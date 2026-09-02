@@ -1,0 +1,30 @@
+node_modules/
+dist/
+.next/
+*.tsbuildinfo
+
+# env / secrets
+.env
+.env.local
+apps/*/.env
+apps/*/.env.local
+
+# db
+*.db
+*.db-journal
+apps/api/prisma/dev.db*
+
+# uploads (fichiers locaux)
+apps/api/uploads/
+
+# imports source (données société — jamais dans git)
+data-import/*
+!data-import/.gitkeep
+
+# rapports d'import générés
+apps/api/prisma/import-report*.json
+apps/api/prisma/import-report*.csv
+
+# OS
+.DS_Store
+Thumbs.db

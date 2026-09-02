@@ -1,0 +1,34 @@
+{
+  "name": "jjd",
+  "private": true,
+  "version": "0.1.0",
+  "description": "JJD App - plateforme de gestion JJD Consult (chantiers, equipes, planning, portail client)",
+  "workspaces": [
+    "packages/*",
+    "apps/api",
+    "apps/web"
+  ],
+  "scripts": {
+    "build:shared": "npm run build --workspace @jjd/shared",
+    "setup": "npm install && npm run build:shared && npm run db:reset --workspace @jjd/api",
+    "db:reset": "npm run db:reset --workspace @jjd/api",
+    "import": "npm run import --workspace @jjd/api",
+    "dev:api": "npm run dev --workspace @jjd/api",
+    "dev:web": "npm run dev --workspace @jjd/web",
+    "dev": "concurrently -n api,web -c blue,green \"npm:dev:api\" \"npm:dev:web\"",
+    "test": "npm run test --workspace @jjd/shared && npm run test --workspace @jjd/api",
+    "typecheck": "npm run typecheck --workspace @jjd/shared && npm run typecheck --workspace @jjd/api && npm run typecheck --workspace @jjd/web"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "allowScripts": {
+    "@prisma/client@6.19.3": true,
+    "@prisma/engines@6.19.3": true,
+    "esbuild@0.28.2": true,
+    "prisma@6.19.3": true
+  }
+}

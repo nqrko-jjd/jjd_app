@@ -1,0 +1,44 @@
+import { existsSync, copyFileSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const root = path.resolve(here, '..');
+const envPath = path.join(root, '.env');
+if (!existsSync(envPath) && existsSync(path.join(root, '.env.example'))) {
+  copyFileSync(path.join(root, '.env.example'), envPath);
+}
+if (existsSync(envPath)) {
+  for (const line of readFileSync(envPath, 'utf8').split('\n')) {
+    const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
+    if (m && m[1] && process.env[m[1]] === undefined) {
+      let v = (m[2] ?? '').trim();
+      if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+        v = v.slice(1, -1);
+      }
+      process.env[m[1]] = v;
+    }
+  }
+}
+
+const deeplKey = process.env.DEEPL_API_KEY ?? '';
+const port = Number(process.env.PORT ?? 4100);
+const publicApiUrl = process.env.PUBLIC_API_URL ?? `http://localhost:${port}`;
+
+export const env = {
+  databaseUrl: process.env.DATABASE_URL ?? 'file:./prisma/dev.db',
+  jwtSecret: process.env.JWT_SECRET ?? 'dev-jjd-secret-change-me',
+  port,
+  publicApiUrl,
+  webUrl: process.env.WEB_URL ?? 'http://localhost:3100',
+  corsOrigins: (process.env.CORS_ORIGINS ?? '*').split(',').map((s) => s.trim()),
+
+  /** Traduction auto FR -> NL/EN. Clé « …:fx » = offre gratuite (api-free). */
+  deeplApiKey: deeplKey,
+  deeplApiHost: deeplKey.endsWith(':fx') ? 'https://api-free.deepl.com' : 'https://api.deepl.com',
+
+  google: {
+    clientId: process.env.GOOGLE_CLIENT_ID ?? '',
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? '',
+  },
+};

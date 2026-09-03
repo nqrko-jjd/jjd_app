@@ -182,7 +182,7 @@ export default function ImmeubleDetail({ params }: { params: Promise<{ id: strin
                   <td><StatusBadge status={w.status} /></td>
                   <td>
                     {w.documents.length === 0 ? <span className="muted">—</span> : w.documents.map((doc) => (
-                      <Link key={doc.id} href={`/documents/${doc.id}`} className="mono" style={{ marginRight: 8, fontSize: '0.8rem' }}>{doc.number}</Link>
+                      <Link key={doc.id} href={`/documents/${doc.id}`} className="mono" style={{ display: 'inline-block', marginRight: 10, fontSize: '0.8rem' }}>{doc.number}</Link>
                     ))}
                   </td>
                   <td style={{ textAlign: 'right' }}><Money value={w.quotedHt} /></td>

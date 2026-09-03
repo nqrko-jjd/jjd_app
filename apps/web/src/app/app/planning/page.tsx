@@ -86,6 +86,11 @@ function layout(blocks: Block[]) {
 export default function PlanningPage() {
   const [view, setView] = useState<'week' | 'day'>('week');
   const [anchor, setAnchor] = useState(() => new Date());
+
+  // Sur petit écran, la vue semaine (7 colonnes) est illisible → bascule sur Jour au 1er rendu.
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 760px)').matches) setView('day');
+  }, []);
   const cols = view === 'week' ? 7 : 1;
   const start = view === 'week' ? mondayOf(anchor) : new Date(anchor.setHours(0, 0, 0, 0));
   const days = Array.from({ length: cols }, (_, i) => addDays(start, i));

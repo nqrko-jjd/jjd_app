@@ -202,6 +202,17 @@ export const LEGAL_DOC_LABEL: Record<LegalDocType, string> = {
   other: 'Autre',
 };
 
+/** Priorité d'un chantier / d'une intervention. */
+export const WORKSITE_PRIORITIES = ['low', 'normal', 'high', 'urgent'] as const;
+export type WorksitePriority = (typeof WORKSITE_PRIORITIES)[number];
+
+export const WORKSITE_PRIORITY_LABEL: Record<WorksitePriority, string> = {
+  low: 'Basse',
+  normal: 'Normale',
+  high: 'Haute',
+  urgent: 'Urgente',
+};
+
 /** Rôles d'un contact rattaché à un immeuble / ACP. */
 export const BUILDING_CONTACT_ROLES = [
   'concierge', 'president', 'council', 'syndic_manager', 'contact', 'owner_rep', 'other',

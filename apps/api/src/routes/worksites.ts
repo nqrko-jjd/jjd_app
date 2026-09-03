@@ -68,6 +68,7 @@ worksitesRouter.post(
         title: data.title,
         entity: data.entity,
         status: data.status,
+        priority: data.priority,
         statusTags: data.statusTags,
         clientId: data.clientId ?? null,
         buildingId: data.buildingId ?? null,

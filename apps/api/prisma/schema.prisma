@@ -298,6 +298,7 @@ model Worksite {
   kind        String    @default("project") // project | overhead (codes E-xx : frais sans chantier)
   entity      String    @default("jjd") // jjd | tonton | m7
   status      String    @default("to_plan")
+  priority    String    @default("normal") // low | normal | high | urgent
   statusRaw   String? // texte d'origine (Excel / TrustUp)
   statusTags  Json? // ["Terminé","A vérifier"]
   clientId    String?

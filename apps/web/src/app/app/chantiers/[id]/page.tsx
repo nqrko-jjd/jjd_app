@@ -3,14 +3,14 @@ import { use, useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
-import { PageHead, StatusBadge, EntityBadge, Money, formatDateBE } from '@/lib/ui';
+import { PageHead, StatusBadge, PriorityBadge, EntityBadge, Money, formatDateBE } from '@/lib/ui';
 import { FormModal, toDateInput, type FieldDef } from '@/components/FormModal';
 import { ChantierThread } from '@/components/ChantierThread';
-import { WORKSITE_STATUSES, WORKSITE_STATUS_LABEL, ENTITIES, ENTITY_LABEL, type WorksiteMargin } from '@jjd/shared';
+import { WORKSITE_STATUSES, WORKSITE_STATUS_LABEL, WORKSITE_PRIORITIES, WORKSITE_PRIORITY_LABEL, ENTITIES, ENTITY_LABEL, type WorksiteMargin } from '@jjd/shared';
 
 interface Detail {
   worksite: {
-    id: string; ref: string; title: string; status: string; statusRaw: string | null;
+    id: string; ref: string; title: string; status: string; priority: string; statusRaw: string | null;
     entity: string; address: string | null; city: string | null; billTo: string | null;
     startedOn: string | null; endedOn: string | null; quotedHt: number | null; description: string | null;
     client: { id: string; name: string } | null;
@@ -35,6 +35,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
     { name: 'title', label: 'Intitulé', required: true, full: true },
     { name: 'entity', label: 'Entité', type: 'select', options: ENTITIES.map((e) => ({ value: e, label: ENTITY_LABEL[e] })) },
     { name: 'status', label: 'Statut', type: 'select', options: WORKSITE_STATUSES.map((s) => ({ value: s, label: WORKSITE_STATUS_LABEL[s] })) },
+    { name: 'priority', label: 'Priorité', type: 'select', options: WORKSITE_PRIORITIES.map((p) => ({ value: p, label: WORKSITE_PRIORITY_LABEL[p] })) },
     { name: 'address', label: 'Adresse', full: true },
     { name: 'postalCode', label: 'Code postal' },
     { name: 'city', label: 'Ville' },
@@ -51,7 +52,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
           title={`Modifier ${w.ref}`}
           fields={editFields}
           initial={{
-            title: w.title, entity: w.entity, status: w.status,
+            title: w.title, entity: w.entity, status: w.status, priority: w.priority,
             address: w.address, city: w.city,
             startedOn: toDateInput(w.startedOn), endedOn: toDateInput(w.endedOn),
             quotedHt: w.quotedHt, description: w.description,
@@ -73,6 +74,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
 
       <div className="row" style={{ marginBottom: '1.2rem' }}>
         <StatusBadge status={w.status} />
+        <PriorityBadge priority={w.priority} />
         <EntityBadge entity={w.entity} />
         {w.statusRaw && w.statusRaw !== w.status && <span className="chip">{w.statusRaw}</span>}
       </div>

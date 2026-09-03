@@ -3,12 +3,12 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
-import { PageHead, StatusBadge, EntityBadge, Money, formatDateBE } from '@/lib/ui';
+import { PageHead, StatusBadge, PriorityBadge, EntityBadge, Money, formatDateBE } from '@/lib/ui';
 import { FormModal, type FieldDef } from '@/components/FormModal';
-import { WORKSITE_STATUS_LABEL, WORKSITE_STATUSES, ENTITIES, ENTITY_LABEL } from '@jjd/shared';
+import { WORKSITE_STATUS_LABEL, WORKSITE_STATUSES, WORKSITE_PRIORITIES, WORKSITE_PRIORITY_LABEL, ENTITIES, ENTITY_LABEL } from '@jjd/shared';
 
 interface WS {
-  id: string; ref: string; title: string; status: string; entity: string;
+  id: string; ref: string; title: string; status: string; priority: string; entity: string;
   city: string | null; quotedHt: number | null; endedOn: string | null;
   client: { name: string } | null;
   manager: { displayName: string | null; firstName: string } | null;
@@ -24,7 +24,7 @@ export default function ChantiersPage() {
   const { data, loading, reload } = useApi<{ items: WS[] }>(`/api/worksites?${params}`);
   const { data: refs } = useApi<{
     clients: { id: string; name: string }[];
-    buildings: { id: string; name: string }[];
+    buildings: { id: string; name: string; syndicId: string | null }[];
     people: { id: string; name: string }[];
   }>(creating ? '/api/meta/pickers' : null);
 
@@ -32,6 +32,7 @@ export default function ChantiersPage() {
     { name: 'title', label: 'Intitulé du chantier', required: true, full: true, placeholder: 'Uccle - Dupont - Toiture' },
     { name: 'entity', label: 'Entité', type: 'select', options: ENTITIES.filter((e) => e !== 'm7').map((e) => ({ value: e, label: ENTITY_LABEL[e] })) },
     { name: 'status', label: 'Statut', type: 'select', options: WORKSITE_STATUSES.map((s) => ({ value: s, label: WORKSITE_STATUS_LABEL[s] })) },
+    { name: 'priority', label: 'Priorité', type: 'select', options: WORKSITE_PRIORITIES.map((p) => ({ value: p, label: WORKSITE_PRIORITY_LABEL[p] })) },
     { name: 'clientId', label: 'Client', type: 'select', options: (refs?.clients ?? []).map((c) => ({ value: c.id, label: c.name })) },
     { name: 'buildingId', label: 'Immeuble / ACP', type: 'select', options: (refs?.buildings ?? []).map((b) => ({ value: b.id, label: b.name })) },
     { name: 'managerId', label: 'Chef de chantier', type: 'select', options: (refs?.people ?? []).map((p) => ({ value: p.id, label: p.name })) },
@@ -50,7 +51,7 @@ export default function ChantiersPage() {
         <FormModal
           title="Nouveau chantier"
           fields={fields}
-          initial={{ entity: 'jjd', status: 'to_plan' }}
+          initial={{ entity: 'jjd', status: 'to_plan', priority: 'normal' }}
           onClose={() => setCreating(false)}
           onSubmit={async (v) => { await api('/api/worksites', { method: 'POST', body: v }); reload(); }}
         />
@@ -87,7 +88,7 @@ export default function ChantiersPage() {
                   <td><Link href={`/app/chantiers/${w.id}`}>{w.title}</Link></td>
                   <td>{w.client?.name ?? '—'}</td>
                   <td>{w.manager?.displayName ?? w.manager?.firstName ?? '—'}</td>
-                  <td><StatusBadge status={w.status} /></td>
+                  <td><span style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap' }}><StatusBadge status={w.status} /><PriorityBadge priority={w.priority} /></span></td>
                   <td><EntityBadge entity={w.entity} /></td>
                   <td style={{ textAlign: 'right' }}><Money value={w.quotedHt} /></td>
                   <td className="tnum">{w.endedOn ? formatDateBE(w.endedOn) : '—'}</td>

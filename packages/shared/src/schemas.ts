@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import {
-  ROLES, ENTITIES, WORKSITE_STATUSES, CRM_STAGES, CRM_LOST_REASONS,
+  ROLES, ENTITIES, WORKSITE_STATUSES, WORKSITE_PRIORITIES, CRM_STAGES, CRM_LOST_REASONS,
   CONTACT_TYPES, CLIENT_KINDS, WORKER_CONTRACT_TYPES, LEGAL_DOC_TYPES,
   BUILDING_CONTACT_ROLES, OCCUPANT_KINDS,
 } from './enums.js';
@@ -67,6 +67,7 @@ export const worksiteInput = z.object({
   title: nonEmpty,
   entity: z.enum(ENTITIES).default('jjd'),
   status: z.enum(WORKSITE_STATUSES).default('to_plan'),
+  priority: z.enum(WORKSITE_PRIORITIES).default('normal'),
   statusTags: z.array(z.string()).default([]),
   clientId: z.string().nullish(),
   buildingId: z.string().nullish(),

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import {
-  WORKSITE_STATUS_LABEL, ENTITY_LABEL, CRM_STAGE_LABEL, formatEur, formatDateBE,
-  type WorksiteStatus,
+  WORKSITE_STATUS_LABEL, WORKSITE_PRIORITY_LABEL, ENTITY_LABEL, CRM_STAGE_LABEL, formatEur, formatDateBE,
+  type WorksiteStatus, type WorksitePriority,
 } from '@jjd/shared';
 
 export { formatEur, formatDateBE };
@@ -22,6 +22,13 @@ const STATUS_TONE: Partial<Record<WorksiteStatus, string>> = {
 export function StatusBadge({ status }: { status: string }) {
   const tone = STATUS_TONE[status as WorksiteStatus] ?? '';
   return <span className={`badge ${tone}`}>{WORKSITE_STATUS_LABEL[status as WorksiteStatus] ?? status}</span>;
+}
+
+const PRIORITY_TONE: Record<string, string> = { high: 'warn', urgent: 'crit' };
+/** N'affiche rien pour normal/low — juste les priorités qui comptent. */
+export function PriorityBadge({ priority }: { priority: string | null | undefined }) {
+  if (!priority || priority === 'normal' || priority === 'low') return null;
+  return <span className={`badge ${PRIORITY_TONE[priority] ?? ''}`}>{WORKSITE_PRIORITY_LABEL[priority as WorksitePriority] ?? priority}</span>;
 }
 
 export function EntityBadge({ entity }: { entity: string }) {

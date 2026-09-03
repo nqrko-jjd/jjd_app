@@ -34,8 +34,13 @@ interface Detail {
   };
 }
 
-const BUILDING_FIELDS: FieldDef[] = [
+const buildingFields = (
+  syndics: { id: string; name: string }[],
+  clients: { id: string; name: string }[],
+): FieldDef[] => [
   { name: 'name', label: 'Nom de l’immeuble / ACP', required: true, full: true },
+  { name: 'syndicId', label: 'Syndic', type: 'select', options: syndics.map((s) => ({ value: s.id, label: s.name })) },
+  { name: 'clientId', label: 'Client / ACP (contact)', type: 'select', options: clients.map((c) => ({ value: c.id, label: c.name })) },
   { name: 'address', label: 'Adresse', full: true },
   { name: 'postalCode', label: 'Code postal' },
   { name: 'city', label: 'Ville' },
@@ -68,6 +73,7 @@ const UNIT_FIELDS: FieldDef[] = [
 export default function ImmeubleDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { data, loading, reload } = useApi<Detail>(`/api/buildings/${id}`);
+  const { data: pick } = useApi<{ syndics: { id: string; name: string }[]; clients: { id: string; name: string }[] }>('/api/meta/pickers');
   const [modal, setModal] = useState<null | { kind: 'building' | 'contact' | 'unit'; row?: BContact | BUnit }>(null);
 
   if (loading) return <div className="empty">Chargement…</div>;
@@ -197,8 +203,8 @@ export default function ImmeubleDetail({ params }: { params: Promise<{ id: strin
       {modal?.kind === 'building' && (
         <FormModal
           title="Modifier l’immeuble"
-          fields={BUILDING_FIELDS}
-          initial={b as unknown as Record<string, unknown>}
+          fields={buildingFields(pick?.syndics ?? [], pick?.clients ?? [])}
+          initial={{ ...(b as unknown as Record<string, unknown>), syndicId: b.syndic?.id, clientId: b.client?.id }}
           onClose={() => setModal(null)}
           onSubmit={async (v) => { await api(`/api/buildings/${id}`, { method: 'PATCH', body: v }); closeAndReload(); }}
         />

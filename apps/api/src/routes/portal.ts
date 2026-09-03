@@ -4,7 +4,10 @@ import { createReadStream, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { nanoid } from 'nanoid';
 import { z } from 'zod';
-import { WORKSITE_STATUS_LABEL, type WorksiteStatus } from '@jjd/shared';
+import {
+  WORKSITE_STATUS_LABEL, WORKSITE_PRIORITY_LABEL, DOC_KIND_LABEL,
+  type WorksiteStatus, type WorksitePriority,
+} from '@jjd/shared';
 import { prisma } from '../db.js';
 import { env } from '../env.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
@@ -19,6 +22,11 @@ const pdfBasename = (n: string) => path.basename(n);
 const portalPdfPath = (safe: string) => path.join(PORTAL_PDF_DIR, safe);
 
 const OPEN_STATUSES: WorksiteStatus[] = ['scheduled', 'in_progress', 'on_hold', 'done', 'to_invoice'];
+
+const wsLabel = (s: string) => WORKSITE_STATUS_LABEL[s as WorksiteStatus] ?? s;
+const prioLabel = (p: string) => WORKSITE_PRIORITY_LABEL[p as WorksitePriority] ?? p;
+const managerName = (m: { displayName: string | null; firstName: string } | null) =>
+  m ? (m.displayName || m.firstName) : null;
 
 /* ---------------------------------------------------- connexion (lien magique) */
 
@@ -66,6 +74,220 @@ portalRouter.get(
   asyncHandler(async (req, res) => {
     const u = req.portalUser!;
     res.json({ user: { email: u.email, label: u.label, isSyndic: !!u.syndicId } });
+  }),
+);
+
+/* ------------------------------------------------------------- vue d'ensemble */
+
+portalRouter.get(
+  '/dashboard',
+  requirePortal,
+  asyncHandler(async (req, res) => {
+    const u = req.portalUser!;
+    const scope = worksiteScope(u);
+    const mSel = { select: { displayName: true, firstName: true } } as const;
+
+    const [buildingCount, worksites, quotes, events, docs] = await Promise.all([
+      prisma.building.count({ where: buildingScope(u) }),
+      prisma.worksite.findMany({
+        where: scope,
+        orderBy: { updatedAt: 'desc' },
+        include: { building: { select: { id: true, name: true } }, manager: mSel },
+      }),
+      prisma.document.findMany({
+        where: { kind: 'quote', status: 'sent', number: { not: null }, worksite: scope },
+        orderBy: { issuedOn: 'desc' },
+        include: { worksite: { select: { id: true, ref: true, building: { select: { name: true } } } } },
+      }),
+      prisma.planningEvent.findMany({
+        where: { worksite: scope, endAt: { gte: startOfWeek(new Date()) }, startAt: { lt: addDays(startOfWeek(new Date()), 21) } },
+        orderBy: { startAt: 'asc' },
+        include: { worksite: { select: { id: true, ref: true, building: { select: { name: true } } } } },
+      }),
+      prisma.document.findMany({
+        where: { number: { not: null }, worksite: scope },
+        orderBy: [{ issuedOn: 'desc' }, { createdAt: 'desc' }],
+        take: 6,
+        include: { worksite: { select: { building: { select: { name: true } } } } },
+      }),
+    ]);
+
+    const open = worksites.filter((w) => OPEN_STATUSES.includes(w.status as WorksiteStatus));
+    const urgent = open.filter((w) => w.priority === 'high' || w.priority === 'urgent');
+
+    return res.json({
+      greeting: { name: u.label, isSyndic: !!u.syndicId },
+      kpis: {
+        buildings: buildingCount,
+        interventionsActive: open.length,
+        quotesToValidate: quotes.length,
+        urgent: urgent.length,
+      },
+      urgentItems: urgent.slice(0, 4).map((w) => ({
+        id: w.id, ref: w.ref, title: w.title, building: w.building?.name ?? null,
+        statusLabel: wsLabel(w.status), priority: w.priority,
+      })),
+      recentInterventions: worksites.slice(0, 6).map((w) => ({
+        id: w.id, ref: w.ref, title: w.title, building: w.building?.name ?? null,
+        status: w.status, statusLabel: wsLabel(w.status),
+        priority: w.priority, priorityLabel: prioLabel(w.priority),
+        manager: managerName(w.manager), updatedAt: w.updatedAt,
+      })),
+      weekPlanning: groupWeek(events),
+      quotesToValidate: quotes.slice(0, 4).map((d) => ({
+        id: d.id, number: d.number, title: d.title, totalHt: d.totalHt,
+        building: d.worksite?.building?.name ?? null, worksiteId: d.worksite?.id ?? null,
+        worksiteRef: d.worksite?.ref ?? null, issuedOn: d.issuedOn,
+      })),
+      recentDocuments: docs.map((d) => ({
+        id: d.id, kind: d.kind, kindLabel: DOC_KIND_LABEL[d.kind] ?? d.kind, number: d.number,
+        title: d.title, building: d.worksite?.building?.name ?? null, issuedOn: d.issuedOn, hasPdf: !!d.originalPdf,
+      })),
+    });
+  }),
+);
+
+function startOfWeek(d: Date): Date {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  const day = (x.getDay() + 6) % 7; // lundi = 0
+  x.setDate(x.getDate() - day);
+  return x;
+}
+function addDays(d: Date, n: number): Date {
+  const x = new Date(d);
+  x.setDate(x.getDate() + n);
+  return x;
+}
+type PEvt = {
+  startAt: Date; endAt: Date; allDay: boolean; title: string | null;
+  worksite: { id: string; ref: string; building: { name: string | null } | null } | null;
+};
+function groupWeek(events: PEvt[]) {
+  const week0 = startOfWeek(new Date());
+  const days: { label: string; date: string; iso: string; items: unknown[] }[] = [];
+  for (let i = 0; i < 7; i++) {
+    const d = addDays(week0, i);
+    days.push({
+      label: d.toLocaleDateString('fr-BE', { weekday: 'short' }).replace('.', '').toUpperCase(),
+      date: d.toLocaleDateString('fr-BE', { day: '2-digit', month: '2-digit' }),
+      iso: d.toISOString().slice(0, 10),
+      items: [],
+    });
+  }
+  for (const e of events) {
+    const iso = new Date(e.startAt).toISOString().slice(0, 10);
+    const day = days.find((x) => x.iso === iso);
+    if (!day) continue;
+    day.items.push({
+      time: e.allDay ? '' : new Date(e.startAt).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' }),
+      label: `${e.worksite?.building?.name ?? e.worksite?.ref ?? ''}${e.title ? ` — ${e.title}` : ''}`.trim() || 'Intervention',
+      worksiteId: e.worksite?.id ?? null,
+    });
+  }
+  return { weekStart: week0.toISOString().slice(0, 10), days };
+}
+
+/* --------------------------------------------------------- listes de portefeuille */
+
+portalRouter.get(
+  '/interventions',
+  requirePortal,
+  asyncHandler(async (req, res) => {
+    const u = req.portalUser!;
+    const { status, buildingId, q } = req.query as Record<string, string>;
+    const where: Record<string, unknown> = { ...worksiteScope(u) };
+    if (status === 'open') where.status = { in: OPEN_STATUSES };
+    else if (status) where.status = status;
+    if (buildingId) where.buildingId = buildingId;
+    if (q) where.OR = [{ ref: { contains: q } }, { title: { contains: q } }];
+    const items = await prisma.worksite.findMany({
+      where,
+      orderBy: [{ updatedAt: 'desc' }],
+      take: 300,
+      include: { building: { select: { id: true, name: true } }, manager: { select: { displayName: true, firstName: true } } },
+    });
+    res.json({
+      items: items.map((w) => ({
+        id: w.id, ref: w.ref, title: w.title,
+        status: w.status, statusLabel: wsLabel(w.status),
+        priority: w.priority, priorityLabel: prioLabel(w.priority),
+        building: w.building, manager: managerName(w.manager),
+        startedOn: w.startedOn, endedOn: w.endedOn, updatedAt: w.updatedAt,
+      })),
+    });
+  }),
+);
+
+portalRouter.get(
+  '/quotes',
+  requirePortal,
+  asyncHandler(async (req, res) => {
+    const u = req.portalUser!;
+    const items = await prisma.document.findMany({
+      where: { kind: 'quote', number: { not: null }, worksite: worksiteScope(u) },
+      orderBy: { issuedOn: 'desc' },
+      include: { worksite: { select: { id: true, ref: true, building: { select: { name: true } } } } },
+    });
+    res.json({
+      items: items.map((d) => ({
+        id: d.id, number: d.number, title: d.title, status: d.status, hasPdf: !!d.originalPdf,
+        totalHt: d.totalHt, totalTtc: d.totalTtc, issuedOn: d.issuedOn, dueOn: d.dueOn,
+        worksiteId: d.worksite?.id ?? null, worksiteRef: d.worksite?.ref ?? null,
+        building: d.worksite?.building?.name ?? null,
+      })),
+    });
+  }),
+);
+
+portalRouter.get(
+  '/documents',
+  requirePortal,
+  asyncHandler(async (req, res) => {
+    const u = req.portalUser!;
+    const { kind } = req.query as Record<string, string>;
+    const where: Record<string, unknown> = { number: { not: null }, worksite: worksiteScope(u) };
+    if (kind) where.kind = kind;
+    const items = await prisma.document.findMany({
+      where,
+      orderBy: [{ issuedOn: 'desc' }, { createdAt: 'desc' }],
+      take: 200,
+      include: { worksite: { select: { id: true, ref: true, building: { select: { name: true } } } } },
+    });
+    res.json({
+      items: items.map((d) => ({
+        id: d.id, kind: d.kind, kindLabel: DOC_KIND_LABEL[d.kind] ?? d.kind, number: d.number, title: d.title,
+        status: d.status, totalTtc: d.totalTtc, issuedOn: d.issuedOn, hasPdf: !!d.originalPdf,
+        worksiteId: d.worksite?.id ?? null, building: d.worksite?.building?.name ?? null,
+      })),
+    });
+  }),
+);
+
+portalRouter.get(
+  '/planning',
+  requirePortal,
+  asyncHandler(async (req, res) => {
+    const u = req.portalUser!;
+    const from = startOfWeek(new Date());
+    const events = await prisma.planningEvent.findMany({
+      where: { worksite: worksiteScope(u), endAt: { gte: from }, startAt: { lt: addDays(from, 42) } },
+      orderBy: { startAt: 'asc' },
+      include: {
+        worksite: { select: { id: true, ref: true, title: true, building: { select: { name: true } } } },
+        team: { select: { name: true } },
+        assignments: { include: { person: { select: { displayName: true, firstName: true } } } },
+      },
+    });
+    res.json({
+      items: events.map((e) => ({
+        id: e.id, startAt: e.startAt, endAt: e.endAt, allDay: e.allDay, title: e.title,
+        worksiteId: e.worksite?.id ?? null, worksiteRef: e.worksite?.ref ?? null,
+        worksiteTitle: e.worksite?.title ?? null, building: e.worksite?.building?.name ?? null,
+        team: e.team?.name ?? null,
+        people: e.assignments.map((a) => managerName(a.person)).filter(Boolean),
+      })),
+    });
   }),
 );
 

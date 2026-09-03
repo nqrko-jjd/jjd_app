@@ -264,6 +264,24 @@ async function seedPortalDemo() {
   const syndic = await prisma.syndic.findFirst({ orderBy: { buildings: { _count: 'desc' } } });
   if (syndic) {
     await prisma.user.create({ data: { email: 'syndic@portail.demo', passwordHash: pw, role: 'client', syndicId: syndic.id } });
+    // rend le tableau de bord démo vivant : quelques interventions "en cours" + priorités
+    const ws = await prisma.worksite.findMany({
+      where: { building: { syndicId: syndic.id } },
+      orderBy: { updatedAt: 'desc' },
+      take: 6,
+      select: { id: true },
+    });
+    const demo: { status?: string; priority?: string }[] = [
+      { status: 'in_progress', priority: 'urgent' },
+      { status: 'scheduled', priority: 'high' },
+      { status: 'in_progress' },
+      { status: 'to_invoice' },
+      { status: 'done' },
+      { status: 'scheduled' },
+    ];
+    for (let i = 0; i < ws.length; i++) {
+      await prisma.worksite.update({ where: { id: ws[i]!.id }, data: demo[i] ?? {} });
+    }
   }
   const client = await prisma.contact.findFirst({
     where: { type: { in: ['client', 'both'] }, kind: 'individual', worksites: { some: { documents: { some: {} } } } },

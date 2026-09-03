@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { portalApi, usePortalGuard } from '@/lib/portal';
-import { PortalHeader } from '../PortalHeader';
+import { PortalShell } from '../PortalShell';
 
 export default function DemandePage() {
   const { me, loading } = usePortalGuard();
@@ -31,16 +31,13 @@ export default function DemandePage() {
   }
 
   return (
-    <>
-      <PortalHeader />
-      <main className="p-main">
-        <Link href="/portail/accueil" className="p-back">← Retour</Link>
-        <div className="p-hero"><h1>Nouvelle demande d’intervention</h1></div>
-
+    <PortalShell title="Nouvelle demande d’intervention" subtitle="Décrivez le besoin, nous revenons vers vous">
+      <Link href="/portail/accueil" className="p-back">← Retour</Link>
+      <div style={{ maxWidth: 620 }}>
         {done ? (
           <div className="p-card p-card-pad">
             <p>Votre demande a bien été transmise à JJD Consult. Nous revenons vers vous rapidement.</p>
-            <button className="p-btn primary" style={{ marginTop: '1rem' }} onClick={() => router.push('/portail/accueil')}>Retour à l’accueil</button>
+            <button className="p-btn-primary" style={{ marginTop: '1rem' }} onClick={() => router.push('/portail/accueil')}>Retour à l’accueil</button>
           </div>
         ) : (
           <form className="p-card p-card-pad" onSubmit={submit}>
@@ -65,10 +62,10 @@ export default function DemandePage() {
               <input type="checkbox" checked={f.urgent} onChange={(e) => setF({ ...f, urgent: e.target.checked })} />
               C’est urgent
             </label>
-            <button className="p-btn primary" disabled={busy}>{busy ? 'Envoi…' : 'Envoyer la demande'}</button>
+            <button className="p-btn-primary" disabled={busy}>{busy ? 'Envoi…' : 'Envoyer la demande'}</button>
           </form>
         )}
-      </main>
-    </>
+      </div>
+    </PortalShell>
   );
 }

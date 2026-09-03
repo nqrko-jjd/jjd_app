@@ -22,12 +22,12 @@ function Verify() {
 
   return (
     <div className="p-login-wrap">
-      <div className="p-card p-card-pad p-login" style={{ textAlign: 'center' }}>
+      <div className="p-login" style={{ textAlign: 'center' }}>
         {err ? (
           <>
             <h1 style={{ fontSize: '1.2rem' }}>Connexion impossible</h1>
             <p className="p-note" style={{ margin: '0.6rem 0 1rem' }}>{err}</p>
-            <button className="p-btn primary" onClick={() => router.push('/portail')}>Demander un nouveau lien</button>
+            <button className="p-btn-primary" onClick={() => router.push('/portail')}>Demander un nouveau lien</button>
           </>
         ) : (
           <p>Connexion en cours…</p>

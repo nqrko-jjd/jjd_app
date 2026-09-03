@@ -2,7 +2,7 @@
 import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { portalApi, portalBlobUrl, usePortalGuard } from '@/lib/portal';
-import { PortalHeader } from '../../PortalHeader';
+import { PortalShell } from '../../PortalShell';
 
 interface Data {
   worksite: {
@@ -33,7 +33,7 @@ export default function PortalWorksite({ params }: { params: Promise<{ id: strin
   useEffect(() => { if (me) load(); }, [me, id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading || !me) return null;
-  if (!data) return <><PortalHeader /><main className="p-main"><p className="p-note">Chargement…</p></main></>;
+  if (!data) return <PortalShell title="Chantier"><p className="p-note">Chargement…</p></PortalShell>;
   const w = data.worksite;
   const stepIdx = STEPS.indexOf(w.status) >= 0 ? STEPS.indexOf(w.status)
     : w.status === 'closed' || w.status === 'paid' ? 3
@@ -56,14 +56,12 @@ export default function PortalWorksite({ params }: { params: Promise<{ id: strin
   }
 
   return (
-    <>
-      <PortalHeader />
-      <main className="p-main">
-        <Link href={w.building ? `/portail/immeuble/${w.building.id}` : '/portail/accueil'} className="p-back">← Retour</Link>
-        <div className="p-hero">
-          <h1>{w.title}</h1>
-          <p>{w.ref}{w.building ? ` · ${w.building.name}` : ''}{w.address ? ` · ${w.address}` : ''}</p>
-        </div>
+    <PortalShell
+      title={w.title}
+      subtitle={`${w.ref}${w.building ? ` · ${w.building.name}` : ''}${w.address ? ` · ${w.address}` : ''}`}
+    >
+      <div>
+        <Link href={w.building ? `/portail/immeuble/${w.building.id}` : '/portail/interventions'} className="p-back">← Retour</Link>
 
         <div className="p-tabs">
           {(['suivi', 'devis', 'factures', 'photos', 'messages'] as const).map((t) => (
@@ -101,13 +99,13 @@ export default function PortalWorksite({ params }: { params: Promise<{ id: strin
                 <span className="n">{q.number}</span>
                 <span className="p-note">{d(q.issuedOn)}</span>
                 <span className="amt">{eur(q.totalTtc)}</span>
-                {q.hasPdf && <button className="p-btn" onClick={() => openPdf(q.id)}>PDF</button>}
+                {q.hasPdf && <button className="p-btn-line" onClick={() => openPdf(q.id)}>PDF</button>}
                 {q.status === 'accepted' ? (
                   <span className="p-pill ok">Accepté</span>
                 ) : q.status === 'declined' ? (
                   <span className="p-pill crit">Décliné</span>
                 ) : (
-                  <button className="p-btn primary" onClick={() => acceptQuote(q.id)}>Accepter</button>
+                  <button className="p-btn-primary" onClick={() => acceptQuote(q.id)}>Accepter</button>
                 )}
               </div>
             ))}
@@ -122,7 +120,7 @@ export default function PortalWorksite({ params }: { params: Promise<{ id: strin
                 <span className="n">{f.number}</span>
                 <span className="p-note">{d(f.issuedOn)}{f.dueOn ? ` · éch. ${d(f.dueOn)}` : ''}</span>
                 <span className="amt">{eur(f.totalTtc)}</span>
-                {f.hasPdf && <button className="p-btn" onClick={() => openPdf(f.id)}>PDF</button>}
+                {f.hasPdf && <button className="p-btn-line" onClick={() => openPdf(f.id)}>PDF</button>}
                 <span className={`p-pill ${f.status === 'paid' ? 'ok' : f.status === 'overdue' ? 'crit' : 'warn'}`}>
                   {f.status === 'paid' ? 'Payée' : f.status === 'overdue' ? 'En retard' : 'À payer'}
                 </span>
@@ -157,11 +155,11 @@ export default function PortalWorksite({ params }: { params: Promise<{ id: strin
             </div>
             <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
               <input className="p-input" placeholder="Votre message…" value={msg} onChange={(e) => setMsg(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && send()} />
-              <button className="p-btn primary" onClick={send} disabled={!msg.trim()}>Envoyer</button>
+              <button className="p-btn-primary" onClick={send} disabled={!msg.trim()}>Envoyer</button>
             </div>
           </div>
         )}
-      </main>
-    </>
+      </div>
+    </PortalShell>
   );
 }

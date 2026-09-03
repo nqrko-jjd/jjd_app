@@ -24,11 +24,8 @@ export default function PortalLogin() {
 
   return (
     <div className="p-login-wrap">
-      <div className="p-card p-card-pad p-login">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 800, fontSize: '1.1rem' }}>
-          <span style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--p-primary)', color: '#fff', display: 'grid', placeItems: 'center', fontSize: '0.85rem' }}>J</span>
-          JJD Consult
-        </div>
+      <div className="p-login">
+        <div className="brand"><span className="mk">JJD</span> Consult</div>
         <h1 style={{ fontSize: '1.35rem', marginTop: '1rem' }}>Espace client</h1>
         <p className="p-note" style={{ marginTop: '0.3rem' }}>
           Suivez vos chantiers, devis, factures et photos.
@@ -38,7 +35,7 @@ export default function PortalLogin() {
           <div style={{ marginTop: '1.2rem' }}>
             <p>Si un compte existe pour <strong>{email}</strong>, un lien de connexion vient d’être envoyé par e-mail (valable 30 minutes).</p>
             {devToken && (
-              <button className="p-btn primary" style={{ marginTop: '1rem' }} onClick={() => router.push(`/portail/connexion?token=${devToken}`)}>
+              <button className="p-btn-primary" style={{ marginTop: '1rem' }} onClick={() => router.push(`/portail/connexion?token=${devToken}`)}>
                 (démo) Se connecter directement
               </button>
             )}
@@ -49,7 +46,7 @@ export default function PortalLogin() {
               <label htmlFor="email">Votre e-mail</label>
               <input id="email" className="p-input" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="vous@exemple.be" />
             </div>
-            <button className="p-btn primary" style={{ width: '100%' }} disabled={busy}>
+            <button className="p-btn-primary" style={{ width: '100%' }} disabled={busy}>
               {busy ? 'Envoi…' : 'Recevoir mon lien de connexion'}
             </button>
             <p className="p-note" style={{ marginTop: '0.8rem' }}>

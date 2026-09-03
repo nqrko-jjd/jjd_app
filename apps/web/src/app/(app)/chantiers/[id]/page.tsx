@@ -5,6 +5,7 @@ import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { PageHead, StatusBadge, EntityBadge, Money, formatDateBE } from '@/lib/ui';
 import { FormModal, toDateInput, type FieldDef } from '@/components/FormModal';
+import { ChantierThread } from '@/components/ChantierThread';
 import { WORKSITE_STATUSES, WORKSITE_STATUS_LABEL, ENTITIES, ENTITY_LABEL, type WorksiteMargin } from '@jjd/shared';
 
 interface Detail {
@@ -107,6 +108,9 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
           <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{w.description}</p>
         </section>
       )}
+
+      <div className="section-title">Fil de chantier</div>
+      <div style={{ marginBottom: '1.5rem' }}><ChantierThread worksiteId={w.id} /></div>
 
       <div className="section-title">Devis &amp; factures <span className="hint">{w.documents.length}</span></div>
       {w.documents.length === 0 ? (

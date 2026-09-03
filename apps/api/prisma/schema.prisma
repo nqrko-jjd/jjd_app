@@ -94,6 +94,7 @@ model Person {
   managedWorksites Worksite[]        @relation("WorksiteManager")
   eventAssignments EventAssignment[]
   teamMemberships  TeamMember[]
+  threadParticipations ThreadParticipant[]
 
   @@index([normalizedName])
   @@index([active])
@@ -573,6 +574,7 @@ model ThreadParticipant {
   threadId String
   thread   Thread @relation(fields: [threadId], references: [id], onDelete: Cascade)
   personId String
+  person   Person @relation(fields: [personId], references: [id], onDelete: Cascade)
 
   @@id([threadId, personId])
 }
@@ -583,9 +585,11 @@ model Message {
   thread    Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
   authorId  String?
   author    User?    @relation(fields: [authorId], references: [id])
+  authorName String? // nom figé (l'auteur peut être un ouvrier sans compte)
   kind      String   @default("text") // text | photo | status
   body      String?
   fileUrl   String?
+  thumbUrl  String?
   createdAt DateTime @default(now())
 
   @@index([threadId, createdAt])

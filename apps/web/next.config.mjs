@@ -9,7 +9,10 @@ const nextConfig = {
   allowedDevOrigins: ['192.168.1.27', '*.trycloudflare.com', '*.loca.lt'],
   async rewrites() {
     const api = process.env.API_INTERNAL_URL ?? 'http://localhost:4100';
-    return [{ source: '/jjd-api/:path*', destination: `${api}/:path*` }];
+    return [
+      { source: '/jjd-api/:path*', destination: `${api}/:path*` },
+      { source: '/uploads/:path*', destination: `${api}/uploads/:path*` },
+    ];
   },
 };
 

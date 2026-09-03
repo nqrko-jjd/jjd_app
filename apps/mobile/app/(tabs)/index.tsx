@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet, RefreshControl } from 'react-native';
-import { useFocusEffect, Redirect } from 'expo-router';
+import { useFocusEffect, Redirect, useRouter } from 'expo-router';
 import { apiGet, apiSend, flushQueue, pendingCount } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { T } from '@/lib/theme';
@@ -30,6 +30,7 @@ function elapsed(fromIso: string): string {
 
 export default function Today() {
   const { person, user } = useSession();
+  const router = useRouter();
   const [events, setEvents] = useState<Ev[]>([]);
   const [running, setRunning] = useState<Running | null>(null);
   const [linked, setLinked] = useState(true);
@@ -129,11 +130,16 @@ export default function Today() {
             {new Date(e.startAt).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' })} –{' '}
             {new Date(e.endAt).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' })}
           </Text>
-          {linked && !running && (
-            <Pressable style={s.btn} onPress={() => start(e.worksite.id)}>
-              <Text style={s.btnTxt}>Démarrer le compteur</Text>
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+            {linked && !running && (
+              <Pressable style={[s.btn, { flex: 1 }]} onPress={() => start(e.worksite.id)}>
+                <Text style={s.btnTxt}>Démarrer le compteur</Text>
+              </Pressable>
+            )}
+            <Pressable style={[s.btn, { backgroundColor: T.surface2, borderWidth: 1, borderColor: T.line }]} onPress={() => router.push(`/fil/${e.worksite.id}` as never)}>
+              <Text style={[s.btnTxt, { color: T.ink }]}>💬 Fil</Text>
             </Pressable>
-          )}
+          </View>
         </View>
       ))}
     </ScrollView>

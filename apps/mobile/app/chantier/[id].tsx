@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet } from 'react-native';
-import { useLocalSearchParams, useFocusEffect, Stack } from 'expo-router';
+import { View, Text, ScrollView, StyleSheet, Pressable } from 'react-native';
+import { useLocalSearchParams, useFocusEffect, Stack, useRouter } from 'expo-router';
 import { apiGet } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { Card, Label, Loading, Badge, eur, dateBE } from '@/lib/ui';
@@ -24,6 +24,7 @@ interface Detail {
 export default function ChantierDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useSession();
+  const router = useRouter();
   const [data, setData] = useState<Detail | null>(null);
 
   const load = useCallback(async () => {
@@ -46,6 +47,13 @@ export default function ChantierDetail() {
         <Badge>{w.entity === 'tonton' ? 'Tonton' : w.entity === 'm7' ? 'M7' : 'JJD'}</Badge>
         {w.statusRaw ? <Badge>{w.statusRaw}</Badge> : <Badge>{w.status}</Badge>}
       </View>
+
+      <Pressable
+        style={{ backgroundColor: T.primary, borderRadius: 10, padding: 13, alignItems: 'center' }}
+        onPress={() => router.push(`/fil/${id}` as never)}
+      >
+        <Text style={{ color: '#fff', fontWeight: '700' }}>💬 Ouvrir le fil de chantier</Text>
+      </Pressable>
 
       <Card>
         <Row k="Client" v={w.client?.name ?? '—'} />

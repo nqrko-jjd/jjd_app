@@ -47,3 +47,15 @@ export async function api<T = unknown>(
   }
   return data as T;
 }
+
+/** Upload multipart (photos du fil de chantier). */
+export async function apiUpload<T = unknown>(path: string, form: FormData): Promise<T> {
+  const headers: Record<string, string> = {};
+  const t = token();
+  if (t) headers.authorization = `Bearer ${t}`;
+  const res = await fetch(`${BASE}${path}`, { method: 'POST', headers, body: form });
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : null;
+  if (!res.ok) throw new ApiError(res.status, data?.error ?? `Erreur ${res.status}`, data);
+  return data as T;
+}

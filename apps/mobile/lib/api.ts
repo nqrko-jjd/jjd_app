@@ -86,6 +86,27 @@ export function apiGet<T>(path: string): Promise<T> {
   return raw<T>(path, 'GET');
 }
 
+/** Upload d'une photo (fil de chantier). `uri` = fichier local Expo. */
+export async function apiUploadPhoto<T = unknown>(
+  path: string,
+  uri: string,
+  caption?: string,
+): Promise<T> {
+  const token = await getToken();
+  const form = new FormData();
+  form.append('file', { uri, name: 'photo.jpg', type: 'image/jpeg' } as unknown as Blob);
+  if (caption) form.append('caption', caption);
+  const res = await fetch(`${API_URL}${path}`, {
+    method: 'POST',
+    headers: token ? { authorization: `Bearer ${token}` } : undefined,
+    body: form,
+  });
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : null;
+  if (!res.ok) throw new ApiError(res.status, data?.error ?? `Erreur ${res.status}`);
+  return data as T;
+}
+
 /**
  * POST/PATCH. Si le réseau échoue, la requête est mise en file et rejouée
  * plus tard. `queueable` est faux pour ce qui doit répondre tout de suite

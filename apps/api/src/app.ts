@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
 import { env } from './env.js';
+import { UPLOADS_DIR } from './lib/media.js';
 import { attachUser } from './lib/auth.js';
 import { errorMiddleware } from './lib/http.js';
 import { authRouter } from './routes/auth.js';
@@ -13,6 +14,7 @@ import { crmRouter } from './routes/crm.js';
 import { dashboardRouter, metaRouter, importsRouter } from './routes/misc.js';
 import { planningRouter, teamsRouter, vehiclesRouter } from './routes/planning.js';
 import { timesheetRouter, statementsRouter } from './routes/timesheet.js';
+import { threadRouter } from './routes/thread.js';
 
 export function createApp() {
   const app = express();
@@ -22,8 +24,10 @@ export function createApp() {
   app.use(attachUser);
 
   app.get('/health', (_req, res) => res.json({ ok: true, service: 'jjd-api' }));
+  app.use('/uploads', express.static(UPLOADS_DIR, { maxAge: '7d' }));
 
   app.use('/api/auth', authRouter);
+  app.use('/api/worksites/:worksiteId/thread', threadRouter);
   app.use('/api/dashboard', dashboardRouter);
   app.use('/api/worksites', worksitesRouter);
   app.use('/api/contacts', contactsRouter);

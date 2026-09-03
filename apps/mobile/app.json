@@ -21,7 +21,11 @@
       "package": "be.jjdconsult.chantier",
       "adaptiveIcon": { "backgroundColor": "#274A70" }
     },
-    "plugins": ["expo-router", "expo-localization"],
+    "plugins": [
+      "expo-router",
+      "expo-localization",
+      ["expo-image-picker", { "photosPermission": "JJD Chantier accède à vos photos pour les ajouter au fil du chantier." }]
+    ],
     "extra": {
       "apiUrl": "http://localhost:4100"
     }

@@ -177,7 +177,7 @@ async function main() {
   await prisma.importBatch.deleteMany({ where: { source: 'agenda' } });
   const batch = await prisma.importBatch.create({ data: { source: 'agenda', label: path.basename(file) } });
 
-  let created = 0, updated = 0, skippedOld = 0, skippedNoRef = 0, assignments = 0;
+  let created = 0, updated = 0, skippedOld = 0, skippedNoRef = 0, assignments = 0, backfilled = 0;
   const issues: { rowRef: string; message: string; rawData: unknown }[] = [];
 
   for (const e of events) {
@@ -237,9 +237,9 @@ async function main() {
     }
 
     // affectations ouvriers
+    const seen = new Set<string>();
     if (workersRaw) {
       await prisma.eventAssignment.deleteMany({ where: { eventId } });
-      const seen = new Set<string>();
       for (const name of splitPeople(workersRaw)) {
         const pid = matchPerson(name);
         if (pid && !seen.has(pid)) {
@@ -248,6 +248,26 @@ async function main() {
           assignments++;
         } else if (!pid) {
           issues.push({ rowRef: summary.slice(0, 60), message: `Ouvrier « ${name} » non reconnu`, rawData: { workersRaw } });
+        }
+      }
+    }
+
+    // pas d'ouvrier trouvé dans la description + événement passé -> on complète avec
+    // les pointages réels du jour (onglet « Main d'œuvre » du fichier Excel)
+    if (seen.size === 0 && start < new Date()) {
+      const d0 = new Date(start); d0.setUTCHours(0, 0, 0, 0);
+      const d1 = new Date(d0); d1.setUTCDate(d1.getUTCDate() + 1);
+      const te = await prisma.timeEntry.findMany({
+        where: { worksiteId: wsId, date: { gte: d0, lt: d1 } },
+        select: { personId: true },
+        distinct: ['personId'],
+      });
+      for (const t of te) {
+        if (t.personId && !seen.has(t.personId)) {
+          seen.add(t.personId);
+          await prisma.eventAssignment.create({ data: { eventId, personId: t.personId } }).catch(() => {});
+          assignments++;
+          backfilled++;
         }
       }
     }
@@ -262,7 +282,7 @@ async function main() {
     });
   }
 
-  const stats = { created, updated, skippedOld, skippedNoRef, assignments, issues: issues.length };
+  const stats = { created, updated, skippedOld, skippedNoRef, assignments, backfilledFromTimesheet: backfilled, issues: issues.length };
   await prisma.importBatch.update({ where: { id: batch.id }, data: { finishedAt: new Date(), stats } });
   console.log('Planning importé :', JSON.stringify(stats, null, 1));
 }

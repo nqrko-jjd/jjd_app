@@ -459,18 +459,61 @@ model EventAssignment {
 // ─────────────────────────────────────────────────────────── Flotte
 
 model Vehicle {
-  id        String   @id @default(cuid())
-  plate     String?  @unique
-  brand     String?
-  model     String?
-  name      String?
-  active    Boolean  @default(true)
-  note      String?
-  createdAt DateTime @default(now())
+  id                String    @id @default(cuid())
+  code              String?   @unique // V002, V003… (registre JJD)
+  plate             String?
+  brand             String?
+  model             String?
+  name              String?
+  type              String?   // Camionette | Moto | Clark | Voiture
+  fuel              String?
+  vin               String?
+  firstRegistration DateTime?
+  km                String?
+  nextInspection    DateTime?
+  circulationTax    Float?
+  biv               Float?
+  driver            String?
+  equipment         String?
+  depot             String?
+  status            String    @default("active")
+
+  // acquisition / financement
+  acquisitionMode   String?   // Comptant | Crédit | Leasing | Renting financier
+  purchaseDate      DateTime?
+  purchasePriceHt   Float?
+  financedAmount    Float?
+  monthlyPayment    Float?
+  downPayment       Float?
+  residualValue     Float?
+  financeMonths     Int?
+  financeEndOn      DateTime?
+  financeCompany    String?
+  financeContract   String?
+
+  active            Boolean   @default(true)
+  note              String?
+  source            String?
+  createdAt         DateTime  @default(now())
 
   insurances Insurance[]
   fines      Fine[]
   events     PlanningEvent[]
+  payments   VehiclePayment[]
+}
+
+/// Échéancier de financement (onglet Paiements du registre véhicules).
+model VehiclePayment {
+  id        String    @id @default(cuid())
+  vehicleId String
+  vehicle   Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  dueOn     DateTime?
+  amount    Float?
+  principal Float?
+  interest  Float?
+  balance   Float?
+
+  @@index([vehicleId, dueOn])
 }
 
 model Insurance {

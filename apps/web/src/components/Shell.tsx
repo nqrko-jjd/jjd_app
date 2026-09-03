@@ -13,6 +13,7 @@ const LINKS: { href: string; label: string; roles?: string[] }[] = [
   { href: '/immeubles', label: 'Immeubles / ACP' },
   { href: '/contacts', label: 'Contacts' },
   { href: '/equipe', label: 'Équipe' },
+  { href: '/flotte', label: 'Flotte' },
   { href: '/controle', label: 'File de contrôle', roles: ['admin', 'office'] },
 ];
 

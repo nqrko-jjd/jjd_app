@@ -20,7 +20,7 @@ export async function bureauDashboard() {
 
   const [
     invoicedMonth, paidMonth, overdue, quotesToFollow, worksitesToInvoice,
-    expiringDocs, expiringInsurance, unpaidFines, hoursWeek, openWorksites,
+    expiringDocs, ctExpiring, unpaidFines, hoursWeek, openWorksites,
     crmNextActions,
   ] = await Promise.all([
     prisma.ledgerEntry.aggregate({
@@ -37,7 +37,7 @@ export async function bureauDashboard() {
       where: { expiresOn: { not: null, lte: in30 } },
       include: { person: true },
     }),
-    prisma.insurance.count({ where: { renewalOn: { not: null, lte: in30 } } }),
+    prisma.vehicle.count({ where: { nextInspection: { not: null, lte: in30 } } }),
     prisma.fine.findMany({ where: { OR: [{ status: null }, { status: { not: 'Payé' } }] } }),
     prisma.timeEntry.aggregate({
       where: { date: { gte: new Date(now.getTime() - 7 * DAY) } }, _sum: { hours: true },
@@ -64,8 +64,8 @@ export async function bureauDashboard() {
     alerts.push({ kind: 'crm_due', severity: 'warning', label: 'Relances CRM à faire', count: crmNextActions, href: '/crm' });
   if (expiringDocs.length)
     alerts.push({ kind: 'expiring_docs', severity: 'warning', label: 'Documents légaux qui expirent (30 j)', count: expiringDocs.length, href: '/equipe?docs=expiring' });
-  if (expiringInsurance)
-    alerts.push({ kind: 'expiring_insurance', severity: 'info', label: 'Assurances véhicules à renouveler', count: expiringInsurance, href: '/flotte' });
+  if (ctExpiring)
+    alerts.push({ kind: 'ct_expiring', severity: 'info', label: 'Contrôles techniques à faire (30 j)', count: ctExpiring, href: '/flotte' });
   if (unpaidFines.length)
     alerts.push({ kind: 'unpaid_fines', severity: 'info', label: 'PV impayés', count: unpaidFines.length, amount: finesAmount, href: '/flotte/pv' });
 

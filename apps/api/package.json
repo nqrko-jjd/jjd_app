@@ -16,7 +16,8 @@
     "build": "npm run db:provider && prisma generate && tsc -p tsconfig.json",
     "start": "node dist/src/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --test --import tsx --experimental-test-isolation=none \"src/**/*.test.ts\" \"test/**/*.test.ts\""
+    "test": "node --test --import tsx --experimental-test-isolation=none \"src/**/*.test.ts\" \"test/**/*.test.ts\"",
+    "import:vehicles": "tsx scripts/import-vehicles.ts"
   },
   "dependencies": {
     "@jjd/shared": "*",

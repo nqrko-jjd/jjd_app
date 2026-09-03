@@ -131,14 +131,12 @@ async function purge() {
     prisma.timeEntry.deleteMany({ where: { source: 'xlsx' } }),
     prisma.ledgerEntry.deleteMany({ where: { source: 'xlsx' } }),
     prisma.bankTransaction.deleteMany({ where: { source: 'xlsx' } }),
-    prisma.fine.deleteMany({}),
-    prisma.insurance.deleteMany({}),
+    prisma.fine.deleteMany({}), // ré-importées ici ; véhicules/assurances = registre dédié
     prisma.worksite.deleteMany({ where: { source: 'xlsx' } }),
     prisma.person.deleteMany({ where: { source: 'xlsx', user: { is: null } } }),
     prisma.building.deleteMany({}),
     prisma.contact.deleteMany({ where: { source: 'xlsx', user: { is: null } } }),
     prisma.syndic.deleteMany({}),
-    prisma.vehicle.deleteMany({}),
     prisma.importIssue.deleteMany({}),
     prisma.importBatch.deleteMany({}),
   ]);
@@ -368,59 +366,19 @@ async function importBank(sh: SheetData) {
   await insertChunked(prisma.bankTransaction, rows);
 }
 
-// ─────────────────────────────────────────────────────── Charges Détail -> flotte
+// ─────────────────────────────────────────────────── Détail PV -> amendes
+// (Les véhicules + assurances viennent du registre dédié : npm run import:vehicles.
+//  Ici on n'importe que les PV ; le lien véhicule est fait par import:vehicles.)
 
-const vehicleByPlate = new Map<string, string>();
-async function getVehicle(plate: string | null, model?: string | null): Promise<string | null> {
-  if (!plate) return null;
-  const key = plate.replace(/[^0-9a-z]/gi, '').toUpperCase();
-  if (vehicleByPlate.has(key)) return vehicleByPlate.get(key)!;
-  const v = await prisma.vehicle.create({ data: { plate: plate.trim(), model: model ?? null } });
-  vehicleByPlate.set(key, v.id);
-  bump('vehicles');
-  return v.id;
-}
-
-async function importFleet(charges: SheetData | undefined, pv: SheetData | undefined) {
-  if (charges) {
-    for (const row of charges.rows) {
-      if (row.r < 3) continue;
-      const provider = str(row.cells.A);
-      const model = str(row.cells.C);
-      const plate = str(row.cells.D);
-      if (!provider && !plate) continue;
-      if (!/^\s*(axa|allianz|belfius|ag|p&v|baloise|generali|assur)/i.test(provider ?? '')) {
-        // en-têtes / sous-totaux
-        if (!plate) continue;
-      }
-      const vehicleId = await getVehicle(plate, model);
-      await prisma.insurance.create({
-        data: {
-          vehicleId,
-          provider,
-          contractNumber: str(row.cells.B),
-          monthlyAmount: parseAmount(row.cells.H),
-          annualAmount: parseAmount(row.cells.I),
-          effectiveOn: parseLooseDate(row.cells.E),
-          renewalOn: parseLooseDate(row.cells.F),
-          paymentMode: str(row.cells.G),
-          note: str(row.cells.J) ?? str(row.cells.K),
-        },
-      });
-      bump('insurances');
-    }
-  }
+async function importFleet(_charges: SheetData | undefined, pv: SheetData | undefined) {
   if (pv) {
     for (const row of pv.rows) {
       if (row.r < 2) continue;
       const plateRaw = str(cell(pv, row, 'Plaque'));
       const ref = str(cell(pv, row, 'Référence'));
       if (!plateRaw && !ref) continue;
-      const plateClean = plateRaw?.match(/[0-9]-?[A-Z]{3}-?[0-9]{3}/i)?.[0] ?? null;
-      const vehicleId = plateClean ? await getVehicle(plateClean) : null;
       await prisma.fine.create({
         data: {
-          vehicleId,
           plateRaw,
           date: parseLooseDate(cell(pv, row, 'Date infraction')),
           time: str(cell(pv, row, 'Heure')),
@@ -561,7 +519,7 @@ async function main() {
   console.log('  banque     ', stats.bank_tx ?? 0);
 
   await importFleet(byName('Charges Détail'), byName('Détail PV'));
-  console.log('  flotte     ', stats.vehicles ?? 0, 'véhicules,', stats.insurances ?? 0, 'assurances,', stats.fines ?? 0, 'PV');
+  console.log('  PV         ', stats.fines ?? 0, '(véhicules + assurances : npm run import:vehicles)');
 
   await linkDemoAccounts();
 

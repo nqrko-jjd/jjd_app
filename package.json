@@ -17,7 +17,8 @@
     "dev:web": "npm run dev --workspace @jjd/web",
     "dev": "concurrently -n api,web -c blue,green \"npm:dev:api\" \"npm:dev:web\"",
     "test": "npm run test --workspace @jjd/shared && npm run test --workspace @jjd/api",
-    "typecheck": "npm run typecheck --workspace @jjd/shared && npm run typecheck --workspace @jjd/api && npm run typecheck --workspace @jjd/web"
+    "typecheck": "npm run typecheck --workspace @jjd/shared && npm run typecheck --workspace @jjd/api && npm run typecheck --workspace @jjd/web",
+    "import:all": "npm run import -w @jjd/api && npm run import:vehicles -w @jjd/api && npm run import:trustup -w @jjd/api"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

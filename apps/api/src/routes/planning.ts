@@ -192,10 +192,44 @@ vehiclesRouter.get(
   requireAuth(...STAFF),
   asyncHandler(async (_req, res) => {
     const items = await prisma.vehicle.findMany({
-      where: { active: true },
-      orderBy: { plate: 'asc' },
-      include: { insurances: { orderBy: { renewalOn: 'asc' }, take: 1 } },
+      orderBy: [{ status: 'asc' }, { brand: 'asc' }],
+      include: {
+        insurances: { take: 1 },
+        _count: { select: { fines: true, payments: true } },
+      },
     });
     res.json({ items });
+  }),
+);
+
+vehiclesRouter.get(
+  '/fines',
+  requireAuth(...STAFF),
+  asyncHandler(async (req, res) => {
+    const unpaidOnly = req.query.unpaid === '1';
+    const items = await prisma.fine.findMany({
+      where: unpaidOnly ? { OR: [{ status: null }, { status: { not: 'Payé' } }] } : {},
+      orderBy: { date: 'desc' },
+      take: 500,
+      include: { vehicle: { select: { id: true, brand: true, model: true, plate: true } } },
+    });
+    res.json({ items });
+  }),
+);
+
+vehiclesRouter.get(
+  '/:id',
+  requireAuth(...STAFF),
+  asyncHandler(async (req, res) => {
+    const v = await prisma.vehicle.findUnique({
+      where: { id: req.params.id },
+      include: {
+        insurances: true,
+        fines: { orderBy: { date: 'desc' }, take: 50 },
+        payments: { orderBy: { dueOn: 'asc' } },
+      },
+    });
+    if (!v) throw new HttpError(404, 'Véhicule introuvable');
+    res.json({ vehicle: v });
   }),
 );

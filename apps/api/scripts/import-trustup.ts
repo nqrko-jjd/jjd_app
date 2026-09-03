@@ -1,54 +1,90 @@
 /**
- * Import des DEVIS et FACTURES depuis un export TrustUp.
+ * Import des DEVIS et FACTURES depuis l'export TrustUp.
  * (Le reste — contacts, chantiers, pointage… — vient de l'Excel, plus complet.)
  *
- *   npm run import:trustup -- data-import/trustup-devis.xlsx
- *   npm run import:trustup -- data-import/trustup-factures.csv
+ *   npm run import:trustup -- data-import/invoice-.../xxxx.csv data-import/quote-.../yyyy.csv
+ *   npm run import:trustup                 (détecte tout seul les CSV dans data-import/)
  *
- * Accepte .xlsx / .csv / .tsv. Détecte devis vs factures d'après les colonnes.
+ * Rattachement au chantier : via la colonne « N° Facture » de l'onglet
+ * Data Projets du fichier de rentabilité (numéro F/D -> réf R-).
+ * Le client (ACP, syndic, n° TVA) est créé / enrichi au passage.
  * Idempotent : remplace les Document de source "trustup".
- * Rattache au chantier par le numéro R- ; crée/enrichit le Contact client.
  */
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { readdirSync, existsSync } from 'node:fs';
 import { PrismaClient } from '@prisma/client';
 import { parseLooseDate, parseAmount, normalizeName } from '@jjd/shared';
 import { readTable, pick, type TableRow } from './lib/table-read.js';
+import { readXlsx } from './lib/xlsx-read.js';
 
 const prisma = new PrismaClient();
-const files = process.argv.slice(2).map((f) => path.resolve(f));
-if (files.length === 0) {
-  console.error('Usage : npm run import:trustup -- <fichier.xlsx|csv> [autre.csv ...]');
-  process.exit(1);
+const here = path.dirname(fileURLToPath(import.meta.url));
+const dataDir = path.resolve(here, '../../../data-import');
+
+function findCsvs(): string[] {
+  const args = process.argv.slice(2);
+  if (args.length) return args.map((f) => path.resolve(f));
+  const out: string[] = [];
+  const walk = (dir: string, depth: number) => {
+    if (depth > 2 || !existsSync(dir)) return;
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) walk(p, depth + 1);
+      else if (e.name.endsWith('.csv') && /invoice|quote|facture|devis/i.test(p)) out.push(p);
+    }
+  };
+  walk(dataDir, 0);
+  return out;
 }
 
-const R_RE = /\bR-\s?\d+/i;
-
-function detectKind(rows: TableRow[]): 'quote' | 'invoice' {
-  const sample = rows.slice(0, 20);
-  const hasQuoteNo = sample.some((r) => /^D\d|^D-/.test(pick(r, 'numero', 'numero devis', 'numero du devis') ?? ''));
-  const hasInvoiceNo = sample.some((r) => /^F\d|^F-/.test(pick(r, 'numero', 'numero facture', 'numero de facture') ?? ''));
-  if (hasInvoiceNo && !hasQuoteNo) return 'invoice';
-  if (hasQuoteNo && !hasInvoiceNo) return 'quote';
-  // repli : présence d'une colonne d'échéance de paiement => facture
-  return sample.some((r) => pick(r, 'date d echeance', 'echeance', 'date de paiement')) ? 'invoice' : 'quote';
-}
-
-const QUOTE_STATUS: Record<string, string> = {
-  brouillon: 'draft', envoye: 'sent', accepte: 'accepted',
-  decline: 'declined', refuse: 'declined', expire: 'expired',
-};
 const INVOICE_STATUS: Record<string, string> = {
-  brouillon: 'draft', envoye: 'sent', paye: 'paid', 'partiellement paye': 'partial',
-  'en retard': 'overdue', 'note de credit': 'credited',
+  draft: 'draft', sent: 'sent', paid: 'paid', overdue: 'overdue', cancelled: 'credited',
+  partially_paid: 'partial',
 };
+const QUOTE_STATUS: Record<string, string> = {
+  draft: 'draft', sent: 'sent', accepted: 'accepted', rejected: 'declined', declined: 'declined',
+  expired: 'expired',
+};
+
+/** number (F2024090040 / D2024...) -> réf chantier (R-xxx), depuis le fichier Excel. */
+function buildDocToWorksite(): Map<string, string> {
+  const map = new Map<string, string>();
+  const xlsx = path.join(dataDir, 'calculs-rentabilite.xlsx');
+  if (!existsSync(xlsx)) return map;
+  const sheets = readXlsx(xlsx);
+
+  // Data Projets : col A = réf, col J = numéros de facture (multi-lignes)
+  const dp = sheets.find((s) => s.name.trim().toLowerCase() === 'data projets');
+  for (const row of dp?.rows ?? []) {
+    if (row.r < 26) continue;
+    const ref = String(row.cells.A ?? '').trim().toUpperCase();
+    if (!/^R-\d/.test(ref)) continue;
+    for (const m of String(row.cells.J ?? '').matchAll(/[FD]\s?\d[\w-]*/g)) {
+      map.set(m[0].replace(/\s/g, '').toUpperCase(), ref);
+    }
+  }
+
+  // Relance Devis : col C = n° devis, col D = réf chantier
+  const rd = sheets.find((s) => s.name.trim().toLowerCase() === 'relance devis');
+  for (const row of rd?.rows ?? []) {
+    if (row.r < 2) continue;
+    const num = String(row.cells.C ?? '').replace(/\s/g, '').toUpperCase();
+    const ref = String(row.cells.D ?? '').trim().toUpperCase();
+    if (/^D\d|^D-/.test(num) && /^R-\d/.test(ref)) map.set(num, ref);
+  }
+
+  return map;
+}
 
 async function contactFor(name: string | null, vat: string | null): Promise<string | null> {
   if (!name) return null;
   const nn = normalizeName(name);
   let c = await prisma.contact.findFirst({ where: { normalizedName: nn } });
   if (!c) {
+    const kind = /\bacp\b|copropri|\bvme\b/i.test(name) ? 'acp' : /\b(srl|sprl|sa|nv|bv|scrl)\b/i.test(name) ? 'company' : 'individual';
     c = await prisma.contact.create({
-      data: { name: name.trim(), normalizedName: nn, type: 'client', vat: vat ?? undefined, source: 'trustup' },
+      data: { name: name.trim(), normalizedName: nn, type: 'client', kind, vat: vat || null, source: 'trustup' },
     });
   } else if (vat && !c.vat) {
     await prisma.contact.update({ where: { id: c.id }, data: { vat } });
@@ -56,71 +92,94 @@ async function contactFor(name: string | null, vat: string | null): Promise<stri
   return c.id;
 }
 
-async function importFile(file: string) {
+async function importFile(file: string, docToWs: Map<string, string>, wsByRef: Map<string, string>) {
   const rows = readTable(file);
-  if (rows.length === 0) {
-    console.log(`  ${path.basename(file)} : vide ou illisible`);
-    return;
-  }
-  const kind = detectKind(rows);
-  console.log(`  ${path.basename(file)} : ${rows.length} lignes -> ${kind === 'quote' ? 'devis' : 'factures'}`);
-  console.log(`    colonnes : ${Object.keys(rows[0]!).join(', ')}`);
-
-  const worksites = await prisma.worksite.findMany({ select: { id: true, ref: true } });
-  const wsByRef = new Map(worksites.map((w) => [w.ref.toUpperCase().replace(/\s/g, ''), w.id]));
+  if (!rows.length) return { kind: '?', ok: 0, noWs: 0 };
+  const isInvoice = /invoice|facture/i.test(file) || rows.some((r) => /^F/i.test(pick(r, 'number') ?? ''));
+  const kind = isInvoice ? 'invoice' : 'quote';
+  const statusMap = isInvoice ? INVOICE_STATUS : QUOTE_STATUS;
 
   let ok = 0;
   let noWs = 0;
-  for (const r of rows) {
-    const number = pick(r, 'numero', 'numero devis', 'numero facture', 'n devis', 'n facture', 'reference');
+  for (const r of rows as TableRow[]) {
+    const number = pick(r, 'number');
     if (!number) continue;
+    const key = number.replace(/\s/g, '').toUpperCase();
 
-    const titleCol = pick(r, 'titre chantier', 'titre', 'objet', 'chantier', 'description') ?? '';
-    const refMatch = (`${titleCol} ${pick(r, 'chantier', 'projet') ?? ''}`).match(R_RE);
-    const wsId = refMatch ? wsByRef.get(refMatch[0].toUpperCase().replace(/\s/g, '')) ?? null : null;
+    let wsId = docToWs.get(key) ? wsByRef.get(docToWs.get(key)!) ?? null : null;
+    if (!wsId) {
+      // parfois le n° apparaît dans le titre
+      const m = (pick(r, 'title') ?? '').match(/\bR-\s?\d+/i);
+      if (m) wsId = wsByRef.get(m[0].replace(/\s/g, '').toUpperCase()) ?? null;
+    }
     if (!wsId) noWs++;
 
-    const clientName = pick(r, 'contact', 'client', 'nom du client', 'nom client');
-    const vat = pick(r, 'numero de tva', 'tva', 'numero tva', 'vat');
-    const contactId = await contactFor(clientName, vat);
-
-    const statusRaw = normalizeName(pick(r, 'statut', 'status', 'etat') ?? '');
-    const status = (kind === 'quote' ? QUOTE_STATUS : INVOICE_STATUS)[statusRaw] ?? 'draft';
-
-    const ht = parseAmount(pick(r, 'montant htva', 'total htva', 'montant ht', 'total ht', 'htva'));
-    const ttc = parseAmount(pick(r, 'montant ttc', 'total ttc', 'total', 'montant', 'ttc'));
-    const vatAmt = parseAmount(pick(r, 'tva', 'montant tva'));
+    const contactId = await contactFor(pick(r, 'client'), pick(r, 'client_vat_number'));
+    const ht = parseAmount(pick(r, 'subtotal')) ?? 0;
+    const tax = parseAmount(pick(r, 'total_tax')) ?? 0;
+    const ttc = parseAmount(pick(r, 'total')) ?? ht + tax;
+    const paid = parseAmount(pick(r, 'total_paid')) ?? 0;
+    const peppol = pick(r, 'peppol_status');
 
     await prisma.document.upsert({
       where: { kind_number: { kind, number } },
       create: {
-        kind, number, direction: 'sale', status,
-        worksiteId: wsId, contactId,
-        title: titleCol || null,
-        issuedOn: parseLooseDate(pick(r, 'date', 'date du devis', 'date de la facture', 'date facture')),
-        dueOn: parseLooseDate(pick(r, 'echeance', 'date d echeance', 'date de paiement')),
-        totalHt: ht ?? (ttc ? ttc / 1.21 : 0),
-        totalVat: vatAmt ?? 0,
-        totalTtc: ttc ?? (ht ? ht * 1.21 : 0),
-        paidAmount: status === 'paid' ? ttc ?? ht ?? 0 : parseAmount(pick(r, 'montant paye', 'paye')) ?? 0,
+        kind,
+        number,
+        direction: 'sale',
+        status: statusMap[(pick(r, 'status') ?? '').toLowerCase()] ?? 'draft',
+        worksiteId: wsId,
+        contactId,
+        title: pick(r, 'title'),
+        issuedOn: parseLooseDate(pick(r, 'sent_at')),
+        dueOn: parseLooseDate(pick(r, 'due_at')),
+        totalHt: ht,
+        totalVat: tax,
+        totalTtc: ttc,
+        paidAmount: paid,
+        paidOn: paid > 0 ? parseLooseDate(pick(r, 'due_at')) : null,
+        note: peppol && peppol !== '' ? `Peppol: ${peppol}` : null,
+        trustupId: pick(r, 'id'),
         source: 'trustup',
       },
       update: {
-        status, worksiteId: wsId, contactId, title: titleCol || null,
-        totalHt: ht ?? undefined, totalTtc: ttc ?? undefined,
+        status: statusMap[(pick(r, 'status') ?? '').toLowerCase()] ?? 'draft',
+        worksiteId: wsId,
+        contactId,
+        totalHt: ht,
+        totalVat: tax,
+        totalTtc: ttc,
+        paidAmount: paid,
       },
     });
     ok++;
   }
-  console.log(`    -> ${ok} documents (${noWs} sans chantier rattaché)`);
+  return { kind, ok, noWs };
 }
 
 async function main() {
-  console.log('Import TrustUp (devis + factures)');
+  const files = findCsvs();
+  if (!files.length) {
+    console.error('Aucun CSV trouvé. Dépose les exports TrustUp dans data-import/ ou passe les chemins en argument.');
+    process.exit(1);
+  }
+  console.log('Import TrustUp —', files.map((f) => path.basename(f)).join(', '));
+
   await prisma.document.deleteMany({ where: { source: 'trustup' } });
-  for (const f of files) await importFile(f);
-  const counts = await prisma.document.groupBy({ by: ['kind'], where: { source: 'trustup' }, _count: true });
-  console.log('\nTotal :', counts.map((c) => `${c._count} ${c.kind}`).join(', '));
+  const docToWs = buildDocToWorksite();
+  console.log(`  ${docToWs.size} numéros de document reliés à un chantier (via l'Excel)`);
+  const worksites = await prisma.worksite.findMany({ select: { id: true, ref: true } });
+  const wsByRef = new Map(worksites.map((w) => [w.ref.toUpperCase(), w.id]));
+
+  for (const f of files) {
+    const r = await importFile(f, docToWs, wsByRef);
+    console.log(`  ${path.basename(f)} : ${r.ok} ${r.kind === 'invoice' ? 'factures' : 'devis'} (${r.noWs} sans chantier)`);
+  }
+
+  const byKind = await prisma.document.groupBy({ by: ['kind'], where: { source: 'trustup' }, _count: true });
+  const linked = await prisma.document.count({ where: { source: 'trustup', worksiteId: { not: null } } });
+  const total = await prisma.document.count({ where: { source: 'trustup' } });
+  console.log(`\nTotal : ${byKind.map((c) => `${c._count} ${c.kind}`).join(', ')} — ${linked}/${total} rattachés à un chantier`);
 }
 
 main()

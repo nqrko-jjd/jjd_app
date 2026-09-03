@@ -8,6 +8,9 @@ dist/
 .env.local
 apps/*/.env
 apps/*/.env.local
+apps/api/secrets/
+*.sa.json
+google-sa.json
 
 # db
 *.db

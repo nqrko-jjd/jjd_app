@@ -6,6 +6,8 @@ import { useAuth } from '@/lib/auth';
 const LINKS: { href: string; label: string; roles?: string[] }[] = [
   { href: '/', label: 'Dashboard' },
   { href: '/chantiers', label: 'Chantiers' },
+  { href: '/planning', label: 'Planning' },
+  { href: '/pointage', label: 'Pointage' },
   { href: '/crm', label: 'CRM / Pipeline' },
   { href: '/immeubles', label: 'Immeubles / ACP' },
   { href: '/contacts', label: 'Contacts' },

@@ -11,6 +11,8 @@ import { buildingsRouter } from './routes/buildings.js';
 import { peopleRouter } from './routes/people.js';
 import { crmRouter } from './routes/crm.js';
 import { dashboardRouter, metaRouter, importsRouter } from './routes/misc.js';
+import { planningRouter, teamsRouter, vehiclesRouter } from './routes/planning.js';
+import { timesheetRouter, statementsRouter } from './routes/timesheet.js';
 
 export function createApp() {
   const app = express();
@@ -28,6 +30,11 @@ export function createApp() {
   app.use('/api/buildings', buildingsRouter);
   app.use('/api/people', peopleRouter);
   app.use('/api/crm', crmRouter);
+  app.use('/api/planning', planningRouter);
+  app.use('/api/teams', teamsRouter);
+  app.use('/api/vehicles', vehiclesRouter);
+  app.use('/api/timesheet', timesheetRouter);
+  app.use('/api/statements', statementsRouter);
   app.use('/api/meta', metaRouter);
   app.use('/api/imports', importsRouter);
 

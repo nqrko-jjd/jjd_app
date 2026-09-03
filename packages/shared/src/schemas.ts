@@ -91,8 +91,52 @@ export const crmOpportunityInput = z.object({
   note: z.string().nullish(),
 });
 
+export const planningEventInput = z.object({
+  worksiteId: nonEmpty,
+  title: z.string().trim().nullish(),
+  startAt: z.coerce.date(),
+  endAt: z.coerce.date(),
+  allDay: z.boolean().default(false),
+  teamId: z.string().nullish(),
+  vehicleId: z.string().nullish(),
+  personIds: z.array(z.string()).default([]),
+  materialsNote: z.string().trim().nullish(),
+  note: z.string().trim().nullish(),
+});
+
+export const teamInput = z.object({
+  name: nonEmpty,
+  color: z.string().trim().nullish(),
+  memberIds: z.array(z.string()).default([]),
+});
+
+export const timeEntryInput = z.object({
+  personId: nonEmpty,
+  worksiteId: z.string().nullish(),
+  date: z.coerce.date(),
+  hours: z.number().positive().nullish(),
+  amount: z.number().nonnegative().nullish(),
+  task: z.string().trim().nullish(),
+  note: z.string().trim().nullish(),
+});
+
+/** Démarrage du compteur mobile (l'app envoie l'heure locale de début). */
+export const timerStartInput = z.object({
+  worksiteId: nonEmpty,
+  startedAt: z.coerce.date().optional(),
+  task: z.string().trim().nullish(),
+});
+
+export const timerStopInput = z.object({
+  endedAt: z.coerce.date().optional(),
+  note: z.string().trim().nullish(),
+});
+
 export type ContactInput = z.infer<typeof contactInput>;
 export type BuildingInput = z.infer<typeof buildingInput>;
 export type WorksiteInput = z.infer<typeof worksiteInput>;
 export type PersonInput = z.infer<typeof personInput>;
 export type CrmOpportunityInput = z.infer<typeof crmOpportunityInput>;
+export type PlanningEventInput = z.infer<typeof planningEventInput>;
+export type TeamInput = z.infer<typeof teamInput>;
+export type TimeEntryInput = z.infer<typeof timeEntryInput>;

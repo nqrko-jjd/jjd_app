@@ -238,6 +238,8 @@ async function importTime(sh: SheetData) {
       issue('time_entry', sh.name, rowRef, 'warning', 'Pointage sans ouvrier', { ref, amount });
       continue;
     }
+    // ligne vide / gabarit (ni heures, ni montant, ni tâche) -> ignorée
+    if ((amount === null || amount === 0) && hours === null && !task) continue;
     const personId = await getPerson(workerName, 'worker');
     if (!personId) continue;
 

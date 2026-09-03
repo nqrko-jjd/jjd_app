@@ -38,7 +38,7 @@ export const env = {
   deeplApiHost: deeplKey.endsWith(':fx') ? 'https://api-free.deepl.com' : 'https://api.deepl.com',
 
   google: {
-    clientId: process.env.GOOGLE_CLIENT_ID ?? '',
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? '',
+    saKeyFile: process.env.GOOGLE_SA_KEY_FILE ?? './secrets/google-sa.json',
+    calendarId: process.env.GOOGLE_CALENDAR_ID ?? '',
   },
 };

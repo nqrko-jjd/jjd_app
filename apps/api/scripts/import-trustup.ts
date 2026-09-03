@@ -170,6 +170,7 @@ async function importFile(file: string, docToWs: Map<string, string>, wsByRef: M
         title: pick(r, 'title'),
         issuedOn: parseLooseDate(pick(r, 'sent_at')),
         dueOn: parseLooseDate(pick(r, 'due_at')),
+        lockedAt: parseLooseDate(pick(r, 'sent_at')) ?? new Date(2024, 0, 1),
         totalHt: ht,
         totalVat: tax,
         totalTtc: ttc,

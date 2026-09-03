@@ -132,6 +132,49 @@ export const timerStopInput = z.object({
   note: z.string().trim().nullish(),
 });
 
+export const documentLineInput = z.object({
+  id: z.string().optional(),
+  kind: z.enum(['item', 'section', 'text']).default('item'),
+  label: z.string().trim().min(1),
+  description: z.string().trim().nullish(),
+  qty: z.number().default(1),
+  unit: z.string().trim().nullish(),
+  unitPriceHt: z.number().default(0),
+  discountPct: z.number().min(0).max(100).default(0),
+  vatRate: z.number().default(0.21),
+  priceItemId: z.string().nullish(),
+});
+
+export const documentInput = z.object({
+  kind: z.enum(['quote', 'invoice', 'credit_note', 'deposit_invoice']).default('quote'),
+  worksiteId: z.string().nullish(),
+  contactId: z.string().nullish(),
+  title: z.string().trim().nullish(),
+  intro: z.string().trim().nullish(),
+  terms: z.string().trim().nullish(),
+  issuedOn: z.coerce.date().nullish(),
+  dueOn: z.coerce.date().nullish(),
+  validUntil: z.coerce.date().nullish(),
+  note: z.string().trim().nullish(),
+  parentId: z.string().nullish(),
+  lines: z.array(documentLineInput).default([]),
+});
+
+export const priceItemInput = z.object({
+  ref: z.string().trim().nullish(),
+  label: nonEmpty,
+  description: z.string().trim().nullish(),
+  unit: z.string().trim().nullish(),
+  unitPriceHt: z.number().nonnegative().default(0),
+  vatRate: z.number().default(0.21),
+  category: z.string().trim().nullish(),
+  active: z.boolean().default(true),
+});
+
+export type DocumentLineInput = z.infer<typeof documentLineInput>;
+export type DocumentInput = z.infer<typeof documentInput>;
+export type PriceItemInput = z.infer<typeof priceItemInput>;
+
 export type ContactInput = z.infer<typeof contactInput>;
 export type BuildingInput = z.infer<typeof buildingInput>;
 export type WorksiteInput = z.infer<typeof worksiteInput>;

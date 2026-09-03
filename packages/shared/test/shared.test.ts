@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   computeWorksiteMargin, parseAmount, parseLooseDate, excelSerialToDate,
   normalizeName, guessWorksiteStatus, htFromTtc, formatVat,
+  computeDocTotals, belgianStructuredComm, formatDocNumber, computeDueDate,
 } from '../src/index.js';
 
 test('parseAmount gère les formats belges et Excel', () => {
@@ -72,4 +73,28 @@ test('htFromTtc 6% rénovation', () => {
 test('formatVat', () => {
   assert.equal(formatVat('BE0850775221'), 'BE 0850.775.221');
   assert.equal(formatVat('foo'), null);
+});
+
+test('computeDocTotals : TVA ventilée par taux, remises, lignes de section', () => {
+  const t = computeDocTotals([
+    { kind: 'section', label: 'Gros œuvre' } as never,
+    { kind: 'item', qty: 10, unitPriceHt: 100, discountPct: 0, vatRate: 0.06 },
+    { kind: 'item', qty: 2, unitPriceHt: 250, discountPct: 10, vatRate: 0.21 },
+  ]);
+  assert.equal(t.totalHt, 1450); // 1000 + 450
+  assert.equal(t.vatBreakdown['0.06'].vat, 60);
+  assert.equal(t.vatBreakdown['0.21'].vat, 94.5);
+  assert.equal(t.totalVat, 154.5);
+  assert.equal(t.totalTtc, 1604.5);
+});
+
+test('belgianStructuredComm : mod 97, 00 -> 97, format +++', () => {
+  assert.equal(belgianStructuredComm(2026014), '+++000/2026/01472+++');
+  assert.match(belgianStructuredComm(1), /^\+\+\+\d{3}\/\d{4}\/\d{5}\+\+\+$/);
+});
+
+test('formatDocNumber & computeDueDate', () => {
+  assert.equal(formatDocNumber('invoice', 2026, 14), 'F2026-014');
+  assert.equal(formatDocNumber('quote', 2026, 3), 'D2026-003');
+  assert.equal(computeDueDate(new Date('2026-01-15'), 30).toISOString().slice(0, 10), '2026-02-14');
 });

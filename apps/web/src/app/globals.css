@@ -219,7 +219,8 @@ p { margin: 0; }
   box-shadow: 0 0 0 3px var(--primary-soft);
 }
 .field { display: flex; flex-direction: column; gap: 0.3rem; }
-.field label { font-size: 0.78rem; font-weight: 600; color: var(--ink-2); }
+.field label, .field > span { font-size: 0.78rem; font-weight: 600; color: var(--ink-2); }
+.field textarea.input { resize: vertical; font: inherit; }
 
 /* ---------------------------------------------------- stat cards */
 .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 0.9rem; }

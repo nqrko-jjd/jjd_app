@@ -153,11 +153,11 @@ portalRouter.get(
         building: w.building, startedOn: w.startedOn, endedOn: w.endedOn,
         description: w.description,
       },
-      quotes: w.documents.filter((d) => d.kind === 'quote').map((d) => ({
+      quotes: w.documents.filter((d) => d.kind === 'quote' && d.number).map((d) => ({
         id: d.id, number: d.number, title: d.title, status: d.status,
         totalHt: d.totalHt, totalTtc: d.totalTtc, issuedOn: d.issuedOn, dueOn: d.dueOn,
       })),
-      invoices: w.documents.filter((d) => d.kind === 'invoice').map((d) => ({
+      invoices: w.documents.filter((d) => d.kind === 'invoice' && d.number).map((d) => ({
         id: d.id, number: d.number, status: d.status,
         totalTtc: d.totalTtc, paidAmount: d.paidAmount, issuedOn: d.issuedOn, dueOn: d.dueOn,
       })),

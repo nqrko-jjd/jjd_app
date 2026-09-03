@@ -20,12 +20,12 @@ model Counter {
 
 /// Lien de connexion à usage unique (portail client — pas de mot de passe).
 model LoginToken {
-  token     String   @id
+  token     String    @id
   email     String
-  purpose   String   @default("portal")
+  purpose   String    @default("portal")
   expiresAt DateTime
   usedAt    DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
   @@index([email])
 }
@@ -73,11 +73,12 @@ model User {
   lastLoginAt  DateTime?
   createdAt    DateTime  @default(now())
 
-  auditLogs       AuditLog[]
-  approvedEntries TimeEntry[]      @relation("ApprovedBy")
-  ownedOpps       CrmOpportunity[] @relation("OppOwner")
-  createdEvents   PlanningEvent[]  @relation("EventCreatedBy")
-  messages        Message[]
+  auditLogs        AuditLog[]
+  approvedEntries  TimeEntry[]      @relation("ApprovedBy")
+  ownedOpps        CrmOpportunity[] @relation("OppOwner")
+  createdEvents    PlanningEvent[]  @relation("EventCreatedBy")
+  messages         Message[]
+  createdDocuments Document[]       @relation("DocumentAuthor")
 }
 
 /// Fiche personne : ouvrier ou chef de chantier. Toutes les infos utiles.
@@ -101,13 +102,13 @@ model Person {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  user             User?
-  legalDocs        LegalDoc[]
-  equipment        Equipment[]
-  timeEntries      TimeEntry[]
-  managedWorksites Worksite[]        @relation("WorksiteManager")
-  eventAssignments EventAssignment[]
-  teamMemberships  TeamMember[]
+  user                 User?
+  legalDocs            LegalDoc[]
+  equipment            Equipment[]
+  timeEntries          TimeEntry[]
+  managedWorksites     Worksite[]          @relation("WorksiteManager")
+  eventAssignments     EventAssignment[]
+  teamMemberships      TeamMember[]
   threadParticipations ThreadParticipant[]
 
   @@index([normalizedName])
@@ -322,33 +323,95 @@ model Category {
 /// En-tête de document commercial : devis, facture, note de crédit, acompte.
 /// Source de vérité = TrustUp pour l'instant (import). Le module lot 6 les créera.
 model Document {
-  id         String    @id @default(cuid())
-  kind       String // quote | invoice | credit_note | deposit_invoice
-  direction  String    @default("sale") // sale | purchase | credit_note
-  number     String
-  worksiteId String?
-  worksite   Worksite? @relation(fields: [worksiteId], references: [id])
-  contactId  String?
-  contact    Contact?  @relation(fields: [contactId], references: [id])
-  status     String    @default("draft")
-  title      String?
-  issuedOn   DateTime?
-  dueOn      DateTime?
-  totalHt    Float     @default(0)
-  totalVat   Float     @default(0)
-  totalTtc   Float     @default(0)
-  vatRate    Float?
-  paidAmount Float     @default(0)
-  paidOn     DateTime?
-  note       String?
-  trustupId  String?
-  source     String?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  id             String         @id @default(cuid())
+  kind           String // quote | invoice | credit_note | deposit_invoice
+  direction      String         @default("sale") // sale | purchase | credit_note
+  number         String? // null tant que le document est en brouillon
+  draftRef       String?        @unique // "BROUILLON-xxx" tant que non émis
+  worksiteId     String?
+  worksite       Worksite?      @relation(fields: [worksiteId], references: [id])
+  contactId      String?
+  contact        Contact?       @relation(fields: [contactId], references: [id])
+  status         String         @default("draft")
+  title          String?
+  intro          String? // texte d'introduction (devis)
+  terms          String? // conditions / mentions de bas de page
+  issuedOn       DateTime?
+  dueOn          DateTime?
+  validUntil     DateTime? // devis : date de validité
+  totalHt        Float          @default(0)
+  totalVat       Float          @default(0)
+  totalTtc       Float          @default(0)
+  vatRate        Float?
+  paidAmount     Float          @default(0)
+  paidOn         DateTime?
+  note           String?
+  // instantané client au moment de l'émission (le contact peut changer ensuite)
+  billingName    String?
+  billingVat     String?
+  billingAddress String?
+  structuredComm String? // communication structurée belge +++xxx/xxxx/xxxxx+++
+  peppolStatus   String? // null | queued | sent | delivered | error
+  sentAt         DateTime?
+  acceptedOn     DateTime?
+  declinedReason String?
+  lockedAt       DateTime? // émission = verrou : plus de modif des lignes
+  parentId       String?
+  parent         Document?      @relation("DocumentLineage", fields: [parentId], references: [id])
+  children       Document[]     @relation("DocumentLineage")
+  trustupId      String?
+  source         String?
+  createdById    String?
+  createdBy      User?          @relation("DocumentAuthor", fields: [createdById], references: [id])
+  lines          DocumentLine[]
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
 
   @@unique([kind, number])
   @@index([worksiteId])
+  @@index([contactId])
   @@index([status])
+}
+
+/// Ligne d'un devis / d'une facture.
+model DocumentLine {
+  id          String     @id @default(cuid())
+  documentId  String
+  document    Document   @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  position    Int        @default(0)
+  kind        String     @default("item") // item | section | text
+  label       String
+  description String?
+  qty         Float      @default(1)
+  unit        String? // "m²", "h", "pce", "forfait"
+  unitPriceHt Float      @default(0)
+  discountPct Float      @default(0)
+  vatRate     Float      @default(0.21)
+  totalHt     Float      @default(0)
+  priceItemId String?
+  priceItem   PriceItem? @relation(fields: [priceItemId], references: [id])
+
+  @@index([documentId])
+}
+
+/// Bibliothèque d'ouvrages — prix réutilisables pour composer les devis.
+model PriceItem {
+  id          String   @id @default(cuid())
+  ref         String? // code interne éventuel
+  label       String
+  description String?
+  unit        String?
+  unitPriceHt Float    @default(0)
+  vatRate     Float    @default(0.21)
+  category    String? // "Maçonnerie", "Peinture", "Main d'œuvre"…
+  active      Boolean  @default(true)
+  source      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  lines DocumentLine[]
+
+  @@index([category])
 }
 
 /// Ligne du grand livre = une ligne de l'onglet "Facture" du fichier.
@@ -482,7 +545,7 @@ model Vehicle {
   brand             String?
   model             String?
   name              String?
-  type              String?   // Camionette | Moto | Clark | Voiture
+  type              String? // Camionette | Moto | Clark | Voiture
   fuel              String?
   vin               String?
   firstRegistration DateTime?
@@ -496,22 +559,22 @@ model Vehicle {
   status            String    @default("active")
 
   // acquisition / financement
-  acquisitionMode   String?   // Comptant | Crédit | Leasing | Renting financier
-  purchaseDate      DateTime?
-  purchasePriceHt   Float?
-  financedAmount    Float?
-  monthlyPayment    Float?
-  downPayment       Float?
-  residualValue     Float?
-  financeMonths     Int?
-  financeEndOn      DateTime?
-  financeCompany    String?
-  financeContract   String?
+  acquisitionMode String? // Comptant | Crédit | Leasing | Renting financier
+  purchaseDate    DateTime?
+  purchasePriceHt Float?
+  financedAmount  Float?
+  monthlyPayment  Float?
+  downPayment     Float?
+  residualValue   Float?
+  financeMonths   Int?
+  financeEndOn    DateTime?
+  financeCompany  String?
+  financeContract String?
 
-  active            Boolean   @default(true)
-  note              String?
-  source            String?
-  createdAt         DateTime  @default(now())
+  active    Boolean  @default(true)
+  note      String?
+  source    String?
+  createdAt DateTime @default(now())
 
   insurances Insurance[]
   fines      Fine[]
@@ -596,17 +659,17 @@ model ThreadParticipant {
 }
 
 model Message {
-  id        String   @id @default(cuid())
-  threadId  String
-  thread    Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
-  authorId  String?
-  author    User?    @relation(fields: [authorId], references: [id])
+  id         String   @id @default(cuid())
+  threadId   String
+  thread     Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  authorId   String?
+  author     User?    @relation(fields: [authorId], references: [id])
   authorName String? // nom figé (l'auteur peut être un ouvrier sans compte)
-  kind      String   @default("text") // text | photo | status
-  body      String?
-  fileUrl   String?
-  thumbUrl  String?
-  createdAt DateTime @default(now())
+  kind       String   @default("text") // text | photo | status
+  body       String?
+  fileUrl    String?
+  thumbUrl   String?
+  createdAt  DateTime @default(now())
 
   @@index([threadId, createdAt])
 }

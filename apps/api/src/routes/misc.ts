@@ -48,15 +48,17 @@ metaRouter.get(
   '/pickers',
   requireAuth(...STAFF),
   asyncHandler(async (_req, res) => {
-    const [clients, buildings, people] = await Promise.all([
+    const [clients, buildings, people, worksites] = await Promise.all([
       prisma.contact.findMany({ where: { OR: [{ type: 'client' }, { type: 'both' }] }, orderBy: { name: 'asc' }, select: { id: true, name: true } }),
       prisma.building.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }),
       prisma.person.findMany({ where: { active: true }, orderBy: { firstName: 'asc' }, select: { id: true, firstName: true, lastName: true, displayName: true } }),
+      prisma.worksite.findMany({ where: { archived: false, kind: 'project' }, orderBy: { updatedAt: 'desc' }, take: 500, select: { id: true, ref: true, title: true, clientId: true } }),
     ]);
     res.json({
       clients,
       buildings,
       people: people.map((p) => ({ id: p.id, name: p.displayName || `${p.firstName} ${p.lastName ?? ''}`.trim() })),
+      worksites: worksites.map((w) => ({ id: w.id, name: `${w.ref} · ${w.title}`, clientId: w.clientId })),
     });
   }),
 );

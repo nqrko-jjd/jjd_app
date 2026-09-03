@@ -16,7 +16,7 @@ interface Detail {
     client: { id: string; name: string } | null;
     building: { id: string; name: string; syndic: { name: string } | null } | null;
     manager: { displayName: string | null; firstName: string } | null;
-    documents: { id: string; kind: string; number: string; totalHt: number; status: string; issuedOn: string | null }[];
+    documents: { id: string; kind: string; number: string | null; draftRef: string | null; totalHt: number; status: string; issuedOn: string | null }[];
     events: { id: string; startAt: string; endAt: string; vehicle: { plate: string | null } | null; assignments: { person: { displayName: string | null; firstName: string } }[] }[];
   };
   margin: WorksiteMargin | null;
@@ -112,7 +112,10 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
       <div className="section-title">Fil de chantier</div>
       <div style={{ marginBottom: '1.5rem' }}><ChantierThread worksiteId={w.id} /></div>
 
-      <div className="section-title">Devis &amp; factures <span className="hint">{w.documents.length}</span></div>
+      <div className="section-title">
+        Devis &amp; factures <span className="hint">{w.documents.length}</span>
+        <Link href="/documents" className="btn" style={{ marginLeft: 'auto', padding: '0.2rem 0.6rem', fontSize: '0.78rem' }}>Tous les documents →</Link>
+      </div>
       {w.documents.length === 0 ? (
         <div className="card card-pad muted">Aucun devis / facture rattaché.</div>
       ) : (
@@ -123,7 +126,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
               {w.documents.map((d) => (
                 <tr key={d.id}>
                   <td>{DOC_KIND[d.kind] ?? d.kind}</td>
-                  <td className="mono">{d.number}</td>
+                  <td className="mono"><Link href={`/documents/${d.id}`}>{d.number ?? d.draftRef ?? '—'}</Link></td>
                   <td className="tnum">{formatDateBE(d.issuedOn)}</td>
                   <td style={{ textAlign: 'right' }}><Money value={d.totalHt} /></td>
                   <td><span className={`badge ${DOC_TONE[d.status] ?? ''}`}>{DOC_STATUS[d.status] ?? d.status}</span></td>

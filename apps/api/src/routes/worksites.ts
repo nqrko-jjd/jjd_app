@@ -36,6 +36,36 @@ worksitesRouter.get(
   }),
 );
 
+/** Chantiers où la personne connectée a travaillé (pointage ou affectation planning). */
+worksitesRouter.get(
+  '/mine',
+  requireAuth(...STAFF),
+  asyncHandler(async (req, res) => {
+    const personId = req.user!.personId;
+    const { q } = req.query as Record<string, string>;
+    if (!personId) return res.json({ items: [] });
+    const where: Record<string, unknown> = {
+      OR: [
+        { timeEntries: { some: { personId } } },
+        { events: { some: { assignments: { some: { personId } } } } },
+      ],
+    };
+    if (q) {
+      where.AND = [{ OR: [{ ref: { contains: q } }, { title: { contains: q } }, { city: { contains: q } }] }];
+    }
+    const items = await prisma.worksite.findMany({
+      where,
+      orderBy: { updatedAt: 'desc' },
+      take: 200,
+      include: {
+        client: { select: { name: true } },
+        building: { select: { name: true } },
+      },
+    });
+    res.json({ items });
+  }),
+);
+
 worksitesRouter.get(
   '/:id',
   requireAuth(...STAFF),

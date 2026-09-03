@@ -412,10 +412,27 @@ async function linkDemoAccounts() {
   await prisma.planningEvent.deleteMany({ where: { title: { startsWith: '(démo)' } } });
   await prisma.person.deleteMany({ where: { source: 'demo' } });
 
-  async function link(email: string, where: object, fallback: { firstName: string; role: string }) {
+  async function link(
+    email: string,
+    where: object,
+    fallback: { firstName: string; role: string },
+    pick?: 'timeEntries' | 'managedWorksites',
+  ) {
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) return null;
-    let person = await prisma.person.findFirst({ where: { ...where, user: { is: null } } });
+    let person: { id: string; hourlyRate: number | null; role: string } | null;
+    if (pick) {
+      // choisit la fiche la plus "riche" (celle qui a le plus de pointages / chantiers)
+      const cands = await prisma.person.findMany({
+        where: { ...where, user: { is: null } },
+        include: { _count: { select: { [pick]: true } as never } },
+      });
+      const n = (x: (typeof cands)[number]) => ((x._count as Record<string, number>)[pick] ?? 0);
+      cands.sort((a, b) => n(b) - n(a));
+      person = cands[0] ?? null;
+    } else {
+      person = await prisma.person.findFirst({ where: { ...where, user: { is: null } } });
+    }
     if (!person) {
       person = await prisma.person.create({
         data: {
@@ -439,11 +456,13 @@ async function linkDemoAccounts() {
     'ouvrier@jjd-consult.be',
     { role: 'worker', timeEntries: { some: {} } },
     { firstName: 'Ouvrier démo', role: 'worker' },
+    'timeEntries',
   );
   const chefId = await link(
     'chef@jjd-consult.be',
-    { role: 'foreman' },
+    { role: 'foreman', managedWorksites: { some: {} } },
     { firstName: 'Chef démo', role: 'foreman' },
+    'managedWorksites',
   );
   await link('david@jjd-consult.be', { normalizedName: 'david' }, { firstName: 'David', role: 'foreman' });
   await link('julien@jjd-consult.be', { normalizedName: 'julien' }, { firstName: 'Julien', role: 'foreman' });

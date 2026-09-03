@@ -33,7 +33,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="index" options={worker || foreman ? tab('Aujourd’hui', '⏱') : hide} />
       <Tabs.Screen name="heures" options={worker ? tab('Mes heures', '📋') : hide} />
       <Tabs.Screen name="dashboard" options={office ? tab('Bord', '▨') : hide} />
-      <Tabs.Screen name="chantiers" options={staff ? tab('Chantiers', '🏗') : hide} />
+      <Tabs.Screen name="chantiers" options={staff ? tab('Chantiers', '🏗') : worker ? tab('Mes chantiers', '🏗') : hide} />
       <Tabs.Screen name="planning" options={staff ? tab('Planning', '🗓') : hide} />
       <Tabs.Screen name="valider" options={staff ? tab('Valider', '✓') : hide} />
       <Tabs.Screen name="plus" options={staff ? tab('Plus', '⋯') : hide} />

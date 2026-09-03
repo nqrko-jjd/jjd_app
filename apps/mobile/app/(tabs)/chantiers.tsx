@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { View, Text, TextInput, Pressable, FlatList, StyleSheet } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { apiGet } from '@/lib/api';
+import { useSession } from '@/lib/session';
 import { Badge, Muted, eur } from '@/lib/ui';
 import { T } from '@/lib/theme';
 
@@ -22,17 +23,20 @@ const TONE: Record<string, 'ok' | 'warn' | 'crit' | undefined> = {
 
 export default function Chantiers() {
   const router = useRouter();
+  const { user } = useSession();
+  const worker = user?.role === 'worker';
   const [q, setQ] = useState('');
   const [items, setItems] = useState<WS[]>([]);
 
   const load = useCallback(async () => {
     try {
-      const r = await apiGet<{ items: WS[] }>(`/api/worksites${q ? `?q=${encodeURIComponent(q)}` : ''}`);
+      const path = worker ? '/api/worksites/mine' : '/api/worksites';
+      const r = await apiGet<{ items: WS[] }>(`${path}${q ? `?q=${encodeURIComponent(q)}` : ''}`);
       setItems(r.items);
     } catch {
       /* hors ligne */
     }
-  }, [q]);
+  }, [q, worker]);
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   return (
@@ -52,7 +56,7 @@ export default function Chantiers() {
         keyExtractor={(x) => x.id}
         contentContainerStyle={{ padding: 12, paddingTop: 0, gap: 8 }}
         renderItem={({ item }) => (
-          <Pressable style={s.row} onPress={() => router.push(`/chantier/${item.id}`)}>
+          <Pressable style={s.row} onPress={() => router.push((worker ? `/fiche/${item.id}` : `/chantier/${item.id}`) as never)}>
             <View style={{ flex: 1 }}>
               <Text style={s.title}>
                 <Text style={s.ref}>{item.ref}</Text> — {item.title}
@@ -61,7 +65,7 @@ export default function Chantiers() {
             </View>
             <View style={{ alignItems: 'flex-end', gap: 4 }}>
               <Badge tone={TONE[item.status]}>{STATUS_LABEL[item.status] ?? item.status}</Badge>
-              <Text style={s.amount}>{eur(item.quotedHt)}</Text>
+              {!worker && <Text style={s.amount}>{eur(item.quotedHt)}</Text>}
             </View>
           </Pressable>
         )}

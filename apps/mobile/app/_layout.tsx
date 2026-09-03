@@ -12,9 +12,9 @@ function Guard() {
 
   useEffect(() => {
     if (loading) return;
-    const inApp = segments[0] === '(tabs)';
-    if (!user && inApp) router.replace('/login');
-    else if (user && !inApp) router.replace('/');
+    const onLogin = segments[0] === 'login';
+    if (!user && !onLogin) router.replace('/login');
+    else if (user && onLogin) router.replace('/');
   }, [user, loading, segments, router]);
 
   return (

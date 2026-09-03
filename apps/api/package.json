@@ -11,6 +11,7 @@
     "db:reset": "node scripts/drop-db.mjs && npm run db:push && npm run seed",
     "seed": "tsx prisma/seed.ts",
     "import": "tsx scripts/import-xlsx.ts",
+    "import:trustup": "tsx scripts/import-trustup.ts",
     "dev": "tsx watch src/index.ts",
     "build": "npm run db:provider && prisma generate && tsc -p tsconfig.json",
     "start": "node dist/src/index.js",

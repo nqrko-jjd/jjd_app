@@ -16,6 +16,8 @@ Ou double-clic sur `LANCER-JJD.cmd`.
 
 Connexion : `david@jjd-consult.be` / `jjd` (comptes de démarrage : david@ julien@ melvina@ chef@ ouvrier@).
 
+**Travailler depuis un autre poste (Git, VPS, déploiement)** → [`docs/travailler-a-distance.md`](docs/travailler-a-distance.md)
+
 ## Structure
 
 | Dossier | Rôle |

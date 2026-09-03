@@ -79,21 +79,22 @@ export default function MaintenancePage() {
         <div className="s-wrap">
           <div className="s-split">
             <div>
-              <Eyebrow>Espace syndic & copropriété</Eyebrow>
-              <h2 style={{ margin: '1rem 0 1.3rem' }}>Un portail dédié <span className="s-em">à vos immeubles.</span></h2>
+              <Eyebrow>Espace syndic & promoteur</Eyebrow>
+              <h2 style={{ margin: '1rem 0 1.3rem' }}>Un portail dédié <span className="s-em">à vos immeubles et vos dossiers.</span></h2>
               <p className="s-lead" style={{ maxWidth: '46ch' }}>
-                Vos gestionnaires suivent chaque intervention en ligne, par immeuble : photos, rapports signés, devis à
-                valider et planning de la semaine. Vos copropriétaires y accèdent en lecture pour les infos qui les
-                concernent.
+                Gestionnaires et promoteurs suivent chaque intervention en ligne : photos, rapports signés, devis à
+                valider et planning de la semaine. Pour un SAV, chaque logement livré devient un dossier suivi jusqu’à
+                la levée de réserves. Les copropriétaires y accèdent en lecture pour ce qui les concerne.
               </p>
               <div style={{ marginTop: '1.8rem' }}>
                 <Cta href="/portail">Voir l’espace client</Cta>
               </div>
             </div>
             <div className="s-panel">
-              <div className="row"><b>·</b><div><strong>Vue par immeuble / ACP</strong><br />Interventions en cours et historique regroupés par bâtiment.</div></div>
+              <div className="row"><b>·</b><div><strong>Vue par immeuble / dossier</strong><br />Interventions en cours et historique regroupés par bâtiment ou par lot livré.</div></div>
               <div className="row"><b>·</b><div><strong>Rapports d’intervention</strong><br />Datés, illustrés et signés sur place par l’équipe.</div></div>
-              <div className="row"><b>·</b><div><strong>Accès résident en lecture</strong><br />Les habitants voient le suivi, sans les données financières.</div></div>
+              <div className="row"><b>·</b><div><strong>Suivi des réserves</strong><br />Chaque point ouvert, traité, clôturé — visible côté promoteur comme côté occupant.</div></div>
+              <div className="row"><b>·</b><div><strong>Accès résident en lecture</strong><br />Les habitants voient l’avancement, sans les données financières.</div></div>
             </div>
           </div>
         </div>

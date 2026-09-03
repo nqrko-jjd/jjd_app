@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { PageHero, SectionHead, CtaBand, Eyebrow } from '../_components/blocks';
+import { PageHero, SectionHead, CtaBand, Eyebrow, Cta } from '../_components/blocks';
 
 export const metadata: Metadata = {
   title: 'Rénovation complète | JJD Consult',
@@ -55,6 +55,30 @@ export default function RenovationPage() {
                 <p>{p.text}</p>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="s-section">
+        <div className="s-wrap">
+          <div className="s-split">
+            <div>
+              <Eyebrow>Votre espace chantier</Eyebrow>
+              <h2 style={{ margin: '1rem 0 1.3rem' }}>Une rénovation qui dure ? <span className="s-em">Suivez-la en ligne.</span></h2>
+              <p className="s-lead" style={{ maxWidth: '46ch' }}>
+                Un chantier complet s’étale sur des mois. Depuis votre espace privé, vous voyez où en est chaque poste,
+                les photos de la semaine, le planning et les devis à valider — sans avoir à relancer pour savoir.
+              </p>
+              <div style={{ marginTop: '1.8rem' }}>
+                <Cta href="/portail" variant="dark">Voir l’espace client</Cta>
+              </div>
+            </div>
+            <ul className="s-list">
+              <li>Avancement poste par poste</li>
+              <li>Photos et comptes rendus datés</li>
+              <li>Planning des interventions à venir</li>
+              <li>Devis complémentaires validés d’un clic</li>
+            </ul>
           </div>
         </div>
       </section>

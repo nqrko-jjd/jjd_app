@@ -27,10 +27,15 @@ Connexion : `david@jjd-consult.be` / `jjd` (comptes de démarrage : david@ julie
 
 ## Où on en est
 
-- **Lot 0** ✅ Fondations, schéma de données, auth par rôles, import Excel (843 chantiers, 9472 pointages, 7605 écritures)
+- **Lot 0** ✅ Fondations, schéma de données, auth par rôles, import Excel (843 chantiers, 9363 pointages, 7600 écritures)
 - **Lot 1** ✅ Web bureau : dashboard, chantiers + rentabilité temps réel, contacts, immeubles/ACP, équipe, CRM, file de contrôle
-- **Lot 2** ⏳ Planning + pointage mobile hors-ligne + décompte mensuel
+- **Lot 2** ✅ (à valider) Planning web, pointage + décomptes mensuels, appli mobile Expo (compteur hors-ligne), push Google Agenda
 - Lots 3-7 : fil de chantier, portail client, compta, facturation/Peppol, stores
+
+### À faire côté David
+- Export **devis + factures** TrustUp → `data-import/` → `npm run import:trustup -- <fichiers>`
+- **Compte de service Google** (`apps/api/secrets/google-sa.json`) + partager l'agenda avec (ID déjà configuré)
+- Tester l'appli mobile ensemble (`LANCER-APPLI-MOBILE.cmd` + téléphone sur le même WiFi)
 
 ## Scripts utiles
 

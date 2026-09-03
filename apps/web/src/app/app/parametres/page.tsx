@@ -14,18 +14,88 @@ interface PriceItem {
 
 export default function ParametresPage() {
   const { user } = useAuth();
-  const [tab, setTab] = useState<'company' | 'library' | 'pointage'>('company');
+  const [tab, setTab] = useState<'company' | 'library' | 'pointage' | 'depot'>('company');
   const admin = user?.role === 'admin';
   return (
     <>
-      <PageHead title="Paramètres" sub="Société, bibliothèque de prix, pointage" />
+      <PageHead title="Paramètres" sub="Société, bibliothèque de prix, dépôt, pointage" />
       <div className="row" style={{ marginBottom: '1rem', gap: '0.4rem' }}>
         <button className={`btn${tab === 'company' ? ' primary' : ''}`} onClick={() => setTab('company')}>Société</button>
+        <button className={`btn${tab === 'depot' ? ' primary' : ''}`} onClick={() => setTab('depot')}>Dépôt</button>
         <button className={`btn${tab === 'library' ? ' primary' : ''}`} onClick={() => setTab('library')}>Bibliothèque de prix</button>
         <button className={`btn${tab === 'pointage' ? ' primary' : ''}`} onClick={() => setTab('pointage')}>Pointage</button>
       </div>
-      {tab === 'company' ? <CompanyForm canEdit={admin} /> : tab === 'library' ? <PriceLibrary /> : <GeoForm canEdit={admin} />}
+      {tab === 'company' ? <CompanyForm canEdit={admin} />
+        : tab === 'depot' ? <DepotForm canEdit={admin} />
+        : tab === 'library' ? <PriceLibrary />
+        : <GeoForm canEdit={admin} />}
     </>
+  );
+}
+
+interface Depot {
+  label: string; address: string; postalCode: string; city: string;
+  lat: number | null; lng: number | null; roadFactor: number;
+}
+
+function DepotForm({ canEdit }: { canEdit: boolean }) {
+  const { data } = useApi<{ depot: Depot }>('/api/settings/depot');
+  const [f, setF] = useState<Depot | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { if (data) setF(data.depot); }, [data]);
+  if (!f) return <div className="empty">Chargement…</div>;
+
+  const save = async () => {
+    setBusy(true); setMsg(null);
+    try { await api('/api/settings/depot', { method: 'PUT', body: f }); setMsg('Enregistré.'); }
+    finally { setBusy(false); }
+  };
+  const geocode = async () => {
+    setBusy(true); setMsg(null);
+    try {
+      await api('/api/settings/depot', { method: 'PUT', body: f }); // sauve l'adresse d'abord
+      const r = await api<{ depot: Depot; matched: string }>('/api/settings/depot/geocode', { method: 'POST' });
+      setF(r.depot);
+      setMsg(`Point GPS fixé : ${r.matched}`);
+    } catch (e) { setMsg((e as Error).message); }
+    finally { setBusy(false); }
+  };
+
+  const upd = (k: keyof Depot, v: string | number) => { setF({ ...f, [k]: v }); setMsg(null); };
+
+  return (
+    <div className="card card-pad" style={{ maxWidth: 620 }}>
+      <div className="section-title">Dépôt de l’entreprise</div>
+      <p className="muted" style={{ fontSize: '0.88rem', marginTop: 0 }}>
+        Point de départ des véhicules. Sert à estimer le <strong>coût transport</strong> de chaque chantier :
+        pour chaque jour où un véhicule est planifié sur un chantier, un aller-retour dépôt ↔ chantier est
+        imputé aux charges, au coût/km du véhicule (fiche flotte).
+      </p>
+      <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+        <label className="field" style={{ gridColumn: '1 / -1' }}><span>Adresse</span>
+          <input className="input" disabled={!canEdit} value={f.address} onChange={(e) => upd('address', e.target.value)} /></label>
+        <label className="field"><span>Code postal</span>
+          <input className="input" disabled={!canEdit} value={f.postalCode} onChange={(e) => upd('postalCode', e.target.value)} /></label>
+        <label className="field"><span>Ville</span>
+          <input className="input" disabled={!canEdit} value={f.city} onChange={(e) => upd('city', e.target.value)} /></label>
+        <label className="field"><span>Facteur routier (vol d’oiseau → route)</span>
+          <input className="input" type="number" step={0.05} min={1} max={2.5} disabled={!canEdit}
+            value={f.roadFactor} onChange={(e) => upd('roadFactor', Number(e.target.value))} /></label>
+      </div>
+      <p className="muted" style={{ fontSize: '0.84rem', marginTop: '0.6rem' }}>
+        {f.lat != null && f.lng != null
+          ? <>Point GPS : <a href={`https://www.google.com/maps?q=${f.lat},${f.lng}`} target="_blank" rel="noreferrer">{f.lat.toFixed(5)}, {f.lng.toFixed(5)}</a></>
+          : 'Aucun point GPS — clique « Géolocaliser » après avoir renseigné l’adresse.'}
+      </p>
+      {canEdit && (
+        <div className="row" style={{ marginTop: '0.9rem', gap: '0.5rem' }}>
+          <button className="btn primary" disabled={busy} onClick={save}>Enregistrer</button>
+          <button className="btn" disabled={busy || !f.address} onClick={geocode}>Géolocaliser l’adresse</button>
+          {msg && <span className="muted">{msg}</span>}
+        </div>
+      )}
+    </div>
   );
 }
 

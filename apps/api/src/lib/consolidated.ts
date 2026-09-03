@@ -1,5 +1,6 @@
 import { prisma } from '../db.js';
 import { round2 } from '@jjd/shared';
+import { allWorksitesTransport } from './vehicle-cost.js';
 
 /**
  * P&L consolidé — reproduit l'onglet « Dashboard Général » du fichier Excel.
@@ -139,11 +140,12 @@ export async function consolidatedPnl(input: ConsolidatedInput) {
  * « Part GT » = ÷ 3.
  */
 export async function profitShare(_year?: number) {
-  const [worksites, buys, sells, times] = await Promise.all([
+  const [worksites, buys, sells, times, transportMap] = await Promise.all([
     prisma.worksite.findMany({ where: { kind: 'project' }, select: { id: true, entity: true } }),
     prisma.ledgerEntry.groupBy({ by: ['worksiteId'], where: { direction: 'purchase', worksiteId: { not: null } }, _sum: { ht: true } }),
     prisma.ledgerEntry.groupBy({ by: ['worksiteId'], where: { direction: 'sale', paymentStatus: { contains: 'Pay' }, worksiteId: { not: null } }, _sum: { ht: true } }),
     prisma.timeEntry.groupBy({ by: ['worksiteId'], where: { status: { in: ['approved', 'submitted'] }, worksiteId: { not: null } }, _sum: { amount: true } }),
+    allWorksitesTransport(),
   ]);
   const buyMap = new Map(buys.map((b) => [b.worksiteId, b._sum.ht ?? 0]));
   const sellMap = new Map(sells.map((s) => [s.worksiteId, s._sum.ht ?? 0]));
@@ -158,7 +160,7 @@ export async function profitShare(_year?: number) {
   for (const w of worksites) {
     const ent = (w.entity as keyof typeof totals) ?? 'jjd';
     if (!totals[ent]) continue;
-    const profit = (sellMap.get(w.id) ?? 0) - (buyMap.get(w.id) ?? 0) - (timeMap.get(w.id) ?? 0);
+    const profit = (sellMap.get(w.id) ?? 0) - (buyMap.get(w.id) ?? 0) - (timeMap.get(w.id) ?? 0) - (transportMap.get(w.id) ?? 0);
     totals[ent].worksites += 1;
     totals[ent].profit += profit;
   }

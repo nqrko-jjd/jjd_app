@@ -4,6 +4,7 @@ import {
   computeWorksiteMargin, parseAmount, parseLooseDate, excelSerialToDate,
   normalizeName, guessWorksiteStatus, htFromTtc, formatVat,
   computeDocTotals, belgianStructuredComm, formatDocNumber, computeDueDate, distanceMeters,
+  vehicleCostPerKm,
 } from '../src/index.js';
 
 test('parseAmount gère les formats belges et Excel', () => {
@@ -64,6 +65,23 @@ test('marge Tonton : part apporteur = 1/3 du bénéfice positif', () => {
   assert.equal(m.realMargin, 12000);
   assert.equal(m.partnerShare, 4000);
   assert.equal(m.netForJjd, 8000);
+});
+
+test('marge chantier : coût transport inclus dans le coût total', () => {
+  const m = computeWorksiteMargin({
+    entity: 'jjd', quotedHt: 10000, invoicedHt: 10000, paidHt: 10000,
+    materialCost: 3000, labourCost: 4000, vehicleCost: 500,
+  });
+  assert.equal(m.vehicleCost, 500);
+  assert.equal(m.totalCost, 7500);
+  assert.equal(m.realMargin, 2500);
+});
+
+test('vehicleCostPerKm : (conso/100)×prix + extra', () => {
+  assert.equal(vehicleCostPerKm({ fuelConsoL100: 8, fuelPricePerL: 1.75 }), 0.14);
+  assert.equal(vehicleCostPerKm({ fuelConsoL100: 10, fuelPricePerL: 1.8, costPerKmExtra: 0.05 }), 0.23);
+  assert.equal(vehicleCostPerKm({ fuelConsoL100: null, fuelPricePerL: null }), null);
+  assert.equal(vehicleCostPerKm({ fuelConsoL100: 0, fuelPricePerL: 0, costPerKmExtra: 0.1 }), 0.1);
 });
 
 test('htFromTtc 6% rénovation', () => {

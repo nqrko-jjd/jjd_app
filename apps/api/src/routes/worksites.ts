@@ -4,6 +4,7 @@ import { prisma, nextWorksiteRef } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, STAFF, OFFICE } from '../lib/auth.js';
 import { worksiteMargin } from '../lib/worksite-margin.js';
+import { geocode } from '../lib/geocode.js';
 
 export const worksitesRouter = Router();
 
@@ -212,17 +213,14 @@ worksitesRouter.post(
     ].filter(Boolean).join(', ');
     if (!q || q === 'Belgique') throw new HttpError(422, 'Aucune adresse à géocoder');
 
-    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`;
-    const r = await fetch(url, { headers: { 'User-Agent': 'JJD-App/1.0 (info@jjd-consult.be)' } });
-    const hits = (await r.json()) as { lat: string; lon: string; display_name: string }[];
-    const hit = hits[0];
+    const hit = await geocode(q);
     if (!hit) throw new HttpError(404, `Adresse introuvable : ${q}`);
 
     const updated = await prisma.worksite.update({
       where: { id: ws.id },
-      data: { lat: Number(hit.lat), lng: Number(hit.lon), geoSetAt: new Date() },
+      data: { lat: hit.lat, lng: hit.lng, geoSetAt: new Date() },
     });
-    res.json({ lat: updated.lat, lng: updated.lng, matched: hit.display_name, query: q });
+    res.json({ lat: updated.lat, lng: updated.lng, matched: hit.label, query: q });
   }),
 );
 

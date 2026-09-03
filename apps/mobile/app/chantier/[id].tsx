@@ -8,6 +8,7 @@ import { T } from '@/lib/theme';
 
 interface Margin {
   quotedHt: number; invoicedHt: number; paidHt: number; materialCost: number; labourCost: number;
+  vehicleCost: number;
   realMargin: number; realMarginPct: number | null; leftToInvoice: number; partnerShare: number;
 }
 interface Detail {
@@ -70,6 +71,7 @@ export default function ChantierDetail() {
           <Row k="Facturé / Encaissé" v={`${eur(data.margin.invoicedHt)} / ${eur(data.margin.paidHt)}`} />
           <Row k="Coût matériaux" v={eur(data.margin.materialCost)} />
           <Row k="Coût main-d’œuvre" v={eur(data.margin.labourCost)} />
+          {data.margin.vehicleCost > 0 && <Row k="Coût transport" v={eur(data.margin.vehicleCost)} />}
           <Row k="Marge réelle" v={`${eur(data.margin.realMargin)}${data.margin.realMarginPct != null ? ` (${data.margin.realMarginPct} %)` : ''}`} strong />
           <Row k="Reste à facturer" v={eur(data.margin.leftToInvoice)} />
           {data.margin.partnerShare > 0 && <Row k="Part GT (33 %)" v={eur(data.margin.partnerShare)} />}

@@ -1,7 +1,8 @@
 'use client';
-import { use } from 'react';
+import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
+import { api } from '@/lib/api';
 import { PageHead, Money, formatDateBE } from '@/lib/ui';
 import { PhotoHeader } from '@/components/PhotoHeader';
 
@@ -11,6 +12,7 @@ interface Detail {
     photoUrl: string | null;
     type: string | null; fuel: string | null; vin: string | null; km: string | null;
     firstRegistration: string | null; nextInspection: string | null; status: string;
+    fuelConsoL100: number | null; fuelPricePerL: number | null; costPerKmExtra: number | null; costPerKm: number | null;
     circulationTax: number | null; biv: number | null; driver: string | null; equipment: string | null; depot: string | null;
     acquisitionMode: string | null; purchaseDate: string | null; purchasePriceHt: number | null;
     financedAmount: number | null; monthlyPayment: number | null; downPayment: number | null;
@@ -56,6 +58,8 @@ export default function VehicleDetail({ params }: { params: Promise<{ id: string
         <Info label="Équipements" value={v.equipment ?? '—'} />
         <Info label="Dépôt" value={v.depot ?? '—'} />
       </div>
+
+      <CostSection v={v} onSaved={reload} />
 
       <section className="card card-pad" style={{ marginBottom: '1.4rem' }}>
         <h2 style={{ marginBottom: '0.6rem' }}>Assurance</h2>
@@ -134,5 +138,67 @@ function Info({ label, value }: { label: string; value: React.ReactNode }) {
       <div className="k">{label}</div>
       <div className="v">{value}</div>
     </div>
+  );
+}
+
+function CostSection({ v, onSaved }: { v: Detail['vehicle']; onSaved: () => void }) {
+  const [f, setF] = useState({
+    fuelConsoL100: v.fuelConsoL100?.toString() ?? '',
+    fuelPricePerL: v.fuelPricePerL?.toString() ?? '',
+    costPerKmExtra: v.costPerKmExtra?.toString() ?? '',
+  });
+  const [saved, setSaved] = useState(false);
+  useEffect(() => {
+    setF({
+      fuelConsoL100: v.fuelConsoL100?.toString() ?? '',
+      fuelPricePerL: v.fuelPricePerL?.toString() ?? '',
+      costPerKmExtra: v.costPerKmExtra?.toString() ?? '',
+    });
+  }, [v.id, v.fuelConsoL100, v.fuelPricePerL, v.costPerKmExtra]);
+
+  const num = (s: string) => (s.trim() === '' ? null : Number(s.replace(',', '.')));
+  const conso = num(f.fuelConsoL100) ?? 0;
+  const price = num(f.fuelPricePerL) ?? 0;
+  const extra = num(f.costPerKmExtra) ?? 0;
+  const preview = conso > 0 && price > 0 ? (conso / 100) * price + extra : extra > 0 ? extra : null;
+
+  async function save() {
+    await api(`/api/vehicles/${v.id}`, {
+      method: 'PATCH',
+      body: {
+        fuelConsoL100: num(f.fuelConsoL100),
+        fuelPricePerL: num(f.fuelPricePerL),
+        costPerKmExtra: num(f.costPerKmExtra),
+      },
+    });
+    setSaved(true);
+    onSaved();
+  }
+
+  return (
+    <section className="card card-pad" style={{ marginBottom: '1.4rem' }}>
+      <h2 style={{ marginBottom: '0.3rem' }}>Coût de revient au km</h2>
+      <p className="muted" style={{ fontSize: '0.85rem', marginTop: 0 }}>
+        Utilisé pour imputer un coût transport aux chantiers (aller-retour dépôt ↔ chantier les jours où ce véhicule est planifié).
+      </p>
+      <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
+        <label className="field"><span>Consommation (L/100 km)</span>
+          <input className="input" type="number" step={0.1} min={0} value={f.fuelConsoL100}
+            onChange={(e) => { setF({ ...f, fuelConsoL100: e.target.value }); setSaved(false); }} placeholder="ex. 8,5" /></label>
+        <label className="field"><span>Prix carburant (€/L)</span>
+          <input className="input" type="number" step={0.01} min={0} value={f.fuelPricePerL}
+            onChange={(e) => { setF({ ...f, fuelPricePerL: e.target.value }); setSaved(false); }} placeholder="ex. 1,75" /></label>
+        <label className="field"><span>Coût/km supplémentaire (€) — optionnel</span>
+          <input className="input" type="number" step={0.01} min={0} value={f.costPerKmExtra}
+            onChange={(e) => { setF({ ...f, costPerKmExtra: e.target.value }); setSaved(false); }} placeholder="entretien, pneus…" /></label>
+      </div>
+      <div className="row" style={{ marginTop: '0.9rem', alignItems: 'baseline', gap: '1rem' }}>
+        <button className="btn primary" onClick={save}>Enregistrer</button>
+        <span className="muted">
+          Coût estimé : <strong>{preview != null ? `${preview.toFixed(3)} €/km` : '—'}</strong>
+          {saved && ' · enregistré'}
+        </span>
+      </div>
+    </section>
   );
 }

@@ -214,6 +214,26 @@ export const reportSignInput = z.object({
 
 export type WorksiteReportInput = z.infer<typeof worksiteReportInput>;
 
+/** Coût de revient d'un véhicule (imputation transport aux chantiers). */
+export const vehicleCostInput = z.object({
+  fuelConsoL100: z.coerce.number().min(0).max(100).nullish(),
+  fuelPricePerL: z.coerce.number().min(0).max(10).nullish(),
+  costPerKmExtra: z.coerce.number().min(0).max(10).nullish(),
+});
+export type VehicleCostInput = z.infer<typeof vehicleCostInput>;
+
+/** Dépôt de l'entreprise — point de départ des trajets véhicules. */
+export const depotInput = z.object({
+  label: z.string().trim().default('Dépôt'),
+  address: z.string().trim().default(''),
+  postalCode: z.string().trim().default(''),
+  city: z.string().trim().default(''),
+  lat: z.coerce.number().min(-90).max(90).nullish(),
+  lng: z.coerce.number().min(-180).max(180).nullish(),
+  roadFactor: z.coerce.number().min(1).max(2.5).default(1.4),
+});
+export type DepotInput = z.infer<typeof depotInput>;
+
 export const priceItemInput = z.object({
   ref: z.string().trim().nullish(),
   label: nonEmpty,

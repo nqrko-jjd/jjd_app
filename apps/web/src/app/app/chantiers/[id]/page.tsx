@@ -26,7 +26,12 @@ interface Detail {
       photos: { id: string; thumbUrl: string | null; url: string }[];
     }[];
   };
-  margin: WorksiteMargin | null;
+  margin: (WorksiteMargin & {
+    transport: {
+      cost: number; note: string | null; oneWayKm: number | null;
+      trips: { date: string; vehicleLabel: string; roundTripKm: number; costPerKm: number; cost: number }[];
+    };
+  }) | null;
 }
 
 export default function ChantierDetail({ params }: { params: Promise<{ id: string }> }) {
@@ -104,10 +109,18 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
             <MiniKpi label="Encaissé HT" value={<Money value={data.margin.paidHt} />} />
             <MiniKpi label="Coût matériaux" value={<Money value={data.margin.materialCost} />} />
             <MiniKpi label="Coût main-d'œuvre" value={<Money value={data.margin.labourCost} />} />
+            <MiniKpi
+              label="Coût transport"
+              value={<Money value={data.margin.vehicleCost} />}
+              note={data.margin.transport.trips.length
+                ? `${data.margin.transport.trips.length} trajet(s) · ${data.margin.transport.oneWayKm} km`
+                : undefined}
+            />
             <MiniKpi label="Marge réelle" value={<Money value={data.margin.realMargin} sign />} note={data.margin.realMarginPct != null ? `${data.margin.realMarginPct} %` : undefined} />
             <MiniKpi label="Reste à facturer" value={<Money value={data.margin.leftToInvoice} />} />
             {data.margin.partnerShare > 0 && <MiniKpi label="Part GT (33 %)" value={<Money value={data.margin.partnerShare} />} />}
           </div>
+          <TransportDetail t={data.margin.transport} />
         </>
       )}
 
@@ -249,6 +262,41 @@ function LocationSection({ w, onChange }: { w: Detail['worksite']; onChange: () 
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function TransportDetail({ t }: { t: NonNullable<Detail['margin']>['transport'] }) {
+  const [open, setOpen] = useState(false);
+  if (!t.trips.length) {
+    return t.note
+      ? <p className="hint" style={{ marginTop: '-0.8rem', marginBottom: '1.5rem' }}>Transport : {t.note}</p>
+      : null;
+  }
+  return (
+    <div style={{ marginTop: '-0.6rem', marginBottom: '1.5rem' }}>
+      <button className="btn ghost" style={{ padding: '0.15rem 0.5rem', fontSize: '0.78rem' }} onClick={() => setOpen(!open)}>
+        {open ? 'Masquer' : 'Voir'} le détail transport ({t.trips.length} trajet{t.trips.length > 1 ? 's' : ''})
+      </button>
+      {t.note && <p className="hint" style={{ margin: '0.3rem 0 0' }}>{t.note}</p>}
+      {open && (
+        <div className="tbl-wrap" style={{ marginTop: '0.5rem' }}>
+          <table className="tbl">
+            <thead><tr><th>Date</th><th>Véhicule</th><th style={{ textAlign: 'right' }}>Km A/R</th><th style={{ textAlign: 'right' }}>€/km</th><th style={{ textAlign: 'right' }}>Coût</th></tr></thead>
+            <tbody>
+              {t.trips.map((tr, i) => (
+                <tr key={i}>
+                  <td className="tnum">{formatDateBE(tr.date)}</td>
+                  <td>{tr.vehicleLabel}</td>
+                  <td className="tnum" style={{ textAlign: 'right' }}>{tr.roundTripKm}</td>
+                  <td className="tnum" style={{ textAlign: 'right' }}>{tr.costPerKm.toFixed(3)}</td>
+                  <td style={{ textAlign: 'right' }}><Money value={tr.cost} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

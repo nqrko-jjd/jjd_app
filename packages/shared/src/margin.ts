@@ -25,6 +25,8 @@ export interface WorksiteCostInput {
   materialCost: number;
   /** Coût main-d'œuvre réel (Σ pointages validés × taux). */
   labourCost: number;
+  /** Coût transport estimé (trajets dépôt ↔ chantier × coût/km du véhicule). Optionnel. */
+  vehicleCost?: number;
 }
 
 export interface WorksiteMargin {
@@ -33,6 +35,8 @@ export interface WorksiteMargin {
   paidHt: number;
   materialCost: number;
   labourCost: number;
+  /** Coût transport estimé imputé au chantier. */
+  vehicleCost: number;
   totalCost: number;
   /** Marge sur ce qui est réellement encaissé (la plus fiable). */
   realMargin: number;
@@ -52,7 +56,8 @@ export interface WorksiteMargin {
 export function computeWorksiteMargin(input: WorksiteCostInput): WorksiteMargin {
   const materialCost = round2(input.materialCost);
   const labourCost = round2(input.labourCost);
-  const totalCost = round2(materialCost + labourCost);
+  const vehicleCost = round2(input.vehicleCost ?? 0);
+  const totalCost = round2(materialCost + labourCost + vehicleCost);
 
   const realMargin = round2(input.paidHt - totalCost);
   const invoicedMargin = round2(input.invoicedHt - totalCost);
@@ -71,6 +76,7 @@ export function computeWorksiteMargin(input: WorksiteCostInput): WorksiteMargin 
     paidHt: round2(input.paidHt),
     materialCost,
     labourCost,
+    vehicleCost,
     totalCost,
     realMargin,
     realMarginPct,
@@ -85,7 +91,7 @@ export function computeWorksiteMargin(input: WorksiteCostInput): WorksiteMargin 
 /** Agrège les marges de plusieurs chantiers (dashboard consolidé). */
 export function sumMargins(margins: WorksiteMargin[]): WorksiteMargin {
   const z: WorksiteMargin = {
-    quotedHt: 0, invoicedHt: 0, paidHt: 0, materialCost: 0, labourCost: 0,
+    quotedHt: 0, invoicedHt: 0, paidHt: 0, materialCost: 0, labourCost: 0, vehicleCost: 0,
     totalCost: 0, realMargin: 0, realMarginPct: null, invoicedMargin: 0,
     forecastMargin: 0, leftToInvoice: 0, partnerShare: 0, netForJjd: 0,
   };
@@ -96,6 +102,7 @@ export function sumMargins(margins: WorksiteMargin[]): WorksiteMargin {
     paidHt: a.paidHt + m.paidHt,
     materialCost: a.materialCost + m.materialCost,
     labourCost: a.labourCost + m.labourCost,
+    vehicleCost: a.vehicleCost + m.vehicleCost,
     totalCost: a.totalCost + m.totalCost,
     realMargin: a.realMargin + m.realMargin,
     invoicedMargin: a.invoicedMargin + m.invoicedMargin,

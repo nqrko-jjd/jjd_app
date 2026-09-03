@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { planningEventInput, teamInput } from '@jjd/shared';
+import { planningEventInput, teamInput, vehicleCostInput, vehicleCostPerKm } from '@jjd/shared';
 import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, STAFF, OFFICE } from '../lib/auth.js';
@@ -194,14 +194,31 @@ vehiclesRouter.get(
   '/',
   requireAuth(...STAFF),
   asyncHandler(async (_req, res) => {
-    const items = await prisma.vehicle.findMany({
+    const rows = await prisma.vehicle.findMany({
       orderBy: [{ status: 'asc' }, { brand: 'asc' }],
       include: {
         insurances: { take: 1 },
         _count: { select: { fines: true, payments: true } },
       },
     });
-    res.json({ items });
+    res.json({ items: rows.map((v) => ({ ...v, costPerKm: vehicleCostPerKm(v) })) });
+  }),
+);
+
+vehiclesRouter.patch(
+  '/:id',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const d = vehicleCostInput.partial().parse(req.body);
+    const v = await prisma.vehicle.update({
+      where: { id: req.params.id },
+      data: {
+        ...('fuelConsoL100' in d ? { fuelConsoL100: d.fuelConsoL100 ?? null } : {}),
+        ...('fuelPricePerL' in d ? { fuelPricePerL: d.fuelPricePerL ?? null } : {}),
+        ...('costPerKmExtra' in d ? { costPerKmExtra: d.costPerKmExtra ?? null } : {}),
+      },
+    });
+    res.json({ vehicle: { ...v, costPerKm: vehicleCostPerKm(v) } });
   }),
 );
 
@@ -233,6 +250,6 @@ vehiclesRouter.get(
       },
     });
     if (!v) throw new HttpError(404, 'Véhicule introuvable');
-    res.json({ vehicle: v });
+    res.json({ vehicle: { ...v, costPerKm: vehicleCostPerKm(v) } });
   }),
 );

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet, RefreshControl } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, Redirect } from 'expo-router';
 import { apiGet, apiSend, flushQueue, pendingCount } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { T } from '@/lib/theme';
@@ -29,7 +29,7 @@ function elapsed(fromIso: string): string {
 }
 
 export default function Today() {
-  const { person } = useSession();
+  const { person, user } = useSession();
   const [events, setEvents] = useState<Ev[]>([]);
   const [running, setRunning] = useState<Running | null>(null);
   const [linked, setLinked] = useState(true);
@@ -61,6 +61,11 @@ export default function Today() {
     const i = setInterval(() => setTick((t) => t + 1), 30000);
     return () => clearInterval(i);
   }, []);
+
+  // Bureau pur (sans fiche terrain) -> tableau de bord
+  if (user && ['admin', 'office'].includes(user.role) && user.role !== 'foreman') {
+    return <Redirect href="/dashboard" />;
+  }
 
   async function start(worksiteId: string) {
     const r = await apiSend<{ entry: unknown }>('/api/timesheet/timer/start', 'POST', {

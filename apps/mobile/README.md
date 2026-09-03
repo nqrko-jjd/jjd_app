@@ -1,6 +1,6 @@
 # apps/mobile — JJD Chantier
 
-Appli terrain (Expo / React Native, hors workspaces npm).
+Appli terrain + admin (Expo / React Native, hors workspaces npm).
 
 ```bash
 cd apps/mobile
@@ -8,10 +8,11 @@ npm install
 npx expo start   # QR code -> Expo Go
 ```
 
-L API doit tourner (port 4100). En dev, l URL de l API est auto-detectee
-(IP LAN de la machine Metro). Pare-feu Windows : autoriser le port 4100.
+Navigation selon le role :
+- **ouvrier** : Aujourd hui (planning + compteur start/stop hors-ligne), Mes heures, Compte
+- **chef de chantier** : idem + Tableau de bord, Chantiers, Planning, Valider
+- **bureau / admin** : Tableau de bord, Chantiers (+ fiche + rentabilite), Planning, Valider, Compte
 
-Ecrans : connexion, Aujourd hui (planning du jour + compteur start/stop,
-file d attente hors-ligne), Mes heures (decompte du mois), Compte.
+L API doit tourner (port 4100). URL auto-detectee (IP LAN Metro). Pare-feu Windows : port 4100.
 
 **A tester avec David sur un vrai telephone** (reseau, Expo Go, pare-feu).

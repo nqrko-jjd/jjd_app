@@ -16,6 +16,7 @@ import { planningRouter, teamsRouter, vehiclesRouter } from './routes/planning.j
 import { timesheetRouter, statementsRouter } from './routes/timesheet.js';
 import { threadRouter } from './routes/thread.js';
 import { portalRouter } from './routes/portal.js';
+import { financeRouter } from './routes/finance.js';
 
 export function createApp() {
   const app = express();
@@ -36,6 +37,7 @@ export function createApp() {
   app.use('/api/buildings', buildingsRouter);
   app.use('/api/people', peopleRouter);
   app.use('/api/crm', crmRouter);
+  app.use('/api/finance', financeRouter);
   app.use('/api/planning', planningRouter);
   app.use('/api/teams', teamsRouter);
   app.use('/api/vehicles', vehiclesRouter);

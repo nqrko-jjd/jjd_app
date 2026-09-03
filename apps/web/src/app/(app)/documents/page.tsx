@@ -10,6 +10,7 @@ import { DocStatusBadge, DOC_KIND_LABEL } from '@/lib/doc-ui';
 interface Row {
   id: string; kind: string; number: string | null; draftRef: string | null; status: string;
   title: string | null; issuedOn: string | null; dueOn: string | null; totalTtc: number; paidAmount: number;
+  originalPdf: string | null;
   worksite: { ref: string } | null; contact: { name: string } | null;
 }
 
@@ -86,6 +87,7 @@ export default function DocumentsPage() {
                 <tr key={d.id}>
                   <td className="mono">
                     <Link href={`/documents/${d.id}`}>{d.number ?? d.draftRef ?? '—'}</Link>
+                    {d.originalPdf && <span title="PDF d’origine disponible" style={{ marginLeft: 6 }}>📄</span>}
                     {!d.number && <span className="badge plain" style={{ marginLeft: 6 }}>{DOC_KIND_LABEL[d.kind]}</span>}
                   </td>
                   <td>{d.title ?? '—'}</td>

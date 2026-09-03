@@ -202,6 +202,31 @@ export const LEGAL_DOC_LABEL: Record<LegalDocType, string> = {
   other: 'Autre',
 };
 
+/** Rôles d'un contact rattaché à un immeuble / ACP. */
+export const BUILDING_CONTACT_ROLES = [
+  'concierge', 'president', 'council', 'syndic_manager', 'contact', 'owner_rep', 'other',
+] as const;
+export type BuildingContactRole = (typeof BUILDING_CONTACT_ROLES)[number];
+
+export const BUILDING_CONTACT_ROLE_LABEL: Record<BuildingContactRole, string> = {
+  concierge: 'Concierge',
+  president: "Président d'assemblée",
+  council: 'Membre du conseil',
+  syndic_manager: 'Gestionnaire syndic',
+  contact: 'Contact',
+  owner_rep: 'Représentant des copropriétaires',
+  other: 'Autre',
+};
+
+export const OCCUPANT_KINDS = ['owner', 'tenant', 'unknown'] as const;
+export type OccupantKind = (typeof OCCUPANT_KINDS)[number];
+
+export const OCCUPANT_KIND_LABEL: Record<OccupantKind, string> = {
+  owner: 'Propriétaire',
+  tenant: 'Locataire',
+  unknown: 'Inconnu',
+};
+
 /* --------------------------------------------------------- Compta / TVA */
 
 export const CATEGORY_KINDS = ['revenue', 'expense', 'salary', 'vat', 'tax', 'credit_note', 'internal'] as const;

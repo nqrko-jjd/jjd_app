@@ -1,4 +1,7 @@
 import { Router } from 'express';
+import path from 'node:path';
+import { createReadStream, existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { nanoid } from 'nanoid';
 import { z } from 'zod';
 import { WORKSITE_STATUS_LABEL, type WorksiteStatus } from '@jjd/shared';
@@ -10,6 +13,10 @@ import { attachPortalUser, requirePortal, signPortalToken, worksiteScope, buildi
 
 export const portalRouter = Router();
 portalRouter.use(attachPortalUser);
+
+const PORTAL_PDF_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../uploads/documents');
+const pdfBasename = (n: string) => path.basename(n);
+const portalPdfPath = (safe: string) => path.join(PORTAL_PDF_DIR, safe);
 
 const OPEN_STATUSES: WorksiteStatus[] = ['scheduled', 'in_progress', 'on_hold', 'done', 'to_invoice'];
 
@@ -154,11 +161,11 @@ portalRouter.get(
         description: w.description,
       },
       quotes: w.documents.filter((d) => d.kind === 'quote' && d.number).map((d) => ({
-        id: d.id, number: d.number, title: d.title, status: d.status,
+        id: d.id, number: d.number, title: d.title, status: d.status, hasPdf: !!d.originalPdf,
         totalHt: d.totalHt, totalTtc: d.totalTtc, issuedOn: d.issuedOn, dueOn: d.dueOn,
       })),
       invoices: w.documents.filter((d) => d.kind === 'invoice' && d.number).map((d) => ({
-        id: d.id, number: d.number, status: d.status,
+        id: d.id, number: d.number, status: d.status, hasPdf: !!d.originalPdf,
         totalTtc: d.totalTtc, paidAmount: d.paidAmount, issuedOn: d.issuedOn, dueOn: d.dueOn,
       })),
       photos: messages.filter((m) => m.kind === 'photo' && m.fileUrl).map((m) => ({
@@ -190,6 +197,25 @@ portalRouter.post(
 );
 
 /* ------------------------------------------------------------ accepter un devis */
+
+portalRouter.get(
+  '/documents/:id/pdf',
+  requirePortal,
+  asyncHandler(async (req, res) => {
+    const u = req.portalUser!;
+    const doc = await prisma.document.findFirst({
+      where: { id: req.params.id!, number: { not: null }, worksite: worksiteScope(u) },
+      select: { originalPdf: true, number: true },
+    });
+    if (!doc?.originalPdf) throw new HttpError(404, 'PDF indisponible');
+    const safe = pdfBasename(doc.originalPdf);
+    const file = portalPdfPath(safe);
+    if (!existsSync(file)) throw new HttpError(404, 'PDF introuvable');
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${doc.number}.pdf"`);
+    createReadStream(file).pipe(res);
+  }),
+);
 
 portalRouter.post(
   '/quotes/:id/accept',

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   ROLES, ENTITIES, WORKSITE_STATUSES, CRM_STAGES, CRM_LOST_REASONS,
   CONTACT_TYPES, CLIENT_KINDS, WORKER_CONTRACT_TYPES, LEGAL_DOC_TYPES,
+  BUILDING_CONTACT_ROLES, OCCUPANT_KINDS,
 } from './enums.js';
 
 const nonEmpty = z.string().trim().min(1);
@@ -32,8 +33,35 @@ export const buildingInput = z.object({
   city: z.string().trim().nullish(),
   syndicId: z.string().nullish(),
   clientId: z.string().nullish(),
+  reference: z.string().trim().nullish(),
+  lotCount: z.coerce.number().int().nonnegative().nullish(),
+  digicode: z.string().trim().nullish(),
+  accessNote: z.string().trim().nullish(),
   note: z.string().nullish(),
 });
+
+export const buildingContactInput = z.object({
+  role: z.enum(BUILDING_CONTACT_ROLES).default('contact'),
+  name: nonEmpty,
+  phone: z.string().trim().nullish(),
+  email: z.string().trim().email().nullish().or(z.literal('')),
+  note: z.string().trim().nullish(),
+  contactId: z.string().nullish(),
+});
+
+export const buildingUnitInput = z.object({
+  label: nonEmpty,
+  floor: z.string().trim().nullish(),
+  door: z.string().trim().nullish(),
+  occupantName: z.string().trim().nullish(),
+  occupantPhone: z.string().trim().nullish(),
+  occupantEmail: z.string().trim().email().nullish().or(z.literal('')),
+  occupantKind: z.enum(OCCUPANT_KINDS).nullish(),
+  note: z.string().trim().nullish(),
+});
+
+export type BuildingContactInput = z.infer<typeof buildingContactInput>;
+export type BuildingUnitInput = z.infer<typeof buildingUnitInput>;
 
 export const worksiteInput = z.object({
   title: nonEmpty,

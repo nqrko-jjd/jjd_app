@@ -203,12 +203,13 @@ model Contact {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  user          User?
-  worksites     Worksite[]       @relation("WorksiteClient")
-  buildings     Building[]
-  opportunities CrmOpportunity[]
-  documents     Document[]
-  ledgerEntries LedgerEntry[]
+  user             User?
+  worksites        Worksite[]        @relation("WorksiteClient")
+  buildings        Building[]
+  opportunities    CrmOpportunity[]
+  documents        Document[]
+  ledgerEntries    LedgerEntry[]
+  buildingContacts BuildingContact[]
 
   @@index([normalizedName])
   @@index([type])
@@ -227,14 +228,62 @@ model Building {
   clientId       String?
   client         Contact? @relation(fields: [clientId], references: [id])
   note           String?
+  // infos ACP
+  reference      String? // n° de dossier syndic / ACP
+  lotCount       Int? // nombre de lots dans la copropriété
+  digicode       String?
+  accessNote     String? // clés, badges, où se garer…
   source         String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   worksites     Worksite[]
   opportunities CrmOpportunity[]
+  contacts      BuildingContact[]
+  units         BuildingUnit[]
 
   @@index([normalizedName])
+}
+
+/// Contact rattaché à un immeuble : concierge, président d'assemblée,
+/// gestionnaire syndic, contact ACP… (texte libre, lien Contact optionnel).
+model BuildingContact {
+  id         String   @id @default(cuid())
+  buildingId String
+  building   Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  role       String // concierge | president | council | syndic_manager | contact | owner_rep | other
+  name       String
+  phone      String?
+  email      String?
+  note       String?
+  contactId  String? // lien éventuel vers un Contact existant
+  contact    Contact? @relation(fields: [contactId], references: [id])
+  position   Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([buildingId])
+}
+
+/// Lot / appartement d'un immeuble + occupant connu.
+/// Ex. « Algarve C1 — Mme Pinto — 1er étage — App C ».
+model BuildingUnit {
+  id            String   @id @default(cuid())
+  buildingId    String
+  building      Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  label         String // "C1", "Lot 12", "2A"
+  floor         String? // "1er étage", "RdC"
+  door          String? // "App C", "porte gauche"
+  occupantName  String?
+  occupantPhone String?
+  occupantEmail String?
+  occupantKind  String? // owner | tenant | unknown
+  note          String?
+  position      Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([buildingId])
 }
 
 // ─────────────────────────────────────────────────────────── Chantiers & CRM
@@ -352,6 +401,7 @@ model Document {
   billingAddress String?
   structuredComm String? // communication structurée belge +++xxx/xxxx/xxxxx+++
   peppolStatus   String? // null | queued | sent | delivered | error
+  originalPdf    String? // nom de fichier du PDF TrustUp d'origine (uploads/documents/…)
   sentAt         DateTime?
   acceptedOn     DateTime?
   declinedReason String?

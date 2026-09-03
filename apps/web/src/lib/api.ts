@@ -48,6 +48,16 @@ export async function api<T = unknown>(
   return data as T;
 }
 
+/** Récupère un binaire authentifié (PDF…) et renvoie une URL blob à ouvrir. */
+export async function apiBlobUrl(path: string): Promise<string> {
+  const headers: Record<string, string> = {};
+  const t = token();
+  if (t) headers.authorization = `Bearer ${t}`;
+  const res = await fetch(`${BASE}${path}`, { headers });
+  if (!res.ok) throw new ApiError(res.status, `Erreur ${res.status}`);
+  return URL.createObjectURL(await res.blob());
+}
+
 /** Upload multipart (photos du fil de chantier). */
 export async function apiUpload<T = unknown>(path: string, form: FormData): Promise<T> {
   const headers: Record<string, string> = {};

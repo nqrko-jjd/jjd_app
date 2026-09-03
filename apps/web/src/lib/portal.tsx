@@ -28,6 +28,14 @@ export async function portalApi<T = unknown>(path: string, opts: { method?: stri
   return data as T;
 }
 
+/** PDF authentifié -> URL blob (à ouvrir dans un nouvel onglet). */
+export async function portalBlobUrl(path: string): Promise<string> {
+  const t = tok();
+  const res = await fetch(`${BASE}${path}`, { headers: t ? { authorization: `Bearer ${t}` } : {} });
+  if (!res.ok) throw new Error(`Erreur ${res.status}`);
+  return URL.createObjectURL(await res.blob());
+}
+
 interface Me { email: string; label: string; isSyndic: boolean }
 interface Ctx { me: Me | null; loading: boolean; signOut: () => void }
 const PortalContext = createContext<Ctx | null>(null);

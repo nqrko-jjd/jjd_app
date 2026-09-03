@@ -1,7 +1,7 @@
 'use client';
 import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { portalApi, usePortalGuard } from '@/lib/portal';
+import { portalApi, portalBlobUrl, usePortalGuard } from '@/lib/portal';
 import { PortalHeader } from '../../PortalHeader';
 
 interface Data {
@@ -10,8 +10,8 @@ interface Data {
     address: string; building: { id: string; name: string } | null;
     startedOn: string | null; endedOn: string | null; description: string | null;
   };
-  quotes: { id: string; number: string; title: string | null; status: string; totalHt: number; totalTtc: number; issuedOn: string | null }[];
-  invoices: { id: string; number: string; status: string; totalTtc: number; paidAmount: number; issuedOn: string | null; dueOn: string | null }[];
+  quotes: { id: string; number: string; title: string | null; status: string; hasPdf: boolean; totalHt: number; totalTtc: number; issuedOn: string | null }[];
+  invoices: { id: string; number: string; status: string; hasPdf: boolean; totalTtc: number; paidAmount: number; issuedOn: string | null; dueOn: string | null }[];
   photos: { id: string; url: string; thumbUrl: string | null; caption: string | null; createdAt: string }[];
   messages: { id: string; body: string | null; kind: string; authorName: string | null; createdAt: string; fromClient: boolean }[];
   threadClosed: boolean;
@@ -49,6 +49,10 @@ export default function PortalWorksite({ params }: { params: Promise<{ id: strin
     if (!confirm('Confirmer l’acceptation de ce devis ?')) return;
     await portalApi(`/quotes/${qid}/accept`, { method: 'POST' });
     load();
+  }
+  async function openPdf(docId: string) {
+    try { window.open(await portalBlobUrl(`/documents/${docId}/pdf`), '_blank'); }
+    catch { alert('PDF indisponible.'); }
   }
 
   return (
@@ -97,6 +101,7 @@ export default function PortalWorksite({ params }: { params: Promise<{ id: strin
                 <span className="n">{q.number}</span>
                 <span className="p-note">{d(q.issuedOn)}</span>
                 <span className="amt">{eur(q.totalTtc)}</span>
+                {q.hasPdf && <button className="p-btn" onClick={() => openPdf(q.id)}>PDF</button>}
                 {q.status === 'accepted' ? (
                   <span className="p-pill ok">Accepté</span>
                 ) : q.status === 'declined' ? (
@@ -117,6 +122,7 @@ export default function PortalWorksite({ params }: { params: Promise<{ id: strin
                 <span className="n">{f.number}</span>
                 <span className="p-note">{d(f.issuedOn)}{f.dueOn ? ` · éch. ${d(f.dueOn)}` : ''}</span>
                 <span className="amt">{eur(f.totalTtc)}</span>
+                {f.hasPdf && <button className="p-btn" onClick={() => openPdf(f.id)}>PDF</button>}
                 <span className={`p-pill ${f.status === 'paid' ? 'ok' : f.status === 'overdue' ? 'crit' : 'warn'}`}>
                   {f.status === 'paid' ? 'Payée' : f.status === 'overdue' ? 'En retard' : 'À payer'}
                 </span>

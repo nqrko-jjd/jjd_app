@@ -1,4 +1,7 @@
 import { Router } from 'express';
+import path from 'node:path';
+import { createReadStream, existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { documentInput, priceItemInput, DOC_KIND_LABEL } from '@jjd/shared';
 import { prisma, nextCounter } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
@@ -52,6 +55,24 @@ documentsRouter.get(
     if (!doc) throw new HttpError(404, 'Document introuvable');
     const company = await getCompany();
     res.json({ document: doc, company });
+  }),
+);
+
+const PDF_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../uploads/documents');
+
+/** PDF TrustUp d'origine (import). Authentifié, streamé inline. */
+documentsRouter.get(
+  '/:id/original.pdf',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const doc = await prisma.document.findUnique({ where: { id: req.params.id }, select: { originalPdf: true, number: true } });
+    if (!doc?.originalPdf) throw new HttpError(404, 'Pas de PDF d’origine pour ce document');
+    const safe = path.basename(doc.originalPdf);
+    const file = path.join(PDF_DIR, safe);
+    if (!existsSync(file)) throw new HttpError(404, 'Fichier PDF introuvable sur le serveur');
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${doc.number ?? safe}.pdf"`);
+    createReadStream(file).pipe(res);
   }),
 );
 

@@ -12,7 +12,7 @@
  */
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readdirSync, existsSync } from 'node:fs';
+import { readdirSync, existsSync, mkdirSync, copyFileSync } from 'node:fs';
 import bcrypt from 'bcryptjs';
 import { PrismaClient } from '@prisma/client';
 import { parseLooseDate, parseAmount, normalizeName } from '@jjd/shared';
@@ -22,6 +22,24 @@ import { readXlsx } from './lib/xlsx-read.js';
 const prisma = new PrismaClient();
 const here = path.dirname(fileURLToPath(import.meta.url));
 const dataDir = path.resolve(here, '../../../data-import');
+const pdfOutDir = path.resolve(here, '../uploads/documents');
+
+/**
+ * Copie le PDF TrustUp d'origine (dossier « documents/ » à côté du CSV) vers
+ * uploads/documents/<numéro>.pdf. Renvoie le nom de fichier, ou null.
+ */
+function copyOriginalPdf(csvFile: string, number: string): string | null {
+  const src = path.join(path.dirname(csvFile), 'documents', `${number}.pdf`);
+  if (!existsSync(src)) return null;
+  mkdirSync(pdfOutDir, { recursive: true });
+  const name = `${number}.pdf`;
+  try {
+    copyFileSync(src, path.join(pdfOutDir, name));
+    return name;
+  } catch {
+    return null;
+  }
+}
 
 function findCsvs(): string[] {
   const args = process.argv.slice(2);
@@ -157,11 +175,13 @@ async function importFile(file: string, docToWs: Map<string, string>, wsByRef: M
     const ttc = parseAmount(pick(r, 'total')) ?? ht + tax;
     const paid = parseAmount(pick(r, 'total_paid')) ?? 0;
     const peppol = pick(r, 'peppol_status');
+    const originalPdf = copyOriginalPdf(file, number);
 
     await prisma.document.upsert({
       where: { kind_number: { kind, number } },
       create: {
         kind,
+        originalPdf,
         number,
         direction: 'sale',
         status: statusMap[(pick(r, 'status') ?? '').toLowerCase()] ?? 'draft',
@@ -188,6 +208,7 @@ async function importFile(file: string, docToWs: Map<string, string>, wsByRef: M
         totalVat: tax,
         totalTtc: ttc,
         paidAmount: paid,
+        originalPdf: originalPdf ?? undefined,
       },
     });
     ok++;

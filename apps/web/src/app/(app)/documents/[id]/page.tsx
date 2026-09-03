@@ -2,7 +2,7 @@
 import { use, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { api } from '@/lib/api';
+import { api, apiBlobUrl } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { PageHead, Money, formatEur } from '@/lib/ui';
 import { DocStatusBadge, DOC_KIND_LABEL, type DocFull, type DocLine } from '@/lib/doc-ui';
@@ -356,7 +356,19 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
             <button className="btn" disabled={!!busy} onClick={() => act('/credit-note', {})}>Note de crédit</button>
           )}
           <button className="btn" disabled={!!busy} onClick={() => act('/duplicate', {})}>Dupliquer</button>
-          <a className="btn" href={`/imprimer/${id}`} target="_blank" rel="noreferrer">Imprimer / PDF</a>
+          {doc.originalPdf ? (
+            <button
+              className="btn"
+              onClick={async () => {
+                try { window.open(await apiBlobUrl(`/api/documents/${id}/original.pdf`), '_blank'); }
+                catch (e) { setMsg((e as Error).message); }
+              }}
+            >
+              PDF d’origine (TrustUp)
+            </button>
+          ) : (
+            <a className="btn" href={`/imprimer/${id}`} target="_blank" rel="noreferrer">Imprimer / PDF</a>
+          )}
           {!locked && <button className="btn" style={{ marginLeft: 'auto', color: 'var(--crit)' }} onClick={del}>Supprimer</button>}
         </div>
         {isInvoiceLike && (

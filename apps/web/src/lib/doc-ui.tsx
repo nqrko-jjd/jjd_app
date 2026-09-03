@@ -53,6 +53,7 @@ export interface DocFull {
   vatRate: number | null;
   structuredComm: string | null;
   peppolStatus: string | null;
+  originalPdf: string | null;
   sentAt: string | null;
   acceptedOn: string | null;
   lockedAt: string | null;

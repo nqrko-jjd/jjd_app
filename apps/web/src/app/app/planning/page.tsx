@@ -118,6 +118,11 @@ export default function PlanningPage() {
     }));
   }, [data, days]);
 
+  const maxLanes = useMemo(
+    () => Math.max(1, ...blocksByDay.map((b) => layout(b.timed).laneCount)),
+    [blocksByDay],
+  );
+
   const hours = Array.from({ length: (DAY_END - DAY_START) / 60 }, (_, i) => DAY_START / 60 + i);
   const now = new Date();
   const nowTop = (now.getHours() * 60 + now.getMinutes() - DAY_START) / 60 * 46;
@@ -151,7 +156,8 @@ export default function PlanningPage() {
         </div>
 
         {loading && !data ? <div className="empty">Chargement…</div> : (
-          <div className="cal-frame" style={{ ['--cal-cols' as string]: cols }}>
+          <div className="cal-frame" style={{ ['--cal-cols' as string]: cols, ['--cal-maxlanes' as string]: maxLanes }}>
+           <div className="cal-scroll">
             <div className="cal-daysrow">
               <div className="cal-corner" />
               {days.map((d, i) => (
@@ -220,6 +226,7 @@ export default function PlanningPage() {
                 );
               })}
             </div>
+           </div>
           </div>
         )}
       </div>

@@ -429,7 +429,12 @@ p { margin: 0; }
 .cal-toolbar .seg button.on { background: var(--primary); color: #fff; }
 
 .cal-frame { border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--surface); }
-.cal-daysrow, .cal-allday, .cal-body { display: grid; grid-template-columns: var(--cal-gutter) repeat(var(--cal-cols, 7), 1fr); }
+.cal-scroll { overflow-x: auto; }
+.cal-daysrow, .cal-allday, .cal-body {
+  display: grid;
+  grid-template-columns: var(--cal-gutter) repeat(var(--cal-cols, 7), minmax(var(--cal-colmin, 0px), 1fr));
+  min-width: min-content;
+}
 .cal-daysrow { border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 3; background: var(--surface); }
 .cal-corner { border-right: 1px solid var(--line); }
 .cal-day-h { text-align: center; padding: 0.5rem 0.2rem; border-left: 1px solid var(--line); font-size: 0.74rem; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.04em; }
@@ -469,8 +474,9 @@ p { margin: 0; }
 .cal-now { position: absolute; left: 0; right: 0; height: 2px; background: var(--crit); z-index: 4; }
 .cal-now::before { content: ""; position: absolute; left: -4px; top: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--crit); }
 
-@media (max-width: 720px) {
+@media (max-width: 760px) {
   .cal { --cal-gutter: 40px; --cal-hour-h: 42px; }
+  .cal-frame { --cal-colmin: calc(var(--cal-maxlanes, 1) * 116px); }
   .cal-day-h { font-size: 0.62rem; }
   .cal-day-h b { font-size: 0.95rem; }
 }

@@ -51,9 +51,10 @@ function sideMatches(tx: TxLite, l: LedgerLite): boolean {
 const amountOf = (l: LedgerLite) => Math.abs(l.ttc ?? l.ht ?? 0);
 
 /** Cherche la meilleure écriture pour une transaction. */
-export function pickMatch(tx: TxLite, ledgers: LedgerLite[]): { ledgerId: string; confidence: 'strong' | 'good' } | null {
+export function pickMatch(tx: TxLite, candidates: LedgerLite[]): { ledgerId: string; confidence: 'strong' | 'good' } | null {
   const amt = Math.abs(tx.amount ?? 0);
   if (!amt) return null;
+  const ledgers = candidates.length > 1 ? [...new Map(candidates.map((l) => [l.id, l])).values()] : candidates;
 
   // 1. communication structurée
   if (tx.structuredComm && tx.structuredComm.length >= 10) {
@@ -104,34 +105,43 @@ export async function autoMatchAll(
     supplierName: l.supplierName, contactName: l.contact?.name ?? null,
   }));
 
-  // index par montant arrondi pour éviter O(n²) complet
+  // index montant (au centime) + index communication structurée -> lookup O(1)
   const byAmount = new Map<number, LedgerLite[]>();
+  const byComm = new Map<string, LedgerLite[]>();
   for (const l of ledgers) {
     const k = Math.round(amountOf(l) * 100);
-    (byAmount.get(k) ?? byAmount.set(k, []).get(k)!).push(l);
+    const bucket = byAmount.get(k);
+    if (bucket) bucket.push(l); else byAmount.set(k, [l]);
+    const c = digits(l.bankComm);
+    if (c.length >= 10) {
+      const cb = byComm.get(c);
+      if (cb) cb.push(l); else byComm.set(c, [l]);
+    }
   }
-  const commIndex = ledgers.filter((l) => digits(l.bankComm).length >= 10);
 
-  let strong = 0;
-  let good = 0;
+  const now = new Date();
+  const updates: { id: string; ledgerId: string; confidence: 'strong' | 'good' }[] = [];
   for (const tx of txs) {
     const amt = Math.round(Math.abs(tx.amount ?? 0) * 100);
-    const pool = [
-      ...(byAmount.get(amt) ?? []),
-      ...(byAmount.get(amt - 1) ?? []),
-      ...(byAmount.get(amt + 1) ?? []),
-      ...(byAmount.get(amt - 2) ?? []),
-      ...(byAmount.get(amt + 2) ?? []),
-      ...commIndex,
-    ];
-    const uniq = [...new Map(pool.map((l) => [l.id, l])).values()];
-    const m = pickMatch(tx as TxLite, uniq);
-    if (!m) continue;
-    await prisma.bankTransaction.update({
-      where: { id: tx.id },
-      data: { matchedLedgerId: m.ledgerId, matchConfidence: m.confidence, matchedAt: new Date() },
-    });
-    if (m.confidence === 'strong') strong++; else good++;
+    if (!amt) continue;
+    const pool: LedgerLite[] = [];
+    if (tx.structuredComm) pool.push(...(byComm.get(tx.structuredComm) ?? []));
+    for (let d = -2; d <= 2; d++) pool.push(...(byAmount.get(amt + d) ?? []));
+    const m = pickMatch(tx as TxLite, pool);
+    if (m) updates.push({ id: tx.id, ledgerId: m.ledgerId, confidence: m.confidence });
   }
-  return { strong, good, scanned: txs.length };
+
+  // écriture par lots
+  for (let i = 0; i < updates.length; i += 200) {
+    await prisma.$transaction(
+      updates.slice(i, i + 200).map((u) =>
+        prisma.bankTransaction.update({
+          where: { id: u.id },
+          data: { matchedLedgerId: u.ledgerId, matchConfidence: u.confidence, matchedAt: now },
+        }),
+      ),
+    );
+  }
+  const strong = updates.filter((u) => u.confidence === 'strong').length;
+  return { strong, good: updates.length - strong, scanned: txs.length };
 }

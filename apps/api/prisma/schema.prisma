@@ -18,6 +18,18 @@ model Counter {
   value Int    @default(0)
 }
 
+/// Lien de connexion à usage unique (portail client — pas de mot de passe).
+model LoginToken {
+  token     String   @id
+  email     String
+  purpose   String   @default("portal")
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([email])
+}
+
 /// Paramètres éconos + coordonnées société, éditables en admin.
 model Setting {
   key       String   @id
@@ -54,8 +66,10 @@ model User {
   active       Boolean   @default(true)
   personId     String?   @unique
   person       Person?   @relation(fields: [personId], references: [id])
-  contactId    String?   @unique // pour les comptes "client"
+  contactId    String?   @unique // compte client -> voit ses chantiers
   contact      Contact?  @relation(fields: [contactId], references: [id])
+  syndicId     String? // compte client "syndic" -> voit tous ses immeubles
+  syndic       Syndic?   @relation(fields: [syndicId], references: [id])
   lastLoginAt  DateTime?
   createdAt    DateTime  @default(now())
 
@@ -162,6 +176,7 @@ model Syndic {
 
   buildings Building[]
   contacts  Contact[]
+  users     User[]
 
   @@index([normalizedName])
 }
@@ -211,6 +226,7 @@ model Building {
   clientId       String?
   client         Contact? @relation(fields: [clientId], references: [id])
   note           String?
+  source         String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

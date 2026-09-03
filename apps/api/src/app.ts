@@ -15,6 +15,7 @@ import { dashboardRouter, metaRouter, importsRouter } from './routes/misc.js';
 import { planningRouter, teamsRouter, vehiclesRouter } from './routes/planning.js';
 import { timesheetRouter, statementsRouter } from './routes/timesheet.js';
 import { threadRouter } from './routes/thread.js';
+import { portalRouter } from './routes/portal.js';
 
 export function createApp() {
   const app = express();
@@ -27,6 +28,7 @@ export function createApp() {
   app.use('/uploads', express.static(UPLOADS_DIR, { maxAge: '7d' }));
 
   app.use('/api/auth', authRouter);
+  app.use('/api/portal', portalRouter);
   app.use('/api/worksites/:worksiteId/thread', threadRouter);
   app.use('/api/dashboard', dashboardRouter);
   app.use('/api/worksites', worksitesRouter);

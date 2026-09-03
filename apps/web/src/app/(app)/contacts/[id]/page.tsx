@@ -16,6 +16,7 @@ interface Detail {
     syndic: { id: string; name: string } | null;
     buildings: { id: string; name: string }[];
     worksites: { id: string; ref: string; title: string; status: string; quotedHt: number | null }[];
+    user?: { email: string } | null;
   };
 }
 
@@ -23,9 +24,22 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
   const { id } = use(params);
   const { data, loading, reload } = useApi<Detail>(`/api/contacts/${id}`);
   const [editing, setEditing] = useState(false);
+  const [portalInfo, setPortalInfo] = useState<{ email: string; portal: string } | null>(null);
   if (loading) return <div className="empty">Chargement…</div>;
   if (!data) return <div className="empty">Contact introuvable.</div>;
   const c = data.contact;
+
+  async function grantPortal() {
+    const email = prompt('E-mail du client pour l’accès portail :', c.email ?? '');
+    if (!email) return;
+    try {
+      const r = await api<{ email: string; portal: string }>(`/api/contacts/${id}/portal-access`, { method: 'POST', body: { email } });
+      setPortalInfo(r);
+      reload();
+    } catch (e) {
+      alert((e as Error).message);
+    }
+  }
 
   return (
     <>
@@ -51,13 +65,32 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
           </div>
         }
       />
-      <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', marginBottom: '1.4rem' }}>
+      <div className="info-grid" style={{ marginBottom: '1.4rem' }}>
         <Info label="E-mail" value={c.email ?? '—'} />
         <Info label="Téléphone" value={c.phone ?? '—'} />
         <Info label="TVA" value={formatVat(c.vat) ?? '—'} />
         <Info label="Adresse" value={[c.address, c.postalCode, c.city].filter(Boolean).join(' ') || '—'} />
         {c.syndic && <Info label="Syndic" value={<Link href={`/immeubles?syndicId=${c.syndic.id}`}>{c.syndic.name}</Link>} />}
+        <div className="info-cell">
+          <div className="k">Accès portail client</div>
+          <div className="v">
+            {c.user ? (
+              <><span className="badge ok">Actif</span> <span className="muted" style={{ fontSize: '0.82rem' }}>{c.user.email}</span></>
+            ) : (
+              <button className="btn" style={{ marginTop: '0.2rem' }} onClick={grantPortal}>Ouvrir un accès</button>
+            )}
+          </div>
+        </div>
       </div>
+
+      {portalInfo && (
+        <div className="card card-pad" style={{ marginBottom: '1.4rem', borderLeft: '3px solid var(--ok)' }}>
+          <div className="eyebrow">Accès portail créé</div>
+          <p style={{ margin: '0.4rem 0 0' }}>
+            <strong>{portalInfo.email}</strong> peut se connecter sur <strong>{portalInfo.portal}</strong> (lien magique, sans mot de passe).
+          </p>
+        </div>
+      )}
 
       {c.buildings.length > 0 && (
         <section style={{ marginBottom: '1.4rem' }}>

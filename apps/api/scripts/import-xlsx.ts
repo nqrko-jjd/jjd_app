@@ -476,6 +476,7 @@ async function linkDemoAccounts() {
     }
     console.log('  planning   ', chantiers.length, 'affectations de démo (cette semaine)');
   }
+
   console.log('  comptes    ', 'chef@ / ouvrier@ / david@ / julien@ liés à une fiche');
 }
 

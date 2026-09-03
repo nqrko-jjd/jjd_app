@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { contactInput, normalizeName } from '@jjd/shared';
 import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
-import { requireAuth, STAFF, OFFICE } from '../lib/auth.js';
+import { requireAuth, STAFF, OFFICE, hashPassword } from '../lib/auth.js';
 
 export const contactsRouter = Router();
 
@@ -37,6 +37,7 @@ contactsRouter.get(
         buildings: true,
         worksites: { orderBy: { updatedAt: 'desc' }, take: 50 },
         opportunities: { orderBy: { updatedAt: 'desc' }, take: 20 },
+        user: { select: { email: true } },
       },
     });
     if (!contact) throw new HttpError(404, 'Contact introuvable');
@@ -59,6 +60,33 @@ contactsRouter.post(
       },
     });
     res.status(201).json({ contact });
+  }),
+);
+
+/** Ouvre un accès au portail client pour ce contact (connexion par lien magique). */
+contactsRouter.post(
+  '/:id/portal-access',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const contact = await prisma.contact.findUnique({ where: { id: req.params.id }, include: { user: true, syndic: true } });
+    if (!contact) throw new HttpError(404, 'Contact introuvable');
+    if (contact.user) throw new HttpError(409, 'Un accès existe déjà');
+    const email = String(req.body.email ?? contact.email ?? '').trim().toLowerCase();
+    if (!/.+@.+\..+/.test(email)) throw new HttpError(422, 'E-mail requis');
+    if (await prisma.user.findUnique({ where: { email } })) throw new HttpError(409, 'Cet e-mail est déjà utilisé');
+
+    // si le contact EST un syndic -> accès syndic (voit tous ses immeubles)
+    const asSyndic = contact.kind === 'syndic' && contact.syndicId;
+    await prisma.user.create({
+      data: {
+        email,
+        passwordHash: await hashPassword(Math.random().toString(36).slice(2)),
+        role: 'client',
+        contactId: asSyndic ? null : contact.id,
+        syndicId: asSyndic ? contact.syndicId : null,
+      },
+    });
+    res.status(201).json({ email, portal: `${req.protocol}://${req.get('host')?.replace(/:\d+$/, ':3100') ?? ''}/portail` });
   }),
 );
 

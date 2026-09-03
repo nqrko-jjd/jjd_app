@@ -13,6 +13,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readdirSync, existsSync } from 'node:fs';
+import bcrypt from 'bcryptjs';
 import { PrismaClient } from '@prisma/client';
 import { parseLooseDate, parseAmount, normalizeName } from '@jjd/shared';
 import { readTable, pick, type TableRow } from './lib/table-read.js';
@@ -77,17 +78,53 @@ function buildDocToWorksite(): Map<string, string> {
   return map;
 }
 
+const syndicCache = new Map<string, string>();
+async function getSyndic(rawName: string): Promise<string> {
+  const nn = normalizeName(rawName);
+  if (syndicCache.has(nn)) return syndicCache.get(nn)!;
+  let s = await prisma.syndic.findFirst({ where: { normalizedName: nn } });
+  if (!s) s = await prisma.syndic.create({ data: { name: rawName.trim(), normalizedName: nn } });
+  syndicCache.set(nn, s.id);
+  return s.id;
+}
+
+/** « ACP Iris (c/o Baltimo) » -> base « ACP Iris », syndic « Baltimo ». */
+function splitSyndic(name: string): { base: string; syndic: string | null } {
+  const m = name.match(/^(.*?)[\s(–-]*c\/o\s+([^)]+?)\)?\s*$/i);
+  if (m) return { base: m[1]!.replace(/[\s(–-]+$/, '').trim(), syndic: m[2]!.trim() };
+  return { base: name.trim(), syndic: null };
+}
+
 async function contactFor(name: string | null, vat: string | null): Promise<string | null> {
   if (!name) return null;
   const nn = normalizeName(name);
   let c = await prisma.contact.findFirst({ where: { normalizedName: nn } });
+  const { base, syndic } = splitSyndic(name);
+  const syndicId = syndic ? await getSyndic(syndic) : null;
+  const kind = /\bacp\b|copropri|\bvme\b/i.test(name) ? 'acp' : /\b(srl|sprl|sa|nv|bv|scrl)\b/i.test(name) ? 'company' : 'individual';
+
   if (!c) {
-    const kind = /\bacp\b|copropri|\bvme\b/i.test(name) ? 'acp' : /\b(srl|sprl|sa|nv|bv|scrl)\b/i.test(name) ? 'company' : 'individual';
     c = await prisma.contact.create({
-      data: { name: name.trim(), normalizedName: nn, type: 'client', kind, vat: vat || null, source: 'trustup' },
+      data: { name: name.trim(), normalizedName: nn, type: 'client', kind, vat: vat || null, syndicId, source: 'trustup' },
     });
-  } else if (vat && !c.vat) {
-    await prisma.contact.update({ where: { id: c.id }, data: { vat } });
+  } else {
+    const patch: Record<string, unknown> = {};
+    if (vat && !c.vat) patch.vat = vat;
+    if (syndicId && !c.syndicId) patch.syndicId = syndicId;
+    if (Object.keys(patch).length) await prisma.contact.update({ where: { id: c.id }, data: patch });
+  }
+
+  // un ACP avec syndic -> aussi un immeuble rattaché à ce syndic
+  if (kind === 'acp' && syndicId) {
+    const bn = normalizeName(base || name);
+    const existing = await prisma.building.findFirst({ where: { normalizedName: bn } });
+    if (!existing) {
+      await prisma.building.create({
+        data: { name: base || name, normalizedName: bn, syndicId, clientId: c.id, source: 'trustup' },
+      });
+    } else if (!existing.syndicId) {
+      await prisma.building.update({ where: { id: existing.id }, data: { syndicId, clientId: c.id } });
+    }
   }
   return c.id;
 }
@@ -153,6 +190,18 @@ async function importFile(file: string, docToWs: Map<string, string>, wsByRef: M
       },
     });
     ok++;
+
+    // rattache le chantier à son client / immeuble via le document
+    if (wsId && contactId) {
+      const ws = await prisma.worksite.findUnique({ where: { id: wsId }, select: { clientId: true, buildingId: true } });
+      const patch: Record<string, unknown> = {};
+      if (!ws?.clientId) patch.clientId = contactId;
+      if (!ws?.buildingId) {
+        const b = await prisma.building.findFirst({ where: { clientId: contactId } });
+        if (b) patch.buildingId = b.id;
+      }
+      if (Object.keys(patch).length) await prisma.worksite.update({ where: { id: wsId }, data: patch });
+    }
   }
   return { kind, ok, noWs };
 }
@@ -166,6 +215,7 @@ async function main() {
   console.log('Import TrustUp —', files.map((f) => path.basename(f)).join(', '));
 
   await prisma.document.deleteMany({ where: { source: 'trustup' } });
+  await prisma.building.deleteMany({ where: { source: 'trustup', worksites: { none: {} } } });
   const docToWs = buildDocToWorksite();
   console.log(`  ${docToWs.size} numéros de document reliés à un chantier (via l'Excel)`);
   const worksites = await prisma.worksite.findMany({ select: { id: true, ref: true } });
@@ -180,6 +230,27 @@ async function main() {
   const linked = await prisma.document.count({ where: { source: 'trustup', worksiteId: { not: null } } });
   const total = await prisma.document.count({ where: { source: 'trustup' } });
   console.log(`\nTotal : ${byKind.map((c) => `${c._count} ${c.kind}`).join(', ')} — ${linked}/${total} rattachés à un chantier`);
+
+  await seedPortalDemo();
+}
+
+/** Comptes de démo du portail client — créés après tous les imports. */
+async function seedPortalDemo() {
+  await prisma.user.deleteMany({ where: { email: { endsWith: '@portail.demo' } } });
+  const pw = await bcrypt.hash('demo', 10);
+
+  const syndic = await prisma.syndic.findFirst({ orderBy: { buildings: { _count: 'desc' } } });
+  if (syndic) {
+    await prisma.user.create({ data: { email: 'syndic@portail.demo', passwordHash: pw, role: 'client', syndicId: syndic.id } });
+  }
+  const client = await prisma.contact.findFirst({
+    where: { type: { in: ['client', 'both'] }, kind: 'individual', worksites: { some: { documents: { some: {} } } } },
+    orderBy: { worksites: { _count: 'desc' } },
+  });
+  if (client) {
+    await prisma.user.create({ data: { email: 'client@portail.demo', passwordHash: pw, role: 'client', contactId: client.id } });
+  }
+  console.log(`Portail démo : syndic@portail.demo (${syndic?.name ?? '—'}) · client@portail.demo (${client?.name ?? '—'})`);
 }
 
 main()

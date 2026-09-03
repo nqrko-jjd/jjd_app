@@ -19,6 +19,7 @@ import { portalRouter } from './routes/portal.js';
 import { financeRouter } from './routes/finance.js';
 import { documentsRouter, priceItemsRouter } from './routes/documents.js';
 import { settingsRouter } from './routes/settings.js';
+import { publicRouter } from './routes/public.js';
 
 export function createApp() {
   const app = express();
@@ -31,6 +32,7 @@ export function createApp() {
   app.use('/uploads', express.static(UPLOADS_DIR, { maxAge: '7d' }));
 
   app.use('/api/auth', authRouter);
+  app.use('/api/public', publicRouter);
   app.use('/api/portal', portalRouter);
   app.use('/api/worksites/:worksiteId/thread', threadRouter);
   app.use('/api/dashboard', dashboardRouter);

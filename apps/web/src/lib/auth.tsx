@@ -39,7 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     setToken(r.token);
     setUser(r.user);
-    router.push('/');
+    router.push('/app');
   }
 
   function logout() {

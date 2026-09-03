@@ -11,29 +11,29 @@ const NAV: Group[] = [
   {
     title: 'Pilotage',
     items: [
-      { href: '/', label: 'Tableau de bord', ic: '◧' },
-      { href: '/chantiers', label: 'Chantiers', ic: '▤' },
-      { href: '/planning', label: 'Planning', ic: '▦' },
-      { href: '/pointage', label: 'Pointage', ic: '◷' },
-      { href: '/crm', label: 'Pipeline', ic: '⇗' },
-      { href: '/documents', label: 'Devis & factures', ic: '▧', roles: ['admin', 'office'] },
-      { href: '/finances', label: 'Finances', ic: '€', roles: ['admin', 'office'] },
+      { href: '/app', label: 'Tableau de bord', ic: '◧' },
+      { href: '/app/chantiers', label: 'Chantiers', ic: '▤' },
+      { href: '/app/planning', label: 'Planning', ic: '▦' },
+      { href: '/app/pointage', label: 'Pointage', ic: '◷' },
+      { href: '/app/crm', label: 'Pipeline', ic: '⇗' },
+      { href: '/app/documents', label: 'Devis & factures', ic: '▧', roles: ['admin', 'office'] },
+      { href: '/app/finances', label: 'Finances', ic: '€', roles: ['admin', 'office'] },
     ],
   },
   {
     title: 'Répertoires',
     items: [
-      { href: '/immeubles', label: 'Immeubles / ACP', ic: '⌂' },
-      { href: '/contacts', label: 'Contacts', ic: '☰' },
-      { href: '/equipe', label: 'Équipe', ic: '☺' },
-      { href: '/flotte', label: 'Flotte', ic: '⛟' },
+      { href: '/app/immeubles', label: 'Immeubles / ACP', ic: '⌂' },
+      { href: '/app/contacts', label: 'Contacts', ic: '☰' },
+      { href: '/app/equipe', label: 'Équipe', ic: '☺' },
+      { href: '/app/flotte', label: 'Flotte', ic: '⛟' },
     ],
   },
   {
     title: 'Administration',
     items: [
-      { href: '/controle', label: 'File de contrôle', ic: '⚑', roles: ['admin', 'office'] },
-      { href: '/parametres', label: 'Paramètres', ic: '⚙', roles: ['admin', 'office'] },
+      { href: '/app/controle', label: 'File de contrôle', ic: '⚑', roles: ['admin', 'office'] },
+      { href: '/app/parametres', label: 'Paramètres', ic: '⚙', roles: ['admin', 'office'] },
     ],
   },
 ];
@@ -43,7 +43,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
   const [open, setOpen] = useState(false);
 
-  const isActive = (href: string) => (href === '/' ? pathname === '/' : pathname.startsWith(href));
+  const isActive = (href: string) => (href === '/app' ? pathname === '/app' : pathname.startsWith(href));
   const visible = (i: Item) => !i.roles || (user && i.roles.includes(user.role));
   const current =
     NAV.flatMap((g) => g.items).find((i) => isActive(i.href))?.label ?? 'JJD App';

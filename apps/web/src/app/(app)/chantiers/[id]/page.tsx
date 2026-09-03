@@ -76,7 +76,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
         {w.statusRaw && w.statusRaw !== w.status && <span className="chip">{w.statusRaw}</span>}
       </div>
 
-      <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', marginBottom: '1.4rem' }}>
+      <div className="info-grid" style={{ marginBottom: '1.5rem' }}>
         <Info label="Client" value={w.client ? <Link href={`/contacts/${w.client.id}`}>{w.client.name}</Link> : '—'} />
         <Info label="Immeuble / ACP" value={w.building ? <Link href={`/immeubles/${w.building.id}`}>{w.building.name}{w.building.syndic ? ` · ${w.building.syndic.name}` : ''}</Link> : '—'} />
         <Info label="Chef de chantier" value={w.manager?.displayName ?? w.manager?.firstName ?? '—'} />
@@ -86,9 +86,9 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
       </div>
 
       {data.margin && (
-        <section className="card card-pad" style={{ marginBottom: '1.4rem' }}>
-          <h2 style={{ marginBottom: '0.8rem' }}>Rentabilité <span className="muted" style={{ fontSize: '0.78rem' }}>— temps réel, main-d'œuvre incluse</span></h2>
-          <div className="kpis">
+        <>
+          <div className="section-title">Rentabilité <span className="hint">temps réel, main-d'œuvre incluse</span></div>
+          <div className="kpis" style={{ marginBottom: '1.5rem' }}>
             <MiniKpi label="Devisé HT" value={<Money value={data.margin.quotedHt} />} />
             <MiniKpi label="Facturé HT" value={<Money value={data.margin.invoicedHt} />} />
             <MiniKpi label="Encaissé HT" value={<Money value={data.margin.paidHt} />} />
@@ -98,45 +98,55 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
             <MiniKpi label="Reste à facturer" value={<Money value={data.margin.leftToInvoice} />} />
             {data.margin.partnerShare > 0 && <MiniKpi label="Part GT (33 %)" value={<Money value={data.margin.partnerShare} />} />}
           </div>
-        </section>
+        </>
       )}
 
       {w.description && (
-        <section className="card card-pad" style={{ marginBottom: '1.4rem' }}>
+        <section className="card card-pad" style={{ marginBottom: '1.5rem' }}>
           <div className="eyebrow" style={{ marginBottom: '0.4rem' }}>Description</div>
           <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{w.description}</p>
         </section>
       )}
 
-      <section style={{ marginBottom: '1.4rem' }}>
-        <h2 style={{ marginBottom: '0.7rem' }}>Documents ({w.documents.length})</h2>
-        {w.documents.length === 0 ? (
-          <div className="card card-pad muted">Aucun devis / facture rattaché (import TrustUp à venir).</div>
-        ) : (
-          <div className="tbl-wrap">
-            <table className="tbl">
-              <thead><tr><th>Type</th><th>Numéro</th><th>Date</th><th style={{ textAlign: 'right' }}>HT</th><th>Statut</th></tr></thead>
-              <tbody>
-                {w.documents.map((d) => (
-                  <tr key={d.id}>
-                    <td>{d.kind}</td><td className="mono">{d.number}</td><td className="tnum">{formatDateBE(d.issuedOn)}</td>
-                    <td style={{ textAlign: 'right' }}><Money value={d.totalHt} /></td><td>{d.status}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+      <div className="section-title">Devis &amp; factures <span className="hint">{w.documents.length}</span></div>
+      {w.documents.length === 0 ? (
+        <div className="card card-pad muted">Aucun devis / facture rattaché.</div>
+      ) : (
+        <div className="tbl-wrap">
+          <table className="tbl">
+            <thead><tr><th>Type</th><th>Numéro</th><th>Date</th><th style={{ textAlign: 'right' }}>HT</th><th>Statut</th></tr></thead>
+            <tbody>
+              {w.documents.map((d) => (
+                <tr key={d.id}>
+                  <td>{DOC_KIND[d.kind] ?? d.kind}</td>
+                  <td className="mono">{d.number}</td>
+                  <td className="tnum">{formatDateBE(d.issuedOn)}</td>
+                  <td style={{ textAlign: 'right' }}><Money value={d.totalHt} /></td>
+                  <td><span className={`badge ${DOC_TONE[d.status] ?? ''}`}>{DOC_STATUS[d.status] ?? d.status}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </>
   );
 }
 
+const DOC_KIND: Record<string, string> = { quote: 'Devis', invoice: 'Facture', credit_note: 'Note de crédit', deposit_invoice: 'Acompte' };
+const DOC_STATUS: Record<string, string> = {
+  draft: 'Brouillon', sent: 'Envoyé', accepted: 'Accepté', declined: 'Décliné', expired: 'Expiré',
+  paid: 'Payé', partial: 'Partiel', overdue: 'En retard', credited: 'Annulé',
+};
+const DOC_TONE: Record<string, string> = {
+  paid: 'ok', accepted: 'ok', sent: 'primary', overdue: 'crit', declined: 'crit', partial: 'warn',
+};
+
 function Info({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="card card-pad">
-      <div className="eyebrow">{label}</div>
-      <div style={{ marginTop: '0.3rem', fontWeight: 500 }}>{value}</div>
+    <div className="info-cell">
+      <div className="k">{label}</div>
+      <div className="v">{value}</div>
     </div>
   );
 }
@@ -144,8 +154,8 @@ function MiniKpi({ label, value, note }: { label: string; value: React.ReactNode
   return (
     <div className="kpi">
       <div className="label">{label}</div>
-      <div className="value" style={{ fontSize: '1.05rem' }}>{value}</div>
-      {note && <div className="muted" style={{ fontSize: '0.74rem' }}>{note}</div>}
+      <div className="value" style={{ fontSize: '1.1rem' }}>{value}</div>
+      {note && <div className="sub">{note}</div>}
     </div>
   );
 }

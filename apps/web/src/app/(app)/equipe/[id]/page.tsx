@@ -140,9 +140,9 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
 
 function Info({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="card card-pad">
-      <div className="eyebrow">{label}</div>
-      <div style={{ marginTop: '0.3rem', fontWeight: 500 }}>{value}</div>
+    <div className="info-cell">
+      <div className="k">{label}</div>
+      <div className="v">{value}</div>
     </div>
   );
 }

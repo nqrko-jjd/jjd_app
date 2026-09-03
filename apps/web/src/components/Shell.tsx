@@ -31,7 +31,10 @@ const NAV: Group[] = [
   },
   {
     title: 'Administration',
-    items: [{ href: '/controle', label: 'File de contrôle', ic: '⚑', roles: ['admin', 'office'] }],
+    items: [
+      { href: '/controle', label: 'File de contrôle', ic: '⚑', roles: ['admin', 'office'] },
+      { href: '/parametres', label: 'Paramètres', ic: '⚙', roles: ['admin', 'office'] },
+    ],
   },
 ];
 

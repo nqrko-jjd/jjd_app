@@ -4,12 +4,13 @@ import { useSession } from '@/lib/session';
 import { API_URL } from '@/lib/api';
 import { T } from '@/lib/theme';
 
-const LINKS: { href: string; label: string; ic: string }[] = [
+const LINKS: { href: string; label: string; ic: string; roles?: string[] }[] = [
   { href: '/immeubles', label: 'Immeubles / ACP', ic: '⌂' },
   { href: '/contacts', label: 'Contacts', ic: '☰' },
   { href: '/equipe', label: 'Équipe', ic: '☺' },
   { href: '/flotte', label: 'Flotte', ic: '⛟' },
   { href: '/pipeline', label: 'Pipeline commercial', ic: '⇗' },
+  { href: '/documents', label: 'Devis & factures', ic: '▧', roles: ['admin', 'office'] },
   { href: '/decomptes', label: 'Décomptes du mois', ic: '€' },
   { href: '/controle', label: 'File de contrôle', ic: '⚑' },
 ];
@@ -17,6 +18,7 @@ const LINKS: { href: string; label: string; ic: string }[] = [
 export default function Plus() {
   const router = useRouter();
   const { user, person, signOut } = useSession();
+  const links = LINKS.filter((l) => !l.roles || (user && l.roles.includes(user.role)));
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ padding: 16, gap: 10 }}>
@@ -26,10 +28,10 @@ export default function Plus() {
       </View>
 
       <View style={s.group}>
-        {LINKS.map((l, i) => (
+        {links.map((l, i) => (
           <Pressable
             key={l.href}
-            style={[s.row, i < LINKS.length - 1 && s.rowBorder]}
+            style={[s.row, i < links.length - 1 && s.rowBorder]}
             onPress={() => router.push(l.href as never)}
           >
             <Text style={s.ic}>{l.ic}</Text>

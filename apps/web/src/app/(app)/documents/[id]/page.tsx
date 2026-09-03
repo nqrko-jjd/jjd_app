@@ -26,6 +26,10 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  const [libQ, setLibQ] = useState('');
+  const { data: lib } = useApi<{ items: { id: string; label: string; unit: string | null; unitPriceHt: number; vatRate: number }[] }>(
+    libQ.length >= 2 ? `/api/price-items?q=${encodeURIComponent(libQ)}` : null,
+  );
 
   useEffect(() => {
     if (data?.document) {
@@ -276,10 +280,37 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
       </div>
 
       {!locked && (
-        <div className="row" style={{ marginBottom: '1rem', gap: '0.4rem' }}>
-          <button className="btn" onClick={() => addLine('item')}>+ Ligne</button>
-          <button className="btn" onClick={() => addLine('section')}>+ Section</button>
-          <button className="btn" onClick={() => addLine('text')}>+ Texte</button>
+        <div style={{ marginBottom: '1rem' }}>
+          <div className="row" style={{ gap: '0.4rem' }}>
+            <button className="btn" onClick={() => addLine('item')}>+ Ligne</button>
+            <button className="btn" onClick={() => addLine('section')}>+ Section</button>
+            <button className="btn" onClick={() => addLine('text')}>+ Texte</button>
+            <input
+              className="input"
+              style={{ maxWidth: 220, marginLeft: 'auto' }}
+              placeholder="Chercher dans la bibliothèque…"
+              value={libQ}
+              onChange={(e) => setLibQ(e.target.value)}
+            />
+          </div>
+          {lib && lib.items.length > 0 && (
+            <div className="card" style={{ marginTop: 6, padding: 6 }}>
+              {lib.items.slice(0, 8).map((it) => (
+                <button
+                  key={it.id}
+                  className="btn ghost"
+                  style={{ display: 'block', width: '100%', textAlign: 'left', marginBottom: 2 }}
+                  onClick={() => {
+                    setLines([...lines, { kind: 'item', label: it.label, qty: 1, unit: it.unit ?? '', unitPriceHt: it.unitPriceHt, discountPct: 0, vatRate: it.vatRate, priceItemId: it.id }]);
+                    setDirty(true);
+                    setLibQ('');
+                  }}
+                >
+                  {it.label} — {formatEur(it.unitPriceHt)}{it.unit ? ` / ${it.unit}` : ''}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

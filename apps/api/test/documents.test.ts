@@ -23,6 +23,10 @@ before(async () => {
       })
     ).json()
   ).token;
+  // repart d'un état propre : purge les brouillons manuels laissés par un run précédent
+  await prisma.documentLine.deleteMany({ where: { document: { source: 'manual', number: null } } });
+  await prisma.document.deleteMany({ where: { source: 'manual', number: null } });
+  await prisma.counter.deleteMany({ where: { name: { startsWith: 'doc:' } } });
   const ws = await prisma.worksite.create({ data: { ref: 'R-DOCTEST', title: 'Doc test', source: 'test' } });
   wsId = ws.id;
 });

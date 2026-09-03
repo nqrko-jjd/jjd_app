@@ -18,6 +18,7 @@ import { threadRouter } from './routes/thread.js';
 import { portalRouter } from './routes/portal.js';
 import { financeRouter } from './routes/finance.js';
 import { documentsRouter, priceItemsRouter } from './routes/documents.js';
+import { settingsRouter } from './routes/settings.js';
 
 export function createApp() {
   const app = express();
@@ -41,6 +42,7 @@ export function createApp() {
   app.use('/api/finance', financeRouter);
   app.use('/api/documents', documentsRouter);
   app.use('/api/price-items', priceItemsRouter);
+  app.use('/api/settings', settingsRouter);
   app.use('/api/planning', planningRouter);
   app.use('/api/teams', teamsRouter);
   app.use('/api/vehicles', vehiclesRouter);

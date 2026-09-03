@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 
-type Item = { href: string; label: string; ic: string; roles?: string[] };
+type Item = { href: string; label: string; ic: string; roles?: string[]; ext?: boolean };
 type Group = { title: string; items: Item[] };
 
 const NAV: Group[] = [
@@ -35,6 +35,7 @@ const NAV: Group[] = [
     items: [
       { href: '/app/controle', label: 'File de contrôle', ic: '⚑', roles: ['admin', 'office'] },
       { href: '/app/parametres', label: 'Paramètres', ic: '⚙', roles: ['admin', 'office'] },
+      { href: '/portail', label: 'Portail client', ic: '⧉', ext: true },
     ],
   },
 ];
@@ -67,15 +68,30 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <div key={g.title}>
               <div className="sect">{g.title}</div>
               {items.map((i) => (
-                <Link
-                  key={i.href}
-                  href={i.href}
-                  className={`navlink${isActive(i.href) ? ' active' : ''}`}
-                  onClick={() => setOpen(false)}
-                >
-                  <span className="ic">{i.ic}</span>
-                  {i.label}
-                </Link>
+                i.ext ? (
+                  <a
+                    key={i.href}
+                    href={i.href}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="navlink"
+                    onClick={() => setOpen(false)}
+                  >
+                    <span className="ic">{i.ic}</span>
+                    {i.label}
+                    <span className="ic" style={{ marginLeft: 'auto', opacity: 0.5, fontSize: '0.75rem' }}>↗</span>
+                  </a>
+                ) : (
+                  <Link
+                    key={i.href}
+                    href={i.href}
+                    className={`navlink${isActive(i.href) ? ' active' : ''}`}
+                    onClick={() => setOpen(false)}
+                  >
+                    <span className="ic">{i.ic}</span>
+                    {i.label}
+                  </Link>
+                )
               ))}
             </div>
           );

@@ -33,6 +33,9 @@ export function SiteHeader() {
               {l.label}
             </Link>
           ))}
+          <a href="/portail" className="s-nav-portal" onClick={() => setOpen(false)}>
+            Espace client
+          </a>
           <Link href="/contact" className="s-btn-dark s-nav-cta" onClick={() => setOpen(false)}>
             Nous contacter <span className="arr">↗</span>
           </Link>

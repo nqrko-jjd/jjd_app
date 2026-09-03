@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { PageHero, SectionHead, Steps, CtaBand, Eyebrow } from '../_components/blocks';
+import { PageHero, SectionHead, Steps, CtaBand, Eyebrow, Cta } from '../_components/blocks';
 
 export const metadata: Metadata = {
   title: 'Maintenance de bâtiments | JJD Consult',
@@ -72,6 +72,30 @@ export default function MaintenancePage() {
             <li>Coordination avec occupants et fournisseurs</li>
             <li>Retour clair après intervention</li>
           </ul>
+        </div>
+      </section>
+
+      <section className="s-section dark">
+        <div className="s-wrap">
+          <div className="s-split">
+            <div>
+              <Eyebrow>Espace syndic & copropriété</Eyebrow>
+              <h2 style={{ margin: '1rem 0 1.3rem' }}>Un portail dédié <span className="s-em">à vos immeubles.</span></h2>
+              <p className="s-lead" style={{ maxWidth: '46ch' }}>
+                Vos gestionnaires suivent chaque intervention en ligne, par immeuble : photos, rapports signés, devis à
+                valider et planning de la semaine. Vos copropriétaires y accèdent en lecture pour les infos qui les
+                concernent.
+              </p>
+              <div style={{ marginTop: '1.8rem' }}>
+                <Cta href="/portail">Voir l’espace client</Cta>
+              </div>
+            </div>
+            <div className="s-panel">
+              <div className="row"><b>·</b><div><strong>Vue par immeuble / ACP</strong><br />Interventions en cours et historique regroupés par bâtiment.</div></div>
+              <div className="row"><b>·</b><div><strong>Rapports d’intervention</strong><br />Datés, illustrés et signés sur place par l’équipe.</div></div>
+              <div className="row"><b>·</b><div><strong>Accès résident en lecture</strong><br />Les habitants voient le suivi, sans les données financières.</div></div>
+            </div>
+          </div>
         </div>
       </section>
 

@@ -75,6 +75,12 @@
 .s-nav-links a:hover { color: var(--s-ink); }
 .s-nav-links a.active { border-color: var(--s-gold); color: var(--s-ink); }
 .s-nav-cta { display: inline-flex; }
+.s-nav-portal {
+  font-size: 0.82rem; font-weight: 600; color: var(--s-ink);
+  border: 1.5px solid var(--s-line); border-radius: 999px; padding: 7px 15px !important;
+  border-bottom-width: 1.5px !important; transition: border-color 0.15s, background 0.15s;
+}
+.s-nav-portal:hover { border-color: var(--s-gold); background: rgba(0,0,0,0.02); }
 .s-burger { display: none; background: none; border: 0; font-size: 1.5rem; color: var(--s-ink); cursor: pointer; margin-left: auto; }
 
 @media (max-width: 900px) {

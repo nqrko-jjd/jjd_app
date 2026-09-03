@@ -31,3 +31,6 @@ apps/api/prisma/import-report*.csv
 # OS
 .DS_Store
 Thumbs.db
+
+apps/mobile/node_modules/
+apps/mobile/.expo/

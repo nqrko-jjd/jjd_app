@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "JJD Chantier",
+    "slug": "jjd-chantier",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "jjd",
+    "userInterfaceStyle": "light",
+    "primaryColor": "#274A70",
+    "splash": {
+      "backgroundColor": "#274A70",
+      "resizeMode": "contain"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "be.jjdconsult.chantier",
+      "infoPlist": { "ITSAppUsesNonExemptEncryption": false }
+    },
+    "android": {
+      "package": "be.jjdconsult.chantier",
+      "adaptiveIcon": { "backgroundColor": "#274A70" }
+    },
+    "plugins": ["expo-router", "expo-localization"],
+    "extra": {
+      "apiUrl": "http://localhost:4100"
+    }
+  }
+}

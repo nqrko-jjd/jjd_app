@@ -237,6 +237,8 @@ p { margin: 0; }
 .kpi .value { font-size: 1.45rem; font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 .kpi .value.neg { color: var(--crit); }
 .kpi .sub { font-size: 0.76rem; color: var(--ink-2); }
+.kpi.warn { border-color: var(--warn); background: var(--warn-soft); }
+.kpi.warn .ic { background: var(--warn); color: #fff; }
 
 /* ---------------------------------------------------- alerts */
 .alert-list { display: flex; flex-direction: column; gap: 0.55rem; }

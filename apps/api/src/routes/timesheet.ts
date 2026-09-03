@@ -196,6 +196,20 @@ timesheetRouter.post(
   }),
 );
 
+/** Valide en masse les pointages soumis (sauf ceux signalés « hors zone »). */
+timesheetRouter.post(
+  '/entries/approve-all',
+  requireAuth('admin', 'office', 'foreman'),
+  asyncHandler(async (req, res) => {
+    const includeFlagged = req.body?.includeFlagged === true;
+    const r = await prisma.timeEntry.updateMany({
+      where: { status: 'submitted', ...(includeFlagged ? {} : { geoFlag: false }) },
+      data: { status: 'approved', approvedById: req.user!.id },
+    });
+    res.json({ approved: r.count });
+  }),
+);
+
 timesheetRouter.patch(
   '/entries/:id',
   requireAuth(...OFFICE),

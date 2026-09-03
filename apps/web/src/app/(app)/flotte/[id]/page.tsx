@@ -3,10 +3,12 @@ import { use } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
 import { PageHead, Money, formatDateBE } from '@/lib/ui';
+import { PhotoHeader } from '@/components/PhotoHeader';
 
 interface Detail {
   vehicle: {
     id: string; code: string | null; brand: string | null; model: string | null; plate: string | null;
+    photoUrl: string | null;
     type: string | null; fuel: string | null; vin: string | null; km: string | null;
     firstRegistration: string | null; nextInspection: string | null; status: string;
     circulationTax: number | null; biv: number | null; driver: string | null; equipment: string | null; depot: string | null;
@@ -22,7 +24,7 @@ interface Detail {
 
 export default function VehicleDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { data, loading } = useApi<Detail>(`/api/vehicles/${id}`);
+  const { data, loading, reload } = useApi<Detail>(`/api/vehicles/${id}`);
   if (loading) return <div className="empty">Chargement…</div>;
   if (!data) return <div className="empty">Véhicule introuvable.</div>;
   const v = data.vehicle;
@@ -35,6 +37,13 @@ export default function VehicleDetail({ params }: { params: Promise<{ id: string
         title={[v.brand, v.model].filter(Boolean).join(' ')}
         sub={`${v.plate ?? 'sans plaque'} · ${v.code ?? ''} · ${v.type ?? ''}`}
         action={<Link href="/flotte" className="btn">← Flotte</Link>}
+      />
+      <PhotoHeader
+        basePath={`/api/vehicles/${v.id}`}
+        photoUrl={v.photoUrl}
+        alt={[v.brand, v.model].filter(Boolean).join(' ')}
+        fallback="🚐"
+        onChange={reload}
       />
       <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', marginBottom: '1.4rem' }}>
         <Info label="Conducteur" value={v.driver ?? '—'} />

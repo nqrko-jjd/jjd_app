@@ -9,6 +9,8 @@ let base = '';
 let davidToken = '';
 let workerToken = '';
 let worksiteId = '';
+let testPersonId = '';
+let originalWorkerPersonId: string | null = null;
 
 async function login(email: string) {
   const r = await fetch(`${base}/api/auth/login`, {
@@ -27,10 +29,13 @@ before(async () => {
 
   davidToken = await login('david@jjd-consult.be');
 
-  // lie un compte ouvrier à une fiche personne avec un taux
+  // lie un compte ouvrier à une fiche personne avec un taux (lien d'origine restauré après)
+  const originalUser = await prisma.user.findUnique({ where: { email: 'ouvrier@jjd-consult.be' } });
+  originalWorkerPersonId = originalUser?.personId ?? null;
   const person = await prisma.person.create({
     data: { firstName: 'Test', displayName: 'Test Ouvrier', normalizedName: 'test ouvrier', role: 'worker', hourlyRate: 20, source: 'test' },
   });
+  testPersonId = person.id;
   await prisma.user.update({ where: { email: 'ouvrier@jjd-consult.be' }, data: { personId: person.id } });
   workerToken = await login('ouvrier@jjd-consult.be');
 
@@ -40,8 +45,9 @@ before(async () => {
 
 after(async () => {
   await prisma.timeEntry.deleteMany({ where: { source: { in: ['timer', 'test', 'manual'] } } });
-  await prisma.user.updateMany({ where: { email: 'ouvrier@jjd-consult.be' }, data: { personId: null } });
-  await prisma.person.deleteMany({ where: { source: 'test' } });
+  await prisma.user.updateMany({ where: { email: 'ouvrier@jjd-consult.be' }, data: { personId: originalWorkerPersonId } });
+  if (testPersonId) await prisma.person.deleteMany({ where: { id: testPersonId } });
+  await prisma.worksite.deleteMany({ where: { ref: 'R-TEST', source: 'test' } });
   server.close();
 });
 

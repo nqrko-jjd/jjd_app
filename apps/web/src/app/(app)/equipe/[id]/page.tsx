@@ -5,13 +5,14 @@ import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { PageHead, Money, formatDateBE } from '@/lib/ui';
 import { FormModal } from '@/components/FormModal';
+import { PhotoHeader } from '@/components/PhotoHeader';
 import { PERSON_FIELDS } from '@/lib/forms';
 import { ROLE_LABEL, WORKER_CONTRACT_LABEL, LEGAL_DOC_LABEL, formatHours } from '@jjd/shared';
 
 interface Detail {
   person: {
     id: string; firstName: string; lastName: string | null; displayName: string | null;
-    role: string; contractType: string; hourlyRate: number | null;
+    role: string; contractType: string; hourlyRate: number | null; photoUrl: string | null;
     phone: string | null; email: string | null; address: string | null;
     languages: string[] | null; emergencyContact: string | null; active: boolean; note: string | null;
     legalDocs: { id: string; type: string; label: string | null; number: string | null; expiresOn: string | null }[];
@@ -71,6 +72,15 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
             <Link href="/equipe" className="btn">← Équipe</Link>
           </div>
         }
+      />
+
+      <PhotoHeader
+        basePath={`/api/people/${p.id}`}
+        photoUrl={p.photoUrl}
+        alt={p.displayName || p.firstName}
+        shape="round"
+        fallback={(p.firstName[0] ?? '') + (p.lastName?.[0] ?? '')}
+        onChange={reload}
       />
 
       <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', marginBottom: '1.4rem' }}>

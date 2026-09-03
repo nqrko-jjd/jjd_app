@@ -4,6 +4,7 @@ import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, STAFF, OFFICE } from '../lib/auth.js';
 import { upsertEvent, deleteEvent, gcalEnabled } from '../lib/gcal.js';
+import { attachPhotoRoutes } from '../lib/photo-upload.js';
 
 export const planningRouter = Router();
 
@@ -187,6 +188,8 @@ teamsRouter.patch(
 // ── Véhicules (lecture — import Excel)
 
 export const vehiclesRouter = Router();
+attachPhotoRoutes(vehiclesRouter, (id, data) => prisma.vehicle.update({ where: { id }, data }));
+
 vehiclesRouter.get(
   '/',
   requireAuth(...STAFF),

@@ -1,11 +1,11 @@
 'use client';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
-import { PageHead, Money, formatDateBE } from '@/lib/ui';
+import { PageHead, Money, formatDateBE, Thumb } from '@/lib/ui';
 
 interface Vehicle {
   id: string; code: string | null; brand: string | null; model: string | null; plate: string | null;
-  type: string | null; fuel: string | null; status: string; driver: string | null;
+  type: string | null; fuel: string | null; status: string; driver: string | null; photoThumbUrl: string | null;
   nextInspection: string | null; monthlyPayment: number | null; acquisitionMode: string | null;
   insurances: { provider: string | null; monthlyAmount: number | null; annualAmount: number | null }[];
   _count: { fines: number; payments: number };
@@ -39,6 +39,7 @@ export default function FlottePage() {
                 return (
                   <tr key={v.id} style={v.status === 'active' ? undefined : { opacity: 0.5 }}>
                     <td>
+                      <Thumb src={v.photoThumbUrl} />
                       <Link href={`/flotte/${v.id}`}>{[v.brand, v.model].filter(Boolean).join(' ')}</Link>
                       {v.code && <span className="muted mono" style={{ fontSize: '0.75rem' }}> · {v.code}</span>}
                     </td>

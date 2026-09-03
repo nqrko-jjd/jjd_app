@@ -2,11 +2,12 @@ import { useCallback, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { Stack, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { apiGet } from '@/lib/api';
-import { Card, Label, Loading, Row, Badge, eur, dateBE } from '@/lib/ui';
+import { Card, Label, Loading, Row, Badge, PhotoHeader, eur, dateBE } from '@/lib/ui';
 import { T } from '@/lib/theme';
 
 interface D {
   person: {
+    id: string; photoUrl: string | null;
     firstName: string; lastName: string | null; displayName: string | null;
     role: string; contractType: string; hourlyRate: number | null;
     phone: string | null; email: string | null; languages: string[] | null; emergencyContact: string | null;
@@ -20,7 +21,8 @@ const DOC: Record<string, string> = { a1: 'A1', limosa: 'Limosa', vca: 'VCA', dr
 export default function PersonneDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [d, setD] = useState<D | null>(null);
-  useFocusEffect(useCallback(() => { apiGet<D>(`/api/people/${id}`).then(setD).catch(() => {}); }, [id]));
+  const load = useCallback(() => { apiGet<D>(`/api/people/${id}`).then(setD).catch(() => {}); }, [id]);
+  useFocusEffect(useCallback(() => { load(); }, [load]));
   if (!d) return <Loading />;
   const p = d.person;
   const soon = Date.now() + 30 * 86400000;
@@ -28,6 +30,7 @@ export default function PersonneDetail() {
   return (
     <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ padding: 16, gap: 12 }}>
       <Stack.Screen options={{ title: p.displayName || p.firstName, headerBackTitle: 'Retour' }} />
+      <PhotoHeader basePath={`/api/people/${p.id}`} photoUrl={p.photoUrl} round onChange={load} />
       <Card>
         <Row k="Taux horaire" v={p.hourlyRate != null ? eur(p.hourlyRate) : 'à définir'} />
         <Row k="Téléphone" v={p.phone ?? '—'} />

@@ -3,7 +3,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
-import { PageHead, Money } from '@/lib/ui';
+import { PageHead, Money, Avatar } from '@/lib/ui';
 import { FormModal } from '@/components/FormModal';
 import { PERSON_FIELDS } from '@/lib/forms';
 import { ROLE_LABEL, WORKER_CONTRACT_LABEL } from '@jjd/shared';
@@ -11,7 +11,7 @@ import { ROLE_LABEL, WORKER_CONTRACT_LABEL } from '@jjd/shared';
 interface Person {
   id: string; firstName: string; lastName: string | null; displayName: string | null;
   role: string; contractType: string; hourlyRate: number | null; phone: string | null;
-  active: boolean; languages: string[] | null;
+  active: boolean; languages: string[] | null; photoThumbUrl: string | null;
   _count: { legalDocs: number; timeEntries: number };
 }
 
@@ -58,7 +58,10 @@ export default function EquipePage() {
             <tbody>
               {data.items.map((p) => (
                 <tr key={p.id} style={p.active ? undefined : { opacity: 0.5 }}>
-                  <td><Link href={`/equipe/${p.id}`}>{p.displayName || `${p.firstName} ${p.lastName ?? ''}`.trim()}</Link></td>
+                  <td>
+                    <Avatar src={p.photoThumbUrl} label={p.displayName || `${p.firstName} ${p.lastName ?? ''}`} />
+                    <Link href={`/equipe/${p.id}`}>{p.displayName || `${p.firstName} ${p.lastName ?? ''}`.trim()}</Link>
+                  </td>
                   <td>{ROLE_LABEL[p.role as keyof typeof ROLE_LABEL] ?? p.role}</td>
                   <td>{WORKER_CONTRACT_LABEL[p.contractType as keyof typeof WORKER_CONTRACT_LABEL] ?? p.contractType}</td>
                   <td style={{ textAlign: 'right' }}>{p.hourlyRate != null ? <Money value={p.hourlyRate} /> : <span className="badge warn">à définir</span>}</td>

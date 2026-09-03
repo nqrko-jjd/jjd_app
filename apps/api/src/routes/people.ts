@@ -3,8 +3,11 @@ import { personInput, legalDocInput, normalizeName } from '@jjd/shared';
 import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, STAFF, OFFICE, hashPassword } from '../lib/auth.js';
+import { attachPhotoRoutes } from '../lib/photo-upload.js';
 
 export const peopleRouter = Router();
+
+attachPhotoRoutes(peopleRouter, (id, data) => prisma.person.update({ where: { id }, data }));
 
 function fullName(p: { firstName: string; lastName?: string | null }) {
   return `${p.firstName} ${p.lastName ?? ''}`.trim();

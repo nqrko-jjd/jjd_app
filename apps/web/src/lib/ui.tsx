@@ -52,3 +52,41 @@ export function PageHead({ title, sub, action }: { title: string; sub?: string; 
 export function Empty({ children }: { children: ReactNode }) {
   return <div className="empty">{children}</div>;
 }
+
+/** Petite vignette ronde (photo ou initiales) pour les listes. */
+export function Avatar({ src, label, size = 26 }: { src?: string | null; label: string; size?: number }) {
+  const initials = label.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join('');
+  return (
+    <span
+      style={{
+        display: 'inline-flex', width: size, height: size, borderRadius: '50%', flexShrink: 0,
+        overflow: 'hidden', alignItems: 'center', justifyContent: 'center', verticalAlign: 'middle',
+        background: 'var(--surface-2)', border: '1px solid var(--line)', marginRight: 8,
+        fontSize: size * 0.4, fontWeight: 700, color: 'var(--ink-3)',
+      }}
+    >
+      {src ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+      ) : initials}
+    </span>
+  );
+}
+
+/** Vignette rectangulaire (véhicule) pour les listes. */
+export function Thumb({ src, size = 40 }: { src?: string | null; size?: number }) {
+  return (
+    <span
+      style={{
+        display: 'inline-flex', width: size * 1.4, height: size, borderRadius: 6, flexShrink: 0,
+        overflow: 'hidden', alignItems: 'center', justifyContent: 'center', verticalAlign: 'middle',
+        background: 'var(--surface-2)', border: '1px solid var(--line)', marginRight: 8,
+      }}
+    >
+      {src ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+      ) : <span style={{ fontSize: size * 0.5 }}>🚐</span>}
+    </span>
+  );
+}

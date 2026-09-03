@@ -2,11 +2,12 @@ import { useCallback, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { Stack, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { apiGet } from '@/lib/api';
-import { Card, Label, Loading, Row, Badge, eur, dateBE } from '@/lib/ui';
+import { Card, Label, Loading, Row, Badge, PhotoHeader, eur, dateBE } from '@/lib/ui';
 import { T } from '@/lib/theme';
 
 interface D {
   vehicle: {
+    id: string; photoUrl: string | null;
     brand: string | null; model: string | null; plate: string | null; code: string | null;
     type: string | null; fuel: string | null; vin: string | null; km: string | null;
     nextInspection: string | null; driver: string | null; equipment: string | null; depot: string | null;
@@ -21,7 +22,8 @@ interface D {
 export default function VehiculeDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [d, setD] = useState<D | null>(null);
-  useFocusEffect(useCallback(() => { apiGet<D>(`/api/vehicles/${id}`).then(setD).catch(() => {}); }, [id]));
+  const load = useCallback(() => { apiGet<D>(`/api/vehicles/${id}`).then(setD).catch(() => {}); }, [id]);
+  useFocusEffect(useCallback(() => { load(); }, [load]));
   if (!d) return <Loading />;
   const v = d.vehicle;
   const ins = v.insurances[0];
@@ -30,6 +32,7 @@ export default function VehiculeDetail() {
   return (
     <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ padding: 16, gap: 12 }}>
       <Stack.Screen options={{ title: [v.brand, v.model].filter(Boolean).join(' '), headerBackTitle: 'Retour' }} />
+      <PhotoHeader basePath={`/api/vehicles/${v.id}`} photoUrl={v.photoUrl} onChange={load} />
       <Card>
         <Row k="Plaque" v={v.plate ?? '—'} />
         <Row k="Type / Carburant" v={`${v.type ?? '—'} · ${v.fuel ?? '—'}`} />

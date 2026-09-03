@@ -1,8 +1,79 @@
 import { useCallback, useState, type ReactNode } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, Pressable, FlatList, TextInput, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, Pressable, FlatList, TextInput, RefreshControl, Image, Alert } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { apiGet } from './api';
+import * as ImagePicker from 'expo-image-picker';
+import { apiGet, apiUploadPhoto, API_URL } from './api';
 import { T } from './theme';
+
+/** Bandeau photo (fiche véhicule / personne). `basePath` = /api/vehicles/<id> etc. */
+export function PhotoHeader({
+  basePath, photoUrl, round, onChange,
+}: { basePath: string; photoUrl: string | null; round?: boolean; onChange?: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const size = round ? 96 : undefined;
+
+  async function upload(uri: string) {
+    setBusy(true);
+    try {
+      await apiUploadPhoto(`${basePath}/photo`, uri);
+      onChange?.();
+    } catch (e) {
+      Alert.alert('Erreur', (e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function choose() {
+    Alert.alert('Photo', undefined, [
+      {
+        text: 'Prendre une photo',
+        onPress: async () => {
+          const perm = await ImagePicker.requestCameraPermissionsAsync();
+          if (!perm.granted) return;
+          const r = await ImagePicker.launchCameraAsync({ quality: 0.6 });
+          if (!r.canceled && r.assets[0]) upload(r.assets[0].uri);
+        },
+      },
+      {
+        text: 'Choisir dans la galerie',
+        onPress: async () => {
+          const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 0.6 });
+          if (!r.canceled && r.assets[0]) upload(r.assets[0].uri);
+        },
+      },
+      { text: 'Annuler', style: 'cancel' },
+    ]);
+  }
+
+  const src = photoUrl ? `${API_URL}${photoUrl}` : null;
+
+  return (
+    <View style={{ alignItems: 'center', gap: 8 }}>
+      <Pressable onPress={choose} disabled={busy}>
+        {src ? (
+          <Image
+            source={{ uri: src }}
+            style={round
+              ? { width: size, height: size, borderRadius: size! / 2, backgroundColor: T.surface2 }
+              : { width: '100%', aspectRatio: 16 / 10, borderRadius: 14, backgroundColor: T.surface2 }}
+          />
+        ) : (
+          <View style={round
+            ? { width: size, height: size, borderRadius: size! / 2, backgroundColor: T.surface2, alignItems: 'center', justifyContent: 'center' }
+            : { width: '100%', aspectRatio: 16 / 10, borderRadius: 14, backgroundColor: T.surface2, alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ fontSize: 30 }}>📷</Text>
+          </View>
+        )}
+      </Pressable>
+      <Pressable onPress={choose} disabled={busy}>
+        <Text style={{ color: T.primary, fontWeight: '700', fontSize: 13 }}>
+          {busy ? 'Envoi…' : photoUrl ? 'Changer la photo' : 'Ajouter une photo'}
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
 
 export function Card({ children, accent }: { children: ReactNode; accent?: string }) {
   return <View style={[st.card, accent ? { borderColor: accent, borderWidth: 1.5 } : null]}>{children}</View>;

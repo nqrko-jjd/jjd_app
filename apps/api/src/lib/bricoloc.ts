@@ -11,6 +11,21 @@ export function bricolocEnabled(): boolean {
   return !!env.bricoloc.apiKey;
 }
 
+/** Origine publique de Bricoloc (pour les URLs d'images `/uploads/...`). */
+const ORIGIN = (() => {
+  try {
+    return new URL(env.bricoloc.apiUrl).origin;
+  } catch {
+    return 'https://new.bricoloc.be';
+  }
+})();
+
+function absImg(src: string | null | undefined): string | null {
+  if (!src) return null;
+  if (/^https?:/i.test(src)) return src;
+  return `${ORIGIN}${src.startsWith('/') ? '' : '/'}${src}`;
+}
+
 async function call<T = unknown>(
   path: string,
   opts: { method?: string; body?: unknown; query?: Record<string, string> } = {},
@@ -85,16 +100,18 @@ export function syncChantierSafe(ws: WorksiteLike): void {
 
 /* ---------------------------------- Parc ---------------------------------- */
 
-export function getStock(q?: string) {
-  return call<{ products: BricolocProduct[] }>('/stock', { query: q ? { q } : {} });
+export async function getStock(q?: string) {
+  const r = await call<{ products: BricolocProduct[] }>('/stock', { query: q ? { q } : {} });
+  return { products: r.products.map((p) => ({ ...p, image: absImg(p.image) })) };
 }
 export function getConsumables() {
   return call<{ consumables: { id: string; slug: string; name: string; stockQty: number | null }[] }>(
     '/consumables',
   );
 }
-export function getUnit(code: string) {
-  return call<BricolocUnitInfo>(`/units/${encodeURIComponent(code)}`);
+export async function getUnit(code: string) {
+  const r = await call<BricolocUnitInfo>(`/units/${encodeURIComponent(code)}`);
+  return { ...r, product: { ...r.product, image: absImg(r.product.image) } };
 }
 export function getChantierReport(worksiteId: string) {
   return call<BricolocChantierReport>(`/chantiers/${encodeURIComponent(worksiteId)}`);
@@ -134,6 +151,8 @@ export interface BricolocProduct {
   slug: string;
   name: string;
   kind: string;
+  brand: string | null;
+  image: string | null;
   category: string | null;
   total: number;
   available: number;
@@ -149,7 +168,7 @@ export interface BricolocProduct {
 
 export interface BricolocUnitInfo {
   unit: { assetTag: string; barcode: string | null; state: string };
-  product: { id: string; name: string; kind: string };
+  product: { id: string; name: string; kind: string; image: string | null };
   location:
     | { type: 'DEPOT'; storageLocation: string | null }
     | { type: 'CHANTIER'; chantier: { name: string; externalRef: string | null }; since: string; takenBy: string | null }

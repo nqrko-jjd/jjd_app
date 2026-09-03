@@ -23,11 +23,12 @@ export default function LoginPage() {
 
   return (
     <div className="login-wrap">
-      <form className="card card-pad login-card grid" onSubmit={submit}>
-        <div className="mono" style={{ fontWeight: 600, letterSpacing: '0.04em' }}>
-          JJD<b style={{ color: 'var(--accent)' }}>·</b>App
+      <form className="card card-pad login-card grid" onSubmit={submit} style={{ gap: '0.85rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', fontWeight: 800, fontSize: '1.1rem' }}>
+          <span style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--primary)', color: '#fff', display: 'grid', placeItems: 'center', fontSize: '0.85rem' }}>J</span>
+          JD Consult
         </div>
-        <h1>Connexion bureau</h1>
+        <h1 style={{ fontSize: '1.35rem' }}>Connexion</h1>
         <div className="field">
           <label htmlFor="email">E-mail</label>
           <input id="email" className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" />

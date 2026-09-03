@@ -9,32 +9,35 @@ function Icon({ label, color }: { label: string; color: string }) {
 
 export default function TabsLayout() {
   const { user } = useSession();
-  const isStaff = user && ['admin', 'office', 'foreman'].includes(user.role);
-  const isField = user && ['worker', 'foreman'].includes(user.role);
+  const role = user?.role ?? 'worker';
+  const worker = role === 'worker';
+  const foreman = role === 'foreman';
+  const office = role === 'admin' || role === 'office';
+  const staff = foreman || office;
 
   const hide = { href: null as null } as const;
+  const tab = (title: string, ic: string) => ({ title, tabBarIcon: ({ color }: { color: string }) => <Icon label={ic} color={color} /> });
 
   return (
     <Tabs
       screenOptions={{
         headerStyle: { backgroundColor: T.surface },
-        headerTitleStyle: { color: T.ink },
+        headerTitleStyle: { color: T.ink, fontWeight: '700' },
+        headerShadowVisible: false,
         tabBarActiveTintColor: T.primary,
         tabBarInactiveTintColor: T.ink2,
         tabBarStyle: { backgroundColor: T.surface, borderTopColor: T.line },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
       }}
     >
-      {/* Terrain */}
-      <Tabs.Screen name="index" options={isField ? { title: 'Aujourd’hui', tabBarIcon: ({ color }) => <Icon label="⏱" color={color} /> } : hide} />
-      <Tabs.Screen name="heures" options={isField ? { title: 'Mes heures', tabBarIcon: ({ color }) => <Icon label="📋" color={color} /> } : hide} />
-
-      {/* Bureau / admin */}
-      <Tabs.Screen name="dashboard" options={isStaff ? { title: 'Tableau de bord', tabBarIcon: ({ color }) => <Icon label="▨" color={color} /> } : hide} />
-      <Tabs.Screen name="chantiers" options={isStaff ? { title: 'Chantiers', tabBarIcon: ({ color }) => <Icon label="🏗" color={color} /> } : hide} />
-      <Tabs.Screen name="planning" options={isStaff ? { title: 'Planning', tabBarIcon: ({ color }) => <Icon label="🗓" color={color} /> } : hide} />
-      <Tabs.Screen name="valider" options={isStaff ? { title: 'Valider', tabBarIcon: ({ color }) => <Icon label="✓" color={color} /> } : hide} />
-
-      <Tabs.Screen name="compte" options={{ title: 'Compte', tabBarIcon: ({ color }) => <Icon label="👤" color={color} /> }} />
+      <Tabs.Screen name="index" options={worker || foreman ? tab('Aujourd’hui', '⏱') : hide} />
+      <Tabs.Screen name="heures" options={worker ? tab('Mes heures', '📋') : hide} />
+      <Tabs.Screen name="dashboard" options={office ? tab('Bord', '▨') : hide} />
+      <Tabs.Screen name="chantiers" options={staff ? tab('Chantiers', '🏗') : hide} />
+      <Tabs.Screen name="planning" options={staff ? tab('Planning', '🗓') : hide} />
+      <Tabs.Screen name="valider" options={staff ? tab('Valider', '✓') : hide} />
+      <Tabs.Screen name="plus" options={staff ? tab('Plus', '⋯') : hide} />
+      <Tabs.Screen name="compte" options={worker ? tab('Compte', '👤') : hide} />
     </Tabs>
   );
 }

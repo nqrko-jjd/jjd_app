@@ -7,6 +7,9 @@ import {
 export { formatEur, formatDateBE };
 
 const STATUS_TONE: Partial<Record<WorksiteStatus, string>> = {
+  lead: 'plain',
+  to_plan: 'plain',
+  scheduled: 'primary',
   in_progress: 'primary',
   done: 'ok',
   invoiced: 'ok',

@@ -18,9 +18,18 @@ function Guard() {
   }, [user, loading, segments, router]);
 
   return (
-    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: T.paper } }}>
-      <Stack.Screen name="login" />
-      <Stack.Screen name="(tabs)" />
+    <Stack
+      screenOptions={{
+        contentStyle: { backgroundColor: T.paper },
+        headerStyle: { backgroundColor: T.surface },
+        headerTitleStyle: { color: T.ink, fontWeight: '700' },
+        headerTintColor: T.primary,
+        headerShadowVisible: false,
+        headerBackTitle: 'Retour',
+      }}
+    >
+      <Stack.Screen name="login" options={{ headerShown: false }} />
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
     </Stack>
   );
 }

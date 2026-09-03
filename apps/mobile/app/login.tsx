@@ -25,7 +25,10 @@ export default function Login() {
   return (
     <SafeAreaView style={s.wrap}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={s.inner}>
-        <Text style={s.brand}>JJD Chantier</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+          <View style={s.mark}><Text style={s.markT}>J</Text></View>
+          <Text style={s.brand}>JD Chantier</Text>
+        </View>
         <Text style={s.sub}>Connecte-toi avec ton compte JJD.</Text>
         <TextInput
           style={s.input}
@@ -56,7 +59,9 @@ export default function Login() {
 const s = StyleSheet.create({
   wrap: { flex: 1, backgroundColor: T.paper },
   inner: { flex: 1, justifyContent: 'center', padding: 24, gap: 12 },
-  brand: { fontSize: 26, fontWeight: '700', color: T.ink },
+  mark: { width: 34, height: 34, borderRadius: 9, backgroundColor: T.primary, alignItems: 'center', justifyContent: 'center' },
+  markT: { color: '#fff', fontWeight: '800', fontSize: 17 },
+  brand: { fontSize: 24, fontWeight: '800', color: T.ink },
   sub: { color: T.ink2, marginBottom: 8 },
   input: {
     backgroundColor: T.surface,
@@ -69,5 +74,5 @@ const s = StyleSheet.create({
   },
   err: { color: T.crit },
   btn: { backgroundColor: T.primary, borderRadius: 10, padding: 16, alignItems: 'center', marginTop: 4 },
-  btnTxt: { color: '#fff', fontWeight: '600', fontSize: 16 },
+  btnTxt: { color: '#fff', fontWeight: '700', fontSize: 16 },
 });

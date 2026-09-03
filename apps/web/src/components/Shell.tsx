@@ -4,17 +4,33 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 
-const LINKS: { href: string; label: string; roles?: string[] }[] = [
-  { href: '/', label: 'Dashboard' },
-  { href: '/chantiers', label: 'Chantiers' },
-  { href: '/planning', label: 'Planning' },
-  { href: '/pointage', label: 'Pointage' },
-  { href: '/crm', label: 'CRM / Pipeline' },
-  { href: '/immeubles', label: 'Immeubles / ACP' },
-  { href: '/contacts', label: 'Contacts' },
-  { href: '/equipe', label: 'Équipe' },
-  { href: '/flotte', label: 'Flotte' },
-  { href: '/controle', label: 'File de contrôle', roles: ['admin', 'office'] },
+type Item = { href: string; label: string; ic: string; roles?: string[] };
+type Group = { title: string; items: Item[] };
+
+const NAV: Group[] = [
+  {
+    title: 'Pilotage',
+    items: [
+      { href: '/', label: 'Tableau de bord', ic: '◧' },
+      { href: '/chantiers', label: 'Chantiers', ic: '▤' },
+      { href: '/planning', label: 'Planning', ic: '▦' },
+      { href: '/pointage', label: 'Pointage', ic: '◷' },
+      { href: '/crm', label: 'Pipeline', ic: '⇗' },
+    ],
+  },
+  {
+    title: 'Répertoires',
+    items: [
+      { href: '/immeubles', label: 'Immeubles / ACP', ic: '⌂' },
+      { href: '/contacts', label: 'Contacts', ic: '☰' },
+      { href: '/equipe', label: 'Équipe', ic: '☺' },
+      { href: '/flotte', label: 'Flotte', ic: '⛟' },
+    ],
+  },
+  {
+    title: 'Administration',
+    items: [{ href: '/controle', label: 'File de contrôle', ic: '⚑', roles: ['admin', 'office'] }],
+  },
 ];
 
 export function Shell({ children }: { children: React.ReactNode }) {
@@ -22,39 +38,45 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
   const [open, setOpen] = useState(false);
 
-  const links = LINKS.filter((l) => !l.roles || (user && l.roles.includes(user.role)));
   const isActive = (href: string) => (href === '/' ? pathname === '/' : pathname.startsWith(href));
-  const current = links.find((l) => isActive(l.href))?.label ?? 'JJD App';
+  const visible = (i: Item) => !i.roles || (user && i.roles.includes(user.role));
+  const current =
+    NAV.flatMap((g) => g.items).find((i) => isActive(i.href))?.label ?? 'JJD App';
 
   return (
     <div className="shell">
-      {/* Barre mobile */}
       <header className="topbar">
         <button className="burger" aria-label="Menu" onClick={() => setOpen(true)}>≡</button>
         <span className="topbar-title">{current}</span>
-        <span className="brand-mini">JJD<b>·</b>App</span>
+        <span className="brand-mini"><span className="mark">J</span>JD</span>
       </header>
 
-      {/* Sidebar / drawer */}
       {open && <div className="scrim" onClick={() => setOpen(false)} />}
       <nav className={`sidebar${open ? ' open' : ''}`}>
-        <div className="brand">JJD<b>·</b>App</div>
-        {links.map((l) => (
-          <Link
-            key={l.href}
-            href={l.href}
-            className={`navlink${isActive(l.href) ? ' active' : ''}`}
-            onClick={() => setOpen(false)}
-          >
-            <span className="dot" />
-            {l.label}
-          </Link>
-        ))}
+        <div className="brand"><span className="mark">J</span> JD Consult</div>
+        {NAV.map((g) => {
+          const items = g.items.filter(visible);
+          if (!items.length) return null;
+          return (
+            <div key={g.title}>
+              <div className="sect">{g.title}</div>
+              {items.map((i) => (
+                <Link
+                  key={i.href}
+                  href={i.href}
+                  className={`navlink${isActive(i.href) ? ' active' : ''}`}
+                  onClick={() => setOpen(false)}
+                >
+                  <span className="ic">{i.ic}</span>
+                  {i.label}
+                </Link>
+              ))}
+            </div>
+          );
+        })}
         <div className="foot">
-          <div className="muted" style={{ fontSize: '0.78rem', wordBreak: 'break-all' }}>{user?.email}</div>
-          <button className="btn" style={{ marginTop: '0.5rem', width: '100%' }} onClick={logout}>
-            Déconnexion
-          </button>
+          <div className="who">{user?.email}</div>
+          <button className="logout" onClick={logout}>Déconnexion</button>
         </div>
       </nav>
 

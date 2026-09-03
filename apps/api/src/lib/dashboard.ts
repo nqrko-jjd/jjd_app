@@ -23,12 +23,11 @@ export async function bureauDashboard() {
     expiringDocs, ctExpiring, unpaidFines, hoursWeek, openWorksites,
     crmNextActions,
   ] = await Promise.all([
-    prisma.ledgerEntry.aggregate({
-      where: { direction: 'sale', date: { gte: monthStart } }, _sum: { ht: true },
+    prisma.document.aggregate({
+      where: { kind: 'invoice', issuedOn: { gte: monthStart } }, _sum: { totalHt: true },
     }),
-    prisma.ledgerEntry.aggregate({
-      where: { direction: 'sale', paymentStatus: { contains: 'Pay' }, date: { gte: monthStart } },
-      _sum: { ht: true },
+    prisma.document.aggregate({
+      where: { kind: 'invoice', status: 'paid', issuedOn: { gte: monthStart } }, _sum: { totalHt: true },
     }),
     prisma.document.findMany({ where: { kind: 'invoice', status: 'overdue' } }),
     prisma.document.count({ where: { kind: 'quote', status: 'sent' } }),
@@ -50,7 +49,7 @@ export async function bureauDashboard() {
     }),
   ]);
 
-  const overdueAmount = round2(overdue.reduce((s, d) => s + (d.totalTtc || 0), 0));
+  const overdueAmount = round2(overdue.reduce((s, d) => s + Math.max(0, (d.totalTtc || 0) - (d.paidAmount || 0)), 0));
   const finesAmount = round2(unpaidFines.reduce((s, f) => s + (f.amount || 0), 0));
 
   const alerts: Alert[] = [];
@@ -74,8 +73,8 @@ export async function bureauDashboard() {
 
   return {
     kpis: {
-      invoicedMonth: round2(invoicedMonth._sum.ht ?? 0),
-      paidMonth: round2(paidMonth._sum.ht ?? 0),
+      invoicedMonth: round2(invoicedMonth._sum.totalHt ?? 0),
+      paidMonth: round2(paidMonth._sum.totalHt ?? 0),
       overdueAmount,
       overdueCount: overdue.length,
       openWorksites,

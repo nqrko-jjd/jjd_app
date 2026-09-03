@@ -10,20 +10,24 @@ export const timesheetRouter = Router();
 /** Qui suis-je côté "personne" (compte ouvrier lié à une fiche). */
 function myPersonId(req: { user?: { personId: string | null } }): string {
   const id = req.user?.personId;
-  if (!id) throw new HttpError(403, 'Aucune fiche personne liée à ce compte');
+  if (!id) throw new HttpError(403, 'Ton compte n’est pas encore lié à une fiche personne. Demande au bureau.');
   return id;
 }
 
-/** Le compteur en cours de l'ouvrier connecté (ou null). */
+/** Le compteur en cours de l'ouvrier connecté (null si pas de fiche liée). */
 timesheetRouter.get(
   '/timer',
   requireAuth(...STAFF),
   asyncHandler(async (req, res) => {
+    if (!req.user?.personId) {
+      res.json({ running: null, linked: false });
+      return;
+    }
     const running = await prisma.timeEntry.findFirst({
-      where: { personId: myPersonId(req), status: 'running' },
+      where: { personId: req.user.personId, status: 'running' },
       include: { worksite: { select: { ref: true, title: true } } },
     });
-    res.json({ running });
+    res.json({ running, linked: true });
   }),
 );
 
@@ -83,10 +87,14 @@ timesheetRouter.get(
   '/mine',
   requireAuth(...STAFF),
   asyncHandler(async (req, res) => {
+    if (!req.user?.personId) {
+      res.json({ items: [], linked: false });
+      return;
+    }
     const { from, to } = req.query as Record<string, string>;
     const items = await prisma.timeEntry.findMany({
       where: {
-        personId: myPersonId(req),
+        personId: req.user.personId,
         date: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) },
       },
       orderBy: { date: 'desc' },

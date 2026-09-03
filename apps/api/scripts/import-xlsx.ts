@@ -440,6 +440,87 @@ async function importFleet(charges: SheetData | undefined, pv: SheetData | undef
   }
 }
 
+// ─────────────────────────────────────────────────── comptes de démonstration
+
+/**
+ * Lie les comptes seed (chef@ / ouvrier@ / david@ / julien@) à une vraie fiche
+ * personne, et crée quelques affectations de planning cette semaine — sinon
+ * l'appli mobile n'a rien à afficher.
+ */
+async function linkDemoAccounts() {
+  const demoEmails = ['ouvrier@jjd-consult.be', 'chef@jjd-consult.be', 'david@jjd-consult.be', 'julien@jjd-consult.be'];
+  // repartir propre : délier les comptes seed + supprimer les fiches "demo"
+  await prisma.user.updateMany({ where: { email: { in: demoEmails } }, data: { personId: null } });
+  await prisma.planningEvent.deleteMany({ where: { title: { startsWith: '(démo)' } } });
+  await prisma.person.deleteMany({ where: { source: 'demo' } });
+
+  async function link(email: string, where: object, fallback: { firstName: string; role: string }) {
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) return null;
+    let person = await prisma.person.findFirst({ where: { ...where, user: { is: null } } });
+    if (!person) {
+      person = await prisma.person.create({
+        data: {
+          firstName: fallback.firstName,
+          displayName: fallback.firstName,
+          normalizedName: normalizeName(fallback.firstName),
+          role: fallback.role,
+          hourlyRate: fallback.role === 'foreman' ? 25 : 16.66,
+          source: 'demo',
+        },
+      });
+    }
+    if (person.hourlyRate == null) {
+      await prisma.person.update({ where: { id: person.id }, data: { hourlyRate: person.role === 'foreman' ? 25 : 16.66 } });
+    }
+    await prisma.user.update({ where: { id: user.id }, data: { personId: person.id } });
+    return person.id;
+  }
+
+  const ouvrierId = await link(
+    'ouvrier@jjd-consult.be',
+    { role: 'worker', timeEntries: { some: {} } },
+    { firstName: 'Ouvrier démo', role: 'worker' },
+  );
+  const chefId = await link(
+    'chef@jjd-consult.be',
+    { role: 'foreman' },
+    { firstName: 'Chef démo', role: 'foreman' },
+  );
+  await link('david@jjd-consult.be', { normalizedName: 'david' }, { firstName: 'David', role: 'foreman' });
+  await link('julien@jjd-consult.be', { normalizedName: 'julien' }, { firstName: 'Julien', role: 'foreman' });
+
+  // Affectations de démo cette semaine si le planning est vide
+  if ((await prisma.planningEvent.count()) === 0 && ouvrierId) {
+    const chantiers = await prisma.worksite.findMany({
+      where: { kind: 'project', status: { in: ['in_progress', 'scheduled', 'to_plan'] } },
+      take: 4,
+      orderBy: { updatedAt: 'desc' },
+    });
+    const monday = new Date();
+    monday.setHours(0, 0, 0, 0);
+    monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+    for (let i = 0; i < chantiers.length; i++) {
+      const day = new Date(monday);
+      day.setDate(monday.getDate() + i);
+      await prisma.planningEvent.create({
+        data: {
+          worksiteId: chantiers[i]!.id,
+          title: '(démo) intervention',
+          startAt: new Date(day.getTime() + 8 * 3600_000),
+          endAt: new Date(day.getTime() + 17 * 3600_000),
+          materialsNote: i === 0 ? 'échafaudage' : null,
+          assignments: {
+            create: [{ personId: ouvrierId }, ...(chefId ? [{ personId: chefId }] : [])],
+          },
+        },
+      });
+    }
+    console.log('  planning   ', chantiers.length, 'affectations de démo (cette semaine)');
+  }
+  console.log('  comptes    ', 'chef@ / ouvrier@ / david@ / julien@ liés à une fiche');
+}
+
 // ─────────────────────────────────────────────────────── run
 
 async function main() {
@@ -481,6 +562,8 @@ async function main() {
 
   await importFleet(byName('Charges Détail'), byName('Détail PV'));
   console.log('  flotte     ', stats.vehicles ?? 0, 'véhicules,', stats.insurances ?? 0, 'assurances,', stats.fines ?? 0, 'PV');
+
+  await linkDemoAccounts();
 
   // écriture des issues
   for (let i = 0; i < issues.length; i += 200) {

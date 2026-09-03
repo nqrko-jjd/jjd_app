@@ -16,6 +16,10 @@ interface Running {
   startedAt: string;
   worksite: { ref: string; title: string } | null;
 }
+interface TimerResp {
+  running: Running | null;
+  linked?: boolean;
+}
 
 function elapsed(fromIso: string): string {
   const ms = Date.now() - new Date(fromIso).getTime();
@@ -28,6 +32,7 @@ export default function Today() {
   const { person } = useSession();
   const [events, setEvents] = useState<Ev[]>([]);
   const [running, setRunning] = useState<Running | null>(null);
+  const [linked, setLinked] = useState(true);
   const [queued, setQueued] = useState(0);
   const [tick, setTick] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
@@ -41,10 +46,11 @@ export default function Today() {
     try {
       const [plan, timer] = await Promise.all([
         apiGet<{ items: Ev[] }>(`/api/planning?from=${from}&to=${to}${person ? `&personId=${person.id}` : ''}`),
-        apiGet<{ running: Running | null }>('/api/timesheet/timer'),
+        apiGet<TimerResp>('/api/timesheet/timer'),
       ]);
       setEvents(plan.items);
       setRunning(timer.running);
+      setLinked(timer.linked !== false);
     } catch {
       /* hors ligne : on garde l'état courant */
     }
@@ -82,7 +88,17 @@ export default function Today() {
       <Text style={s.hi}>Bonjour {person?.displayName || person?.firstName || ''}</Text>
       {queued > 0 && <Text style={s.queued}>⏳ {queued} pointage(s) en attente de réseau</Text>}
 
-      {running ? (
+      {!linked && (
+        <View style={[s.card, { borderColor: T.accent, borderWidth: 2 }]}>
+          <Text style={s.label}>Compte non lié</Text>
+          <Text style={s.muted}>
+            Ton compte n’est pas encore rattaché à ta fiche ouvrier. Le bureau doit le faire
+            (fiche Équipe → « Lier à un compte »). En attendant, tu ne peux pas pointer.
+          </Text>
+        </View>
+      )}
+
+      {linked && (running ? (
         <View style={[s.card, { borderColor: T.ok, borderWidth: 2 }]}>
           <Text style={s.label}>Compteur en cours</Text>
           <Text style={s.wsRef}>{running.worksite?.ref} — {running.worksite?.title}</Text>
@@ -96,7 +112,7 @@ export default function Today() {
           <Text style={s.label}>Aucun compteur actif</Text>
           <Text style={s.muted}>Choisis un chantier ci-dessous pour démarrer.</Text>
         </View>
-      )}
+      ))}
 
       <Text style={s.section}>Mes chantiers du jour</Text>
       {events.length === 0 && <Text style={s.muted}>Rien de planifié aujourd’hui.</Text>}
@@ -108,7 +124,7 @@ export default function Today() {
             {new Date(e.startAt).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' })} –{' '}
             {new Date(e.endAt).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' })}
           </Text>
-          {!running && (
+          {linked && !running && (
             <Pressable style={s.btn} onPress={() => start(e.worksite.id)}>
               <Text style={s.btnTxt}>Démarrer le compteur</Text>
             </Pressable>

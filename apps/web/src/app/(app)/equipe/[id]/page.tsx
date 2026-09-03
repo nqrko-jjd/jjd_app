@@ -1,7 +1,8 @@
 'use client';
-import { use } from 'react';
+import { use, useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
+import { api } from '@/lib/api';
 import { PageHead, Money, formatDateBE } from '@/lib/ui';
 import { ROLE_LABEL, WORKER_CONTRACT_LABEL, LEGAL_DOC_LABEL, formatHours } from '@jjd/shared';
 
@@ -13,17 +14,34 @@ interface Detail {
     languages: string[] | null; emergencyContact: string | null; active: boolean; note: string | null;
     legalDocs: { id: string; type: string; label: string | null; number: string | null; expiresOn: string | null }[];
     equipment: { id: string; name: string }[];
+    user: { id: string; email: string; role: string } | null;
   };
   monthStatement: { hours: number; amount: number };
 }
 
 export default function PersonDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { data, loading } = useApi<Detail>(`/api/people/${id}`);
+  const { data, loading, reload } = useApi<Detail>(`/api/people/${id}`);
+  const [created, setCreated] = useState<{ email: string; password: string } | null>(null);
   if (loading) return <div className="empty">Chargement…</div>;
   if (!data) return <div className="empty">Fiche introuvable.</div>;
   const p = data.person;
   const now = new Date().toLocaleDateString('fr-BE', { month: 'long', year: 'numeric' });
+
+  async function createAccount() {
+    const email = prompt('E-mail de connexion pour cette personne :', p.email ?? '');
+    if (!email) return;
+    try {
+      const r = await api<{ email: string; password: string }>(`/api/people/${id}/account`, {
+        method: 'POST',
+        body: { email },
+      });
+      setCreated(r);
+      reload();
+    } catch (e) {
+      alert((e as Error).message);
+    }
+  }
 
   return (
     <>
@@ -40,7 +58,24 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
         <Info label="Adresse" value={p.address ?? '—'} />
         <Info label="Langues" value={(p.languages ?? []).join(', ') || '—'} />
         <Info label="Contact d'urgence" value={p.emergencyContact ?? '—'} />
+        <div className="card card-pad">
+          <div className="eyebrow">Compte appli</div>
+          {p.user ? (
+            <div style={{ marginTop: '0.3rem' }}><span className="badge ok">Lié</span> <span className="muted" style={{ fontSize: '0.82rem' }}>{p.user.email}</span></div>
+          ) : (
+            <button className="btn" style={{ marginTop: '0.4rem' }} onClick={createAccount}>Créer un compte</button>
+          )}
+        </div>
       </div>
+
+      {created && (
+        <div className="card card-pad" style={{ marginBottom: '1.4rem', borderLeft: '3px solid var(--ok)' }}>
+          <div className="eyebrow">Compte créé — à communiquer à la personne</div>
+          <p style={{ margin: '0.4rem 0 0' }}>
+            E-mail : <strong>{created.email}</strong> · Mot de passe provisoire : <strong className="mono">{created.password}</strong>
+          </p>
+        </div>
+      )}
 
       <section className="card card-pad" style={{ marginBottom: '1.4rem' }}>
         <div className="eyebrow">Décompte — {now}</div>

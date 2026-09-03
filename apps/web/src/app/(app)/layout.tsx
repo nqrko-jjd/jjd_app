@@ -1,5 +1,5 @@
 'use client';
-import { Sidebar } from '@/components/Sidebar';
+import { Shell } from '@/components/Shell';
 import { useRequireAuth } from '@/lib/auth';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -8,10 +8,5 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   if (loading) return <div className="empty">Chargement…</div>;
   if (!user) return <div className="empty">Redirection…</div>;
 
-  return (
-    <div className="shell">
-      <Sidebar />
-      <main className="main">{children}</main>
-    </div>
-  );
+  return <Shell>{children}</Shell>;
 }

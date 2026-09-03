@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { personInput, legalDocInput, normalizeName } from '@jjd/shared';
 import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
-import { requireAuth, STAFF, OFFICE } from '../lib/auth.js';
+import { requireAuth, STAFF, OFFICE, hashPassword } from '../lib/auth.js';
 
 export const peopleRouter = Router();
 
@@ -90,6 +90,32 @@ peopleRouter.patch(
       },
     });
     res.json({ person });
+  }),
+);
+
+/** Crée un compte de connexion pour cette personne (pour l'appli mobile). */
+peopleRouter.post(
+  '/:id/account',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const person = await prisma.person.findUnique({ where: { id: req.params.id }, include: { user: true } });
+    if (!person) throw new HttpError(404, 'Fiche introuvable');
+    if (person.user) throw new HttpError(409, 'Un compte existe déjà pour cette personne');
+
+    const email = String(req.body.email ?? '').trim().toLowerCase();
+    if (!/.+@.+\..+/.test(email)) throw new HttpError(422, 'E-mail invalide');
+    if (await prisma.user.findUnique({ where: { email } })) throw new HttpError(409, 'Cet e-mail est déjà pris');
+
+    const password = req.body.password || Math.random().toString(36).slice(2, 8);
+    await prisma.user.create({
+      data: {
+        email,
+        passwordHash: await hashPassword(password),
+        role: person.role === 'foreman' ? 'foreman' : 'worker',
+        personId: person.id,
+      },
+    });
+    res.status(201).json({ email, password });
   }),
 );
 

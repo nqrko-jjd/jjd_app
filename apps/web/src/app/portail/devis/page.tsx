@@ -23,6 +23,9 @@ export default function PortalQuotes() {
   }, [me]);
 
   if (loading || !me) return null;
+  if (me.access === 'limited') {
+    return <PortalShell title="Devis"><div className="p-empty">Les devis sont gérés par le syndic de votre immeuble.</div></PortalShell>;
+  }
   const toValidate = (items ?? []).filter((q) => q.status === 'sent').length;
 
   async function openPdf(id: string) {

@@ -36,7 +36,7 @@ export async function portalBlobUrl(path: string): Promise<string> {
   return URL.createObjectURL(await res.blob());
 }
 
-interface Me { email: string; label: string; isSyndic: boolean }
+interface Me { email: string; label: string; isSyndic: boolean; access: 'full' | 'limited'; scopeLabel: string | null }
 interface Ctx { me: Me | null; loading: boolean; signOut: () => void }
 const PortalContext = createContext<Ctx | null>(null);
 

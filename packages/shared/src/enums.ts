@@ -202,6 +202,14 @@ export const LEGAL_DOC_LABEL: Record<LegalDocType, string> = {
   other: 'Autre',
 };
 
+/** Niveau d'accès au portail client. */
+export const PORTAL_ACCESS = ['full', 'limited'] as const;
+export type PortalAccess = (typeof PORTAL_ACCESS)[number];
+export const PORTAL_ACCESS_LABEL: Record<PortalAccess, string> = {
+  full: 'Complet (devis, factures, montants)',
+  limited: 'Limité (suivi, photos, messages)',
+};
+
 /** Priorité d'un chantier / d'une intervention. */
 export const WORKSITE_PRIORITIES = ['low', 'normal', 'high', 'urgent'] as const;
 export type WorksitePriority = (typeof WORKSITE_PRIORITIES)[number];

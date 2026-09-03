@@ -71,3 +71,42 @@ test('portail : dashboard refusé sans token', async () => {
   const r = await fetch(`${base}/api/portal/dashboard`);
   assert.equal(r.status, 401);
 });
+
+test('portail : accès résident limité — scoping immeuble + pas de devis/factures', async () => {
+  const b = await prisma.building.findFirst({ where: { worksites: { some: { documents: { some: { number: { not: null } } } } } } });
+  if (!b) return;
+  await prisma.user.upsert({
+    where: { email: 'test-resident@portal.test' },
+    create: { email: 'test-resident@portal.test', passwordHash: 'x', role: 'client', buildingId: b.id, portalAccess: 'limited' },
+    update: { buildingId: b.id, portalAccess: 'limited', active: true },
+  });
+  const link = await (await fetch(`${base}/api/portal/request-link`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'test-resident@portal.test' }) })).json();
+  const { token: rt } = await (await fetch(`${base}/api/portal/verify`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: link.devToken }) })).json();
+  const h = { authorization: `Bearer ${rt}` };
+
+  const me = await (await fetch(`${base}/api/portal/me`, { headers: h })).json();
+  assert.equal(me.user.access, 'limited');
+
+  const dash = await (await fetch(`${base}/api/portal/dashboard`, { headers: h })).json();
+  assert.equal(dash.kpis.quotesToValidate, null);
+  assert.equal(dash.recentDocuments.length, 0);
+
+  // les interventions restent visibles (photos/suivi)
+  const iv = await fetch(`${base}/api/portal/interventions`, { headers: h });
+  assert.equal(iv.status, 200);
+
+  // devis / documents interdits
+  assert.equal((await fetch(`${base}/api/portal/quotes`, { headers: h })).status, 403);
+  assert.equal((await fetch(`${base}/api/portal/documents`, { headers: h })).status, 403);
+
+  // une fiche chantier de l'immeuble n'expose ni devis ni factures
+  const first = (await (await fetch(`${base}/api/portal/interventions`, { headers: h })).json()).items[0];
+  if (first) {
+    const ws = await (await fetch(`${base}/api/portal/worksites/${first.id}`, { headers: h })).json();
+    assert.equal(ws.quotes.length, 0);
+    assert.equal(ws.invoices.length, 0);
+  }
+
+  await prisma.user.deleteMany({ where: { email: 'test-resident@portal.test' } });
+  await prisma.loginToken.deleteMany({ where: { email: 'test-resident@portal.test' } });
+});

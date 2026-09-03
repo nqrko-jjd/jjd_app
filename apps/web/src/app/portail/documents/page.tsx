@@ -29,6 +29,9 @@ export default function PortalDocuments() {
   }, [me, kind]);
 
   if (loading || !me) return null;
+  if (me.access === 'limited') {
+    return <PortalShell title="Documents"><div className="p-empty">Les devis et factures sont gérés par le syndic de votre immeuble.</div></PortalShell>;
+  }
 
   async function openPdf(id: string) {
     try { window.open(await portalBlobUrl(`/documents/${id}/pdf`), '_blank'); } catch { /* */ }

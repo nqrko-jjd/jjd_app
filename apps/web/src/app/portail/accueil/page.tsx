@@ -6,8 +6,8 @@ import { portalApi, portalBlobUrl, usePortalGuard } from '@/lib/portal';
 import { PortalShell } from '../PortalShell';
 
 interface Dash {
-  greeting: { name: string; isSyndic: boolean };
-  kpis: { buildings: number; interventionsActive: number; quotesToValidate: number; urgent: number };
+  greeting: { name: string; isSyndic: boolean; access: 'full' | 'limited' };
+  kpis: { buildings: number; interventionsActive: number; quotesToValidate: number | null; urgent: number };
   urgentItems: { id: string; ref: string; title: string; building: string | null; statusLabel: string; priority: string }[];
   recentInterventions: {
     id: string; ref: string; title: string; building: string | null; status: string; statusLabel: string;
@@ -47,12 +47,14 @@ export default function PortalDashboard() {
     try { window.open(await portalBlobUrl(`/documents/${id}/pdf`), '_blank'); } catch { /* */ }
   }
 
-  const firstName = (d?.greeting.name ?? me.label).split(/[\s,]+/)[0];
+  const name = d?.greeting.name ?? me.label;
+  // pour un particulier on garde juste le prénom ; pour un syndic / une ACP on garde le nom complet
+  const greetName = me.isSyndic || me.access === 'limited' ? name : name.split(/[\s,]+/)[0];
   const alert = d?.urgentItems[0];
 
   return (
     <PortalShell
-      title={`Bonjour, ${firstName}`}
+      title={`Bonjour, ${greetName}`}
       subtitle={me.isSyndic ? 'Voici l’activité de votre portefeuille' : 'Voici l’activité de vos chantiers'}
       action={<Link href="/portail/demande" className="p-btn-primary">+ Nouvelle demande</Link>}
     >
@@ -62,7 +64,9 @@ export default function PortalDashboard() {
           <div className="p-kpis">
             <div className="p-kpi"><span className="ico">▦</span><div><div className="v">{d.kpis.buildings}</div><div className="l">{me.isSyndic ? 'Immeubles' : 'Dossiers'}</div></div></div>
             <div className="p-kpi"><span className="ico">⚒</span><div><div className="v">{d.kpis.interventionsActive}</div><div className="l">Interventions en cours</div></div></div>
-            <div className="p-kpi"><span className="ico">▤</span><div><div className="v">{d.kpis.quotesToValidate}</div><div className="l">Devis à valider</div></div></div>
+            {d.kpis.quotesToValidate != null && (
+              <div className="p-kpi"><span className="ico">▤</span><div><div className="v">{d.kpis.quotesToValidate}</div><div className="l">Devis à valider</div></div></div>
+            )}
             <div className={`p-kpi${d.kpis.urgent > 0 ? ' alert' : ''}`}><span className="ico">!</span><div><div className="v">{d.kpis.urgent}</div><div className="l">{d.kpis.urgent > 1 ? 'Urgences' : 'Urgence'}</div></div></div>
           </div>
 

@@ -77,13 +77,17 @@ contactsRouter.post(
 
     // si le contact EST un syndic -> accès syndic (voit tous ses immeubles)
     const asSyndic = contact.kind === 'syndic' && contact.syndicId;
+    const access = req.body.access === 'limited' ? 'limited' : 'full';
+    const buildingId = typeof req.body.buildingId === 'string' && req.body.buildingId ? req.body.buildingId : null;
     await prisma.user.create({
       data: {
         email,
         passwordHash: await hashPassword(Math.random().toString(36).slice(2)),
         role: 'client',
-        contactId: asSyndic ? null : contact.id,
+        contactId: asSyndic || buildingId ? null : contact.id,
         syndicId: asSyndic ? contact.syndicId : null,
+        buildingId,
+        portalAccess: asSyndic ? 'full' : access,
       },
     });
     res.status(201).json({ email, portal: `${req.protocol}://${req.get('host')?.replace(/:\d+$/, ':3100') ?? ''}/portail` });

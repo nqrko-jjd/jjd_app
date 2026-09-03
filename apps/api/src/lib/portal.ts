@@ -9,7 +9,15 @@ export interface PortalUser {
   email: string;
   contactId: string | null;
   syndicId: string | null;
+  buildingId: string | null;
+  buildingName: string | null;
+  access: 'full' | 'limited';
   label: string;
+}
+
+/** true = accès complet (devis, factures, montants). */
+export function portalFull(u: PortalUser): boolean {
+  return u.access !== 'limited';
 }
 
 declare global {
@@ -31,14 +39,17 @@ export async function attachPortalUser(req: Request, _res: Response, next: NextF
   try {
     const p = jwt.verify(h.slice(7), env.jwtSecret) as { sub: string; portal?: boolean };
     if (!p.portal) return next();
-    const u = await prisma.user.findUnique({ where: { id: p.sub }, include: { contact: true, syndic: true } });
+    const u = await prisma.user.findUnique({ where: { id: p.sub }, include: { contact: true, syndic: true, building: true } });
     if (u && u.active && u.role === 'client') {
       req.portalUser = {
         id: u.id,
         email: u.email,
         contactId: u.contactId,
         syndicId: u.syndicId,
-        label: u.syndic?.name ?? u.contact?.name ?? u.email,
+        buildingId: u.buildingId,
+        buildingName: u.building?.name ?? null,
+        access: u.portalAccess === 'limited' ? 'limited' : 'full',
+        label: u.syndic?.name ?? u.contact?.name ?? u.building?.name ?? u.email,
       };
     }
   } catch {
@@ -54,9 +65,8 @@ export function requirePortal(req: Request, _res: Response, next: NextFunction) 
 
 /** Clause Prisma : les chantiers visibles par ce client. */
 export function worksiteScope(u: PortalUser): object {
-  if (u.syndicId) {
-    return { building: { syndicId: u.syndicId } };
-  }
+  if (u.buildingId) return { buildingId: u.buildingId };
+  if (u.syndicId) return { building: { syndicId: u.syndicId } };
   return {
     OR: [
       { clientId: u.contactId },
@@ -66,6 +76,7 @@ export function worksiteScope(u: PortalUser): object {
 }
 
 export function buildingScope(u: PortalUser): object {
+  if (u.buildingId) return { id: u.buildingId };
   if (u.syndicId) return { syndicId: u.syndicId };
   return { OR: [{ clientId: u.contactId }, { worksites: { some: { clientId: u.contactId } } }] };
 }

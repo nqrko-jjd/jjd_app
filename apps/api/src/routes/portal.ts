@@ -12,7 +12,7 @@ import { prisma } from '../db.js';
 import { env } from '../env.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { sendMail } from '../lib/mail.js';
-import { attachPortalUser, requirePortal, signPortalToken, worksiteScope, buildingScope, type PortalUser } from '../lib/portal.js';
+import { attachPortalUser, requirePortal, signPortalToken, worksiteScope, buildingScope, portalFull, type PortalUser } from '../lib/portal.js';
 
 export const portalRouter = Router();
 portalRouter.use(attachPortalUser);
@@ -73,7 +73,14 @@ portalRouter.get(
   requirePortal,
   asyncHandler(async (req, res) => {
     const u = req.portalUser!;
-    res.json({ user: { email: u.email, label: u.label, isSyndic: !!u.syndicId } });
+    res.json({
+      user: {
+        email: u.email, label: u.label,
+        isSyndic: !!u.syndicId,
+        access: u.access,
+        scopeLabel: u.buildingName ?? (u.syndicId ? 'Portefeuille' : null),
+      },
+    });
   }),
 );
 
@@ -114,13 +121,14 @@ portalRouter.get(
 
     const open = worksites.filter((w) => OPEN_STATUSES.includes(w.status as WorksiteStatus));
     const urgent = open.filter((w) => w.priority === 'high' || w.priority === 'urgent');
+    const full = portalFull(u);
 
     return res.json({
-      greeting: { name: u.label, isSyndic: !!u.syndicId },
+      greeting: { name: u.label, isSyndic: !!u.syndicId, access: u.access, scopeLabel: u.buildingName },
       kpis: {
         buildings: buildingCount,
         interventionsActive: open.length,
-        quotesToValidate: quotes.length,
+        quotesToValidate: full ? quotes.length : null,
         urgent: urgent.length,
       },
       urgentItems: urgent.slice(0, 4).map((w) => ({
@@ -134,15 +142,15 @@ portalRouter.get(
         manager: managerName(w.manager), updatedAt: w.updatedAt,
       })),
       weekPlanning: groupWeek(events),
-      quotesToValidate: quotes.slice(0, 4).map((d) => ({
+      quotesToValidate: full ? quotes.slice(0, 4).map((d) => ({
         id: d.id, number: d.number, title: d.title, totalHt: d.totalHt,
         building: d.worksite?.building?.name ?? null, worksiteId: d.worksite?.id ?? null,
         worksiteRef: d.worksite?.ref ?? null, issuedOn: d.issuedOn,
-      })),
-      recentDocuments: docs.map((d) => ({
+      })) : [],
+      recentDocuments: full ? docs.map((d) => ({
         id: d.id, kind: d.kind, kindLabel: DOC_KIND_LABEL[d.kind] ?? d.kind, number: d.number,
         title: d.title, building: d.worksite?.building?.name ?? null, issuedOn: d.issuedOn, hasPdf: !!d.originalPdf,
-      })),
+      })) : [],
     });
   }),
 );
@@ -224,6 +232,7 @@ portalRouter.get(
   requirePortal,
   asyncHandler(async (req, res) => {
     const u = req.portalUser!;
+    if (!portalFull(u)) throw new HttpError(403, 'Accès limité');
     const items = await prisma.document.findMany({
       where: { kind: 'quote', number: { not: null }, worksite: worksiteScope(u) },
       orderBy: { issuedOn: 'desc' },
@@ -245,6 +254,7 @@ portalRouter.get(
   requirePortal,
   asyncHandler(async (req, res) => {
     const u = req.portalUser!;
+    if (!portalFull(u)) throw new HttpError(403, 'Accès limité');
     const { kind } = req.query as Record<string, string>;
     const where: Record<string, unknown> = { number: { not: null }, worksite: worksiteScope(u) };
     if (kind) where.kind = kind;
@@ -374,6 +384,7 @@ portalRouter.get(
     const u = req.portalUser!;
     const w = await loadWorksite(u, req.params.id!);
     const messages = w.thread?.messages ?? [];
+    const full = portalFull(u);
     res.json({
       worksite: {
         id: w.id, ref: w.ref, title: w.title, status: w.status,
@@ -382,11 +393,12 @@ portalRouter.get(
         building: w.building, startedOn: w.startedOn, endedOn: w.endedOn,
         description: w.description,
       },
-      quotes: w.documents.filter((d) => d.kind === 'quote' && d.number).map((d) => ({
+      access: u.access,
+      quotes: !full ? [] : w.documents.filter((d) => d.kind === 'quote' && d.number).map((d) => ({
         id: d.id, number: d.number, title: d.title, status: d.status, hasPdf: !!d.originalPdf,
         totalHt: d.totalHt, totalTtc: d.totalTtc, issuedOn: d.issuedOn, dueOn: d.dueOn,
       })),
-      invoices: w.documents.filter((d) => d.kind === 'invoice' && d.number).map((d) => ({
+      invoices: !full ? [] : w.documents.filter((d) => d.kind === 'invoice' && d.number).map((d) => ({
         id: d.id, number: d.number, status: d.status, hasPdf: !!d.originalPdf,
         totalTtc: d.totalTtc, paidAmount: d.paidAmount, issuedOn: d.issuedOn, dueOn: d.dueOn,
       })),
@@ -425,6 +437,7 @@ portalRouter.get(
   requirePortal,
   asyncHandler(async (req, res) => {
     const u = req.portalUser!;
+    if (!portalFull(u)) throw new HttpError(403, 'Accès limité');
     const doc = await prisma.document.findFirst({
       where: { id: req.params.id!, number: { not: null }, worksite: worksiteScope(u) },
       select: { originalPdf: true, number: true },
@@ -444,6 +457,7 @@ portalRouter.post(
   requirePortal,
   asyncHandler(async (req, res) => {
     const u = req.portalUser!;
+    if (!portalFull(u)) throw new HttpError(403, 'Seul le syndic peut accepter un devis');
     const doc = await prisma.document.findFirst({
       where: { id: req.params.id!, kind: 'quote', worksite: worksiteScope(u) },
       include: { worksite: { select: { id: true, ref: true } } },

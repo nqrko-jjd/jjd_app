@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { buildingInput, buildingContactInput, buildingUnitInput, normalizeName } from '@jjd/shared';
 import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
-import { requireAuth, STAFF, OFFICE } from '../lib/auth.js';
+import { requireAuth, STAFF, OFFICE, hashPassword } from '../lib/auth.js';
 
 export const buildingsRouter = Router();
 
@@ -84,6 +84,53 @@ buildingsRouter.patch(
       },
     });
     res.json({ building });
+  }),
+);
+
+/* ------------------------------------------------------ Accès portail (résidents) */
+
+buildingsRouter.get(
+  '/:id/portal-users',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const users = await prisma.user.findMany({
+      where: { buildingId: req.params.id, role: 'client' },
+      select: { id: true, email: true, portalAccess: true, lastLoginAt: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    res.json({ users });
+  }),
+);
+
+buildingsRouter.post(
+  '/:id/portal-access',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const building = await prisma.building.findUnique({ where: { id: req.params.id } });
+    if (!building) throw new HttpError(404, 'Immeuble introuvable');
+    const email = String(req.body.email ?? '').trim().toLowerCase();
+    if (!/.+@.+\..+/.test(email)) throw new HttpError(422, 'E-mail requis');
+    if (await prisma.user.findUnique({ where: { email } })) throw new HttpError(409, 'Cet e-mail est déjà utilisé');
+    const access = req.body.access === 'full' ? 'full' : 'limited';
+    await prisma.user.create({
+      data: {
+        email,
+        passwordHash: await hashPassword(Math.random().toString(36).slice(2)),
+        role: 'client',
+        buildingId: building.id,
+        portalAccess: access,
+      },
+    });
+    res.status(201).json({ email, access });
+  }),
+);
+
+buildingsRouter.delete(
+  '/:id/portal-access/:userId',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    await prisma.user.deleteMany({ where: { id: req.params.userId, buildingId: req.params.id } });
+    res.json({ ok: true });
   }),
 );
 

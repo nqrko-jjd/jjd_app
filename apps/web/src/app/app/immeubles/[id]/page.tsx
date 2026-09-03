@@ -171,6 +171,9 @@ export default function ImmeubleDetail({ params }: { params: Promise<{ id: strin
         </div>
       )}
 
+      {/* Accès portail */}
+      <PortalAccessSection buildingId={id} />
+
       {/* Interventions */}
       <div className="section-title">Interventions <span className="hint">{b.worksites.length}</span></div>
       {b.worksites.length === 0 ? (
@@ -240,6 +243,52 @@ export default function ImmeubleDetail({ params }: { params: Promise<{ id: strin
 }
 
 const mini: React.CSSProperties = { padding: '0.15rem 0.45rem', fontSize: '0.75rem', minWidth: 0 };
+
+function PortalAccessSection({ buildingId }: { buildingId: string }) {
+  const { data, reload } = useApi<{ users: { id: string; email: string; portalAccess: string; lastLoginAt: string | null }[] }>(`/api/buildings/${buildingId}/portal-users`);
+  const [email, setEmail] = useState('');
+  const [access, setAccess] = useState('limited');
+  const [msg, setMsg] = useState<string | null>(null);
+
+  async function add() {
+    if (!email.trim()) return;
+    try {
+      await api(`/api/buildings/${buildingId}/portal-access`, { method: 'POST', body: { email: email.trim(), access } });
+      setEmail('');
+      setMsg('Accès créé. La personne se connecte sur /portail avec cet e-mail (lien magique).');
+      reload();
+    } catch (e) {
+      setMsg((e as Error).message);
+    }
+  }
+
+  return (
+    <>
+      <div className="section-title">Accès portail <span className="hint">résidents / conseil de copropriété</span></div>
+      <div className="card card-pad" style={{ marginBottom: '1.6rem' }}>
+        <p className="muted" style={{ fontSize: '0.85rem', marginTop: 0 }}>
+          Un accès <strong>limité</strong> voit le suivi, les photos et les messages de cet immeuble — pas les devis, factures ni montants.
+          Un accès <strong>complet</strong> voit tout (à réserver au syndic ou au président).
+        </p>
+        {(data?.users ?? []).map((u) => (
+          <div key={u.id} className="row" style={{ justifyContent: 'space-between', padding: '0.4rem 0', borderTop: '1px solid var(--line)' }}>
+            <span>{u.email} <span className={`badge ${u.portalAccess === 'full' ? 'primary' : 'plain'}`}>{u.portalAccess === 'full' ? 'Complet' : 'Limité'}</span></span>
+            <button className="btn ghost" style={mini} onClick={async () => { if (confirm('Retirer cet accès ?')) { await api(`/api/buildings/${buildingId}/portal-access/${u.id}`, { method: 'DELETE' }); reload(); } }}>Retirer</button>
+          </div>
+        ))}
+        <div className="row" style={{ marginTop: '0.8rem', gap: '0.5rem' }}>
+          <input className="input" style={{ maxWidth: 240 }} placeholder="e-mail du résident" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <select className="select" style={{ maxWidth: 130 }} value={access} onChange={(e) => setAccess(e.target.value)}>
+            <option value="limited">Limité</option>
+            <option value="full">Complet</option>
+          </select>
+          <button className="btn primary" onClick={add}>Donner l’accès</button>
+        </div>
+        {msg && <p className="muted" style={{ fontSize: '0.82rem', marginTop: '0.6rem' }}>{msg}</p>}
+      </div>
+    </>
+  );
+}
 
 function Info({ label, value }: { label: string; value: React.ReactNode }) {
   return (

@@ -8,9 +8,9 @@ const NAV = [
   { href: '/portail/accueil', label: 'Vue d’ensemble', ic: '◈' },
   { href: '/portail/immeubles', label: 'Immeubles', ic: '⌂' },
   { href: '/portail/interventions', label: 'Interventions', ic: '⚒' },
-  { href: '/portail/devis', label: 'Devis', ic: '▤' },
+  { href: '/portail/devis', label: 'Devis', ic: '▤', full: true },
   { href: '/portail/planning', label: 'Planning', ic: '▦' },
-  { href: '/portail/documents', label: 'Documents', ic: '🗀' },
+  { href: '/portail/documents', label: 'Documents', ic: '🗀', full: true },
 ];
 
 export function PortalShell({
@@ -21,6 +21,7 @@ export function PortalShell({
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const initials = (me?.label ?? '?').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join('');
+  const nav = NAV.filter((n) => !n.full || me?.access !== 'limited');
 
   return (
     <div className="p-shell">
@@ -30,7 +31,7 @@ export function PortalShell({
           <span className="mk">JJD</span> <span>Consult</span>
         </Link>
         <nav className="p-nav">
-          {NAV.map((n) => (
+          {nav.map((n) => (
             <Link
               key={n.href}
               href={n.href}
@@ -52,6 +53,11 @@ export function PortalShell({
           <div className="greet">
             <h1>{title}</h1>
             {subtitle && <p>{subtitle}</p>}
+            {me?.access === 'limited' && (
+              <p style={{ fontSize: '0.78rem', color: 'var(--p-gold)', fontWeight: 700 }}>
+                Accès résident{me.scopeLabel ? ` · ${me.scopeLabel}` : ''} — suivi, photos et messages
+              </p>
+            )}
           </div>
           <div className="actions">
             <div className="p-user">

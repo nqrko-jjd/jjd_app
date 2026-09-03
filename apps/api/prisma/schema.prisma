@@ -70,6 +70,9 @@ model User {
   contact      Contact?  @relation(fields: [contactId], references: [id])
   syndicId     String? // compte client "syndic" -> voit tous ses immeubles
   syndic       Syndic?   @relation(fields: [syndicId], references: [id])
+  buildingId   String? // compte "résident" -> limité à un immeuble
+  building     Building? @relation("BuildingPortalUsers", fields: [buildingId], references: [id])
+  portalAccess String    @default("full") // full | limited (limited = suivi/photos/messages, sans devis/factures/montants)
   lastLoginAt  DateTime?
   createdAt    DateTime  @default(now())
 
@@ -243,6 +246,7 @@ model Building {
   opportunities CrmOpportunity[]
   contacts      BuildingContact[]
   units         BuildingUnit[]
+  portalUsers   User[]            @relation("BuildingPortalUsers")
 
   @@index([normalizedName])
 }

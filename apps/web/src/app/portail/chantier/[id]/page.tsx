@@ -15,6 +15,7 @@ interface Data {
   photos: { id: string; url: string; thumbUrl: string | null; caption: string | null; createdAt: string }[];
   messages: { id: string; body: string | null; kind: string; authorName: string | null; createdAt: string; fromClient: boolean }[];
   threadClosed: boolean;
+  access: 'full' | 'limited';
 }
 
 const STEPS = ['scheduled', 'in_progress', 'done', 'invoiced'];
@@ -27,6 +28,7 @@ export default function PortalWorksite({ params }: { params: Promise<{ id: strin
   const { me, loading } = usePortalGuard();
   const [data, setData] = useState<Data | null>(null);
   const [tab, setTab] = useState<'suivi' | 'devis' | 'factures' | 'photos' | 'messages'>('suivi');
+  const full = data?.access !== 'limited';
   const [msg, setMsg] = useState('');
 
   const load = () => portalApi<Data>(`/worksites/${id}`).then(setData).catch(() => {});
@@ -64,13 +66,15 @@ export default function PortalWorksite({ params }: { params: Promise<{ id: strin
         <Link href={w.building ? `/portail/immeuble/${w.building.id}` : '/portail/interventions'} className="p-back">← Retour</Link>
 
         <div className="p-tabs">
-          {(['suivi', 'devis', 'factures', 'photos', 'messages'] as const).map((t) => (
-            <button key={t} className={`p-tab${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
-              {t === 'suivi' ? 'Suivi' : t === 'devis' ? `Devis (${data.quotes.length})`
-                : t === 'factures' ? `Factures (${data.invoices.length})`
-                : t === 'photos' ? `Photos (${data.photos.length})` : `Messages (${data.messages.length})`}
-            </button>
-          ))}
+          {(['suivi', 'devis', 'factures', 'photos', 'messages'] as const)
+            .filter((t) => full || (t !== 'devis' && t !== 'factures'))
+            .map((t) => (
+              <button key={t} className={`p-tab${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
+                {t === 'suivi' ? 'Suivi' : t === 'devis' ? `Devis (${data.quotes.length})`
+                  : t === 'factures' ? `Factures (${data.invoices.length})`
+                  : t === 'photos' ? `Photos (${data.photos.length})` : `Messages (${data.messages.length})`}
+              </button>
+            ))}
         </div>
 
         {tab === 'suivi' && (

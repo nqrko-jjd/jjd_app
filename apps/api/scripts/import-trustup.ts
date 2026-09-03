@@ -282,6 +282,13 @@ async function seedPortalDemo() {
     for (let i = 0; i < ws.length; i++) {
       await prisma.worksite.update({ where: { id: ws[i]!.id }, data: demo[i] ?? {} });
     }
+    // accès résident limité (voit suivi/photos/messages d'un seul immeuble)
+    const oneBuilding = await prisma.building.findFirst({ where: { syndicId: syndic.id }, orderBy: { worksites: { _count: 'desc' } } });
+    if (oneBuilding) {
+      await prisma.user.create({
+        data: { email: 'resident@portail.demo', passwordHash: pw, role: 'client', buildingId: oneBuilding.id, portalAccess: 'limited' },
+      });
+    }
   }
   const client = await prisma.contact.findFirst({
     where: { type: { in: ['client', 'both'] }, kind: 'individual', worksites: { some: { documents: { some: {} } } } },

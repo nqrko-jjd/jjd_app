@@ -68,6 +68,9 @@ services:
     restart: unless-stopped
     depends_on:
       - api
+    environment:
+      # Cible des rewrites Next (/jjd-api, /uploads) au runtime — service « api ».
+      API_INTERNAL_URL: http://api:4100
     networks: [default, edge]
 
 volumes:

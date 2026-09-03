@@ -1,0 +1,37 @@
+name: Déploiement VPS
+
+# Redéploie JJD sur le VPS Combell (le MÊME que Bricoloc) à chaque push sur main.
+# Prérequis : secrets VPS_HOST, VPS_USER, VPS_SSH_KEY, VPS_PATH (= /opt/jjd).
+# Le VPS doit avoir le dépôt cloné dans VPS_PATH avec .env.production configuré,
+# le réseau Docker « edge » créé, et le nginx de Bricoloc attaché à « edge ».
+# Voir docs/DEPLOIEMENT.md.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-jjd-vps
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Déployer via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script_stop: true
+          command_timeout: 25m
+          script: |
+            set -e
+            cd "${{ secrets.VPS_PATH }}"
+            git fetch origin main
+            git reset --hard origin/main
+            docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+            docker image prune -f
+            echo "JJD déployé : $(git rev-parse --short HEAD)"

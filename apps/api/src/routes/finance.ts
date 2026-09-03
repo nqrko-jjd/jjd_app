@@ -159,11 +159,24 @@ financeRouter.post(
         + `Champs reconnus : ${parsed.mapped.join(', ') || 'aucun'} (il faut au minimum une date et un montant).`);
     }
 
+    const norm = (s: string | null) => (s ?? '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 12);
     let imported = 0;
     let duplicates = 0;
     for (const r of parsed.rows) {
-      const existing = await prisma.bankTransaction.findUnique({ where: { externalId: r.externalId } });
-      if (existing) { duplicates++; continue; }
+      const byId = await prisma.bankTransaction.findUnique({ where: { externalId: r.externalId } });
+      if (byId) { duplicates++; continue; }
+      // dédoublonnage inter-sources (une ligne déjà présente via l'import Excel)
+      if (r.bookingDate && r.amount != null) {
+        const sameDay = new Date(r.bookingDate); sameDay.setUTCHours(0, 0, 0, 0);
+        const next = new Date(sameDay); next.setUTCDate(next.getUTCDate() + 1);
+        const near = await prisma.bankTransaction.findMany({
+          where: { amount: r.amount, bookingDate: { gte: new Date(sameDay.getTime() - 3 * 86400000), lt: next } },
+          select: { counterpartyName: true },
+        });
+        if (near.some((n) => !r.counterpartyName || !n.counterpartyName || norm(n.counterpartyName) === norm(r.counterpartyName) || norm(n.counterpartyName).includes(norm(r.counterpartyName).slice(0, 6)))) {
+          duplicates++; continue;
+        }
+      }
       await prisma.bankTransaction.create({
         data: {
           externalId: r.externalId, bookingDate: r.bookingDate, valueDate: r.valueDate,

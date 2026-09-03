@@ -189,6 +189,20 @@ export const documentInput = z.object({
   lines: z.array(documentLineInput).default([]),
 });
 
+export const worksiteReportInput = z.object({
+  eventId: z.string().nullish(),
+  date: z.coerce.date().optional(),
+  workDone: z.string().trim().nullish(),
+  notes: z.string().trim().nullish(),
+});
+
+export const reportSignInput = z.object({
+  clientName: z.string().trim().min(2),
+  signature: z.string().min(20), // data URL PNG
+});
+
+export type WorksiteReportInput = z.infer<typeof worksiteReportInput>;
+
 export const priceItemInput = z.object({
   ref: z.string().trim().nullish(),
   label: nonEmpty,

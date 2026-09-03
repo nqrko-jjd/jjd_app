@@ -341,6 +341,7 @@ async function loadWorksite(u: PortalUser, id: string) {
     include: {
       building: { select: { id: true, name: true } },
       documents: { orderBy: { issuedOn: 'desc' } },
+      reports: { where: { status: 'signed' }, orderBy: { date: 'desc' }, include: { photos: true } },
       thread: {
         include: {
           messages: { orderBy: { createdAt: 'asc' } },
@@ -404,6 +405,11 @@ portalRouter.get(
       })),
       photos: messages.filter((m) => m.kind === 'photo' && m.fileUrl).map((m) => ({
         id: m.id, url: m.fileUrl, thumbUrl: m.thumbUrl, caption: m.body, createdAt: m.createdAt,
+      })),
+      reports: w.reports.map((r) => ({
+        id: r.id, date: r.date, authorName: r.authorName, workDone: r.workDone, notes: r.notes,
+        clientName: r.clientName, signedAt: r.signedAt,
+        photos: r.photos.map((p) => ({ id: p.id, url: p.url, thumbUrl: p.thumbUrl, caption: p.caption })),
       })),
       messages: messages.filter((m) => m.kind !== 'photo').map((m) => ({
         id: m.id, body: m.body, kind: m.kind, authorName: m.authorName, createdAt: m.createdAt,

@@ -14,6 +14,11 @@ interface Data {
   invoices: { id: string; number: string; status: string; hasPdf: boolean; totalTtc: number; paidAmount: number; issuedOn: string | null; dueOn: string | null }[];
   photos: { id: string; url: string; thumbUrl: string | null; caption: string | null; createdAt: string }[];
   messages: { id: string; body: string | null; kind: string; authorName: string | null; createdAt: string; fromClient: boolean }[];
+  reports: {
+    id: string; date: string; authorName: string; workDone: string | null; notes: string | null;
+    clientName: string | null; signedAt: string | null;
+    photos: { id: string; url: string; thumbUrl: string | null; caption: string | null }[];
+  }[];
   threadClosed: boolean;
   access: 'full' | 'limited';
 }
@@ -27,7 +32,7 @@ export default function PortalWorksite({ params }: { params: Promise<{ id: strin
   const { id } = use(params);
   const { me, loading } = usePortalGuard();
   const [data, setData] = useState<Data | null>(null);
-  const [tab, setTab] = useState<'suivi' | 'devis' | 'factures' | 'photos' | 'messages'>('suivi');
+  const [tab, setTab] = useState<'suivi' | 'devis' | 'factures' | 'rapports' | 'photos' | 'messages'>('suivi');
   const full = data?.access !== 'limited';
   const [msg, setMsg] = useState('');
 
@@ -66,12 +71,13 @@ export default function PortalWorksite({ params }: { params: Promise<{ id: strin
         <Link href={w.building ? `/portail/immeuble/${w.building.id}` : '/portail/interventions'} className="p-back">← Retour</Link>
 
         <div className="p-tabs">
-          {(['suivi', 'devis', 'factures', 'photos', 'messages'] as const)
+          {(['suivi', 'devis', 'factures', 'rapports', 'photos', 'messages'] as const)
             .filter((t) => full || (t !== 'devis' && t !== 'factures'))
             .map((t) => (
               <button key={t} className={`p-tab${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
                 {t === 'suivi' ? 'Suivi' : t === 'devis' ? `Devis (${data.quotes.length})`
                   : t === 'factures' ? `Factures (${data.invoices.length})`
+                  : t === 'rapports' ? `Rapports (${data.reports.length})`
                   : t === 'photos' ? `Photos (${data.photos.length})` : `Messages (${data.messages.length})`}
               </button>
             ))}
@@ -131,6 +137,34 @@ export default function PortalWorksite({ params }: { params: Promise<{ id: strin
               </div>
             ))}
           </div>
+        )}
+
+        {tab === 'rapports' && (
+          data.reports.length === 0 ? <div className="p-card p-card-pad"><p className="p-note">Aucun rapport d’intervention pour le moment.</p></div> : (
+            <div style={{ display: 'grid', gap: '0.9rem' }}>
+              {data.reports.map((r) => (
+                <div key={r.id} className="p-card p-card-pad">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                    <strong>{d(r.date)}</strong>
+                    {r.clientName && <span className="p-pill ok">Signé · {r.clientName}</span>}
+                  </div>
+                  <p className="p-note" style={{ margin: '0.2rem 0 0.5rem' }}>par {r.authorName}</p>
+                  {r.workDone && <p style={{ whiteSpace: 'pre-wrap', fontSize: '0.92rem' }}>{r.workDone}</p>}
+                  {r.notes && <p className="p-note" style={{ marginTop: '0.4rem', whiteSpace: 'pre-wrap' }}>Remarques : {r.notes}</p>}
+                  {r.photos.length > 0 && (
+                    <div className="p-photos" style={{ marginTop: '0.6rem' }}>
+                      {r.photos.map((p) => (
+                        <a key={p.id} href={p.url} target="_blank" rel="noreferrer">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={p.thumbUrl ?? p.url} alt={p.caption ?? ''} />
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )
         )}
 
         {tab === 'photos' && (

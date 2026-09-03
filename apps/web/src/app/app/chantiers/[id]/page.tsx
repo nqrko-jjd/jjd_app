@@ -18,6 +18,11 @@ interface Detail {
     manager: { displayName: string | null; firstName: string } | null;
     documents: { id: string; kind: string; number: string | null; draftRef: string | null; totalHt: number; status: string; issuedOn: string | null }[];
     events: { id: string; startAt: string; endAt: string; vehicle: { plate: string | null } | null; assignments: { person: { displayName: string | null; firstName: string } }[] }[];
+    reports: {
+      id: string; date: string; authorName: string; workDone: string | null; status: string;
+      clientName: string | null; signedAt: string | null;
+      photos: { id: string; thumbUrl: string | null; url: string }[];
+    }[];
   };
   margin: WorksiteMargin | null;
 }
@@ -109,6 +114,36 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
           <div className="eyebrow" style={{ marginBottom: '0.4rem' }}>Description</div>
           <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{w.description}</p>
         </section>
+      )}
+
+      <div className="section-title">Rapports d’intervention <span className="hint">{w.reports.length}</span></div>
+      {w.reports.length === 0 ? (
+        <div className="card card-pad muted" style={{ marginBottom: '1.5rem' }}>Aucun rapport. Les ouvriers les créent depuis l’app mobile.</div>
+      ) : (
+        <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', marginBottom: '1.5rem' }}>
+          {w.reports.map((r) => (
+            <div key={r.id} className="card card-pad">
+              <div className="row" style={{ justifyContent: 'space-between' }}>
+                <strong>{formatDateBE(r.date)}</strong>
+                {r.status === 'signed'
+                  ? <span className="badge ok">Signé{r.clientName ? ` · ${r.clientName}` : ''}</span>
+                  : <span className="badge warn">Brouillon</span>}
+              </div>
+              <div className="muted" style={{ fontSize: '0.82rem' }}>par {r.authorName}</div>
+              {r.workDone && <p style={{ fontSize: '0.88rem', margin: '0.4rem 0 0', whiteSpace: 'pre-wrap' }}>{r.workDone.slice(0, 160)}</p>}
+              {r.photos.length > 0 && (
+                <div style={{ display: 'flex', gap: 4, marginTop: '0.5rem', flexWrap: 'wrap' }}>
+                  {r.photos.slice(0, 4).map((p) => (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img key={p.id} src={p.thumbUrl ?? p.url} alt="" style={{ width: 52, height: 52, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--line)' }} />
+                  ))}
+                  {r.photos.length > 4 && <span className="muted" style={{ fontSize: '0.8rem', alignSelf: 'center' }}>+{r.photos.length - 4}</span>}
+                </div>
+              )}
+              <a className="btn" style={{ marginTop: '0.6rem', padding: '0.25rem 0.6rem', fontSize: '0.78rem' }} href={`/rapport/${r.id}`} target="_blank" rel="noreferrer">Voir / imprimer →</a>
+            </div>
+          ))}
+        </div>
       )}
 
       <div className="section-title">Fil de chantier</div>

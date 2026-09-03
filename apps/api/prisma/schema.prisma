@@ -82,6 +82,7 @@ model User {
   createdEvents    PlanningEvent[]  @relation("EventCreatedBy")
   messages         Message[]
   createdDocuments Document[]       @relation("DocumentAuthor")
+  reports          WorksiteReport[] @relation("ReportAuthor")
 }
 
 /// Fiche personne : ouvrier ou chef de chantier. Toutes les infos utiles.
@@ -331,6 +332,7 @@ model Worksite {
   events        PlanningEvent[]
   opportunity   CrmOpportunity?
   thread        Thread?
+  reports       WorksiteReport[]
 
   @@index([status])
   @@index([entity])
@@ -732,6 +734,43 @@ model Message {
   createdAt  DateTime @default(now())
 
   @@index([threadId, createdAt])
+}
+
+/// Rapport d'intervention rempli sur le terrain par l'ouvrier / le chef,
+/// signé au doigt par le client sur place.
+model WorksiteReport {
+  id           String    @id @default(cuid())
+  worksiteId   String
+  worksite     Worksite  @relation(fields: [worksiteId], references: [id], onDelete: Cascade)
+  eventId      String? // créneau de planning concerné
+  authorId     String? // User (chef / ouvrier lié à un compte)
+  author       User?     @relation("ReportAuthor", fields: [authorId], references: [id])
+  authorName   String
+  date         DateTime  @default(now())
+  workDone     String? // travaux réalisés
+  notes        String? // remarques, réserves
+  status       String    @default("draft") // draft | signed
+  clientName   String? // nom de la personne qui a signé
+  signatureUrl String? // PNG de la signature (uploads/…)
+  signedAt     DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  photos ReportPhoto[]
+
+  @@index([worksiteId])
+}
+
+model ReportPhoto {
+  id        String         @id @default(cuid())
+  reportId  String
+  report    WorksiteReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  url       String
+  thumbUrl  String?
+  caption   String?
+  createdAt DateTime       @default(now())
+
+  @@index([reportId])
 }
 
 // ─────────────────────────────────────────────────────────── Import & contrôle

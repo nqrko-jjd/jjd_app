@@ -81,8 +81,8 @@ export function Card({ children, accent }: { children: ReactNode; accent?: strin
 export function Label({ children }: { children: ReactNode }) {
   return <Text style={st.label}>{children}</Text>;
 }
-export function Muted({ children }: { children: ReactNode }) {
-  return <Text style={st.muted}>{children}</Text>;
+export function Muted({ children, style }: { children: ReactNode; style?: object }) {
+  return <Text style={[st.muted, style]}>{children}</Text>;
 }
 export function Loading() {
   return <View style={{ padding: 44, alignItems: 'center' }}><ActivityIndicator color={T.primary} /></View>;

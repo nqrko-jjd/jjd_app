@@ -123,7 +123,7 @@ export default function Today() {
       <Text style={s.section}>Mes chantiers du jour</Text>
       {events.length === 0 && <Text style={s.muted}>Rien de planifié aujourd’hui.</Text>}
       {events.map((e) => (
-        <View key={e.id} style={s.card}>
+        <Pressable key={e.id} style={s.card} onPress={() => router.push(`/fiche/${e.worksite.id}` as never)}>
           <Text style={s.wsRef}>{e.worksite.ref} — {e.worksite.title}</Text>
           {e.worksite.city && <Text style={s.muted}>{e.worksite.city}</Text>}
           <Text style={s.muted}>
@@ -136,11 +136,11 @@ export default function Today() {
                 <Text style={s.btnTxt}>Démarrer le compteur</Text>
               </Pressable>
             )}
-            <Pressable style={[s.btn, { backgroundColor: T.surface2, borderWidth: 1, borderColor: T.line }]} onPress={() => router.push(`/fil/${e.worksite.id}` as never)}>
-              <Text style={[s.btnTxt, { color: T.ink }]}>💬 Fil</Text>
+            <Pressable style={[s.btn, { backgroundColor: T.surface2, borderWidth: 1, borderColor: T.line }]} onPress={() => router.push(`/fiche/${e.worksite.id}` as never)}>
+              <Text style={[s.btnTxt, { color: T.ink }]}>Fiche du jour ›</Text>
             </Pressable>
           </View>
-        </View>
+        </Pressable>
       ))}
     </ScrollView>
   );

@@ -318,6 +318,9 @@ model Worksite {
   city        String?
   startedOn   DateTime?
   endedOn     DateTime?
+  lat         Float? // point GPS de référence (capturé au 1er pointage sur place, ajustable)
+  lng         Float?
+  geoSetAt    DateTime?
   quotedHt    Float? // "Total Devisé"
   description String?
   trustupId   String?
@@ -545,6 +548,10 @@ model TimeEntry {
   task          String?
   startedAt     DateTime? // compteur mobile
   endedAt       DateTime?
+  startLat      Float? // position au démarrage du compteur
+  startLng      Float?
+  geoDistance   Int? // mètres entre le pointage et le point de référence du chantier
+  geoFlag       Boolean   @default(false) // true = pointé hors zone (mode souple : accepté mais signalé)
   status        String    @default("approved") // running | submitted | approved | rejected
   approvedById  String?
   approvedBy    User?     @relation("ApprovedBy", fields: [approvedById], references: [id])

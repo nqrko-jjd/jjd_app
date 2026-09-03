@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { View, Text, Pressable, ScrollView, StyleSheet, RefreshControl } from 'react-native';
+import { View, Text, Pressable, ScrollView, StyleSheet, RefreshControl, Alert } from 'react-native';
 import { useFocusEffect, Redirect, useRouter } from 'expo-router';
 import { apiGet, apiSend, flushQueue, pendingCount } from '@/lib/api';
+import { currentPosition } from '@/lib/geo';
 import { useSession } from '@/lib/session';
 import { T } from '@/lib/theme';
 
@@ -69,11 +70,17 @@ export default function Today() {
   }
 
   async function start(worksiteId: string) {
-    const r = await apiSend<{ entry: unknown }>('/api/timesheet/timer/start', 'POST', {
+    const pos = await currentPosition();
+    const r = await apiSend<{ entry: unknown; geoFlag?: boolean; geoDistance?: number }>('/api/timesheet/timer/start', 'POST', {
       worksiteId,
       startedAt: new Date().toISOString(),
+      lat: pos?.lat ?? null,
+      lng: pos?.lng ?? null,
     });
     if ('queued' in r) setQueued((q) => q + 1);
+    else if ((r as { geoFlag?: boolean }).geoFlag) {
+      Alert.alert('Pointage hors zone', `Tu es à environ ${(r as { geoDistance?: number }).geoDistance} m du chantier. Le pointage est enregistré mais sera vérifié par le bureau.`);
+    }
     await load();
   }
   async function stop() {

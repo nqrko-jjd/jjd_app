@@ -12,6 +12,7 @@ interface Detail {
   worksite: {
     id: string; ref: string; title: string; status: string; priority: string; statusRaw: string | null;
     entity: string; address: string | null; city: string | null; billTo: string | null;
+    lat: number | null; lng: number | null; geoSetAt: string | null;
     startedOn: string | null; endedOn: string | null; quotedHt: number | null; description: string | null;
     client: { id: string; name: string } | null;
     building: { id: string; name: string; syndic: { name: string } | null } | null;
@@ -115,6 +116,26 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
           <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{w.description}</p>
         </section>
       )}
+
+      <div className="section-title">Localisation <span className="hint">contrôle de pointage</span></div>
+      <div className="card card-pad" style={{ marginBottom: '1.5rem' }}>
+        {w.lat != null && w.lng != null ? (
+          <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.6rem' }}>
+            <span>
+              Point GPS défini {w.geoSetAt ? `le ${formatDateBE(w.geoSetAt)}` : ''} —{' '}
+              <a href={`https://www.google.com/maps?q=${w.lat},${w.lng}`} target="_blank" rel="noreferrer">{w.lat.toFixed(5)}, {w.lng.toFixed(5)}</a>
+            </span>
+            <button className="btn" style={{ padding: '0.2rem 0.6rem', fontSize: '0.78rem' }}
+              onClick={async () => { if (confirm('Réinitialiser ? Le prochain pointage sur place fixera un nouveau point.')) { await api(`/api/worksites/${id}/geo`, { method: 'PATCH', body: { clear: true } }); reload(); } }}>
+              Réinitialiser
+            </button>
+          </div>
+        ) : (
+          <p className="muted" style={{ margin: 0, fontSize: '0.88rem' }}>
+            Aucun point GPS. Il sera fixé automatiquement au premier pointage d’un ouvrier sur place.
+          </p>
+        )}
+      </div>
 
       <div className="section-title">Rapports d’intervention <span className="hint">{w.reports.length}</span></div>
       {w.reports.length === 0 ? (

@@ -91,6 +91,31 @@ test('un 2e start pendant qu\'un compteur tourne -> 409', async () => {
   });
 });
 
+test('géoloc pointage (mode souple) : 1er point fixé, puis hors zone signalé', async () => {
+  const geoWs = await prisma.worksite.create({ data: { ref: 'R-GEOTEST', title: 'Geo', source: 'test' } });
+  const H = (b: unknown) => ({ method: 'POST' as const, headers: { 'content-type': 'application/json', authorization: `Bearer ${workerToken}` }, body: JSON.stringify(b) });
+  const stop = () => fetch(`${base}/api/timesheet/timer/stop`, H({}));
+
+  // 1er pointage sur place -> fixe le point de référence
+  const r1 = await fetch(`${base}/api/timesheet/timer/start`, H({ worksiteId: geoWs.id, lat: 50.8467, lng: 4.3525 }));
+  assert.equal(r1.status, 201);
+  assert.equal((await r1.json()).geoFlag, false);
+  await stop();
+  const w = await prisma.worksite.findUnique({ where: { id: geoWs.id } });
+  assert.ok(w?.lat && w?.lng);
+
+  // pointage à ~5 km -> accepté mais signalé
+  const r2 = await fetch(`${base}/api/timesheet/timer/start`, H({ worksiteId: geoWs.id, lat: 50.8949, lng: 4.3416 }));
+  assert.equal(r2.status, 201);
+  const j2 = await r2.json();
+  assert.equal(j2.geoFlag, true);
+  assert.ok(j2.geoDistance > 4000);
+  await stop();
+
+  await prisma.timeEntry.deleteMany({ where: { worksiteId: geoWs.id } });
+  await prisma.worksite.delete({ where: { id: geoWs.id } });
+});
+
 test('validation : submitted -> approved par le bureau', async () => {
   const pending = await fetch(`${base}/api/timesheet/pending`, { headers: { authorization: `Bearer ${davidToken}` } });
   const { items } = await pending.json();

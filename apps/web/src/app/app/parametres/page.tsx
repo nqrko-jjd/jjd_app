@@ -14,16 +14,49 @@ interface PriceItem {
 
 export default function ParametresPage() {
   const { user } = useAuth();
-  const [tab, setTab] = useState<'company' | 'library'>('company');
+  const [tab, setTab] = useState<'company' | 'library' | 'pointage'>('company');
+  const admin = user?.role === 'admin';
   return (
     <>
-      <PageHead title="Paramètres" sub="Coordonnées société & bibliothèque de prix" />
+      <PageHead title="Paramètres" sub="Société, bibliothèque de prix, pointage" />
       <div className="row" style={{ marginBottom: '1rem', gap: '0.4rem' }}>
         <button className={`btn${tab === 'company' ? ' primary' : ''}`} onClick={() => setTab('company')}>Société</button>
         <button className={`btn${tab === 'library' ? ' primary' : ''}`} onClick={() => setTab('library')}>Bibliothèque de prix</button>
+        <button className={`btn${tab === 'pointage' ? ' primary' : ''}`} onClick={() => setTab('pointage')}>Pointage</button>
       </div>
-      {tab === 'company' ? <CompanyForm canEdit={user?.role === 'admin'} /> : <PriceLibrary />}
+      {tab === 'company' ? <CompanyForm canEdit={admin} /> : tab === 'library' ? <PriceLibrary /> : <GeoForm canEdit={admin} />}
     </>
+  );
+}
+
+function GeoForm({ canEdit }: { canEdit: boolean }) {
+  const { data } = useApi<{ radiusM: number }>('/api/settings/geo');
+  const [m, setM] = useState<number | ''>('');
+  const [saved, setSaved] = useState(false);
+  useEffect(() => { if (data) setM(data.radiusM); }, [data]);
+  return (
+    <div className="card card-pad" style={{ maxWidth: 560 }}>
+      <div className="section-title">Contrôle du lieu de pointage</div>
+      <p className="muted" style={{ fontSize: '0.88rem', marginTop: 0 }}>
+        Quand un ouvrier démarre son compteur, l’app enregistre sa position. Le <strong>1<sup>er</sup> pointage</strong> sur
+        un chantier fixe le point de référence. Les pointages suivants faits à plus du rayon ci-dessous sont
+        <strong> acceptés mais signalés « hors zone »</strong> dans la file de validation (mode souple, jamais bloquant).
+      </p>
+      <label className="field" style={{ maxWidth: 200 }}>
+        <span>Rayon toléré (mètres)</span>
+        <input className="input" type="number" min={50} max={5000} step={50} disabled={!canEdit}
+          value={m} onChange={(e) => { setM(e.target.value === '' ? '' : Number(e.target.value)); setSaved(false); }} />
+      </label>
+      {canEdit && (
+        <div className="row" style={{ marginTop: '0.9rem' }}>
+          <button className="btn primary" onClick={async () => { await api('/api/settings/geo', { method: 'PUT', body: { radiusM: m } }); setSaved(true); }}>Enregistrer</button>
+          {saved && <span className="muted">Enregistré.</span>}
+        </div>
+      )}
+      <p className="hint" style={{ marginTop: '0.9rem' }}>
+        Le point GPS d’un chantier se corrige sur sa fiche (section « Localisation »).
+      </p>
+    </div>
   );
 }
 

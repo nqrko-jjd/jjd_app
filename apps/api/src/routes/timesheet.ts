@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { timeEntryInput, timerStartInput, timerStopInput, round2 } from '@jjd/shared';
+import { timeEntryInput, timerStartInput, timerStopInput, round2, distanceMeters, DEFAULT_GEO_RADIUS } from '@jjd/shared';
 import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, STAFF, OFFICE } from '../lib/auth.js';
@@ -40,6 +40,24 @@ timesheetRouter.post(
     const existing = await prisma.timeEntry.findFirst({ where: { personId, status: 'running' } });
     if (existing) throw new HttpError(409, 'Un compteur tourne déjà');
     const person = await prisma.person.findUnique({ where: { id: personId } });
+    const worksite = await prisma.worksite.findUnique({ where: { id: d.worksiteId }, select: { id: true, lat: true, lng: true } });
+
+    // géolocalisation (mode souple : jamais bloquant, juste signalé)
+    let geoDistance: number | null = null;
+    let geoFlag = false;
+    const hasPos = typeof d.lat === 'number' && typeof d.lng === 'number';
+    if (hasPos && worksite) {
+      if (worksite.lat == null || worksite.lng == null) {
+        // 1er pointage sur place -> devient le point de référence du chantier
+        await prisma.worksite.update({ where: { id: worksite.id }, data: { lat: d.lat!, lng: d.lng!, geoSetAt: new Date() } });
+      } else {
+        geoDistance = distanceMeters(worksite.lat, worksite.lng, d.lat!, d.lng!);
+        const row = await prisma.setting.findUnique({ where: { key: 'geoRadius' } });
+        const radius = Number((row?.value as { m?: number })?.m) || DEFAULT_GEO_RADIUS;
+        geoFlag = geoDistance > radius;
+      }
+    }
+
     const entry = await prisma.timeEntry.create({
       data: {
         personId,
@@ -48,11 +66,15 @@ timesheetRouter.post(
         date: d.startedAt ?? new Date(),
         task: d.task ?? null,
         rateUsed: person?.hourlyRate ?? null,
+        startLat: hasPos ? d.lat : null,
+        startLng: hasPos ? d.lng : null,
+        geoDistance,
+        geoFlag,
         status: 'running',
         source: 'timer',
       },
     });
-    res.status(201).json({ entry });
+    res.status(201).json({ entry, geoFlag, geoDistance });
   }),
 );
 

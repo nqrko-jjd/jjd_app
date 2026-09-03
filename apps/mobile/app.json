@@ -24,7 +24,8 @@
     "plugins": [
       "expo-router",
       "expo-localization",
-      ["expo-image-picker", { "photosPermission": "JJD Chantier accède à vos photos pour les ajouter au fil du chantier." }]
+      ["expo-image-picker", { "photosPermission": "JJD Chantier accède à vos photos pour les ajouter au fil du chantier." }],
+      ["expo-location", { "locationWhenInUsePermission": "JJD Chantier utilise votre position pour vérifier que le pointage est bien fait sur le chantier." }]
     ],
     "extra": {
       "apiUrl": "http://localhost:4100"

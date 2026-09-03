@@ -29,6 +29,25 @@ settingsRouter.get(
   }),
 );
 
+settingsRouter.get(
+  '/geo',
+  requireAuth('admin', 'office'),
+  asyncHandler(async (_req, res) => {
+    const row = await prisma.setting.findUnique({ where: { key: 'geoRadius' } });
+    res.json({ radiusM: Number((row?.value as { m?: number })?.m) || 250 });
+  }),
+);
+
+settingsRouter.put(
+  '/geo',
+  requireAuth('admin'),
+  asyncHandler(async (req, res) => {
+    const m = Math.max(50, Math.min(5000, Number(req.body?.radiusM) || 250));
+    await prisma.setting.upsert({ where: { key: 'geoRadius' }, create: { key: 'geoRadius', value: { m } }, update: { value: { m } } });
+    res.json({ radiusM: m });
+  }),
+);
+
 settingsRouter.put(
   '/company',
   requireAuth('admin'),

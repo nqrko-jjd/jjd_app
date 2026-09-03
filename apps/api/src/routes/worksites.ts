@@ -180,6 +180,21 @@ worksitesRouter.post(
   }),
 );
 
+/** Point GPS de référence du chantier (pour le contrôle de pointage). */
+worksitesRouter.patch(
+  '/:id/geo',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const { lat, lng, clear } = req.body as { lat?: number; lng?: number; clear?: boolean };
+    const data = clear
+      ? { lat: null, lng: null, geoSetAt: null }
+      : { lat: Number(lat), lng: Number(lng), geoSetAt: new Date() };
+    if (!clear && (Number.isNaN(data.lat as number) || Number.isNaN(data.lng as number))) throw new HttpError(422, 'Coordonnées invalides');
+    const ws = await prisma.worksite.update({ where: { id: req.params.id }, data });
+    res.json({ lat: ws.lat, lng: ws.lng, geoSetAt: ws.geoSetAt });
+  }),
+);
+
 worksitesRouter.patch(
   '/:id',
   requireAuth(...OFFICE),

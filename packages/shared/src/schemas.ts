@@ -154,6 +154,8 @@ export const timerStartInput = z.object({
   worksiteId: nonEmpty,
   startedAt: z.coerce.date().optional(),
   task: z.string().trim().nullish(),
+  lat: z.number().min(-90).max(90).nullish(),
+  lng: z.number().min(-180).max(180).nullish(),
 });
 
 export const timerStopInput = z.object({

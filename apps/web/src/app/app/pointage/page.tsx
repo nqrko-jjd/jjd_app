@@ -7,6 +7,7 @@ import { formatHours } from '@jjd/shared';
 
 interface Pending {
   id: string; date: string | null; hours: number | null; amount: number | null; task: string | null;
+  geoFlag: boolean; geoDistance: number | null;
   person: { displayName: string | null; firstName: string };
   worksite: { ref: string; title: string } | null;
 }
@@ -34,7 +35,7 @@ export default function PointagePage() {
         <div className="tbl-wrap">
           <table className="tbl">
             <thead>
-              <tr><th>Date</th><th>Ouvrier</th><th>Chantier</th><th>Tâche</th><th style={{ textAlign: 'right' }}>Heures</th><th style={{ textAlign: 'right' }}>Montant</th><th></th></tr>
+              <tr><th>Date</th><th>Ouvrier</th><th>Chantier</th><th>Tâche</th><th>Lieu</th><th style={{ textAlign: 'right' }}>Heures</th><th style={{ textAlign: 'right' }}>Montant</th><th></th></tr>
             </thead>
             <tbody>
               {data.items.map((e) => (
@@ -43,6 +44,13 @@ export default function PointagePage() {
                   <td>{e.person.displayName || e.person.firstName}</td>
                   <td>{e.worksite ? <span className="mono">{e.worksite.ref}</span> : <span className="muted">—</span>} {e.worksite?.title}</td>
                   <td className="muted">{e.task ?? '—'}</td>
+                  <td>
+                    {e.geoFlag
+                      ? <span className="badge crit" title={`Pointé à ${e.geoDistance} m du chantier`}>Hors zone · {e.geoDistance} m</span>
+                      : e.geoDistance != null
+                        ? <span className="badge ok">Sur place</span>
+                        : <span className="muted" style={{ fontSize: '0.8rem' }}>—</span>}
+                  </td>
                   <td style={{ textAlign: 'right' }}>{formatHours(e.hours)}</td>
                   <td style={{ textAlign: 'right' }}><Money value={e.amount} /></td>
                   <td>

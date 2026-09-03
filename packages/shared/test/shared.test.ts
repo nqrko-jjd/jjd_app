@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   computeWorksiteMargin, parseAmount, parseLooseDate, excelSerialToDate,
   normalizeName, guessWorksiteStatus, htFromTtc, formatVat,
-  computeDocTotals, belgianStructuredComm, formatDocNumber, computeDueDate,
+  computeDocTotals, belgianStructuredComm, formatDocNumber, computeDueDate, distanceMeters,
 } from '../src/index.js';
 
 test('parseAmount gère les formats belges et Excel', () => {
@@ -91,6 +91,16 @@ test('computeDocTotals : TVA ventilée par taux, remises, lignes de section', ()
 test('belgianStructuredComm : mod 97, 00 -> 97, format +++', () => {
   assert.equal(belgianStructuredComm(2026014), '+++000/2026/01472+++');
   assert.match(belgianStructuredComm(1), /^\+\+\+\d{3}\/\d{4}\/\d{5}\+\+\+$/);
+});
+
+test('distanceMeters : haversine', () => {
+  assert.equal(distanceMeters(50.85, 4.35, 50.85, 4.35), 0);
+  // Grand-Place Bruxelles -> Atomium ≈ 5,3 km
+  const d = distanceMeters(50.8467, 4.3525, 50.8949, 4.3416);
+  assert.ok(d > 5000 && d < 5700, `distance = ${d}`);
+  // ~140 m
+  const near = distanceMeters(50.8467, 4.3525, 50.8479, 4.3527);
+  assert.ok(near > 100 && near < 180, `near = ${near}`);
 });
 
 test('formatDocNumber & computeDueDate', () => {

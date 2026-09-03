@@ -4,7 +4,7 @@ import {
   computeWorksiteMargin, parseAmount, parseLooseDate, excelSerialToDate,
   normalizeName, guessWorksiteStatus, htFromTtc, formatVat,
   computeDocTotals, belgianStructuredComm, formatDocNumber, computeDueDate, distanceMeters,
-  vehicleCostPerKm,
+  vehicleCostPerKm, perDayFromMonthly,
 } from '../src/index.js';
 
 test('parseAmount gère les formats belges et Excel', () => {
@@ -82,6 +82,12 @@ test('vehicleCostPerKm : (conso/100)×prix + extra', () => {
   assert.equal(vehicleCostPerKm({ fuelConsoL100: 10, fuelPricePerL: 1.8, costPerKmExtra: 0.05 }), 0.23);
   assert.equal(vehicleCostPerKm({ fuelConsoL100: null, fuelPricePerL: null }), null);
   assert.equal(vehicleCostPerKm({ fuelConsoL100: 0, fuelPricePerL: 0, costPerKmExtra: 0.1 }), 0.1);
+});
+
+test('perDayFromMonthly : mensuel × 12 ÷ jours ouvrés', () => {
+  assert.equal(perDayFromMonthly(220, 220), 12); // 2640 / 220
+  assert.equal(perDayFromMonthly(0), 0);
+  assert.equal(perDayFromMonthly(100, 0), 0);
 });
 
 test('htFromTtc 6% rénovation', () => {

@@ -20,6 +20,15 @@ export const DEFAULT_GEO_RADIUS = 250;
  */
 export const DEFAULT_ROAD_FACTOR = 1.4;
 
+/** Jours ouvrés par an par défaut pour répartir les coûts fixes des véhicules. */
+export const DEFAULT_WORK_DAYS_PER_YEAR = 220;
+
+/** Convertit un coût mensuel en coût par jour ouvré. */
+export function perDayFromMonthly(monthly: number, workDaysPerYear = DEFAULT_WORK_DAYS_PER_YEAR): number {
+  if (workDaysPerYear <= 0) return 0;
+  return Math.round(((monthly * 12) / workDaysPerYear) * 100) / 100;
+}
+
 /** Coût carburant au km d'un véhicule = (conso L/100 ÷ 100) × prix €/L, + éventuel coût/km additionnel. */
 export function vehicleCostPerKm(v: {
   fuelConsoL100?: number | null;

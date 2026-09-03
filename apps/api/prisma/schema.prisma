@@ -628,10 +628,12 @@ model Vehicle {
   depot             String?
   status            String    @default("active")
 
-  // coût de revient au km (imputation transport aux chantiers)
+  // coût de revient (imputation aux chantiers)
   fuelConsoL100  Float? // consommation moyenne, litres / 100 km
   fuelPricePerL  Float? // prix du carburant, € / litre
   costPerKmExtra Float? // € / km supplémentaire (entretien, pneus, usure)
+  parkingMonthly Float? // parking / garage, € / mois
+  otherMonthly   Float? // autres frais fixes mensuels (GPS, nettoyage, télépéage…)
 
   // acquisition / financement
   acquisitionMode String? // Comptant | Crédit | Leasing | Renting financier

@@ -35,7 +35,7 @@ export default function ParametresPage() {
 
 interface Depot {
   label: string; address: string; postalCode: string; city: string;
-  lat: number | null; lng: number | null; roadFactor: number;
+  lat: number | null; lng: number | null; roadFactor: number; workDaysPerYear: number;
 }
 
 function DepotForm({ canEdit }: { canEdit: boolean }) {
@@ -68,9 +68,10 @@ function DepotForm({ canEdit }: { canEdit: boolean }) {
     <div className="card card-pad" style={{ maxWidth: 620 }}>
       <div className="section-title">Dépôt de l’entreprise</div>
       <p className="muted" style={{ fontSize: '0.88rem', marginTop: 0 }}>
-        Point de départ des véhicules. Sert à estimer le <strong>coût transport</strong> de chaque chantier :
-        pour chaque jour où un véhicule est planifié sur un chantier, un aller-retour dépôt ↔ chantier est
-        imputé aux charges, au coût/km du véhicule (fiche flotte).
+        Point de départ des véhicules. Sert à estimer le <strong>coût véhicule</strong> de chaque chantier :
+        chaque jour où un véhicule est planifié sur un chantier, on impute aux charges un aller-retour dépôt ↔ chantier
+        (carburant + usure) <strong>et</strong> une quote-part des coûts fixes du véhicule (assurance, financement, taxe,
+        parking…) = coût mensuel ÷ jours ouvrés par mois.
       </p>
       <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
         <label className="field" style={{ gridColumn: '1 / -1' }}><span>Adresse</span>
@@ -82,6 +83,9 @@ function DepotForm({ canEdit }: { canEdit: boolean }) {
         <label className="field"><span>Facteur routier (vol d’oiseau → route)</span>
           <input className="input" type="number" step={0.05} min={1} max={2.5} disabled={!canEdit}
             value={f.roadFactor} onChange={(e) => upd('roadFactor', Number(e.target.value))} /></label>
+        <label className="field"><span>Jours ouvrés / an</span>
+          <input className="input" type="number" step={1} min={120} max={365} disabled={!canEdit}
+            value={f.workDaysPerYear} onChange={(e) => upd('workDaysPerYear', Number(e.target.value))} /></label>
       </div>
       <p className="muted" style={{ fontSize: '0.84rem', marginTop: '0.6rem' }}>
         {f.lat != null && f.lng != null

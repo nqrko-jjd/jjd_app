@@ -5,6 +5,7 @@ import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, STAFF, OFFICE } from '../lib/auth.js';
 import { upsertEvent, deleteEvent, gcalEnabled } from '../lib/gcal.js';
 import { attachPhotoRoutes } from '../lib/photo-upload.js';
+import { vehicleCostBreakdown } from '../lib/vehicle-cost.js';
 
 export const planningRouter = Router();
 
@@ -210,15 +211,11 @@ vehiclesRouter.patch(
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
     const d = vehicleCostInput.partial().parse(req.body);
-    const v = await prisma.vehicle.update({
-      where: { id: req.params.id },
-      data: {
-        ...('fuelConsoL100' in d ? { fuelConsoL100: d.fuelConsoL100 ?? null } : {}),
-        ...('fuelPricePerL' in d ? { fuelPricePerL: d.fuelPricePerL ?? null } : {}),
-        ...('costPerKmExtra' in d ? { costPerKmExtra: d.costPerKmExtra ?? null } : {}),
-      },
-    });
-    res.json({ vehicle: { ...v, costPerKm: vehicleCostPerKm(v) } });
+    const keys = ['fuelConsoL100', 'fuelPricePerL', 'costPerKmExtra', 'parkingMonthly', 'otherMonthly'] as const;
+    const data: Record<string, number | null> = {};
+    for (const k of keys) if (k in d) data[k] = d[k] ?? null;
+    await prisma.vehicle.update({ where: { id: req.params.id }, data });
+    res.json({ vehicle: await withCost(req.params.id!) });
   }),
 );
 
@@ -237,6 +234,12 @@ vehiclesRouter.get(
   }),
 );
 
+async function withCost(id: string) {
+  const v = await prisma.vehicle.findUnique({ where: { id }, include: { insurances: true } });
+  if (!v) throw new HttpError(404, 'Véhicule introuvable');
+  return { ...v, costPerKm: vehicleCostPerKm(v), costBreakdown: await vehicleCostBreakdown(id) };
+}
+
 vehiclesRouter.get(
   '/:id',
   requireAuth(...STAFF),
@@ -250,6 +253,6 @@ vehiclesRouter.get(
       },
     });
     if (!v) throw new HttpError(404, 'Véhicule introuvable');
-    res.json({ vehicle: { ...v, costPerKm: vehicleCostPerKm(v) } });
+    res.json({ vehicle: { ...v, costPerKm: vehicleCostPerKm(v), costBreakdown: await vehicleCostBreakdown(v.id) } });
   }),
 );

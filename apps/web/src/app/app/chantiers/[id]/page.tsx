@@ -28,8 +28,8 @@ interface Detail {
   };
   margin: (WorksiteMargin & {
     transport: {
-      cost: number; note: string | null; oneWayKm: number | null;
-      trips: { date: string; vehicleLabel: string; roundTripKm: number; costPerKm: number; cost: number }[];
+      cost: number; fuelCost: number; fixedCost: number; note: string | null; oneWayKm: number | null;
+      trips: { date: string; vehicleLabel: string; roundTripKm: number; fuelCost: number; fixedCost: number; cost: number }[];
     };
   }) | null;
 }
@@ -110,10 +110,10 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
             <MiniKpi label="Coût matériaux" value={<Money value={data.margin.materialCost} />} />
             <MiniKpi label="Coût main-d'œuvre" value={<Money value={data.margin.labourCost} />} />
             <MiniKpi
-              label="Coût transport"
+              label="Coût véhicule"
               value={<Money value={data.margin.vehicleCost} />}
               note={data.margin.transport.trips.length
-                ? `${data.margin.transport.trips.length} trajet(s) · ${data.margin.transport.oneWayKm} km`
+                ? `${data.margin.transport.trips.length} j · fixe ${data.margin.transport.fixedCost.toFixed(0)} € + route ${data.margin.transport.fuelCost.toFixed(0)} €`
                 : undefined}
             />
             <MiniKpi label="Marge réelle" value={<Money value={data.margin.realMargin} sign />} note={data.margin.realMarginPct != null ? `${data.margin.realMarginPct} %` : undefined} />
@@ -282,14 +282,15 @@ function TransportDetail({ t }: { t: NonNullable<Detail['margin']>['transport'] 
       {open && (
         <div className="tbl-wrap" style={{ marginTop: '0.5rem' }}>
           <table className="tbl">
-            <thead><tr><th>Date</th><th>Véhicule</th><th style={{ textAlign: 'right' }}>Km A/R</th><th style={{ textAlign: 'right' }}>€/km</th><th style={{ textAlign: 'right' }}>Coût</th></tr></thead>
+            <thead><tr><th>Date</th><th>Véhicule</th><th style={{ textAlign: 'right' }}>Km A/R</th><th style={{ textAlign: 'right' }}>Route</th><th style={{ textAlign: 'right' }}>Fixe/jour</th><th style={{ textAlign: 'right' }}>Total</th></tr></thead>
             <tbody>
               {t.trips.map((tr, i) => (
                 <tr key={i}>
                   <td className="tnum">{formatDateBE(tr.date)}</td>
                   <td>{tr.vehicleLabel}</td>
-                  <td className="tnum" style={{ textAlign: 'right' }}>{tr.roundTripKm}</td>
-                  <td className="tnum" style={{ textAlign: 'right' }}>{tr.costPerKm.toFixed(3)}</td>
+                  <td className="tnum" style={{ textAlign: 'right' }}>{tr.roundTripKm || '—'}</td>
+                  <td style={{ textAlign: 'right' }}><Money value={tr.fuelCost} /></td>
+                  <td style={{ textAlign: 'right' }}><Money value={tr.fixedCost} /></td>
                   <td style={{ textAlign: 'right' }}><Money value={tr.cost} /></td>
                 </tr>
               ))}

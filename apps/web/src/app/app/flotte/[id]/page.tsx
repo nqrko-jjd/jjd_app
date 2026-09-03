@@ -13,6 +13,11 @@ interface Detail {
     type: string | null; fuel: string | null; vin: string | null; km: string | null;
     firstRegistration: string | null; nextInspection: string | null; status: string;
     fuelConsoL100: number | null; fuelPricePerL: number | null; costPerKmExtra: number | null; costPerKm: number | null;
+    parkingMonthly: number | null; otherMonthly: number | null;
+    costBreakdown: {
+      fixed: { insurance: number; financing: number; tax: number; parking: number; other: number; monthly: number; perDay: number };
+      fuelPerKm: number | null; workDaysPerYear: number;
+    } | null;
     circulationTax: number | null; biv: number | null; driver: string | null; equipment: string | null; depot: string | null;
     acquisitionMode: string | null; purchaseDate: string | null; purchasePriceHt: number | null;
     financedAmount: number | null; monthlyPayment: number | null; downPayment: number | null;
@@ -142,33 +147,33 @@ function Info({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 function CostSection({ v, onSaved }: { v: Detail['vehicle']; onSaved: () => void }) {
-  const [f, setF] = useState({
+  const init = () => ({
     fuelConsoL100: v.fuelConsoL100?.toString() ?? '',
     fuelPricePerL: v.fuelPricePerL?.toString() ?? '',
     costPerKmExtra: v.costPerKmExtra?.toString() ?? '',
+    parkingMonthly: v.parkingMonthly?.toString() ?? '',
+    otherMonthly: v.otherMonthly?.toString() ?? '',
   });
+  const [f, setF] = useState(init);
   const [saved, setSaved] = useState(false);
-  useEffect(() => {
-    setF({
-      fuelConsoL100: v.fuelConsoL100?.toString() ?? '',
-      fuelPricePerL: v.fuelPricePerL?.toString() ?? '',
-      costPerKmExtra: v.costPerKmExtra?.toString() ?? '',
-    });
-  }, [v.id, v.fuelConsoL100, v.fuelPricePerL, v.costPerKmExtra]);
+  useEffect(() => { setF(init()); setSaved(false); },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [v.id, v.fuelConsoL100, v.fuelPricePerL, v.costPerKmExtra, v.parkingMonthly, v.otherMonthly]);
 
   const num = (s: string) => (s.trim() === '' ? null : Number(s.replace(',', '.')));
   const conso = num(f.fuelConsoL100) ?? 0;
   const price = num(f.fuelPricePerL) ?? 0;
   const extra = num(f.costPerKmExtra) ?? 0;
-  const preview = conso > 0 && price > 0 ? (conso / 100) * price + extra : extra > 0 ? extra : null;
+  const perKm = conso > 0 && price > 0 ? (conso / 100) * price + extra : extra > 0 ? extra : null;
+  const b = v.costBreakdown;
 
+  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => { setF({ ...f, [k]: e.target.value }); setSaved(false); };
   async function save() {
     await api(`/api/vehicles/${v.id}`, {
       method: 'PATCH',
       body: {
-        fuelConsoL100: num(f.fuelConsoL100),
-        fuelPricePerL: num(f.fuelPricePerL),
-        costPerKmExtra: num(f.costPerKmExtra),
+        fuelConsoL100: num(f.fuelConsoL100), fuelPricePerL: num(f.fuelPricePerL), costPerKmExtra: num(f.costPerKmExtra),
+        parkingMonthly: num(f.parkingMonthly), otherMonthly: num(f.otherMonthly),
       },
     });
     setSaved(true);
@@ -177,28 +182,47 @@ function CostSection({ v, onSaved }: { v: Detail['vehicle']; onSaved: () => void
 
   return (
     <section className="card card-pad" style={{ marginBottom: '1.4rem' }}>
-      <h2 style={{ marginBottom: '0.3rem' }}>Coût de revient au km</h2>
+      <h2 style={{ marginBottom: '0.3rem' }}>Coût de revient — imputé aux chantiers</h2>
       <p className="muted" style={{ fontSize: '0.85rem', marginTop: 0 }}>
-        Utilisé pour imputer un coût transport aux chantiers (aller-retour dépôt ↔ chantier les jours où ce véhicule est planifié).
+        Les jours où ce véhicule est planifié sur un chantier, on impute : un aller-retour dépôt ↔ chantier
+        (carburant + usure) + une quote-part journalière des coûts fixes ci-dessous.
       </p>
+
+      <div className="eyebrow" style={{ marginTop: '0.6rem' }}>Carburant &amp; usure (au km)</div>
       <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
         <label className="field"><span>Consommation (L/100 km)</span>
-          <input className="input" type="number" step={0.1} min={0} value={f.fuelConsoL100}
-            onChange={(e) => { setF({ ...f, fuelConsoL100: e.target.value }); setSaved(false); }} placeholder="ex. 8,5" /></label>
+          <input className="input" type="number" step={0.1} min={0} value={f.fuelConsoL100} onChange={set('fuelConsoL100')} placeholder="ex. 8,5" /></label>
         <label className="field"><span>Prix carburant (€/L)</span>
-          <input className="input" type="number" step={0.01} min={0} value={f.fuelPricePerL}
-            onChange={(e) => { setF({ ...f, fuelPricePerL: e.target.value }); setSaved(false); }} placeholder="ex. 1,75" /></label>
-        <label className="field"><span>Coût/km supplémentaire (€) — optionnel</span>
-          <input className="input" type="number" step={0.01} min={0} value={f.costPerKmExtra}
-            onChange={(e) => { setF({ ...f, costPerKmExtra: e.target.value }); setSaved(false); }} placeholder="entretien, pneus…" /></label>
+          <input className="input" type="number" step={0.01} min={0} value={f.fuelPricePerL} onChange={set('fuelPricePerL')} placeholder="ex. 1,75" /></label>
+        <label className="field"><span>Coût/km supplémentaire (€)</span>
+          <input className="input" type="number" step={0.01} min={0} value={f.costPerKmExtra} onChange={set('costPerKmExtra')} placeholder="pneus, entretien…" /></label>
       </div>
-      <div className="row" style={{ marginTop: '0.9rem', alignItems: 'baseline', gap: '1rem' }}>
+
+      <div className="eyebrow" style={{ marginTop: '0.9rem' }}>Coûts fixes mensuels</div>
+      <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
+        <label className="field"><span>Parking / garage (€/mois)</span>
+          <input className="input" type="number" step={1} min={0} value={f.parkingMonthly} onChange={set('parkingMonthly')} /></label>
+        <label className="field"><span>Autres frais (€/mois)</span>
+          <input className="input" type="number" step={1} min={0} value={f.otherMonthly} onChange={set('otherMonthly')} placeholder="GPS, télépéage…" /></label>
+      </div>
+
+      <div className="row" style={{ marginTop: '0.9rem', gap: '1rem', alignItems: 'baseline' }}>
         <button className="btn primary" onClick={save}>Enregistrer</button>
-        <span className="muted">
-          Coût estimé : <strong>{preview != null ? `${preview.toFixed(3)} €/km` : '—'}</strong>
-          {saved && ' · enregistré'}
-        </span>
+        {saved && <span className="muted">enregistré</span>}
       </div>
+
+      {b && (
+        <div className="info-grid" style={{ marginTop: '1rem' }}>
+          <Info label="Assurance /mois" value={<Money value={b.fixed.insurance} />} />
+          <Info label="Financement /mois" value={<Money value={b.fixed.financing} />} />
+          <Info label="Taxe + BIV /mois" value={<Money value={b.fixed.tax} />} />
+          <Info label="Parking + autres /mois" value={<Money value={b.fixed.parking + b.fixed.other} />} />
+          <Info label="Total fixe /mois" value={<strong><Money value={b.fixed.monthly} /></strong>} />
+          <Info label="Coût fixe / jour de chantier" value={<strong><Money value={b.fixed.perDay} /></strong>} />
+          <Info label="Carburant + usure" value={perKm != null ? `${perKm.toFixed(3)} €/km` : '—'} />
+          <Info label="Base de répartition" value={`${b.workDaysPerYear} j ouvrés / an`} />
+        </div>
+      )}
     </section>
   );
 }

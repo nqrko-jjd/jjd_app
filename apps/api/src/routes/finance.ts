@@ -1,11 +1,14 @@
 import { Router } from 'express';
+import multer from 'multer';
 import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, requirePartner, OFFICE } from '../lib/auth.js';
 import { consolidatedPnl, profitShare } from '../lib/consolidated.js';
 import { autoMatchAll } from '../lib/bank-match.js';
+import { parseBankCsv } from '../lib/bank-csv.js';
 
 export const financeRouter = Router();
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 /** P&L consolidé (bureau + admin). */
 financeRouter.get(
@@ -134,5 +137,45 @@ financeRouter.post(
   requireAuth(...OFFICE),
   asyncHandler(async (_req, res) => {
     res.json(await autoMatchAll());
+  }),
+);
+
+/**
+ * Import d'un relevé CSV (carte Visa/Mastercard, extraits banque…) que le flux
+ * Ponto ne remonte pas. Champ multipart « file », option « bank » (libellé).
+ */
+financeRouter.post(
+  '/bank/import',
+  requireAuth(...OFFICE),
+  upload.single('file'),
+  asyncHandler(async (req, res) => {
+    if (!req.file) throw new HttpError(422, 'Aucun fichier');
+    const bankLabel = String(req.body?.bank ?? '').trim() || 'CSV';
+    const text = req.file.buffer.toString('utf8');
+    const parsed = parseBankCsv(text);
+    if (parsed.rows.length === 0) {
+      throw new HttpError(422,
+        `Aucune ligne exploitable. Colonnes détectées : ${parsed.headers.join(', ') || '—'}. `
+        + `Champs reconnus : ${parsed.mapped.join(', ') || 'aucun'} (il faut au minimum une date et un montant).`);
+    }
+
+    let imported = 0;
+    let duplicates = 0;
+    for (const r of parsed.rows) {
+      const existing = await prisma.bankTransaction.findUnique({ where: { externalId: r.externalId } });
+      if (existing) { duplicates++; continue; }
+      await prisma.bankTransaction.create({
+        data: {
+          externalId: r.externalId, bookingDate: r.bookingDate, valueDate: r.valueDate,
+          bank: bankLabel, amount: r.amount, currency: r.currency,
+          counterpartyName: r.counterpartyName, counterpartyAccount: r.counterpartyAccount,
+          description: r.description, communication: r.communication,
+          side: (r.amount ?? 0) < 0 ? 'out' : 'in', source: 'csv',
+        },
+      });
+      imported++;
+    }
+    const match = await autoMatchAll();
+    res.json({ imported, duplicates, skipped: parsed.skipped, mapped: parsed.mapped, headers: parsed.headers, match });
   }),
 );

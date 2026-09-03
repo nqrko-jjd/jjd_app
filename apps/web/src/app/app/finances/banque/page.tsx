@@ -1,9 +1,9 @@
 'use client';
-import { Fragment, Suspense, useEffect, useState } from 'react';
+import { Fragment, Suspense, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
-import { api } from '@/lib/api';
+import { api, apiUpload } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { PageHead, Money, formatDateBE } from '@/lib/ui';
 
@@ -46,6 +46,7 @@ function BanqueInner() {
   const { data: ponto, reload: reloadPonto } = useApi<PontoStatus>('/api/ponto/status');
   const [openTx, setOpenTx] = useState<string | null>(null);
   const { data: sugg } = useApi<{ items: Suggestion[] }>(openTx ? `/api/finance/bank/${openTx}/suggestions` : null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const p = sp.get('ponto');
@@ -79,6 +80,20 @@ function BanqueInner() {
       reload();
     } catch (e) { setFlash((e as Error).message); }
     finally { setBusy(null); }
+  }
+  async function importCsv(file: File) {
+    setBusy('csv'); setFlash(null);
+    const label = window.prompt('Libellé de ce relevé (ex. « Visa Belfius ») :', file.name.replace(/\.csv$/i, ''));
+    if (label === null) { setBusy(null); return; }
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('bank', label);
+      const r = await apiUpload<{ imported: number; duplicates: number; skipped: number; match: { strong: number; good: number } }>('/api/finance/bank/import', fd);
+      setFlash(`${r.imported} ligne(s) importée(s) · ${r.duplicates} déjà présente(s) · ${r.skipped} ignorée(s) · ${r.match.strong + r.match.good} rapprochée(s).`);
+      reload();
+    } catch (e) { setFlash((e as Error).message); }
+    finally { setBusy(null); if (fileRef.current) fileRef.current.value = ''; }
   }
 
   const admin = user?.role === 'admin';
@@ -119,7 +134,17 @@ function BanqueInner() {
             <button className="btn" disabled={busy === 'match'} onClick={autoMatch}>
               {busy === 'match' ? 'Rapprochement…' : 'Rapprocher automatiquement'}
             </button>
+            <button className="btn" disabled={busy === 'csv'} onClick={() => fileRef.current?.click()}>
+              {busy === 'csv' ? 'Import…' : 'Importer un CSV'}
+            </button>
+            <input
+              ref={fileRef} type="file" accept=".csv,text/csv" hidden
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) importCsv(f); }}
+            />
           </div>
+        </div>
+        <div className="muted" style={{ marginTop: '0.5rem', fontSize: '0.82rem' }}>
+          « Importer un CSV » = pour les paiements absents du flux Ponto (Visa, Mastercard business…). Export depuis ta banque, puis dépose le fichier ici.
         </div>
         {flash && <div className="muted" style={{ marginTop: '0.6rem', fontSize: '0.85rem' }}>{flash}</div>}
       </div>

@@ -5,10 +5,45 @@ import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, requirePartner, OFFICE } from '../lib/auth.js';
 import { consolidatedPnl, profitShare } from '../lib/consolidated.js';
 import { autoMatchAll } from '../lib/bank-match.js';
-import { parseBankCsv } from '../lib/bank-csv.js';
+import { parseBankCsv, type ParsedBankRow } from '../lib/bank-csv.js';
+import { parseCardStatement, pdfToRawText, pdftotextAvailable } from '../lib/bank-pdf.js';
 
 export const financeRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
+/** Insère des lignes de relevé (dédoublonnage par externalId + inter-sources). */
+async function insertBankRows(rows: ParsedBankRow[], bankLabel: string, source: string) {
+  const norm = (s: string | null) => (s ?? '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 12);
+  let imported = 0;
+  let duplicates = 0;
+  for (const r of rows) {
+    if (await prisma.bankTransaction.findUnique({ where: { externalId: r.externalId } })) { duplicates++; continue; }
+    if (r.bookingDate && r.amount != null) {
+      const sameDay = new Date(r.bookingDate); sameDay.setUTCHours(0, 0, 0, 0);
+      const next = new Date(sameDay); next.setUTCDate(next.getUTCDate() + 1);
+      const near = await prisma.bankTransaction.findMany({
+        where: { amount: r.amount, bookingDate: { gte: new Date(sameDay.getTime() - 3 * 86400000), lt: next } },
+        select: { counterpartyName: true },
+      });
+      if (near.some((n) => !r.counterpartyName || !n.counterpartyName
+        || norm(n.counterpartyName) === norm(r.counterpartyName)
+        || norm(n.counterpartyName).includes(norm(r.counterpartyName).slice(0, 6)))) {
+        duplicates++; continue;
+      }
+    }
+    await prisma.bankTransaction.create({
+      data: {
+        externalId: r.externalId, bookingDate: r.bookingDate, valueDate: r.valueDate,
+        bank: bankLabel, amount: r.amount, currency: r.currency,
+        counterpartyName: r.counterpartyName, counterpartyAccount: r.counterpartyAccount,
+        description: r.description, communication: r.communication,
+        side: (r.amount ?? 0) < 0 ? 'out' : 'in', source,
+      },
+    });
+    imported++;
+  }
+  return { imported, duplicates };
+}
 
 /** P&L consolidé (bureau + admin). */
 financeRouter.get(
@@ -141,8 +176,10 @@ financeRouter.post(
 );
 
 /**
- * Import d'un relevé CSV (carte Visa/Mastercard, extraits banque…) que le flux
- * Ponto ne remonte pas. Champ multipart « file », option « bank » (libellé).
+ * Import d'un relevé que le flux Ponto ne remonte pas :
+ *  - CSV (extraits banque, cartes exportables)
+ *  - PDF « État des dépenses » de carte (Belfius / Atos Worldline)
+ * Champ multipart « file », option « bank » (libellé).
  */
 financeRouter.post(
   '/bank/import',
@@ -150,45 +187,29 @@ financeRouter.post(
   upload.single('file'),
   asyncHandler(async (req, res) => {
     if (!req.file) throw new HttpError(422, 'Aucun fichier');
-    const bankLabel = String(req.body?.bank ?? '').trim() || 'CSV';
-    const text = req.file.buffer.toString('utf8');
-    const parsed = parseBankCsv(text);
+    const bankLabel = String(req.body?.bank ?? '').trim();
+    const isPdf = req.file.mimetype === 'application/pdf' || req.file.buffer.subarray(0, 5).toString() === '%PDF-';
+
+    if (isPdf) {
+      if (!(await pdftotextAvailable())) {
+        throw new HttpError(503, 'Lecture PDF indisponible sur ce serveur (poppler-utils non installé).');
+      }
+      const text = await pdfToRawText(req.file.buffer);
+      const st = parseCardStatement(text);
+      if (st.rows.length === 0) throw new HttpError(422, 'Aucune transaction trouvée dans ce PDF (format de relevé non reconnu).');
+      const { imported, duplicates } = await insertBankRows(st.rows, bankLabel || `Carte ${st.cardRef ?? ''}`.trim(), 'pdf');
+      const match = await autoMatchAll();
+      return res.json({ imported, duplicates, kind: 'pdf', cardRef: st.cardRef, period: st.period, total: st.total, match });
+    }
+
+    const parsed = parseBankCsv(req.file.buffer.toString('utf8'));
     if (parsed.rows.length === 0) {
       throw new HttpError(422,
         `Aucune ligne exploitable. Colonnes détectées : ${parsed.headers.join(', ') || '—'}. `
         + `Champs reconnus : ${parsed.mapped.join(', ') || 'aucun'} (il faut au minimum une date et un montant).`);
     }
-
-    const norm = (s: string | null) => (s ?? '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 12);
-    let imported = 0;
-    let duplicates = 0;
-    for (const r of parsed.rows) {
-      const byId = await prisma.bankTransaction.findUnique({ where: { externalId: r.externalId } });
-      if (byId) { duplicates++; continue; }
-      // dédoublonnage inter-sources (une ligne déjà présente via l'import Excel)
-      if (r.bookingDate && r.amount != null) {
-        const sameDay = new Date(r.bookingDate); sameDay.setUTCHours(0, 0, 0, 0);
-        const next = new Date(sameDay); next.setUTCDate(next.getUTCDate() + 1);
-        const near = await prisma.bankTransaction.findMany({
-          where: { amount: r.amount, bookingDate: { gte: new Date(sameDay.getTime() - 3 * 86400000), lt: next } },
-          select: { counterpartyName: true },
-        });
-        if (near.some((n) => !r.counterpartyName || !n.counterpartyName || norm(n.counterpartyName) === norm(r.counterpartyName) || norm(n.counterpartyName).includes(norm(r.counterpartyName).slice(0, 6)))) {
-          duplicates++; continue;
-        }
-      }
-      await prisma.bankTransaction.create({
-        data: {
-          externalId: r.externalId, bookingDate: r.bookingDate, valueDate: r.valueDate,
-          bank: bankLabel, amount: r.amount, currency: r.currency,
-          counterpartyName: r.counterpartyName, counterpartyAccount: r.counterpartyAccount,
-          description: r.description, communication: r.communication,
-          side: (r.amount ?? 0) < 0 ? 'out' : 'in', source: 'csv',
-        },
-      });
-      imported++;
-    }
+    const { imported, duplicates } = await insertBankRows(parsed.rows, bankLabel || 'CSV', 'csv');
     const match = await autoMatchAll();
-    res.json({ imported, duplicates, skipped: parsed.skipped, mapped: parsed.mapped, headers: parsed.headers, match });
+    res.json({ imported, duplicates, kind: 'csv', skipped: parsed.skipped, mapped: parsed.mapped, headers: parsed.headers, match });
   }),
 );

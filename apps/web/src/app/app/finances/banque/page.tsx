@@ -81,16 +81,22 @@ function BanqueInner() {
     } catch (e) { setFlash((e as Error).message); }
     finally { setBusy(null); }
   }
-  async function importCsv(file: File) {
+  async function importFile(file: File) {
     setBusy('csv'); setFlash(null);
-    const label = window.prompt('Libellé de ce relevé (ex. « Visa Belfius ») :', file.name.replace(/\.csv$/i, ''));
+    const label = window.prompt('Libellé de ce relevé (ex. « Visa Belfius ») :', file.name.replace(/\.(csv|pdf)$/i, ''));
     if (label === null) { setBusy(null); return; }
     try {
       const fd = new FormData();
       fd.append('file', file);
       fd.append('bank', label);
-      const r = await apiUpload<{ imported: number; duplicates: number; skipped: number; match: { strong: number; good: number } }>('/api/finance/bank/import', fd);
-      setFlash(`${r.imported} ligne(s) importée(s) · ${r.duplicates} déjà présente(s) · ${r.skipped} ignorée(s) · ${r.match.strong + r.match.good} rapprochée(s).`);
+      const r = await apiUpload<{ imported: number; duplicates: number; skipped?: number; period?: string; match: { strong: number; good: number } }>('/api/finance/bank/import', fd);
+      const parts = [
+        `${r.imported} ligne(s) importée(s)`,
+        `${r.duplicates} déjà présente(s)`,
+        r.skipped ? `${r.skipped} ignorée(s)` : null,
+        `${r.match.strong + r.match.good} rapprochée(s)`,
+      ].filter(Boolean);
+      setFlash((r.period ? `Relevé ${r.period} — ` : '') + parts.join(' · ') + '.');
       reload();
     } catch (e) { setFlash((e as Error).message); }
     finally { setBusy(null); if (fileRef.current) fileRef.current.value = ''; }
@@ -135,16 +141,16 @@ function BanqueInner() {
               {busy === 'match' ? 'Rapprochement…' : 'Rapprocher automatiquement'}
             </button>
             <button className="btn" disabled={busy === 'csv'} onClick={() => fileRef.current?.click()}>
-              {busy === 'csv' ? 'Import…' : 'Importer un CSV'}
+              {busy === 'csv' ? 'Import…' : 'Importer un relevé'}
             </button>
             <input
-              ref={fileRef} type="file" accept=".csv,text/csv" hidden
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) importCsv(f); }}
+              ref={fileRef} type="file" accept=".csv,text/csv,.pdf,application/pdf" hidden
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) importFile(f); }}
             />
           </div>
         </div>
         <div className="muted" style={{ marginTop: '0.5rem', fontSize: '0.82rem' }}>
-          « Importer un CSV » = pour les paiements absents du flux Ponto (Visa, Mastercard business…). Export depuis ta banque, puis dépose le fichier ici.
+          « Importer un relevé » = pour les paiements absents du flux Ponto (cartes Visa/Mastercard). CSV, ou PDF « État des dépenses » de carte. Ré-importer le même fichier ne crée pas de doublons.
         </div>
         {flash && <div className="muted" style={{ marginTop: '0.6rem', fontSize: '0.85rem' }}>{flash}</div>}
       </div>

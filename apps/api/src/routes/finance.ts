@@ -3,6 +3,7 @@ import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, requirePartner, OFFICE } from '../lib/auth.js';
 import { consolidatedPnl, profitShare } from '../lib/consolidated.js';
+import { autoMatchAll } from '../lib/bank-match.js';
 
 export const financeRouter = Router();
 
@@ -56,16 +57,31 @@ financeRouter.get(
     if (q) where.OR = [{ counterpartyName: { contains: q } }, { description: { contains: q } }, { communication: { contains: q } }];
 
     const [items, stats] = await Promise.all([
-      prisma.bankTransaction.findMany({ where, orderBy: { bookingDate: 'desc' }, take: 300 }),
+      prisma.bankTransaction.findMany({
+        where, orderBy: { bookingDate: 'desc' }, take: 300,
+        include: { account: { select: { label: true, iban: true } } },
+      }),
       prisma.bankTransaction.groupBy({
         by: ['bank'],
         _count: true,
         _sum: { amount: true },
       }),
     ]);
+    // libellé de l'écriture rapprochée (pour l'affichage)
+    const ledgerIds = items.map((t) => t.matchedLedgerId).filter((x): x is string => !!x);
+    const ledgers = ledgerIds.length
+      ? await prisma.ledgerEntry.findMany({
+          where: { id: { in: ledgerIds } },
+          select: { id: true, docNumber: true, supplierName: true, direction: true, ttc: true, worksite: { select: { ref: true } } },
+        })
+      : [];
+    const ledgerMap = new Map(ledgers.map((l) => [l.id, l]));
     const total = await prisma.bankTransaction.count();
     const done = await prisma.bankTransaction.count({ where: { matchedLedgerId: { not: null } } });
-    res.json({ items, byBank: stats, matched: done, total });
+    res.json({
+      items: items.map((t) => ({ ...t, matchedLedger: t.matchedLedgerId ? ledgerMap.get(t.matchedLedgerId) ?? null : null })),
+      byBank: stats, matched: done, total,
+    });
   }),
 );
 
@@ -77,17 +93,20 @@ financeRouter.get(
     const tx = await prisma.bankTransaction.findUnique({ where: { id: req.params.id } });
     if (!tx) throw new HttpError(404, 'Transaction introuvable');
     const amount = Math.abs(tx.amount ?? 0);
-    const items = await prisma.ledgerEntry.findMany({
-      where: {
-        ttc: { gte: amount - 1, lte: amount + 1 },
-        ...(tx.bookingDate
-          ? { date: { gte: new Date(tx.bookingDate.getTime() - 20 * 86400000), lte: new Date(tx.bookingDate.getTime() + 20 * 86400000) } }
-          : {}),
-      },
-      take: 12,
-      include: { worksite: { select: { ref: true, title: true } } },
-      orderBy: { date: 'desc' },
+    const window = tx.bookingDate
+      ? { date: { gte: new Date(tx.bookingDate.getTime() - 20 * 86400000), lte: new Date(tx.bookingDate.getTime() + 20 * 86400000) } }
+      : {};
+    const inc = { worksite: { select: { ref: true, title: true } } };
+
+    const byComm = tx.structuredComm && tx.structuredComm.length >= 10
+      ? await prisma.ledgerEntry.findMany({ where: { bankComm: { contains: tx.structuredComm.slice(0, 12) } }, take: 5, include: inc })
+      : [];
+    const byAmount = await prisma.ledgerEntry.findMany({
+      where: { ttc: { gte: amount - 1, lte: amount + 1 }, ...window },
+      take: 12, include: inc, orderBy: { date: 'desc' },
     });
+    const seen = new Set<string>();
+    const items = [...byComm, ...byAmount].filter((l) => (seen.has(l.id) ? false : seen.add(l.id)));
     res.json({ items });
   }),
 );
@@ -99,8 +118,21 @@ financeRouter.post(
     const ledgerId: string | null = req.body.ledgerId ?? null;
     const tx = await prisma.bankTransaction.update({
       where: { id: req.params.id },
-      data: { matchedLedgerId: ledgerId },
+      data: {
+        matchedLedgerId: ledgerId,
+        matchConfidence: ledgerId ? 'manual' : null,
+        matchedAt: ledgerId ? new Date() : null,
+      },
     });
     res.json({ transaction: tx });
+  }),
+);
+
+/** Rapprochement automatique de toutes les transactions non liées. */
+financeRouter.post(
+  '/bank/auto-match',
+  requireAuth(...OFFICE),
+  asyncHandler(async (_req, res) => {
+    res.json(await autoMatchAll());
   }),
 );

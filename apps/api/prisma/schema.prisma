@@ -516,8 +516,28 @@ model LedgerEntry {
 }
 
 /// Import brut des relevés bancaires (Belfius + ING). Rapprochement progressif.
+/// Compte bancaire connecté via Ponto (Ibanity) — ou saisi à la main.
+model BankAccount {
+  id          String            @id @default(cuid())
+  externalId  String?           @unique // id du compte côté Ponto
+  iban        String?
+  label       String?
+  currency    String?           @default("EUR")
+  balance     Float?
+  balanceAt   DateTime?
+  lastSyncAt  DateTime?
+  syncCursor  String? // pagination Ponto (page[after]) pour la synchro incrémentale
+  createdAt   DateTime          @default(now())
+  transactions BankTransaction[]
+
+  @@index([iban])
+}
+
 model BankTransaction {
   id                  String    @id @default(cuid())
+  externalId          String?   @unique // id de la transaction côté Ponto (idempotence)
+  accountId           String?
+  account             BankAccount? @relation(fields: [accountId], references: [id])
   bookingDate         DateTime?
   bank                String?
   counterpartyAccount String?
@@ -527,11 +547,16 @@ model BankTransaction {
   amount              Float?
   currency            String?   @default("EUR")
   communication       String?
+  structuredComm      String? // communication structurée normalisée (+++xxx/xxxx/xxxxx+++)
+  side                String? // "in" (crédit / encaissement) | "out" (débit / paiement)
   matchedLedgerId     String?
-  source              String?
+  matchConfidence     String? // "strong" | "good" | "manual"
+  matchedAt           DateTime?
+  source              String? // "xlsx" | "ponto"
   createdAt           DateTime  @default(now())
 
   @@index([bookingDate])
+  @@index([matchedLedgerId])
 }
 
 // ─────────────────────────────────────────────────────────── Pointage & planning

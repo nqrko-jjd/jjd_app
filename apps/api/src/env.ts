@@ -41,4 +41,24 @@ export const env = {
     saKeyFile: process.env.GOOGLE_SA_KEY_FILE ?? './secrets/google-sa.json',
     calendarId: process.env.GOOGLE_CALENDAR_ID ?? '',
   },
+
+  /**
+   * Ponto Connect (Ibanity) — agrégation bancaire.
+   * Tout est optionnel : sans config, la connexion bancaire est désactivée
+   * (l'app fonctionne, les transactions restent celles importées du fichier).
+   * Les certificats mTLS et la clé de signature vivent dans apps/api/secrets/.
+   */
+  ponto: {
+    clientId: process.env.PONTO_CLIENT_ID ?? '',
+    clientSecret: process.env.PONTO_CLIENT_SECRET ?? '',
+    redirectUri: process.env.PONTO_REDIRECT_URI ?? `${publicApiUrl}/api/ponto/callback`,
+    // mTLS (obligatoire côté Ibanity)
+    certFile: process.env.PONTO_CERT_FILE ?? './secrets/ponto-certificate.pem',
+    keyFile: process.env.PONTO_KEY_FILE ?? './secrets/ponto-private-key.pem',
+    keyPassphrase: process.env.PONTO_KEY_PASSPHRASE ?? '',
+    // signature des requêtes (prod uniquement)
+    signKeyId: process.env.PONTO_SIGNATURE_KEY_ID ?? '',
+    signKeyFile: process.env.PONTO_SIGNATURE_KEY_FILE ?? './secrets/ponto-signature-key.pem',
+    sandbox: (process.env.PONTO_SANDBOX ?? '') === '1',
+  },
 };

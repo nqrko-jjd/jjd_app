@@ -2,8 +2,10 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
+import { api } from '@/lib/api';
 import { PageHead, StatusBadge, EntityBadge, Money, formatDateBE } from '@/lib/ui';
-import { WORKSITE_STATUS_LABEL } from '@jjd/shared';
+import { FormModal, type FieldDef } from '@/components/FormModal';
+import { WORKSITE_STATUS_LABEL, WORKSITE_STATUSES, ENTITIES, ENTITY_LABEL } from '@jjd/shared';
 
 interface WS {
   id: string; ref: string; title: string; status: string; entity: string;
@@ -15,16 +17,48 @@ interface WS {
 export default function ChantiersPage() {
   const [q, setQ] = useState('');
   const [status, setStatus] = useState('');
+  const [creating, setCreating] = useState(false);
   const params = new URLSearchParams();
   if (q) params.set('q', q);
   if (status) params.set('status', status);
-  const { data, loading } = useApi<{ items: WS[] }>(`/api/worksites?${params}`);
+  const { data, loading, reload } = useApi<{ items: WS[] }>(`/api/worksites?${params}`);
+  const { data: refs } = useApi<{
+    clients: { id: string; name: string }[];
+    buildings: { id: string; name: string }[];
+    people: { id: string; name: string }[];
+  }>(creating ? '/api/meta/pickers' : null);
+
+  const fields: FieldDef[] = [
+    { name: 'title', label: 'Intitulé du chantier', required: true, full: true, placeholder: 'Uccle - Dupont - Toiture' },
+    { name: 'entity', label: 'Entité', type: 'select', options: ENTITIES.filter((e) => e !== 'm7').map((e) => ({ value: e, label: ENTITY_LABEL[e] })) },
+    { name: 'status', label: 'Statut', type: 'select', options: WORKSITE_STATUSES.map((s) => ({ value: s, label: WORKSITE_STATUS_LABEL[s] })) },
+    { name: 'clientId', label: 'Client', type: 'select', options: (refs?.clients ?? []).map((c) => ({ value: c.id, label: c.name })) },
+    { name: 'buildingId', label: 'Immeuble / ACP', type: 'select', options: (refs?.buildings ?? []).map((b) => ({ value: b.id, label: b.name })) },
+    { name: 'managerId', label: 'Chef de chantier', type: 'select', options: (refs?.people ?? []).map((p) => ({ value: p.id, label: p.name })) },
+    { name: 'address', label: 'Adresse', full: true },
+    { name: 'postalCode', label: 'Code postal' },
+    { name: 'city', label: 'Ville' },
+    { name: 'startedOn', label: 'Date de début', type: 'date' },
+    { name: 'endedOn', label: 'Date de fin', type: 'date' },
+    { name: 'quotedHt', label: 'Total devisé HT', type: 'number' },
+    { name: 'description', label: 'Description', type: 'textarea', full: true },
+  ];
 
   return (
     <>
+      {creating && (
+        <FormModal
+          title="Nouveau chantier"
+          fields={fields}
+          initial={{ entity: 'jjd', status: 'to_plan' }}
+          onClose={() => setCreating(false)}
+          onSubmit={async (v) => { await api('/api/worksites', { method: 'POST', body: v }); reload(); }}
+        />
+      )}
       <PageHead
         title="Chantiers"
         sub={data ? `${data.items.length} chantiers` : undefined}
+        action={<button className="btn primary" onClick={() => setCreating(true)}>+ Nouveau chantier</button>}
       />
       <div className="row" style={{ marginBottom: '1rem' }}>
         <input className="input" style={{ maxWidth: 280 }} placeholder="Rechercher (réf, titre, ville)…" value={q} onChange={(e) => setQ(e.target.value)} />

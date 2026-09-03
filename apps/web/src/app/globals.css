@@ -376,5 +376,34 @@ p { margin: 0; }
   .sidebar, .alert, .btn { transition: none; }
 }
 
+/* ---------------------------------------------------- modal */
+.modal-scrim {
+  position: fixed; inset: 0; z-index: 60;
+  background: rgba(10, 14, 22, 0.45); backdrop-filter: blur(2px);
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: clamp(1rem, 6vh, 4rem) 1rem;
+  overflow-y: auto;
+}
+.modal {
+  width: 100%; max-width: 560px;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius); box-shadow: var(--shadow-lg);
+  display: flex; flex-direction: column;
+}
+.modal-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 1rem 1.15rem; border-bottom: 1px solid var(--line);
+}
+.modal-head h2 { font-size: 1.05rem; }
+.modal-body {
+  padding: 1.15rem; display: grid; grid-template-columns: 1fr 1fr; gap: 0.9rem;
+}
+.modal-body .field textarea { resize: vertical; }
+.modal-foot {
+  display: flex; justify-content: flex-end; gap: 0.6rem;
+  padding: 1rem 1.15rem; border-top: 1px solid var(--line);
+}
+@media (max-width: 520px) { .modal-body { grid-template-columns: 1fr; } }
+
 :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 3px; }
 ::selection { background: var(--primary-soft); }

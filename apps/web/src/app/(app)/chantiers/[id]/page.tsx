@@ -1,9 +1,11 @@
 'use client';
-import { use } from 'react';
+import { use, useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
+import { api } from '@/lib/api';
 import { PageHead, StatusBadge, EntityBadge, Money, formatDateBE } from '@/lib/ui';
-import type { WorksiteMargin } from '@jjd/shared';
+import { FormModal, toDateInput, type FieldDef } from '@/components/FormModal';
+import { WORKSITE_STATUSES, WORKSITE_STATUS_LABEL, ENTITIES, ENTITY_LABEL, type WorksiteMargin } from '@jjd/shared';
 
 interface Detail {
   worksite: {
@@ -21,18 +23,51 @@ interface Detail {
 
 export default function ChantierDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { data, loading } = useApi<Detail>(`/api/worksites/${id}`);
+  const { data, loading, reload } = useApi<Detail>(`/api/worksites/${id}`);
+  const [editing, setEditing] = useState(false);
 
   if (loading) return <div className="empty">Chargement…</div>;
   if (!data) return <div className="empty">Chantier introuvable.</div>;
   const w = data.worksite;
 
+  const editFields: FieldDef[] = [
+    { name: 'title', label: 'Intitulé', required: true, full: true },
+    { name: 'entity', label: 'Entité', type: 'select', options: ENTITIES.map((e) => ({ value: e, label: ENTITY_LABEL[e] })) },
+    { name: 'status', label: 'Statut', type: 'select', options: WORKSITE_STATUSES.map((s) => ({ value: s, label: WORKSITE_STATUS_LABEL[s] })) },
+    { name: 'address', label: 'Adresse', full: true },
+    { name: 'postalCode', label: 'Code postal' },
+    { name: 'city', label: 'Ville' },
+    { name: 'startedOn', label: 'Début', type: 'date' },
+    { name: 'endedOn', label: 'Fin', type: 'date' },
+    { name: 'quotedHt', label: 'Total devisé HT', type: 'number' },
+    { name: 'description', label: 'Description', type: 'textarea', full: true },
+  ];
+
   return (
     <>
+      {editing && (
+        <FormModal
+          title={`Modifier ${w.ref}`}
+          fields={editFields}
+          initial={{
+            title: w.title, entity: w.entity, status: w.status,
+            address: w.address, city: w.city,
+            startedOn: toDateInput(w.startedOn), endedOn: toDateInput(w.endedOn),
+            quotedHt: w.quotedHt, description: w.description,
+          }}
+          onClose={() => setEditing(false)}
+          onSubmit={async (v) => { await api(`/api/worksites/${id}`, { method: 'PATCH', body: v }); reload(); }}
+        />
+      )}
       <PageHead
         title={w.title}
         sub={`${w.ref} · ${[w.address, w.city].filter(Boolean).join(', ') || 'adresse non renseignée'}`}
-        action={<Link href="/chantiers" className="btn">← Chantiers</Link>}
+        action={
+          <div className="row">
+            <button className="btn" onClick={() => setEditing(true)}>Modifier</button>
+            <Link href="/chantiers" className="btn">← Chantiers</Link>
+          </div>
+        }
       />
 
       <div className="row" style={{ marginBottom: '1.2rem' }}>

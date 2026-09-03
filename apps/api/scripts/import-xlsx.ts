@@ -506,6 +506,18 @@ async function main() {
   await importWorksites(dataProjets);
   console.log('  chantiers  ', stats.worksites ?? 0, '(+', stats.worksites_overhead ?? 0, 'frais généraux)');
 
+  // le compteur R- doit repartir au-dessus du plus grand numéro importé
+  let maxRef = 780;
+  for (const ref of worksiteByRef.keys()) {
+    const m = ref.match(/^R-(\d+)$/i);
+    if (m) maxRef = Math.max(maxRef, Number(m[1]));
+  }
+  await prisma.counter.upsert({
+    where: { name: 'worksite' },
+    create: { name: 'worksite', value: maxRef },
+    update: { value: maxRef },
+  });
+
   const main = byName('Main doeuvre');
   if (main) await importTime(main);
   console.log('  pointages  ', stats.time_entries ?? 0);

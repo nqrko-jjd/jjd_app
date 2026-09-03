@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { PageHead, Money, formatDateBE } from '@/lib/ui';
+import { FormModal } from '@/components/FormModal';
+import { PERSON_FIELDS } from '@/lib/forms';
 import { ROLE_LABEL, WORKER_CONTRACT_LABEL, LEGAL_DOC_LABEL, formatHours } from '@jjd/shared';
 
 interface Detail {
@@ -23,6 +25,7 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
   const { id } = use(params);
   const { data, loading, reload } = useApi<Detail>(`/api/people/${id}`);
   const [created, setCreated] = useState<{ email: string; password: string } | null>(null);
+  const [editing, setEditing] = useState(false);
   if (loading) return <div className="empty">Chargement…</div>;
   if (!data) return <div className="empty">Fiche introuvable.</div>;
   const p = data.person;
@@ -45,10 +48,29 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
 
   return (
     <>
+      {editing && (
+        <FormModal
+          title={`Modifier ${p.firstName}`}
+          fields={PERSON_FIELDS}
+          initial={{
+            firstName: p.firstName, lastName: p.lastName, displayName: p.displayName,
+            role: p.role, contractType: p.contractType, hourlyRate: p.hourlyRate,
+            phone: p.phone, email: p.email, address: p.address,
+            languages: (p.languages ?? []).join(', '), emergencyContact: p.emergencyContact, note: p.note,
+          }}
+          onClose={() => setEditing(false)}
+          onSubmit={async (v) => { await api(`/api/people/${id}`, { method: 'PATCH', body: v }); reload(); }}
+        />
+      )}
       <PageHead
         title={p.displayName || `${p.firstName} ${p.lastName ?? ''}`.trim()}
         sub={`${ROLE_LABEL[p.role as keyof typeof ROLE_LABEL]} · ${WORKER_CONTRACT_LABEL[p.contractType as keyof typeof WORKER_CONTRACT_LABEL]}`}
-        action={<Link href="/equipe" className="btn">← Équipe</Link>}
+        action={
+          <div className="row">
+            <button className="btn" onClick={() => setEditing(true)}>Modifier</button>
+            <Link href="/equipe" className="btn">← Équipe</Link>
+          </div>
+        }
       />
 
       <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', marginBottom: '1.4rem' }}>

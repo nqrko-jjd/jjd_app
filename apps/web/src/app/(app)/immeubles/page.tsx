@@ -2,7 +2,10 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
+import { api } from '@/lib/api';
 import { PageHead } from '@/lib/ui';
+import { FormModal } from '@/components/FormModal';
+import { BUILDING_FIELDS } from '@/lib/forms';
 
 interface Building {
   id: string; name: string; city: string | null;
@@ -12,13 +15,26 @@ interface Building {
 
 export default function ImmeublesPage() {
   const [q, setQ] = useState('');
+  const [creating, setCreating] = useState(false);
   const params = new URLSearchParams();
   if (q) params.set('q', q);
-  const { data, loading } = useApi<{ items: Building[] }>(`/api/buildings?${params}`);
+  const { data, loading, reload } = useApi<{ items: Building[] }>(`/api/buildings?${params}`);
 
   return (
     <>
-      <PageHead title="Immeubles / ACP" sub={data ? `${data.items.length} dossiers` : undefined} />
+      {creating && (
+        <FormModal
+          title="Nouvel immeuble / ACP"
+          fields={BUILDING_FIELDS}
+          onClose={() => setCreating(false)}
+          onSubmit={async (v) => { await api('/api/buildings', { method: 'POST', body: v }); reload(); }}
+        />
+      )}
+      <PageHead
+        title="Immeubles / ACP"
+        sub={data ? `${data.items.length} dossiers` : undefined}
+        action={<button className="btn primary" onClick={() => setCreating(true)}>+ Nouvel immeuble</button>}
+      />
       <div className="row" style={{ marginBottom: '1rem' }}>
         <input className="input" style={{ maxWidth: 300 }} placeholder="Nom, ville…" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>

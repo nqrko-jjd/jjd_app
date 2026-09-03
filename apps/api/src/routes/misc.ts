@@ -43,6 +43,24 @@ metaRouter.get(
   }),
 );
 
+/** Listes courtes pour les <select> des formulaires. */
+metaRouter.get(
+  '/pickers',
+  requireAuth(...STAFF),
+  asyncHandler(async (_req, res) => {
+    const [clients, buildings, people] = await Promise.all([
+      prisma.contact.findMany({ where: { OR: [{ type: 'client' }, { type: 'both' }] }, orderBy: { name: 'asc' }, select: { id: true, name: true } }),
+      prisma.building.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }),
+      prisma.person.findMany({ where: { active: true }, orderBy: { firstName: 'asc' }, select: { id: true, firstName: true, lastName: true, displayName: true } }),
+    ]);
+    res.json({
+      clients,
+      buildings,
+      people: people.map((p) => ({ id: p.id, name: p.displayName || `${p.firstName} ${p.lastName ?? ''}`.trim() })),
+    });
+  }),
+);
+
 metaRouter.get(
   '/syndics',
   requireAuth(...STAFF),

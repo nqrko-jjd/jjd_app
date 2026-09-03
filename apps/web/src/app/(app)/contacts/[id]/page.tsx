@@ -1,8 +1,11 @@
 'use client';
-import { use } from 'react';
+import { use, useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
+import { api } from '@/lib/api';
 import { PageHead, StatusBadge, Money } from '@/lib/ui';
+import { FormModal } from '@/components/FormModal';
+import { CONTACT_FIELDS } from '@/lib/forms';
 import { CLIENT_KIND_LABEL, formatVat } from '@jjd/shared';
 
 interface Detail {
@@ -18,17 +21,35 @@ interface Detail {
 
 export default function ContactDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { data, loading } = useApi<Detail>(`/api/contacts/${id}`);
+  const { data, loading, reload } = useApi<Detail>(`/api/contacts/${id}`);
+  const [editing, setEditing] = useState(false);
   if (loading) return <div className="empty">Chargement…</div>;
   if (!data) return <div className="empty">Contact introuvable.</div>;
   const c = data.contact;
 
   return (
     <>
+      {editing && (
+        <FormModal
+          title={`Modifier ${c.name}`}
+          fields={CONTACT_FIELDS}
+          initial={{
+            name: c.name, type: c.type, kind: c.kind, email: c.email, phone: c.phone,
+            vat: c.vat, address: c.address, postalCode: c.postalCode, city: c.city, note: c.note,
+          }}
+          onClose={() => setEditing(false)}
+          onSubmit={async (v) => { await api(`/api/contacts/${id}`, { method: 'PATCH', body: v }); reload(); }}
+        />
+      )}
       <PageHead
         title={c.name}
         sub={c.kind ? CLIENT_KIND_LABEL[c.kind as keyof typeof CLIENT_KIND_LABEL] : c.type}
-        action={<Link href="/contacts" className="btn">← Contacts</Link>}
+        action={
+          <div className="row">
+            <button className="btn" onClick={() => setEditing(true)}>Modifier</button>
+            <Link href="/contacts" className="btn">← Contacts</Link>
+          </div>
+        }
       />
       <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', marginBottom: '1.4rem' }}>
         <Info label="E-mail" value={c.email ?? '—'} />

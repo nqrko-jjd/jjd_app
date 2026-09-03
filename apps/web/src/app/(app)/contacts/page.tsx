@@ -2,7 +2,10 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
+import { api } from '@/lib/api';
 import { PageHead } from '@/lib/ui';
+import { FormModal } from '@/components/FormModal';
+import { CONTACT_FIELDS } from '@/lib/forms';
 import { CLIENT_KIND_LABEL, formatVat } from '@jjd/shared';
 
 interface Contact {
@@ -15,13 +18,27 @@ interface Contact {
 export default function ContactsPage() {
   const [q, setQ] = useState('');
   const [type, setType] = useState('all');
+  const [creating, setCreating] = useState(false);
   const params = new URLSearchParams({ type });
   if (q) params.set('q', q);
-  const { data, loading } = useApi<{ items: Contact[] }>(`/api/contacts?${params}`);
+  const { data, loading, reload } = useApi<{ items: Contact[] }>(`/api/contacts?${params}`);
 
   return (
     <>
-      <PageHead title="Contacts" sub={data ? `${data.items.length} affichés` : undefined} />
+      {creating && (
+        <FormModal
+          title="Nouveau contact"
+          fields={CONTACT_FIELDS}
+          initial={{ type: 'client' }}
+          onClose={() => setCreating(false)}
+          onSubmit={async (v) => { await api('/api/contacts', { method: 'POST', body: v }); reload(); }}
+        />
+      )}
+      <PageHead
+        title="Contacts"
+        sub={data ? `${data.items.length} affichés` : undefined}
+        action={<button className="btn primary" onClick={() => setCreating(true)}>+ Nouveau contact</button>}
+      />
       <div className="row" style={{ marginBottom: '1rem' }}>
         <input className="input" style={{ maxWidth: 280 }} placeholder="Nom, ville, TVA…" value={q} onChange={(e) => setQ(e.target.value)} />
         <select className="select" style={{ maxWidth: 180 }} value={type} onChange={(e) => setType(e.target.value)}>

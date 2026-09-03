@@ -156,8 +156,9 @@ export default function HomePage() {
               <Eyebrow>Votre espace client</Eyebrow>
               <h2 style={{ margin: '1rem 0 1.4rem' }}>Suivez vos chantiers <span className="s-em">en ligne, à tout moment.</span></h2>
               <p className="s-lead">
-                Chaque client et chaque syndic dispose d’un espace privé pour suivre les interventions sans multiplier
-                les appels et les e-mails — un service que peu d’entrepreneurs proposent.
+                Une rénovation qui dure des mois, un portefeuille d’immeubles à gérer, un SAV après livraison :
+                chaque client dispose d’un espace privé pour suivre l’avancement sans multiplier les appels et les
+                e-mails — un service que peu d’entrepreneurs proposent.
               </p>
               <div style={{ marginTop: '2rem' }}>
                 <Cta href="/portail">Accéder à l’espace client</Cta>

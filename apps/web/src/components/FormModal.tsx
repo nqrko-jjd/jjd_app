@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 export interface FieldDef {
   name: string;
   label: string;
-  type?: 'text' | 'textarea' | 'number' | 'date' | 'select' | 'tags';
+  type?: 'text' | 'textarea' | 'number' | 'date' | 'select' | 'tags' | 'checkbox';
   options?: { value: string; label: string }[];
   required?: boolean;
   placeholder?: string;
@@ -45,6 +45,7 @@ export function FormModal({
         if (f.type === 'number') val = val === '' || val == null ? null : Number(val);
         if (f.type === 'date') val = val ? new Date(val as string).toISOString() : null;
         if (f.type === 'tags') val = typeof val === 'string' ? (val as string).split(',').map((s) => s.trim()).filter(Boolean) : val ?? [];
+        if (f.type === 'checkbox') { clean[f.name] = !!val; continue; }
         if (val === '') val = null;
         clean[f.name] = val;
       }
@@ -67,7 +68,12 @@ export function FormModal({
           {fields.map((f) => (
             <div className="field" key={f.name} style={f.full ? { gridColumn: '1 / -1' } : undefined}>
               <label htmlFor={f.name}>{f.label}{f.required && ' *'}</label>
-              {f.type === 'textarea' ? (
+              {f.type === 'checkbox' ? (
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 400, fontSize: '0.9rem', color: 'var(--ink)' }}>
+                  <input id={f.name} type="checkbox" checked={v[f.name] === undefined ? true : !!v[f.name]} onChange={(e) => setV({ ...v, [f.name]: e.target.checked })} />
+                  {f.placeholder ?? 'Oui'}
+                </label>
+              ) : f.type === 'textarea' ? (
                 <textarea id={f.name} className="input" rows={3} value={(v[f.name] as string) ?? ''} onChange={(e) => setV({ ...v, [f.name]: e.target.value })} placeholder={f.placeholder} />
               ) : f.type === 'select' ? (
                 <select id={f.name} className="select" value={(v[f.name] as string) ?? ''} onChange={(e) => setV({ ...v, [f.name]: e.target.value })}>

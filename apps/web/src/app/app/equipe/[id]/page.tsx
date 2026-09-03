@@ -58,6 +58,7 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
             role: p.role, contractType: p.contractType, hourlyRate: p.hourlyRate,
             phone: p.phone, email: p.email, address: p.address,
             languages: (p.languages ?? []).join(', '), emergencyContact: p.emergencyContact, note: p.note,
+            active: p.active,
           }}
           onClose={() => setEditing(false)}
           onSubmit={async (v) => { await api(`/api/people/${id}`, { method: 'PATCH', body: v }); reload(); }}
@@ -65,9 +66,12 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
       )}
       <PageHead
         title={p.displayName || `${p.firstName} ${p.lastName ?? ''}`.trim()}
-        sub={`${ROLE_LABEL[p.role as keyof typeof ROLE_LABEL]} · ${WORKER_CONTRACT_LABEL[p.contractType as keyof typeof WORKER_CONTRACT_LABEL]}`}
+        sub={`${ROLE_LABEL[p.role as keyof typeof ROLE_LABEL]} · ${WORKER_CONTRACT_LABEL[p.contractType as keyof typeof WORKER_CONTRACT_LABEL]}${p.active ? '' : ' · Ancien (données conservées)'}`}
         action={
           <div className="row">
+            <button className="btn" onClick={async () => { await api(`/api/people/${id}`, { method: 'PATCH', body: { active: !p.active } }); reload(); }}>
+              {p.active ? 'Marquer ancien' : 'Réactiver'}
+            </button>
             <button className="btn" onClick={() => setEditing(true)}>Modifier</button>
             <Link href="/app/equipe" className="btn">← Équipe</Link>
           </div>

@@ -29,6 +29,7 @@ export const PERSON_FIELDS: FieldDef[] = [
   { name: 'address', label: 'Adresse', full: true },
   { name: 'languages', label: 'Langues (séparées par des virgules)', type: 'tags', full: true, placeholder: 'fr, nl, pt' },
   { name: 'emergencyContact', label: "Contact d'urgence", full: true },
+  { name: 'active', label: 'Statut', type: 'checkbox', placeholder: 'Actif (décocher pour un ancien — les données sont conservées)', full: true },
   { name: 'note', label: 'Note', type: 'textarea', full: true },
 ];
 

@@ -18,10 +18,12 @@ interface Person {
 export default function EquipePage() {
   const [q, setQ] = useState('');
   const [role, setRole] = useState('');
+  const [active, setActive] = useState('1');
   const [creating, setCreating] = useState(false);
   const params = new URLSearchParams();
   if (q) params.set('q', q);
   if (role) params.set('role', role);
+  if (active) params.set('active', active);
   const { data, loading, reload } = useApi<{ items: Person[] }>(`/api/people?${params}`);
 
   return (
@@ -30,7 +32,7 @@ export default function EquipePage() {
         <FormModal
           title="Nouvelle personne"
           fields={PERSON_FIELDS}
-          initial={{ role: 'worker', contractType: 'employee' }}
+          initial={{ role: 'worker', contractType: 'employee', active: true }}
           onClose={() => setCreating(false)}
           onSubmit={async (v) => { await api('/api/people', { method: 'POST', body: v }); reload(); }}
         />
@@ -43,9 +45,14 @@ export default function EquipePage() {
       <div className="row" style={{ marginBottom: '1rem' }}>
         <input className="input" style={{ maxWidth: 260 }} placeholder="Nom…" value={q} onChange={(e) => setQ(e.target.value)} />
         <select className="select" style={{ maxWidth: 200 }} value={role} onChange={(e) => setRole(e.target.value)}>
-          <option value="">Tous</option>
+          <option value="">Tous rôles</option>
           <option value="foreman">Chefs de chantier</option>
           <option value="worker">Ouvriers</option>
+        </select>
+        <select className="select" style={{ maxWidth: 160 }} value={active} onChange={(e) => setActive(e.target.value)}>
+          <option value="1">Actifs</option>
+          <option value="0">Anciens</option>
+          <option value="">Tous</option>
         </select>
       </div>
       {loading && <div className="empty">Chargement…</div>}
@@ -61,6 +68,7 @@ export default function EquipePage() {
                   <td>
                     <Avatar src={p.photoThumbUrl} label={p.displayName || `${p.firstName} ${p.lastName ?? ''}`} />
                     <Link href={`/app/equipe/${p.id}`}>{p.displayName || `${p.firstName} ${p.lastName ?? ''}`.trim()}</Link>
+                    {!p.active && <span className="badge plain" style={{ marginLeft: 6 }}>Ancien</span>}
                   </td>
                   <td>{ROLE_LABEL[p.role as keyof typeof ROLE_LABEL] ?? p.role}</td>
                   <td>{WORKER_CONTRACT_LABEL[p.contractType as keyof typeof WORKER_CONTRACT_LABEL] ?? p.contractType}</td>

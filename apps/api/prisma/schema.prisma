@@ -572,7 +572,8 @@ model PlanningEvent {
   vehicle       Vehicle? @relation(fields: [vehicleId], references: [id])
   materialsNote String?
   note          String?
-  googleEventId String?
+  googleEventId String?  @unique // UID de l'événement Google Agenda (synchro / import)
+  source        String? // "agenda-import" | null (créé dans l'app)
   createdById   String?
   createdBy     User?    @relation("EventCreatedBy", fields: [createdById], references: [id])
   createdAt     DateTime @default(now())

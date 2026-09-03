@@ -737,10 +737,11 @@ model Message {
   authorId   String?
   author     User?    @relation(fields: [authorId], references: [id])
   authorName String? // nom figé (l'auteur peut être un ouvrier sans compte)
-  kind       String   @default("text") // text | photo | status
+  kind       String   @default("text") // text | photo | video | file | status
   body       String?
   fileUrl    String?
   thumbUrl   String?
+  source     String? // "whatsapp" | null (créé dans l'app)
   createdAt  DateTime @default(now())
 
   @@index([threadId, createdAt])

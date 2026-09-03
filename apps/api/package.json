@@ -18,7 +18,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --test --test-force-exit --import tsx --experimental-test-isolation=none \"src/**/*.test.ts\" \"test/**/*.test.ts\"",
     "import:vehicles": "tsx scripts/import-vehicles.ts",
-    "import:agenda": "tsx scripts/import-agenda.ts"
+    "import:agenda": "tsx scripts/import-agenda.ts",
+    "import:whatsapp": "tsx scripts/import-whatsapp.ts"
   },
   "dependencies": {
     "@jjd/shared": "*",

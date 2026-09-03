@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView, Image, StyleSheet, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { View, Text, TextInput, Pressable, ScrollView, Image, StyleSheet, KeyboardAvoidingView, Platform, Alert, Linking } from 'react-native';
 import { Stack, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { apiGet, apiSend, apiUploadPhoto, API_URL } from '@/lib/api';
@@ -74,7 +74,17 @@ export default function Fil() {
             {m.kind === 'photo' && m.fileUrl && (
               <Image source={{ uri: `${API_URL}${m.thumbUrl ?? m.fileUrl}` }} style={s.photo} />
             )}
-            {m.body ? (
+            {m.kind === 'video' && m.fileUrl && (
+              <Pressable style={s.mediaLink} onPress={() => Linking.openURL(`${API_URL}${m.fileUrl}`)}>
+                <Text style={{ color: T.primary, fontWeight: '600' }}>▶︎ Voir la vidéo</Text>
+              </Pressable>
+            )}
+            {m.kind === 'file' && m.fileUrl && (
+              <Pressable style={s.mediaLink} onPress={() => Linking.openURL(`${API_URL}${m.fileUrl}`)}>
+                <Text style={{ color: T.primary, fontWeight: '600' }}>📎 {m.body || 'Fichier'}</Text>
+              </Pressable>
+            )}
+            {m.body && m.kind !== 'file' ? (
               <Text style={m.kind === 'status' ? s.status : s.bubble}>{m.body}</Text>
             ) : null}
           </View>
@@ -98,6 +108,7 @@ export default function Fil() {
 
 const s = StyleSheet.create({
   photo: { width: 220, height: 165, borderRadius: 10, backgroundColor: T.surface2 },
+  mediaLink: { backgroundColor: T.surface2, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, alignSelf: 'flex-start' },
   bubble: { backgroundColor: T.surface, borderWidth: 1, borderColor: T.line, borderRadius: 10, padding: 10, alignSelf: 'flex-start', maxWidth: '85%', color: T.ink },
   status: { fontStyle: 'italic', color: T.ink2, fontSize: 13 },
   closed: { padding: 10, alignItems: 'center', backgroundColor: T.okSoft },

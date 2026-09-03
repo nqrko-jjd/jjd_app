@@ -403,16 +403,17 @@ portalRouter.get(
         id: d.id, number: d.number, status: d.status, hasPdf: !!d.originalPdf,
         totalTtc: d.totalTtc, paidAmount: d.paidAmount, issuedOn: d.issuedOn, dueOn: d.dueOn,
       })),
-      photos: messages.filter((m) => m.kind === 'photo' && m.fileUrl).map((m) => ({
-        id: m.id, url: m.fileUrl, thumbUrl: m.thumbUrl, caption: m.body, createdAt: m.createdAt,
+      photos: messages.filter((m) => (m.kind === 'photo' || m.kind === 'video') && m.fileUrl).map((m) => ({
+        id: m.id, url: m.fileUrl, thumbUrl: m.thumbUrl, caption: m.body, createdAt: m.createdAt, video: m.kind === 'video',
       })),
       reports: w.reports.map((r) => ({
         id: r.id, date: r.date, authorName: r.authorName, workDone: r.workDone, notes: r.notes,
         clientName: r.clientName, signedAt: r.signedAt,
         photos: r.photos.map((p) => ({ id: p.id, url: p.url, thumbUrl: p.thumbUrl, caption: p.caption })),
       })),
-      messages: messages.filter((m) => m.kind !== 'photo').map((m) => ({
-        id: m.id, body: m.body, kind: m.kind, authorName: m.authorName, createdAt: m.createdAt,
+      messages: messages.filter((m) => m.kind !== 'photo' && m.kind !== 'video').map((m) => ({
+        id: m.id, body: m.body, kind: m.kind, fileUrl: m.fileUrl, thumbUrl: m.thumbUrl,
+        authorName: m.authorName, createdAt: m.createdAt,
         fromClient: m.authorName === u.label,
       })),
       threadClosed: !!w.thread?.closedAt,

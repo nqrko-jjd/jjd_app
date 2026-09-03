@@ -79,8 +79,12 @@ export function ChantierThread({ worksiteId }: { worksiteId: string }) {
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={m.thumbUrl ?? m.fileUrl} alt="" style={{ maxWidth: 260, borderRadius: 8, border: '1px solid var(--line)' }} />
               </a>
+            ) : m.kind === 'video' && m.fileUrl ? (
+              <video src={m.fileUrl} controls preload="metadata" style={{ maxWidth: 280, borderRadius: 8, border: '1px solid var(--line)' }} />
+            ) : m.kind === 'file' && m.fileUrl ? (
+              <a href={m.fileUrl} target="_blank" rel="noreferrer" className="badge plain" style={{ fontSize: '0.8rem' }}>📎 {m.body || 'Fichier'}</a>
             ) : null}
-            {m.body && (
+            {m.body && m.kind !== 'file' && (
               <div style={m.kind === 'status'
                 ? { fontStyle: 'italic', color: 'var(--ink-2)', fontSize: '0.85rem' }
                 : { background: 'var(--surface-2)', borderRadius: 8, padding: '0.5rem 0.7rem', fontSize: '0.9rem', alignSelf: 'flex-start', maxWidth: '80%' }}>

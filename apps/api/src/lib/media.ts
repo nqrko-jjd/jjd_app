@@ -2,7 +2,7 @@
  * Stockage local des photos de chantier. En dev : dossier apps/api/uploads/,
  * servi en statique. En prod : à basculer sur un volume / S3 (lot 7).
  */
-import { mkdirSync, existsSync } from 'node:fs';
+import { mkdirSync, existsSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
@@ -41,4 +41,16 @@ export async function storeImage(buffer: Buffer): Promise<StoredImage> {
     width: meta.width ?? 0,
     height: meta.height ?? 0,
   };
+}
+
+/** Stocke un fichier tel quel (vidéo, PDF…) sous uploads/<subdir>/. Renvoie l'URL relative. */
+export function storeFile(buffer: Buffer, originalName: string, subdir = 'files'): string {
+  const now = new Date();
+  const rel = path.join(subdir, String(now.getFullYear()), String(now.getMonth() + 1).padStart(2, '0'));
+  const dir = path.join(UPLOADS_DIR, rel);
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  const ext = (originalName.match(/\.[a-z0-9]+$/i)?.[0] ?? '').toLowerCase();
+  const name = `${nanoid(14)}${ext}`;
+  writeFileSync(path.join(dir, name), buffer);
+  return `/uploads/${rel.replace(/\\/g, '/')}/${name}`;
 }

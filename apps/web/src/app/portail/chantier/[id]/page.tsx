@@ -12,8 +12,8 @@ interface Data {
   };
   quotes: { id: string; number: string; title: string | null; status: string; hasPdf: boolean; totalHt: number; totalTtc: number; issuedOn: string | null }[];
   invoices: { id: string; number: string; status: string; hasPdf: boolean; totalTtc: number; paidAmount: number; issuedOn: string | null; dueOn: string | null }[];
-  photos: { id: string; url: string; thumbUrl: string | null; caption: string | null; createdAt: string }[];
-  messages: { id: string; body: string | null; kind: string; authorName: string | null; createdAt: string; fromClient: boolean }[];
+  photos: { id: string; url: string; thumbUrl: string | null; caption: string | null; createdAt: string; video?: boolean }[];
+  messages: { id: string; body: string | null; kind: string; fileUrl?: string | null; thumbUrl?: string | null; authorName: string | null; createdAt: string; fromClient: boolean }[];
   reports: {
     id: string; date: string; authorName: string; workDone: string | null; notes: string | null;
     clientName: string | null; signedAt: string | null;
@@ -171,10 +171,14 @@ export default function PortalWorksite({ params }: { params: Promise<{ id: strin
           data.photos.length === 0 ? <div className="p-card p-card-pad"><p className="p-note">Aucune photo pour le moment.</p></div> : (
             <div className="p-photos">
               {data.photos.map((p) => (
-                <a key={p.id} href={p.url} target="_blank" rel="noreferrer">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={p.thumbUrl ?? p.url} alt={p.caption ?? ''} />
-                </a>
+                p.video ? (
+                  <video key={p.id} src={p.url} controls preload="metadata" style={{ width: '100%', borderRadius: 8 }} />
+                ) : (
+                  <a key={p.id} href={p.url} target="_blank" rel="noreferrer">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={p.thumbUrl ?? p.url} alt={p.caption ?? ''} />
+                  </a>
+                )
               ))}
             </div>
           )
@@ -187,7 +191,9 @@ export default function PortalWorksite({ params }: { params: Promise<{ id: strin
               {data.messages.map((m) => (
                 <div key={m.id} className={`p-msg ${m.fromClient ? 'mine' : ''} ${m.kind === 'status' ? 'status' : ''}`}>
                   {m.kind !== 'status' && <div className="who">{m.authorName} · {new Date(m.createdAt).toLocaleString('fr-BE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</div>}
-                  <div className="bubble">{m.body}</div>
+                  {m.kind === 'file' && m.fileUrl
+                    ? <div className="bubble"><a href={m.fileUrl} target="_blank" rel="noreferrer">📎 {m.body || 'Fichier'}</a></div>
+                    : <div className="bubble">{m.body}</div>}
                 </div>
               ))}
             </div>

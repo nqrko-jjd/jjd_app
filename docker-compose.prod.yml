@@ -1,0 +1,81 @@
+# JJD — pile de production. Tourne sur le MÊME VPS que Bricoloc :
+# le HTTPS et le routage par domaine sont assurés par le nginx de Bricoloc
+# (voir deploy/nginx/jjd-consult.be.conf). Cette pile n'expose donc AUCUN
+# port sur l'hôte ; nginx la joint via le réseau Docker partagé « edge ».
+#
+#   docker network create edge            # une seule fois (partagé avec Bricoloc)
+#   cp deploy/.env.production.example .env.production   # puis compléter
+#   docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+
+name: jjd
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-jjd}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?mot de passe DB requis}
+      POSTGRES_DB: ${POSTGRES_DB:-jjd}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-jjd}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: jjd-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-jjd}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-jjd}
+      JWT_SECRET: ${JWT_SECRET:?secret JWT requis}
+      PORT: 4100
+      PUBLIC_API_URL: ${SITE_URL}
+      WEB_URL: ${SITE_URL}
+      CORS_ORIGINS: ${SITE_URL}
+      UPLOADS_DIR: /repo/apps/api/uploads
+      DEEPL_API_KEY: ${DEEPL_API_KEY:-}
+      GOOGLE_CALENDAR_ID: ${GOOGLE_CALENDAR_ID:-}
+      GOOGLE_SA_KEY_FILE: /repo/apps/api/secrets/google-sa.json
+      # Parc d'outillage Bricoloc — même clé que PARTNER_API_KEY côté Bricoloc
+      BRICOLOC_API_URL: ${BRICOLOC_API_URL:-https://new.bricoloc.be/bricoloc-api}
+      BRICOLOC_API_KEY: ${BRICOLOC_API_KEY:-}
+      # Ponto Connect (connexion bancaire) — laisser vide tant que non configuré
+      PONTO_CLIENT_ID: ${PONTO_CLIENT_ID:-}
+      PONTO_CLIENT_SECRET: ${PONTO_CLIENT_SECRET:-}
+      PONTO_REDIRECT_URI: ${SITE_URL}/api/ponto/callback
+      PONTO_CERT_FILE: /repo/apps/api/secrets/ponto-certificate.pem
+      PONTO_KEY_FILE: /repo/apps/api/secrets/ponto-private-key.pem
+      PONTO_KEY_PASSPHRASE: ${PONTO_KEY_PASSPHRASE:-}
+    volumes:
+      - uploads:/repo/apps/api/uploads
+      - ./apps/api/secrets:/repo/apps/api/secrets:ro
+    networks: [default, edge]
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: jjd-web
+    restart: unless-stopped
+    depends_on:
+      - api
+    networks: [default, edge]
+
+volumes:
+  db-data:
+  uploads:
+
+networks:
+  # Réseau partagé avec la pile Bricoloc (son nginx y est aussi).
+  edge:
+    external: true
+  default:

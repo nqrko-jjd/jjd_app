@@ -1,0 +1,14 @@
+User-agent: *
+Allow: /$
+Allow: /maintenance
+Allow: /renovation
+Allow: /projets
+Allow: /realisations
+Allow: /a-propos
+Allow: /contact
+Disallow: /app
+Disallow: /portail
+Disallow: /login
+Disallow: /jjd-api
+Disallow: /imprimer
+Disallow: /rapport

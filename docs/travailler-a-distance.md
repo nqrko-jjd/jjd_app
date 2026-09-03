@@ -102,9 +102,12 @@ Un seul dépôt, deux personnes (toi + Julien) : `git pull` avant de commencer,
 
 ---
 
-## 5. Plus tard : déploiement sur le VPS Combell (lot 7)
+## 5. Déploiement sur le VPS Combell
 
-Vue d'ensemble, pas à faire maintenant :
+**Procédure complète : [`deploiement.md`](./deploiement.md)** (Docker Compose sur
+le VPS de Bricoloc, derrière son nginx, domaine `jjd-consult.be`).
+
+Vue d'ensemble :
 
 - **VPS Combell** fait tourner, via Docker Compose : PostgreSQL + l'API + le web + un
   reverse-proxy (Caddy) qui gère le HTTPS automatiquement (Let's Encrypt).

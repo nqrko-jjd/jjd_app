@@ -9,7 +9,8 @@ import sharp from 'sharp';
 import { nanoid } from 'nanoid';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-export const UPLOADS_DIR = path.join(root, 'uploads');
+// En prod (Docker), UPLOADS_DIR pointe vers un volume persistant.
+export const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(root, 'uploads');
 
 export interface StoredImage {
   url: string; // chemin relatif portable, ex. /uploads/media/2026/09/abc.webp

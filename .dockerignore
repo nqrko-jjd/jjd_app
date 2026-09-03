@@ -1,0 +1,29 @@
+# Contexte de build Docker — on ne copie que le code.
+**/node_modules
+**/.next
+**/dist
+**/*.tsbuildinfo
+
+# données & secrets (jamais dans l'image)
+data-import
+apps/api/.env
+apps/api/.env.local
+apps/api/secrets
+apps/api/uploads
+apps/api/private
+apps/api/prisma/dev.db*
+.env.production
+.env.production.local
+
+# appli mobile (hors du monorepo de build)
+apps/mobile
+
+# divers
+.git
+.github
+docs
+*.md
+!apps/*/README.md
+LANCER-*.cmd
+.vscode
+.claude

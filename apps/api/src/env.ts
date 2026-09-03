@@ -43,6 +43,16 @@ export const env = {
   },
 
   /**
+   * Parc d'outillage partagé avec Bricoloc (API partenaire).
+   * Bricoloc est la source de vérité du parc physique ; JJD sort/rentre les
+   * outils sur ses chantiers via cette API. Sans clé = fonctionnalité désactivée.
+   */
+  bricoloc: {
+    apiUrl: (process.env.BRICOLOC_API_URL ?? 'https://new.bricoloc.be/bricoloc-api').replace(/\/$/, ''),
+    apiKey: process.env.BRICOLOC_API_KEY ?? '',
+  },
+
+  /**
    * Ponto Connect (Ibanity) — agrégation bancaire.
    * Tout est optionnel : sans config, la connexion bancaire est désactivée
    * (l'app fonctionne, les transactions restent celles importées du fichier).

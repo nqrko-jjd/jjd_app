@@ -5,6 +5,26 @@ import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, STAFF, OFFICE } from '../lib/auth.js';
 import { worksiteMargin } from '../lib/worksite-margin.js';
 import { geocode } from '../lib/geocode.js';
+import { syncChantierSafe } from '../lib/bricoloc.js';
+
+/** Recharge le chantier avec le client et pousse la synchro parc Bricoloc (non bloquant). */
+async function pushBricoloc(id: string) {
+  const ws = await prisma.worksite.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      ref: true,
+      title: true,
+      address: true,
+      postalCode: true,
+      city: true,
+      status: true,
+      archived: true,
+      client: { select: { name: true } },
+    },
+  });
+  if (ws) syncChantierSafe(ws);
+}
 
 export const worksitesRouter = Router();
 
@@ -177,6 +197,7 @@ worksitesRouter.post(
     await prisma.auditLog.create({
       data: { actorId: req.user!.id, action: 'create', entity: 'worksite', entityId: ws.id },
     });
+    void pushBricoloc(ws.id);
     res.status(201).json({ worksite: ws });
   }),
 );
@@ -239,6 +260,7 @@ worksitesRouter.patch(
     await prisma.auditLog.create({
       data: { actorId: req.user!.id, action: 'update', entity: 'worksite', entityId: ws.id, meta: data },
     });
+    void pushBricoloc(ws.id);
     res.json({ worksite: ws });
   }),
 );

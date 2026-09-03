@@ -27,6 +27,7 @@ const NAV: Group[] = [
       { href: '/app/contacts', label: 'Contacts', ic: '☰' },
       { href: '/app/equipe', label: 'Équipe', ic: '☺' },
       { href: '/app/flotte', label: 'Flotte', ic: '⛟' },
+      { href: '/app/materiel', label: 'Matériel', ic: '⚒' },
     ],
   },
   {

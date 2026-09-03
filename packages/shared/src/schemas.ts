@@ -198,6 +198,15 @@ export const worksiteReportInput = z.object({
   notes: z.string().trim().nullish(),
 });
 
+export const worksiteTaskInput = z.object({
+  title: nonEmpty,
+  description: z.string().trim().nullish(),
+  status: z.enum(['todo', 'doing', 'done']).default('todo'),
+  assigneeId: z.string().nullish(),
+  dueOn: z.coerce.date().nullish(),
+});
+export type WorksiteTaskInput = z.infer<typeof worksiteTaskInput>;
+
 export const reportSignInput = z.object({
   clientName: z.string().trim().min(2),
   signature: z.string().min(20), // data URL PNG

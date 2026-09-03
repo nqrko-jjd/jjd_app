@@ -195,6 +195,37 @@ worksitesRouter.patch(
   }),
 );
 
+/** Géocode l'adresse du chantier (OpenStreetMap / Nominatim) -> fixe le point GPS. */
+worksitesRouter.post(
+  '/:id/geocode',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const ws = await prisma.worksite.findUnique({
+      where: { id: req.params.id },
+      include: { building: { select: { address: true, postalCode: true, city: true } } },
+    });
+    if (!ws) throw new HttpError(404, 'Chantier introuvable');
+    const q = [
+      req.body?.address || ws.address || ws.building?.address,
+      [ws.postalCode || ws.building?.postalCode, ws.city || ws.building?.city].filter(Boolean).join(' '),
+      'Belgique',
+    ].filter(Boolean).join(', ');
+    if (!q || q === 'Belgique') throw new HttpError(422, 'Aucune adresse à géocoder');
+
+    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`;
+    const r = await fetch(url, { headers: { 'User-Agent': 'JJD-App/1.0 (info@jjd-consult.be)' } });
+    const hits = (await r.json()) as { lat: string; lon: string; display_name: string }[];
+    const hit = hits[0];
+    if (!hit) throw new HttpError(404, `Adresse introuvable : ${q}`);
+
+    const updated = await prisma.worksite.update({
+      where: { id: ws.id },
+      data: { lat: Number(hit.lat), lng: Number(hit.lon), geoSetAt: new Date() },
+    });
+    res.json({ lat: updated.lat, lng: updated.lng, matched: hit.display_name, query: q });
+  }),
+);
+
 worksitesRouter.patch(
   '/:id',
   requireAuth(...OFFICE),

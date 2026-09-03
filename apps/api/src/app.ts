@@ -21,6 +21,7 @@ import { documentsRouter, priceItemsRouter } from './routes/documents.js';
 import { settingsRouter } from './routes/settings.js';
 import { publicRouter } from './routes/public.js';
 import { worksiteReportsRouter, reportsRouter } from './routes/reports.js';
+import { worksiteTasksRouter, tasksRouter } from './routes/tasks.js';
 
 export function createApp() {
   const app = express();
@@ -38,6 +39,8 @@ export function createApp() {
   app.use('/api/worksites/:worksiteId/thread', threadRouter);
   app.use('/api/worksites/:worksiteId/reports', worksiteReportsRouter);
   app.use('/api/reports', reportsRouter);
+  app.use('/api/worksites/:worksiteId/tasks', worksiteTasksRouter);
+  app.use('/api/tasks', tasksRouter);
   app.use('/api/dashboard', dashboardRouter);
   app.use('/api/worksites', worksitesRouter);
   app.use('/api/contacts', contactsRouter);

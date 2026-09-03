@@ -6,6 +6,7 @@ import { api } from '@/lib/api';
 import { PageHead, StatusBadge, PriorityBadge, EntityBadge, Money, formatDateBE } from '@/lib/ui';
 import { FormModal, toDateInput, type FieldDef } from '@/components/FormModal';
 import { ChantierThread } from '@/components/ChantierThread';
+import { WorksiteTasks } from '@/components/WorksiteTasks';
 import { WORKSITE_STATUSES, WORKSITE_STATUS_LABEL, WORKSITE_PRIORITIES, WORKSITE_PRIORITY_LABEL, ENTITIES, ENTITY_LABEL, type WorksiteMargin } from '@jjd/shared';
 
 interface Detail {
@@ -117,25 +118,11 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
         </section>
       )}
 
-      <div className="section-title">Localisation <span className="hint">contrôle de pointage</span></div>
-      <div className="card card-pad" style={{ marginBottom: '1.5rem' }}>
-        {w.lat != null && w.lng != null ? (
-          <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.6rem' }}>
-            <span>
-              Point GPS défini {w.geoSetAt ? `le ${formatDateBE(w.geoSetAt)}` : ''} —{' '}
-              <a href={`https://www.google.com/maps?q=${w.lat},${w.lng}`} target="_blank" rel="noreferrer">{w.lat.toFixed(5)}, {w.lng.toFixed(5)}</a>
-            </span>
-            <button className="btn" style={{ padding: '0.2rem 0.6rem', fontSize: '0.78rem' }}
-              onClick={async () => { if (confirm('Réinitialiser ? Le prochain pointage sur place fixera un nouveau point.')) { await api(`/api/worksites/${id}/geo`, { method: 'PATCH', body: { clear: true } }); reload(); } }}>
-              Réinitialiser
-            </button>
-          </div>
-        ) : (
-          <p className="muted" style={{ margin: 0, fontSize: '0.88rem' }}>
-            Aucun point GPS. Il sera fixé automatiquement au premier pointage d’un ouvrier sur place.
-          </p>
-        )}
-      </div>
+      <div className="section-title">Tâches</div>
+      <div style={{ marginBottom: '1.5rem' }}><WorksiteTasks worksiteId={w.id} /></div>
+
+      <div className="section-title">Localisation <span className="hint">carte &amp; contrôle de pointage</span></div>
+      <LocationSection w={w} onChange={reload} />
 
       <div className="section-title">Rapports d’intervention <span className="hint">{w.reports.length}</span></div>
       {w.reports.length === 0 ? (
@@ -206,6 +193,65 @@ const DOC_STATUS: Record<string, string> = {
 const DOC_TONE: Record<string, string> = {
   paid: 'ok', accepted: 'ok', sent: 'primary', overdue: 'crit', declined: 'crit', partial: 'warn',
 };
+
+function LocationSection({ w, onChange }: { w: Detail['worksite']; onChange: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const hasAddr = !!(w.address || w.city);
+
+  async function geocode() {
+    setBusy(true); setMsg(null);
+    try {
+      const r = await api<{ matched: string }>(`/api/worksites/${w.id}/geocode`, { method: 'POST' });
+      setMsg(`Adresse trouvée : ${r.matched}`);
+      onChange();
+    } catch (e) {
+      setMsg((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const bbox = w.lat != null && w.lng != null
+    ? `${w.lng - 0.004},${w.lat - 0.002},${w.lng + 0.004},${w.lat + 0.002}`
+    : null;
+
+  return (
+    <div className="card card-pad" style={{ marginBottom: '1.5rem' }}>
+      {bbox && (
+        <iframe
+          title="Carte du chantier"
+          style={{ width: '100%', height: 260, border: '1px solid var(--line)', borderRadius: 10, marginBottom: '0.8rem' }}
+          src={`https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${w.lat},${w.lng}`}
+        />
+      )}
+      <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.6rem' }}>
+        <div>
+          {w.lat != null && w.lng != null ? (
+            <>
+              <div>Point GPS {w.geoSetAt ? `— ${formatDateBE(w.geoSetAt)}` : ''} · <a href={`https://www.google.com/maps?q=${w.lat},${w.lng}`} target="_blank" rel="noreferrer">{w.lat.toFixed(5)}, {w.lng.toFixed(5)}</a></div>
+              <div className="muted" style={{ fontSize: '0.82rem' }}>Sert de référence au contrôle de pointage.</div>
+            </>
+          ) : (
+            <div className="muted" style={{ fontSize: '0.88rem' }}>Aucun point GPS. Géolocalise l’adresse, ou il sera fixé au premier pointage sur place.</div>
+          )}
+          {msg && <div style={{ fontSize: '0.82rem', marginTop: '0.4rem', color: 'var(--ink-2)' }}>{msg}</div>}
+        </div>
+        <div className="row" style={{ gap: '0.4rem' }}>
+          <button className="btn" disabled={busy || !hasAddr} onClick={geocode} style={{ padding: '0.25rem 0.7rem', fontSize: '0.8rem' }}>
+            {busy ? '…' : 'Géolocaliser l’adresse'}
+          </button>
+          {w.lat != null && (
+            <button className="btn ghost" style={{ padding: '0.25rem 0.6rem', fontSize: '0.8rem' }}
+              onClick={async () => { if (confirm('Réinitialiser le point GPS ?')) { await api(`/api/worksites/${w.id}/geo`, { method: 'PATCH', body: { clear: true } }); onChange(); } }}>
+              Réinitialiser
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function Info({ label, value }: { label: string; value: React.ReactNode }) {
   return (

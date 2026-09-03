@@ -1,9 +1,11 @@
 import { useCallback, useState } from 'react';
 import { ScrollView, Text, View, Pressable, Linking } from 'react-native';
 import { Stack, useLocalSearchParams, useFocusEffect, useRouter } from 'expo-router';
-import { apiGet } from '@/lib/api';
+import { apiGet, apiSend } from '@/lib/api';
 import { Card, Label, Loading, Row, Muted, dateBE } from '@/lib/ui';
 import { T } from '@/lib/theme';
+
+interface Task { id: string; title: string; status: string; assignee: { displayName: string | null; firstName: string } | null }
 
 const ROLE: Record<string, string> = {
   concierge: 'Concierge', president: 'Président', council: 'Conseil', syndic_manager: 'Gestionnaire syndic',
@@ -36,9 +38,22 @@ export default function FicheDuJour() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const [d, setD] = useState<Field | null>(null);
-  useFocusEffect(useCallback(() => { apiGet<Field>(`/api/worksites/${id}/field`).then(setD).catch(() => {}); }, [id]));
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const load = useCallback(() => {
+    apiGet<Field>(`/api/worksites/${id}/field`).then(setD).catch(() => {});
+    apiGet<{ items: Task[] }>(`/api/worksites/${id}/tasks`).then((r) => setTasks(r.items)).catch(() => {});
+  }, [id]);
+  useFocusEffect(useCallback(() => { load(); }, [load]));
   if (!d) return <Loading />;
   const w = d.worksite;
+
+  const toggleTask = async (t: Task) => {
+    const next = t.status === 'done' ? 'todo' : 'done';
+    setTasks((ts) => ts.map((x) => (x.id === t.id ? { ...x, status: next } : x)));
+    await apiSend(`/api/tasks/${t.id}`, 'PATCH', { status: next });
+  };
+  const openTasks = tasks.filter((t) => t.status !== 'done');
+  const doneTasks = tasks.filter((t) => t.status === 'done');
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ padding: 16, gap: 12 }}>
@@ -62,6 +77,22 @@ export default function FicheDuJour() {
         {d.today?.materials ? <Text style={{ color: T.ink2, marginTop: 6 }}>🧰 {d.today.materials}</Text> : null}
         {d.today?.vehicle ? <Text style={{ color: T.ink2, marginTop: 2 }}>🚐 {d.today.vehicle}</Text> : null}
       </Card>
+
+      {tasks.length > 0 ? (
+        <Card>
+          <Label>Tâches ({openTasks.length} à faire)</Label>
+          {[...openTasks, ...doneTasks].map((t) => (
+            <Pressable key={t.id} onPress={() => toggleTask(t)} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 7 }}>
+              <View style={{ width: 20, height: 20, borderRadius: 5, borderWidth: 2, borderColor: t.status === 'done' ? T.ok : T.line, backgroundColor: t.status === 'done' ? T.ok : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
+                {t.status === 'done' && <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>✓</Text>}
+              </View>
+              <Text style={{ flex: 1, color: t.status === 'done' ? T.ink3 : T.ink, textDecorationLine: t.status === 'done' ? 'line-through' : 'none' }}>
+                {t.title}{t.assignee ? `  ·  ${t.assignee.displayName || t.assignee.firstName}` : ''}
+              </Text>
+            </Pressable>
+          ))}
+        </Card>
+      ) : null}
 
       {d.today && d.today.people.length > 0 ? (
         <Card>

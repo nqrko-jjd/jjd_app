@@ -48,7 +48,9 @@ portalRouter.post(
         'Votre accès à l’espace client JJD Consult',
         `Bonjour,\n\nVoici votre lien de connexion (valable 30 minutes) :\n${link}\n\nJJD Consult`,
       );
-      if (process.env.NODE_ENV !== 'production') devToken = token;
+      // raccourci de connexion : en dev, ou pour les comptes de démonstration
+      // (jamais pour un vrai client — eux reçoivent le lien par e-mail).
+      if (process.env.NODE_ENV !== 'production' || email.endsWith('@portail.demo')) devToken = token;
     }
     res.json({ ok: true, devToken });
   }),

@@ -133,28 +133,36 @@ docker compose --env-file .env.production up -d
 
 ## 6. Charger les données réelles
 
-La base est vide (schéma seulement). Deux options :
+Le déploiement crée déjà **les comptes** (`db:deploy` lance `seed`) → on peut se
+connecter à `/login` avec `david@jjd-consult.be` / `jjd` dès la mise en ligne.
+Il reste à importer les **données** (chantiers, factures, pointages…).
 
-### Option A — ré-importer depuis les fichiers source *(recommandé)*
+### En une commande (depuis le PC)
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\deploy-data.ps1
+```
+
+Le script envoie ~8 Mo de fichiers sources (Excel + CSV TrustUp + agenda) sur le
+VPS et lance l'import dans le conteneur. Prérequis : `ssh`/`scp` fonctionnels vers
+le VPS (clé ou mot de passe). Paramètres par défaut : `bricoloc@136.144.209.157`,
+`/opt/jjd` — surcharger avec `-VpsUser` / `-VpsHost` / `-VpsPath` si besoin.
+
+Les **PDF TrustUp** (pour « voir le PDF d'origine » dans le portail) et les
+**médias WhatsApp** (~900 Mo) sont facultatifs et se copient à part — voir la
+fin du script.
+
+### Manuellement (sur le VPS)
 
 ```bash
-# copier le dossier data-import/ sur le VPS (233 Mo : Excel, CSV/PDF TrustUp)
-scp -r "C:/Users/david/Documents/JJD/data-import"  <user>@<vps>:/opt/jjd/
-
 cd /opt/jjd
 docker compose -f docker-compose.prod.yml --env-file .env.production run --rm \
   -v /opt/jjd/data-import:/repo/data-import:ro \
   api sh -c "cd /repo/apps/api && tsx scripts/import-xlsx.ts && tsx scripts/import-vehicles.ts && tsx scripts/import-trustup.ts && tsx scripts/import-agenda.ts"
 ```
 
-(WhatsApp : ajouter `&& tsx scripts/import-whatsapp.ts` si les exports sont dans `data-import/whatsapp/`.)
-
-### Option B — recopier la base SQLite de dev
-
-Non applicable : la prod est PostgreSQL. Rester sur l'option A.
-
-Ensuite, se connecter à `https://jjd-consult.be/login` (`david@jjd-consult.be` /
-`jjd` — **à changer**), puis renseigner *Paramètres → Société* (TVA, IBAN, adresse).
+Ensuite, renseigner *Paramètres → Société* (TVA, IBAN, adresse) et **changer le
+mot de passe** des comptes.
 
 ---
 

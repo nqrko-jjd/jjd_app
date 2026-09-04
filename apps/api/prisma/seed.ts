@@ -1,6 +1,9 @@
 import { PrismaClient } from '@prisma/client';
-import { hashPassword } from '../src/lib/auth.js';
+import bcrypt from 'bcryptjs';
 import { CATEGORY_SEED } from './categories.js';
+
+// Autonome (pas d'import de src/) pour tourner aussi dans l'image Docker de prod.
+const hashPassword = (pw: string) => bcrypt.hash(pw, 10);
 
 const prisma = new PrismaClient();
 

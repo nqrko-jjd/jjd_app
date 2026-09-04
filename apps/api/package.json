@@ -8,7 +8,7 @@
     "db:provider": "node scripts/set-db-provider.mjs",
     "prisma:generate": "npm run db:provider && prisma generate",
     "db:push": "npm run db:provider && prisma db push --skip-generate --accept-data-loss",
-    "db:deploy": "npm run db:push",
+    "db:deploy": "npm run db:push && npm run seed",
     "db:reset": "node scripts/drop-db.mjs && npm run db:push && npm run seed",
     "seed": "tsx prisma/seed.ts",
     "import": "tsx scripts/import-xlsx.ts",

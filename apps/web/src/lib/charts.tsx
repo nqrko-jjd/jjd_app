@@ -6,9 +6,9 @@ import { formatEur } from '@jjd/shared';
 
 const C = {
   ink: 'var(--ink)', ink2: 'var(--ink-2)', ink3: 'var(--ink-3)',
-  line: 'var(--line)', primary: 'var(--primary)', ok: 'var(--ok)', crit: 'var(--crit)',
+  line: 'var(--line)', primary: 'var(--gold)', ok: 'var(--ok)', crit: 'var(--crit)',
 };
-const DONUT_PALETTE = ['#d9581f', '#2f6bd0', '#1f9d63', '#c9861d', '#7c5cbf', '#3aa6a6', '#cf4436', '#8a93a6'];
+const DONUT_PALETTE = ['#1d4235', '#c1922a', '#2f6bd0', '#4a9d78', '#a8611f', '#7c5cbf', '#c6463a', '#8a938c'];
 
 const eurShort = (n: number) => {
   const a = Math.abs(n);

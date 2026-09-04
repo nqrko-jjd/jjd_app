@@ -6,16 +6,14 @@ Tant qu'un fichier manque, un emplacement vert soigné s'affiche à la place.
 Format conseillé : JPEG, largeur ~1600 px, < 400 Ko (compresser).
 Cadrage : les images sont recadrées en « cover », prévoir de la marge.
 
-## Accueil
-| Fichier | Où | Cadrage |
-|---|---|---|
-| `hero.jpg` | fond du grand titre | paysage large, sombre de préférence |
-| `equipe.jpg` | section « Trois expertises » | 5:4 (léger portrait) |
-| `service-maintenance.jpg` | carte Maintenance | 16:10 paysage |
-| `service-renovation.jpg` | carte Rénovation | 16:10 paysage |
-| `service-projets.jpg` | carte Projets | 16:10 paysage |
-| `reference-rhode.jpg` | section Rhode-Saint-Genèse | 4:5 portrait |
-| `band-chantier.jpg` | bande pleine largeur | paysage très large |
+## Accueil (déjà en place — images de la maquette)
+| Fichier | Où |
+|---|---|
+| `jjd-villa-exterior.webp` | fond du hero |
+| `jjd-interior-hall.webp` | section « Rhode-Saint-Genèse » |
+| `jjd-project-team.webp` | section « JJD Projets — décider avant de construire » |
+
+Pour les remplacer par de vraies photos : garder les mêmes noms.
 
 ## Pages services
 | Fichier | Page |

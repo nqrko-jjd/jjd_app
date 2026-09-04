@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { PageHero, SectionHead, CtaBand, Eyebrow, Cta } from '../_components/blocks';
+import { Figure } from '../_components/Figure';
 
 export const metadata: Metadata = {
   title: 'Rénovation complète | JJD Consult',
@@ -21,22 +22,24 @@ export default function RenovationPage() {
         eyebrow="JJD Rénovation"
         title={<>Transformer un bâtiment. <span className="s-em">Préserver sa cohérence.</span></>}
         lead="Une rénovation complète coordonnée de A à Z, avec un seul interlocuteur pour les décisions, les métiers et les finitions."
+        image="/site/hero-renovation.jpg"
       />
 
       <section className="s-section">
         <div className="s-wrap">
-          <div className="s-split">
+          <div className="s-split middle">
             <div>
               <Eyebrow>Rénovation globale</Eyebrow>
               <h2 style={{ margin: '1rem 0 1.3rem' }}>Bien plus qu’une succession <span className="s-em">de corps de métier.</span></h2>
-              <p className="s-lead" style={{ maxWidth: '46ch' }}>
+              <p className="s-lead" style={{ maxWidth: '46ch', marginBottom: '1.1rem' }}>
                 Nous pensons le chantier dans son ensemble : volumes, techniques, enveloppe, finitions et extérieurs.
               </p>
+              <p style={{ color: 'var(--s-ink-soft)' }}>
+                Cette vision permet d’éviter les incohérences entre les postes, de mieux anticiper les contraintes
+                et de garder une direction claire tout au long du projet.
+              </p>
             </div>
-            <p style={{ color: 'var(--s-ink-soft)' }}>
-              Cette vision permet d’éviter les incohérences entre les postes, de mieux anticiper les contraintes
-              et de garder une direction claire tout au long du projet.
-            </p>
+            <Figure src="/site/renovation-chantier.jpg" alt="Chantier de rénovation" ratio="5 / 4" label="Rénovation" />
           </div>
         </div>
       </section>

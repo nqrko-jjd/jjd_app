@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
+import { HeroImage } from './Figure';
 
 export function Eyebrow({ children }: { children: ReactNode }) {
   return <span className="s-eyebrow">{children}</span>;
@@ -37,9 +38,12 @@ export function NumberCard({
   );
 }
 
-export function PageHero({ eyebrow, title, lead }: { eyebrow: string; title: ReactNode; lead: string }) {
+export function PageHero({
+  eyebrow, title, lead, image,
+}: { eyebrow: string; title: ReactNode; lead: string; image?: string }) {
   return (
     <section className="s-hero">
+      {image && <HeroImage src={image} />}
       <div className="s-hero-inner" style={{ paddingBottom: 'clamp(3rem, 7vw, 5rem)' }}>
         <Eyebrow>{eyebrow}</Eyebrow>
         <h1 style={{ margin: '1.4rem 0 1.3rem', maxWidth: '18ch' }}>{title}</h1>

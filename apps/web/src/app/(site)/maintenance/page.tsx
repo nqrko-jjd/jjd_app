@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { PageHero, SectionHead, Steps, CtaBand, Eyebrow, Cta } from '../_components/blocks';
+import { Figure } from '../_components/Figure';
 
 export const metadata: Metadata = {
   title: 'Maintenance de bâtiments | JJD Consult',
@@ -21,22 +22,24 @@ export default function MaintenancePage() {
         eyebrow="JJD Maintenance"
         title={<>Des bâtiments suivis. <span className="s-em">Des demandes maîtrisées.</span></>}
         lead="Interventions, réparations et suivi technique avec un partenaire réactif qui connaît la réalité des immeubles."
+        image="/site/hero-maintenance.jpg"
       />
 
       <section className="s-section">
         <div className="s-wrap">
-          <div className="s-split">
+          <div className="s-split middle">
             <div>
               <Eyebrow>Maintenance multitechnique</Eyebrow>
               <h2 style={{ margin: '1rem 0 1.3rem' }}>Un interlocuteur de terrain <span className="s-em">pour vos bâtiments.</span></h2>
-              <p className="s-lead" style={{ maxWidth: '46ch' }}>
+              <p className="s-lead" style={{ maxWidth: '46ch', marginBottom: '1.1rem' }}>
                 Centralisez davantage d’interventions sans multiplier les entreprises et les relances.
               </p>
+              <p style={{ color: 'var(--s-ink-soft)' }}>
+                JJD Consult accompagne les gestionnaires et propriétaires pour les demandes ponctuelles comme pour
+                l’entretien régulier. Chaque intervention est qualifiée, organisée et suivie jusqu’à sa clôture.
+              </p>
             </div>
-            <p style={{ color: 'var(--s-ink-soft)' }}>
-              JJD Consult accompagne les gestionnaires et propriétaires pour les demandes ponctuelles comme pour
-              l’entretien régulier. Chaque intervention est qualifiée, organisée et suivie jusqu’à sa clôture.
-            </p>
+            <Figure src="/site/maintenance-intervention.jpg" alt="Intervention de maintenance" ratio="5 / 4" label="Intervention" />
           </div>
         </div>
       </section>

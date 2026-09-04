@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { PageHero, SectionHead, CtaBand, Eyebrow, NumberCard } from '../_components/blocks';
+import { Figure } from '../_components/Figure';
 
 export const metadata: Metadata = {
   title: 'Qui sommes-nous ? | JJD Consult',
@@ -14,30 +15,32 @@ export default function AProposPage() {
         eyebrow="Qui sommes-nous ?"
         title={<>Une entreprise familiale. <span className="s-em">Une culture du terrain.</span></>}
         lead="JJD Consult accompagne particuliers et professionnels avec une organisation claire, une relation directe et plus de 20 ans d’expérience du bâtiment."
+        image="/site/hero-a-propos.jpg"
       />
 
       <section className="s-section">
         <div className="s-wrap">
-          <div className="s-split">
+          <div className="s-split middle">
             <div>
               <Eyebrow>Notre histoire</Eyebrow>
               <h2 style={{ margin: '1rem 0 1.3rem' }}>Construire une relation <span className="s-em">aussi solide que les travaux.</span></h2>
-              <p className="s-lead" style={{ maxWidth: '46ch' }}>
+              <p className="s-lead" style={{ maxWidth: '46ch', marginBottom: '1.1rem' }}>
                 JJD Consult est née d’une conviction simple : les clients ont besoin d’un partenaire qui comprend
                 le terrain et qui reste présent jusqu’à la fin.
               </p>
+              <div style={{ display: 'grid', gap: '1rem', color: 'var(--s-ink-soft)' }}>
+                <p>
+                  La direction technique s’appuie sur plus de 20 ans d’expérience dans le bâtiment, les installations
+                  techniques, la rénovation et le suivi de projets. Cette expérience nous permet d’identifier les
+                  contraintes en amont et de proposer des solutions concrètes.
+                </p>
+                <p>
+                  Notre structure familiale conserve une communication directe. Vous savez qui contacter, ce qui a été
+                  décidé et comment le projet avance.
+                </p>
+              </div>
             </div>
-            <div style={{ display: 'grid', gap: '1rem', color: 'var(--s-ink-soft)' }}>
-              <p>
-                La direction technique s’appuie sur plus de 20 ans d’expérience dans le bâtiment, les installations
-                techniques, la rénovation et le suivi de projets. Cette expérience nous permet d’identifier les
-                contraintes en amont et de proposer des solutions concrètes.
-              </p>
-              <p>
-                Notre structure familiale conserve une communication directe. Vous savez qui contacter, ce qui a été
-                décidé et comment le projet avance.
-              </p>
-            </div>
+            <Figure src="/site/a-propos-equipe.jpg" alt="L’équipe JJD Consult" ratio="4 / 5" label="JJD Consult" />
           </div>
         </div>
       </section>

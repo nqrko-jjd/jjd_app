@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Eyebrow, SectionHead, Cta, NumberCard, Steps, CtaBand } from './_components/blocks';
+import { Figure, HeroImage, Band } from './_components/Figure';
 
 export const metadata: Metadata = {
   title: 'JJD Consult | Maintenance, Rénovation et Projets',
@@ -10,21 +11,21 @@ export const metadata: Metadata = {
 
 const SERVICES = [
   {
-    n: '01', tag: 'JJD Maintenance', title: 'Maintenance',
+    n: '01', tag: 'JJD Maintenance', title: 'Maintenance', img: '/site/service-maintenance.jpg',
     baseline: 'Préserver la valeur de vos bâtiments.',
     text: 'Un partenaire technique réactif pour entretenir, réparer et suivre vos immeubles dans la durée.',
     points: ['Syndics & copropriétés', 'SAV pour promoteurs', 'Entreprises & bureaux', 'Interventions multitechniques'],
     href: '/maintenance',
   },
   {
-    n: '02', tag: 'JJD Rénovation', title: 'Rénovation',
+    n: '02', tag: 'JJD Rénovation', title: 'Rénovation', img: '/site/service-renovation.jpg',
     baseline: 'Transformer avec une vision d’ensemble.',
     text: 'Des rénovations complètes coordonnées de A à Z, avec une attention constante portée à la qualité des finitions.',
     points: ['Rénovation complète', 'Propriétés de standing', 'Intérieur & techniques', 'Terrasses, jardin & piscine'],
     href: '/renovation',
   },
   {
-    n: '03', tag: 'JJD Projets', title: 'Projets',
+    n: '03', tag: 'JJD Projets', title: 'Projets', img: '/site/service-projets.jpg',
     baseline: 'Donner une direction claire aux projets complexes.',
     text: 'De l’étude des possibilités à la réalisation, nous structurons les choix, le budget et les intervenants.',
     points: ['Étude & valorisation', 'Scénarios d’aménagement', 'Budget & planification', 'Coordination générale'],
@@ -44,6 +45,7 @@ export default function HomePage() {
     <>
       {/* Hero */}
       <section className="s-hero">
+        <HeroImage src="/site/hero.jpg" alt="Chantier JJD Consult" />
         <div className="s-hero-inner">
           <Eyebrow>Maintenance • Rénovation • Projets</Eyebrow>
           <h1>Nous prenons soin de vos bâtiments. <span className="s-em">À chaque étape.</span></h1>
@@ -65,20 +67,19 @@ export default function HomePage() {
       {/* Intro */}
       <section className="s-section">
         <div className="s-wrap">
-          <div className="s-split">
+          <div className="s-split middle">
             <div>
               <Eyebrow>JJD Consult</Eyebrow>
               <h2 style={{ margin: '1rem 0 1.4rem' }}>Trois expertises. <span className="s-em">Une même exigence.</span></h2>
-              <p className="s-lead" style={{ maxWidth: '48ch' }}>
+              <p className="s-lead" style={{ maxWidth: '48ch', marginBottom: '1.1rem' }}>
                 Un bâtiment vit, évolue et demande des réponses différentes au fil du temps.
               </p>
-            </div>
-            <div>
               <p style={{ color: 'var(--s-ink-soft)' }}>
                 JJD Consult réunit la maintenance, la rénovation et la gestion de projets dans une seule structure.
                 Vous bénéficiez d’une équipe de terrain, d’une communication claire et d’un suivi adapté à chaque mission.
               </p>
             </div>
+            <Figure src="/site/equipe.jpg" alt="L’équipe JJD Consult sur le terrain" ratio="5 / 4" label="Équipe / terrain" />
           </div>
         </div>
       </section>
@@ -92,15 +93,15 @@ export default function HomePage() {
           />
           <div className="s-grid cols-3">
             {SERVICES.map((s) => (
-              <div key={s.n} className="s-card s-service">
-                <span className="s-num">{s.n}</span>
+              <Link key={s.n} href={s.href} className="s-card s-service">
+                <Figure src={s.img} alt={s.title} ratio="16 / 10" label={s.title} className="s-service-fig" />
                 <div className="tag">{s.tag}</div>
                 <h3>{s.title}</h3>
                 <p style={{ fontWeight: 500, color: 'var(--s-ink)' }}>{s.baseline}</p>
                 <p>{s.text}</p>
                 <ul>{s.points.map((p) => <li key={p}>{p}</li>)}</ul>
-                <Link className="s-link" href={s.href}>Découvrir ce service <span>↗</span></Link>
-              </div>
+                <span className="s-link">Découvrir ce service <span>↗</span></span>
+              </Link>
             ))}
           </div>
         </div>
@@ -109,23 +110,24 @@ export default function HomePage() {
       {/* Reference */}
       <section className="s-section dark">
         <div className="s-wrap">
-          <div className="s-split">
+          <div className="s-split middle reverse">
             <div>
               <Eyebrow>Référence • Rhode-Saint-Genèse</Eyebrow>
               <h2 style={{ margin: '1rem 0 1.4rem' }}>Une propriété d’exception, <span className="s-em">pensée dans son ensemble.</span></h2>
-              <p className="s-lead">
+              <p className="s-lead" style={{ marginBottom: '1.6rem' }}>
                 Rénovation et valorisation globale d’une propriété de standing : espaces intérieurs, équipements techniques,
                 terrasses, abords, jardin, pelouse et zone piscine.
               </p>
+              <ul className="s-list">
+                <li>Une cohérence du dedans au dehors</li>
+                <li>Une coordination centralisée, un interlocuteur principal</li>
+                <li>Des finitions suivies de près, raccord par raccord</li>
+              </ul>
               <div style={{ marginTop: '2rem' }}>
                 <Cta href="/contact">Parler de mon projet</Cta>
               </div>
             </div>
-            <div className="s-panel">
-              <div className="row"><b>·</b><div><strong>Une cohérence du dedans au dehors</strong><br />Chaque intervention s’inscrit dans une vision commune de la propriété.</div></div>
-              <div className="row"><b>·</b><div><strong>Une coordination centralisée</strong><br />Un interlocuteur principal pour les équipes, fournisseurs et décisions.</div></div>
-              <div className="row"><b>·</b><div><strong>Des finitions suivies de près</strong><br />Une attention particulière aux raccords, détails et matériaux.</div></div>
-            </div>
+            <Figure src="/site/reference-rhode.jpg" alt="Propriété rénovée à Rhode-Saint-Genèse" ratio="4 / 5" label="Rhode-Saint-Genèse" />
           </div>
         </div>
       </section>
@@ -147,6 +149,9 @@ export default function HomePage() {
           />
         </div>
       </section>
+
+      {/* Bande image */}
+      <Band src="/site/band-chantier.jpg" alt="Intervention sur chantier" />
 
       {/* Espace client */}
       <section className="s-section dark">

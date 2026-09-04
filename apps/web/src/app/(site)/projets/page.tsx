@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { PageHero, SectionHead, Steps, CtaBand, Eyebrow } from '../_components/blocks';
+import { Figure } from '../_components/Figure';
 
 export const metadata: Metadata = {
   title: 'Étude et coordination de projets | JJD Consult',
@@ -14,23 +15,25 @@ export default function ProjetsPage() {
         eyebrow="JJD Projets"
         title={<>Décider avec méthode. <span className="s-em">Réaliser avec maîtrise.</span></>}
         lead="Nous transformons un bâtiment à potentiel ou un projet complexe en une feuille de route réaliste, budgétée et coordonnée."
+        image="/site/hero-projets.jpg"
       />
 
       <section className="s-section">
         <div className="s-wrap">
-          <div className="s-split">
+          <div className="s-split middle">
             <div>
               <Eyebrow>Avant les travaux</Eyebrow>
               <h2 style={{ margin: '1rem 0 1.3rem' }}>Donner une direction claire <span className="s-em">aux bonnes décisions.</span></h2>
-              <p className="s-lead" style={{ maxWidth: '46ch' }}>
+              <p className="s-lead" style={{ maxWidth: '46ch', marginBottom: '1.1rem' }}>
                 Un projet solide commence avant le premier coup de marteau.
               </p>
+              <p style={{ color: 'var(--s-ink-soft)' }}>
+                Nous analysons l’état du bien, confrontons les usages possibles, structurons les grands postes et
+                identifions les études spécialisées nécessaires. Vous avancez avec une vision plus réaliste du projet
+                et du budget.
+              </p>
             </div>
-            <p style={{ color: 'var(--s-ink-soft)' }}>
-              Nous analysons l’état du bien, confrontons les usages possibles, structurons les grands postes et
-              identifions les études spécialisées nécessaires. Vous avancez avec une vision plus réaliste du projet
-              et du budget.
-            </p>
+            <Figure src="/site/projets-etude.jpg" alt="Étude de projet" ratio="5 / 4" label="Étude & plans" />
           </div>
         </div>
       </section>

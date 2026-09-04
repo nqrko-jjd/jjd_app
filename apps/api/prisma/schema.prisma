@@ -148,6 +148,19 @@ model Equipment {
   assignedTo   Person?  @relation(fields: [assignedToId], references: [id])
   note         String?
   createdAt    DateTime @default(now())
+
+  events EventEquipment[]
+}
+
+/// Catalogue des consommables (visserie, ciment, peinture…) utilisés sur les chantiers.
+model Consumable {
+  id        String   @id @default(cuid())
+  name      String
+  unit      String   @default("pièce") // pièce | kg | L | m² | sac…
+  note      String?
+  createdAt DateTime @default(now())
+
+  events EventConsumable[]
 }
 
 /// Équipe = préréglage nommé (souvent recomposé au jour le jour via le planning).
@@ -617,6 +630,8 @@ model PlanningEvent {
   updatedAt     DateTime @updatedAt
 
   assignments EventAssignment[]
+  equipment   EventEquipment[]
+  consumables EventConsumable[]
 
   @@index([startAt])
   @@index([worksiteId])
@@ -629,6 +644,27 @@ model EventAssignment {
   person   Person        @relation(fields: [personId], references: [id], onDelete: Cascade)
 
   @@id([eventId, personId])
+}
+
+/// Matériel (outillage, échafaudage…) réservé pour une affectation de planning.
+model EventEquipment {
+  eventId     String
+  event       PlanningEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  equipmentId String
+  equipment   Equipment     @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, equipmentId])
+}
+
+/// Consommables prévus pour une affectation de planning, avec quantité.
+model EventConsumable {
+  eventId      String
+  event        PlanningEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  consumableId String
+  consumable   Consumable    @relation(fields: [consumableId], references: [id], onDelete: Cascade)
+  qty          Float         @default(1)
+
+  @@id([eventId, consumableId])
 }
 
 // ─────────────────────────────────────────────────────────── Flotte

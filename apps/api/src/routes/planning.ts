@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { planningEventInput, teamInput, vehicleCostInput, vehicleCostPerKm } from '@jjd/shared';
+import { planningEventInput, teamInput, consumableInput, vehicleCostInput, vehicleCostPerKm } from '@jjd/shared';
 import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, STAFF, OFFICE } from '../lib/auth.js';
@@ -17,16 +17,22 @@ async function syncToGoogle(eventId: string) {
       team: { select: { name: true } },
       vehicle: { select: { plate: true, model: true } },
       assignments: { include: { person: { select: { displayName: true, firstName: true } } } },
+      equipment: { include: { equipment: { select: { name: true } } } },
+      consumables: { include: { consumable: { select: { name: true, unit: true } } } },
     },
   });
   if (!ev) return;
   const people = ev.assignments.map((a) => a.person.displayName || a.person.firstName).join(', ');
+  const equipmentList = ev.equipment.map((e) => e.equipment.name).join(', ');
+  const consumablesList = ev.consumables.map((c) => `${c.consumable.name} (${c.qty} ${c.consumable.unit})`).join(', ');
   const lines = [
     ev.team ? `Équipe : ${ev.team.name}` : null,
     people ? `Ouvriers : ${people}` : null,
     ev.vehicle ? `Véhicule : ${[ev.vehicle.plate, ev.vehicle.model].filter(Boolean).join(' ')}` : null,
-    ev.materialsNote ? `Matériel : ${ev.materialsNote}` : null,
-    ev.note ?? null,
+    equipmentList ? `Matériel : ${equipmentList}` : null,
+    consumablesList ? `Consommables : ${consumablesList}` : null,
+    ev.materialsNote ? `Autre matériel : ${ev.materialsNote}` : null,
+    ev.note ? `Instructions : ${ev.note}` : null,
   ].filter(Boolean);
   const gid = await upsertEvent(ev.googleEventId, {
     summary: `${ev.worksite.ref} — ${ev.title || ev.worksite.title}`,
@@ -54,13 +60,25 @@ planningRouter.get(
       where,
       orderBy: { startAt: 'asc' },
       include: {
-        worksite: { select: { id: true, ref: true, title: true, city: true } },
+        worksite: { select: { id: true, ref: true, title: true, city: true, address: true } },
         team: { select: { id: true, name: true, color: true } },
         vehicle: { select: { id: true, plate: true, model: true } },
-        assignments: { include: { person: { select: { id: true, displayName: true, firstName: true } } } },
+        assignments: { include: { person: { select: { id: true, displayName: true, firstName: true, phone: true } } } },
+        equipment: { include: { equipment: { select: { id: true, name: true } } } },
+        consumables: { include: { consumable: { select: { id: true, name: true, unit: true } } } },
       },
     });
     res.json({ items, googleSync: gcalEnabled() });
+  }),
+);
+
+planningRouter.get(
+  '/:id',
+  requireAuth(...STAFF),
+  asyncHandler(async (req, res) => {
+    const ev = await withIncludes(req.params.id!);
+    if (!ev) throw new HttpError(404, 'Affectation introuvable');
+    res.json({ event: ev });
   }),
 );
 
@@ -82,6 +100,8 @@ planningRouter.post(
         note: d.note ?? null,
         createdById: req.user!.id,
         assignments: { create: d.personIds.map((personId) => ({ personId })) },
+        equipment: { create: d.equipmentIds.map((equipmentId) => ({ equipmentId })) },
+        consumables: { create: d.consumables.map((c) => ({ consumableId: c.consumableId, qty: c.qty })) },
       },
     });
     await syncToGoogle(ev.id);
@@ -109,6 +129,12 @@ planningRouter.patch(
         ...(d.personIds
           ? { assignments: { deleteMany: {}, create: d.personIds.map((personId) => ({ personId })) } }
           : {}),
+        ...(d.equipmentIds
+          ? { equipment: { deleteMany: {}, create: d.equipmentIds.map((equipmentId) => ({ equipmentId })) } }
+          : {}),
+        ...(d.consumables
+          ? { consumables: { deleteMany: {}, create: d.consumables.map((c) => ({ consumableId: c.consumableId, qty: c.qty })) } }
+          : {}),
       },
     });
     await syncToGoogle(req.params.id!);
@@ -128,14 +154,96 @@ planningRouter.delete(
   }),
 );
 
+/** Fiche de chantier imprimable : tout ce qu'il faut donner à l'équipe. */
+planningRouter.get(
+  '/:id/fiche',
+  requireAuth(...STAFF),
+  asyncHandler(async (req, res) => {
+    const ev = await prisma.planningEvent.findUnique({
+      where: { id: req.params.id },
+      include: {
+        worksite: {
+          select: {
+            id: true,
+            ref: true,
+            title: true,
+            description: true,
+            address: true,
+            postalCode: true,
+            city: true,
+            client: { select: { name: true, phone: true } },
+            building: {
+              select: {
+                name: true,
+                digicode: true,
+                accessNote: true,
+                contacts: { orderBy: { position: 'asc' }, select: { role: true, name: true, phone: true } },
+              },
+            },
+            manager: { select: { displayName: true, firstName: true, phone: true } },
+            tasks: {
+              where: { status: { not: 'done' } },
+              orderBy: { position: 'asc' },
+              select: { id: true, title: true, assignee: { select: { displayName: true, firstName: true } } },
+            },
+          },
+        },
+        team: { select: { name: true } },
+        vehicle: { select: { code: true, brand: true, model: true, plate: true } },
+        assignments: {
+          include: { person: { select: { displayName: true, firstName: true, role: true, phone: true } } },
+        },
+        equipment: { include: { equipment: { select: { name: true, reference: true } } } },
+        consumables: { include: { consumable: { select: { name: true, unit: true } } } },
+        createdBy: { select: { email: true } },
+      },
+    });
+    if (!ev) throw new HttpError(404, 'Affectation introuvable');
+
+    const w = ev.worksite;
+    const address = [w.address, [w.postalCode, w.city].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+
+    res.json({
+      fiche: {
+        id: ev.id,
+        title: ev.title,
+        startAt: ev.startAt,
+        endAt: ev.endAt,
+        allDay: ev.allDay,
+        instructions: ev.note,
+        worksite: { id: w.id, ref: w.ref, title: w.title, description: w.description, address },
+        client: w.client,
+        building: w.building
+          ? { name: w.building.name, digicode: w.building.digicode, accessNote: w.building.accessNote, contacts: w.building.contacts }
+          : null,
+        manager: w.manager ? { name: w.manager.displayName || w.manager.firstName, phone: w.manager.phone } : null,
+        team: ev.team?.name ?? null,
+        vehicle: ev.vehicle
+          ? { label: [ev.vehicle.code, ev.vehicle.brand, ev.vehicle.model].filter(Boolean).join(' '), plate: ev.vehicle.plate }
+          : null,
+        people: ev.assignments.map((a) => ({
+          name: a.person.displayName || a.person.firstName,
+          role: a.person.role,
+          phone: a.person.phone,
+        })),
+        equipment: ev.equipment.map((e) => ({ name: e.equipment.name, reference: e.equipment.reference })),
+        consumables: ev.consumables.map((c) => ({ name: c.consumable.name, qty: c.qty, unit: c.consumable.unit })),
+        tasks: w.tasks.map((t) => ({ title: t.title, assignee: t.assignee ? (t.assignee.displayName || t.assignee.firstName) : null })),
+      },
+    });
+  }),
+);
+
 async function withIncludes(id: string) {
   return prisma.planningEvent.findUnique({
     where: { id },
     include: {
-      worksite: { select: { id: true, ref: true, title: true, city: true } },
+      worksite: { select: { id: true, ref: true, title: true, city: true, address: true } },
       team: true,
       vehicle: true,
-      assignments: { include: { person: { select: { id: true, displayName: true, firstName: true } } } },
+      assignments: { include: { person: { select: { id: true, displayName: true, firstName: true, phone: true } } } },
+      equipment: { include: { equipment: { select: { id: true, name: true } } } },
+      consumables: { include: { consumable: { select: { id: true, name: true, unit: true } } } },
     },
   });
 }
@@ -254,5 +362,54 @@ vehiclesRouter.get(
     });
     if (!v) throw new HttpError(404, 'Véhicule introuvable');
     res.json({ vehicle: { ...v, costPerKm: vehicleCostPerKm(v), costBreakdown: await vehicleCostBreakdown(v.id) } });
+  }),
+);
+
+// ── Matériel (outillage réservable pour une affectation)
+
+export const equipmentRouter = Router();
+
+equipmentRouter.get(
+  '/',
+  requireAuth(...STAFF),
+  asyncHandler(async (_req, res) => {
+    const items = await prisma.equipment.findMany({ orderBy: { name: 'asc' } });
+    res.json({ items });
+  }),
+);
+
+equipmentRouter.post(
+  '/',
+  requireAuth(...STAFF),
+  asyncHandler(async (req, res) => {
+    const name = String(req.body?.name ?? '').trim();
+    if (!name) throw new HttpError(400, 'Nom requis');
+    const item = await prisma.equipment.create({
+      data: { name, reference: req.body?.reference?.trim() || null },
+    });
+    res.status(201).json({ item });
+  }),
+);
+
+// ── Consommables (catalogue + quantités par affectation)
+
+export const consumablesRouter = Router();
+
+consumablesRouter.get(
+  '/',
+  requireAuth(...STAFF),
+  asyncHandler(async (_req, res) => {
+    const items = await prisma.consumable.findMany({ orderBy: { name: 'asc' } });
+    res.json({ items });
+  }),
+);
+
+consumablesRouter.post(
+  '/',
+  requireAuth(...STAFF),
+  asyncHandler(async (req, res) => {
+    const d = consumableInput.parse(req.body);
+    const item = await prisma.consumable.create({ data: { name: d.name, unit: d.unit, note: d.note ?? null } });
+    res.status(201).json({ item });
   }),
 );

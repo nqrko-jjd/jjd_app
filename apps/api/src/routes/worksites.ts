@@ -138,6 +138,8 @@ worksitesRouter.get(
         assignments: { include: { person: { select: { displayName: true, firstName: true, phone: true } } } },
         vehicle: { select: { code: true, brand: true, model: true, plate: true } },
         team: { select: { name: true } },
+        equipment: { include: { equipment: { select: { name: true, reference: true } } } },
+        consumables: { include: { consumable: { select: { name: true, unit: true } } } },
       },
     });
 
@@ -161,6 +163,8 @@ worksitesRouter.get(
             team: ev.team?.name ?? null,
             vehicle: ev.vehicle ? `${ev.vehicle.code ?? ''} ${ev.vehicle.brand ?? ''} ${ev.vehicle.model ?? ''}`.trim() : null,
             people: ev.assignments.map((a) => ({ name: a.person.displayName || a.person.firstName, phone: a.person.phone })),
+            equipment: ev.equipment.map((e) => ({ name: e.equipment.name, reference: e.equipment.reference })),
+            consumables: ev.consumables.map((c) => ({ name: c.consumable.name, qty: c.qty, unit: c.consumable.unit })),
           }
         : null,
     });

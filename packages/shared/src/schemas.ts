@@ -129,6 +129,8 @@ export const planningEventInput = z.object({
   teamId: z.string().nullish(),
   vehicleId: z.string().nullish(),
   personIds: z.array(z.string()).default([]),
+  equipmentIds: z.array(z.string()).default([]),
+  consumables: z.array(z.object({ consumableId: nonEmpty, qty: z.number().positive().default(1) })).default([]),
   materialsNote: z.string().trim().nullish(),
   note: z.string().trim().nullish(),
 });
@@ -137,6 +139,12 @@ export const teamInput = z.object({
   name: nonEmpty,
   color: z.string().trim().nullish(),
   memberIds: z.array(z.string()).default([]),
+});
+
+export const consumableInput = z.object({
+  name: nonEmpty,
+  unit: z.string().trim().default('pièce'),
+  note: z.string().trim().nullish(),
 });
 
 export const timeEntryInput = z.object({
@@ -259,4 +267,5 @@ export type PersonInput = z.infer<typeof personInput>;
 export type CrmOpportunityInput = z.infer<typeof crmOpportunityInput>;
 export type PlanningEventInput = z.infer<typeof planningEventInput>;
 export type TeamInput = z.infer<typeof teamInput>;
+export type ConsumableInput = z.infer<typeof consumableInput>;
 export type TimeEntryInput = z.infer<typeof timeEntryInput>;

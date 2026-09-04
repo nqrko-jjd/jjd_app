@@ -20,6 +20,8 @@ interface Field {
   today: {
     startAt: string; endAt: string; allDay: boolean; toDo: string | null; materials: string | null;
     team: string | null; vehicle: string | null; people: { name: string; phone: string | null }[];
+    equipment: { name: string; reference: string | null }[];
+    consumables: { name: string; qty: number; unit: string }[];
   } | null;
 }
 
@@ -77,6 +79,22 @@ export default function FicheDuJour() {
         {d.today?.materials ? <Text style={{ color: T.ink2, marginTop: 6 }}>🧰 {d.today.materials}</Text> : null}
         {d.today?.vehicle ? <Text style={{ color: T.ink2, marginTop: 2 }}>🚐 {d.today.vehicle}</Text> : null}
       </Card>
+
+      {d.today && (d.today.equipment.length > 0 || d.today.consumables.length > 0) ? (
+        <Card>
+          <Label>Matériel &amp; consommables</Label>
+          {d.today.equipment.map((e, i) => (
+            <Text key={`e${i}`} style={{ color: T.ink, paddingVertical: 3 }}>
+              🧰 {e.name}{e.reference ? ` (${e.reference})` : ''}
+            </Text>
+          ))}
+          {d.today.consumables.map((c, i) => (
+            <Text key={`c${i}`} style={{ color: T.ink, paddingVertical: 3 }}>
+              📦 {c.qty} {c.unit} — {c.name}
+            </Text>
+          ))}
+        </Card>
+      ) : null}
 
       {tasks.length > 0 ? (
         <Card>

@@ -8,10 +8,12 @@ import { PageHead } from '@/lib/ui';
 interface Ev {
   id: string; title: string | null; startAt: string; endAt: string; allDay: boolean;
   materialsNote: string | null; note: string | null;
-  worksite: { id: string; ref: string; title: string; city: string | null };
+  worksite: { id: string; ref: string; title: string; city: string | null; address?: string | null };
   team: { name: string; color: string | null } | null;
   vehicle: { plate: string | null; model: string | null } | null;
-  assignments: { person: { id: string; displayName: string | null; firstName: string } }[];
+  assignments: { person: { id: string; displayName: string | null; firstName: string; phone?: string | null } }[];
+  equipment: { equipment: { id: string; name: string } }[];
+  consumables: { qty: number; consumable: { id: string; name: string; unit: string } }[];
 }
 
 const DAY_START = 6 * 60;
@@ -40,7 +42,8 @@ function colorFor(e: Ev) {
 interface Block {
   key: string; worksite: Ev['worksite']; title: string | null; startAt: string; endAt: string;
   team: Ev['team']; vehicle: Ev['vehicle']; materialsNote: string | null; note: string | null;
-  people: string[]; ids: string[]; color: string;
+  people: string[]; equipment: string[]; consumables: { name: string; qty: number; unit: string }[];
+  ids: string[]; color: string;
 }
 
 /** Regroupe les affectations d'un même chantier / même jour en un seul bloc. */
@@ -49,17 +52,21 @@ function mergeByWorksite(evs: Ev[]): Block[] {
   for (const e of evs) {
     const cur = map.get(e.worksite.id);
     const names = e.assignments.map((a) => a.person.displayName || a.person.firstName);
+    const equip = e.equipment.map((x) => x.equipment.name);
+    const cons = e.consumables.map((x) => ({ name: x.consumable.name, qty: x.qty, unit: x.consumable.unit }));
     if (!cur) {
       map.set(e.worksite.id, {
         key: e.worksite.id, worksite: e.worksite, title: e.title, startAt: e.startAt, endAt: e.endAt,
         team: e.team, vehicle: e.vehicle, materialsNote: e.materialsNote, note: e.note,
-        people: [...names], ids: [e.id], color: colorFor(e),
+        people: [...names], equipment: [...equip], consumables: [...cons], ids: [e.id], color: colorFor(e),
       });
     } else {
       if (new Date(e.startAt) < new Date(cur.startAt)) cur.startAt = e.startAt;
       if (new Date(e.endAt) > new Date(cur.endAt)) cur.endAt = e.endAt;
       cur.ids.push(e.id);
       for (const n of names) if (!cur.people.includes(n)) cur.people.push(n);
+      for (const n of equip) if (!cur.equipment.includes(n)) cur.equipment.push(n);
+      for (const c of cons) if (!cur.consumables.some((x) => x.name === c.name)) cur.consumables.push(c);
       cur.vehicle ??= e.vehicle;
       cur.materialsNote ??= e.materialsNote;
       if (e.note && !cur.note) cur.note = e.note;
@@ -258,7 +265,13 @@ function EventDetail({ b, onClose, onDeleted }: { b: Block; onClose: () => void;
             </p>
           )}
           {b.vehicle && <p className="muted" style={{ margin: '0 0 0.3rem' }}>🚐 {b.vehicle.plate || b.vehicle.model}</p>}
-          {b.materialsNote && <p className="muted" style={{ margin: '0 0 0.3rem' }}>🔧 {b.materialsNote}</p>}
+          {b.equipment.length > 0 && <p className="muted" style={{ margin: '0 0 0.3rem' }}>🔧 {b.equipment.join(', ')}</p>}
+          {b.materialsNote && <p className="muted" style={{ margin: '0 0 0.3rem' }}>{b.materialsNote}</p>}
+          {b.consumables.length > 0 && (
+            <p className="muted" style={{ margin: '0 0 0.3rem' }}>
+              📦 {b.consumables.map((c) => `${c.name} (${c.qty} ${c.unit})`).join(', ')}
+            </p>
+          )}
           {b.note && <p style={{ margin: '0.4rem 0 0', whiteSpace: 'pre-wrap', fontSize: '0.88rem' }}>{b.note}</p>}
         </div>
         <div className="modal-foot">
@@ -267,6 +280,7 @@ function EventDetail({ b, onClose, onDeleted }: { b: Block; onClose: () => void;
             await Promise.all(b.ids.map((id) => api(`/api/planning/${id}`, { method: 'DELETE' })));
             onDeleted();
           }}>Supprimer</button>
+          <a href={`/fiche/${b.ids[0]}`} target="_blank" rel="noreferrer" className="btn">Imprimer la fiche</a>
           <Link href={`/app/chantiers/${b.worksite.id}`} className="btn primary">Ouvrir le chantier</Link>
         </div>
       </div>
@@ -278,13 +292,36 @@ function NewEventForm({ prefill, onDone, onClose }: { prefill: { date?: string; 
   const { data: ws } = useApi<{ items: { id: string; ref: string; title: string }[] }>('/api/worksites');
   const { data: people } = useApi<{ items: { id: string; displayName: string | null; firstName: string; role: string }[] }>('/api/people?active=1');
   const { data: vehicles } = useApi<{ items: { id: string; plate: string | null; model: string | null }[] }>('/api/vehicles');
+  const { data: equipmentList, reload: reloadEquipment } = useApi<{ items: { id: string; name: string }[] }>('/api/equipment');
+  const { data: consumableList, reload: reloadConsumables } = useApi<{ items: { id: string; name: string; unit: string }[] }>('/api/consumables');
   const h = prefill.hour ?? 8;
   const [f, setF] = useState({
     worksiteId: '', date: prefill.date ?? new Date().toISOString().slice(0, 10),
     start: `${String(h).padStart(2, '0')}:00`, end: `${String(Math.min(h + 8, 20)).padStart(2, '0')}:00`,
     vehicleId: '', materialsNote: '', note: '', personIds: [] as string[],
+    equipmentIds: [] as string[], consumables: [] as { consumableId: string; qty: number }[],
   });
+  const [newEquipment, setNewEquipment] = useState('');
+  const [newConsumable, setNewConsumable] = useState('');
   const [busy, setBusy] = useState(false);
+
+  async function addEquipment() {
+    const name = newEquipment.trim();
+    if (!name) return;
+    setNewEquipment('');
+    const { item } = await api<{ item: { id: string; name: string } }>('/api/equipment', { method: 'POST', body: { name } });
+    await reloadEquipment();
+    setF((cur) => ({ ...cur, equipmentIds: [...cur.equipmentIds, item.id] }));
+  }
+
+  async function addConsumable() {
+    const name = newConsumable.trim();
+    if (!name) return;
+    setNewConsumable('');
+    const { item } = await api<{ item: { id: string; name: string; unit: string } }>('/api/consumables', { method: 'POST', body: { name } });
+    await reloadConsumables();
+    setF((cur) => ({ ...cur, consumables: [...cur.consumables, { consumableId: item.id, qty: 1 }] }));
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -300,6 +337,8 @@ function NewEventForm({ prefill, onDone, onClose }: { prefill: { date?: string; 
         materialsNote: f.materialsNote || null,
         note: f.note || null,
         personIds: f.personIds,
+        equipmentIds: f.equipmentIds,
+        consumables: f.consumables,
       },
     });
     onDone();
@@ -326,8 +365,6 @@ function NewEventForm({ prefill, onDone, onClose }: { prefill: { date?: string; 
           </div>
           <div className="field"><label>Début</label><input className="input" type="time" value={f.start} onChange={(e) => setF({ ...f, start: e.target.value })} /></div>
           <div className="field"><label>Fin</label><input className="input" type="time" value={f.end} onChange={(e) => setF({ ...f, end: e.target.value })} /></div>
-          <div className="field" style={{ gridColumn: '1 / -1' }}><label>Matériel</label><input className="input" value={f.materialsNote} onChange={(e) => setF({ ...f, materialsNote: e.target.value })} placeholder="échafaudage, nacelle…" /></div>
-          <div className="field" style={{ gridColumn: '1 / -1' }}><label>Note / tâches</label><textarea className="input" rows={2} value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} /></div>
           <div className="field" style={{ gridColumn: '1 / -1' }}>
             <label>Ouvriers</label>
             <div className="row">
@@ -342,6 +379,62 @@ function NewEventForm({ prefill, onDone, onClose }: { prefill: { date?: string; 
               })}
             </div>
           </div>
+          <div className="field" style={{ gridColumn: '1 / -1' }}>
+            <label>Matériel (outillage)</label>
+            <div className="row">
+              {(equipmentList?.items ?? []).map((eq) => {
+                const on = f.equipmentIds.includes(eq.id);
+                return (
+                  <button type="button" key={eq.id} className={`badge ${on ? 'primary' : ''}`} style={{ cursor: 'pointer' }}
+                    onClick={() => setF({ ...f, equipmentIds: on ? f.equipmentIds.filter((x) => x !== eq.id) : [...f.equipmentIds, eq.id] })}>
+                    {eq.name}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="row" style={{ marginTop: 6 }}>
+              <input className="input" style={{ maxWidth: 220 }} placeholder="+ nouveau matériel" value={newEquipment}
+                onChange={(e) => setNewEquipment(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addEquipment(); } }} />
+              <button type="button" className="btn" onClick={addEquipment}>Ajouter</button>
+            </div>
+          </div>
+          <div className="field" style={{ gridColumn: '1 / -1' }}>
+            <label>Consommables à prévoir</label>
+            {f.consumables.map((c, i) => {
+              const cat = (consumableList?.items ?? []).find((x) => x.id === c.consumableId);
+              return (
+                <div key={c.consumableId} className="row" style={{ alignItems: 'center', marginBottom: 4 }}>
+                  <span className="badge">{cat?.name ?? '—'}</span>
+                  <input className="input" type="number" min={0} step="any" style={{ width: 80 }} value={c.qty}
+                    onChange={(e) => {
+                      const qty = Number(e.target.value);
+                      setF({ ...f, consumables: f.consumables.map((x, j) => (j === i ? { ...x, qty } : x)) });
+                    }} />
+                  <span className="muted">{cat?.unit}</span>
+                  <button type="button" className="btn ghost" onClick={() => setF({ ...f, consumables: f.consumables.filter((_, j) => j !== i) })}>✕</button>
+                </div>
+              );
+            })}
+            <div className="row">
+              <select className="select" style={{ maxWidth: 220 }} value=""
+                onChange={(e) => {
+                  const id = e.target.value;
+                  if (id && !f.consumables.some((c) => c.consumableId === id)) {
+                    setF({ ...f, consumables: [...f.consumables, { consumableId: id, qty: 1 }] });
+                  }
+                }}>
+                <option value="">+ ajouter depuis le catalogue…</option>
+                {(consumableList?.items ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              <input className="input" style={{ maxWidth: 220 }} placeholder="+ nouveau consommable" value={newConsumable}
+                onChange={(e) => setNewConsumable(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addConsumable(); } }} />
+              <button type="button" className="btn" onClick={addConsumable}>Ajouter</button>
+            </div>
+          </div>
+          <div className="field" style={{ gridColumn: '1 / -1' }}><label>Autre matériel / précisions</label><input className="input" value={f.materialsNote} onChange={(e) => setF({ ...f, materialsNote: e.target.value })} placeholder="échafaudage, nacelle…" /></div>
+          <div className="field" style={{ gridColumn: '1 / -1' }}><label>Instructions pour l’équipe</label><textarea className="input" rows={3} value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} placeholder="Tâches à faire, consignes particulières…" /></div>
         </div>
         <div className="modal-foot">
           <button type="button" className="btn" onClick={onClose}>Annuler</button>

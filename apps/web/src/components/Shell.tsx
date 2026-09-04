@@ -7,6 +7,17 @@ import { useAuth } from '@/lib/auth';
 type Item = { href: string; label: string; ic: string; roles?: string[]; ext?: boolean };
 type Group = { title: string; items: Item[] };
 
+const WORKER_NAV: Group[] = [
+  {
+    title: 'Terrain',
+    items: [
+      { href: '/app', label: 'Aujourd’hui', ic: '◷' },
+      { href: '/app/mes-chantiers', label: 'Mes chantiers', ic: '▤' },
+      { href: '/app/mes-heures', label: 'Mes heures', ic: '☰' },
+    ],
+  },
+];
+
 const NAV: Group[] = [
   {
     title: 'Pilotage',
@@ -48,8 +59,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
   const isActive = (href: string) => (href === '/app' ? pathname === '/app' : pathname.startsWith(href));
   const visible = (i: Item) => !i.roles || (user && i.roles.includes(user.role));
+  const nav = user?.role === 'worker' ? WORKER_NAV : NAV;
   const current =
-    NAV.flatMap((g) => g.items).find((i) => isActive(i.href))?.label ?? 'JJD App';
+    nav.flatMap((g) => g.items).find((i) => isActive(i.href))?.label ?? 'JJD App';
 
   return (
     <div className="shell">
@@ -62,7 +74,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       {open && <div className="scrim" onClick={() => setOpen(false)} />}
       <nav className={`sidebar${open ? ' open' : ''}`}>
         <div className="brand"><span className="mark">J</span> JD Consult</div>
-        {NAV.map((g) => {
+        {nav.map((g) => {
           const items = g.items.filter(visible);
           if (!items.length) return null;
           return (

@@ -10,7 +10,7 @@ import { allWorksitesTransport } from './vehicle-cost.js';
 
 const norm = (s: string | null) => (s ?? '').toLowerCase().trim();
 
-function entityOf(cat: string | null, wsEntity: string | null): 'jjd' | 'tonton' | 'm7' | 'autre' {
+export function entityOf(cat: string | null, wsEntity: string | null): 'jjd' | 'tonton' | 'm7' | 'autre' {
   const c = norm(cat);
   if (c.includes('tonton')) return 'tonton';
   if (c.includes('m7')) return 'm7';
@@ -20,7 +20,7 @@ function entityOf(cat: string | null, wsEntity: string | null): 'jjd' | 'tonton'
 }
 
 /** Regroupe une catégorie de dépense dans une section du compte de résultat. */
-function section(cat: string | null): string {
+export function section(cat: string | null): string {
   const c = norm(cat);
   if (c.startsWith('rémunération') || c.startsWith('remuneration')) return 'salaires';
   if (c.includes('sous-trait')) return 'sous_traitance';
@@ -33,7 +33,7 @@ function section(cat: string | null): string {
   return 'autres';
 }
 
-const SECTION_LABEL: Record<string, string> = {
+export const SECTION_LABEL: Record<string, string> = {
   materiel: 'Matériel',
   sous_traitance: 'Sous-traitance',
   chantier_divers: 'Location / décheterie',

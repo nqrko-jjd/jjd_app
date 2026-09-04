@@ -4,6 +4,7 @@ import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, requirePartner, OFFICE } from '../lib/auth.js';
 import { consolidatedPnl, profitShare } from '../lib/consolidated.js';
+import { analytics } from '../lib/analytics.js';
 import { autoMatchAll } from '../lib/bank-match.js';
 import { parseBankCsv, type ParsedBankRow } from '../lib/bank-csv.js';
 import { parseCardStatement, pdfToRawText, pdftotextAvailable } from '../lib/bank-pdf.js';
@@ -55,6 +56,21 @@ financeRouter.get(
       await consolidatedPnl({
         year: year ? Number(year) : undefined,
         month: month ? Number(month) : undefined,
+        entity: entity === 'jjd' || entity === 'tonton' || entity === 'm7' ? entity : undefined,
+      }),
+    );
+  }),
+);
+
+/** Séries pour la page Analyse (graphiques). */
+financeRouter.get(
+  '/analytics',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const { months, entity } = req.query as Record<string, string>;
+    res.json(
+      await analytics({
+        months: months ? Number(months) : undefined,
         entity: entity === 'jjd' || entity === 'tonton' || entity === 'm7' ? entity : undefined,
       }),
     );

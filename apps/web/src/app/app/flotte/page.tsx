@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
-import { PageHead, Money, formatDateBE, Thumb } from '@/lib/ui';
+import { PageHead, Money, formatDateBE, Thumb, VehicleStatusBadge } from '@/lib/ui';
 
 interface Vehicle {
   id: string; code: string | null; brand: string | null; model: string | null; plate: string | null;
@@ -28,7 +28,7 @@ export default function FlottePage() {
           <table className="tbl">
             <thead>
               <tr>
-                <th>Véhicule</th><th>Plaque</th><th>Type</th><th>Conducteur</th>
+                <th>Véhicule</th><th>Plaque</th><th>Type</th><th>Statut</th><th>Conducteur</th>
                 <th>Assurance</th><th style={{ textAlign: 'right' }}>Mensualité</th><th>Contrôle technique</th>
               </tr>
             </thead>
@@ -37,7 +37,7 @@ export default function FlottePage() {
                 const ins = v.insurances[0];
                 const ct = v.nextInspection ? new Date(v.nextInspection).getTime() : null;
                 return (
-                  <tr key={v.id} style={v.status === 'active' ? undefined : { opacity: 0.5 }}>
+                  <tr key={v.id} style={v.status === 'sold' || v.status === 'retired' ? { opacity: 0.5 } : undefined}>
                     <td>
                       <Thumb src={v.photoThumbUrl} />
                       <Link href={`/app/flotte/${v.id}`}>{[v.brand, v.model].filter(Boolean).join(' ')}</Link>
@@ -45,6 +45,7 @@ export default function FlottePage() {
                     </td>
                     <td className="mono">{v.plate ?? '—'}</td>
                     <td>{v.type ?? '—'}</td>
+                    <td><VehicleStatusBadge status={v.status} /></td>
                     <td>{v.driver ?? '—'}</td>
                     <td>{ins?.provider ?? '—'} {ins?.monthlyAmount ? <span className="muted">· <Money value={ins.monthlyAmount} />/m</span> : null}</td>
                     <td style={{ textAlign: 'right' }}>{v.monthlyPayment ? <Money value={v.monthlyPayment} /> : '—'}</td>

@@ -78,6 +78,23 @@ export const WORKSITE_STATUS_OPEN: WorksiteStatus[] = [
   'lead', 'to_plan', 'scheduled', 'in_progress', 'on_hold', 'done', 'to_invoice',
 ];
 
+export const VEHICLE_STATUSES = [
+  'active', // opérationnel
+  'repair', // en réparation
+  'breakdown', // en panne
+  'sold', // vendu
+  'retired', // réformé / hors service
+] as const;
+export type VehicleStatus = (typeof VEHICLE_STATUSES)[number];
+
+export const VEHICLE_STATUS_LABEL: Record<VehicleStatus, string> = {
+  active: 'Opérationnel',
+  repair: 'En réparation',
+  breakdown: 'En panne',
+  sold: 'Vendu',
+  retired: 'Hors service',
+};
+
 /** Devine un statut propre à partir du texte libre du fichier Excel / TrustUp. */
 export function guessWorksiteStatus(raw: string | null | undefined): WorksiteStatus {
   const s = (raw ?? '').toLowerCase().trim();

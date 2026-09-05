@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import {
   WORKSITE_STATUS_LABEL, WORKSITE_PRIORITY_LABEL, ENTITY_LABEL, CRM_STAGE_LABEL, formatEur, formatDateBE,
-  type WorksiteStatus, type WorksitePriority,
+  VEHICLE_STATUS_LABEL, type WorksiteStatus, type WorksitePriority, type VehicleStatus,
 } from '@jjd/shared';
 
 export { formatEur, formatDateBE };
@@ -33,6 +33,19 @@ export function PriorityBadge({ priority }: { priority: string | null | undefine
 
 export function EntityBadge({ entity }: { entity: string }) {
   return <span className="badge">{ENTITY_LABEL[entity as keyof typeof ENTITY_LABEL] ?? entity}</span>;
+}
+
+const VEHICLE_STATUS_TONE: Partial<Record<VehicleStatus, string>> = {
+  active: 'ok',
+  repair: 'warn',
+  breakdown: 'crit',
+  sold: 'plain',
+  retired: 'plain',
+};
+
+export function VehicleStatusBadge({ status }: { status: string }) {
+  const tone = VEHICLE_STATUS_TONE[status as VehicleStatus] ?? '';
+  return <span className={`badge ${tone}`}>{VEHICLE_STATUS_LABEL[status as VehicleStatus] ?? status}</span>;
 }
 
 export function stageLabel(s: string) {

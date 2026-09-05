@@ -1,10 +1,12 @@
 'use client';
-import { use, useEffect, useState } from 'react';
+import { use, useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
-import { PageHead, Money, formatDateBE } from '@/lib/ui';
+import { PageHead, Money, formatDateBE, VehicleStatusBadge } from '@/lib/ui';
 import { PhotoHeader } from '@/components/PhotoHeader';
+import { FormModal, toDateInput, type FieldDef } from '@/components/FormModal';
+import { VEHICLE_STATUSES, VEHICLE_STATUS_LABEL } from '@jjd/shared';
 
 interface Detail {
   vehicle: {
@@ -18,7 +20,7 @@ interface Detail {
       fixed: { insurance: number; financing: number; tax: number; parking: number; other: number; monthly: number; perDay: number };
       fuelPerKm: number | null; workDaysPerYear: number;
     } | null;
-    circulationTax: number | null; biv: number | null; driver: string | null; equipment: string | null; depot: string | null;
+    circulationTax: number | null; biv: number | null; driver: string | null; equipment: string | null; depot: string | null; note: string | null;
     acquisitionMode: string | null; purchaseDate: string | null; purchasePriceHt: number | null;
     financedAmount: number | null; monthlyPayment: number | null; downPayment: number | null;
     residualValue: number | null; financeMonths: number | null; financeEndOn: string | null;
@@ -32,18 +34,64 @@ interface Detail {
 export default function VehicleDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { data, loading, reload } = useApi<Detail>(`/api/vehicles/${id}`);
+  const [editing, setEditing] = useState(false);
   if (loading) return <div className="empty">Chargement…</div>;
   if (!data) return <div className="empty">Véhicule introuvable.</div>;
   const v = data.vehicle;
   const ins = v.insurances[0];
   const nextPay = v.payments.find((p) => p.dueOn && new Date(p.dueOn).getTime() >= Date.now());
 
+  const editFields: FieldDef[] = [
+    { name: 'brand', label: 'Marque' },
+    { name: 'model', label: 'Modèle' },
+    { name: 'plate', label: 'Plaque' },
+    { name: 'type', label: 'Type', placeholder: 'Camionette, Moto, Clark, Voiture…' },
+    { name: 'status', label: 'Statut', type: 'select', required: true, options: VEHICLE_STATUSES.map((s) => ({ value: s, label: VEHICLE_STATUS_LABEL[s] })) },
+    { name: 'fuel', label: 'Carburant' },
+    { name: 'driver', label: 'Conducteur' },
+    { name: 'depot', label: 'Dépôt' },
+    { name: 'km', label: 'Kilométrage' },
+    { name: 'vin', label: 'VIN' },
+    { name: 'firstRegistration', label: '1re mise en circulation', type: 'date' },
+    { name: 'nextInspection', label: 'Contrôle technique', type: 'date' },
+    { name: 'circulationTax', label: 'Taxe de circulation', type: 'number' },
+    { name: 'biv', label: 'BIV', type: 'number' },
+    { name: 'equipment', label: 'Équipements', full: true },
+    { name: 'note', label: 'Note', type: 'textarea', full: true },
+    { name: 'fuelConsoL100', label: 'Consommation (L/100 km)', type: 'number' },
+    { name: 'fuelPricePerL', label: 'Prix carburant (€/L)', type: 'number' },
+    { name: 'costPerKmExtra', label: 'Coût/km supplémentaire (€)', type: 'number', placeholder: 'pneus, entretien…' },
+    { name: 'parkingMonthly', label: 'Parking / garage (€/mois)', type: 'number' },
+    { name: 'otherMonthly', label: 'Autres frais fixes (€/mois)', type: 'number', placeholder: 'GPS, télépéage…' },
+  ];
+
   return (
     <>
+      {editing && (
+        <FormModal
+          title={`Modifier ${[v.brand, v.model].filter(Boolean).join(' ') || v.code || 'le véhicule'}`}
+          fields={editFields}
+          initial={{
+            brand: v.brand, model: v.model, plate: v.plate, type: v.type, status: v.status,
+            fuel: v.fuel, driver: v.driver, depot: v.depot, km: v.km, vin: v.vin,
+            firstRegistration: toDateInput(v.firstRegistration), nextInspection: toDateInput(v.nextInspection),
+            circulationTax: v.circulationTax, biv: v.biv, equipment: v.equipment, note: v.note,
+            fuelConsoL100: v.fuelConsoL100, fuelPricePerL: v.fuelPricePerL, costPerKmExtra: v.costPerKmExtra,
+            parkingMonthly: v.parkingMonthly, otherMonthly: v.otherMonthly,
+          }}
+          onClose={() => setEditing(false)}
+          onSubmit={async (body) => { await api(`/api/vehicles/${v.id}`, { method: 'PATCH', body }); reload(); }}
+        />
+      )}
       <PageHead
         title={[v.brand, v.model].filter(Boolean).join(' ')}
         sub={`${v.plate ?? 'sans plaque'} · ${v.code ?? ''} · ${v.type ?? ''}`}
-        action={<Link href="/app/flotte" className="btn">← Flotte</Link>}
+        action={
+          <div className="row">
+            <button className="btn" onClick={() => setEditing(true)}>Modifier</button>
+            <Link href="/app/flotte" className="btn">← Flotte</Link>
+          </div>
+        }
       />
       <PhotoHeader
         basePath={`/api/vehicles/${v.id}`}
@@ -52,6 +100,9 @@ export default function VehicleDetail({ params }: { params: Promise<{ id: string
         fallback="🚐"
         onChange={reload}
       />
+      <div className="row" style={{ marginBottom: '1rem' }}>
+        <VehicleStatusBadge status={v.status} />
+      </div>
       <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', marginBottom: '1.4rem' }}>
         <Info label="Conducteur" value={v.driver ?? '—'} />
         <Info label="Carburant" value={v.fuel ?? '—'} />
@@ -64,7 +115,7 @@ export default function VehicleDetail({ params }: { params: Promise<{ id: string
         <Info label="Dépôt" value={v.depot ?? '—'} />
       </div>
 
-      <CostSection v={v} onSaved={reload} />
+      <CostSection v={v} />
 
       <section className="card card-pad" style={{ marginBottom: '1.4rem' }}>
         <h2 style={{ marginBottom: '0.6rem' }}>Assurance</h2>
@@ -146,69 +197,31 @@ function Info({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-function CostSection({ v, onSaved }: { v: Detail['vehicle']; onSaved: () => void }) {
-  const init = () => ({
-    fuelConsoL100: v.fuelConsoL100?.toString() ?? '',
-    fuelPricePerL: v.fuelPricePerL?.toString() ?? '',
-    costPerKmExtra: v.costPerKmExtra?.toString() ?? '',
-    parkingMonthly: v.parkingMonthly?.toString() ?? '',
-    otherMonthly: v.otherMonthly?.toString() ?? '',
-  });
-  const [f, setF] = useState(init);
-  const [saved, setSaved] = useState(false);
-  useEffect(() => { setF(init()); setSaved(false); },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [v.id, v.fuelConsoL100, v.fuelPricePerL, v.costPerKmExtra, v.parkingMonthly, v.otherMonthly]);
-
-  const num = (s: string) => (s.trim() === '' ? null : Number(s.replace(',', '.')));
-  const conso = num(f.fuelConsoL100) ?? 0;
-  const price = num(f.fuelPricePerL) ?? 0;
-  const extra = num(f.costPerKmExtra) ?? 0;
+function CostSection({ v }: { v: Detail['vehicle'] }) {
+  const conso = v.fuelConsoL100 ?? 0;
+  const price = v.fuelPricePerL ?? 0;
+  const extra = v.costPerKmExtra ?? 0;
   const perKm = conso > 0 && price > 0 ? (conso / 100) * price + extra : extra > 0 ? extra : null;
   const b = v.costBreakdown;
-
-  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => { setF({ ...f, [k]: e.target.value }); setSaved(false); };
-  async function save() {
-    await api(`/api/vehicles/${v.id}`, {
-      method: 'PATCH',
-      body: {
-        fuelConsoL100: num(f.fuelConsoL100), fuelPricePerL: num(f.fuelPricePerL), costPerKmExtra: num(f.costPerKmExtra),
-        parkingMonthly: num(f.parkingMonthly), otherMonthly: num(f.otherMonthly),
-      },
-    });
-    setSaved(true);
-    onSaved();
-  }
+  const configured = v.fuelConsoL100 != null || v.fuelPricePerL != null || v.costPerKmExtra != null
+    || v.parkingMonthly != null || v.otherMonthly != null;
 
   return (
     <section className="card card-pad" style={{ marginBottom: '1.4rem' }}>
       <h2 style={{ marginBottom: '0.3rem' }}>Coût de revient — imputé aux chantiers</h2>
       <p className="muted" style={{ fontSize: '0.85rem', marginTop: 0 }}>
         Les jours où ce véhicule est planifié sur un chantier, on impute : un aller-retour dépôt ↔ chantier
-        (carburant + usure) + une quote-part journalière des coûts fixes ci-dessous.
+        (carburant + usure) + une quote-part journalière des coûts fixes. Réglages dans « Modifier ».
       </p>
 
-      <div className="eyebrow" style={{ marginTop: '0.6rem' }}>Carburant &amp; usure (au km)</div>
-      <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
-        <label className="field"><span>Consommation (L/100 km)</span>
-          <input className="input" type="number" step={0.1} min={0} value={f.fuelConsoL100} onChange={set('fuelConsoL100')} placeholder="ex. 8,5" /></label>
-        <label className="field"><span>Prix carburant (€/L)</span>
-          <input className="input" type="number" step={0.01} min={0} value={f.fuelPricePerL} onChange={set('fuelPricePerL')} placeholder="ex. 1,75" /></label>
-        <label className="field"><span>Coût/km supplémentaire (€)</span>
-          <input className="input" type="number" step={0.01} min={0} value={f.costPerKmExtra} onChange={set('costPerKmExtra')} placeholder="pneus, entretien…" /></label>
-      </div>
+      {!configured && <p className="muted" style={{ fontSize: '0.85rem' }}>Pas encore réglé — clique « Modifier » ci-dessus.</p>}
 
-      <div className="eyebrow" style={{ marginTop: '0.9rem' }}>Coûts fixes mensuels</div>
-      <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
-        <label className="field"><span>Parking / garage (€/mois)</span>
-          <input className="input" type="number" step={1} min={0} value={f.parkingMonthly} onChange={set('parkingMonthly')} /></label>
-        <label className="field"><span>Autres frais (€/mois)</span>
-          <input className="input" type="number" step={1} min={0} value={f.otherMonthly} onChange={set('otherMonthly')} placeholder="GPS, télépéage…" /></label>
-      </div>
-
-      <div className="row" style={{ marginTop: '0.9rem', gap: '1rem', alignItems: 'baseline' }}>
-        <button className="btn primary" onClick={save}>Enregistrer</button>
-        {saved && <span className="muted">enregistré</span>}
+      <div className="info-grid" style={{ marginTop: '0.6rem' }}>
+        <Info label="Consommation" value={v.fuelConsoL100 != null ? `${v.fuelConsoL100} L/100 km` : '—'} />
+        <Info label="Prix carburant" value={v.fuelPricePerL != null ? `${v.fuelPricePerL} €/L` : '—'} />
+        <Info label="Coût/km supplémentaire" value={v.costPerKmExtra != null ? <Money value={v.costPerKmExtra} /> : '—'} />
+        <Info label="Parking / garage" value={v.parkingMonthly != null ? <><Money value={v.parkingMonthly} />/mois</> : '—'} />
+        <Info label="Autres frais fixes" value={v.otherMonthly != null ? <><Money value={v.otherMonthly} />/mois</> : '—'} />
       </div>
 
       {b && (

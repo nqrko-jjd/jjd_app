@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { planningEventInput, teamInput, consumableInput, vehicleCostInput, vehicleCostPerKm } from '@jjd/shared';
+import { planningEventInput, teamInput, consumableInput, vehicleInput, vehicleCostPerKm } from '@jjd/shared';
 import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, STAFF, OFFICE } from '../lib/auth.js';
@@ -318,10 +318,18 @@ vehiclesRouter.patch(
   '/:id',
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
-    const d = vehicleCostInput.partial().parse(req.body);
-    const keys = ['fuelConsoL100', 'fuelPricePerL', 'costPerKmExtra', 'parkingMonthly', 'otherMonthly'] as const;
-    const data: Record<string, number | null> = {};
-    for (const k of keys) if (k in d) data[k] = d[k] ?? null;
+    const d = vehicleInput.partial().parse(req.body);
+    const keys = [
+      'brand', 'model', 'plate', 'type', 'fuel', 'vin', 'km', 'firstRegistration', 'nextInspection',
+      'circulationTax', 'biv', 'driver', 'equipment', 'depot', 'status', 'note',
+      'fuelConsoL100', 'fuelPricePerL', 'costPerKmExtra', 'parkingMonthly', 'otherMonthly',
+    ] as const;
+    const data: Record<string, unknown> = {};
+    for (const k of keys) {
+      if (!(k in d)) continue;
+      if (k === 'status') { if (d.status) data.status = d.status; continue; } // colonne non nullable
+      data[k] = d[k] ?? null;
+    }
     await prisma.vehicle.update({ where: { id: req.params.id }, data });
     res.json({ vehicle: await withCost(req.params.id!) });
   }),

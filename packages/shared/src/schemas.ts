@@ -2,7 +2,7 @@ import { z } from 'zod';
 import {
   ROLES, ENTITIES, WORKSITE_STATUSES, WORKSITE_PRIORITIES, CRM_STAGES, CRM_LOST_REASONS,
   CONTACT_TYPES, CLIENT_KINDS, WORKER_CONTRACT_TYPES, LEGAL_DOC_TYPES,
-  BUILDING_CONTACT_ROLES, OCCUPANT_KINDS,
+  BUILDING_CONTACT_ROLES, OCCUPANT_KINDS, VEHICLE_STATUSES,
 } from './enums.js';
 
 const nonEmpty = z.string().trim().min(1);
@@ -231,6 +231,27 @@ export const vehicleCostInput = z.object({
   otherMonthly: z.coerce.number().min(0).max(5000).nullish(),
 });
 export type VehicleCostInput = z.infer<typeof vehicleCostInput>;
+
+/** Fiche véhicule — infos générales + statut. Le coût de revient se modifie dans la même fiche. */
+export const vehicleInput = z.object({
+  brand: z.string().trim().nullish(),
+  model: z.string().trim().nullish(),
+  plate: z.string().trim().nullish(),
+  type: z.string().trim().nullish(),
+  fuel: z.string().trim().nullish(),
+  vin: z.string().trim().nullish(),
+  km: z.string().trim().nullish(),
+  firstRegistration: z.coerce.date().nullish(),
+  nextInspection: z.coerce.date().nullish(),
+  circulationTax: z.coerce.number().nonnegative().nullish(),
+  biv: z.coerce.number().nonnegative().nullish(),
+  driver: z.string().trim().nullish(),
+  equipment: z.string().trim().nullish(),
+  depot: z.string().trim().nullish(),
+  status: z.enum(VEHICLE_STATUSES).nullish(),
+  note: z.string().trim().nullish(),
+}).merge(vehicleCostInput);
+export type VehicleInput = z.infer<typeof vehicleInput>;
 
 /** Dépôt de l'entreprise — point de départ des trajets véhicules. */
 export const depotInput = z.object({

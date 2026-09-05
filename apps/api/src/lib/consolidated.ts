@@ -152,7 +152,7 @@ export async function consolidatedPnl(input: ConsolidatedInput) {
  * « Part GT » = ÷ 3.
  */
 export async function profitShare(_year?: number) {
-  const [worksites, buys, sells, times, transportMap] = await Promise.all([
+  const [worksites, buys, sells, times, transportMap, materielTontonAgg, dejaPayeTontonAgg] = await Promise.all([
     prisma.worksite.findMany({ where: { kind: 'project' }, select: { id: true, entity: true } }),
     prisma.ledgerEntry.findMany({
       where: { direction: 'purchase', worksiteId: { not: null } },
@@ -161,6 +161,11 @@ export async function profitShare(_year?: number) {
     prisma.ledgerEntry.groupBy({ by: ['worksiteId'], where: { direction: 'sale', paymentStatus: { contains: 'Pay' }, worksiteId: { not: null } }, _sum: { ht: true } }),
     prisma.timeEntry.groupBy({ by: ['worksiteId'], where: { status: { in: ['approved', 'submitted'] }, worksiteId: { not: null } }, _sum: { amount: true } }),
     allWorksitesTransport(),
+    // Matériel que Tonton achète pour un chantier via sa société puis nous refacture (à
+    // rembourser en plus de sa part de bénéfice — ce n'est pas une prestation).
+    prisma.ledgerEntry.aggregate({ where: { direction: 'purchase', categoryRaw: 'Matériel - Tonton' }, _sum: { ht: true } }),
+    // Déjà versé sur son bénéfice (factures "Rémunération - Tonton" à sa société GT Light Concept).
+    prisma.ledgerEntry.aggregate({ where: { direction: 'purchase', categoryRaw: 'Rémunération - Tonton' }, _sum: { ht: true } }),
   ]);
   // "Rémunération - Ouvrier" (ouvriers JJD pointés) remplace l'estimation par pointage plutôt
   // que de s'y ajouter (sinon double compte). Les autres achats — dont "Rémunération -
@@ -207,6 +212,11 @@ export async function profitShare(_year?: number) {
       profit: tontonProfit,
       partGt: round2(tontonProfit / 3),
       resteJjd: round2(tontonProfit - tontonProfit / 3),
+      // Solde = sa part de bénéfice + le matériel qu'il a avancé − ce qu'on lui a déjà versé.
+      // Positif = on lui doit encore de l'argent ; négatif = on a payé plus que ce qu'il fallait.
+      materielTonton: round2(materielTontonAgg._sum.ht ?? 0),
+      dejaPayeTonton: round2(dejaPayeTontonAgg._sum.ht ?? 0),
+      solde: round2(tontonProfit / 3 + (materielTontonAgg._sum.ht ?? 0) - (dejaPayeTontonAgg._sum.ht ?? 0)),
     },
     m7: { worksites: totals.m7!.worksites, profit: round2(totals.m7!.profit) },
   };

@@ -14,7 +14,10 @@ interface Pnl {
 }
 interface Share {
   jjd: { worksites: number; profit: number; david: number; julien: number };
-  tonton: { worksites: number; profit: number; partGt: number; resteJjd: number };
+  tonton: {
+    worksites: number; profit: number; partGt: number; resteJjd: number;
+    materielTonton: number; dejaPayeTonton: number; solde: number;
+  };
   m7: { worksites: number; profit: number };
 }
 const MONTHS = ['—', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
@@ -125,6 +128,21 @@ export default function FinancesPage() {
                   <div className="value" style={{ fontSize: '1.4rem', fontWeight: 800, margin: '0.3rem 0 0.6rem' }}><Money value={share.tonton.profit} /></div>
                   <div className="row" style={{ justifyContent: 'space-between' }}><span>Part GT (⅓)</span><strong><Money value={share.tonton.partGt} /></strong></div>
                   <div className="row" style={{ justifyContent: 'space-between' }}><span>Reste JJD</span><strong><Money value={share.tonton.resteJjd} /></strong></div>
+                </div>
+                <div className="card card-pad">
+                  <div className="eyebrow">Solde Tonton (GT Light Concept)</div>
+                  <div
+                    className="value"
+                    style={{ fontSize: '1.4rem', fontWeight: 800, margin: '0.3rem 0 0.6rem', color: share.tonton.solde > 0 ? 'var(--crit)' : 'var(--ok)' }}
+                  >
+                    <Money value={share.tonton.solde} sign />
+                  </div>
+                  <div className="muted" style={{ fontSize: '0.8rem', marginBottom: '0.5rem' }}>
+                    {share.tonton.solde > 0 ? 'Reste à lui verser' : share.tonton.solde < 0 ? 'Il a reçu plus que dû' : 'À jour'}
+                  </div>
+                  <div className="row" style={{ justifyContent: 'space-between' }}><span>Part GT (⅓)</span><strong><Money value={share.tonton.partGt} /></strong></div>
+                  <div className="row" style={{ justifyContent: 'space-between' }}><span>+ Matériel avancé</span><strong><Money value={share.tonton.materielTonton} /></strong></div>
+                  <div className="row" style={{ justifyContent: 'space-between' }}><span>− Déjà versé</span><strong><Money value={share.tonton.dejaPayeTonton} /></strong></div>
                 </div>
               </div>
             </>

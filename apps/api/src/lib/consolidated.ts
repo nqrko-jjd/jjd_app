@@ -19,9 +19,21 @@ export function entityOf(cat: string | null, wsEntity: string | null): 'jjd' | '
   return 'autre';
 }
 
+/**
+ * Rémunération versée à un ouvrier JJD pointé (payé à la journée sur base du
+ * pointage, puis facturé) — à distinguer de « Rémunération - Julien/Tonton »
+ * (associés) et « Rémunération - M7 » (ancien associé, reclassé sous-traitance :
+ * il ne pointe pas, sa facture s'ajoute au coût du chantier sans remplacer rien).
+ */
+export function isOuvrierRemuneration(cat: string | null): boolean {
+  const c = norm(cat);
+  return c === 'rémunération - ouvrier' || c === 'remuneration - ouvrier';
+}
+
 /** Regroupe une catégorie de dépense dans une section du compte de résultat. */
 export function section(cat: string | null): string {
   const c = norm(cat);
+  if (c.includes('m7')) return 'sous_traitance';
   if (c.startsWith('rémunération') || c.startsWith('remuneration')) return 'salaires';
   if (c.includes('sous-trait')) return 'sous_traitance';
   if (c.startsWith('matériel') || c.startsWith('materiel')) return 'materiel';
@@ -142,12 +154,24 @@ export async function consolidatedPnl(input: ConsolidatedInput) {
 export async function profitShare(_year?: number) {
   const [worksites, buys, sells, times, transportMap] = await Promise.all([
     prisma.worksite.findMany({ where: { kind: 'project' }, select: { id: true, entity: true } }),
-    prisma.ledgerEntry.groupBy({ by: ['worksiteId'], where: { direction: 'purchase', worksiteId: { not: null } }, _sum: { ht: true } }),
+    prisma.ledgerEntry.findMany({
+      where: { direction: 'purchase', worksiteId: { not: null } },
+      select: { worksiteId: true, ht: true, categoryRaw: true },
+    }),
     prisma.ledgerEntry.groupBy({ by: ['worksiteId'], where: { direction: 'sale', paymentStatus: { contains: 'Pay' }, worksiteId: { not: null } }, _sum: { ht: true } }),
     prisma.timeEntry.groupBy({ by: ['worksiteId'], where: { status: { in: ['approved', 'submitted'] }, worksiteId: { not: null } }, _sum: { amount: true } }),
     allWorksitesTransport(),
   ]);
-  const buyMap = new Map(buys.map((b) => [b.worksiteId, b._sum.ht ?? 0]));
+  // "Rémunération - Ouvrier" (ouvriers JJD pointés) remplace l'estimation par pointage plutôt
+  // que de s'y ajouter (sinon double compte). Les autres achats — dont "Rémunération -
+  // Julien/Tonton/M7", personnes distinctes des ouvriers pointés — s'additionnent normalement.
+  const buyMap = new Map<string, number>();
+  const invoicedLabourMap = new Map<string, number>();
+  for (const b of buys) {
+    if (!b.worksiteId) continue;
+    const target = isOuvrierRemuneration(b.categoryRaw) ? invoicedLabourMap : buyMap;
+    target.set(b.worksiteId, (target.get(b.worksiteId) ?? 0) + b.ht);
+  }
   const sellMap = new Map(sells.map((s) => [s.worksiteId, s._sum.ht ?? 0]));
   const timeMap = new Map(times.map((t) => [t.worksiteId, t._sum.amount ?? 0]));
 
@@ -160,7 +184,9 @@ export async function profitShare(_year?: number) {
   for (const w of worksites) {
     const ent = (w.entity as keyof typeof totals) ?? 'jjd';
     if (!totals[ent]) continue;
-    const profit = (sellMap.get(w.id) ?? 0) - (buyMap.get(w.id) ?? 0) - (timeMap.get(w.id) ?? 0) - (transportMap.get(w.id) ?? 0);
+    const invoicedLabour = invoicedLabourMap.get(w.id) ?? 0;
+    const labourCost = invoicedLabour > 0 ? invoicedLabour : (timeMap.get(w.id) ?? 0);
+    const profit = (sellMap.get(w.id) ?? 0) - (buyMap.get(w.id) ?? 0) - labourCost - (transportMap.get(w.id) ?? 0);
     totals[ent].worksites += 1;
     totals[ent].profit += profit;
   }

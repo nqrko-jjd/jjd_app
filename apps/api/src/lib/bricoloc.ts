@@ -102,10 +102,23 @@ export function syncChantierSafe(ws: WorksiteLike): void {
 
 export async function getStock(q?: string) {
   const r = await call<{ products: BricolocProduct[] }>('/stock', { query: q ? { q } : {} });
-  return { products: r.products.map((p) => ({ ...p, image: absImg(p.image) })) };
+  // Champs ajoutés récemment côté Bricoloc (specs, description, fiche technique…) :
+  // tolère une réponse d'une instance pas encore redéployée.
+  return {
+    products: r.products.map((p) => ({
+      ...p,
+      image: absImg(p.image),
+      model: p.model ?? null,
+      shortDescription: p.shortDescription ?? null,
+      description: p.description ?? null,
+      specs: p.specs ?? {},
+      manualUrl: p.manualUrl ?? null,
+      documents: p.documents ?? [],
+    })),
+  };
 }
 export function getConsumables() {
-  return call<{ consumables: { id: string; slug: string; name: string; stockQty: number | null }[] }>(
+  return call<{ consumables: { id: string; slug: string; name: string; stockQty: number | null; shortDescription: string | null }[] }>(
     '/consumables',
   );
 }
@@ -127,8 +140,8 @@ export function createLoan(body: {
     { method: 'POST', body },
   );
 }
-export function returnLoan(body: { code: string; returnedBy?: string; note?: string; toState?: string }) {
-  return call<{ loanId: string; unitId: string; state: string }>('/returns', { method: 'POST', body });
+export function returnLoan(body: { code: string; returnedBy?: string; note?: string; toState?: string; storageLocation?: string }) {
+  return call<{ loanId: string; unitId: string; state: string; storageLocation: string | null }>('/returns', { method: 'POST', body });
 }
 export function logConsumption(body: {
   code?: string;
@@ -152,8 +165,14 @@ export interface BricolocProduct {
   name: string;
   kind: string;
   brand: string | null;
+  model: string | null;
   image: string | null;
   category: string | null;
+  shortDescription: string | null;
+  description: string | null;
+  specs: Record<string, string>;
+  manualUrl: string | null;
+  documents: { label: string; url: string }[];
   total: number;
   available: number;
   onSite: number;

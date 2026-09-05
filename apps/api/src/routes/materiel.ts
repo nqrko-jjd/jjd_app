@@ -115,9 +115,10 @@ materielRouter.post(
   '/returns',
   requireAuth(...STAFF),
   asyncHandler(async (req, res) => {
-    const { code, note, toState } = req.body ?? {};
+    const { code, note, toState, storageLocation } = req.body ?? {};
     if (!code) throw new HttpError(422, 'code requis');
-    res.json(await returnLoan({ code, returnedBy: actorName(req), note, toState }));
+    if (!storageLocation) throw new HttpError(422, 'Emplacement de rangement requis (scanner la zone où l’outil est remis)');
+    res.json(await returnLoan({ code, returnedBy: actorName(req), note, toState, storageLocation }));
   }),
 );
 

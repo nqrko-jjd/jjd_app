@@ -17,10 +17,12 @@ interface WS {
 export default function ChantiersPage() {
   const [q, setQ] = useState('');
   const [status, setStatus] = useState('');
+  const [kind, setKind] = useState<'project' | 'overhead'>('project');
   const [creating, setCreating] = useState(false);
   const params = new URLSearchParams();
   if (q) params.set('q', q);
   if (status) params.set('status', status);
+  params.set('kind', kind);
   const { data, loading, reload } = useApi<{ items: WS[] }>(`/api/worksites?${params}`);
   const { data: refs } = useApi<{
     clients: { id: string; name: string }[];
@@ -57,18 +59,24 @@ export default function ChantiersPage() {
         />
       )}
       <PageHead
-        title="Chantiers"
-        sub={data ? `${data.items.length} chantiers` : undefined}
-        action={<button className="btn primary" onClick={() => setCreating(true)}>+ Nouveau chantier</button>}
+        title={kind === 'project' ? 'Chantiers' : 'Charges'}
+        sub={data ? `${data.items.length} ${kind === 'project' ? 'chantiers' : 'postes de charges'}` : undefined}
+        action={kind === 'project' ? <button className="btn primary" onClick={() => setCreating(true)}>+ Nouveau chantier</button> : undefined}
       />
+      <div className="seg" style={{ marginBottom: '1rem' }}>
+        <button className={kind === 'project' ? 'on' : ''} onClick={() => setKind('project')}>Chantiers</button>
+        <button className={kind === 'overhead' ? 'on' : ''} onClick={() => setKind('overhead')}>Charges</button>
+      </div>
       <div className="row" style={{ marginBottom: '1rem' }}>
         <input className="input" style={{ maxWidth: 280 }} placeholder="Rechercher (réf, titre, ville)…" value={q} onChange={(e) => setQ(e.target.value)} />
-        <select className="select" style={{ maxWidth: 200 }} value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option value="">Tous les statuts</option>
-          {Object.entries(WORKSITE_STATUS_LABEL).map(([k, v]) => (
-            <option key={k} value={k}>{v}</option>
-          ))}
-        </select>
+        {kind === 'project' && (
+          <select className="select" style={{ maxWidth: 200 }} value={status} onChange={(e) => setStatus(e.target.value)}>
+            <option value="">Tous les statuts</option>
+            {Object.entries(WORKSITE_STATUS_LABEL).map(([k, v]) => (
+              <option key={k} value={k}>{v}</option>
+            ))}
+          </select>
+        )}
       </div>
 
       {loading && <div className="empty">Chargement…</div>}

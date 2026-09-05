@@ -7,6 +7,7 @@ import { PageHead, StatusBadge, PriorityBadge, EntityBadge, Money, formatDateBE 
 import { FormModal, toDateInput, type FieldDef } from '@/components/FormModal';
 import { ChantierThread } from '@/components/ChantierThread';
 import { WorksiteTasks } from '@/components/WorksiteTasks';
+import { Donut } from '@/lib/charts';
 import { WORKSITE_STATUSES, WORKSITE_STATUS_LABEL, WORKSITE_PRIORITIES, WORKSITE_PRIORITY_LABEL, ENTITIES, ENTITY_LABEL, type WorksiteMargin } from '@jjd/shared';
 
 interface Detail {
@@ -78,6 +79,11 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
         sub={`${w.ref} · ${[w.address, w.city].filter(Boolean).join(', ') || 'adresse non renseignée'}`}
         action={
           <div className="row">
+            {data.margin && (
+              <a href={`/imprimer/chantier/${id}`} target="_blank" rel="noreferrer" className="btn">
+                Résumé facturation →
+              </a>
+            )}
             <button className="btn" onClick={() => setEditing(true)}>Modifier</button>
             <Link href="/app/chantiers" className="btn">← Chantiers</Link>
           </div>
@@ -117,10 +123,23 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
                 : undefined}
             />
             <MiniKpi label="Marge réelle" value={<Money value={data.margin.realMargin} sign />} note={data.margin.realMarginPct != null ? `${data.margin.realMarginPct} %` : undefined} />
+            <MiniKpi label="Marge hypothétique" value={<Money value={data.margin.forecastMargin} sign />} note="devisé − coûts engagés" />
             <MiniKpi label="Reste à facturer" value={<Money value={data.margin.leftToInvoice} />} />
             {data.margin.partnerShare > 0 && <MiniKpi label="Part GT (33 %)" value={<Money value={data.margin.partnerShare} />} />}
           </div>
           <TransportDetail t={data.margin.transport} />
+          {data.margin.totalCost > 0 && (
+            <div className="card card-pad" style={{ marginBottom: '1.5rem', maxWidth: 420 }}>
+              <div className="eyebrow" style={{ marginBottom: '0.6rem' }}>Répartition des coûts</div>
+              <Donut
+                data={[
+                  { label: 'Matériaux', total: data.margin.materialCost },
+                  { label: "Main-d'œuvre", total: data.margin.labourCost },
+                  { label: 'Véhicule', total: data.margin.vehicleCost },
+                ].filter((d) => d.total > 0)}
+              />
+            </div>
+          )}
         </>
       )}
 

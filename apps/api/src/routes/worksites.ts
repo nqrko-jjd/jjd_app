@@ -32,8 +32,8 @@ worksitesRouter.get(
   '/',
   requireAuth(...STAFF),
   asyncHandler(async (req, res) => {
-    const { status, entity, q, archived } = req.query as Record<string, string>;
-    const where: Record<string, unknown> = { archived: archived === '1' ? true : false };
+    const { status, entity, q, archived, kind } = req.query as Record<string, string>;
+    const where: Record<string, unknown> = { archived: archived === '1' ? true : false, kind: kind || 'project' };
     if (status) where.status = status;
     if (entity) where.entity = entity;
     if (q) {

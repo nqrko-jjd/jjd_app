@@ -1,6 +1,7 @@
 import { computeWorksiteMargin, type Entity, type WorksiteMargin } from '@jjd/shared';
 import { prisma } from '../db.js';
 import { worksiteTransport, type WorksiteTransport } from './vehicle-cost.js';
+import { isOuvrierRemuneration } from './consolidated.js';
 
 /**
  * Marge réelle d'un chantier, calculée à partir des lignes du grand livre
@@ -26,12 +27,19 @@ export async function worksiteMargin(worksiteId: string): Promise<WorksiteMargin
   let invoicedHt = 0;
   let paidHt = 0;
   let materialCost = 0;
+  // Main-d'œuvre JJD (ouvriers pointés) déjà facturée : ils sont payés à la journée sur base
+  // du pointage, puis la facture "Rémunération - Ouvrier" formalise ce même paiement. Une fois
+  // passée, elle remplace l'estimation par pointage — sinon la main-d'œuvre compte deux fois.
+  // Les autres "Rémunération - ..." (Julien, Tonton, M7/sous-traitance) payent des personnes
+  // distinctes des ouvriers pointés : elles s'additionnent normalement, comme au dépôt d'origine.
+  let invoicedLabourCost = 0;
   for (const e of ledger) {
     if (e.direction === 'sale') {
       invoicedHt += e.ht;
       if ((e.paymentStatus ?? '').toLowerCase().includes('pay')) paidHt += e.ht;
     } else if (e.direction === 'purchase') {
-      materialCost += e.ht;
+      if (isOuvrierRemuneration(e.categoryRaw)) invoicedLabourCost += e.ht;
+      else materialCost += e.ht;
     } else if (e.direction === 'credit_note') {
       // note de crédit : signe déjà négatif dans la donnée, on additionne tel quel
       invoicedHt += e.ht;
@@ -39,13 +47,17 @@ export async function worksiteMargin(worksiteId: string): Promise<WorksiteMargin
     }
   }
 
+  // Tant qu'aucune facture "Rémunération - Ouvrier" n'existe pour ce chantier, on garde
+  // l'estimation par pointage (c'est elle qui sert à préparer la facture, cf. décompte mensuel).
+  const labourCost = invoicedLabourCost > 0 ? invoicedLabourCost : (time._sum.amount ?? 0);
+
   const margin = computeWorksiteMargin({
     entity: (ws.entity as Entity) ?? 'jjd',
     quotedHt: ws.quotedHt ?? 0,
     invoicedHt,
     paidHt,
     materialCost,
-    labourCost: time._sum.amount ?? 0,
+    labourCost,
     vehicleCost: transport.cost,
   });
   return { ...margin, transport };

@@ -14,6 +14,7 @@ const WORKER_NAV: Group[] = [
       { href: '/app', label: 'Aujourd’hui', ic: '◷' },
       { href: '/app/mes-chantiers', label: 'Mes chantiers', ic: '▤' },
       { href: '/app/mes-heures', label: 'Mes heures', ic: '☰' },
+      { href: '/app/materiel', label: 'Matériel', ic: '⚒' },
     ],
   },
 ];

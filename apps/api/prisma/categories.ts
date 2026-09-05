@@ -46,9 +46,9 @@ export const CATEGORY_SEED: { code: string; label: string; kind: string; entity?
   { code: 'E-06', label: 'Achat machine', kind: 'expense' },
   { code: 'E-08', label: 'Charges fixes dépôt', kind: 'expense' },
   { code: 'E-09', label: 'Assurance Dépôt', kind: 'expense' },
-  { code: 'E-10', label: 'Charges véhicules', kind: 'expense' },
+  { code: 'E-10', label: 'Rémunération ouvrier', kind: 'expense' },
   { code: 'E-12', label: 'Crédit Auto', kind: 'expense' },
   { code: 'E-14', label: 'Réparation auto', kind: 'expense' },
-  { code: 'E-17', label: 'Charges', kind: 'expense' },
+  { code: 'E-17', label: 'TVA', kind: 'expense' },
   { code: 'E-18', label: 'Impôt', kind: 'tax' },
 ];

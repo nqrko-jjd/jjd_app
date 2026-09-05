@@ -15,6 +15,11 @@ async function main() {
       create: { code: c.code, label: c.label, kind: c.kind, entity: c.entity ?? null },
       update: { label: c.label, kind: c.kind, entity: c.entity ?? null },
     });
+    // Les chantiers "frais généraux" (E-xx) portent le même intitulé que leur catégorie —
+    // corrige les titres déjà importés si le libellé source (categories.ts) a changé depuis.
+    if (c.code.startsWith('E-')) {
+      await prisma.worksite.updateMany({ where: { ref: c.code, kind: 'overhead' }, data: { title: c.label } });
+    }
   }
 
   // ── Paramètres société

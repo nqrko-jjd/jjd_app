@@ -30,6 +30,15 @@ export function isOuvrierRemuneration(cat: string | null): boolean {
   return c === 'rémunération - ouvrier' || c === 'remuneration - ouvrier';
 }
 
+/**
+ * Une note de crédit peut réduire une vente ("Note de crédit vente") ou un achat
+ * ("Note de crédit") — le montant (déjà négatif) doit rejoindre le bon camp
+ * (CA / coût), sinon vente et achat se neutralisent l'un l'autre à tort.
+ */
+export function isCreditNoteSale(cat: string | null): boolean {
+  return norm(cat).includes('vente');
+}
+
 /** Regroupe une catégorie de dépense dans une section du compte de résultat. */
 export function section(cat: string | null): string {
   const c = norm(cat);
@@ -152,13 +161,21 @@ export async function consolidatedPnl(input: ConsolidatedInput) {
  * « Part GT » = ÷ 3.
  */
 export async function profitShare(_year?: number) {
-  const [worksites, buys, sells, times, transportMap, materielTontonAgg, dejaPayeTontonAgg] = await Promise.all([
+  const [worksites, buys, salesRaw, creditNotesRaw, times, transportMap, materielTontonAgg, dejaPayeTontonAgg] = await Promise.all([
     prisma.worksite.findMany({ where: { kind: 'project' }, select: { id: true, entity: true } }),
     prisma.ledgerEntry.findMany({
       where: { direction: 'purchase', worksiteId: { not: null } },
       select: { worksiteId: true, ht: true, categoryRaw: true },
     }),
-    prisma.ledgerEntry.groupBy({ by: ['worksiteId'], where: { direction: 'sale', paymentStatus: { contains: 'Pay' }, worksiteId: { not: null } }, _sum: { ht: true } }),
+    prisma.ledgerEntry.findMany({
+      where: { direction: 'sale', paymentStatus: { contains: 'Pay' }, worksiteId: { not: null } },
+      select: { worksiteId: true, ht: true },
+    }),
+    // Notes de crédit : réduisent le CA encaissé si "vente" (et payées), sinon le coût matériaux.
+    prisma.ledgerEntry.findMany({
+      where: { direction: 'credit_note', worksiteId: { not: null } },
+      select: { worksiteId: true, ht: true, categoryRaw: true, paymentStatus: true },
+    }),
     prisma.timeEntry.groupBy({ by: ['worksiteId'], where: { status: { in: ['approved', 'submitted'] }, worksiteId: { not: null } }, _sum: { amount: true } }),
     allWorksitesTransport(),
     // Matériel que Tonton achète pour un chantier via sa société puis nous refacture (à
@@ -177,7 +194,19 @@ export async function profitShare(_year?: number) {
     const target = isOuvrierRemuneration(b.categoryRaw) ? invoicedLabourMap : buyMap;
     target.set(b.worksiteId, (target.get(b.worksiteId) ?? 0) + b.ht);
   }
-  const sellMap = new Map(sells.map((s) => [s.worksiteId, s._sum.ht ?? 0]));
+  const sellMap = new Map<string, number>();
+  for (const s of salesRaw) {
+    if (!s.worksiteId) continue;
+    sellMap.set(s.worksiteId, (sellMap.get(s.worksiteId) ?? 0) + s.ht);
+  }
+  for (const c of creditNotesRaw) {
+    if (!c.worksiteId) continue;
+    if (isCreditNoteSale(c.categoryRaw)) {
+      if ((c.paymentStatus ?? '').toLowerCase().includes('pay')) sellMap.set(c.worksiteId, (sellMap.get(c.worksiteId) ?? 0) + c.ht);
+    } else {
+      buyMap.set(c.worksiteId, (buyMap.get(c.worksiteId) ?? 0) + c.ht);
+    }
+  }
   const timeMap = new Map(times.map((t) => [t.worksiteId, t._sum.amount ?? 0]));
 
   const totals: Record<string, { worksites: number; profit: number }> = {

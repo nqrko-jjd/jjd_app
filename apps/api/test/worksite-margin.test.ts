@@ -78,3 +78,28 @@ test('worksiteMargin : "Rémunération - Julien/Tonton/M7" paye une personne dis
   assert.equal(m!.labourCost, 260, 'la main-d\'œuvre pointée des ouvriers ne doit pas être remplacée par la facture de Julien');
   assert.equal(m!.materialCost, 150 + 8000, 'la facture Rémunération - Julien s\'ajoute aux autres achats');
 });
+
+test('worksiteMargin : note de crédit vente réduit le CA, note de crédit achat réduit les coûts (pas l\'inverse)', async () => {
+  await prisma.ledgerEntry.create({
+    data: {
+      direction: 'sale', worksiteId, ht: 1000, paymentStatus: 'Payé',
+      date: new Date('2026-03-08'), source: 'test',
+    },
+  });
+  await prisma.ledgerEntry.create({
+    data: {
+      direction: 'credit_note', worksiteId, ht: -100, categoryRaw: 'Note de crédit vente', paymentStatus: 'Payé',
+      date: new Date('2026-03-09'), source: 'test',
+    },
+  });
+  await prisma.ledgerEntry.create({
+    data: {
+      direction: 'credit_note', worksiteId, ht: -30, categoryRaw: 'Note de crédit',
+      date: new Date('2026-03-09'), source: 'test',
+    },
+  });
+  const m = await worksiteMargin(worksiteId);
+  assert.ok(m);
+  assert.equal(m!.paidHt, 1000 - 100, 'la note de crédit vente réduit le CA encaissé');
+  assert.equal(m!.materialCost, 150 + 8000 - 30, 'la note de crédit achat réduit le coût matériaux, pas le CA');
+});

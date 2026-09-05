@@ -1,7 +1,7 @@
 import { computeWorksiteMargin, type Entity, type WorksiteMargin } from '@jjd/shared';
 import { prisma } from '../db.js';
 import { worksiteTransport, type WorksiteTransport } from './vehicle-cost.js';
-import { isOuvrierRemuneration } from './consolidated.js';
+import { isOuvrierRemuneration, isCreditNoteSale } from './consolidated.js';
 
 /**
  * Marge réelle d'un chantier, calculée à partir des lignes du grand livre
@@ -41,9 +41,14 @@ export async function worksiteMargin(worksiteId: string): Promise<WorksiteMargin
       if (isOuvrierRemuneration(e.categoryRaw)) invoicedLabourCost += e.ht;
       else materialCost += e.ht;
     } else if (e.direction === 'credit_note') {
-      // note de crédit : signe déjà négatif dans la donnée, on additionne tel quel
-      invoicedHt += e.ht;
-      paidHt += e.ht;
+      // signe déjà négatif dans la donnée — mais une note de crédit d'achat doit réduire
+      // le coût matériaux, pas le CA (sinon vente et achat se neutralisent à tort).
+      if (isCreditNoteSale(e.categoryRaw)) {
+        invoicedHt += e.ht;
+        if ((e.paymentStatus ?? '').toLowerCase().includes('pay')) paidHt += e.ht;
+      } else {
+        materialCost += e.ht;
+      }
     }
   }
 

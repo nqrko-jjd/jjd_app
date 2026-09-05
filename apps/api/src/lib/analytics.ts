@@ -1,6 +1,6 @@
 import { prisma } from '../db.js';
 import { round2 } from '@jjd/shared';
-import { section, SECTION_LABEL, entityOf, isOuvrierRemuneration } from './consolidated.js';
+import { section, SECTION_LABEL, entityOf, isOuvrierRemuneration, isCreditNoteSale } from './consolidated.js';
 
 /**
  * Séries pour la page « Analyse » : mensuel (CA / dépenses / résultat / heures),
@@ -149,12 +149,19 @@ export async function analytics(input: AnalyticsInput = {}) {
 
   /* ---------------- top chantiers (marge réelle sur la fenêtre) ---------------- */
   const wsMap = new Map(worksites.map((w) => [w.id, w]));
-  const [buys, sells, timeByWs] = await Promise.all([
+  const [buys, salesRaw, creditNotesRaw, timeByWs] = await Promise.all([
     prisma.ledgerEntry.findMany({
       where: { direction: 'purchase', worksiteId: { not: null }, date: { gte: win.from } },
       select: { worksiteId: true, ht: true, categoryRaw: true },
     }),
-    prisma.ledgerEntry.groupBy({ by: ['worksiteId'], where: { direction: 'sale', paymentStatus: { contains: 'Pay' }, worksiteId: { not: null }, date: { gte: win.from } }, _sum: { ht: true } }),
+    prisma.ledgerEntry.findMany({
+      where: { direction: 'sale', paymentStatus: { contains: 'Pay' }, worksiteId: { not: null }, date: { gte: win.from } },
+      select: { worksiteId: true, ht: true },
+    }),
+    prisma.ledgerEntry.findMany({
+      where: { direction: 'credit_note', worksiteId: { not: null }, date: { gte: win.from } },
+      select: { worksiteId: true, ht: true, categoryRaw: true, paymentStatus: true },
+    }),
     prisma.timeEntry.groupBy({ by: ['worksiteId'], where: { status: { in: ['approved', 'submitted'] }, worksiteId: { not: null }, date: { gte: win.from } }, _sum: { amount: true } }),
   ]);
   // "Rémunération - Ouvrier" (ouvriers JJD pointés, payés à la journée puis facturés) remplace
@@ -168,16 +175,29 @@ export async function analytics(input: AnalyticsInput = {}) {
     const target = isOuvrierRemuneration(b.categoryRaw) ? invoicedLabourW : buyW;
     target.set(b.worksiteId, (target.get(b.worksiteId) ?? 0) + b.ht);
   }
+  const sellW = new Map<string, number>();
+  for (const s of salesRaw) {
+    if (!s.worksiteId) continue;
+    sellW.set(s.worksiteId, (sellW.get(s.worksiteId) ?? 0) + s.ht);
+  }
+  // Notes de crédit : réduisent le CA encaissé si "vente" (et payées), sinon le coût matériaux.
+  for (const c of creditNotesRaw) {
+    if (!c.worksiteId) continue;
+    if (isCreditNoteSale(c.categoryRaw)) {
+      if ((c.paymentStatus ?? '').toLowerCase().includes('pay')) sellW.set(c.worksiteId, (sellW.get(c.worksiteId) ?? 0) + c.ht);
+    } else {
+      buyW.set(c.worksiteId, (buyW.get(c.worksiteId) ?? 0) + c.ht);
+    }
+  }
   const timeW = new Map(timeByWs.map((t) => [t.worksiteId, t._sum.amount ?? 0]));
-  const topWorksites = sells
-    .map((s) => {
-      const w = s.worksiteId ? wsMap.get(s.worksiteId) : null;
+  const topWorksites = [...sellW.entries()]
+    .map(([worksiteId, paidHt]) => {
+      const w = wsMap.get(worksiteId);
       if (!w) return null;
       if (input.entity && w.entity !== input.entity) return null;
-      const paidHt = s._sum.ht ?? 0;
-      const invoicedLabour = invoicedLabourW.get(s.worksiteId!) ?? 0;
-      const labourCost = invoicedLabour > 0 ? invoicedLabour : (timeW.get(s.worksiteId!) ?? 0);
-      const margin = round2(paidHt - (buyW.get(s.worksiteId!) ?? 0) - labourCost);
+      const invoicedLabour = invoicedLabourW.get(worksiteId) ?? 0;
+      const labourCost = invoicedLabour > 0 ? invoicedLabour : (timeW.get(worksiteId) ?? 0);
+      const margin = round2(paidHt - (buyW.get(worksiteId) ?? 0) - labourCost);
       return { ref: w.ref, title: w.title, entity: w.entity, paidHt: round2(paidHt), margin };
     })
     .filter((x): x is NonNullable<typeof x> => !!x)

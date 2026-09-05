@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { CATEGORY_SEED } from './categories.js';
+import { TONTON_REFS } from './tonton-refs.js';
 
 // Autonome (pas d'import de src/) pour tourner aussi dans l'image Docker de prod.
 const hashPassword = (pw: string) => bcrypt.hash(pw, 10);
@@ -19,6 +20,25 @@ async function main() {
     // corrige les titres déjà importés si le libellé source (categories.ts) a changé depuis.
     if (c.code.startsWith('E-')) {
       await prisma.worksite.updateMany({ where: { ref: c.code, kind: 'overhead' }, data: { title: c.label } });
+    }
+  }
+
+  // ── Attribution JJD / Tonton des chantiers — d'après la vraie liste de l'onglet
+  // "Calculs Tonton" (celle qu'on utilise réellement pour son partage de bénéfice),
+  // plus fiable que la colonne "Attribution" de Data Projets. Idempotent : ne touche
+  // que les chantiers dont l'entité est désynchronisée (jamais "m7", laissé tel quel).
+  const tontonSet = new Set(TONTON_REFS.map((r) => r.toUpperCase()));
+  const projects = await prisma.worksite.findMany({
+    where: { kind: 'project' },
+    select: { id: true, ref: true, entity: true },
+  });
+  let entityFixed = 0;
+  for (const w of projects) {
+    const shouldBeTonton = tontonSet.has(w.ref.toUpperCase());
+    const target = shouldBeTonton ? 'tonton' : w.entity === 'tonton' ? 'jjd' : w.entity;
+    if (target !== w.entity) {
+      await prisma.worksite.update({ where: { id: w.id }, data: { entity: target } });
+      entityFixed++;
     }
   }
 
@@ -66,6 +86,7 @@ async function main() {
   const counts = {
     categories: await prisma.category.count(),
     users: await prisma.user.count(),
+    entityFixed,
   };
   console.log('Seed OK', counts);
 }

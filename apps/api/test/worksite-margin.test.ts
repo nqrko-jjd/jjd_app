@@ -79,6 +79,19 @@ test('worksiteMargin : "Rémunération - Julien/Tonton/M7" paye une personne dis
   assert.equal(m!.materialCost, 150 + 8000, 'la facture Rémunération - Julien s\'ajoute aux autres achats');
 });
 
+test('worksiteMargin : une facture "Non Payé" ne doit pas compter comme payée ("Non Payé" contient "Payé")', async () => {
+  await prisma.ledgerEntry.create({
+    data: {
+      direction: 'sale', worksiteId, ht: 55000, paymentStatus: 'Non Payé',
+      date: new Date('2026-03-10'), source: 'test',
+    },
+  });
+  const m = await worksiteMargin(worksiteId);
+  assert.ok(m);
+  assert.equal(m!.paidHt, 0, '"Non Payé" ne doit pas être compté dans le CA encaissé');
+  assert.equal(m!.invoicedHt, 55000, 'mais reste bien compté dans le CA facturé');
+});
+
 test('worksiteMargin : note de crédit vente réduit le CA, note de crédit achat réduit les coûts (pas l\'inverse)', async () => {
   await prisma.ledgerEntry.create({
     data: {
@@ -102,4 +115,17 @@ test('worksiteMargin : note de crédit vente réduit le CA, note de crédit acha
   assert.ok(m);
   assert.equal(m!.paidHt, 1000 - 100, 'la note de crédit vente réduit le CA encaissé');
   assert.equal(m!.materialCost, 150 + 8000 - 30, 'la note de crédit achat réduit le coût matériaux, pas le CA');
+});
+
+test('worksiteMargin : "Crédit auto" est un financement, pas une dépense — exclu du coût matériaux', async () => {
+  const before = (await worksiteMargin(worksiteId))!.materialCost;
+  await prisma.ledgerEntry.create({
+    data: {
+      direction: 'purchase', worksiteId, ht: 38000, categoryRaw: 'Crédit auto', supplierName: 'BMW Financial services',
+      date: new Date('2026-03-11'), source: 'test',
+    },
+  });
+  const m = await worksiteMargin(worksiteId);
+  assert.ok(m);
+  assert.equal(m!.materialCost, before, 'le crédit/leasing auto ne doit pas gonfler le coût matériaux');
 });

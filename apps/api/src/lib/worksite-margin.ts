@@ -1,7 +1,7 @@
 import { computeWorksiteMargin, type Entity, type WorksiteMargin } from '@jjd/shared';
 import { prisma } from '../db.js';
 import { worksiteTransport, type WorksiteTransport } from './vehicle-cost.js';
-import { isOuvrierRemuneration, isCreditNoteSale } from './consolidated.js';
+import { isOuvrierRemuneration, isCreditNoteSale, isPaid, isVehicleFinancing } from './consolidated.js';
 
 /**
  * Marge réelle d'un chantier, calculée à partir des lignes du grand livre
@@ -36,8 +36,9 @@ export async function worksiteMargin(worksiteId: string): Promise<WorksiteMargin
   for (const e of ledger) {
     if (e.direction === 'sale') {
       invoicedHt += e.ht;
-      if ((e.paymentStatus ?? '').toLowerCase().includes('pay')) paidHt += e.ht;
+      if (isPaid(e.paymentStatus)) paidHt += e.ht;
     } else if (e.direction === 'purchase') {
+      if (isVehicleFinancing(e.categoryRaw)) continue; // crédit/leasing : financement, pas une dépense
       if (isOuvrierRemuneration(e.categoryRaw)) invoicedLabourCost += e.ht;
       else materialCost += e.ht;
     } else if (e.direction === 'credit_note') {
@@ -45,8 +46,8 @@ export async function worksiteMargin(worksiteId: string): Promise<WorksiteMargin
       // le coût matériaux, pas le CA (sinon vente et achat se neutralisent à tort).
       if (isCreditNoteSale(e.categoryRaw)) {
         invoicedHt += e.ht;
-        if ((e.paymentStatus ?? '').toLowerCase().includes('pay')) paidHt += e.ht;
-      } else {
+        if (isPaid(e.paymentStatus)) paidHt += e.ht;
+      } else if (!isVehicleFinancing(e.categoryRaw)) {
         materialCost += e.ht;
       }
     }

@@ -9,6 +9,8 @@ import { allWorksitesTransport } from './vehicle-cost.js';
  */
 
 const norm = (s: string | null) => (s ?? '').toLowerCase().trim();
+// Égalité stricte : "Non Payé" contient "Payé" comme sous-chaîne, un .includes() les confondrait.
+export const isPaid = (s: string | null) => norm(s) === 'payé';
 
 export function entityOf(cat: string | null, wsEntity: string | null): 'jjd' | 'tonton' | 'm7' | 'autre' {
   const c = norm(cat);
@@ -37,6 +39,15 @@ export function isOuvrierRemuneration(cat: string | null): boolean {
  */
 export function isCreditNoteSale(cat: string | null): boolean {
   return norm(cat).includes('vente');
+}
+
+/**
+ * Crédit / leasing véhicule : un financement, pas une dépense d'exploitation — seuls
+ * les frais/intérêts réels (déjà dans « Charges ») comptent comme charge. Le capital
+ * emprunté ou remboursé n'entre donc pas dans le calcul des dépenses.
+ */
+export function isVehicleFinancing(cat: string | null): boolean {
+  return norm(cat) === 'crédit auto' || norm(cat) === 'credit auto';
 }
 
 /** Regroupe une catégorie de dépense dans une section du compte de résultat. */
@@ -91,6 +102,9 @@ export async function consolidatedPnl(input: ConsolidatedInput) {
   const creditNoteSales = { jjd: 0, tonton: 0, m7: 0, autre: 0 } as Record<string, number>;
   const expenseSections = new Map<string, { total: number; lines: Map<string, number> }>();
   let labour = 0;
+  // Une note de crédit d'achat n'est pas une dépense (c'est un fournisseur qui nous doit de
+  // l'argent) — elle réduit le total des dépenses mais n'apparaît pas comme sa propre catégorie.
+  let creditNoteAchatTotal = 0;
 
   for (const e of entries) {
     const ent = entityOf(e.categoryRaw, e.worksite?.entity ?? null);
@@ -98,10 +112,15 @@ export async function consolidatedPnl(input: ConsolidatedInput) {
 
     if (e.direction === 'sale') {
       revenueByEntity[ent] = (revenueByEntity[ent] ?? 0) + e.ht;
-    } else if (e.direction === 'credit_note' && norm(e.categoryRaw).includes('vente')) {
+    } else if (e.direction === 'credit_note' && isCreditNoteSale(e.categoryRaw)) {
       creditNoteSales[ent] = (creditNoteSales[ent] ?? 0) + e.ht;
+    } else if (e.direction === 'credit_note') {
+      if (!isVehicleFinancing(e.categoryRaw)) creditNoteAchatTotal += e.ht;
+    } else if (isVehicleFinancing(e.categoryRaw)) {
+      // crédit/leasing véhicule : financement, pas une dépense d'exploitation
+      continue;
     } else {
-      // achat ou note de crédit d'achat -> dépense
+      // achat -> dépense
       const sec = section(e.categoryRaw);
       if (sec === 'salaires') labour += e.ht;
       const bucket = expenseSections.get(sec) ?? { total: 0, lines: new Map() };
@@ -133,7 +152,7 @@ export async function consolidatedPnl(input: ConsolidatedInput) {
     }))
     .sort((a, b) => b.total - a.total);
 
-  const expenseTotal = round2(sections.reduce((a, s) => a + s.total, 0));
+  const expenseTotal = round2(sections.reduce((a, s) => a + s.total, 0) + creditNoteAchatTotal);
   const result = round2(netRevenue - expenseTotal);
   const margin = netRevenue > 0 ? round2((result / netRevenue) * 100) : null;
 
@@ -145,7 +164,7 @@ export async function consolidatedPnl(input: ConsolidatedInput) {
       creditNotes: creditNoteTotal,
       net: netRevenue,
     },
-    expenses: { total: expenseTotal, sections },
+    expenses: { total: expenseTotal, sections, creditNotesAchat: round2(creditNoteAchatTotal) },
     labour: round2(labour),
     timesheetLabour: round2(timeAgg._sum.amount ?? 0),
     result,
@@ -168,7 +187,7 @@ export async function profitShare(_year?: number) {
       select: { worksiteId: true, ht: true, categoryRaw: true },
     }),
     prisma.ledgerEntry.findMany({
-      where: { direction: 'sale', paymentStatus: { contains: 'Pay' }, worksiteId: { not: null } },
+      where: { direction: 'sale', paymentStatus: 'Payé', worksiteId: { not: null } },
       select: { worksiteId: true, ht: true },
     }),
     // Notes de crédit : réduisent le CA encaissé si "vente" (et payées), sinon le coût matériaux.
@@ -190,7 +209,7 @@ export async function profitShare(_year?: number) {
   const buyMap = new Map<string, number>();
   const invoicedLabourMap = new Map<string, number>();
   for (const b of buys) {
-    if (!b.worksiteId) continue;
+    if (!b.worksiteId || isVehicleFinancing(b.categoryRaw)) continue;
     const target = isOuvrierRemuneration(b.categoryRaw) ? invoicedLabourMap : buyMap;
     target.set(b.worksiteId, (target.get(b.worksiteId) ?? 0) + b.ht);
   }
@@ -200,9 +219,9 @@ export async function profitShare(_year?: number) {
     sellMap.set(s.worksiteId, (sellMap.get(s.worksiteId) ?? 0) + s.ht);
   }
   for (const c of creditNotesRaw) {
-    if (!c.worksiteId) continue;
+    if (!c.worksiteId || isVehicleFinancing(c.categoryRaw)) continue;
     if (isCreditNoteSale(c.categoryRaw)) {
-      if ((c.paymentStatus ?? '').toLowerCase().includes('pay')) sellMap.set(c.worksiteId, (sellMap.get(c.worksiteId) ?? 0) + c.ht);
+      if (isPaid(c.paymentStatus)) sellMap.set(c.worksiteId, (sellMap.get(c.worksiteId) ?? 0) + c.ht);
     } else {
       buyMap.set(c.worksiteId, (buyMap.get(c.worksiteId) ?? 0) + c.ht);
     }

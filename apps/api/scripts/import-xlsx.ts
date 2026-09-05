@@ -144,7 +144,24 @@ async function purge() {
 
 // ─────────────────────────────────────────────────────── Data Projets -> chantiers
 
-async function importWorksites(sh: SheetData) {
+/**
+ * Réfs "part de bénéfice Tonton" — telles que listées dans l'onglet « Calculs Tonton »,
+ * la liste que David/Julien utilisent réellement pour calculer ce qu'on lui doit.
+ * Plus fiable que la colonne "Attribution" de Data Projets, qui peut diverger (chantiers
+ * privés des associés, oublis de mise à jour...).
+ */
+function readTontonRefs(sh: SheetData | undefined): Set<string> {
+  const refs = new Set<string>();
+  if (!sh) return refs;
+  for (const row of sh.rows) {
+    if (row.r < 2) continue;
+    const ref = str(row.cells.A);
+    if (ref) refs.add(ref.toUpperCase());
+  }
+  return refs;
+}
+
+async function importWorksites(sh: SheetData, tontonRefs: Set<string>) {
   for (const row of sh.rows) {
     if (row.r < 26) continue; // lignes 2-25 = légende
     const ref = str(row.cells.A);
@@ -169,7 +186,7 @@ async function importWorksites(sh: SheetData) {
     const endedOn = parseLooseDate(row.cells.M);
     const quoted = parseAmount(row.cells.P);
 
-    const entity = attribution.includes('tonton') ? 'tonton' : attribution.includes('m7') ? 'm7' : 'jjd';
+    const entity = tontonRefs.has(ref.toUpperCase()) ? 'tonton' : attribution.includes('m7') ? 'm7' : 'jjd';
     const clientId = clientName ? await getContact(clientName, 'client') : null;
 
     // immeuble : si le client est un ACP, getContact l'a déjà créé ; on le relie
@@ -294,11 +311,13 @@ async function importLedger(sh: SheetData) {
     const ttc = parseAmount(c.M);
     if (!typeRaw && ht === null && ttc === null) continue;
 
-    const t = (typeRaw ?? '').toLowerCase();
-    const direction = t.includes('vente')
-      ? 'sale'
-      : t.includes('crédit') || t.includes('credit')
-        ? 'credit_note'
+    const t = (typeRaw ?? '').toLowerCase().trim();
+    // Attention : "Crédit Auto" (financement/leasing) contient "crédit" mais n'est pas une
+    // "Note de crédit" — un simple .includes('crédit') les confondrait à tort.
+    const direction = t.includes('note de crédit') || t.includes('note de credit')
+      ? 'credit_note'
+      : t === 'facture de vente'
+        ? 'sale'
         : 'purchase';
 
     let worksiteId: string | null = null;
@@ -523,7 +542,8 @@ async function main() {
 
   const dataProjets = byName('Data Projets');
   if (!dataProjets) throw new Error('Feuille « Data Projets » introuvable');
-  await importWorksites(dataProjets);
+  const tontonRefs = readTontonRefs(byName('Calculs Tonton'));
+  await importWorksites(dataProjets, tontonRefs);
   console.log('  chantiers  ', stats.worksites ?? 0, '(+', stats.worksites_overhead ?? 0, 'frais généraux)');
 
   // le compteur R- doit repartir au-dessus du plus grand numéro importé

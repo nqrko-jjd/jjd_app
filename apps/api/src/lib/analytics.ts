@@ -1,6 +1,6 @@
 import { prisma } from '../db.js';
 import { round2 } from '@jjd/shared';
-import { section, SECTION_LABEL, entityOf, isOuvrierRemuneration, isCreditNoteSale } from './consolidated.js';
+import { section, SECTION_LABEL, entityOf, isOuvrierRemuneration, isCreditNoteSale, isVehicleFinancing } from './consolidated.js';
 
 /**
  * Séries pour la page « Analyse » : mensuel (CA / dépenses / résultat / heures),
@@ -9,7 +9,8 @@ import { section, SECTION_LABEL, entityOf, isOuvrierRemuneration, isCreditNoteSa
 
 type Entity = 'jjd' | 'tonton' | 'm7';
 const norm = (s: string | null) => (s ?? '').toLowerCase();
-const isPaid = (s: string | null) => norm(s).includes('pay');
+// Égalité stricte : "Non Payé" contient "Payé" comme sous-chaîne, un .includes() les confondrait.
+const isPaid = (s: string | null) => norm(s).trim() === 'payé';
 
 function monthKey(d: Date) {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
@@ -71,7 +72,7 @@ export async function analytics(input: AnalyticsInput = {}) {
       if (isPaid(e.paymentStatus)) m.collected += e.ht;
     } else if (e.direction === 'credit_note' && norm(e.categoryRaw).includes('vente')) {
       m.revenue += e.ht; // signe déjà négatif
-    } else {
+    } else if (!isVehicleFinancing(e.categoryRaw)) {
       m.expenses += e.ht;
     }
   }
@@ -108,7 +109,7 @@ export async function analytics(input: AnalyticsInput = {}) {
       if (!keep(ent)) continue;
       if (e.direction === 'sale') { revenue += e.ht; if (isPaid(e.paymentStatus)) collected += e.ht; }
       else if (e.direction === 'credit_note' && norm(e.categoryRaw).includes('vente')) revenue += e.ht;
-      else expenses += e.ht;
+      else if (!isVehicleFinancing(e.categoryRaw)) expenses += e.ht;
     }
     return { revenue: round2(revenue), expenses: round2(expenses), result: round2(revenue - expenses), collected: round2(collected) };
   };
@@ -137,6 +138,7 @@ export async function analytics(input: AnalyticsInput = {}) {
     if (!e.date || monthKey(e.date) < curFromKey || monthKey(e.date) >= afterKey) continue;
     if (e.direction === 'sale') continue;
     if (e.direction === 'credit_note' && norm(e.categoryRaw).includes('vente')) continue;
+    if (isVehicleFinancing(e.categoryRaw)) continue;
     const ent = entityOf(e.categoryRaw, e.worksite?.entity ?? null);
     if (!keep(ent)) continue;
     const sec = section(e.categoryRaw);
@@ -155,7 +157,7 @@ export async function analytics(input: AnalyticsInput = {}) {
       select: { worksiteId: true, ht: true, categoryRaw: true },
     }),
     prisma.ledgerEntry.findMany({
-      where: { direction: 'sale', paymentStatus: { contains: 'Pay' }, worksiteId: { not: null }, date: { gte: win.from } },
+      where: { direction: 'sale', paymentStatus: 'Payé', worksiteId: { not: null }, date: { gte: win.from } },
       select: { worksiteId: true, ht: true },
     }),
     prisma.ledgerEntry.findMany({
@@ -171,7 +173,7 @@ export async function analytics(input: AnalyticsInput = {}) {
   const buyW = new Map<string, number>();
   const invoicedLabourW = new Map<string, number>();
   for (const b of buys) {
-    if (!b.worksiteId) continue;
+    if (!b.worksiteId || isVehicleFinancing(b.categoryRaw)) continue;
     const target = isOuvrierRemuneration(b.categoryRaw) ? invoicedLabourW : buyW;
     target.set(b.worksiteId, (target.get(b.worksiteId) ?? 0) + b.ht);
   }
@@ -182,9 +184,9 @@ export async function analytics(input: AnalyticsInput = {}) {
   }
   // Notes de crédit : réduisent le CA encaissé si "vente" (et payées), sinon le coût matériaux.
   for (const c of creditNotesRaw) {
-    if (!c.worksiteId) continue;
+    if (!c.worksiteId || isVehicleFinancing(c.categoryRaw)) continue;
     if (isCreditNoteSale(c.categoryRaw)) {
-      if ((c.paymentStatus ?? '').toLowerCase().includes('pay')) sellW.set(c.worksiteId, (sellW.get(c.worksiteId) ?? 0) + c.ht);
+      if (isPaid(c.paymentStatus)) sellW.set(c.worksiteId, (sellW.get(c.worksiteId) ?? 0) + c.ht);
     } else {
       buyW.set(c.worksiteId, (buyW.get(c.worksiteId) ?? 0) + c.ht);
     }

@@ -1,9 +1,9 @@
 import { Tabs } from 'expo-router';
-import { Text } from 'react-native';
+import { Text, type ColorValue } from 'react-native';
 import { useSession } from '@/lib/session';
 import { T } from '@/lib/theme';
 
-function Icon({ label, color }: { label: string; color: string }) {
+function Icon({ label, color }: { label: string; color: ColorValue }) {
   return <Text style={{ color, fontSize: 17 }}>{label}</Text>;
 }
 
@@ -16,7 +16,7 @@ export default function TabsLayout() {
   const staff = foreman || office;
 
   const hide = { href: null as null } as const;
-  const tab = (title: string, ic: string) => ({ title, tabBarIcon: ({ color }: { color: string }) => <Icon label={ic} color={color} /> });
+  const tab = (title: string, ic: string) => ({ title, tabBarIcon: ({ color }: { color: ColorValue }) => <Icon label={ic} color={color} /> });
 
   return (
     <Tabs

@@ -7,25 +7,45 @@
     "scheme": "jjd",
     "userInterfaceStyle": "light",
     "primaryColor": "#274A70",
-    "splash": {
-      "backgroundColor": "#274A70",
-      "resizeMode": "contain"
-    },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "be.jjdconsult.chantier",
-      "infoPlist": { "ITSAppUsesNonExemptEncryption": false }
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "be.jjdconsult.chantier",
-      "adaptiveIcon": { "backgroundColor": "#274A70" }
+      "adaptiveIcon": {
+        "backgroundColor": "#274A70"
+      }
     },
     "plugins": [
       "expo-router",
       "expo-localization",
-      ["expo-image-picker", { "photosPermission": "JJD Chantier accède à vos photos pour les ajouter au fil du chantier." }],
-      ["expo-location", { "locationWhenInUsePermission": "JJD Chantier utilise votre position pour vérifier que le pointage est bien fait sur le chantier." }]
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "JJD Chantier accède à vos photos pour les ajouter au fil du chantier."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "JJD Chantier utilise votre position pour vérifier que le pointage est bien fait sur le chantier."
+        }
+      ],
+      "expo-status-bar",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#274A70",
+          "resizeMode": "contain"
+        }
+      ]
     ],
     "extra": {
       "apiUrl": "http://localhost:4100"

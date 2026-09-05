@@ -15,10 +15,11 @@ interface Running { id: string; startedAt: string; worksite: { ref: string; titl
 interface TimerResp { running: Running | null; linked?: boolean }
 
 function elapsed(fromIso: string): string {
-  const ms = Date.now() - new Date(fromIso).getTime();
+  const ms = Math.max(0, Date.now() - new Date(fromIso).getTime());
   const h = Math.floor(ms / 3_600_000);
   const m = Math.floor((ms % 3_600_000) / 60_000);
-  return `${h} h ${String(m).padStart(2, '0')}`;
+  const s = Math.floor((ms % 60_000) / 1000);
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
 function currentPosition(): Promise<{ lat: number; lng: number } | null> {
@@ -42,7 +43,7 @@ function WorkerToday() {
   );
   const { data: timer, reload: reloadTimer } = useApi<TimerResp>('/api/timesheet/timer');
   const [, force] = useState(0);
-  useEffect(() => { const t = setInterval(() => force((x) => x + 1), 30000); return () => clearInterval(t); }, []);
+  useEffect(() => { const t = setInterval(() => force((x) => x + 1), 1000); return () => clearInterval(t); }, []);
 
   async function start(worksiteId: string) {
     const pos = await currentPosition();
@@ -75,8 +76,11 @@ function WorkerToday() {
         <div className="card card-pad" style={{ borderColor: 'var(--ok)', borderWidth: 2, marginBottom: '1.2rem' }}>
           <div className="muted" style={{ textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.05em' }}>Compteur en cours</div>
           <div style={{ fontWeight: 700, fontSize: '1.1rem', margin: '0.2rem 0' }}>{running.worksite?.ref} — {running.worksite?.title}</div>
-          <div style={{ fontSize: '2.2rem', fontWeight: 800, fontFamily: 'var(--font-serif)', margin: '0.3rem 0' }}>{elapsed(running.startedAt)}</div>
-          <button className="btn" style={{ background: 'var(--crit)', color: '#fff', borderColor: 'var(--crit)' }} onClick={stop}>Arrêter</button>
+          <div className="mono" style={{ fontSize: '2.2rem', fontWeight: 800, fontVariantNumeric: 'tabular-nums', margin: '0.3rem 0' }}>{elapsed(running.startedAt)}</div>
+          <div className="row" style={{ gap: '0.6rem' }}>
+            <button className="btn" style={{ background: 'var(--crit)', color: '#fff', borderColor: 'var(--crit)' }} onClick={stop}>Arrêter</button>
+            <Link href="/app/mes-heures" className="btn">Mon récap →</Link>
+          </div>
         </div>
       ) : (
         <div className="card card-pad muted" style={{ marginBottom: '1.2rem' }}>Aucun compteur actif. Choisis un chantier ci-dessous pour démarrer.</div>

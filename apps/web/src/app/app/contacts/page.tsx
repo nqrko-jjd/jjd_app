@@ -6,6 +6,7 @@ import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { PageHead } from '@/lib/ui';
 import { FormModal } from '@/components/FormModal';
+import { useSort, SortTh } from '@/lib/sort';
 import { CONTACT_FIELDS } from '@/lib/forms';
 import { CLIENT_KIND_LABEL, formatVat } from '@jjd/shared';
 
@@ -32,6 +33,14 @@ function ContactsInner() {
   const params = new URLSearchParams({ type });
   if (q) params.set('q', q);
   const { data, loading, reload } = useApi<{ items: Contact[] }>(`/api/contacts?${params}`);
+  const sort = useSort<Contact>(data?.items ?? [], {
+    name: (c) => c.name,
+    kind: (c) => (c.kind ? CLIENT_KIND_LABEL[c.kind as keyof typeof CLIENT_KIND_LABEL] : c.type === 'supplier' ? 'Fournisseur' : ''),
+    city: (c) => c.city,
+    vat: (c) => c.vat,
+    contact: (c) => c.email ?? c.phone,
+    worksites: (c) => c._count.worksites,
+  });
 
   return (
     <>
@@ -62,10 +71,17 @@ function ContactsInner() {
         <div className="tbl-wrap">
           <table className="tbl">
             <thead>
-              <tr><th>Nom</th><th>Type</th><th>Ville</th><th>TVA</th><th>Contact</th><th style={{ textAlign: 'right' }}>Chantiers</th></tr>
+              <tr>
+                <SortTh k="name" sort={sort}>Nom</SortTh>
+                <SortTh k="kind" sort={sort}>Type</SortTh>
+                <SortTh k="city" sort={sort}>Ville</SortTh>
+                <SortTh k="vat" sort={sort}>TVA</SortTh>
+                <SortTh k="contact" sort={sort}>Contact</SortTh>
+                <SortTh k="worksites" sort={sort} align="right">Chantiers</SortTh>
+              </tr>
             </thead>
             <tbody>
-              {data.items.map((c) => (
+              {sort.rows.map((c) => (
                 <tr key={c.id}>
                   <td>
                     <Link href={`/app/contacts/${c.id}`}>{c.name}</Link>

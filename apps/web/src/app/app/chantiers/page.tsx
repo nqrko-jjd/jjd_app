@@ -6,6 +6,7 @@ import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { PageHead, StatusBadge, PriorityBadge, EntityBadge, Money, formatDateBE } from '@/lib/ui';
 import { FormModal, type FieldDef } from '@/components/FormModal';
+import { useSort, SortTh } from '@/lib/sort';
 import { WORKSITE_STATUS_LABEL, WORKSITE_STATUSES, WORKSITE_PRIORITIES, WORKSITE_PRIORITY_LABEL, ENTITIES, ENTITY_LABEL } from '@jjd/shared';
 
 interface WS {
@@ -34,6 +35,16 @@ function ChantiersInner() {
   if (status) params.set('status', status);
   params.set('kind', kind);
   const { data, loading, reload } = useApi<{ items: WS[] }>(`/api/worksites?${params}`);
+  const sort = useSort<WS>(data?.items ?? [], {
+    ref: (w) => w.ref,
+    title: (w) => w.title,
+    client: (w) => w.client?.name,
+    manager: (w) => w.manager?.displayName ?? w.manager?.firstName,
+    status: (w) => WORKSITE_STATUS_LABEL[w.status as keyof typeof WORKSITE_STATUS_LABEL] ?? w.status,
+    entity: (w) => ENTITY_LABEL[w.entity as keyof typeof ENTITY_LABEL] ?? w.entity,
+    quotedHt: (w) => w.quotedHt,
+    endedOn: (w) => (w.endedOn ? new Date(w.endedOn) : null),
+  });
   const { data: refs } = useApi<{
     clients: { id: string; name: string }[];
     buildings: { id: string; name: string; syndicId: string | null }[];
@@ -95,12 +106,18 @@ function ChantiersInner() {
           <table className="tbl">
             <thead>
               <tr>
-                <th>Réf</th><th>Chantier</th><th>Client</th><th>Chef</th>
-                <th>Statut</th><th>Entité</th><th style={{ textAlign: 'right' }}>Devisé</th><th>Fin</th>
+                <SortTh k="ref" sort={sort}>Réf</SortTh>
+                <SortTh k="title" sort={sort}>Chantier</SortTh>
+                <SortTh k="client" sort={sort}>Client</SortTh>
+                <SortTh k="manager" sort={sort}>Chef</SortTh>
+                <SortTh k="status" sort={sort}>Statut</SortTh>
+                <SortTh k="entity" sort={sort}>Entité</SortTh>
+                <SortTh k="quotedHt" sort={sort} align="right">Devisé</SortTh>
+                <SortTh k="endedOn" sort={sort}>Fin</SortTh>
               </tr>
             </thead>
             <tbody>
-              {data.items.map((w) => (
+              {sort.rows.map((w) => (
                 <tr key={w.id}>
                   <td className="mono">{w.ref}</td>
                   <td><Link href={`/app/chantiers/${w.id}`}>{w.title}</Link></td>

@@ -6,6 +6,7 @@ import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { PageHead, Money, formatDateBE } from '@/lib/ui';
 import { DocStatusBadge, DOC_KIND_LABEL } from '@/lib/doc-ui';
+import { useSort, SortTh } from '@/lib/sort';
 import { DOC_STATUS_LABEL } from '@jjd/shared';
 
 interface Row {
@@ -52,6 +53,16 @@ function DocumentsInner() {
   if (q) params.set('q', q);
   const { data, loading } = useApi<{ items: Row[] }>(`/api/documents?${params}`);
   const statusOptions = active.kind ? (STATUS_BY_KIND[active.kind] ?? []) : [];
+  const sort = useSort<Row>(data?.items ?? [], {
+    number: (d) => d.number ?? d.draftRef,
+    title: (d) => d.title,
+    contact: (d) => d.contact?.name,
+    worksite: (d) => d.worksite?.ref,
+    issuedOn: (d) => (d.issuedOn ? new Date(d.issuedOn) : null),
+    dueOn: (d) => (d.dueOn ? new Date(d.dueOn) : null),
+    status: (d) => DOC_STATUS_LABEL[d.status] ?? d.status,
+    totalTtc: (d) => d.totalTtc,
+  });
 
   async function create(kind: string) {
     setBusy(true);
@@ -106,12 +117,18 @@ function DocumentsInner() {
           <table className="tbl">
             <thead>
               <tr>
-                <th>N°</th><th>Objet</th><th>Client</th><th>Chantier</th>
-                <th>Émis</th><th>Échéance</th><th>Statut</th><th style={{ textAlign: 'right' }}>TTC</th>
+                <SortTh k="number" sort={sort}>N°</SortTh>
+                <SortTh k="title" sort={sort}>Objet</SortTh>
+                <SortTh k="contact" sort={sort}>Client</SortTh>
+                <SortTh k="worksite" sort={sort}>Chantier</SortTh>
+                <SortTh k="issuedOn" sort={sort}>Émis</SortTh>
+                <SortTh k="dueOn" sort={sort}>Échéance</SortTh>
+                <SortTh k="status" sort={sort}>Statut</SortTh>
+                <SortTh k="totalTtc" sort={sort} align="right">TTC</SortTh>
               </tr>
             </thead>
             <tbody>
-              {data.items.map((d) => (
+              {sort.rows.map((d) => (
                 <tr key={d.id}>
                   <td className="mono">
                     <Link href={`/app/documents/${d.id}`}>{d.number ?? d.draftRef ?? '—'}</Link>

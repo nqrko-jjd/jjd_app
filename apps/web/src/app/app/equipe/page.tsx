@@ -5,6 +5,7 @@ import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { PageHead, Money, Avatar } from '@/lib/ui';
 import { FormModal } from '@/components/FormModal';
+import { useSort, SortTh } from '@/lib/sort';
 import { PERSON_FIELDS } from '@/lib/forms';
 import { ROLE_LABEL, WORKER_CONTRACT_LABEL } from '@jjd/shared';
 
@@ -25,6 +26,16 @@ export default function EquipePage() {
   if (role) params.set('role', role);
   if (active) params.set('active', active);
   const { data, loading, reload } = useApi<{ items: Person[] }>(`/api/people?${params}`);
+  const name = (p: Person) => p.displayName || `${p.firstName} ${p.lastName ?? ''}`.trim();
+  const sort = useSort<Person>(data?.items ?? [], {
+    name,
+    role: (p) => ROLE_LABEL[p.role as keyof typeof ROLE_LABEL] ?? p.role,
+    contract: (p) => WORKER_CONTRACT_LABEL[p.contractType as keyof typeof WORKER_CONTRACT_LABEL] ?? p.contractType,
+    rate: (p) => p.hourlyRate,
+    languages: (p) => (p.languages ?? []).join(' '),
+    docs: (p) => p._count.legalDocs,
+    entries: (p) => p._count.timeEntries,
+  });
 
   return (
     <>
@@ -60,10 +71,18 @@ export default function EquipePage() {
         <div className="tbl-wrap">
           <table className="tbl">
             <thead>
-              <tr><th>Nom</th><th>Rôle</th><th>Contrat</th><th style={{ textAlign: 'right' }}>Taux</th><th>Langues</th><th>Docs</th><th>Pointages</th></tr>
+              <tr>
+                <SortTh k="name" sort={sort}>Nom</SortTh>
+                <SortTh k="role" sort={sort}>Rôle</SortTh>
+                <SortTh k="contract" sort={sort}>Contrat</SortTh>
+                <SortTh k="rate" sort={sort} align="right">Taux</SortTh>
+                <SortTh k="languages" sort={sort}>Langues</SortTh>
+                <SortTh k="docs" sort={sort}>Docs</SortTh>
+                <SortTh k="entries" sort={sort}>Pointages</SortTh>
+              </tr>
             </thead>
             <tbody>
-              {data.items.map((p) => (
+              {sort.rows.map((p) => (
                 <tr key={p.id} style={p.active ? undefined : { opacity: 0.5 }}>
                   <td>
                     <Avatar src={p.photoThumbUrl} label={p.displayName || `${p.firstName} ${p.lastName ?? ''}`} />

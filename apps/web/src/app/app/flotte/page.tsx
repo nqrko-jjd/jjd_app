@@ -1,7 +1,9 @@
 'use client';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
+import { useSort, SortTh } from '@/lib/sort';
 import { PageHead, Money, formatDateBE, Thumb, VehicleStatusBadge } from '@/lib/ui';
+import { VEHICLE_STATUS_LABEL } from '@jjd/shared';
 
 interface Vehicle {
   id: string; code: string | null; brand: string | null; model: string | null; plate: string | null;
@@ -14,6 +16,16 @@ interface Vehicle {
 export default function FlottePage() {
   const { data, loading } = useApi<{ items: Vehicle[] }>('/api/vehicles');
   const soon = Date.now() + 30 * 86400000;
+  const sort = useSort<Vehicle>(data?.items ?? [], {
+    vehicle: (v) => [v.brand, v.model].filter(Boolean).join(' ') || v.code,
+    plate: (v) => v.plate,
+    type: (v) => v.type,
+    status: (v) => VEHICLE_STATUS_LABEL[v.status as keyof typeof VEHICLE_STATUS_LABEL] ?? v.status,
+    driver: (v) => v.driver,
+    insurance: (v) => v.insurances[0]?.provider,
+    monthlyPayment: (v) => v.monthlyPayment,
+    nextInspection: (v) => (v.nextInspection ? new Date(v.nextInspection) : null),
+  });
 
   return (
     <>
@@ -28,12 +40,18 @@ export default function FlottePage() {
           <table className="tbl">
             <thead>
               <tr>
-                <th>Véhicule</th><th>Plaque</th><th>Type</th><th>Statut</th><th>Conducteur</th>
-                <th>Assurance</th><th style={{ textAlign: 'right' }}>Mensualité</th><th>Contrôle technique</th>
+                <SortTh k="vehicle" sort={sort}>Véhicule</SortTh>
+                <SortTh k="plate" sort={sort}>Plaque</SortTh>
+                <SortTh k="type" sort={sort}>Type</SortTh>
+                <SortTh k="status" sort={sort}>Statut</SortTh>
+                <SortTh k="driver" sort={sort}>Conducteur</SortTh>
+                <SortTh k="insurance" sort={sort}>Assurance</SortTh>
+                <SortTh k="monthlyPayment" sort={sort} align="right">Mensualité</SortTh>
+                <SortTh k="nextInspection" sort={sort}>Contrôle technique</SortTh>
               </tr>
             </thead>
             <tbody>
-              {data.items.map((v) => {
+              {sort.rows.map((v) => {
                 const ins = v.insurances[0];
                 const ct = v.nextInspection ? new Date(v.nextInspection).getTime() : null;
                 return (

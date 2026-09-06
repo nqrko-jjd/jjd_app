@@ -6,6 +6,7 @@ import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { PageHead, Money, formatDateBE } from '@/lib/ui';
+import { useSort, SortTh } from '@/lib/sort';
 import { LEGAL_DOC_LABEL, WORKSITE_STATUS_LABEL } from '@jjd/shared';
 
 interface TodayEv {
@@ -145,6 +146,50 @@ function QuickActions() {
 
 const WS_STATUS_TONE: Record<string, string> = { scheduled: 'primary', in_progress: 'ok', on_hold: 'warn' };
 
+type InProgressRow = Dashboard['inProgress'][number];
+
+function InProgressTable({ rows }: { rows: InProgressRow[] }) {
+  const sort = useSort<InProgressRow>(rows, {
+    ref: (w) => w.ref,
+    title: (w) => w.title,
+    client: (w) => w.client,
+    manager: (w) => w.manager,
+    status: (w) => WORKSITE_STATUS_LABEL[w.status as keyof typeof WORKSITE_STATUS_LABEL] ?? w.status,
+  });
+  return (
+    <>
+      <div className="section-title">Chantiers en cours <span className="hint">{rows.length} — clique pour ouvrir le dossier</span></div>
+      <div className="tbl-wrap">
+        <table className="tbl">
+          <thead>
+            <tr>
+              <SortTh k="ref" sort={sort}>Réf</SortTh>
+              <SortTh k="title" sort={sort}>Chantier</SortTh>
+              <SortTh k="client" sort={sort}>Client</SortTh>
+              <SortTh k="manager" sort={sort}>Chef</SortTh>
+              <SortTh k="status" sort={sort}>Statut</SortTh>
+            </tr>
+          </thead>
+          <tbody>
+            {sort.rows.map((w) => (
+              <tr key={w.id}>
+                <td className="mono">{w.ref}</td>
+                <td>
+                  <Link href={`/app/chantiers/${w.id}`}>{w.title}</Link>
+                  {w.city && <div className="muted" style={{ fontSize: '0.78rem' }}>{w.city}</div>}
+                </td>
+                <td>{w.client ?? '—'}</td>
+                <td>{w.manager ?? '—'}</td>
+                <td><span className={`badge ${WS_STATUS_TONE[w.status] ?? ''}`}>{WORKSITE_STATUS_LABEL[w.status as keyof typeof WORKSITE_STATUS_LABEL] ?? w.status}</span></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
 export default function DashboardPage() {
   const { user } = useAuth();
   const { data, loading } = useApi<Dashboard>(user?.role === 'worker' ? null : '/api/dashboard');
@@ -186,30 +231,7 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {data.inProgress.length > 0 && (
-            <>
-              <div className="section-title">Chantiers en cours <span className="hint">{data.inProgress.length} — clique pour ouvrir le dossier</span></div>
-              <div className="tbl-wrap">
-                <table className="tbl">
-                  <thead><tr><th>Réf</th><th>Chantier</th><th>Client</th><th>Chef</th><th>Statut</th></tr></thead>
-                  <tbody>
-                    {data.inProgress.map((w) => (
-                      <tr key={w.id}>
-                        <td className="mono">{w.ref}</td>
-                        <td>
-                          <Link href={`/app/chantiers/${w.id}`}>{w.title}</Link>
-                          {w.city && <div className="muted" style={{ fontSize: '0.78rem' }}>{w.city}</div>}
-                        </td>
-                        <td>{w.client ?? '—'}</td>
-                        <td>{w.manager ?? '—'}</td>
-                        <td><span className={`badge ${WS_STATUS_TONE[w.status] ?? ''}`}>{WORKSITE_STATUS_LABEL[w.status as keyof typeof WORKSITE_STATUS_LABEL] ?? w.status}</span></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          )}
+          {data.inProgress.length > 0 && <InProgressTable rows={data.inProgress} />}
 
           {data.expiringDocs.length > 0 && (
             <>

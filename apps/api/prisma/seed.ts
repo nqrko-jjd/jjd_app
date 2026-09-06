@@ -76,12 +76,21 @@ async function main() {
     });
   }
 
-  // ── Compteur R- : démarre au-dessus du plus haut numéro connu (~780)
-  await prisma.counter.upsert({
-    where: { name: 'worksite' },
-    create: { name: 'worksite', value: 780 },
-    update: {},
-  });
+  // ── Compteur R- : recalé au-dessus du plus grand numéro R- présent (import inclus)
+  const rRefs = await prisma.worksite.findMany({ where: { ref: { startsWith: 'R-' } }, select: { ref: true } });
+  let maxR = 780;
+  for (const { ref } of rRefs) {
+    const m = ref.match(/^R-0*(\d+)$/);
+    if (m) maxR = Math.max(maxR, Number(m[1]));
+  }
+  const rCounter = await prisma.counter.findUnique({ where: { name: 'worksite' } });
+  if (!rCounter || rCounter.value < maxR) {
+    await prisma.counter.upsert({
+      where: { name: 'worksite' },
+      create: { name: 'worksite', value: maxR },
+      update: { value: maxR },
+    });
+  }
 
   const counts = {
     categories: await prisma.category.count(),

@@ -31,7 +31,7 @@ export type Entity = (typeof ENTITIES)[number];
 
 export const ENTITY_LABEL: Record<Entity, string> = {
   jjd: 'JJD',
-  tonton: 'Tonton (GT Light Concept)',
+  tonton: 'Tonton',
   m7: 'M7 (historique)',
 };
 

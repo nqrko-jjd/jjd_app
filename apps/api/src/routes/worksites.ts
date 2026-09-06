@@ -46,7 +46,7 @@ worksitesRouter.get(
     const items = await prisma.worksite.findMany({
       where,
       orderBy: { updatedAt: 'desc' },
-      take: 300,
+      take: 5000,
       include: {
         client: { select: { id: true, name: true } },
         building: { select: { id: true, name: true } },

@@ -1,14 +1,17 @@
 'use client';
 import { Suspense, useState } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { PageHead } from '@/lib/ui';
 import { FormModal } from '@/components/FormModal';
+import { ContextMenu, useContextMenu, openActions, type MenuItem } from '@/components/ContextMenu';
 import { useSort, SortTh } from '@/lib/sort';
 import { CONTACT_FIELDS } from '@/lib/forms';
 import { CLIENT_KIND_LABEL, formatVat } from '@jjd/shared';
+
+const CONTACT_TYPE_LABEL: Record<string, string> = { client: 'Client', supplier: 'Fournisseur', both: 'Client + Fournisseur' };
 
 interface Contact {
   id: string; name: string; type: string; kind: string | null;
@@ -27,12 +30,39 @@ export default function ContactsPage() {
 
 function ContactsInner() {
   const sp = useSearchParams();
+  const router = useRouter();
   const [q, setQ] = useState('');
   const [type, setType] = useState('all');
   const [creating, setCreating] = useState(sp.get('new') === '1');
+  const ctx = useContextMenu<Contact>();
   const params = new URLSearchParams({ type });
   if (q) params.set('q', q);
   const { data, loading, reload } = useApi<{ items: Contact[] }>(`/api/contacts?${params}`);
+
+  async function patch(id: string, body: Record<string, unknown>) {
+    await api(`/api/contacts/${id}`, { method: 'PATCH', body });
+    reload();
+  }
+
+  function rowMenu(c: Contact): MenuItem[] {
+    return [
+      ...openActions(`/app/contacts/${c.id}`, (h) => router.push(h)),
+      'separator',
+      ...(c.phone ? [{ label: `Appeler ${c.phone}`, onClick: () => { window.location.href = `tel:${c.phone}`; } }] : []),
+      ...(c.email ? [{ label: 'Envoyer un e-mail', onClick: () => { window.location.href = `mailto:${c.email}`; } }] : []),
+      ...(c.phone || c.email ? ['separator' as const] : []),
+      {
+        label: 'Type',
+        items: (['client', 'supplier', 'both'] as const).map((t) => ({
+          label: CONTACT_TYPE_LABEL[t],
+          check: c.type === t,
+          disabled: c.type === t,
+          onClick: () => patch(c.id, { type: t }),
+        })),
+      },
+    ];
+  }
+
   const sort = useSort<Contact>(data?.items ?? [], {
     name: (c) => c.name,
     kind: (c) => (c.kind ? CLIENT_KIND_LABEL[c.kind as keyof typeof CLIENT_KIND_LABEL] : c.type === 'supplier' ? 'Fournisseur' : ''),
@@ -44,6 +74,7 @@ function ContactsInner() {
 
   return (
     <>
+      {ctx.menu && <ContextMenu x={ctx.menu.x} y={ctx.menu.y} items={rowMenu(ctx.menu.row)} onClose={ctx.close} />}
       {creating && (
         <FormModal
           title="Nouveau contact"
@@ -55,7 +86,7 @@ function ContactsInner() {
       )}
       <PageHead
         title="Contacts"
-        sub={data ? `${data.items.length} affichés` : undefined}
+        sub={data ? `${data.items.length} affichés · clic droit sur une ligne pour les actions rapides` : undefined}
         action={<button className="btn primary" onClick={() => setCreating(true)}>+ Nouveau contact</button>}
       />
       <div className="row" style={{ marginBottom: '1rem' }}>
@@ -82,7 +113,11 @@ function ContactsInner() {
             </thead>
             <tbody>
               {sort.rows.map((c) => (
-                <tr key={c.id}>
+                <tr
+                  key={c.id}
+                  className={ctx.menu?.row.id === c.id ? 'ctx-target' : undefined}
+                  onContextMenu={(e) => ctx.open(e, c)}
+                >
                   <td>
                     <Link href={`/app/contacts/${c.id}`}>{c.name}</Link>
                     {c.syndic && <div className="muted" style={{ fontSize: '0.78rem' }}>c/o {c.syndic.name}</div>}

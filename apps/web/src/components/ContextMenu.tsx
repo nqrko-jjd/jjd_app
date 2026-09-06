@@ -1,10 +1,29 @@
 'use client';
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 
 export type MenuItem =
   | { label: ReactNode; onClick: () => void; danger?: boolean; disabled?: boolean; check?: boolean }
   | { label: ReactNode; items: MenuItem[]; disabled?: boolean }
   | 'separator';
+
+/** Gère l'état {x, y, row} d'un menu contextuel de tableau. */
+export function useContextMenu<T>() {
+  const [menu, setMenu] = useState<{ x: number; y: number; row: T } | null>(null);
+  const open = useCallback((e: ReactMouseEvent, row: T) => {
+    e.preventDefault();
+    setMenu({ x: e.clientX, y: e.clientY, row });
+  }, []);
+  const close = useCallback(() => setMenu(null), []);
+  return { menu, open, close };
+}
+
+/** Actions « Ouvrir / Ouvrir dans un nouvel onglet » communes à toutes les listes. */
+export function openActions(href: string, go: (href: string) => void): MenuItem[] {
+  return [
+    { label: 'Ouvrir', onClick: () => go(href) },
+    { label: 'Ouvrir dans un nouvel onglet', onClick: () => window.open(href, '_blank') },
+  ];
+}
 
 function isSubmenu(i: MenuItem): i is { label: ReactNode; items: MenuItem[]; disabled?: boolean } {
   return typeof i === 'object' && 'items' in i;

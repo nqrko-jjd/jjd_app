@@ -6,6 +6,7 @@ import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { PageHead, Money, formatDateBE } from '@/lib/ui';
 import { DocStatusBadge, DOC_KIND_LABEL } from '@/lib/doc-ui';
+import { ContextMenu, useContextMenu, openActions, type MenuItem } from '@/components/ContextMenu';
 import { useSort, SortTh } from '@/lib/sort';
 import { DOC_STATUS_LABEL } from '@jjd/shared';
 
@@ -51,8 +52,45 @@ function DocumentsInner() {
   if (active.scope) params.set('scope', active.scope);
   if (status && active.kind) params.set('status', status);
   if (q) params.set('q', q);
-  const { data, loading } = useApi<{ items: Row[] }>(`/api/documents?${params}`);
+  const { data, loading, reload } = useApi<{ items: Row[] }>(`/api/documents?${params}`);
+  const ctx = useContextMenu<Row>();
   const statusOptions = active.kind ? (STATUS_BY_KIND[active.kind] ?? []) : [];
+
+  async function post(url: string, body: Record<string, unknown>, navigate = false) {
+    const r = await api<{ document?: { id: string } }>(url, { method: 'POST', body });
+    if (navigate && r.document) router.push(`/app/documents/${r.document.id}`);
+    else reload();
+  }
+
+  function rowMenu(d: Row): MenuItem[] {
+    const isQuote = d.kind === 'quote';
+    const isInvoice = d.kind === 'invoice' || d.kind === 'deposit_invoice' || d.kind === 'credit_note';
+    return [
+      ...openActions(`/app/documents/${d.id}`, (h) => router.push(h)),
+      'separator',
+      { label: 'Dupliquer', onClick: () => post(`/api/documents/${d.id}/duplicate`, {}, true) },
+      ...(isQuote ? [{ label: 'Convertir en facture', onClick: () => post(`/api/documents/${d.id}/convert`, {}, true) }] : []),
+      ...(isQuote && d.status === 'sent'
+        ? [
+            { label: 'Marquer accepté', onClick: () => post(`/api/documents/${d.id}/status`, { status: 'accepted' }) },
+            { label: 'Marquer refusé', onClick: () => post(`/api/documents/${d.id}/status`, { status: 'declined' }) },
+          ]
+        : []),
+      ...(isInvoice && d.status !== 'paid'
+        ? [{ label: 'Marquer payée', onClick: () => post(`/api/documents/${d.id}/mark-paid`, {}) }]
+        : []),
+      ...(d.status === 'draft'
+        ? [
+            'separator' as const,
+            {
+              label: 'Supprimer le brouillon',
+              danger: true,
+              onClick: async () => { await api(`/api/documents/${d.id}`, { method: 'DELETE' }); reload(); },
+            },
+          ]
+        : []),
+    ];
+  }
   const sort = useSort<Row>(data?.items ?? [], {
     number: (d) => d.number ?? d.draftRef,
     title: (d) => d.title,
@@ -76,9 +114,10 @@ function DocumentsInner() {
 
   return (
     <>
+      {ctx.menu && <ContextMenu x={ctx.menu.x} y={ctx.menu.y} items={rowMenu(ctx.menu.row)} onClose={ctx.close} />}
       <PageHead
         title="Devis & factures"
-        sub="Création, émission, suivi des paiements"
+        sub="Création, émission, suivi des paiements · clic droit sur une ligne pour les actions rapides"
         action={
           <div className="row">
             <button className="btn" disabled={busy} onClick={() => create('quote')}>+ Devis</button>
@@ -129,7 +168,11 @@ function DocumentsInner() {
             </thead>
             <tbody>
               {sort.rows.map((d) => (
-                <tr key={d.id}>
+                <tr
+                  key={d.id}
+                  className={ctx.menu?.row.id === d.id ? 'ctx-target' : undefined}
+                  onContextMenu={(e) => ctx.open(e, d)}
+                >
                   <td className="mono">
                     <Link href={`/app/documents/${d.id}`}>{d.number ?? d.draftRef ?? '—'}</Link>
                     {d.originalPdf && <span title="PDF d’origine disponible" style={{ marginLeft: 6 }}>📄</span>}

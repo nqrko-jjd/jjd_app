@@ -1,9 +1,12 @@
 'use client';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
+import { api } from '@/lib/api';
+import { ContextMenu, useContextMenu, openActions, type MenuItem } from '@/components/ContextMenu';
 import { useSort, SortTh } from '@/lib/sort';
 import { PageHead, Money, formatDateBE, Thumb, VehicleStatusBadge } from '@/lib/ui';
-import { VEHICLE_STATUS_LABEL } from '@jjd/shared';
+import { VEHICLE_STATUSES, VEHICLE_STATUS_LABEL } from '@jjd/shared';
 
 interface Vehicle {
   id: string; code: string | null; brand: string | null; model: string | null; plate: string | null;
@@ -14,8 +17,32 @@ interface Vehicle {
 }
 
 export default function FlottePage() {
-  const { data, loading } = useApi<{ items: Vehicle[] }>('/api/vehicles');
+  const router = useRouter();
+  const { data, loading, reload } = useApi<{ items: Vehicle[] }>('/api/vehicles');
   const soon = Date.now() + 30 * 86400000;
+  const ctx = useContextMenu<Vehicle>();
+
+  async function setStatus(id: string, status: string) {
+    await api(`/api/vehicles/${id}`, { method: 'PATCH', body: { status } });
+    reload();
+  }
+
+  function rowMenu(v: Vehicle): MenuItem[] {
+    return [
+      ...openActions(`/app/flotte/${v.id}`, (h) => router.push(h)),
+      'separator',
+      {
+        label: 'Statut',
+        items: VEHICLE_STATUSES.map((s) => ({
+          label: VEHICLE_STATUS_LABEL[s],
+          check: v.status === s,
+          disabled: v.status === s,
+          onClick: () => setStatus(v.id, s),
+        })),
+      },
+    ];
+  }
+
   const sort = useSort<Vehicle>(data?.items ?? [], {
     vehicle: (v) => [v.brand, v.model].filter(Boolean).join(' ') || v.code,
     plate: (v) => v.plate,
@@ -29,9 +56,10 @@ export default function FlottePage() {
 
   return (
     <>
+      {ctx.menu && <ContextMenu x={ctx.menu.x} y={ctx.menu.y} items={rowMenu(ctx.menu.row)} onClose={ctx.close} />}
       <PageHead
         title="Flotte"
-        sub={data ? `${data.items.filter((v) => v.status === 'active').length} véhicules actifs` : undefined}
+        sub={data ? `${data.items.filter((v) => v.status === 'active').length} véhicules actifs · clic droit sur une ligne pour les actions rapides` : undefined}
         action={<Link href="/app/flotte/pv" className="btn">PV / amendes →</Link>}
       />
       {loading && <div className="empty">Chargement…</div>}
@@ -55,7 +83,12 @@ export default function FlottePage() {
                 const ins = v.insurances[0];
                 const ct = v.nextInspection ? new Date(v.nextInspection).getTime() : null;
                 return (
-                  <tr key={v.id} style={v.status === 'sold' || v.status === 'retired' ? { opacity: 0.5 } : undefined}>
+                  <tr
+                    key={v.id}
+                    style={v.status === 'sold' || v.status === 'retired' ? { opacity: 0.5 } : undefined}
+                    className={ctx.menu?.row.id === v.id ? 'ctx-target' : undefined}
+                    onContextMenu={(e) => ctx.open(e, v)}
+                  >
                     <td>
                       <Thumb src={v.photoThumbUrl} />
                       <Link href={`/app/flotte/${v.id}`}>{[v.brand, v.model].filter(Boolean).join(' ')}</Link>

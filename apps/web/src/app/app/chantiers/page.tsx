@@ -6,7 +6,7 @@ import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { PageHead, StatusBadge, PriorityBadge, EntityBadge, Money, formatDateBE } from '@/lib/ui';
 import { FormModal, type FieldDef } from '@/components/FormModal';
-import { ContextMenu, type MenuItem } from '@/components/ContextMenu';
+import { ContextMenu, useContextMenu, openActions, type MenuItem } from '@/components/ContextMenu';
 import { useSort, SortTh } from '@/lib/sort';
 import { WORKSITE_STATUS_LABEL, WORKSITE_STATUSES, WORKSITE_PRIORITIES, WORKSITE_PRIORITY_LABEL, ENTITIES, ENTITY_LABEL } from '@jjd/shared';
 
@@ -32,7 +32,7 @@ function ChantiersInner() {
   const [status, setStatus] = useState(sp.get('statut') ?? '');
   const [kind, setKind] = useState<'project' | 'overhead'>('project');
   const [creating, setCreating] = useState(sp.get('new') === '1');
-  const [menu, setMenu] = useState<{ x: number; y: number; ws: WS } | null>(null);
+  const ctx = useContextMenu<WS>();
   const params = new URLSearchParams();
   if (q) params.set('q', q);
   if (status) params.set('status', status);
@@ -61,8 +61,7 @@ function ChantiersInner() {
 
   function rowMenu(w: WS): MenuItem[] {
     return [
-      { label: 'Ouvrir la fiche', onClick: () => router.push(`/app/chantiers/${w.id}`) },
-      { label: 'Ouvrir dans un nouvel onglet', onClick: () => window.open(`/app/chantiers/${w.id}`, '_blank') },
+      ...openActions(`/app/chantiers/${w.id}`, (h) => router.push(h)),
       'separator',
       {
         label: 'Changer le statut',
@@ -113,8 +112,8 @@ function ChantiersInner() {
           onSubmit={async (v) => { await api('/api/worksites', { method: 'POST', body: v }); reload(); }}
         />
       )}
-      {menu && (
-        <ContextMenu x={menu.x} y={menu.y} items={rowMenu(menu.ws)} onClose={() => setMenu(null)} />
+      {ctx.menu && (
+        <ContextMenu x={ctx.menu.x} y={ctx.menu.y} items={rowMenu(ctx.menu.row)} onClose={ctx.close} />
       )}
       <PageHead
         title={kind === 'project' ? 'Chantiers' : 'Charges'}
@@ -157,8 +156,8 @@ function ChantiersInner() {
               {sort.rows.map((w) => (
                 <tr
                   key={w.id}
-                  className={menu?.ws.id === w.id ? 'ctx-target' : undefined}
-                  onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, ws: w }); }}
+                  className={ctx.menu?.row.id === w.id ? 'ctx-target' : undefined}
+                  onContextMenu={(e) => ctx.open(e, w)}
                 >
                   <td className="mono">{w.ref}</td>
                   <td><Link href={`/app/chantiers/${w.id}`}>{w.title}</Link></td>

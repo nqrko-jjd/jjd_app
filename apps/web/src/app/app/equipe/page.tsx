@@ -1,10 +1,12 @@
 'use client';
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { PageHead, Money, Avatar } from '@/lib/ui';
 import { FormModal } from '@/components/FormModal';
+import { ContextMenu, useContextMenu, openActions, type MenuItem } from '@/components/ContextMenu';
 import { useSort, SortTh } from '@/lib/sort';
 import { PERSON_FIELDS } from '@/lib/forms';
 import { ROLE_LABEL, WORKER_CONTRACT_LABEL } from '@jjd/shared';
@@ -17,16 +19,43 @@ interface Person {
 }
 
 export default function EquipePage() {
+  const router = useRouter();
   const [q, setQ] = useState('');
   const [role, setRole] = useState('');
   const [active, setActive] = useState('1');
   const [creating, setCreating] = useState(false);
+  const ctx = useContextMenu<Person>();
   const params = new URLSearchParams();
   if (q) params.set('q', q);
   if (role) params.set('role', role);
   if (active) params.set('active', active);
   const { data, loading, reload } = useApi<{ items: Person[] }>(`/api/people?${params}`);
   const name = (p: Person) => p.displayName || `${p.firstName} ${p.lastName ?? ''}`.trim();
+
+  async function patch(id: string, body: Record<string, unknown>) {
+    await api(`/api/people/${id}`, { method: 'PATCH', body });
+    reload();
+  }
+
+  function rowMenu(p: Person): MenuItem[] {
+    return [
+      ...openActions(`/app/equipe/${p.id}`, (h) => router.push(h)),
+      ...(p.phone ? ['separator' as const, { label: `Appeler ${p.phone}`, onClick: () => { window.location.href = `tel:${p.phone}`; } }] : []),
+      'separator',
+      {
+        label: 'Rôle',
+        items: (['worker', 'foreman', 'office'] as const).map((r) => ({
+          label: ROLE_LABEL[r],
+          check: p.role === r,
+          disabled: p.role === r,
+          onClick: () => patch(p.id, { role: r }),
+        })),
+      },
+      p.active
+        ? { label: 'Marquer comme ancien', onClick: () => patch(p.id, { active: false }) }
+        : { label: 'Réactiver', onClick: () => patch(p.id, { active: true }) },
+    ];
+  }
   const sort = useSort<Person>(data?.items ?? [], {
     name,
     role: (p) => ROLE_LABEL[p.role as keyof typeof ROLE_LABEL] ?? p.role,
@@ -39,6 +68,7 @@ export default function EquipePage() {
 
   return (
     <>
+      {ctx.menu && <ContextMenu x={ctx.menu.x} y={ctx.menu.y} items={rowMenu(ctx.menu.row)} onClose={ctx.close} />}
       {creating && (
         <FormModal
           title="Nouvelle personne"
@@ -50,7 +80,7 @@ export default function EquipePage() {
       )}
       <PageHead
         title="Équipe"
-        sub={data ? `${data.items.filter((p) => p.active).length} actifs` : undefined}
+        sub={data ? `${data.items.filter((p) => p.active).length} actifs · clic droit sur une ligne pour les actions rapides` : undefined}
         action={<button className="btn primary" onClick={() => setCreating(true)}>+ Nouvelle personne</button>}
       />
       <div className="row" style={{ marginBottom: '1rem' }}>
@@ -83,7 +113,12 @@ export default function EquipePage() {
             </thead>
             <tbody>
               {sort.rows.map((p) => (
-                <tr key={p.id} style={p.active ? undefined : { opacity: 0.5 }}>
+                <tr
+                  key={p.id}
+                  style={p.active ? undefined : { opacity: 0.5 }}
+                  className={ctx.menu?.row.id === p.id ? 'ctx-target' : undefined}
+                  onContextMenu={(e) => ctx.open(e, p)}
+                >
                   <td>
                     <Avatar src={p.photoThumbUrl} label={p.displayName || `${p.firstName} ${p.lastName ?? ''}`} />
                     <Link href={`/app/equipe/${p.id}`}>{p.displayName || `${p.firstName} ${p.lastName ?? ''}`.trim()}</Link>

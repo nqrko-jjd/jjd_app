@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { PageHead, Money, formatDateBE } from '@/lib/ui';
 import { useSort, SortTh } from '@/lib/sort';
+import { rowNav } from '@/lib/rowNav';
 import { LEGAL_DOC_LABEL, WORKSITE_STATUS_LABEL } from '@jjd/shared';
 
 interface TodayEv {
@@ -149,6 +150,7 @@ const WS_STATUS_TONE: Record<string, string> = { scheduled: 'primary', in_progre
 type InProgressRow = Dashboard['inProgress'][number];
 
 function InProgressTable({ rows }: { rows: InProgressRow[] }) {
+  const router = useRouter();
   const sort = useSort<InProgressRow>(rows, {
     ref: (w) => w.ref,
     title: (w) => w.title,
@@ -172,7 +174,7 @@ function InProgressTable({ rows }: { rows: InProgressRow[] }) {
           </thead>
           <tbody>
             {sort.rows.map((w) => (
-              <tr key={w.id}>
+              <tr key={w.id} className="row-link" onClick={rowNav(`/app/chantiers/${w.id}`, (h) => router.push(h))}>
                 <td className="mono">{w.ref}</td>
                 <td>
                   <Link href={`/app/chantiers/${w.id}`}>{w.title}</Link>

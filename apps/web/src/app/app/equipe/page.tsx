@@ -8,6 +8,7 @@ import { PageHead, Money, Avatar } from '@/lib/ui';
 import { FormModal } from '@/components/FormModal';
 import { ContextMenu, useContextMenu, openActions, type MenuItem } from '@/components/ContextMenu';
 import { useSort, SortTh } from '@/lib/sort';
+import { rowNav } from '@/lib/rowNav';
 import { PERSON_FIELDS } from '@/lib/forms';
 import { ROLE_LABEL, WORKER_CONTRACT_LABEL } from '@jjd/shared';
 
@@ -116,7 +117,8 @@ export default function EquipePage() {
                 <tr
                   key={p.id}
                   style={p.active ? undefined : { opacity: 0.5 }}
-                  className={ctx.menu?.row.id === p.id ? 'ctx-target' : undefined}
+                  className={`row-link${ctx.menu?.row.id === p.id ? ' ctx-target' : ''}`}
+                  onClick={rowNav(`/app/equipe/${p.id}`, (h) => router.push(h))}
                   onContextMenu={(e) => ctx.open(e, p)}
                 >
                   <td>

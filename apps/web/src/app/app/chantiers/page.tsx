@@ -8,6 +8,7 @@ import { PageHead, StatusBadge, PriorityBadge, EntityBadge, Money, formatDateBE 
 import { FormModal, type FieldDef } from '@/components/FormModal';
 import { ContextMenu, useContextMenu, openActions, type MenuItem } from '@/components/ContextMenu';
 import { useSort, SortTh } from '@/lib/sort';
+import { rowNav } from '@/lib/rowNav';
 import { WORKSITE_STATUS_LABEL, WORKSITE_STATUSES, WORKSITE_PRIORITIES, WORKSITE_PRIORITY_LABEL, ENTITIES, ENTITY_LABEL } from '@jjd/shared';
 
 interface WS {
@@ -156,7 +157,8 @@ function ChantiersInner() {
               {sort.rows.map((w) => (
                 <tr
                   key={w.id}
-                  className={ctx.menu?.row.id === w.id ? 'ctx-target' : undefined}
+                  className={`row-link${ctx.menu?.row.id === w.id ? ' ctx-target' : ''}`}
+                  onClick={rowNav(`/app/chantiers/${w.id}`, (h) => router.push(h))}
                   onContextMenu={(e) => ctx.open(e, w)}
                 >
                   <td className="mono">{w.ref}</td>

@@ -1,10 +1,12 @@
 'use client';
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { PageHead } from '@/lib/ui';
 import { FormModal } from '@/components/FormModal';
+import { rowNav } from '@/lib/rowNav';
 import { BUILDING_FIELDS } from '@/lib/forms';
 
 interface Building {
@@ -14,6 +16,7 @@ interface Building {
 }
 
 export default function ImmeublesPage() {
+  const router = useRouter();
   const [q, setQ] = useState('');
   const [creating, setCreating] = useState(false);
   const params = new URLSearchParams();
@@ -50,7 +53,7 @@ export default function ImmeublesPage() {
             <thead><tr><th>Immeuble</th><th>Syndic</th><th>Ville</th><th style={{ textAlign: 'right' }}>Chantiers</th></tr></thead>
             <tbody>
               {data.items.map((b) => (
-                <tr key={b.id}>
+                <tr key={b.id} className="row-link" onClick={rowNav(`/app/immeubles/${b.id}`, (h) => router.push(h))}>
                   <td><Link href={`/app/immeubles/${b.id}`}>{b.name}</Link></td>
                   <td>{b.syndic?.name ?? '—'}</td>
                   <td>{b.city ?? '—'}</td>

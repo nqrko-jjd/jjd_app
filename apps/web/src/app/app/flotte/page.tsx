@@ -5,6 +5,7 @@ import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { ContextMenu, useContextMenu, openActions, type MenuItem } from '@/components/ContextMenu';
 import { useSort, SortTh } from '@/lib/sort';
+import { rowNav } from '@/lib/rowNav';
 import { PageHead, Money, formatDateBE, Thumb, VehicleStatusBadge } from '@/lib/ui';
 import { VEHICLE_STATUSES, VEHICLE_STATUS_LABEL } from '@jjd/shared';
 
@@ -86,7 +87,8 @@ export default function FlottePage() {
                   <tr
                     key={v.id}
                     style={v.status === 'sold' || v.status === 'retired' ? { opacity: 0.5 } : undefined}
-                    className={ctx.menu?.row.id === v.id ? 'ctx-target' : undefined}
+                    className={`row-link${ctx.menu?.row.id === v.id ? ' ctx-target' : ''}`}
+                    onClick={rowNav(`/app/flotte/${v.id}`, (h) => router.push(h))}
                     onContextMenu={(e) => ctx.open(e, v)}
                   >
                     <td>

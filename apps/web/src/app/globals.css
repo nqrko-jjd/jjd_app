@@ -313,6 +313,7 @@ p { margin: 0; }
 .tbl tr:last-child td { border-bottom: none; }
 .tbl tbody tr { transition: background 0.1s; }
 .tbl tbody tr:hover { background: var(--surface-2); }
+.tbl tbody tr.row-link { cursor: pointer; }
 .tbl a { color: var(--primary); font-weight: 600; }
 .tbl a:hover { color: var(--primary-ink); }
 .tbl tfoot td { padding: 0.65rem 0.9rem; border-top: 2px solid var(--line-strong); font-weight: 700; }

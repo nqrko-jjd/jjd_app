@@ -8,6 +8,7 @@ import { PageHead } from '@/lib/ui';
 import { FormModal } from '@/components/FormModal';
 import { ContextMenu, useContextMenu, openActions, type MenuItem } from '@/components/ContextMenu';
 import { useSort, SortTh } from '@/lib/sort';
+import { rowNav } from '@/lib/rowNav';
 import { CONTACT_FIELDS } from '@/lib/forms';
 import { CLIENT_KIND_LABEL, formatVat } from '@jjd/shared';
 
@@ -115,7 +116,8 @@ function ContactsInner() {
               {sort.rows.map((c) => (
                 <tr
                   key={c.id}
-                  className={ctx.menu?.row.id === c.id ? 'ctx-target' : undefined}
+                  className={`row-link${ctx.menu?.row.id === c.id ? ' ctx-target' : ''}`}
+                  onClick={rowNav(`/app/contacts/${c.id}`, (h) => router.push(h))}
                   onContextMenu={(e) => ctx.open(e, c)}
                 >
                   <td>

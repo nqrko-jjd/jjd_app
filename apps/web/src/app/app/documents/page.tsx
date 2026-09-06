@@ -8,6 +8,7 @@ import { PageHead, Money, formatDateBE } from '@/lib/ui';
 import { DocStatusBadge, DOC_KIND_LABEL } from '@/lib/doc-ui';
 import { ContextMenu, useContextMenu, openActions, type MenuItem } from '@/components/ContextMenu';
 import { useSort, SortTh } from '@/lib/sort';
+import { rowNav } from '@/lib/rowNav';
 import { DOC_STATUS_LABEL } from '@jjd/shared';
 
 interface Row {
@@ -170,7 +171,8 @@ function DocumentsInner() {
               {sort.rows.map((d) => (
                 <tr
                   key={d.id}
-                  className={ctx.menu?.row.id === d.id ? 'ctx-target' : undefined}
+                  className={`row-link${ctx.menu?.row.id === d.id ? ' ctx-target' : ''}`}
+                  onClick={rowNav(`/app/documents/${d.id}`, (h) => router.push(h))}
                   onContextMenu={(e) => ctx.open(e, d)}
                 >
                   <td className="mono">

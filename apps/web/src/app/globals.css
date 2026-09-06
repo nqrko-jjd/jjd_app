@@ -458,6 +458,30 @@ p { margin: 0; }
   .sidebar, .alert, .btn { transition: none; }
 }
 
+/* ---------------------------------------------------- menu contextuel */
+.ctx-root { position: fixed; z-index: 70; }
+.ctx-menu {
+  min-width: 208px; background: var(--surface); border: 1px solid var(--line-strong, var(--line));
+  border-radius: 10px; box-shadow: 0 10px 34px rgba(10, 14, 22, 0.18); padding: 4px;
+}
+.ctx-sub {
+  position: absolute; left: 100%; top: -5px; margin-left: 2px;
+}
+.ctx-item {
+  display: flex; align-items: center; gap: 6px; width: 100%;
+  padding: 0.44rem 0.6rem; border: 0; background: none; border-radius: 6px;
+  font: inherit; font-size: 0.86rem; color: var(--ink); text-align: left; cursor: pointer;
+}
+.ctx-item:hover:not(.ctx-disabled) { background: var(--primary-soft); color: var(--primary-ink, var(--primary)); }
+.ctx-has-sub { justify-content: space-between; position: relative; }
+.ctx-arrow { opacity: 0.5; font-size: 1.05em; }
+.ctx-check { width: 0.9em; display: inline-block; color: var(--primary); font-size: 0.9em; }
+.ctx-danger { color: var(--crit); }
+.ctx-danger:hover:not(.ctx-disabled) { background: var(--crit-soft); color: var(--crit); }
+.ctx-disabled { opacity: 0.4; cursor: default; }
+.ctx-sep { height: 1px; background: var(--line); margin: 4px 2px; }
+.tbl tbody tr.ctx-target { background: var(--primary-soft); }
+
 /* ---------------------------------------------------- modal */
 .modal-scrim {
   position: fixed; inset: 0; z-index: 60;

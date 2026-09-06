@@ -1,11 +1,12 @@
 'use client';
 import { Suspense, useState } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { PageHead, StatusBadge, PriorityBadge, EntityBadge, Money, formatDateBE } from '@/lib/ui';
 import { FormModal, type FieldDef } from '@/components/FormModal';
+import { ContextMenu, type MenuItem } from '@/components/ContextMenu';
 import { useSort, SortTh } from '@/lib/sort';
 import { WORKSITE_STATUS_LABEL, WORKSITE_STATUSES, WORKSITE_PRIORITIES, WORKSITE_PRIORITY_LABEL, ENTITIES, ENTITY_LABEL } from '@jjd/shared';
 
@@ -26,10 +27,12 @@ export default function ChantiersPage() {
 
 function ChantiersInner() {
   const sp = useSearchParams();
+  const router = useRouter();
   const [q, setQ] = useState('');
   const [status, setStatus] = useState(sp.get('statut') ?? '');
   const [kind, setKind] = useState<'project' | 'overhead'>('project');
   const [creating, setCreating] = useState(sp.get('new') === '1');
+  const [menu, setMenu] = useState<{ x: number; y: number; ws: WS } | null>(null);
   const params = new URLSearchParams();
   if (q) params.set('q', q);
   if (status) params.set('status', status);
@@ -50,6 +53,37 @@ function ChantiersInner() {
     buildings: { id: string; name: string; syndicId: string | null }[];
     people: { id: string; name: string }[];
   }>(creating ? '/api/meta/pickers' : null);
+
+  async function patchWs(id: string, body: Record<string, unknown>) {
+    await api(`/api/worksites/${id}`, { method: 'PATCH', body });
+    reload();
+  }
+
+  function rowMenu(w: WS): MenuItem[] {
+    return [
+      { label: 'Ouvrir la fiche', onClick: () => router.push(`/app/chantiers/${w.id}`) },
+      { label: 'Ouvrir dans un nouvel onglet', onClick: () => window.open(`/app/chantiers/${w.id}`, '_blank') },
+      'separator',
+      {
+        label: 'Changer le statut',
+        items: WORKSITE_STATUSES.map((s) => ({
+          label: WORKSITE_STATUS_LABEL[s],
+          check: s === w.status,
+          disabled: s === w.status,
+          onClick: () => patchWs(w.id, { status: s }),
+        })),
+      },
+      {
+        label: 'Priorité',
+        items: WORKSITE_PRIORITIES.map((p) => ({
+          label: WORKSITE_PRIORITY_LABEL[p],
+          check: p === w.priority,
+          disabled: p === w.priority,
+          onClick: () => patchWs(w.id, { priority: p }),
+        })),
+      },
+    ];
+  }
 
   const fields: FieldDef[] = [
     { name: 'title', label: 'Intitulé du chantier', required: true, full: true, placeholder: 'Uccle - Dupont - Toiture' },
@@ -79,9 +113,12 @@ function ChantiersInner() {
           onSubmit={async (v) => { await api('/api/worksites', { method: 'POST', body: v }); reload(); }}
         />
       )}
+      {menu && (
+        <ContextMenu x={menu.x} y={menu.y} items={rowMenu(menu.ws)} onClose={() => setMenu(null)} />
+      )}
       <PageHead
         title={kind === 'project' ? 'Chantiers' : 'Charges'}
-        sub={data ? `${data.items.length} ${kind === 'project' ? 'chantiers' : 'postes de charges'}` : undefined}
+        sub={data ? `${data.items.length} ${kind === 'project' ? 'chantiers' : 'postes de charges'} · clic droit sur une ligne pour les actions rapides` : undefined}
         action={kind === 'project' ? <button className="btn primary" onClick={() => setCreating(true)}>+ Nouveau chantier</button> : undefined}
       />
       <div className="seg" style={{ marginBottom: '1rem' }}>
@@ -118,7 +155,11 @@ function ChantiersInner() {
             </thead>
             <tbody>
               {sort.rows.map((w) => (
-                <tr key={w.id}>
+                <tr
+                  key={w.id}
+                  className={menu?.ws.id === w.id ? 'ctx-target' : undefined}
+                  onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, ws: w }); }}
+                >
                   <td className="mono">{w.ref}</td>
                   <td><Link href={`/app/chantiers/${w.id}`}>{w.title}</Link></td>
                   <td>{w.client?.name ?? '—'}</td>

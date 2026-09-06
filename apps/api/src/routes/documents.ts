@@ -37,7 +37,7 @@ documentsRouter.get(
     const items = await prisma.document.findMany({
       where,
       orderBy: [{ issuedOn: 'desc' }, { createdAt: 'desc' }],
-      take: 400,
+      take: 5000,
       include: {
         worksite: { select: { id: true, ref: true, title: true } },
         contact: { select: { id: true, name: true } },

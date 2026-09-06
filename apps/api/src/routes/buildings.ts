@@ -21,7 +21,7 @@ buildingsRouter.get(
         syndic: { select: { id: true, name: true } },
         _count: { select: { worksites: true, units: true } },
       },
-      take: 500,
+      take: 5000,
     });
     res.json({ items });
   }),

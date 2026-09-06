@@ -19,7 +19,7 @@ contactsRouter.get(
     const items = await prisma.contact.findMany({
       where,
       orderBy: { name: 'asc' },
-      take: 500,
+      take: 5000,
       include: { syndic: { select: { id: true, name: true } }, _count: { select: { worksites: true } } },
     });
     res.json({ items });

@@ -36,7 +36,7 @@ crmRouter.get(
     const items = await prisma.crmOpportunity.findMany({
       where: { stage: stage === 'won' || stage === 'lost' ? stage : { in: ['won', 'lost'] } },
       orderBy: { updatedAt: 'desc' },
-      take: 200,
+      take: 2000,
       include: { contact: { select: { name: true } }, worksite: { select: { ref: true } } },
     });
     res.json({ items });

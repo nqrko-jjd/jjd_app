@@ -302,8 +302,11 @@ p { margin: 0; }
   white-space: nowrap; position: sticky; top: 0;
 }
 .tbl th.sortable { cursor: pointer; user-select: none; }
-.tbl th.sortable:hover { color: var(--ink); background: var(--surface-3, var(--surface-2)); }
-.tbl th .sort-ind { font-size: 0.85em; opacity: 0.35; margin-left: 0.15em; }
+.tbl th.sortable:hover { color: var(--primary); background: var(--primary-soft); }
+.tbl th .sort-ind { font-size: 0.95em; opacity: 0.5; margin-left: 0.3em; display: inline-block; }
+.tbl th.sortable:hover .sort-ind { opacity: 1; }
+.tbl th.sortable[aria-sort="ascending"],
+.tbl th.sortable[aria-sort="descending"] { color: var(--primary); }
 .tbl th.sortable[aria-sort="ascending"] .sort-ind,
 .tbl th.sortable[aria-sort="descending"] .sort-ind { opacity: 1; color: var(--primary); }
 .tbl td { padding: 0.65rem 0.9rem; border-bottom: 1px solid var(--line); vertical-align: top; }

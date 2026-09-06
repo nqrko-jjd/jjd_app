@@ -70,9 +70,10 @@ export function SortTh({
       onClick={() => sort.toggle(k)}
       aria-sort={active ? (sort.sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
       style={{ textAlign: align, ...style }}
+      title={active ? (sort.sortDir === 'asc' ? 'Trié A→Z — cliquer pour inverser' : 'Trié Z→A — cliquer pour inverser') : 'Cliquer pour trier'}
     >
       {children}
-      <span className="sort-ind" aria-hidden>{active ? (sort.sortDir === 'asc' ? '▲' : '▼') : '⇅'}</span>
+      <span className="sort-ind" aria-hidden>{active ? (sort.sortDir === 'asc' ? '▲' : '▼') : '↕'}</span>
     </th>
   );
 }

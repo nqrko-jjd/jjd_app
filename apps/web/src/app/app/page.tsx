@@ -1,11 +1,12 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { PageHead, Money, formatDateBE } from '@/lib/ui';
-import { LEGAL_DOC_LABEL } from '@jjd/shared';
+import { LEGAL_DOC_LABEL, WORKSITE_STATUS_LABEL } from '@jjd/shared';
 
 interface TodayEv {
   id: string; startAt: string; endAt: string;
@@ -110,11 +111,39 @@ function WorkerToday() {
 interface Dashboard {
   kpis: {
     invoicedMonth: number; paidMonth: number; overdueAmount: number;
-    overdueCount: number; openWorksites: number; hoursWeek: number;
+    overdueCount: number; openWorksites: number;
+    receivableAmount: number; quotesPendingAmount: number; quotesPendingCount: number;
   };
   alerts: { kind: string; severity: string; label: string; count: number; amount?: number; href: string }[];
+  inProgress: { id: string; ref: string; title: string; city: string | null; status: string; client: string | null; manager: string | null }[];
   expiringDocs: { id: string; person: string; type: string; label: string | null; expiresOn: string | null }[];
 }
+
+function QuickActions() {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  async function newDoc(kind: 'quote' | 'invoice') {
+    setBusy(true);
+    try {
+      const { document } = await api<{ document: { id: string } }>('/api/documents', { method: 'POST', body: { kind } });
+      router.push(`/app/documents/${document.id}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="quick-actions">
+      <button className="qa" disabled={busy} onClick={() => newDoc('quote')}><span className="qa-ic">▧</span>Nouveau devis</button>
+      <button className="qa" disabled={busy} onClick={() => newDoc('invoice')}><span className="qa-ic">€</span>Nouvelle facture</button>
+      <Link className="qa" href="/app/chantiers?new=1"><span className="qa-ic">▤</span>Nouveau chantier</Link>
+      <Link className="qa" href="/app/contacts?new=1"><span className="qa-ic">☰</span>Nouveau contact</Link>
+      <Link className="qa" href="/app/crm?new=1"><span className="qa-ic">⇗</span>Nouvelle opportunité</Link>
+      <Link className="qa" href="/app/planning"><span className="qa-ic">▦</span>Planifier</Link>
+    </div>
+  );
+}
+
+const WS_STATUS_TONE: Record<string, string> = { scheduled: 'primary', in_progress: 'ok', on_hold: 'warn' };
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -126,6 +155,9 @@ export default function DashboardPage() {
   return (
     <>
       <PageHead title="Tableau de bord" sub={`Vue d'ensemble — ${now}`} />
+
+      <QuickActions />
+
       {loading && <div className="empty">Chargement…</div>}
       {data && (
         <>
@@ -133,8 +165,9 @@ export default function DashboardPage() {
             <Kpi ic="€" label="Facturé ce mois" value={<Money value={data.kpis.invoicedMonth} />} />
             <Kpi ic="✓" label="Encaissé ce mois" value={<Money value={data.kpis.paidMonth} />} />
             <Kpi ic="!" label="Impayés" value={<Money value={data.kpis.overdueAmount} />} sub={`${data.kpis.overdueCount} factures en retard`} />
-            <Kpi ic="▤" label="Chantiers ouverts" value={data.kpis.openWorksites} />
-            <Kpi ic="◷" label="Heures pointées (7 j)" value={data.kpis.hoursWeek} />
+            <Kpi ic="◷" label="À encaisser" value={<Money value={data.kpis.receivableAmount} />} sub="factures émises non payées" />
+            <Kpi ic="▤" label="Chantiers en cours" value={data.kpis.openWorksites} />
+            <Kpi ic="⇗" label="Devis en attente" value={<Money value={data.kpis.quotesPendingAmount} />} sub={`${data.kpis.quotesPendingCount} devis envoyés`} />
           </div>
 
           <div className="section-title">À traiter <span className="hint">trié par urgence</span></div>
@@ -151,6 +184,31 @@ export default function DashboardPage() {
                 </Link>
               ))}
             </div>
+          )}
+
+          {data.inProgress.length > 0 && (
+            <>
+              <div className="section-title">Chantiers en cours <span className="hint">{data.inProgress.length} — clique pour ouvrir le dossier</span></div>
+              <div className="tbl-wrap">
+                <table className="tbl">
+                  <thead><tr><th>Réf</th><th>Chantier</th><th>Client</th><th>Chef</th><th>Statut</th></tr></thead>
+                  <tbody>
+                    {data.inProgress.map((w) => (
+                      <tr key={w.id}>
+                        <td className="mono">{w.ref}</td>
+                        <td>
+                          <Link href={`/app/chantiers/${w.id}`}>{w.title}</Link>
+                          {w.city && <div className="muted" style={{ fontSize: '0.78rem' }}>{w.city}</div>}
+                        </td>
+                        <td>{w.client ?? '—'}</td>
+                        <td>{w.manager ?? '—'}</td>
+                        <td><span className={`badge ${WS_STATUS_TONE[w.status] ?? ''}`}>{WORKSITE_STATUS_LABEL[w.status as keyof typeof WORKSITE_STATUS_LABEL] ?? w.status}</span></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
 
           {data.expiringDocs.length > 0 && (

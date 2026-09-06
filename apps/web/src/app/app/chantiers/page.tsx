@@ -1,6 +1,7 @@
 'use client';
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { PageHead, StatusBadge, PriorityBadge, EntityBadge, Money, formatDateBE } from '@/lib/ui';
@@ -15,10 +16,19 @@ interface WS {
 }
 
 export default function ChantiersPage() {
+  return (
+    <Suspense fallback={<div className="empty">Chargement…</div>}>
+      <ChantiersInner />
+    </Suspense>
+  );
+}
+
+function ChantiersInner() {
+  const sp = useSearchParams();
   const [q, setQ] = useState('');
-  const [status, setStatus] = useState('');
+  const [status, setStatus] = useState(sp.get('statut') ?? '');
   const [kind, setKind] = useState<'project' | 'overhead'>('project');
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] = useState(sp.get('new') === '1');
   const params = new URLSearchParams();
   if (q) params.set('q', q);
   if (status) params.set('status', status);

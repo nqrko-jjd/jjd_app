@@ -1,6 +1,7 @@
 'use client';
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { PageHead } from '@/lib/ui';
@@ -16,9 +17,18 @@ interface Contact {
 }
 
 export default function ContactsPage() {
+  return (
+    <Suspense fallback={<div className="empty">Chargement…</div>}>
+      <ContactsInner />
+    </Suspense>
+  );
+}
+
+function ContactsInner() {
+  const sp = useSearchParams();
   const [q, setQ] = useState('');
   const [type, setType] = useState('all');
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] = useState(sp.get('new') === '1');
   const params = new URLSearchParams({ type });
   if (q) params.set('q', q);
   const { data, loading, reload } = useApi<{ items: Contact[] }>(`/api/contacts?${params}`);

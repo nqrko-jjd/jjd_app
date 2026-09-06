@@ -1,5 +1,6 @@
 'use client';
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { PageHead, Money, formatDateBE, stageLabel } from '@/lib/ui';
@@ -13,8 +14,17 @@ interface Opp {
 }
 
 export default function CrmPage() {
+  return (
+    <Suspense fallback={<div className="empty">Chargement…</div>}>
+      <CrmInner />
+    </Suspense>
+  );
+}
+
+function CrmInner() {
+  const sp = useSearchParams();
   const { data, loading, reload } = useApi<{ columns: { stage: string; items: Opp[] }[] }>('/api/crm');
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] = useState(sp.get('new') === '1');
   const [title, setTitle] = useState('');
 
   async function create(e: React.FormEvent) {

@@ -32,6 +32,14 @@ before(async () => {
   });
   token = (await login.json()).token;
 
+  // nettoie d'éventuels restes d'un run précédent interrompu
+  const stale = await prisma.worksite.findMany({ where: { ref: 'R-EXP-TEST' }, select: { id: true } });
+  for (const w of stale) {
+    await prisma.bankTransaction.updateMany({ where: { matchedLedgerId: { in: (await prisma.ledgerEntry.findMany({ where: { worksiteId: w.id }, select: { id: true } })).map((x) => x.id) } }, data: { matchedLedgerId: null } });
+    await prisma.ledgerEntry.deleteMany({ where: { worksiteId: w.id } });
+    await prisma.worksite.delete({ where: { id: w.id } });
+  }
+
   const ws = await prisma.worksite.create({ data: { ref: 'R-EXP-TEST', title: 'Dépenses — test', source: 'test' } });
   worksiteId = ws.id;
   const tx = await prisma.bankTransaction.create({

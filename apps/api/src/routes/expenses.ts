@@ -166,7 +166,41 @@ expensesRouter.get(
   asyncHandler(async (req, res) => {
     const e = await prisma.ledgerEntry.findUnique({ where: { id: req.params.id }, include: inc });
     if (!e) throw new HttpError(404, 'Dépense introuvable');
-    res.json({ expense: { ...e, hasPdf: !!e.pdfPath, editable: e.source === 'manual' } });
+    const bankMatch = await prisma.bankTransaction.findFirst({
+      where: { matchedLedgerId: e.id },
+      select: { id: true, bookingDate: true, amount: true, bank: true, counterpartyName: true, communication: true },
+    });
+    res.json({ expense: { ...e, hasPdf: !!e.pdfPath, editable: e.source === 'manual', bankMatch } });
+  }),
+);
+
+/** Transactions bancaires non rapprochées susceptibles de correspondre à cette dépense. */
+expensesRouter.get(
+  '/:id/bank-suggestions',
+  requireAuth(...FIELD_OFFICE),
+  asyncHandler(async (req, res) => {
+    const e = await prisma.ledgerEntry.findUnique({
+      where: { id: req.params.id },
+      select: { ttc: true, ht: true, date: true, bankComm: true },
+    });
+    if (!e) throw new HttpError(404, 'Dépense introuvable');
+    const amount = Math.abs(e.ttc ?? e.ht ?? 0);
+    const win = e.date
+      ? { bookingDate: { gte: new Date(e.date.getTime() - 30 * 86400000), lte: new Date(e.date.getTime() + 60 * 86400000) } }
+      : {};
+    const items = await prisma.bankTransaction.findMany({
+      where: {
+        matchedLedgerId: null,
+        matchedDocumentId: null,
+        // décaissement : montant négatif de valeur proche du TTC de la dépense
+        amount: { gte: -(amount + 1), lte: -(amount - 1) },
+        ...win,
+      },
+      orderBy: { bookingDate: 'desc' },
+      take: 15,
+      select: { id: true, bookingDate: true, amount: true, bank: true, counterpartyName: true, communication: true },
+    });
+    res.json({ items });
   }),
 );
 

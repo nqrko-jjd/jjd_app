@@ -483,6 +483,23 @@ p { margin: 0; }
 .ctx-sep { height: 1px; background: var(--line); margin: 4px 2px; }
 .tbl tbody tr.ctx-target { background: var(--primary-soft); }
 
+/* ---------------------------------------------------- zone de dépôt fichier */
+.filedrop {
+  border: 1.5px dashed var(--line-strong, var(--line));
+  border-radius: 10px; padding: 0.9rem 1rem; min-height: 68px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface-2); cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+}
+.filedrop:hover { border-color: var(--primary); }
+.filedrop.over { border-color: var(--primary); background: var(--primary-soft); }
+.filedrop.disabled { opacity: 0.5; cursor: default; }
+.filedrop-row { display: flex; align-items: center; gap: 0.65rem; width: 100%; }
+.filedrop-row img { width: 44px; height: 44px; object-fit: cover; border-radius: 6px; flex-shrink: 0; }
+.filedrop-ic { font-size: 1.3rem; flex-shrink: 0; }
+.filedrop-name { flex: 1; font-size: 0.86rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.filedrop-empty { color: var(--ink-2); justify-content: center; }
+
 /* ---------------------------------------------------- modal */
 .modal-scrim {
   position: fixed; inset: 0; z-index: 60;

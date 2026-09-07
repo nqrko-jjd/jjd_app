@@ -7,6 +7,7 @@ import { useSort, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
 import { ContextMenu, useContextMenu, type MenuItem } from '@/components/ContextMenu';
 import { ComboBox } from '@/components/ComboBox';
+import { FileDrop } from '@/components/FileDrop';
 
 interface Expense {
   id: string;
@@ -40,6 +41,11 @@ interface Meta {
   suppliers: { id: string; name: string }[];
   worksites: { id: string; name: string }[];
   years: number[];
+}
+
+interface BankTx {
+  id: string; bookingDate: string | null; amount: number | null;
+  bank: string | null; counterpartyName: string | null; communication: string | null;
 }
 
 function toDateInput(iso: string | null): string {
@@ -248,6 +254,9 @@ function ExpenseModal({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [bankMatch, setBankMatch] = useState<BankTx | null>(null);
+  const [bankSug, setBankSug] = useState<BankTx[] | null>(null);
 
   useEffect(() => {
     const onEsc = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -257,7 +266,28 @@ function ExpenseModal({
 
   useEffect(() => {
     if (expense?.hasPdf) apiBlobUrl(`/api/finance/expenses/${expense.id}/pdf`).then(setPdfUrl).catch(() => {});
+    if (expense) {
+      api<{ expense: { bankMatch: BankTx | null } }>(`/api/finance/expenses/${expense.id}`)
+        .then((r) => setBankMatch(r.expense.bankMatch))
+        .catch(() => {});
+    }
   }, [expense]);
+
+  async function searchPayment() {
+    if (!expense) return;
+    const r = await api<{ items: BankTx[] }>(`/api/finance/expenses/${expense.id}/bank-suggestions`);
+    setBankSug(r.items);
+  }
+  async function linkPayment(txId: string | null) {
+    if (!expense) return;
+    await api(`/api/finance/bank/${txId ?? bankMatch?.id}/match`, {
+      method: 'POST',
+      body: { ledgerId: txId ? expense.id : null },
+    });
+    setBankSug(null);
+    onSaved();
+    onClose();
+  }
 
   // auto-calcule TTC quand HT + TVA récup sont saisis et TTC vide
   function set(k: string, val: string) {
@@ -294,34 +324,16 @@ function ExpenseModal({
       const saved = expense
         ? await api<{ expense: { id: string } }>(`/api/finance/expenses/${expense.id}`, { method: 'PATCH', body })
         : await api<{ expense: { id: string } }>('/api/finance/expenses', { method: 'POST', body });
-      onSaved();
-      // proposer l'upload du PDF juste après création
-      if (!expense) {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = 'application/pdf,image/*';
-        input.onchange = async () => {
-          const f = input.files?.[0];
-          if (!f) return;
-          const fd = new FormData();
-          fd.append('file', f);
-          await apiUpload(`/api/finance/expenses/${saved.expense.id}/pdf`, fd);
-          onSaved();
-        };
-        input.click();
+      if (pendingFile) {
+        const fd = new FormData();
+        fd.append('file', pendingFile);
+        await apiUpload(`/api/finance/expenses/${saved.expense.id}/pdf`, fd);
       }
+      onSaved();
     } catch (e2) {
       setErr((e2 as Error).message ?? 'Erreur');
       setBusy(false);
     }
-  }
-
-  async function uploadPdf(f: File) {
-    if (!expense) return;
-    const fd = new FormData();
-    fd.append('file', f);
-    await apiUpload(`/api/finance/expenses/${expense.id}/pdf`, fd);
-    onSaved();
   }
 
   return (
@@ -399,18 +411,38 @@ function ExpenseModal({
             <textarea className="input" rows={2} disabled={readOnly} value={v.notes} onChange={(e) => set('notes', e.target.value)} />
           </div>
 
+          <div className="field" style={{ gridColumn: '1 / -1' }}>
+            <label>Pièce jointe (PDF ou photo)</label>
+            <FileDrop file={pendingFile} onFile={setPendingFile} existingUrl={pdfUrl} disabled={readOnly} />
+          </div>
+
           {expense && (
             <div className="field" style={{ gridColumn: '1 / -1' }}>
-              <label>Pièce jointe (PDF ou photo)</label>
-              {pdfUrl ? (
-                <div className="row" style={{ gap: '0.5rem', alignItems: 'center' }}>
-                  <a className="btn" href={pdfUrl} target="_blank" rel="noreferrer">Voir</a>
-                  {!readOnly && <button type="button" className="btn" onClick={() => { document.getElementById('exp-pdf')?.click(); }}>Remplacer</button>}
+              <label>Paiement (rapprochement bancaire)</label>
+              {bankMatch ? (
+                <div className="row" style={{ gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span className="badge ok">Rapproché</span>
+                  <span>{formatDateBE(bankMatch.bookingDate)} · <Money value={bankMatch.amount} sign /> · {bankMatch.bank ?? '—'}</span>
+                  {bankMatch.counterpartyName && <span className="muted">{bankMatch.counterpartyName}</span>}
+                  <button type="button" className="btn" onClick={() => linkPayment(null)}>Délier</button>
                 </div>
-              ) : !readOnly ? (
-                <button type="button" className="btn" onClick={() => { document.getElementById('exp-pdf')?.click(); }}>Joindre un fichier</button>
-              ) : <span className="muted">aucune</span>}
-              <input id="exp-pdf" type="file" accept="application/pdf,image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadPdf(f); }} />
+              ) : bankSug ? (
+                bankSug.length === 0 ? (
+                  <span className="muted">Aucune transaction bancaire non rapprochée ne correspond (montant ± 1 €).</span>
+                ) : (
+                  <div className="grid" style={{ gap: '0.35rem' }}>
+                    {bankSug.map((t) => (
+                      <button key={t.id} type="button" className="btn" style={{ justifyContent: 'space-between' }} onClick={() => linkPayment(t.id)}>
+                        <span>{formatDateBE(t.bookingDate)} · {t.counterpartyName ?? (t.communication ?? '').slice(0, 30) ?? '—'} · {t.bank ?? ''}</span>
+                        <Money value={t.amount} sign />
+                      </button>
+                    ))}
+                    <button type="button" className="btn ghost" onClick={() => setBankSug(null)}>Annuler</button>
+                  </div>
+                )
+              ) : (
+                <button type="button" className="btn" onClick={searchPayment}>Rechercher le paiement dans la banque</button>
+              )}
             </div>
           )}
         </div>

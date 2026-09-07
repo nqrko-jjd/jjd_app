@@ -45,11 +45,13 @@ timesheetRouter.post(
     // géolocalisation (mode souple : jamais bloquant, juste signalé)
     let geoDistance: number | null = null;
     let geoFlag = false;
+    let geoInit = false;
     const hasPos = typeof d.lat === 'number' && typeof d.lng === 'number';
     if (hasPos && worksite) {
       if (worksite.lat == null || worksite.lng == null) {
         // 1er pointage sur place -> devient le point de référence du chantier
         await prisma.worksite.update({ where: { id: worksite.id }, data: { lat: d.lat!, lng: d.lng!, geoSetAt: new Date() } });
+        geoInit = true;
       } else {
         geoDistance = distanceMeters(worksite.lat, worksite.lng, d.lat!, d.lng!);
         const row = await prisma.setting.findUnique({ where: { key: 'geoRadius' } });
@@ -74,7 +76,7 @@ timesheetRouter.post(
         source: 'timer',
       },
     });
-    res.status(201).json({ entry, geoFlag, geoDistance });
+    res.status(201).json({ entry, geoFlag, geoDistance, geoInit });
   }),
 );
 

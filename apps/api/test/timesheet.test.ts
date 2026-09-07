@@ -96,10 +96,12 @@ test('géoloc pointage (mode souple) : 1er point fixé, puis hors zone signalé'
   const H = (b: unknown) => ({ method: 'POST' as const, headers: { 'content-type': 'application/json', authorization: `Bearer ${workerToken}` }, body: JSON.stringify(b) });
   const stop = () => fetch(`${base}/api/timesheet/timer/stop`, H({}));
 
-  // 1er pointage sur place -> fixe le point de référence
+  // 1er pointage sur place -> fixe le point de référence (signalé par geoInit)
   const r1 = await fetch(`${base}/api/timesheet/timer/start`, H({ worksiteId: geoWs.id, lat: 50.8467, lng: 4.3525 }));
   assert.equal(r1.status, 201);
-  assert.equal((await r1.json()).geoFlag, false);
+  const j1 = await r1.json();
+  assert.equal(j1.geoFlag, false);
+  assert.equal(j1.geoInit, true, 'le tout premier pointage devient le point de référence');
   await stop();
   const w = await prisma.worksite.findUnique({ where: { id: geoWs.id } });
   assert.ok(w?.lat && w?.lng);
@@ -109,6 +111,7 @@ test('géoloc pointage (mode souple) : 1er point fixé, puis hors zone signalé'
   assert.equal(r2.status, 201);
   const j2 = await r2.json();
   assert.equal(j2.geoFlag, true);
+  assert.equal(j2.geoInit, false, 'le point de référence existe déjà, ce 2e pointage ne le redéfinit pas');
   assert.ok(j2.geoDistance > 4000);
   await stop();
 

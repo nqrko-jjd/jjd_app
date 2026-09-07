@@ -281,6 +281,9 @@ const DOC_TONE: Record<string, string> = {
 function LocationSection({ w, onChange }: { w: Detail['worksite']; onChange: () => void }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [manual, setManual] = useState(false);
+  const [lat, setLat] = useState('');
+  const [lng, setLng] = useState('');
   const hasAddr = !!(w.address || w.city);
 
   async function geocode() {
@@ -288,6 +291,46 @@ function LocationSection({ w, onChange }: { w: Detail['worksite']; onChange: () 
     try {
       const r = await api<{ matched: string }>(`/api/worksites/${w.id}/geocode`, { method: 'POST' });
       setMsg(`Adresse trouvée : ${r.matched}`);
+      onChange();
+    } catch (e) {
+      setMsg((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function useMyPosition() {
+    if (!navigator.geolocation) { setMsg('Géolocalisation non disponible sur cet appareil.'); return; }
+    setBusy(true); setMsg(null);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          await api(`/api/worksites/${w.id}/geo`, {
+            method: 'PATCH',
+            body: { lat: pos.coords.latitude, lng: pos.coords.longitude },
+          });
+          setMsg('Point GPS enregistré à partir de ta position actuelle.');
+          onChange();
+        } catch (e) {
+          setMsg((e as Error).message);
+        } finally {
+          setBusy(false);
+        }
+      },
+      (e) => { setMsg(`Position refusée ou indisponible (${e.message}).`); setBusy(false); },
+      { enableHighAccuracy: true, timeout: 15000 },
+    );
+  }
+
+  async function saveManual() {
+    const la = Number(lat.replace(',', '.'));
+    const lo = Number(lng.replace(',', '.'));
+    if (!Number.isFinite(la) || !Number.isFinite(lo)) { setMsg('Coordonnées invalides.'); return; }
+    setBusy(true); setMsg(null);
+    try {
+      await api(`/api/worksites/${w.id}/geo`, { method: 'PATCH', body: { lat: la, lng: lo } });
+      setMsg('Point GPS enregistré.');
+      setManual(false); setLat(''); setLng('');
       onChange();
     } catch (e) {
       setMsg((e as Error).message);
@@ -317,13 +360,21 @@ function LocationSection({ w, onChange }: { w: Detail['worksite']; onChange: () 
               <div className="muted" style={{ fontSize: '0.82rem' }}>Sert de référence au contrôle de pointage.</div>
             </>
           ) : (
-            <div className="muted" style={{ fontSize: '0.88rem' }}>Aucun point GPS. Géolocalise l’adresse, ou il sera fixé au premier pointage sur place.</div>
+            <div className="muted" style={{ fontSize: '0.88rem' }}>
+              Aucun point GPS. Géolocalise l’adresse, enregistre ta position, ou il sera fixé au premier pointage sur place.
+            </div>
           )}
           {msg && <div style={{ fontSize: '0.82rem', marginTop: '0.4rem', color: 'var(--ink-2)' }}>{msg}</div>}
         </div>
-        <div className="row" style={{ gap: '0.4rem' }}>
+        <div className="row" style={{ gap: '0.4rem', flexWrap: 'wrap' }}>
+          <button className="btn" disabled={busy} onClick={useMyPosition} style={{ padding: '0.25rem 0.7rem', fontSize: '0.8rem' }}>
+            {busy ? '…' : '📍 Utiliser ma position actuelle'}
+          </button>
           <button className="btn" disabled={busy || !hasAddr} onClick={geocode} style={{ padding: '0.25rem 0.7rem', fontSize: '0.8rem' }}>
             {busy ? '…' : 'Géolocaliser l’adresse'}
+          </button>
+          <button className="btn ghost" disabled={busy} onClick={() => setManual((v) => !v)} style={{ padding: '0.25rem 0.6rem', fontSize: '0.8rem' }}>
+            {manual ? 'Annuler' : 'Saisir des coordonnées'}
           </button>
           {w.lat != null && (
             <button className="btn ghost" style={{ padding: '0.25rem 0.6rem', fontSize: '0.8rem' }}
@@ -333,6 +384,13 @@ function LocationSection({ w, onChange }: { w: Detail['worksite']; onChange: () 
           )}
         </div>
       </div>
+      {manual && (
+        <div className="row" style={{ marginTop: '0.7rem', gap: '0.4rem', alignItems: 'center' }}>
+          <input className="input" style={{ maxWidth: 160 }} placeholder="Latitude" value={lat} onChange={(e) => setLat(e.target.value)} />
+          <input className="input" style={{ maxWidth: 160 }} placeholder="Longitude" value={lng} onChange={(e) => setLng(e.target.value)} />
+          <button className="btn primary" disabled={busy || !lat || !lng} onClick={saveManual} style={{ padding: '0.25rem 0.7rem', fontSize: '0.8rem' }}>Enregistrer</button>
+        </div>
+      )}
     </div>
   );
 }

@@ -71,14 +71,18 @@ export default function Today() {
 
   async function start(worksiteId: string) {
     const pos = await currentPosition();
-    const r = await apiSend<{ entry: unknown; geoFlag?: boolean; geoDistance?: number }>('/api/timesheet/timer/start', 'POST', {
+    const r = await apiSend<{ entry: unknown; geoFlag?: boolean; geoDistance?: number; geoInit?: boolean }>('/api/timesheet/timer/start', 'POST', {
       worksiteId,
       startedAt: new Date().toISOString(),
       lat: pos?.lat ?? null,
       lng: pos?.lng ?? null,
     });
     if ('queued' in r) setQueued((q) => q + 1);
-    else if ((r as { geoFlag?: boolean }).geoFlag) {
+    else if (!pos) {
+      Alert.alert('Position non transmise', 'Géolocalisation refusée ou indisponible — le pointage n’a pas pu être vérifié.');
+    } else if ((r as { geoInit?: boolean }).geoInit) {
+      Alert.alert('Point de référence enregistré', 'Aucun point n’était encore fixé pour ce chantier : ta position actuelle vient de le devenir.');
+    } else if ((r as { geoFlag?: boolean }).geoFlag) {
       Alert.alert('Pointage hors zone', `Tu es à environ ${(r as { geoDistance?: number }).geoDistance} m du chantier. Le pointage est enregistré mais sera vérifié par le bureau.`);
     }
     await load();

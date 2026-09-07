@@ -9,7 +9,7 @@ interface D {
   vehicle: {
     id: string; photoUrl: string | null;
     brand: string | null; model: string | null; plate: string | null; code: string | null;
-    type: string | null; fuel: string | null; vin: string | null; km: string | null;
+    type: string | null; seats: number | null; fuel: string | null; vin: string | null; km: string | null;
     nextInspection: string | null; driver: string | null; equipment: string | null; depot: string | null;
     acquisitionMode: string | null; purchasePriceHt: number | null; monthlyPayment: number | null;
     financeCompany: string | null; financeEndOn: string | null;
@@ -36,6 +36,7 @@ export default function VehiculeDetail() {
       <Card>
         <Row k="Plaque" v={v.plate ?? '—'} />
         <Row k="Type / Carburant" v={`${v.type ?? '—'} · ${v.fuel ?? '—'}`} />
+        <Row k="Places" v={v.seats != null ? String(v.seats) : '—'} />
         <Row k="Conducteur" v={v.driver ?? '—'} />
         <Row k="Km" v={v.km ?? '—'} />
         <Row k="Contrôle technique" v={dateBE(v.nextInspection)} />

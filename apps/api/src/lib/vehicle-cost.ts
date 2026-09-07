@@ -130,8 +130,8 @@ export async function worksiteTransport(worksiteId: string): Promise<WorksiteTra
   if (!ws) return empty('Chantier introuvable');
 
   const events = await prisma.planningEvent.findMany({
-    where: { worksiteId, vehicleId: { not: null } },
-    select: { startAt: true, vehicleId: true, vehicle: { select: vehicleCostSelect } },
+    where: { worksiteId, vehicles: { some: {} } },
+    select: { startAt: true, vehicles: { select: { vehicleId: true, vehicle: { select: vehicleCostSelect } } } },
   });
   if (events.length === 0) return empty('Aucun véhicule planifié sur ce chantier');
 
@@ -146,26 +146,27 @@ export async function worksiteTransport(worksiteId: string): Promise<WorksiteTra
   let missingData = false;
 
   for (const ev of events) {
-    if (!ev.vehicleId || !ev.vehicle) continue;
     const date = ev.startAt.toISOString().slice(0, 10);
-    const key = `${date}|${ev.vehicleId}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
+    for (const evv of ev.vehicles) {
+      const key = `${date}|${evv.vehicleId}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
 
-    const fixed = vehicleFixedCost(ev.vehicle, depot.workDaysPerYear);
-    const fuelPerKm = vehicleCostPerKm(ev.vehicle) ?? 0;
-    const roundTripKm = oneWayKm != null ? round2(oneWayKm * 2) : 0;
-    const fuelCost = round2(roundTripKm * fuelPerKm);
+      const fixed = vehicleFixedCost(evv.vehicle, depot.workDaysPerYear);
+      const fuelPerKm = vehicleCostPerKm(evv.vehicle) ?? 0;
+      const roundTripKm = oneWayKm != null ? round2(oneWayKm * 2) : 0;
+      const fuelCost = round2(roundTripKm * fuelPerKm);
 
-    if (oneWayKm == null && fuelPerKm > 0) missingGeo = true;
-    if (fixed.monthly === 0 && fuelPerKm === 0) missingData = true;
-    if (fixed.perDay === 0 && fuelCost === 0) continue;
+      if (oneWayKm == null && fuelPerKm > 0) missingGeo = true;
+      if (fixed.monthly === 0 && fuelPerKm === 0) missingData = true;
+      if (fixed.perDay === 0 && fuelCost === 0) continue;
 
-    trips.push({
-      date, vehicleId: ev.vehicleId, vehicleLabel: vehLabel(ev.vehicle),
-      roundTripKm, fuelPerKm, fuelCost, fixedCost: fixed.perDay,
-      cost: round2(fuelCost + fixed.perDay),
-    });
+      trips.push({
+        date, vehicleId: evv.vehicleId, vehicleLabel: vehLabel(evv.vehicle),
+        roundTripKm, fuelPerKm, fuelCost, fixedCost: fixed.perDay,
+        cost: round2(fuelCost + fixed.perDay),
+      });
+    }
   }
 
   trips.sort((a, b) => a.date.localeCompare(b.date));
@@ -192,8 +193,8 @@ export async function allWorksitesTransport(): Promise<Map<string, number>> {
   const [worksites, events] = await Promise.all([
     prisma.worksite.findMany({ select: { id: true, lat: true, lng: true } }),
     prisma.planningEvent.findMany({
-      where: { vehicleId: { not: null } },
-      select: { worksiteId: true, startAt: true, vehicleId: true, vehicle: { select: vehicleCostSelect } },
+      where: { vehicles: { some: {} } },
+      select: { worksiteId: true, startAt: true, vehicles: { select: { vehicleId: true, vehicle: { select: vehicleCostSelect } } } },
     }),
   ]);
 
@@ -207,16 +208,18 @@ export async function allWorksitesTransport(): Promise<Map<string, number>> {
 
   const seen = new Set<string>();
   for (const ev of events) {
-    if (!ev.vehicleId || !ev.vehicle || !ev.worksiteId) continue;
+    if (!ev.worksiteId) continue;
     const date = ev.startAt.toISOString().slice(0, 10);
-    const key = `${ev.worksiteId}|${date}|${ev.vehicleId}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    const fixed = vehicleFixedCost(ev.vehicle, depot.workDaysPerYear).perDay;
-    const km = oneWay.get(ev.worksiteId);
-    const fuel = km != null ? km * 2 * (vehicleCostPerKm(ev.vehicle) ?? 0) : 0;
-    const add = fixed + fuel;
-    if (add > 0) out.set(ev.worksiteId, round2((out.get(ev.worksiteId) ?? 0) + add));
+    for (const evv of ev.vehicles) {
+      const key = `${ev.worksiteId}|${date}|${evv.vehicleId}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const fixed = vehicleFixedCost(evv.vehicle, depot.workDaysPerYear).perDay;
+      const km = oneWay.get(ev.worksiteId);
+      const fuel = km != null ? km * 2 * (vehicleCostPerKm(evv.vehicle) ?? 0) : 0;
+      const add = fixed + fuel;
+      if (add > 0) out.set(ev.worksiteId, round2((out.get(ev.worksiteId) ?? 0) + add));
+    }
   }
   return out;
 }

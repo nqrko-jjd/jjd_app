@@ -9,7 +9,7 @@ interface Ev {
   id: string; title: string | null; startAt: string; endAt: string; allDay: boolean;
   materialsNote: string | null;
   worksite: { ref: string; title: string; city: string | null };
-  vehicle: { plate: string | null; model: string | null } | null;
+  vehicles: { vehicle: { plate: string | null; model: string | null } }[];
   assignments: { person: { id: string; displayName: string | null; firstName: string } }[];
 }
 
@@ -80,9 +80,12 @@ export default function Planning() {
                 <Text style={{ color: T.ink }}>
                   {e.assignments.map((a) => a.person.displayName || a.person.firstName).join(', ') || 'Aucun ouvrier'}
                 </Text>
-                {(e.vehicle || e.materialsNote) && (
+                {(e.vehicles.length > 0 || e.materialsNote) && (
                   <Muted>
-                    {[e.vehicle ? `🚐 ${e.vehicle.plate || e.vehicle.model}` : null, e.materialsNote ? `🔧 ${e.materialsNote}` : null].filter(Boolean).join('  ')}
+                    {[
+                      e.vehicles.length > 0 ? `🚐 ${e.vehicles.map((v) => v.vehicle.plate || v.vehicle.model).join(', ')}` : null,
+                      e.materialsNote ? `🔧 ${e.materialsNote}` : null,
+                    ].filter(Boolean).join('  ')}
                   </Muted>
                 )}
               </Card>

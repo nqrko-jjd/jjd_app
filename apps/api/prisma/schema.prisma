@@ -632,7 +632,7 @@ model PlanningEvent {
   allDay        Boolean  @default(false)
   teamId        String?
   team          Team?    @relation(fields: [teamId], references: [id])
-  vehicleId     String?
+  vehicleId     String? // legacy, un seul véhicule — conservé pour ne pas perdre les données déjà en prod, plus utilisé par l'appli (voir EventVehicle)
   vehicle       Vehicle? @relation(fields: [vehicleId], references: [id])
   materialsNote String?
   note          String?
@@ -646,6 +646,7 @@ model PlanningEvent {
   assignments EventAssignment[]
   equipment   EventEquipment[]
   consumables EventConsumable[]
+  vehicles    EventVehicle[]
 
   @@index([startAt])
   @@index([worksiteId])
@@ -681,6 +682,16 @@ model EventConsumable {
   @@id([eventId, consumableId])
 }
 
+/// Véhicule(s) affecté(s) à une affectation de planning (plusieurs possibles).
+model EventVehicle {
+  eventId   String
+  event     PlanningEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  vehicleId String
+  vehicle   Vehicle       @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, vehicleId])
+}
+
 // ─────────────────────────────────────────────────────────── Flotte
 
 model Vehicle {
@@ -691,6 +702,7 @@ model Vehicle {
   model             String?
   name              String?
   type              String? // Camionette | Moto | Clark | Voiture
+  seats             Int? // nombre de places
   fuel              String?
   vin               String?
   firstRegistration DateTime?
@@ -732,7 +744,8 @@ model Vehicle {
 
   insurances Insurance[]
   fines      Fine[]
-  events     PlanningEvent[]
+  events     PlanningEvent[] // legacy (voir PlanningEvent.vehicleId)
+  eventLinks EventVehicle[]
   payments   VehiclePayment[]
 }
 

@@ -10,7 +10,7 @@ interface Fiche {
   building: { name: string; digicode: string | null; accessNote: string | null; contacts: { role: string | null; name: string; phone: string | null }[] } | null;
   manager: { name: string; phone: string | null } | null;
   team: string | null;
-  vehicle: { label: string; plate: string | null } | null;
+  vehicles: { label: string; plate: string | null }[];
   people: { name: string; role: string; phone: string | null }[];
   equipment: { name: string; reference: string | null }[];
   consumables: { name: string; qty: number; unit: string }[];
@@ -100,8 +100,10 @@ export default function FichePage({ params }: { params: Promise<{ id: string }> 
             </ul>
           </div>
           <div className="box">
-            <div className="lbl">Véhicule</div>
-            {f.vehicle ? <div className="big">{f.vehicle.label}{f.vehicle.plate ? ` · ${f.vehicle.plate}` : ''}</div> : <div className="muted">—</div>}
+            <div className="lbl">Véhicule{f.vehicles.length > 1 ? 's' : ''}</div>
+            {f.vehicles.length > 0 ? (
+              <div className="big">{f.vehicles.map((v) => `${v.label}${v.plate ? ` · ${v.plate}` : ''}`).join(' — ')}</div>
+            ) : <div className="muted">—</div>}
           </div>
           <div className="box">
             <div className="lbl">Matériel</div>

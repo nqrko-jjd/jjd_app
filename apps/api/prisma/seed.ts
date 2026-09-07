@@ -111,11 +111,29 @@ async function main() {
     });
   }
 
+  // ── Véhicules multiples par affectation : bascule l'ancien vehicleId (un seul
+  // véhicule) vers la table de liaison EventVehicle. Idempotent (upsert) ; ne
+  // touche pas vehicleId lui-même, gardé pour compat.
+  const legacyVehicleEvents = await prisma.planningEvent.findMany({
+    where: { vehicleId: { not: null } },
+    select: { id: true, vehicleId: true },
+  });
+  let vehicleLinksBackfilled = 0;
+  for (const ev of legacyVehicleEvents) {
+    await prisma.eventVehicle.upsert({
+      where: { eventId_vehicleId: { eventId: ev.id, vehicleId: ev.vehicleId! } },
+      create: { eventId: ev.id, vehicleId: ev.vehicleId! },
+      update: {},
+    });
+    vehicleLinksBackfilled++;
+  }
+
   const counts = {
     categories: await prisma.category.count(),
     users: await prisma.user.count(),
     entityFixed,
     statusFixed,
+    vehicleLinksBackfilled,
   };
   console.log('Seed OK', counts);
 }

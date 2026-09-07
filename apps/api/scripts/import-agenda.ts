@@ -219,7 +219,6 @@ async function main() {
       allDay,
       note,
       materialsNote: materials ?? (vehicleRaw ? `Véhicule : ${vehicleRaw}` : null),
-      vehicleId: vehicleRaw ? matchVehicle(vehicleRaw) : null,
       googleEventId: uid,
       source: 'agenda-import',
     };
@@ -235,6 +234,12 @@ async function main() {
       eventId = ev.id;
       created++;
     }
+
+    // véhicule (analysé depuis la description « Véhicule : ») — table de liaison, un seul
+    // véhicule détecté ici mais un événement peut en recevoir d'autres depuis l'appli
+    const matchedVehicleId = vehicleRaw ? matchVehicle(vehicleRaw) : null;
+    await prisma.eventVehicle.deleteMany({ where: { eventId } });
+    if (matchedVehicleId) await prisma.eventVehicle.create({ data: { eventId, vehicleId: matchedVehicleId } });
 
     // affectations ouvriers
     const seen = new Set<string>();

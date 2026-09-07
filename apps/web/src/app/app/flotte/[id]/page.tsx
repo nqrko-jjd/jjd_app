@@ -12,7 +12,7 @@ interface Detail {
   vehicle: {
     id: string; code: string | null; brand: string | null; model: string | null; plate: string | null;
     photoUrl: string | null;
-    type: string | null; fuel: string | null; vin: string | null; km: string | null;
+    type: string | null; seats: number | null; fuel: string | null; vin: string | null; km: string | null;
     firstRegistration: string | null; nextInspection: string | null; status: string;
     fuelConsoL100: number | null; fuelPricePerL: number | null; costPerKmExtra: number | null; costPerKm: number | null;
     parkingMonthly: number | null; otherMonthly: number | null;
@@ -46,6 +46,7 @@ export default function VehicleDetail({ params }: { params: Promise<{ id: string
     { name: 'model', label: 'Modèle' },
     { name: 'plate', label: 'Plaque' },
     { name: 'type', label: 'Type', placeholder: 'Camionette, Moto, Clark, Voiture…' },
+    { name: 'seats', label: 'Nombre de places', type: 'number' },
     { name: 'status', label: 'Statut', type: 'select', required: true, options: VEHICLE_STATUSES.map((s) => ({ value: s, label: VEHICLE_STATUS_LABEL[s] })) },
     { name: 'fuel', label: 'Carburant' },
     { name: 'driver', label: 'Conducteur' },
@@ -72,7 +73,7 @@ export default function VehicleDetail({ params }: { params: Promise<{ id: string
           title={`Modifier ${[v.brand, v.model].filter(Boolean).join(' ') || v.code || 'le véhicule'}`}
           fields={editFields}
           initial={{
-            brand: v.brand, model: v.model, plate: v.plate, type: v.type, status: v.status,
+            brand: v.brand, model: v.model, plate: v.plate, type: v.type, seats: v.seats, status: v.status,
             fuel: v.fuel, driver: v.driver, depot: v.depot, km: v.km, vin: v.vin,
             firstRegistration: toDateInput(v.firstRegistration), nextInspection: toDateInput(v.nextInspection),
             circulationTax: v.circulationTax, biv: v.biv, equipment: v.equipment, note: v.note,
@@ -105,6 +106,7 @@ export default function VehicleDetail({ params }: { params: Promise<{ id: string
       </div>
       <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', marginBottom: '1.4rem' }}>
         <Info label="Conducteur" value={v.driver ?? '—'} />
+        <Info label="Places" value={v.seats ?? '—'} />
         <Info label="Carburant" value={v.fuel ?? '—'} />
         <Info label="Km" value={v.km ?? '—'} />
         <Info label="1re mise en circ." value={formatDateBE(v.firstRegistration)} />

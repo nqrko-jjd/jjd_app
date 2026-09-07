@@ -34,14 +34,15 @@ before(async () => {
   vehicleId = v.id;
 
   const day = (d: string, h: number) => new Date(`${d}T0${h}:00:00.000Z`);
-  await prisma.planningEvent.createMany({
-    data: [
-      { worksiteId, vehicleId, startAt: day('2026-03-02', 8), endAt: day('2026-03-02', 9) },
-      // même jour, même véhicule -> pas de 2e aller-retour
-      { worksiteId, vehicleId, startAt: day('2026-03-02', 9), endAt: day('2026-03-02', 9) },
-      { worksiteId, vehicleId, startAt: day('2026-03-03', 8), endAt: day('2026-03-03', 9) },
-    ],
+  const withVehicle = (startAt: Date, endAt: Date) => ({
+    worksiteId, startAt, endAt, vehicles: { create: [{ vehicleId }] },
   });
+  await Promise.all([
+    prisma.planningEvent.create({ data: withVehicle(day('2026-03-02', 8), day('2026-03-02', 9)) }),
+    // même jour, même véhicule -> pas de 2e aller-retour
+    prisma.planningEvent.create({ data: withVehicle(day('2026-03-02', 9), day('2026-03-02', 9)) }),
+    prisma.planningEvent.create({ data: withVehicle(day('2026-03-03', 8), day('2026-03-03', 9)) }),
+  ]);
 });
 
 after(async () => {
@@ -78,6 +79,27 @@ test('worksiteTransport : un jour = 1 A/R carburant + 1 quote-part fixe', async 
   assert.equal(t.fuelCost, Math.round(fuelPerTrip * 2 * 100) / 100);
   assert.equal(t.fixedCost, Math.round(fixedPerDay * 2 * 100) / 100);
   assert.equal(t.cost, Math.round((t.fuelCost + t.fixedCost) * 100) / 100);
+});
+
+test('worksiteTransport : 2 véhicules sur la même affectation -> 2 trajets ce jour-là', async () => {
+  const v2 = await prisma.vehicle.create({
+    data: { brand: 'Test', model: 'Camionette', plate: 'TEST-2', source: 'test', fuelConsoL100: 10, fuelPricePerL: 1.75 },
+  });
+  const ev = await prisma.planningEvent.create({
+    data: {
+      worksiteId, startAt: new Date('2026-03-04T08:00:00.000Z'), endAt: new Date('2026-03-04T09:00:00.000Z'),
+      vehicles: { create: [{ vehicleId }, { vehicleId: v2.id }] },
+    },
+  });
+  try {
+    const t = await worksiteTransport(worksiteId);
+    const day = t.trips.filter((tr) => tr.date === '2026-03-04');
+    assert.equal(day.length, 2, 'un trajet par véhicule affecté ce jour-là');
+    assert.deepEqual(new Set(day.map((tr) => tr.vehicleId)), new Set([vehicleId, v2.id]));
+  } finally {
+    await prisma.planningEvent.delete({ where: { id: ev.id } });
+    await prisma.vehicle.delete({ where: { id: v2.id } });
+  }
 });
 
 test('worksiteTransport : pas de GPS -> coûts fixes seulement + note', async () => {

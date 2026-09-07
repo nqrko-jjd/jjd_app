@@ -6,12 +6,14 @@ import { api } from '@/lib/api';
 import { PageHead } from '@/lib/ui';
 import { ComboBox } from '@/components/ComboBox';
 
+interface EvVehicle { vehicle: { id: string; plate: string | null; model: string | null; brand: string | null; code: string | null; seats: number | null } }
+
 interface Ev {
   id: string; title: string | null; startAt: string; endAt: string; allDay: boolean;
   materialsNote: string | null; note: string | null;
   worksite: { id: string; ref: string; title: string; city: string | null; address?: string | null };
   team: { name: string; color: string | null } | null;
-  vehicle: { plate: string | null; model: string | null } | null;
+  vehicles: EvVehicle[];
   assignments: { person: { id: string; displayName: string | null; firstName: string; phone?: string | null } }[];
   equipment: { equipment: { id: string; name: string } }[];
   consumables: { qty: number; consumable: { id: string; name: string; unit: string } }[];
@@ -42,7 +44,7 @@ function colorFor(e: Ev) {
 
 interface Block {
   key: string; worksite: Ev['worksite']; title: string | null; startAt: string; endAt: string;
-  team: Ev['team']; vehicle: Ev['vehicle']; materialsNote: string | null; note: string | null;
+  team: Ev['team']; vehicles: EvVehicle[]; materialsNote: string | null; note: string | null;
   people: string[]; equipment: string[]; consumables: { name: string; qty: number; unit: string }[];
   ids: string[]; color: string;
 }
@@ -58,7 +60,7 @@ function mergeByWorksite(evs: Ev[]): Block[] {
     if (!cur) {
       map.set(e.worksite.id, {
         key: e.worksite.id, worksite: e.worksite, title: e.title, startAt: e.startAt, endAt: e.endAt,
-        team: e.team, vehicle: e.vehicle, materialsNote: e.materialsNote, note: e.note,
+        team: e.team, vehicles: [...e.vehicles], materialsNote: e.materialsNote, note: e.note,
         people: [...names], equipment: [...equip], consumables: [...cons], ids: [e.id], color: colorFor(e),
       });
     } else {
@@ -68,7 +70,7 @@ function mergeByWorksite(evs: Ev[]): Block[] {
       for (const n of names) if (!cur.people.includes(n)) cur.people.push(n);
       for (const n of equip) if (!cur.equipment.includes(n)) cur.equipment.push(n);
       for (const c of cons) if (!cur.consumables.some((x) => x.name === c.name)) cur.consumables.push(c);
-      cur.vehicle ??= e.vehicle;
+      for (const v of e.vehicles) if (!cur.vehicles.some((x) => x.vehicle.id === v.vehicle.id)) cur.vehicles.push(v);
       cur.materialsNote ??= e.materialsNote;
       if (e.note && !cur.note) cur.note = e.note;
     }
@@ -265,7 +267,11 @@ function EventDetail({ b, onClose, onDeleted }: { b: Block; onClose: () => void;
               {b.people.map((n) => <span key={n} className="badge" style={{ marginRight: 4 }}>{n}</span>)}
             </p>
           )}
-          {b.vehicle && <p className="muted" style={{ margin: '0 0 0.3rem' }}>🚐 {b.vehicle.plate || b.vehicle.model}</p>}
+          {b.vehicles.length > 0 && (
+            <p className="muted" style={{ margin: '0 0 0.3rem' }}>
+              🚐 {b.vehicles.map((v) => v.vehicle.plate || v.vehicle.model).join(', ')}
+            </p>
+          )}
           {b.equipment.length > 0 && <p className="muted" style={{ margin: '0 0 0.3rem' }}>🔧 {b.equipment.join(', ')}</p>}
           {b.materialsNote && <p className="muted" style={{ margin: '0 0 0.3rem' }}>{b.materialsNote}</p>}
           {b.consumables.length > 0 && (
@@ -295,7 +301,7 @@ interface BricoConsumable { id: string; name: string; stockQty: number | null }
 function NewEventForm({ prefill, onDone, onClose }: { prefill: { date?: string; hour?: number }; onDone: () => void; onClose: () => void }) {
   const { data: ws } = useApi<{ items: { id: string; ref: string; title: string }[] }>('/api/worksites');
   const { data: people } = useApi<{ items: { id: string; displayName: string | null; firstName: string; role: string }[] }>('/api/people?active=1');
-  const { data: vehicles } = useApi<{ items: { id: string; plate: string | null; model: string | null; brand: string | null; code: string | null }[] }>('/api/vehicles');
+  const { data: vehicles } = useApi<{ items: { id: string; plate: string | null; model: string | null; brand: string | null; code: string | null; seats: number | null }[] }>('/api/vehicles');
   const { data: equipmentList, reload: reloadEquipment } = useApi<{ items: { id: string; name: string }[] }>('/api/equipment');
   const { data: consumableList, reload: reloadConsumables } = useApi<{ items: { id: string; name: string; unit: string }[] }>('/api/consumables');
   const { data: brico } = useApi<{ enabled: boolean }>('/api/materiel/status');
@@ -305,7 +311,7 @@ function NewEventForm({ prefill, onDone, onClose }: { prefill: { date?: string; 
   const [f, setF] = useState({
     worksiteId: '', date: prefill.date ?? new Date().toISOString().slice(0, 10),
     start: `${String(h).padStart(2, '0')}:00`, end: `${String(Math.min(h + 8, 20)).padStart(2, '0')}:00`,
-    vehicleId: '', materialsNote: '', note: '', personIds: [] as string[],
+    vehicleIds: [] as string[], materialsNote: '', note: '', personIds: [] as string[],
     equipmentIds: [] as string[], consumables: [] as { consumableId: string; qty: number }[],
   });
   const [newEquipment, setNewEquipment] = useState('');
@@ -337,7 +343,7 @@ function NewEventForm({ prefill, onDone, onClose }: { prefill: { date?: string; 
         worksiteId: f.worksiteId,
         startAt: new Date(`${f.date}T${f.start}`).toISOString(),
         endAt: new Date(`${f.date}T${f.end}`).toISOString(),
-        vehicleId: f.vehicleId || null,
+        vehicleIds: f.vehicleIds,
         materialsNote: f.materialsNote || null,
         note: f.note || null,
         personIds: f.personIds,
@@ -363,14 +369,20 @@ function NewEventForm({ prefill, onDone, onClose }: { prefill: { date?: string; 
             />
           </div>
           <div className="field"><label>Date</label><input className="input" type="date" value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} /></div>
-          <div className="field"><label>Véhicule</label>
-            <select className="select" value={f.vehicleId} onChange={(e) => setF({ ...f, vehicleId: e.target.value })}>
-              <option value="">—</option>
+          <div className="field" style={{ gridColumn: '1 / -1' }}>
+            <label>Véhicule(s)</label>
+            <div className="row" style={{ flexWrap: 'wrap', gap: 4 }}>
               {(vehicles?.items ?? []).map((v) => {
                 const name = [v.brand, v.model].filter(Boolean).join(' ') || v.code || v.plate || '—';
-                return <option key={v.id} value={v.id}>{name}{v.plate ? ` · ${v.plate}` : ''}</option>;
+                const on = f.vehicleIds.includes(v.id);
+                return (
+                  <button type="button" key={v.id} className={`badge ${on ? 'primary' : ''}`} style={{ cursor: 'pointer' }}
+                    onClick={() => setF({ ...f, vehicleIds: on ? f.vehicleIds.filter((x) => x !== v.id) : [...f.vehicleIds, v.id] })}>
+                    {name}{v.plate ? ` · ${v.plate}` : ''}{v.seats != null ? ` · ${v.seats} place${v.seats > 1 ? 's' : ''}` : ''}
+                  </button>
+                );
               })}
-            </select>
+            </div>
           </div>
           <div className="field"><label>Début</label><input className="input" type="time" value={f.start} onChange={(e) => setF({ ...f, start: e.target.value })} /></div>
           <div className="field"><label>Fin</label><input className="input" type="time" value={f.end} onChange={(e) => setF({ ...f, end: e.target.value })} /></div>

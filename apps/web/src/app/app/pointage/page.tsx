@@ -7,7 +7,7 @@ import { formatHours } from '@jjd/shared';
 
 interface Pending {
   id: string; date: string | null; hours: number | null; amount: number | null; task: string | null;
-  geoFlag: boolean; geoDistance: number | null;
+  geoFlag: boolean; geoDistance: number | null; startLat: number | null; startLng: number | null;
   person: { displayName: string | null; firstName: string };
   worksite: { ref: string; title: string } | null;
 }
@@ -81,10 +81,17 @@ export default function PointagePage() {
                     <td>{e.worksite ? <><span className="mono">{e.worksite.ref}</span> {e.worksite.title}</> : <span className="muted">—</span>}</td>
                     <td className="muted">{e.task ?? '—'}</td>
                     <td>
-                      {e.geoFlag
-                        ? <span className="badge crit" title={`Pointé à ${e.geoDistance} m du chantier`}>Hors zone · {e.geoDistance} m</span>
-                        : e.geoDistance != null ? <span className="badge ok">Sur place</span>
-                        : <span className="muted" style={{ fontSize: '0.8rem' }}>—</span>}
+                      <div className="row" style={{ gap: '0.4rem' }}>
+                        {e.geoFlag
+                          ? <span className="badge crit" title={`Pointé à ${e.geoDistance} m du chantier`}>Hors zone · {e.geoDistance} m</span>
+                          : e.geoDistance != null ? <span className="badge ok">Sur place</span>
+                          : <span className="muted" style={{ fontSize: '0.8rem' }}>—</span>}
+                        {e.startLat != null && e.startLng != null && (
+                          <a href={`https://www.google.com/maps?q=${e.startLat},${e.startLng}`} target="_blank" rel="noreferrer" style={{ fontSize: '0.78rem' }}>
+                            📍 voir
+                          </a>
+                        )}
+                      </div>
                     </td>
                     <td style={{ textAlign: 'right' }} className="tnum">{formatHours(e.hours)}</td>
                     <td style={{ textAlign: 'right' }}><Money value={e.amount} /></td>

@@ -1,5 +1,6 @@
 'use client';
 import { use, useCallback, useState } from 'react';
+import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { PageHead } from '@/lib/ui';
@@ -135,6 +136,10 @@ export default function WorkerFichePage({ params }: { params: Promise<{ id: stri
         {(d.building?.contacts ?? []).map((c, i) => <PhoneLine key={i} label={CONTACT_ROLE[c.role] ?? c.role} name={c.name} phone={c.phone} />)}
         {!d.manager && !d.client && (d.building?.contacts ?? []).length === 0 && <div className="muted">Aucun contact renseigné.</div>}
       </div>
+
+      <Link href={`/app/fiche/${w.id}/rapport`} className="btn primary" style={{ display: 'block', textAlign: 'center', marginBottom: '1.2rem' }}>
+        Faire le rapport de chantier
+      </Link>
 
       <div className="section-title" style={{ marginTop: 0 }}>Fil de chantier</div>
       <ChantierThread worksiteId={w.id} />

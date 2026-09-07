@@ -97,6 +97,7 @@ model Person {
   role             String   @default("worker") // foreman | worker
   contractType     String   @default("employee") // employee | subcontractor | interim
   hourlyRate       Float?
+  dailyHours       Float    @default(10) // jour presté garanti (payé même si moins pointé sur chantier)
   phone            String?
   email            String?
   address          String?

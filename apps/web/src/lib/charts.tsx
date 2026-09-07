@@ -114,7 +114,7 @@ export function RevenueChart({
 export function MonthBars({
   data, color = C.primary, height = 200, unit = '',
 }: {
-  data: { month: string; value: number }[]; color?: string; height?: number; unit?: string;
+  data: { month: string; value: number; tooltip?: string }[]; color?: string; height?: number; unit?: string;
 }) {
   const W = 640, H = height, padL = 38, padB = 24, padT = 10;
   const innerW = W - padL - 6, innerH = H - padB - padT;
@@ -135,8 +135,12 @@ export function MonthBars({
         {data.map((d, i) => {
           const cx = padL + slot * (i + 0.5);
           return (
-            <g key={d.month}>
-              <rect x={cx - bw / 2} y={y(d.value)} width={bw} height={Math.max(0, padT + innerH - y(d.value))} rx="2" fill={color} />
+            <g key={d.month} style={{ cursor: d.tooltip ? 'pointer' : undefined }}>
+              {d.tooltip && <title>{d.tooltip}</title>}
+              <rect
+                x={cx - bw / 2} y={y(d.value)} width={bw} height={Math.max(0, padT + innerH - y(d.value))} rx="2" fill={color}
+                className={d.tooltip ? 'chart-bar-hover' : undefined}
+              />
               <text x={cx} y={H - 7} textAnchor="middle" fontSize="10" fill={C.ink3}>{monthShort(d.month)}</text>
             </g>
           );

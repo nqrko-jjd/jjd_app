@@ -1,11 +1,22 @@
 import { Router } from 'express';
+import path from 'node:path';
+import { createReadStream, existsSync } from 'node:fs';
+import multer from 'multer';
 import { personInput, legalDocInput, normalizeName } from '@jjd/shared';
 import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, STAFF, OFFICE, hashPassword } from '../lib/auth.js';
 import { attachPhotoRoutes } from '../lib/photo-upload.js';
+import { storeFile, UPLOADS_DIR } from '../lib/media.js';
+import { monthlyStatement, personEarningsSeries } from '../lib/statement.js';
 
 export const peopleRouter = Router();
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
+
+function resolveUpload(rel: string): string {
+  const clean = rel.replace(/^\/?uploads\//, '').replace(/\\/g, '/');
+  return path.join(UPLOADS_DIR, path.normalize(clean));
+}
 
 attachPhotoRoutes(peopleRouter, (id, data) => prisma.person.update({ where: { id }, data }));
 
@@ -46,17 +57,26 @@ peopleRouter.get(
     });
     if (!person) throw new HttpError(404, 'Fiche introuvable');
 
-    // décompte du mois courant
+    // décompte du mois courant (jour presté garanti inclus)
     const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const month = await prisma.timeEntry.aggregate({
-      where: { personId: person.id, date: { gte: monthStart }, status: { in: ['approved', 'submitted'] } },
-      _sum: { hours: true, amount: true },
-    });
+    const s = await monthlyStatement(person.id, now.getFullYear(), now.getMonth() + 1);
     res.json({
       person,
-      monthStatement: { hours: month._sum.hours ?? 0, amount: month._sum.amount ?? 0 },
+      monthStatement: {
+        hours: s.totalHours, amount: s.totalAmount,
+        worksites: s.worksiteCount, guaranteeApplied: s.guaranteeApplied, dailyHours: s.dailyHoursGuarantee,
+      },
     });
+  }),
+);
+
+/** Série mensuelle (montant, heures, chantiers) pour le graphique de la fiche. */
+peopleRouter.get(
+  '/:id/stats',
+  requireAuth(...STAFF),
+  asyncHandler(async (req, res) => {
+    const months = Math.min(24, Math.max(3, Number(req.query.months) || 12));
+    res.json({ months: await personEarningsSeries(req.params.id!, months) });
   }),
 );
 
@@ -138,5 +158,41 @@ peopleRouter.delete(
   asyncHandler(async (req, res) => {
     await prisma.legalDoc.delete({ where: { id: req.params.docId } });
     res.status(204).end();
+  }),
+);
+
+/** Joint le scan/photo du document (PDF ou image). */
+peopleRouter.post(
+  '/:id/legal-docs/:docId/file',
+  requireAuth(...OFFICE),
+  upload.single('file'),
+  asyncHandler(async (req, res) => {
+    if (!req.file) throw new HttpError(422, 'Aucun fichier');
+    const okType = req.file.mimetype === 'application/pdf' || /^image\/(jpe?g|png|webp|heic)$/.test(req.file.mimetype);
+    if (!okType) throw new HttpError(422, 'Format accepté : PDF ou image.');
+    const doc = await prisma.legalDoc.findFirst({ where: { id: req.params.docId, personId: req.params.id } });
+    if (!doc) throw new HttpError(404, 'Document introuvable');
+    const rel = storeFile(req.file.buffer, req.file.originalname || 'document.pdf', 'legal-docs');
+    const updated = await prisma.legalDoc.update({ where: { id: doc.id }, data: { fileUrl: rel } });
+    res.status(201).json({ doc: updated });
+  }),
+);
+
+peopleRouter.get(
+  '/:id/legal-docs/:docId/file',
+  requireAuth(...STAFF),
+  asyncHandler(async (req, res) => {
+    const doc = await prisma.legalDoc.findFirst({ where: { id: req.params.docId, personId: req.params.id } });
+    if (!doc?.fileUrl) throw new HttpError(404, 'Aucune pièce jointe');
+    const file = resolveUpload(doc.fileUrl);
+    if (!existsSync(file)) throw new HttpError(404, 'Fichier introuvable sur le serveur');
+    const ext = path.extname(file).toLowerCase();
+    const type = ext === '.pdf' ? 'application/pdf'
+      : ext === '.png' ? 'image/png'
+      : ext === '.webp' ? 'image/webp'
+      : 'image/jpeg';
+    res.setHeader('Content-Type', type);
+    res.setHeader('Content-Disposition', `inline; filename="${(doc.label ?? doc.type).replace(/[^\w.-]/g, '_')}${ext}"`);
+    createReadStream(file).pipe(res);
   }),
 );

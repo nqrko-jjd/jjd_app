@@ -371,6 +371,8 @@ p { margin: 0; }
 
 .chart-scroll { overflow-x: auto; }
 .chart-svg { width: 100%; height: auto; min-width: 380px; display: block; }
+.chart-bar-hover { transition: filter 0.1s; }
+.chart-bar-hover:hover { filter: brightness(1.18); }
 .chart-legend { display: flex; gap: 1.2rem; flex-wrap: wrap; margin-top: 0.5rem; font-size: 0.8rem; color: var(--ink-2); }
 .chart-legend span { display: inline-flex; align-items: center; gap: 0.4rem; }
 .chart-legend i, .chart-donut-legend i { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }

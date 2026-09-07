@@ -88,6 +88,7 @@ export const personInput = z.object({
   role: z.enum(ROLES).default('worker'),
   contractType: z.enum(WORKER_CONTRACT_TYPES).default('employee'),
   hourlyRate: z.number().nonnegative().nullish(),
+  dailyHours: z.coerce.number().positive().max(24).default(10),
   phone: z.string().trim().nullish(),
   email: z.string().trim().email().nullish().or(z.literal('')),
   address: z.string().trim().nullish(),

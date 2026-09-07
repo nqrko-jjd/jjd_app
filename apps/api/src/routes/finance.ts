@@ -103,11 +103,12 @@ financeRouter.get(
   '/bank',
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
-    const { matched, q, from } = req.query as Record<string, string>;
+    const { matched, q, from, bank } = req.query as Record<string, string>;
     const and: Record<string, unknown>[] = [];
     if (matched === '1') and.push({ OR: [{ matchedLedgerId: { not: null } }, { matchedDocumentId: { not: null } }] });
     if (matched === '0') and.push({ matchedLedgerId: null }, { matchedDocumentId: null });
     if (from) and.push({ bookingDate: { gte: new Date(from) } });
+    if (bank) and.push({ bank });
     if (q) and.push({ OR: [{ counterpartyName: { contains: q } }, { description: { contains: q } }, { communication: { contains: q } }] });
     const where: Record<string, unknown> = and.length ? { AND: and } : {};
 

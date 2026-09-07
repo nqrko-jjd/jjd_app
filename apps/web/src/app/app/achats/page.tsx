@@ -46,6 +46,7 @@ interface Meta {
 interface BankTx {
   id: string; bookingDate: string | null; amount: number | null;
   bank: string | null; counterpartyName: string | null; communication: string | null;
+  nameMatch?: boolean;
 }
 
 function toDateInput(iso: string | null): string {
@@ -428,12 +429,18 @@ function ExpenseModal({
                 </div>
               ) : bankSug ? (
                 bankSug.length === 0 ? (
-                  <span className="muted">Aucune transaction bancaire non rapprochée ne correspond (montant ± 1 €).</span>
+                  <span className="muted">Aucune transaction bancaire non rapprochée ne correspond (montant ± 1 €, ± 2 mois).</span>
                 ) : (
                   <div className="grid" style={{ gap: '0.35rem' }}>
+                    <span className="muted" style={{ fontSize: '0.8rem' }}>Vérifie le nom : « fournisseur ✓ » = la contrepartie du paiement correspond au fournisseur.</span>
                     {bankSug.map((t) => (
                       <button key={t.id} type="button" className="btn" style={{ justifyContent: 'space-between' }} onClick={() => linkPayment(t.id)}>
-                        <span>{formatDateBE(t.bookingDate)} · {t.counterpartyName ?? (t.communication ?? '').slice(0, 30) ?? '—'} · {t.bank ?? ''}</span>
+                        <span>
+                          <span className={`badge ${t.nameMatch ? 'ok' : 'plain'}`} style={{ marginRight: 6 }}>
+                            {t.nameMatch ? 'fournisseur ✓' : 'montant seul'}
+                          </span>
+                          {formatDateBE(t.bookingDate)} · {t.counterpartyName ?? ((t.communication ?? '').slice(0, 30) || '—')} · {t.bank ?? ''}
+                        </span>
                         <Money value={t.amount} sign />
                       </button>
                     ))}

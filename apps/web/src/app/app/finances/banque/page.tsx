@@ -39,12 +39,14 @@ function BanqueInner() {
   const sp = useSearchParams();
   const [matched, setMatched] = useState('0');
   const [q, setQ] = useState('');
+  const [bank, setBank] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
 
   const qs = new URLSearchParams({ matched });
   if (q) qs.set('q', q);
-  const { data, loading, reload } = useApi<{ items: Tx[]; matched: number; total: number }>(`/api/finance/bank?${qs}`);
+  if (bank) qs.set('bank', bank);
+  const { data, loading, reload } = useApi<{ items: Tx[]; matched: number; total: number; byBank: { bank: string | null; _count: number }[] }>(`/api/finance/bank?${qs}`);
   const { data: ponto, reload: reloadPonto } = useApi<PontoStatus>('/api/ponto/status');
   const [openTx, setOpenTx] = useState<string | null>(null);
   const { data: sugg } = useApi<{ items: Suggestion[] }>(openTx ? `/api/finance/bank/${openTx}/suggestions` : null);
@@ -163,6 +165,12 @@ function BanqueInner() {
           <option value="0">À rapprocher</option>
           <option value="1">Rapprochées</option>
           <option value="">Toutes</option>
+        </select>
+        <select className="select" style={{ maxWidth: 150 }} value={bank} onChange={(e) => setBank(e.target.value)}>
+          <option value="">Tous les comptes</option>
+          {(data?.byBank ?? []).filter((b) => b.bank).map((b) => (
+            <option key={b.bank} value={b.bank!}>{b.bank} ({b._count})</option>
+          ))}
         </select>
       </div>
 

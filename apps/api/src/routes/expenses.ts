@@ -12,6 +12,7 @@ import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, OFFICE, FIELD_OFFICE } from '../lib/auth.js';
 import { storeFile, UPLOADS_DIR } from '../lib/media.js';
+import { nameOverlap } from '../lib/bank-match.js';
 
 export const expensesRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
@@ -181,14 +182,14 @@ expensesRouter.get(
   asyncHandler(async (req, res) => {
     const e = await prisma.ledgerEntry.findUnique({
       where: { id: req.params.id },
-      select: { ttc: true, ht: true, date: true, bankComm: true },
+      select: { ttc: true, ht: true, date: true, bankComm: true, supplierName: true, contact: { select: { name: true } } },
     });
     if (!e) throw new HttpError(404, 'Dépense introuvable');
     const amount = Math.abs(e.ttc ?? e.ht ?? 0);
     const win = e.date
       ? { bookingDate: { gte: new Date(e.date.getTime() - 30 * 86400000), lte: new Date(e.date.getTime() + 60 * 86400000) } }
       : {};
-    const items = await prisma.bankTransaction.findMany({
+    const raw = await prisma.bankTransaction.findMany({
       where: {
         matchedLedgerId: null,
         matchedDocumentId: null,
@@ -197,10 +198,19 @@ expensesRouter.get(
         ...win,
       },
       orderBy: { bookingDate: 'desc' },
-      take: 15,
+      take: 40,
       select: { id: true, bookingDate: true, amount: true, bank: true, counterpartyName: true, communication: true },
     });
-    res.json({ items });
+    const supplier = e.contact?.name ?? e.supplierName ?? '';
+    const items = raw
+      .map((t) => ({
+        ...t,
+        nameMatch: !!supplier && !!t.counterpartyName && nameOverlap(supplier, t.counterpartyName),
+      }))
+      // le fournisseur qui correspond d'abord, puis par date décroissante
+      .sort((a, b) => Number(b.nameMatch) - Number(a.nameMatch))
+      .slice(0, 15);
+    res.json({ items, supplier });
   }),
 );
 

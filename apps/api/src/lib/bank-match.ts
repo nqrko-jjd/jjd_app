@@ -36,7 +36,8 @@ const DAY = 86_400_000;
 
 // mots trop génériques pour discriminer une contrepartie
 const STOP = new Set(['acp', 'sprl', 'bvba', 'srl', 'nv', 'sa', 'the', 'les', 'des', 'and', 'ets', 'via']);
-function nameOverlap(a: string, b: string): boolean {
+/** Deux libellés partagent-ils un mot significatif (> 3 lettres, hors mots vides) ? */
+export function nameOverlap(a: string, b: string): boolean {
   const keep = (w: string) => w.length > 3 && !STOP.has(w);
   const wa = new Set(norm(a).split(/\s+/).filter(keep));
   return norm(b).split(/\s+/).filter(keep).some((w) => wa.has(w));

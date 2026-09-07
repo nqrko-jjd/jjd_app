@@ -7,6 +7,7 @@ import { PageHead, StatusBadge, PriorityBadge, EntityBadge, Money, formatDateBE 
 import { FormModal, toDateInput, type FieldDef } from '@/components/FormModal';
 import { ChantierThread } from '@/components/ChantierThread';
 import { WorksiteTasks } from '@/components/WorksiteTasks';
+import { CollapsibleSection } from '@/components/CollapsibleSection';
 import { Donut } from '@/lib/charts';
 import { WORKSITE_STATUSES, WORKSITE_STATUS_LABEL, WORKSITE_PRIORITIES, WORKSITE_PRIORITY_LABEL, ENTITIES, ENTITY_LABEL, formatHours, type WorksiteMargin } from '@jjd/shared';
 
@@ -191,30 +192,32 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
       <div className="section-title">Fil de chantier</div>
       <div style={{ marginBottom: '1.5rem' }}><ChantierThread worksiteId={w.id} /></div>
 
-      <div className="section-title">
-        Devis &amp; factures <span className="hint">{w.documents.length}</span>
-        <Link href="/app/documents" className="btn" style={{ marginLeft: 'auto', padding: '0.2rem 0.6rem', fontSize: '0.78rem' }}>Tous les documents →</Link>
-      </div>
-      {w.documents.length === 0 ? (
-        <div className="card card-pad muted">Aucun devis / facture rattaché.</div>
-      ) : (
-        <div className="tbl-wrap">
-          <table className="tbl">
-            <thead><tr><th>Type</th><th>Numéro</th><th>Date</th><th style={{ textAlign: 'right' }}>HT</th><th>Statut</th></tr></thead>
-            <tbody>
-              {w.documents.map((d) => (
-                <tr key={d.id}>
-                  <td>{DOC_KIND[d.kind] ?? d.kind}</td>
-                  <td className="mono"><Link href={`/app/documents/${d.id}`}>{d.number ?? d.draftRef ?? '—'}</Link></td>
-                  <td className="tnum">{formatDateBE(d.issuedOn)}</td>
-                  <td style={{ textAlign: 'right' }}><Money value={d.totalHt} /></td>
-                  <td><span className={`badge ${DOC_TONE[d.status] ?? ''}`}>{DOC_STATUS[d.status] ?? d.status}</span></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <CollapsibleSection
+        title="Devis & factures"
+        summary={w.documents.length ? `${w.documents.length} · ${formatEuro(w.documents.reduce((s, d) => s + d.totalHt, 0))} HT` : 'Aucun'}
+      >
+        {w.documents.length === 0 ? (
+          <p className="muted" style={{ margin: 0 }}>Aucun devis / facture rattaché.</p>
+        ) : (
+          <div className="tbl-wrap">
+            <table className="tbl">
+              <thead><tr><th>Type</th><th>Numéro</th><th>Date</th><th style={{ textAlign: 'right' }}>HT</th><th>Statut</th></tr></thead>
+              <tbody>
+                {w.documents.map((d) => (
+                  <tr key={d.id}>
+                    <td>{DOC_KIND[d.kind] ?? d.kind}</td>
+                    <td className="mono"><Link href={`/app/documents/${d.id}`}>{d.number ?? d.draftRef ?? '—'}</Link></td>
+                    <td className="tnum">{formatDateBE(d.issuedOn)}</td>
+                    <td style={{ textAlign: 'right' }}><Money value={d.totalHt} /></td>
+                    <td><span className={`badge ${DOC_TONE[d.status] ?? ''}`}>{DOC_STATUS[d.status] ?? d.status}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <Link href="/app/documents" className="btn" style={{ marginTop: '0.7rem', padding: '0.2rem 0.6rem', fontSize: '0.78rem' }}>Tous les documents →</Link>
+      </CollapsibleSection>
 
       <WorksiteExpenses worksiteId={w.id} />
     </>
@@ -231,13 +234,12 @@ function WorksiteExpenses({ worksiteId }: { worksiteId: string }) {
     `/api/finance/expenses?worksiteId=${worksiteId}`,
   );
   return (
-    <div style={{ marginTop: '1.5rem' }}>
-      <div className="section-title">
-        Dépenses <span className="hint">{data ? `${data.items.length} · ${formatEuro(data.totals.ht)} HT` : ''}</span>
-        <Link href="/app/achats" className="btn" style={{ marginLeft: 'auto', padding: '0.2rem 0.6rem', fontSize: '0.78rem' }}>Toutes les dépenses →</Link>
-      </div>
-      {!data ? <div className="card card-pad muted">Chargement…</div>
-        : data.items.length === 0 ? <div className="card card-pad muted">Aucune facture d’achat rattachée à ce chantier.</div>
+    <CollapsibleSection
+      title="Dépenses"
+      summary={data ? `${data.items.length} · ${formatEuro(data.totals.ht)} HT` : undefined}
+    >
+      {!data ? <p className="muted" style={{ margin: 0 }}>Chargement…</p>
+        : data.items.length === 0 ? <p className="muted" style={{ margin: 0 }}>Aucune facture d’achat rattachée à ce chantier.</p>
         : (
           <div className="tbl-wrap">
             <table className="tbl">
@@ -258,7 +260,8 @@ function WorksiteExpenses({ worksiteId }: { worksiteId: string }) {
             </table>
           </div>
         )}
-    </div>
+      <Link href="/app/achats" className="btn" style={{ marginTop: '0.7rem', padding: '0.2rem 0.6rem', fontSize: '0.78rem' }}>Toutes les dépenses →</Link>
+    </CollapsibleSection>
   );
 }
 
@@ -335,70 +338,67 @@ function LocationSection({ w, onChange }: { w: Detail['worksite']; onChange: () 
 }
 
 function TransportDetail({ t }: { t: NonNullable<Detail['margin']>['transport'] }) {
-  const [open, setOpen] = useState(false);
   if (!t.trips.length) {
     return t.note
       ? <p className="hint" style={{ marginTop: '-0.8rem', marginBottom: '1.5rem' }}>Transport : {t.note}</p>
       : null;
   }
   return (
-    <div style={{ marginTop: '-0.6rem', marginBottom: '1.5rem' }}>
-      <button className="btn ghost" style={{ padding: '0.15rem 0.5rem', fontSize: '0.78rem' }} onClick={() => setOpen(!open)}>
-        {open ? 'Masquer' : 'Voir'} le détail transport ({t.trips.length} trajet{t.trips.length > 1 ? 's' : ''})
-      </button>
-      {t.note && <p className="hint" style={{ margin: '0.3rem 0 0' }}>{t.note}</p>}
-      {open && (
-        <div className="tbl-wrap" style={{ marginTop: '0.5rem' }}>
-          <table className="tbl">
-            <thead><tr><th>Date</th><th>Véhicule</th><th style={{ textAlign: 'right' }}>Km A/R</th><th style={{ textAlign: 'right' }}>Route</th><th style={{ textAlign: 'right' }}>Fixe/jour</th><th style={{ textAlign: 'right' }}>Total</th></tr></thead>
-            <tbody>
-              {t.trips.map((tr, i) => (
-                <tr key={i}>
-                  <td className="tnum">{formatDateBE(tr.date)}</td>
-                  <td>{tr.vehicleLabel}</td>
-                  <td className="tnum" style={{ textAlign: 'right' }}>{tr.roundTripKm || '—'}</td>
-                  <td style={{ textAlign: 'right' }}><Money value={tr.fuelCost} /></td>
-                  <td style={{ textAlign: 'right' }}><Money value={tr.fixedCost} /></td>
-                  <td style={{ textAlign: 'right' }}><Money value={tr.cost} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
+    <CollapsibleSection
+      icon="🚐"
+      title="Détail transport"
+      hint={t.note ?? undefined}
+      summary={`${t.trips.length} trajet${t.trips.length > 1 ? 's' : ''} · ${new Intl.NumberFormat('fr-BE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(t.cost)}`}
+    >
+      <div className="tbl-wrap">
+        <table className="tbl">
+          <thead><tr><th>Date</th><th>Véhicule</th><th style={{ textAlign: 'right' }}>Km A/R</th><th style={{ textAlign: 'right' }}>Route</th><th style={{ textAlign: 'right' }}>Fixe/jour</th><th style={{ textAlign: 'right' }}>Total</th></tr></thead>
+          <tbody>
+            {t.trips.map((tr, i) => (
+              <tr key={i}>
+                <td className="tnum">{formatDateBE(tr.date)}</td>
+                <td>{tr.vehicleLabel}</td>
+                <td className="tnum" style={{ textAlign: 'right' }}>{tr.roundTripKm || '—'}</td>
+                <td style={{ textAlign: 'right' }}><Money value={tr.fuelCost} /></td>
+                <td style={{ textAlign: 'right' }}><Money value={tr.fixedCost} /></td>
+                <td style={{ textAlign: 'right' }}><Money value={tr.cost} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </CollapsibleSection>
   );
 }
 
 function LabourDetail({ rows }: { rows: NonNullable<Detail['margin']>['labour'] }) {
-  const [open, setOpen] = useState(false);
   if (!rows.length) return null;
   const totalHours = rows.reduce((s, r) => s + r.hours, 0);
+  const totalAmount = rows.reduce((s, r) => s + r.amount, 0);
   const days = new Set(rows.map((r) => r.date)).size;
   return (
-    <div style={{ marginTop: '-0.6rem', marginBottom: '1.5rem' }}>
-      <button className="btn ghost" style={{ padding: '0.15rem 0.5rem', fontSize: '0.78rem' }} onClick={() => setOpen(!open)}>
-        {open ? 'Masquer' : 'Voir'} le détail main-d'œuvre ({days} jour{days > 1 ? 's' : ''} · {formatHours(totalHours)})
-      </button>
-      {open && (
-        <div className="tbl-wrap" style={{ marginTop: '0.5rem' }}>
-          <table className="tbl">
-            <thead><tr><th>Date</th><th>Ouvrier</th><th style={{ textAlign: 'right' }}>Heures</th><th style={{ textAlign: 'right' }}>Montant</th><th></th></tr></thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={`${r.date}|${r.personId}`}>
-                  <td className="tnum">{formatDateBE(r.date)}</td>
-                  <td>{r.personName}</td>
-                  <td className="tnum" style={{ textAlign: 'right' }}>{formatHours(r.hours)}</td>
-                  <td style={{ textAlign: 'right' }}><Money value={r.amount} /></td>
-                  <td>{r.pending && <span className="badge warn" style={{ fontSize: '0.72rem' }}>à valider</span>}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
+    <CollapsibleSection
+      icon="👷"
+      title="Détail main-d'œuvre"
+      summary={`${days} jour${days > 1 ? 's' : ''} · ${formatHours(totalHours)} · ${new Intl.NumberFormat('fr-BE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(totalAmount)}`}
+    >
+      <div className="tbl-wrap">
+        <table className="tbl">
+          <thead><tr><th>Date</th><th>Ouvrier</th><th style={{ textAlign: 'right' }}>Heures</th><th style={{ textAlign: 'right' }}>Montant</th><th></th></tr></thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={`${r.date}|${r.personId}`}>
+                <td className="tnum">{formatDateBE(r.date)}</td>
+                <td>{r.personName}</td>
+                <td className="tnum" style={{ textAlign: 'right' }}>{formatHours(r.hours)}</td>
+                <td style={{ textAlign: 'right' }}><Money value={r.amount} /></td>
+                <td>{r.pending && <span className="badge warn" style={{ fontSize: '0.72rem' }}>à valider</span>}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </CollapsibleSection>
   );
 }
 

@@ -99,22 +99,37 @@ export const VEHICLE_STATUS_LABEL: Record<VehicleStatus, string> = {
 export const EXPENSE_PAYMENT_STATUSES = ['Non payé', 'Payé'] as const;
 export type ExpensePaymentStatus = (typeof EXPENSE_PAYMENT_STATUSES)[number];
 
-/** Devine un statut propre à partir du texte libre du fichier Excel / TrustUp. */
+/**
+ * Devine un statut propre à partir du texte libre de la feuille « Data Projets »
+ * (colonne Statut) — souvent composé, ex. « Terminé, Facturé » ou « Devis accepté, A planifier ».
+ * L'ordre des tests compte : le premier qui matche gagne.
+ */
 export function guessWorksiteStatus(raw: string | null | undefined): WorksiteStatus {
-  const s = (raw ?? '').toLowerCase().trim();
+  const s = (raw ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
   if (!s || s === '/' || s === '-') return 'to_plan';
-  if (s.includes('abandon')) return 'cancelled';
-  const facture = s.includes('factur');
-  const termine = s.includes('termin') || s.includes('fini') || s.includes('clôtur') || s.includes('cloctur');
-  if (termine && facture && (s.includes('payé') || s.includes('paye'))) return 'closed';
-  if (facture && s.includes('a factur')) return 'to_invoice';
-  if (termine && s.includes('a factur')) return 'to_invoice';
+
+  // Perdu : devis refusé / chantier abandonné / annulé
+  if (s.includes('abandon') || s.includes('refus') || s.includes('annul') || s.includes('perdu')) return 'cancelled';
+
+  const aFacturer = s.includes('a factur') || s.includes('non factur') || s.includes('pas factur') || s.includes('decompte');
+  const facture = s.includes('factur') && !aFacturer;
+  const termine = s.includes('termin') || s.includes('fini') || s.includes('clotur');
+  const paye = s.includes('paye') || s.includes('encaiss') || s.includes('solde');
+
+  if (facture && paye) return 'closed';
   if (facture) return 'invoiced';
+  if (aFacturer) return 'to_invoice';
   if (termine) return 'done';
-  if (s.includes('en cours')) return 'in_progress';
-  if (s.includes('planif') || s.includes('rdv') || s.includes('accepté') || s.includes('accepte')) return 'scheduled';
-  if (s.includes('devis')) return 'lead';
-  if (s.includes('attente')) return 'on_hold';
+  if (s.includes('en cours') || s.includes('demarr')) return 'in_progress';
+
+  const planifie = s.includes('planif') || s.includes('rdv');
+  const accepte = s.includes('accept');
+  // « Devis envoyé / à faire » sans acceptation ni planif = prospect commercial
+  if ((s.includes('devis') || s.includes('demande') || s.includes('offre')) && !accepte && !planifie) return 'lead';
+  if (s.includes('attente') || s.includes('expertise') || s.includes('report') || s.includes('pause')) return 'on_hold';
+  // « À planifier » AVANT le générique « planif » (qui attrape aussi « Planifié »)
+  if (s.includes('a planif') || s.includes('planifier')) return 'to_plan';
+  if (planifie || accepte) return 'scheduled';
   return 'to_plan';
 }
 

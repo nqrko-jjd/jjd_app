@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { guessWorksiteStatus } from '@jjd/shared';
 import { CATEGORY_SEED } from './categories.js';
 import { TONTON_REFS } from './tonton-refs.js';
 
@@ -39,6 +40,24 @@ async function main() {
     if (target !== w.entity) {
       await prisma.worksite.update({ where: { id: w.id }, data: { entity: target } });
       entityFixed++;
+    }
+  }
+
+  // ── Statut des chantiers importés — recalé sur la colonne « Statut » de Data Projets.
+  // Le mapping texte→statut a été corrigé (« À planifier » ≠ « Planifié », « Refusé » →
+  // « Abandonné », « Non Facturé » → « À facturer »…). Idempotent ; ne touche que les
+  // chantiers issus de l'import Excel (source = "xlsx").
+  // NOTE : à retirer quand la gestion des statuts se fera dans le logiciel.
+  const xlsxProjects = await prisma.worksite.findMany({
+    where: { kind: 'project', source: 'xlsx', statusRaw: { not: null } },
+    select: { id: true, statusRaw: true, status: true },
+  });
+  let statusFixed = 0;
+  for (const w of xlsxProjects) {
+    const target = guessWorksiteStatus(w.statusRaw);
+    if (target !== w.status) {
+      await prisma.worksite.update({ where: { id: w.id }, data: { status: target } });
+      statusFixed++;
     }
   }
 
@@ -96,6 +115,7 @@ async function main() {
     categories: await prisma.category.count(),
     users: await prisma.user.count(),
     entityFixed,
+    statusFixed,
   };
   console.log('Seed OK', counts);
 }

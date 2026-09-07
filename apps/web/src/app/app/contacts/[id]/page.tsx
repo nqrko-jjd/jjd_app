@@ -14,6 +14,7 @@ interface Detail {
     email: string | null; phone: string | null; vat: string | null;
     address: string | null; postalCode: string | null; city: string | null; note: string | null;
     syndic: { id: string; name: string } | null;
+    building: { id: string; name: string } | null;
     buildings: { id: string; name: string }[];
     worksites: { id: string; ref: string; title: string; status: string; quotedHt: number | null }[];
     user?: { email: string } | null;
@@ -23,6 +24,7 @@ interface Detail {
 export default function ContactDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { data, loading, reload } = useApi<Detail>(`/api/contacts/${id}`);
+  const { data: pick } = useApi<{ buildings: { id: string; name: string }[] }>('/api/meta/pickers');
   const [editing, setEditing] = useState(false);
   const [portalInfo, setPortalInfo] = useState<{ email: string; portal: string } | null>(null);
   if (loading) return <div className="empty">Chargement…</div>;
@@ -46,10 +48,11 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
       {editing && (
         <FormModal
           title={`Modifier ${c.name}`}
-          fields={CONTACT_FIELDS}
+          fields={CONTACT_FIELDS(pick?.buildings ?? [])}
           initial={{
             name: c.name, type: c.type, kind: c.kind, email: c.email, phone: c.phone,
             vat: c.vat, address: c.address, postalCode: c.postalCode, city: c.city, note: c.note,
+            buildingId: c.building?.id ?? '',
           }}
           onClose={() => setEditing(false)}
           onSubmit={async (v) => { await api(`/api/contacts/${id}`, { method: 'PATCH', body: v }); reload(); }}
@@ -71,6 +74,7 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
         <Info label="TVA" value={formatVat(c.vat) ?? '—'} />
         <Info label="Adresse" value={[c.address, c.postalCode, c.city].filter(Boolean).join(' ') || '—'} />
         {c.syndic && <Info label="Syndic" value={<Link href={`/app/immeubles?syndicId=${c.syndic.id}`}>{c.syndic.name}</Link>} />}
+        {c.building && <Info label="Immeuble / ACP" value={<Link href={`/app/immeubles/${c.building.id}`}>{c.building.name}</Link>} />}
         <div className="info-cell">
           <div className="k">Accès portail client</div>
           <div className="v">

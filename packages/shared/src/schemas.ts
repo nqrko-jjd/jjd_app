@@ -23,6 +23,7 @@ export const contactInput = z.object({
   postalCode: z.string().trim().nullish(),
   city: z.string().trim().nullish(),
   syndicId: z.string().nullish(),
+  buildingId: z.string().nullish(),
   note: z.string().nullish(),
 });
 

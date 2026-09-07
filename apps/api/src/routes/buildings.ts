@@ -37,6 +37,10 @@ buildingsRouter.get(
         syndic: true,
         client: true,
         contacts: { orderBy: [{ position: 'asc' }, { createdAt: 'asc' }], include: { contact: { select: { id: true, name: true } } } },
+        linkedContacts: {
+          orderBy: { name: 'asc' },
+          select: { id: true, name: true, type: true, kind: true, phone: true, email: true },
+        },
         units: { orderBy: [{ position: 'asc' }, { label: 'asc' }] },
         worksites: {
           orderBy: { updatedAt: 'desc' },

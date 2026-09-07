@@ -221,6 +221,8 @@ model Contact {
   city           String?
   syndicId       String?
   syndic         Syndic?  @relation(fields: [syndicId], references: [id])
+  buildingId     String? // ACP à laquelle ce contact (personne) est rattaché — distinct de `buildings` ci-dessous (ACP dont il est LE client facturé)
+  building       Building? @relation("ContactOfBuilding", fields: [buildingId], references: [id])
   note           String?
   trustupId      String?
   source         String?
@@ -229,7 +231,7 @@ model Contact {
 
   user             User?
   worksites        Worksite[]        @relation("WorksiteClient")
-  buildings        Building[]
+  buildings        Building[]        @relation("BuildingClient")
   opportunities    CrmOpportunity[]
   documents        Document[]
   ledgerEntries    LedgerEntry[]
@@ -250,7 +252,7 @@ model Building {
   syndicId       String?
   syndic         Syndic?  @relation(fields: [syndicId], references: [id])
   clientId       String?
-  client         Contact? @relation(fields: [clientId], references: [id])
+  client         Contact? @relation("BuildingClient", fields: [clientId], references: [id])
   note           String?
   // infos ACP
   reference      String? // n° de dossier syndic / ACP
@@ -261,11 +263,12 @@ model Building {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  worksites     Worksite[]
-  opportunities CrmOpportunity[]
-  contacts      BuildingContact[]
-  units         BuildingUnit[]
-  portalUsers   User[]            @relation("BuildingPortalUsers")
+  worksites      Worksite[]
+  opportunities  CrmOpportunity[]
+  contacts       BuildingContact[]
+  linkedContacts Contact[]         @relation("ContactOfBuilding")
+  units          BuildingUnit[]
+  portalUsers    User[]            @relation("BuildingPortalUsers")
 
   @@index([normalizedName])
 }

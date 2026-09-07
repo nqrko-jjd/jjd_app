@@ -6,7 +6,7 @@ import { api } from '@/lib/api';
 import { PageHead, StatusBadge, Money, formatDateBE } from '@/lib/ui';
 import { FormModal, type FieldDef } from '@/components/FormModal';
 import {
-  BUILDING_CONTACT_ROLES, BUILDING_CONTACT_ROLE_LABEL, OCCUPANT_KINDS, OCCUPANT_KIND_LABEL,
+  BUILDING_CONTACT_ROLES, BUILDING_CONTACT_ROLE_LABEL, OCCUPANT_KINDS, OCCUPANT_KIND_LABEL, CLIENT_KIND_LABEL,
 } from '@jjd/shared';
 
 interface BContact {
@@ -25,6 +25,7 @@ interface Detail {
     syndic: { id: string; name: string; email: string | null; phone: string | null } | null;
     client: { id: string; name: string } | null;
     contacts: BContact[];
+    linkedContacts: { id: string; name: string; type: string; kind: string | null; phone: string | null; email: string | null }[];
     units: BUnit[];
     worksites: {
       id: string; ref: string; title: string; status: string; quotedHt: number | null; endedOn: string | null;
@@ -130,6 +131,27 @@ export default function ImmeubleDetail({ params }: { params: Promise<{ id: strin
                 <button className="btn ghost" style={mini} onClick={() => setModal({ kind: 'contact', row: c })}>Modifier</button>
                 <button className="btn ghost" style={mini} onClick={async () => { if (confirm('Supprimer ?')) { await api(`/api/buildings/${id}/contacts/${c.id}`, { method: 'DELETE' }); reload(); } }}>✕</button>
               </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Contacts rattachés depuis la fiche Contact (clients/fournisseurs/syndics liés à cette ACP) */}
+      <div className="section-title">
+        Contacts <span className="hint">{b.linkedContacts.length} — depuis la fiche Contact</span>
+      </div>
+      {b.linkedContacts.length === 0 ? (
+        <div className="card card-pad muted" style={{ marginBottom: '1.6rem' }}>
+          Aucun contact rattaché. Sur une fiche Contact, choisis cet immeuble comme « Immeuble / ACP » pour qu'il apparaisse ici.
+        </div>
+      ) : (
+        <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', marginBottom: '1.6rem' }}>
+          {b.linkedContacts.map((c) => (
+            <div key={c.id} className="card card-pad">
+              <div className="eyebrow">{c.kind ? CLIENT_KIND_LABEL[c.kind as keyof typeof CLIENT_KIND_LABEL] : c.type === 'supplier' ? 'Fournisseur' : 'Contact'}</div>
+              <div style={{ fontWeight: 700, margin: '0.2rem 0' }}><Link href={`/app/contacts/${c.id}`}>{c.name}</Link></div>
+              {c.phone && <div><a href={`tel:${c.phone}`}>{c.phone}</a></div>}
+              {c.email && <div className="muted" style={{ fontSize: '0.85rem' }}>{c.email}</div>}
             </div>
           ))}
         </div>

@@ -20,7 +20,11 @@ contactsRouter.get(
       where,
       orderBy: { name: 'asc' },
       take: 5000,
-      include: { syndic: { select: { id: true, name: true } }, _count: { select: { worksites: true } } },
+      include: {
+        syndic: { select: { id: true, name: true } },
+        building: { select: { id: true, name: true } },
+        _count: { select: { worksites: true } },
+      },
     });
     res.json({ items });
   }),
@@ -34,6 +38,7 @@ contactsRouter.get(
       where: { id: req.params.id },
       include: {
         syndic: true,
+        building: { select: { id: true, name: true } },
         buildings: true,
         worksites: { orderBy: { updatedAt: 'desc' }, take: 50 },
         opportunities: { orderBy: { updatedAt: 'desc' }, take: 20 },
@@ -56,6 +61,7 @@ contactsRouter.post(
         email: data.email || null,
         normalizedName: normalizeName(data.name),
         syndicId: data.syndicId ?? null,
+        buildingId: data.buildingId ?? null,
         source: 'manual',
       },
     });

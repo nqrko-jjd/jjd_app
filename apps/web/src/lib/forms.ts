@@ -5,10 +5,11 @@ import {
   LEGAL_DOC_LABEL, LEGAL_DOC_TYPES,
 } from '@jjd/shared';
 
-export const CONTACT_FIELDS: FieldDef[] = [
+export const CONTACT_FIELDS = (buildings: { id: string; name: string }[] = []): FieldDef[] => [
   { name: 'name', label: 'Nom', required: true, full: true },
   { name: 'type', label: 'Type', type: 'select', options: CONTACT_TYPES.map((t) => ({ value: t, label: t === 'client' ? 'Client' : t === 'supplier' ? 'Fournisseur' : 'Les deux' })) },
   { name: 'kind', label: 'Catégorie', type: 'select', options: CLIENT_KINDS.map((k) => ({ value: k, label: CLIENT_KIND_LABEL[k] })) },
+  { name: 'buildingId', label: 'Immeuble / ACP', type: 'select', options: buildings.map((b) => ({ value: b.id, label: b.name })), full: true },
   { name: 'email', label: 'E-mail' },
   { name: 'phone', label: 'Téléphone' },
   { name: 'vat', label: 'N° TVA' },

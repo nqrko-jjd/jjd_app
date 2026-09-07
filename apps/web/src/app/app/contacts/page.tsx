@@ -18,6 +18,7 @@ interface Contact {
   id: string; name: string; type: string; kind: string | null;
   email: string | null; phone: string | null; vat: string | null; city: string | null;
   syndic: { name: string } | null;
+  building: { id: string; name: string } | null;
   _count: { worksites: number };
 }
 
@@ -39,6 +40,7 @@ function ContactsInner() {
   const params = new URLSearchParams({ type });
   if (q) params.set('q', q);
   const { data, loading, reload } = useApi<{ items: Contact[] }>(`/api/contacts?${params}`);
+  const { data: pick } = useApi<{ buildings: { id: string; name: string }[] }>('/api/meta/pickers');
 
   async function patch(id: string, body: Record<string, unknown>) {
     await api(`/api/contacts/${id}`, { method: 'PATCH', body });
@@ -79,7 +81,7 @@ function ContactsInner() {
       {creating && (
         <FormModal
           title="Nouveau contact"
-          fields={CONTACT_FIELDS}
+          fields={CONTACT_FIELDS(pick?.buildings ?? [])}
           initial={{ type: 'client' }}
           onClose={() => setCreating(false)}
           onSubmit={async (v) => { await api('/api/contacts', { method: 'POST', body: v }); reload(); }}
@@ -123,6 +125,7 @@ function ContactsInner() {
                   <td>
                     <Link href={`/app/contacts/${c.id}`}>{c.name}</Link>
                     {c.syndic && <div className="muted" style={{ fontSize: '0.78rem' }}>c/o {c.syndic.name}</div>}
+                    {c.building && <div className="muted" style={{ fontSize: '0.78rem' }}>ACP : {c.building.name}</div>}
                   </td>
                   <td>{c.kind ? CLIENT_KIND_LABEL[c.kind as keyof typeof CLIENT_KIND_LABEL] : c.type === 'supplier' ? 'Fournisseur' : '—'}</td>
                   <td>{c.city ?? '—'}</td>

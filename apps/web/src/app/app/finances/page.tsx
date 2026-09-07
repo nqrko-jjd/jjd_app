@@ -21,7 +21,7 @@ interface Share {
   m7: { worksites: number; profit: number };
 }
 const MONTHS = ['—', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
-const ENT_LABEL: Record<string, string> = { jjd: 'JJD', tonton: 'Tonton (GT)', m7: 'M7', autre: 'Non attribué' };
+const ENT_LABEL: Record<string, string> = { jjd: 'JJD', tonton: 'Tonton', m7: 'M7', autre: 'Non attribué' };
 
 export default function FinancesPage() {
   const { user } = useAuth();
@@ -57,7 +57,7 @@ export default function FinancesPage() {
         <select className="select" style={{ maxWidth: 160 }} value={entity} onChange={(e) => setEntity(e.target.value)}>
           <option value="">Toutes entités</option>
           <option value="jjd">JJD</option>
-          <option value="tonton">Tonton (GT)</option>
+          <option value="tonton">Tonton</option>
           <option value="m7">M7</option>
         </select>
       </div>
@@ -130,7 +130,7 @@ export default function FinancesPage() {
                   <div className="row" style={{ justifyContent: 'space-between' }}><span>Reste JJD</span><strong><Money value={share.tonton.resteJjd} /></strong></div>
                 </div>
                 <div className="card card-pad">
-                  <div className="eyebrow">Solde Tonton (GT Light Concept)</div>
+                  <div className="eyebrow">Solde Tonton</div>
                   <div
                     className="value"
                     style={{ fontSize: '1.4rem', fontWeight: 800, margin: '0.3rem 0 0.6rem', color: share.tonton.solde > 0 ? 'var(--crit)' : 'var(--ok)' }}

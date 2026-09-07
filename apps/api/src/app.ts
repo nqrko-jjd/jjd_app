@@ -17,6 +17,7 @@ import { timesheetRouter, statementsRouter } from './routes/timesheet.js';
 import { threadRouter } from './routes/thread.js';
 import { portalRouter } from './routes/portal.js';
 import { financeRouter } from './routes/finance.js';
+import { expensesRouter } from './routes/expenses.js';
 import { pontoRouter } from './routes/ponto.js';
 import { documentsRouter, priceItemsRouter } from './routes/documents.js';
 import { settingsRouter } from './routes/settings.js';
@@ -49,6 +50,7 @@ export function createApp() {
   app.use('/api/buildings', buildingsRouter);
   app.use('/api/people', peopleRouter);
   app.use('/api/crm', crmRouter);
+  app.use('/api/finance/expenses', expensesRouter);
   app.use('/api/finance', financeRouter);
   app.use('/api/ponto', pontoRouter);
   app.use('/api/documents', documentsRouter);

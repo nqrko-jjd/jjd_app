@@ -82,6 +82,7 @@ model User {
   createdEvents    PlanningEvent[]  @relation("EventCreatedBy")
   messages         Message[]
   createdDocuments Document[]       @relation("DocumentAuthor")
+  createdLedger    LedgerEntry[]    @relation("LedgerEntryAuthor")
   reports          WorksiteReport[] @relation("ReportAuthor")
   createdTasks     WorksiteTask[]   @relation("TaskCreatedBy")
 }
@@ -442,6 +443,7 @@ model Document {
   createdById    String?
   createdBy      User?          @relation("DocumentAuthor", fields: [createdById], references: [id])
   lines          DocumentLine[]
+  bankMatches    BankTransaction[] @relation("DocumentBankMatches")
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
@@ -497,6 +499,7 @@ model PriceItem {
 model LedgerEntry {
   id            String    @id @default(cuid())
   date          DateTime?
+  dueDate       DateTime? // échéance (facture d'achat)
   year          Int?
   month         String?
   direction     String // sale | purchase | credit_note
@@ -517,10 +520,16 @@ model LedgerEntry {
   ttc           Float?
   vatRate       Float?
   quarter       String?
-  paymentStatus String? // "Payé" | ...
+  paymentStatus String? // "Payé" | "Non payé" | ...
+  paidOn        DateTime? // date de paiement (rapprochement ou saisie manuelle)
   bankComm      String?
+  notes         String?
+  pdfPath       String? // pièce jointe (PDF ou image), via storeFile -> uploads/expenses/…
   source        String?
+  createdById   String?
+  createdBy     User?     @relation("LedgerEntryAuthor", fields: [createdById], references: [id])
   createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @default(now()) @updatedAt
 
   @@index([worksiteId])
   @@index([worksiteRef])
@@ -563,6 +572,8 @@ model BankTransaction {
   structuredComm      String? // communication structurée normalisée (+++xxx/xxxx/xxxxx+++)
   side                String? // "in" (crédit / encaissement) | "out" (débit / paiement)
   matchedLedgerId     String?
+  matchedDocumentId   String?
+  matchedDocument     Document? @relation("DocumentBankMatches", fields: [matchedDocumentId], references: [id])
   matchConfidence     String? // "strong" | "good" | "manual"
   matchedAt           DateTime?
   source              String? // "xlsx" | "ponto"
@@ -570,6 +581,7 @@ model BankTransaction {
 
   @@index([bookingDate])
   @@index([matchedLedgerId])
+  @@index([matchedDocumentId])
 }
 
 // ─────────────────────────────────────────────────────────── Pointage & planning

@@ -213,8 +213,55 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
           </table>
         </div>
       )}
+
+      <WorksiteExpenses worksiteId={w.id} />
     </>
   );
+}
+
+interface WsExpense {
+  id: string; date: string | null; docNumber: string | null; supplier: string | null;
+  categoryLabel: string | null; ht: number; ttc: number | null; paid: boolean; hasPdf: boolean;
+}
+
+function WorksiteExpenses({ worksiteId }: { worksiteId: string }) {
+  const { data } = useApi<{ items: WsExpense[]; totals: { ht: number; ttc: number; unpaidTtc: number } }>(
+    `/api/finance/expenses?worksiteId=${worksiteId}`,
+  );
+  return (
+    <div style={{ marginTop: '1.5rem' }}>
+      <div className="section-title">
+        Dépenses <span className="hint">{data ? `${data.items.length} · ${formatEuro(data.totals.ht)} HT` : ''}</span>
+        <Link href="/app/achats" className="btn" style={{ marginLeft: 'auto', padding: '0.2rem 0.6rem', fontSize: '0.78rem' }}>Toutes les dépenses →</Link>
+      </div>
+      {!data ? <div className="card card-pad muted">Chargement…</div>
+        : data.items.length === 0 ? <div className="card card-pad muted">Aucune facture d’achat rattachée à ce chantier.</div>
+        : (
+          <div className="tbl-wrap">
+            <table className="tbl">
+              <thead><tr><th>Date</th><th>Fournisseur</th><th>Catégorie</th><th style={{ textAlign: 'right' }}>HT</th><th style={{ textAlign: 'right' }}>TTC</th><th>Statut</th></tr></thead>
+              <tbody>
+                {data.items.map((e) => (
+                  <tr key={e.id}>
+                    <td className="tnum">{formatDateBE(e.date)}</td>
+                    <td>{e.supplier ?? '—'} {e.hasPdf && '📎'}</td>
+                    <td>{e.categoryLabel ?? '—'}</td>
+                    <td style={{ textAlign: 'right' }}><Money value={e.ht} /></td>
+                    <td style={{ textAlign: 'right' }}><Money value={e.ttc ?? e.ht} /></td>
+                    <td><span className={`badge ${e.paid ? 'ok' : 'warn'}`}>{e.paid ? 'Payé' : 'Non payé'}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot><tr><td colSpan={3}>Total</td><td style={{ textAlign: 'right' }}><Money value={data.totals.ht} /></td><td style={{ textAlign: 'right' }}><Money value={data.totals.ttc} /></td><td /></tr></tfoot>
+            </table>
+          </div>
+        )}
+    </div>
+  );
+}
+
+function formatEuro(n: number): string {
+  return new Intl.NumberFormat('fr-BE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n);
 }
 
 const DOC_KIND: Record<string, string> = { quote: 'Devis', invoice: 'Facture', credit_note: 'Note de crédit', deposit_invoice: 'Acompte' };

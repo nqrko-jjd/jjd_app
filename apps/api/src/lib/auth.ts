@@ -84,3 +84,5 @@ export function requirePartner(req: Request, _res: Response, next: NextFunction)
 
 export const STAFF: Role[] = ['admin', 'office', 'foreman', 'worker'];
 export const OFFICE: Role[] = ['admin', 'office'];
+/** Bureau + chefs de chantier (saisie terrain : dépenses, achats matériel…). */
+export const FIELD_OFFICE: Role[] = ['admin', 'office', 'foreman'];

@@ -131,15 +131,22 @@ export async function autoMatchAll(
     if (m) updates.push({ id: tx.id, ledgerId: m.ledgerId, confidence: m.confidence });
   }
 
-  // écriture par lots
-  for (let i = 0; i < updates.length; i += 200) {
+  // date de la transaction (pour poser paidOn sur l'écriture rapprochée)
+  const txDate = new Map(txs.map((t) => [t.id, t.bookingDate]));
+
+  // écriture par lots : transaction bancaire + statut « payé » de l'écriture liée
+  for (let i = 0; i < updates.length; i += 100) {
     await prisma.$transaction(
-      updates.slice(i, i + 200).map((u) =>
+      updates.slice(i, i + 100).flatMap((u) => [
         prisma.bankTransaction.update({
           where: { id: u.id },
           data: { matchedLedgerId: u.ledgerId, matchConfidence: u.confidence, matchedAt: now },
         }),
-      ),
+        prisma.ledgerEntry.update({
+          where: { id: u.ledgerId },
+          data: { paymentStatus: 'Payé', paidOn: txDate.get(u.id) ?? now },
+        }),
+      ]),
     );
   }
   const strong = updates.filter((u) => u.confidence === 'strong').length;

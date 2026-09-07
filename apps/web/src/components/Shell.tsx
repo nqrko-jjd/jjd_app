@@ -29,6 +29,7 @@ const NAV: Group[] = [
       { href: '/app/pointage', label: 'Pointage', ic: '◷' },
       { href: '/app/crm', label: 'Pipeline', ic: '⇗' },
       { href: '/app/documents', label: 'Devis & factures', ic: '▧', roles: ['admin', 'office'] },
+      { href: '/app/achats', label: 'Achats / Dépenses', ic: '↧', roles: ['admin', 'office'] },
       { href: '/app/analyse', label: 'Analyse', ic: '▨', roles: ['admin', 'office'] },
       { href: '/app/finances', label: 'Finances', ic: '€', roles: ['admin', 'office'] },
     ],

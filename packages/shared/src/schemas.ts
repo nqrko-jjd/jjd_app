@@ -199,6 +199,24 @@ export const documentInput = z.object({
   lines: z.array(documentLineInput).default([]),
 });
 
+/** Facture d'achat / dépense — une ligne du grand livre saisie à la main. */
+export const expenseInput = z.object({
+  date: z.coerce.date(),
+  dueDate: z.coerce.date().nullish(),
+  supplierName: z.string().trim().nullish(),
+  contactId: z.string().nullish(),
+  docNumber: z.string().trim().nullish(),
+  categoryCode: z.string().trim().nullish(),
+  worksiteId: z.string().nullish(),
+  ht: z.coerce.number(),
+  vatRecup: z.coerce.number().nullish(),
+  ttc: z.coerce.number().nullish(),
+  vatRate: z.coerce.number().min(0).max(1).nullish(),
+  notes: z.string().trim().nullish(),
+  paymentStatus: z.enum(['Non payé', 'Payé']).default('Non payé'),
+});
+export type ExpenseInput = z.infer<typeof expenseInput>;
+
 export const worksiteReportInput = z.object({
   eventId: z.string().nullish(),
   date: z.coerce.date().optional(),

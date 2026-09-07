@@ -95,6 +95,10 @@ export const VEHICLE_STATUS_LABEL: Record<VehicleStatus, string> = {
   retired: 'Hors service',
 };
 
+/** Statut de paiement d'une dépense / facture (grand livre). */
+export const EXPENSE_PAYMENT_STATUSES = ['Non payé', 'Payé'] as const;
+export type ExpensePaymentStatus = (typeof EXPENSE_PAYMENT_STATUSES)[number];
+
 /** Devine un statut propre à partir du texte libre du fichier Excel / TrustUp. */
 export function guessWorksiteStatus(raw: string | null | undefined): WorksiteStatus {
   const s = (raw ?? '').toLowerCase().trim();

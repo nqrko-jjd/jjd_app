@@ -8,14 +8,14 @@ import { FormModal } from '@/components/FormModal';
 import { PhotoHeader } from '@/components/PhotoHeader';
 import { MonthBars } from '@/lib/charts';
 import { PERSON_FIELDS, LEGAL_DOC_FIELDS } from '@/lib/forms';
-import { ROLE_LABEL, WORKER_CONTRACT_LABEL, LEGAL_DOC_LABEL, formatHours, formatEur } from '@jjd/shared';
+import { PERSON_ROLE_LABEL, WORKER_CONTRACT_LABEL, LEGAL_DOC_LABEL, formatHours, formatEur } from '@jjd/shared';
 
 interface Detail {
   person: {
     id: string; firstName: string; lastName: string | null; displayName: string | null;
     role: string; contractType: string; hourlyRate: number | null; dailyHours: number; photoUrl: string | null;
     phone: string | null; email: string | null; address: string | null;
-    languages: string[] | null; emergencyContact: string | null; active: boolean; note: string | null;
+    languages: string[] | null; specialties: string[] | null; emergencyContact: string | null; active: boolean; note: string | null;
     legalDocs: { id: string; type: string; label: string | null; number: string | null; expiresOn: string | null; fileUrl: string | null }[];
     equipment: { id: string; name: string }[];
     user: { id: string; email: string; role: string } | null;
@@ -71,7 +71,8 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
             firstName: p.firstName, lastName: p.lastName, displayName: p.displayName,
             role: p.role, contractType: p.contractType, hourlyRate: p.hourlyRate, dailyHours: p.dailyHours,
             phone: p.phone, email: p.email, address: p.address,
-            languages: (p.languages ?? []).join(', '), emergencyContact: p.emergencyContact, note: p.note,
+            languages: (p.languages ?? []).join(', '), specialties: (p.specialties ?? []).join(', '),
+            emergencyContact: p.emergencyContact, note: p.note,
             active: p.active,
           }}
           onClose={() => setEditing(false)}
@@ -88,7 +89,7 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
       )}
       <PageHead
         title={p.displayName || `${p.firstName} ${p.lastName ?? ''}`.trim()}
-        sub={`${ROLE_LABEL[p.role as keyof typeof ROLE_LABEL]} · ${WORKER_CONTRACT_LABEL[p.contractType as keyof typeof WORKER_CONTRACT_LABEL]}${p.active ? '' : ' · Ancien (données conservées)'}`}
+        sub={`${PERSON_ROLE_LABEL[p.role as keyof typeof PERSON_ROLE_LABEL] ?? p.role} · ${WORKER_CONTRACT_LABEL[p.contractType as keyof typeof WORKER_CONTRACT_LABEL]}${p.active ? '' : ' · Ancien (données conservées)'}`}
         action={
           <div className="row">
             <button className="btn" onClick={async () => { await api(`/api/people/${id}`, { method: 'PATCH', body: { active: !p.active } }); reload(); }}>
@@ -112,6 +113,7 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
       <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', marginBottom: '1.4rem' }}>
         <Info label="Taux horaire" value={p.hourlyRate != null ? <Money value={p.hourlyRate} /> : <span className="badge warn">à définir</span>} />
         <Info label="Heures payées / jour presté" value={`${p.dailyHours} h`} />
+        <Info label="Spécialités" value={(p.specialties ?? []).join(', ') || '—'} />
         <Info label="Téléphone" value={p.phone ?? '—'} />
         <Info label="E-mail" value={p.email ?? '—'} />
         <Info label="Adresse" value={p.address ?? '—'} />

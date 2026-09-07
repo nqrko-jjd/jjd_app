@@ -20,6 +20,24 @@ export const ROLE_LABEL: Record<Role, string> = {
 /** Accès « interne » (tout sauf le client). */
 export const INTERNAL_ROLES: Role[] = ['admin', 'office', 'foreman', 'worker'];
 
+/* ---------------------------------------------------- Fonction (fiche ouvrier) */
+/**
+ * Distinct du Rôle ci-dessus (qui conditionne l'accès à l'appli). C'est la
+ * fonction affichée sur la fiche ouvrier — plus fine que juste « chef de
+ * chantier / ouvrier ». « foreman » reste la valeur qui donne un compte
+ * chef de chantier à la création (routes/people.ts, POST /:id/account) ;
+ * les 3 autres valeurs restent de simples ouvriers côté accès.
+ */
+export const PERSON_ROLES = ['foreman', 'team_leader', 'qualified_worker', 'worker'] as const;
+export type PersonRole = (typeof PERSON_ROLES)[number];
+
+export const PERSON_ROLE_LABEL: Record<PersonRole, string> = {
+  foreman: 'Chef de chantier',
+  team_leader: "Chef d'équipe",
+  qualified_worker: 'Ouvrier qualifié',
+  worker: 'Ouvrier',
+};
+
 /* ------------------------------------------------------ Entité d'attribution */
 /**
  * jjd    = chantier JJD Consult

@@ -92,6 +92,7 @@ peopleRouter.post(
         displayName: data.displayName || data.firstName,
         normalizedName: normalizeName(fullName(data)),
         languages: data.languages,
+        specialties: data.specialties,
         source: 'manual',
       },
     });
@@ -110,6 +111,7 @@ peopleRouter.patch(
         ...data,
         email: data.email === '' ? null : data.email,
         languages: data.languages ?? undefined,
+        specialties: data.specialties ?? undefined,
       },
     });
     res.json({ person });

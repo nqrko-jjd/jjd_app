@@ -1,7 +1,7 @@
 import type { FieldDef } from '@/components/FormModal';
 import {
   CLIENT_KIND_LABEL, CLIENT_KINDS, CONTACT_TYPES,
-  ROLE_LABEL, WORKER_CONTRACT_LABEL, WORKER_CONTRACT_TYPES,
+  PERSON_ROLE_LABEL, PERSON_ROLES, WORKER_CONTRACT_LABEL, WORKER_CONTRACT_TYPES,
   LEGAL_DOC_LABEL, LEGAL_DOC_TYPES,
 } from '@jjd/shared';
 
@@ -22,7 +22,8 @@ export const PERSON_FIELDS: FieldDef[] = [
   { name: 'firstName', label: 'Prénom', required: true },
   { name: 'lastName', label: 'Nom' },
   { name: 'displayName', label: 'Nom affiché (terrain)', full: true, placeholder: 'nom court utilisé dans le pointage' },
-  { name: 'role', label: 'Rôle', type: 'select', options: (['foreman', 'worker'] as const).map((r) => ({ value: r, label: ROLE_LABEL[r] })) },
+  { name: 'role', label: 'Rôle', type: 'select', options: PERSON_ROLES.map((r) => ({ value: r, label: PERSON_ROLE_LABEL[r] })) },
+  { name: 'specialties', label: 'Spécialités (séparées par des virgules)', type: 'tags', full: true, placeholder: 'maçon, carreleur, électricien…' },
   { name: 'contractType', label: 'Contrat', type: 'select', options: WORKER_CONTRACT_TYPES.map((c) => ({ value: c, label: WORKER_CONTRACT_LABEL[c] })) },
   { name: 'hourlyRate', label: 'Taux horaire (€)', type: 'number' },
   { name: 'dailyHours', label: 'Heures payées par jour presté', type: 'number', placeholder: '10' },

@@ -94,7 +94,7 @@ model Person {
   lastName         String?
   displayName      String? // nom court utilisé sur le terrain / dans le pointage
   normalizedName   String // pour le dédoublonnage
-  role             String   @default("worker") // foreman | worker
+  role             String   @default("worker") // foreman | team_leader | qualified_worker | worker
   contractType     String   @default("employee") // employee | subcontractor | interim
   hourlyRate       Float?
   dailyHours       Float    @default(10) // jour presté garanti (payé même si moins pointé sur chantier)
@@ -102,6 +102,7 @@ model Person {
   email            String?
   address          String?
   languages        Json? // ["fr","pt","es"]
+  specialties      Json? // ["maçon","carreleur","électricien"]
   emergencyContact String?
   active           Boolean  @default(true)
   note             String?

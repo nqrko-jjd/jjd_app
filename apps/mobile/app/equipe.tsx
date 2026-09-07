@@ -6,7 +6,9 @@ interface P {
   id: string; firstName: string; lastName: string | null; displayName: string | null;
   role: string; contractType: string; hourlyRate: number | null; active: boolean;
 }
-const ROLE: Record<string, string> = { foreman: 'Chef de chantier', worker: 'Ouvrier' };
+const ROLE: Record<string, string> = {
+  foreman: 'Chef de chantier', team_leader: "Chef d'équipe", qualified_worker: 'Ouvrier qualifié', worker: 'Ouvrier',
+};
 const CT: Record<string, string> = { employee: 'Salarié', subcontractor: 'Sous-traitant', interim: 'Intérim' };
 
 export default function Equipe() {

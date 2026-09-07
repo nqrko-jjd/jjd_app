@@ -10,12 +10,12 @@ import { ContextMenu, useContextMenu, openActions, type MenuItem } from '@/compo
 import { useSort, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
 import { PERSON_FIELDS } from '@/lib/forms';
-import { ROLE_LABEL, WORKER_CONTRACT_LABEL } from '@jjd/shared';
+import { PERSON_ROLE_LABEL, PERSON_ROLES, WORKER_CONTRACT_LABEL } from '@jjd/shared';
 
 interface Person {
   id: string; firstName: string; lastName: string | null; displayName: string | null;
   role: string; contractType: string; hourlyRate: number | null; phone: string | null;
-  active: boolean; languages: string[] | null; photoThumbUrl: string | null;
+  active: boolean; languages: string[] | null; specialties: string[] | null; photoThumbUrl: string | null;
   _count: { legalDocs: number; timeEntries: number };
 }
 
@@ -45,8 +45,8 @@ export default function EquipePage() {
       'separator',
       {
         label: 'Rôle',
-        items: (['worker', 'foreman', 'office'] as const).map((r) => ({
-          label: ROLE_LABEL[r],
+        items: PERSON_ROLES.map((r) => ({
+          label: PERSON_ROLE_LABEL[r],
           check: p.role === r,
           disabled: p.role === r,
           onClick: () => patch(p.id, { role: r }),
@@ -59,10 +59,11 @@ export default function EquipePage() {
   }
   const sort = useSort<Person>(data?.items ?? [], {
     name,
-    role: (p) => ROLE_LABEL[p.role as keyof typeof ROLE_LABEL] ?? p.role,
+    role: (p) => PERSON_ROLE_LABEL[p.role as keyof typeof PERSON_ROLE_LABEL] ?? p.role,
     contract: (p) => WORKER_CONTRACT_LABEL[p.contractType as keyof typeof WORKER_CONTRACT_LABEL] ?? p.contractType,
     rate: (p) => p.hourlyRate,
     languages: (p) => (p.languages ?? []).join(' '),
+    specialties: (p) => (p.specialties ?? []).join(' '),
     docs: (p) => p._count.legalDocs,
     entries: (p) => p._count.timeEntries,
   });
@@ -88,8 +89,7 @@ export default function EquipePage() {
         <input className="input" style={{ maxWidth: 260 }} placeholder="Nom…" value={q} onChange={(e) => setQ(e.target.value)} />
         <select className="select" style={{ maxWidth: 200 }} value={role} onChange={(e) => setRole(e.target.value)}>
           <option value="">Tous rôles</option>
-          <option value="foreman">Chefs de chantier</option>
-          <option value="worker">Ouvriers</option>
+          {PERSON_ROLES.map((r) => <option key={r} value={r}>{PERSON_ROLE_LABEL[r]}</option>)}
         </select>
         <select className="select" style={{ maxWidth: 160 }} value={active} onChange={(e) => setActive(e.target.value)}>
           <option value="1">Actifs</option>
@@ -105,6 +105,7 @@ export default function EquipePage() {
               <tr>
                 <SortTh k="name" sort={sort}>Nom</SortTh>
                 <SortTh k="role" sort={sort}>Rôle</SortTh>
+                <SortTh k="specialties" sort={sort}>Spécialités</SortTh>
                 <SortTh k="contract" sort={sort}>Contrat</SortTh>
                 <SortTh k="rate" sort={sort} align="right">Taux</SortTh>
                 <SortTh k="languages" sort={sort}>Langues</SortTh>
@@ -126,7 +127,8 @@ export default function EquipePage() {
                     <Link href={`/app/equipe/${p.id}`}>{p.displayName || `${p.firstName} ${p.lastName ?? ''}`.trim()}</Link>
                     {!p.active && <span className="badge plain" style={{ marginLeft: 6 }}>Ancien</span>}
                   </td>
-                  <td>{ROLE_LABEL[p.role as keyof typeof ROLE_LABEL] ?? p.role}</td>
+                  <td>{PERSON_ROLE_LABEL[p.role as keyof typeof PERSON_ROLE_LABEL] ?? p.role}</td>
+                  <td style={{ fontSize: '0.82rem' }}>{(p.specialties ?? []).join(', ') || '—'}</td>
                   <td>{WORKER_CONTRACT_LABEL[p.contractType as keyof typeof WORKER_CONTRACT_LABEL] ?? p.contractType}</td>
                   <td style={{ textAlign: 'right' }}>{p.hourlyRate != null ? <Money value={p.hourlyRate} /> : <span className="badge warn">à définir</span>}</td>
                   <td className="mono" style={{ fontSize: '0.8rem' }}>{(p.languages ?? []).join(' ') || '—'}</td>

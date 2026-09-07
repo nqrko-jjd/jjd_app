@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import {
-  ROLES, ENTITIES, WORKSITE_STATUSES, WORKSITE_PRIORITIES, CRM_STAGES, CRM_LOST_REASONS,
+  PERSON_ROLES, ENTITIES, WORKSITE_STATUSES, WORKSITE_PRIORITIES, CRM_STAGES, CRM_LOST_REASONS,
   CONTACT_TYPES, CLIENT_KINDS, WORKER_CONTRACT_TYPES, LEGAL_DOC_TYPES,
   BUILDING_CONTACT_ROLES, OCCUPANT_KINDS, VEHICLE_STATUSES,
 } from './enums.js';
@@ -85,7 +85,7 @@ export const personInput = z.object({
   firstName: nonEmpty,
   lastName: z.string().trim().nullish(),
   displayName: z.string().trim().nullish(),
-  role: z.enum(ROLES).default('worker'),
+  role: z.enum(PERSON_ROLES).default('worker'),
   contractType: z.enum(WORKER_CONTRACT_TYPES).default('employee'),
   hourlyRate: z.number().nonnegative().nullish(),
   dailyHours: z.coerce.number().positive().max(24).default(10),
@@ -93,6 +93,7 @@ export const personInput = z.object({
   email: z.string().trim().email().nullish().or(z.literal('')),
   address: z.string().trim().nullish(),
   languages: z.array(z.string()).default([]),
+  specialties: z.array(z.string()).default([]),
   emergencyContact: z.string().trim().nullish(),
   active: z.boolean().default(true),
   note: z.string().nullish(),

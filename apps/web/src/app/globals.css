@@ -1,6 +1,6 @@
 /* ============================================================
    JJD App — design system
-   Même charte que le site vitrine : vert profond + or, Fraunces
+   Même charte que le site vitrine : vert profond + or (police 100% sans-sérif dans l'appli)
    ============================================================ */
 
 :root {
@@ -48,7 +48,7 @@
   --shadow-lg: 0 12px 34px rgba(28, 41, 36, 0.14);
 
   --font: "Manrope", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-serif: "Fraunces", "Georgia", serif;
+  --font-serif: var(--font); /* plus de sérif dans l'appli : moins lisible à l'usage (retour David) */
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
   --measure: 68ch;

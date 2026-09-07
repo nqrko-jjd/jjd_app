@@ -34,3 +34,6 @@ Thumbs.db
 
 apps/mobile/node_modules/
 apps/mobile/.expo/
+
+# préférences Claude Code locales (pas partagées)
+.claude/settings.local.json

@@ -1,9 +1,9 @@
 'use client';
 import { use, useCallback, useState } from 'react';
-import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { PageHead } from '@/lib/ui';
+import { ChantierThread } from '@/components/ChantierThread';
 
 interface Task { id: string; title: string; status: string; assignee: { displayName: string | null; firstName: string } | null }
 
@@ -136,9 +136,8 @@ export default function WorkerFichePage({ params }: { params: Promise<{ id: stri
         {!d.manager && !d.client && (d.building?.contacts ?? []).length === 0 && <div className="muted">Aucun contact renseigné.</div>}
       </div>
 
-      <Link href={`/app/chantiers/${w.id}`} className="btn primary" style={{ display: 'block', textAlign: 'center' }}>
-        Ouvrir le chantier (photos, rapports…)
-      </Link>
+      <div className="section-title" style={{ marginTop: 0 }}>Fil de chantier</div>
+      <ChantierThread worksiteId={w.id} />
     </>
   );
 }

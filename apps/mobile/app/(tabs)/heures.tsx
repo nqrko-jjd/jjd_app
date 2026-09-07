@@ -1,9 +1,11 @@
 import { useCallback, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, RefreshControl } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, RefreshControl, Pressable } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { apiGet } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { T } from '@/lib/theme';
+
+const MONTHS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
 
 interface Entry {
   id: string;
@@ -27,25 +29,34 @@ const STATUS: Record<string, string> = {
 
 export default function Heures() {
   const { person } = useSession();
+  const now = new Date();
+  const [y, setY] = useState(now.getFullYear());
+  const [m, setM] = useState(now.getMonth() + 1);
+  const isCurrentMonth = y === now.getFullYear() && m === now.getMonth() + 1;
   const [entries, setEntries] = useState<Entry[]>([]);
   const [statement, setStatement] = useState<Statement | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
+  function shift(delta: number) {
+    const d = new Date(y, m - 1 + delta, 1);
+    setY(d.getFullYear()); setM(d.getMonth() + 1);
+  }
+
   const load = useCallback(async () => {
     if (!person) return;
-    const now = new Date();
-    const from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    const from = new Date(y, m - 1, 1).toISOString();
+    const to = new Date(y, m, 1).toISOString();
     try {
       const [mine, stmt] = await Promise.all([
-        apiGet<{ items: Entry[] }>(`/api/timesheet/mine?from=${from}`),
-        apiGet<Statement>(`/api/statements/${person.id}?year=${now.getFullYear()}&month=${now.getMonth() + 1}`),
+        apiGet<{ items: Entry[] }>(`/api/timesheet/mine?from=${from}&to=${to}`),
+        apiGet<Statement>(`/api/statements/${person.id}?year=${y}&month=${m}`),
       ]);
       setEntries(mine.items);
       setStatement(stmt);
     } catch {
       /* hors ligne */
     }
-  }, [person]);
+  }, [person, y, m]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
@@ -55,9 +66,15 @@ export default function Heures() {
       contentContainerStyle={{ padding: 16, gap: 12 }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} />}
     >
+      <View style={s.nav}>
+        <Pressable style={s.navBtn} onPress={() => shift(-1)}><Text style={s.navTxt}>←</Text></Pressable>
+        <Text style={s.month}>{MONTHS[m - 1]} {y}</Text>
+        <Pressable style={s.navBtn} onPress={() => !isCurrentMonth && shift(1)}><Text style={[s.navTxt, isCurrentMonth && { opacity: 0.3 }]}>→</Text></Pressable>
+      </View>
+
       {statement && (
         <View style={s.card}>
-          <Text style={s.label}>Ce mois-ci</Text>
+          <Text style={s.label}>{isCurrentMonth ? 'Ce mois-ci' : `${MONTHS[m - 1]} ${y}`}</Text>
           <View style={s.rowBetween}>
             <Text style={s.big}>{statement.totalHours} h</Text>
             <Text style={s.big}>{statement.totalAmount.toLocaleString('fr-BE')} €</Text>
@@ -92,6 +109,10 @@ export default function Heures() {
 }
 
 const s = StyleSheet.create({
+  nav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  navBtn: { borderWidth: 1, borderColor: T.line, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 6, backgroundColor: T.surface },
+  navTxt: { fontSize: 16, color: T.ink },
+  month: { fontWeight: '700', color: T.ink, fontSize: 15 },
   card: { backgroundColor: T.surface, borderRadius: T.radius, borderWidth: 1, borderColor: T.line, padding: 14, gap: 5 },
   label: { fontSize: 12, color: T.ink2, textTransform: 'uppercase', letterSpacing: 0.5 },
   section: { fontSize: 13, fontWeight: '700', color: T.ink2, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 6 },

@@ -103,8 +103,11 @@ worksitesRouter.get(
       },
     });
     if (!ws) throw new HttpError(404, 'Chantier introuvable');
-    const margin = req.user!.role === 'worker' ? null : await worksiteMargin(ws.id);
-    res.json({ worksite: ws, margin });
+    // Les ouvriers ont leur propre vue (tâches + fil de chantier, /:id/field) — pas les
+    // devis/factures ni la rentabilité si jamais ils atterrissent quand même sur cette route.
+    const isWorker = req.user!.role === 'worker';
+    const margin = isWorker ? null : await worksiteMargin(ws.id);
+    res.json({ worksite: isWorker ? { ...ws, documents: [] } : ws, margin });
   }),
 );
 

@@ -8,7 +8,7 @@ import { FormModal, toDateInput, type FieldDef } from '@/components/FormModal';
 import { ChantierThread } from '@/components/ChantierThread';
 import { WorksiteTasks } from '@/components/WorksiteTasks';
 import { Donut } from '@/lib/charts';
-import { WORKSITE_STATUSES, WORKSITE_STATUS_LABEL, WORKSITE_PRIORITIES, WORKSITE_PRIORITY_LABEL, ENTITIES, ENTITY_LABEL, type WorksiteMargin } from '@jjd/shared';
+import { WORKSITE_STATUSES, WORKSITE_STATUS_LABEL, WORKSITE_PRIORITIES, WORKSITE_PRIORITY_LABEL, ENTITIES, ENTITY_LABEL, formatHours, type WorksiteMargin } from '@jjd/shared';
 
 interface Detail {
   worksite: {
@@ -32,6 +32,7 @@ interface Detail {
       cost: number; fuelCost: number; fixedCost: number; note: string | null; oneWayKm: number | null;
       trips: { date: string; vehicleLabel: string; roundTripKm: number; fuelCost: number; fixedCost: number; cost: number }[];
     };
+    labour: { date: string; personId: string; personName: string; hours: number; amount: number; pending: boolean }[];
   }) | null;
 }
 
@@ -128,6 +129,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
             {data.margin.partnerShare > 0 && <MiniKpi label="Part GT (33 %)" value={<Money value={data.margin.partnerShare} />} />}
           </div>
           <TransportDetail t={data.margin.transport} />
+          <LabourDetail rows={data.margin.labour} />
           {data.margin.totalCost > 0 && (
             <div className="card card-pad" style={{ marginBottom: '1.5rem', maxWidth: 420 }}>
               <div className="eyebrow" style={{ marginBottom: '0.6rem' }}>Répartition des coûts</div>
@@ -358,6 +360,38 @@ function TransportDetail({ t }: { t: NonNullable<Detail['margin']>['transport'] 
                   <td style={{ textAlign: 'right' }}><Money value={tr.fuelCost} /></td>
                   <td style={{ textAlign: 'right' }}><Money value={tr.fixedCost} /></td>
                   <td style={{ textAlign: 'right' }}><Money value={tr.cost} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LabourDetail({ rows }: { rows: NonNullable<Detail['margin']>['labour'] }) {
+  const [open, setOpen] = useState(false);
+  if (!rows.length) return null;
+  const totalHours = rows.reduce((s, r) => s + r.hours, 0);
+  const days = new Set(rows.map((r) => r.date)).size;
+  return (
+    <div style={{ marginTop: '-0.6rem', marginBottom: '1.5rem' }}>
+      <button className="btn ghost" style={{ padding: '0.15rem 0.5rem', fontSize: '0.78rem' }} onClick={() => setOpen(!open)}>
+        {open ? 'Masquer' : 'Voir'} le détail main-d'œuvre ({days} jour{days > 1 ? 's' : ''} · {formatHours(totalHours)})
+      </button>
+      {open && (
+        <div className="tbl-wrap" style={{ marginTop: '0.5rem' }}>
+          <table className="tbl">
+            <thead><tr><th>Date</th><th>Ouvrier</th><th style={{ textAlign: 'right' }}>Heures</th><th style={{ textAlign: 'right' }}>Montant</th><th></th></tr></thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={`${r.date}|${r.personId}`}>
+                  <td className="tnum">{formatDateBE(r.date)}</td>
+                  <td>{r.personName}</td>
+                  <td className="tnum" style={{ textAlign: 'right' }}>{formatHours(r.hours)}</td>
+                  <td style={{ textAlign: 'right' }}><Money value={r.amount} /></td>
+                  <td>{r.pending && <span className="badge warn" style={{ fontSize: '0.72rem' }}>à valider</span>}</td>
                 </tr>
               ))}
             </tbody>

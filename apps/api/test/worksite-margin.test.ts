@@ -37,6 +37,24 @@ test('worksiteMargin : sans facture "Rémunération", la main-d\'œuvre = estima
   assert.equal(m!.materialCost, 0);
 });
 
+test('worksiteMargin : détail main-d\'œuvre — un jour/ouvrier, plusieurs pointages le même jour cumulés', async () => {
+  // 2e pointage le même jour, même ouvrier -> une seule ligne, heures/montant cumulés
+  await prisma.timeEntry.create({
+    data: {
+      personId, worksiteId, date: new Date('2026-03-02'), hours: 2, amount: 60, rateUsed: 30,
+      status: 'submitted', source: 'test',
+    },
+  });
+  const m = await worksiteMargin(worksiteId);
+  assert.ok(m);
+  assert.equal(m!.labour.length, 1, 'les deux pointages du même jour/ouvrier sont fusionnés en une ligne');
+  assert.equal(m!.labour[0]!.hours, 10);
+  assert.equal(m!.labour[0]!.amount, 300);
+  assert.equal(m!.labour[0]!.personId, personId);
+  assert.equal(m!.labour[0]!.pending, true, 'un pointage encore "submitted" -> ligne signalée à valider');
+  await prisma.timeEntry.deleteMany({ where: { worksiteId, status: 'submitted' } });
+});
+
 test('worksiteMargin : une facture d\'achat "Rémunération - Ouvrier" remplace le pointage, ne s\'additionne pas', async () => {
   await prisma.ledgerEntry.create({
     data: {

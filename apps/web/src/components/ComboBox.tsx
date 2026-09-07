@@ -1,5 +1,5 @@
 'use client';
-import { useId } from 'react';
+import { useId, useRef } from 'react';
 
 export interface ComboOption {
   value: string;
@@ -19,6 +19,7 @@ export function ComboBox({
   style,
   allowFree,
   disabled,
+  clearOnSelect,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -27,12 +28,16 @@ export function ComboBox({
   style?: React.CSSProperties;
   allowFree?: boolean;
   disabled?: boolean;
+  /** Vide le champ juste après une sélection — utile pour un « chercher et ajouter » répété. */
+  clearOnSelect?: boolean;
 }) {
   const id = useId();
+  const inputRef = useRef<HTMLInputElement>(null);
   const current = options.find((o) => o.value === value);
   return (
     <>
       <input
+        ref={inputRef}
         className="input"
         list={id}
         style={style}
@@ -42,7 +47,12 @@ export function ComboBox({
         onChange={(e) => {
           const txt = e.target.value;
           const hit = options.find((o) => o.label === txt);
-          onChange(hit ? hit.value : allowFree ? txt : '');
+          if (hit) {
+            onChange(hit.value);
+            if (clearOnSelect && inputRef.current) inputRef.current.value = '';
+          } else {
+            onChange(allowFree ? txt : '');
+          }
         }}
       />
       <datalist id={id}>

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { PageHead } from '@/lib/ui';
+import { ComboBox } from '@/components/ComboBox';
 
 interface Ev {
   id: string; title: string | null; startAt: string; endAt: string; allDay: boolean;
@@ -288,12 +289,18 @@ function EventDetail({ b, onClose, onDeleted }: { b: Block; onClose: () => void;
   );
 }
 
+interface BricoProduct { id: string; name: string; brand: string | null; available: number; total: number }
+interface BricoConsumable { id: string; name: string; stockQty: number | null }
+
 function NewEventForm({ prefill, onDone, onClose }: { prefill: { date?: string; hour?: number }; onDone: () => void; onClose: () => void }) {
   const { data: ws } = useApi<{ items: { id: string; ref: string; title: string }[] }>('/api/worksites');
   const { data: people } = useApi<{ items: { id: string; displayName: string | null; firstName: string; role: string }[] }>('/api/people?active=1');
-  const { data: vehicles } = useApi<{ items: { id: string; plate: string | null; model: string | null }[] }>('/api/vehicles');
+  const { data: vehicles } = useApi<{ items: { id: string; plate: string | null; model: string | null; brand: string | null; code: string | null }[] }>('/api/vehicles');
   const { data: equipmentList, reload: reloadEquipment } = useApi<{ items: { id: string; name: string }[] }>('/api/equipment');
   const { data: consumableList, reload: reloadConsumables } = useApi<{ items: { id: string; name: string; unit: string }[] }>('/api/consumables');
+  const { data: brico } = useApi<{ enabled: boolean }>('/api/materiel/status');
+  const { data: bStock } = useApi<{ products: BricoProduct[] }>(brico?.enabled ? '/api/materiel/stock' : null);
+  const { data: bCons } = useApi<{ consumables: BricoConsumable[] }>(brico?.enabled ? '/api/materiel/consumables' : null);
   const h = prefill.hour ?? 8;
   const [f, setF] = useState({
     worksiteId: '', date: prefill.date ?? new Date().toISOString().slice(0, 10),
@@ -305,22 +312,19 @@ function NewEventForm({ prefill, onDone, onClose }: { prefill: { date?: string; 
   const [newConsumable, setNewConsumable] = useState('');
   const [busy, setBusy] = useState(false);
 
-  async function addEquipment() {
-    const name = newEquipment.trim();
-    if (!name) return;
-    setNewEquipment('');
-    const { item } = await api<{ item: { id: string; name: string } }>('/api/equipment', { method: 'POST', body: { name } });
-    await reloadEquipment();
-    setF((cur) => ({ ...cur, equipmentIds: [...cur.equipmentIds, item.id] }));
-  }
+  const equipName = (id: string) => (equipmentList?.items ?? []).find((e) => e.id === id)?.name ?? '…';
 
-  async function addConsumable() {
-    const name = newConsumable.trim();
-    if (!name) return;
-    setNewConsumable('');
-    const { item } = await api<{ item: { id: string; name: string; unit: string } }>('/api/consumables', { method: 'POST', body: { name } });
+  async function linkEquipment(name: string, reference?: string) {
+    if (!name.trim()) return;
+    const { item } = await api<{ item: { id: string; name: string } }>('/api/equipment', { method: 'POST', body: { name: name.trim(), reference } });
+    await reloadEquipment();
+    setF((cur) => (cur.equipmentIds.includes(item.id) ? cur : { ...cur, equipmentIds: [...cur.equipmentIds, item.id] }));
+  }
+  async function linkConsumable(name: string) {
+    if (!name.trim()) return;
+    const { item } = await api<{ item: { id: string; name: string; unit: string } }>('/api/consumables', { method: 'POST', body: { name: name.trim() } });
     await reloadConsumables();
-    setF((cur) => ({ ...cur, consumables: [...cur.consumables, { consumableId: item.id, qty: 1 }] }));
+    setF((cur) => (cur.consumables.some((c) => c.consumableId === item.id) ? cur : { ...cur, consumables: [...cur.consumables, { consumableId: item.id, qty: 1 }] }));
   }
 
   async function submit(e: React.FormEvent) {
@@ -351,16 +355,21 @@ function NewEventForm({ prefill, onDone, onClose }: { prefill: { date?: string; 
         <div className="modal-body">
           <div className="field" style={{ gridColumn: '1 / -1' }}>
             <label>Chantier</label>
-            <select className="select" value={f.worksiteId} onChange={(e) => setF({ ...f, worksiteId: e.target.value })} required>
-              <option value="">—</option>
-              {(ws?.items ?? []).map((w) => <option key={w.id} value={w.id}>{w.ref} — {w.title}</option>)}
-            </select>
+            <ComboBox
+              placeholder="chercher un chantier (réf ou nom)…"
+              value={f.worksiteId}
+              onChange={(v) => setF((cur) => ({ ...cur, worksiteId: v }))}
+              options={(ws?.items ?? []).map((w) => ({ value: w.id, label: `${w.ref} — ${w.title}` }))}
+            />
           </div>
           <div className="field"><label>Date</label><input className="input" type="date" value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} /></div>
           <div className="field"><label>Véhicule</label>
             <select className="select" value={f.vehicleId} onChange={(e) => setF({ ...f, vehicleId: e.target.value })}>
               <option value="">—</option>
-              {(vehicles?.items ?? []).map((v) => <option key={v.id} value={v.id}>{v.plate || v.model}</option>)}
+              {(vehicles?.items ?? []).map((v) => {
+                const name = [v.brand, v.model].filter(Boolean).join(' ') || v.code || v.plate || '—';
+                return <option key={v.id} value={v.id}>{name}{v.plate ? ` · ${v.plate}` : ''}</option>;
+              })}
             </select>
           </div>
           <div className="field"><label>Début</label><input className="input" type="time" value={f.start} onChange={(e) => setF({ ...f, start: e.target.value })} /></div>
@@ -380,32 +389,58 @@ function NewEventForm({ prefill, onDone, onClose }: { prefill: { date?: string; 
             </div>
           </div>
           <div className="field" style={{ gridColumn: '1 / -1' }}>
-            <label>Matériel (outillage)</label>
-            <div className="row">
-              {(equipmentList?.items ?? []).map((eq) => {
-                const on = f.equipmentIds.includes(eq.id);
-                return (
-                  <button type="button" key={eq.id} className={`badge ${on ? 'primary' : ''}`} style={{ cursor: 'pointer' }}
-                    onClick={() => setF({ ...f, equipmentIds: on ? f.equipmentIds.filter((x) => x !== eq.id) : [...f.equipmentIds, eq.id] })}>
-                    {eq.name}
-                  </button>
-                );
-              })}
-            </div>
+            <label>Matériel (machine à prendre){brico?.enabled ? ' — parc Bricoloc' : ''}</label>
+            {f.equipmentIds.length > 0 && (
+              <div className="row" style={{ marginBottom: 6, flexWrap: 'wrap', gap: 4 }}>
+                {f.equipmentIds.map((id) => (
+                  <span key={id} className="badge primary" style={{ cursor: 'pointer' }}
+                    onClick={() => setF((cur) => ({ ...cur, equipmentIds: cur.equipmentIds.filter((x) => x !== id) }))}>
+                    {equipName(id)} ✕
+                  </span>
+                ))}
+              </div>
+            )}
+            {brico?.enabled ? (
+              <ComboBox
+                clearOnSelect
+                placeholder={bStock ? 'chercher une machine…' : 'chargement du parc…'}
+                value=""
+                onChange={(v) => {
+                  const p = (bStock?.products ?? []).find((x) => x.id === v);
+                  if (p) linkEquipment(p.name, p.id);
+                }}
+                options={(bStock?.products ?? []).map((p) => ({
+                  value: p.id,
+                  label: `${p.name}${p.brand ? ` (${p.brand})` : ''} — ${p.available}/${p.total} dispo`,
+                }))}
+              />
+            ) : (
+              <div className="row">
+                {(equipmentList?.items ?? []).map((eq) => {
+                  const on = f.equipmentIds.includes(eq.id);
+                  return (
+                    <button type="button" key={eq.id} className={`badge ${on ? 'primary' : ''}`} style={{ cursor: 'pointer' }}
+                      onClick={() => setF({ ...f, equipmentIds: on ? f.equipmentIds.filter((x) => x !== eq.id) : [...f.equipmentIds, eq.id] })}>
+                      {eq.name}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             <div className="row" style={{ marginTop: 6 }}>
-              <input className="input" style={{ maxWidth: 220 }} placeholder="+ nouveau matériel" value={newEquipment}
+              <input className="input" style={{ maxWidth: 240 }} placeholder="+ autre matériel (hors parc)" value={newEquipment}
                 onChange={(e) => setNewEquipment(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addEquipment(); } }} />
-              <button type="button" className="btn" onClick={addEquipment}>Ajouter</button>
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); linkEquipment(newEquipment); setNewEquipment(''); } }} />
+              <button type="button" className="btn" onClick={() => { linkEquipment(newEquipment); setNewEquipment(''); }}>Ajouter</button>
             </div>
           </div>
           <div className="field" style={{ gridColumn: '1 / -1' }}>
-            <label>Consommables à prévoir</label>
+            <label>Consommables à prévoir{brico?.enabled ? ' — stock Bricoloc' : ''}</label>
             {f.consumables.map((c, i) => {
               const cat = (consumableList?.items ?? []).find((x) => x.id === c.consumableId);
               return (
                 <div key={c.consumableId} className="row" style={{ alignItems: 'center', marginBottom: 4 }}>
-                  <span className="badge">{cat?.name ?? '—'}</span>
+                  <span className="badge" style={{ flex: 1 }}>{cat?.name ?? '—'}</span>
                   <input className="input" type="number" min={0} step="any" style={{ width: 80 }} value={c.qty}
                     onChange={(e) => {
                       const qty = Number(e.target.value);
@@ -416,21 +451,37 @@ function NewEventForm({ prefill, onDone, onClose }: { prefill: { date?: string; 
                 </div>
               );
             })}
-            <div className="row">
-              <select className="select" style={{ maxWidth: 220 }} value=""
-                onChange={(e) => {
-                  const id = e.target.value;
-                  if (id && !f.consumables.some((c) => c.consumableId === id)) {
-                    setF({ ...f, consumables: [...f.consumables, { consumableId: id, qty: 1 }] });
-                  }
-                }}>
-                <option value="">+ ajouter depuis le catalogue…</option>
-                {(consumableList?.items ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-              <input className="input" style={{ maxWidth: 220 }} placeholder="+ nouveau consommable" value={newConsumable}
+            <div className="row" style={{ marginTop: 6 }}>
+              {brico?.enabled ? (
+                <ComboBox
+                  clearOnSelect
+                  placeholder={bCons ? 'chercher un consommable…' : 'chargement du stock…'}
+                  value=""
+                  onChange={(v) => {
+                    const c = (bCons?.consumables ?? []).find((x) => x.id === v);
+                    if (c) linkConsumable(c.name);
+                  }}
+                  options={(bCons?.consumables ?? []).map((c) => ({
+                    value: c.id,
+                    label: `${c.name}${c.stockQty != null ? ` — ${c.stockQty} en stock` : ''}`,
+                  }))}
+                />
+              ) : (
+                <select className="select" style={{ maxWidth: 220 }} value=""
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    if (id && !f.consumables.some((c) => c.consumableId === id)) {
+                      setF({ ...f, consumables: [...f.consumables, { consumableId: id, qty: 1 }] });
+                    }
+                  }}>
+                  <option value="">+ ajouter depuis le catalogue…</option>
+                  {(consumableList?.items ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              )}
+              <input className="input" style={{ maxWidth: 220 }} placeholder="+ autre consommable" value={newConsumable}
                 onChange={(e) => setNewConsumable(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addConsumable(); } }} />
-              <button type="button" className="btn" onClick={addConsumable}>Ajouter</button>
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); linkConsumable(newConsumable); setNewConsumable(''); } }} />
+              <button type="button" className="btn" onClick={() => { linkConsumable(newConsumable); setNewConsumable(''); }}>Ajouter</button>
             </div>
           </div>
           <div className="field" style={{ gridColumn: '1 / -1' }}><label>Autre matériel / précisions</label><input className="input" value={f.materialsNote} onChange={(e) => setF({ ...f, materialsNote: e.target.value })} placeholder="échafaudage, nacelle…" /></div>

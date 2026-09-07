@@ -392,10 +392,15 @@ equipmentRouter.post(
   asyncHandler(async (req, res) => {
     const name = String(req.body?.name ?? '').trim();
     if (!name) throw new HttpError(400, 'Nom requis');
-    const item = await prisma.equipment.create({
-      data: { name, reference: req.body?.reference?.trim() || null },
-    });
-    res.status(201).json({ item });
+    const reference = req.body?.reference?.trim() || null;
+    // dédoublonne par nom (le même outil Bricoloc peut être re-sélectionné)
+    const existing = await prisma.equipment.findFirst({ where: { name: { equals: name } } });
+    const item = existing
+      ? (reference && !existing.reference
+          ? await prisma.equipment.update({ where: { id: existing.id }, data: { reference } })
+          : existing)
+      : await prisma.equipment.create({ data: { name, reference } });
+    res.status(existing ? 200 : 201).json({ item });
   }),
 );
 
@@ -417,7 +422,8 @@ consumablesRouter.post(
   requireAuth(...STAFF),
   asyncHandler(async (req, res) => {
     const d = consumableInput.parse(req.body);
-    const item = await prisma.consumable.create({ data: { name: d.name, unit: d.unit, note: d.note ?? null } });
-    res.status(201).json({ item });
+    const existing = await prisma.consumable.findFirst({ where: { name: { equals: d.name } } });
+    const item = existing ?? await prisma.consumable.create({ data: { name: d.name, unit: d.unit, note: d.note ?? null } });
+    res.status(existing ? 200 : 201).json({ item });
   }),
 );

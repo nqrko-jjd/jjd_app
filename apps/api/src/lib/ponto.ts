@@ -10,8 +10,14 @@
  *   3. régler PONTO_CLIENT_ID / PONTO_REDIRECT_URI dans apps/api/.env
  *   4. l'URL de callback doit être publique -> après déploiement Combell
  *
- * ⚠️ Les chemins d'endpoints et le schéma de signature sont à revalider avec
- * la doc Ibanity au moment de l'activation (marqués « TODO(ibanity) »).
+ * Endpoints vérifiés le 2026-09-08 contre la doc Ibanity/Ponto en vigueur
+ * (documentation.ibanity.com/ponto-connect) : API de données (comptes,
+ * transactions, synchronisations, échange de token) sur api.ibanity.com,
+ * identique sandbox/live (c'est le certificat client qui distingue les deux) ;
+ * écran de consentement (redirection navigateur) sur *.myponto.com — deux
+ * hôtes distincts selon l'environnement, PAS de suffixe /ponto-connect.
+ * Le schéma de signature de requêtes ne s'applique qu'aux paiements
+ * (non utilisés ici, on ne fait que lire les comptes/transactions).
  */
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -23,10 +29,17 @@ import { prisma } from '../db.js';
 
 const asJson = (v: unknown) => v as Prisma.InputJsonValue;
 
-const API_BASE = env.ponto.sandbox
-  ? 'https://api.ibanity.com/ponto-connect' // sandbox partage l'hôte, credentials distincts
-  : 'https://api.ibanity.com/ponto-connect';
-const AUTH_BASE = 'https://authorization.ibanity.com/ponto-connect'; // TODO(ibanity) confirmer (sandbox ?)
+// L'API de données (comptes, transactions, synchronisations, échange de token) est le MÊME hôte
+// en sandbox et en live — c'est le certificat client (mTLS) qui détermine l'environnement, pas l'URL.
+// Confirmé : https://documentation.ibanity.com/ponto-connect/api (« There is no flip switch to
+// change from test to production - your client certificate will determine which mode you are in »).
+const API_BASE = 'https://api.ibanity.com/ponto-connect';
+// L'écran de consentement (redirection navigateur), lui, a bien deux hôtes distincts par
+// environnement — confirmé sur https://documentation.ibanity.com/ponto-connect/2/products
+// (section Access Authorization) : *.myponto.com, pas *.ibanity.com, et sans suffixe /ponto-connect.
+const AUTH_BASE = env.ponto.sandbox
+  ? 'https://sandbox-authorization.myponto.com'
+  : 'https://authorization.myponto.com';
 const SCOPES = 'ai name offline_access';
 
 const secretPath = (p: string) => (path.isAbsolute(p) ? p : path.resolve(process.cwd(), p));
@@ -167,7 +180,7 @@ export async function buildAuthUrl(): Promise<string> {
     code_challenge: challenge,
     code_challenge_method: 'S256',
   });
-  return `${AUTH_BASE}/oauth2/auth?${q}`; // TODO(ibanity) confirmer le path exact
+  return `${AUTH_BASE}/oauth2/auth?${q}`;
 }
 
 export async function handleCallback(code: string, state: string): Promise<void> {

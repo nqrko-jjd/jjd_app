@@ -62,10 +62,16 @@ export default function AchatsPage() {
   const [contactId, setContactId] = useState('');
   const [category, setCategory] = useState('');
   const [year, setYear] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(100);
   const [edit, setEdit] = useState<Expense | 'new' | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [exporting, setExporting] = useState(false);
   const ctx = useContextMenu<Expense>();
+
+  // revient à la 1ère page à chaque changement de filtre (sinon on peut se retrouver
+  // sur une page qui n'existe plus après un filtrage plus restrictif)
+  useEffect(() => { setPage(1); }, [q, paid, worksiteId, contactId, category, year]);
 
   const params = new URLSearchParams();
   if (q) params.set('q', q);
@@ -74,10 +80,14 @@ export default function AchatsPage() {
   if (contactId) params.set('contactId', contactId);
   if (category) params.set('category', category);
   if (year) params.set('year', year);
+  params.set('page', String(page));
+  params.set('pageSize', String(pageSize));
   const { data, loading, reload } = useApi<{
     items: Expense[];
     totals: { count: number; ht: number; ttc: number; unpaidTtc: number };
-    capped: boolean;
+    page: number;
+    pageSize: number;
+    totalPages: number;
   }>(`/api/finance/expenses?${params}`);
   const { data: meta } = useApi<Meta>('/api/finance/expenses/meta');
 
@@ -164,7 +174,7 @@ export default function AchatsPage() {
 
       <PageHead
         title="Achats / Dépenses"
-        sub={data ? `${data.totals.count} factures d'achat${data.capped ? ` · ${data.items.length} affichées` : ''} · clic droit pour les actions rapides` : undefined}
+        sub={data ? `${data.totals.count} factures d'achat · page ${data.page}/${data.totalPages} · clic droit pour les actions rapides` : undefined}
         action={
           <div className="row">
             {selected.size > 0 && (
@@ -273,6 +283,25 @@ export default function AchatsPage() {
               <tr><td colSpan={7}>Total (tout le filtre)</td><td style={{ textAlign: 'right' }}><Money value={total} /></td><td colSpan={2} /></tr>
             </tfoot>
           </table>
+        </div>
+      )}
+
+      {data && data.totalPages > 1 && (
+        <div className="row" style={{ marginTop: '0.8rem', gap: '0.5rem', alignItems: 'center' }}>
+          <button className="btn" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>← Précédent</button>
+          <span className="muted">Page {data.page} / {data.totalPages}</span>
+          <button className="btn" disabled={page >= data.totalPages} onClick={() => setPage((p) => p + 1)}>Suivant →</button>
+          <select
+            className="select"
+            style={{ maxWidth: 140, marginLeft: 'auto' }}
+            value={pageSize}
+            onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
+          >
+            <option value={50}>50 / page</option>
+            <option value={100}>100 / page</option>
+            <option value={200}>200 / page</option>
+            <option value={500}>500 / page</option>
+          </select>
         </div>
       )}
     </>

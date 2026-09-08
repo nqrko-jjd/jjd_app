@@ -42,7 +42,7 @@ expensesRouter.get(
   '/',
   requireAuth(...FIELD_OFFICE),
   asyncHandler(async (req, res) => {
-    const { q, paid, worksiteId, contactId, category, from, to, year } = req.query as Record<string, string>;
+    const { q, paid, worksiteId, contactId, category, from, to, year, page: pageStr, pageSize: pageSizeStr } = req.query as Record<string, string>;
     // achats + notes de crédit d'achat (une NC de vente réduit le CA, pas une dépense)
     const and: Record<string, unknown>[] = [
       { OR: [{ direction: 'purchase' }, { direction: 'credit_note', NOT: { categoryRaw: { contains: 'vente' } } }] },
@@ -67,7 +67,8 @@ expensesRouter.get(
         ],
       });
     }
-    const CAP = 2000;
+    const page = Math.max(1, Math.trunc(Number(pageStr)) || 1);
+    const pageSize = Math.min(500, Math.max(20, Math.trunc(Number(pageSizeStr)) || 100));
     const isPaidStr = (s: string | null) =>
       (s ?? '').toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').trim() === 'paye';
 
@@ -75,10 +76,11 @@ expensesRouter.get(
       prisma.ledgerEntry.findMany({
         where: { AND: and },
         orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
-        take: CAP,
+        skip: (page - 1) * pageSize,
+        take: pageSize,
         include: inc,
       }),
-      // totaux sur l'ensemble du filtre (pas seulement les lignes affichées)
+      // totaux (KPI) sur l'ensemble du filtre, pas seulement la page affichée
       prisma.ledgerEntry.findMany({ where: { AND: and }, select: { ht: true, ttc: true, paymentStatus: true } }),
     ]);
 
@@ -109,7 +111,9 @@ expensesRouter.get(
         ttc: Math.round(totals.ttc * 100) / 100,
         unpaidTtc: Math.round(totals.unpaidTtc * 100) / 100,
       },
-      capped: totals.count > CAP,
+      page,
+      pageSize,
+      totalPages: Math.max(1, Math.ceil(totals.count / pageSize)),
     });
   }),
 );

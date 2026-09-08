@@ -219,9 +219,16 @@ scp bricoloc@136.144.209.157:/opt/jjd/backups/jjd-db-2026-09-06.sql.gz .
 
 ⚠️ Ces sauvegardes restent **sur le même serveur** que l'application : elles
 protègent contre une erreur humaine, un bug ou une mauvaise migration, mais
-pas contre la perte du VPS lui-même. Pour une copie hors-site (recommandé à
-terme), il faudrait ajouter une destination externe (stockage cloud, `rclone`,
-etc.) — nécessite un compte/des identifiants à fournir.
+pas contre la perte du VPS lui-même.
+
+**Copie hors-site (fait)** : des NAS Synology distants (David, bureau,
+associé) rapatrient automatiquement `backups/` en pull SSH/rsync
+(Hyper Backup) — voir `.github/workflows/setup-backup-keys.yml` et
+`deploy/rrsync-backups.sh`. Chaque NAS a sa propre clé SSH, restreinte par
+commande forcée à un `rsync --sender` en lecture seule de `backups/` (aucune
+écriture, aucun shell, aucun autre accès au VPS possible avec ces clés).
+Ajouter/révoquer une clé : Actions → *Gérer les clés de pull de sauvegarde
+(NAS)* → `add_pubkeys` / `remove_pubkeys` (une clé publique par ligne).
 
 ---
 

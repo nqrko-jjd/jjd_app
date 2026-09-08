@@ -11,6 +11,7 @@
 import puppeteer from 'puppeteer-core';
 import { computeDocTotals, formatEur, formatDateBE, DOC_KIND_LABEL, type DocLineLike } from '@jjd/shared';
 import type { Company } from './documents.js';
+import { renderEpcQrDataUrl, isValidBelgianIban } from './epc-qr.js';
 
 export interface PdfDocLine extends DocLineLike {
   label: string;
@@ -40,7 +41,7 @@ function esc(s: string | null | undefined): string {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 }
 
-function buildHtml(d: PdfDoc, co: Company): string {
+async function buildHtml(d: PdfDoc, co: Company): Promise<string> {
   const totals = computeDocTotals(d.lines);
   const title = DOC_KIND_LABEL[d.kind] ?? d.kind;
   const ref = d.number ?? d.draftRef ?? '';
@@ -78,9 +79,21 @@ function buildHtml(d: PdfDoc, co: Company): string {
     d.worksite ? `<tr><td>Chantier</td><td>${esc(d.worksite.ref)}</td></tr>` : '',
   ].join('');
 
-  const payBlock = (d.kind === 'invoice' || d.kind === 'deposit_invoice')
-    ? `<div class="pay"><div><strong>Paiement</strong> — ${co.iban ? `IBAN ${esc(co.iban)}` : 'coordonnées bancaires sur demande'}</div>
-       ${d.structuredComm ? `<div>Communication structurée : <strong>${esc(d.structuredComm)}</strong></div>` : ''}</div>`
+  const isInvoiceLike = d.kind === 'invoice' || d.kind === 'deposit_invoice';
+  // QR de paiement (EPC069-12) : scan depuis l'appli bancaire -> virement pré-rempli.
+  // Seulement si l'IBAN est valide et qu'il y a un montant réel à payer.
+  const qrDataUrl = isInvoiceLike && isValidBelgianIban(co.iban) && totals.totalTtc > 0
+    ? await renderEpcQrDataUrl({ beneficiaryName: co.name, iban: co.iban!, amount: totals.totalTtc, structuredComm: d.structuredComm })
+    : null;
+
+  const payBlock = isInvoiceLike
+    ? `<div class="pay">
+         <div class="pay-text">
+           <div><strong>Paiement</strong> — ${co.iban ? `IBAN ${esc(co.iban)}` : 'coordonnées bancaires sur demande'}</div>
+           ${d.structuredComm ? `<div>Communication structurée : <strong>${esc(d.structuredComm)}</strong></div>` : ''}
+         </div>
+         ${qrDataUrl ? `<div class="pay-qr"><img src="${qrDataUrl}" alt="QR code de paiement" /><span>à scanner pour payer</span></div>` : ''}
+       </div>`
     : '';
 
   return `<!doctype html><html><head><meta charset="utf-8"><style>${CSS}</style></head><body>
@@ -160,7 +173,11 @@ const CSS = `
   .totals td { padding: 4px 8px; }
   .totals td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
   .totals tr.grand td { border-top: 2px solid #294a70; font-weight: 800; font-size: 13px; padding-top: 6px; }
-  .pay { margin-top: 18px; padding: 10px 12px; background: #f2f5f9; border-radius: 6px; font-size: 11px; }
+  .pay { margin-top: 18px; padding: 10px 12px; background: #f2f5f9; border-radius: 6px; font-size: 11px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .pay-text { flex: 1; }
+  .pay-qr { text-align: center; flex: none; }
+  .pay-qr img { width: 84px; height: 84px; display: block; }
+  .pay-qr span { display: block; font-size: 9px; color: #6a7482; margin-top: 2px; }
   .terms { margin-top: 22px; padding-top: 10px; border-top: 1px solid #e6eaf0; color: #6a7482; font-size: 10px; white-space: pre-wrap; }
 `;
 
@@ -188,7 +205,7 @@ export async function renderDocumentPdf(d: PdfDoc, co: Company): Promise<Buffer>
   const browser = await getBrowser();
   const page = await browser.newPage();
   try {
-    await page.setContent(buildHtml(d, co), { waitUntil: 'load' });
+    await page.setContent(await buildHtml(d, co), { waitUntil: 'load' });
     const pdf = await page.pdf({ format: 'A4', printBackground: true, margin: { top: '16mm', bottom: '16mm', left: '16mm', right: '16mm' } });
     return Buffer.from(pdf);
   } finally {

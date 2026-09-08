@@ -37,3 +37,6 @@ apps/mobile/.expo/
 
 # préférences Claude Code locales (pas partagées)
 .claude/settings.local.json
+
+# sauvegardes générées sur le VPS (deploy/backup.sh) — jamais versionnées
+/backups/

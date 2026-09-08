@@ -204,8 +204,8 @@ sur le VPS :
 
 - dump PostgreSQL compressé (`pg_dump | gzip`)
 - archive des médias (`uploads`, photos/PDF)
-- écrit dans `/opt/jjd-backups`, **en dehors du dépôt git** (jamais touché par
-  le `git reset --hard` du déploiement)
+- écrit dans `/opt/jjd/backups/` — non versionné (`.gitignore`), donc jamais
+  touché par le `git reset --hard` du déploiement
 - purge automatiquement ce qui a plus de 45 jours (~6 sauvegardes hebdo conservées)
 
 Vérifier que ça tourne : onglet **Actions** du dépôt GitHub → *Sauvegarde
@@ -213,8 +213,8 @@ hebdomadaire JJD*. Un échec y apparaît (et génère la notification GitHub
 habituelle). Lister/récupérer les fichiers sur le VPS :
 
 ```bash
-ls -lh /opt/jjd-backups
-scp bricoloc@136.144.209.157:/opt/jjd-backups/jjd-db-2026-09-06.sql.gz .
+ls -lh /opt/jjd/backups
+scp bricoloc@136.144.209.157:/opt/jjd/backups/jjd-db-2026-09-06.sql.gz .
 ```
 
 ⚠️ Ces sauvegardes restent **sur le même serveur** que l'application : elles

@@ -5,13 +5,14 @@
 # sur le VPS, mêmes secrets que le déploiement) — peut aussi être exécuté à la
 # main sur le VPS : `cd /opt/jjd && bash deploy/backup.sh`.
 #
-# Écrit dans /opt/jjd-backups, EN DEHORS du dépôt git (donc jamais touché par
-# le `git reset --hard` du déploiement). Conserve 45 jours (~6 sauvegardes
-# hebdomadaires) puis purge automatiquement les plus anciennes.
+# Écrit dans backups/ à la racine du dépôt — non versionné (.gitignore), donc
+# jamais touché par le `git reset --hard` du déploiement, mais sur le même
+# volume disque que le reste. Conserve 45 jours (~6 sauvegardes hebdomadaires)
+# puis purge automatiquement les plus anciennes.
 set -euo pipefail
 cd "$(dirname "$0")/.."   # racine du dépôt (VPS_PATH)
 
-BACKUP_DIR=/opt/jjd-backups
+BACKUP_DIR="$(pwd)/backups"
 RETENTION_DAYS=45
 DATE=$(date +%F)
 

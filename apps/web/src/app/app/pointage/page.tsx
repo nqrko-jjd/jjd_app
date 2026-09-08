@@ -1,9 +1,13 @@
 'use client';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { PageHead, Money, formatDateBE } from '@/lib/ui';
+import { ComboBox } from '@/components/ComboBox';
 import { formatHours } from '@jjd/shared';
+
+interface Meta { people: { id: string; name: string }[]; worksites: { id: string; name: string }[] }
 
 interface Pending {
   id: string; date: string | null; hours: number | null; amount: number | null; task: string | null;
@@ -14,6 +18,7 @@ interface Pending {
 
 export default function PointagePage() {
   const { data, loading, reload } = useApi<{ items: Pending[] }>('/api/timesheet/pending');
+  const [adding, setAdding] = useState(false);
 
   async function act(id: string, action: 'approve' | 'reject') {
     await api(`/api/timesheet/entries/${id}/${action}`, { method: 'POST' });
@@ -39,11 +44,13 @@ export default function PointagePage() {
 
   return (
     <>
+      {adding && <ManualEntryModal onClose={() => setAdding(false)} onDone={() => { setAdding(false); reload(); }} />}
       <PageHead
         title="Pointage"
         sub="Heures à valider avant le décompte de paie"
         action={
           <div className="row">
+            <button className="btn" onClick={() => setAdding(true)}>+ Pointage manuel</button>
             {items.length > 0 && <button className="btn primary" onClick={approveAll}>Tout valider{flagged ? ' (sauf hors zone)' : ''}</button>}
             <Link href="/app/pointage/decomptes" className="btn">Décomptes du mois →</Link>
           </div>
@@ -109,5 +116,90 @@ export default function PointagePage() {
         </div>
       ))}
     </>
+  );
+}
+
+/** Saisie manuelle : ouvrier qui a oublié de pointer, correction, etc. Validé directement (source=manual). */
+function ManualEntryModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const { data: meta } = useApi<Meta>('/api/meta/pickers');
+  const [personId, setPersonId] = useState('');
+  const [worksiteId, setWorksiteId] = useState('');
+  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [hours, setHours] = useState('');
+  const [task, setTask] = useState('');
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    const onEsc = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onEsc);
+    return () => window.removeEventListener('keydown', onEsc);
+  }, [onClose]);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setErr(null);
+    try {
+      await api('/api/timesheet/entries', {
+        method: 'POST',
+        body: {
+          personId,
+          worksiteId: worksiteId || null,
+          date: new Date(date).toISOString(),
+          hours: hours ? Number(hours) : null,
+          task: task || null,
+          note: note || null,
+        },
+      });
+      onDone();
+    } catch (e2) {
+      setErr((e2 as Error).message ?? 'Erreur');
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="modal-scrim" onClick={onClose}>
+      <form className="modal" style={{ maxWidth: 460 }} onClick={(e) => e.stopPropagation()} onSubmit={submit}>
+        <div className="modal-head">
+          <h2>Pointage manuel</h2>
+          <button type="button" className="btn ghost" onClick={onClose} aria-label="Fermer">✕</button>
+        </div>
+        <div className="modal-body">
+          <p className="muted" style={{ marginTop: 0 }}>Pour un ouvrier qui a oublié de pointer, ou une correction. Validé immédiatement (pas de file d’attente).</p>
+          <div className="field">
+            <label>Ouvrier *</label>
+            <ComboBox placeholder="chercher un nom" value={personId} onChange={setPersonId} options={meta?.people.map((p) => ({ value: p.id, label: p.name })) ?? []} />
+          </div>
+          <div className="field">
+            <label>Chantier</label>
+            <ComboBox placeholder="— (frais général)" value={worksiteId} onChange={setWorksiteId} options={meta?.worksites.map((w) => ({ value: w.id, label: w.name })) ?? []} />
+          </div>
+          <div className="field">
+            <label>Date *</label>
+            <input className="input" type="date" required value={date} onChange={(e) => setDate(e.target.value)} />
+          </div>
+          <div className="field">
+            <label>Heures</label>
+            <input className="input" type="number" step="any" min="0" value={hours} onChange={(e) => setHours(e.target.value)} placeholder="ex. 8" />
+          </div>
+          <div className="field">
+            <label>Tâche</label>
+            <input className="input" value={task} onChange={(e) => setTask(e.target.value)} />
+          </div>
+          <div className="field">
+            <label>Note</label>
+            <textarea className="input" rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="ex. oublié de pointer, ajouté par le bureau" />
+          </div>
+        </div>
+        {err && <div className="badge crit" style={{ margin: '0 1.15rem', padding: '0.4rem 0.7rem' }}>{err}</div>}
+        <div className="modal-foot">
+          <button type="button" className="btn" onClick={onClose}>Annuler</button>
+          <button type="submit" className="btn primary" disabled={busy || !personId || !date}>{busy ? 'Enregistrement…' : 'Enregistrer'}</button>
+        </div>
+      </form>
+    </div>
   );
 }

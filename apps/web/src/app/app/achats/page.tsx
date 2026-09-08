@@ -63,6 +63,8 @@ export default function AchatsPage() {
   const [category, setCategory] = useState('');
   const [year, setYear] = useState('');
   const [edit, setEdit] = useState<Expense | 'new' | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [exporting, setExporting] = useState(false);
   const ctx = useContextMenu<Expense>();
 
   const params = new URLSearchParams();
@@ -107,6 +109,33 @@ export default function AchatsPage() {
     reload();
   }
 
+  function toggleSelected(id: string) {
+    setSelected((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+  function toggleAll() {
+    const withPdf = sort.rows.filter((e) => e.hasPdf);
+    setSelected((s) => (s.size === withPdf.length && withPdf.every((e) => s.has(e.id)) ? new Set() : new Set(withPdf.map((e) => e.id))));
+  }
+  async function exportZip() {
+    if (!selected.size) return;
+    setExporting(true);
+    try {
+      const url = await apiBlobUrl(`/api/finance/expenses/export.zip?ids=${[...selected].join(',')}`);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `depenses-${new Date().toISOString().slice(0, 10)}.zip`;
+      a.click();
+    } catch (e) {
+      alert(`Échec de l’export : ${(e as Error).message}`);
+    } finally {
+      setExporting(false);
+    }
+  }
+
   function rowMenu(e: Expense): MenuItem[] {
     return [
       { label: 'Ouvrir / modifier', onClick: () => setEdit(e) },
@@ -136,7 +165,16 @@ export default function AchatsPage() {
       <PageHead
         title="Achats / Dépenses"
         sub={data ? `${data.totals.count} factures d'achat${data.capped ? ` · ${data.items.length} affichées` : ''} · clic droit pour les actions rapides` : undefined}
-        action={<button className="btn primary" onClick={() => setEdit('new')}>+ Nouvelle dépense</button>}
+        action={
+          <div className="row">
+            {selected.size > 0 && (
+              <button className="btn" disabled={exporting} onClick={exportZip} title="Pièce jointe de chaque dépense sélectionnée, dans un seul .zip">
+                📦 Exporter {selected.size} pièce{selected.size > 1 ? 's' : ''} jointe{selected.size > 1 ? 's' : ''} (zip)
+              </button>
+            )}
+            <button className="btn primary" onClick={() => setEdit('new')}>+ Nouvelle dépense</button>
+          </div>
+        }
       />
 
       <div className="kpis" style={{ marginBottom: '1.2rem' }}>
@@ -182,6 +220,14 @@ export default function AchatsPage() {
           <table className="tbl">
             <thead>
               <tr>
+                <th style={{ width: 28 }}>
+                  <input
+                    type="checkbox"
+                    checked={sort.rows.some((e) => e.hasPdf) && sort.rows.filter((e) => e.hasPdf).every((e) => selected.has(e.id))}
+                    onChange={toggleAll}
+                    aria-label="Tout sélectionner (pièces jointes disponibles)"
+                  />
+                </th>
                 <SortTh k="date" sort={sort}>Date</SortTh>
                 <SortTh k="supplier" sort={sort}>Fournisseur</SortTh>
                 <SortTh k="docNumber" sort={sort}>N°</SortTh>
@@ -201,6 +247,16 @@ export default function AchatsPage() {
                   onClick={rowNav('', () => setEdit(e))}
                   onContextMenu={(ev) => ctx.open(ev, e)}
                 >
+                  <td onClick={(ev) => ev.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={selected.has(e.id)}
+                      disabled={!e.hasPdf}
+                      title={e.hasPdf ? undefined : 'Aucune pièce jointe à exporter'}
+                      onChange={() => toggleSelected(e.id)}
+                      aria-label="Sélectionner"
+                    />
+                  </td>
                   <td className="tnum">{formatDateBE(e.date)}</td>
                   <td>{e.supplier ?? '—'}{e.direction === 'credit_note' && <span className="badge warn" style={{ marginLeft: 6 }}>NC</span>}</td>
                   <td className="mono" style={{ fontSize: '0.82rem' }}>{e.docNumber ?? '—'}</td>
@@ -214,7 +270,7 @@ export default function AchatsPage() {
               ))}
             </tbody>
             <tfoot>
-              <tr><td colSpan={6}>Total (tout le filtre)</td><td style={{ textAlign: 'right' }}><Money value={total} /></td><td colSpan={2} /></tr>
+              <tr><td colSpan={7}>Total (tout le filtre)</td><td style={{ textAlign: 'right' }}><Money value={total} /></td><td colSpan={2} /></tr>
             </tfoot>
           </table>
         </div>

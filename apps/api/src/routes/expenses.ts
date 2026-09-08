@@ -5,8 +5,9 @@
  */
 import { Router } from 'express';
 import path from 'node:path';
-import { createReadStream, existsSync } from 'node:fs';
+import { createReadStream, existsSync, readFileSync } from 'node:fs';
 import multer from 'multer';
+import { zipSync } from 'fflate';
 import { expenseInput } from '@jjd/shared';
 import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
@@ -156,6 +157,44 @@ expensesRouter.get(
       worksites: worksites.map((w) => ({ id: w.id, name: `${w.ref} · ${w.title}` })),
       years: years.map((y) => y.year).filter(Boolean),
     });
+  }),
+);
+
+/* ------------------------------------------------------------------ export */
+
+/** Export groupé : les pièces jointes de plusieurs dépenses en un seul .zip (à glisser chez le comptable). */
+expensesRouter.get(
+  '/export.zip',
+  requireAuth(...FIELD_OFFICE),
+  asyncHandler(async (req, res) => {
+    const ids = String(req.query.ids ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+    if (!ids.length) throw new HttpError(422, 'Aucune dépense sélectionnée');
+    if (ids.length > 300) throw new HttpError(422, 'Trop de dépenses sélectionnées (300 max)');
+    const items = await prisma.ledgerEntry.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, pdfPath: true, docNumber: true, supplierName: true, contact: { select: { name: true } } },
+    });
+
+    const files: Record<string, Uint8Array> = {};
+    const used = new Set<string>();
+    for (const e of items) {
+      if (!e.pdfPath) continue;
+      const file = resolveUpload(e.pdfPath);
+      if (!existsSync(file)) continue;
+      const ext = path.extname(file) || '.pdf';
+      const label = (e.docNumber || e.contact?.name || e.supplierName || e.id).replace(/[^\w.-]+/g, '-');
+      let name = `${label}${ext}`;
+      let i = 2;
+      while (used.has(name)) { name = `${label}-${i}${ext}`; i++; }
+      used.add(name);
+      files[name] = new Uint8Array(readFileSync(file));
+    }
+    if (!Object.keys(files).length) throw new HttpError(422, 'Aucune des dépenses sélectionnées n’a de pièce jointe à exporter.');
+
+    const zipped = zipSync(files, { level: 6 });
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="depenses-${new Date().toISOString().slice(0, 10)}.zip"`);
+    res.send(Buffer.from(zipped));
   }),
 );
 

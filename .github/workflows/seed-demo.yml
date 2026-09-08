@@ -1,0 +1,29 @@
+name: Chantier de démonstration
+
+# Usage ponctuel (workflow_dispatch) : lance apps/api/scripts/seed-demo-worksite.ts
+# dans le conteneur API en production (même mécanisme que les imports de données,
+# voir docs/deploiement.md §6) — crée/recrée le chantier « DEMO-1 » entièrement
+# peuplé (devis/factures, dépenses, pointages, rapports, fil de chantier, stock…),
+# exclu de tous les rapports agrégés (source='demo' + archived=true).
+# Idempotent : relancer supprime l'ancien chantier démo et le recrée proprement.
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Lancer le script via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script_stop: true
+          command_timeout: 10m
+          script: |
+            set -e
+            cd "${{ secrets.VPS_PATH }}"
+            docker compose -f docker-compose.prod.yml --env-file .env.production run --rm \
+              api sh -c "cd /repo/apps/api && npx tsx scripts/seed-demo-worksite.ts"

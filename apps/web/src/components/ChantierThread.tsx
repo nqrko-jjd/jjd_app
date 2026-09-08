@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, apiUpload } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
+import { useAuth } from '@/lib/auth';
 
 interface Msg {
   id: string; kind: string; body: string | null; fileUrl: string | null; thumbUrl: string | null;
@@ -18,10 +19,14 @@ function time(iso: string) {
 }
 
 export function ChantierThread({ worksiteId }: { worksiteId: string }) {
+  const { user } = useAuth();
+  const canImport = !!user && !['worker', 'client'].includes(user.role);
   const { data, loading, reload } = useApi<ThreadData>(`/api/worksites/${worksiteId}/thread`);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
+  const [importMsg, setImportMsg] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const zipRef = useRef<HTMLInputElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { endRef.current?.scrollIntoView(); }, [data?.messages.length]);
@@ -51,6 +56,34 @@ export function ChantierThread({ worksiteId }: { worksiteId: string }) {
     await api(`/api/worksites/${worksiteId}/thread/close`, { method: 'POST', body: { reopen } });
     reload();
   }
+  async function importWhatsapp(files: FileList | null) {
+    const zip = files?.[0];
+    if (!zip) return;
+    if (!confirm('Importer cet export WhatsApp ? Les messages iront dans le chat, les photos/vidéos dans les pièces jointes. Un import précédent pour ce chantier serait remplacé.')) {
+      if (zipRef.current) zipRef.current.value = '';
+      return;
+    }
+    setBusy(true);
+    setImportMsg('Import en cours… (peut prendre une minute selon le nombre de photos)');
+    try {
+      const fd = new FormData();
+      fd.append('zip', zip);
+      const r = await apiUpload<{ imported: { texts: number; photos: number; videos: number; files: number; skipped: number }; warnings: string[] }>(
+        `/api/worksites/${worksiteId}/thread/import-whatsapp`, fd,
+      );
+      const { imported: im, warnings } = r;
+      setImportMsg(
+        `Importé : ${im.texts} message(s), ${im.photos} photo(s), ${im.videos} vidéo(s), ${im.files} fichier(s)`
+        + (im.skipped ? ` · ${im.skipped} média(s) introuvable(s)` : '')
+        + (warnings.length ? ` — ${warnings.slice(0, 3).join(' ; ')}${warnings.length > 3 ? '…' : ''}` : ''),
+      );
+    } catch (e) {
+      setImportMsg(`Échec de l’import : ${(e as Error).message}`);
+    }
+    setBusy(false);
+    if (zipRef.current) zipRef.current.value = '';
+    reload();
+  }
 
   if (loading) return <div className="card card-pad muted">Chargement du fil…</div>;
   if (!data) return null;
@@ -62,10 +95,25 @@ export function ChantierThread({ worksiteId }: { worksiteId: string }) {
           <strong>Fil de chantier</strong>{' '}
           <span className="muted" style={{ fontSize: '0.8rem' }}>{data.participants.length} participant(s)</span>
         </div>
-        <button className={`btn ${data.thread.closedAt ? '' : 'primary'}`} onClick={toggleClose}>
-          {data.thread.closedAt ? 'Rouvrir' : 'Chantier terminé'}
-        </button>
+        <div className="row" style={{ gap: '0.5rem' }}>
+          {canImport && (
+            <>
+              <input ref={zipRef} type="file" accept=".zip,application/zip" hidden onChange={(e) => importWhatsapp(e.target.files)} />
+              <button className="btn" onClick={() => zipRef.current?.click()} disabled={busy} title="Importer un export WhatsApp (.zip) : chat + photos">
+                Importer WhatsApp
+              </button>
+            </>
+          )}
+          <button className={`btn ${data.thread.closedAt ? '' : 'primary'}`} onClick={toggleClose}>
+            {data.thread.closedAt ? 'Rouvrir' : 'Chantier terminé'}
+          </button>
+        </div>
       </div>
+      {importMsg && (
+        <div className="muted" style={{ padding: '0.5rem 1.15rem', fontSize: '0.82rem', borderBottom: '1px solid var(--line)' }}>
+          {importMsg}
+        </div>
+      )}
 
       <div style={{ maxHeight: 460, overflowY: 'auto', padding: '1rem 1.15rem', display: 'flex', flexDirection: 'column', gap: '0.7rem' }}>
         {data.messages.length === 0 && <div className="muted">Aucun message. Lance la conversation ci-dessous.</div>}

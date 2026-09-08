@@ -13,58 +13,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readdirSync, readFileSync, existsSync, statSync } from 'node:fs';
 import { PrismaClient } from '@prisma/client';
-import { normalizeName } from '@jjd/shared';
 import { storeImage, storeFile } from '../src/lib/media.js';
+import { parseWhatsAppChat as parseChat, buildWhatsAppAuthorMatcher, WHATSAPP_SKIP_BODY as SKIP_BODY } from '../src/lib/whatsapp-import.js';
 
 const prisma = new PrismaClient();
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '../../../data-import/whatsapp');
-
-/* -------------------------------------------------------------- parsing */
-
-const LINE_RE = /^(\d{1,2})\/(\d{1,2})\/(\d{2}),\s(\d{1,2}):(\d{2})\s[-–]\s(.*)$/;
-const ATTACH_RE = /^‎?(.+?\.(jpe?g|png|webp|mp4|mov|3gp|opus|m4a|aac|pdf|vcf|docx?|xlsx?))\s*\((fichier joint|file attached)\)$/i;
-const MARKS_RE = /[‎‏⁦-⁩]/g;
-const SKIP_BODY = new Set([
-  'null', 'Ce message a été supprimé.', 'This message was deleted.',
-  '<Médias omis>', '<Médias omis>', '<Media omitted>',
-  'Vous avez supprimé ce message.', 'You deleted this message.',
-]);
-/** Lignes système WhatsApp (création de groupe, ajout/départ de membres, chiffrement…). */
-const SYSTEM_RE = /^(Les messages et les appels|Vous avez (créé|ajouté|retiré|expulsé|changé|modifié|supprimé le sujet|activé|désactivé)|Vous êtes maintenant|Vous avez rejoint|.{0,60}\b(a créé le groupe|a ajouté|a été ajouté|a quitté|a retiré|a expulsé|a changé|a modifié|a rejoint|ont rejoint|est maintenant admin|a supprimé|a été expulsé|a activé le verrouillage|a désactivé))/i;
-
-interface Msg { at: Date; author: string | null; body: string; attach: string | null }
-
-function parseChat(text: string): Msg[] {
-  const out: Msg[] = [];
-  for (const raw of text.replace(/\r/g, '').split('\n')) {
-    const m = LINE_RE.exec(raw);
-    if (!m) {
-      if (out.length) out[out.length - 1]!.body += `\n${raw}`;
-      continue;
-    }
-    const [, d, mo, y, hh, mm, restRaw] = m;
-    const rest = restRaw!.replace(MARKS_RE, '');
-    const at = new Date(Date.UTC(2000 + Number(y), Number(mo) - 1, Number(d), Number(hh), Number(mm)));
-    if (SYSTEM_RE.test(rest)) { out.push({ at, author: null, body: '', attach: null }); continue; }
-    const colon = rest.indexOf(': ');
-    let author: string | null = null;
-    let body = rest;
-    if (colon > 0 && colon < 42) { author = rest.slice(0, colon).trim(); body = rest.slice(colon + 2); }
-    const a = ATTACH_RE.exec(body.trim());
-    out.push({ at, author, body: a ? '' : body, attach: a ? a[1]! : null });
-  }
-  return out;
-}
-
-/** « Julien Sweert 😁 » -> « Julien Sweert » ; retire emoji + marques directionnelles. */
-function cleanName(n: string): string {
-  return n
-    .replace(/[‎‏⁦-⁩]/g, '')
-    .replace(/[\u{1F000}-\u{1FAFF}☀-➿️]/gu, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
 
 /* -------------------------------------------------------------- import */
 
@@ -97,24 +51,7 @@ async function main() {
     where: { active: true },
     select: { id: true, firstName: true, lastName: true, displayName: true },
   });
-  // n'indexe que les fiches "individuelles" (pas les libellés composites « Julien / Pascal »)
-  const personByToken = new Map<string, { id: string; label: string }>();
-  for (const p of people) {
-    const label = p.displayName || p.firstName;
-    if (/[/&+]|,/.test(label)) continue;
-    const keys = [normalizeName(label), normalizeName(`${p.firstName} ${p.lastName ?? ''}`.trim())];
-    if (/^[A-Za-zÀ-ÿ]+$/.test(p.firstName)) keys.push(normalizeName(p.firstName));
-    for (const k of keys) if (k && !personByToken.has(k)) personByToken.set(k, { id: p.id, label });
-  }
-  const matchAuthor = (waName: string): { label: string; personId: string | null } => {
-    const clean = cleanName(waName);
-    const words = clean.split(' ').filter(Boolean);
-    for (const cand of [normalizeName(clean), ...words.map((w) => normalizeName(w))]) {
-      const hit = personByToken.get(cand);
-      if (hit) return { label: hit.label, personId: hit.id };
-    }
-    return { label: words[0] ? words.slice(0, 2).join(' ') : clean, personId: null };
-  };
+  const matchAuthor = buildWhatsAppAuthorMatcher(people);
 
   await prisma.importIssue.deleteMany({ where: { batch: { source: 'whatsapp' } } });
   await prisma.importBatch.deleteMany({ where: { source: 'whatsapp' } });

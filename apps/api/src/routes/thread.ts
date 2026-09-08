@@ -1,12 +1,15 @@
 import { Router } from 'express';
 import multer from 'multer';
+import { unzipSync } from 'fflate';
 import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
-import { requireAuth, STAFF } from '../lib/auth.js';
-import { storeImage } from '../lib/media.js';
+import { requireAuth, STAFF, FIELD_OFFICE } from '../lib/auth.js';
+import { storeImage, storeFile } from '../lib/media.js';
+import { parseWhatsAppChat, buildWhatsAppAuthorMatcher, WHATSAPP_SKIP_BODY } from '../lib/whatsapp-import.js';
 
 export const threadRouter = Router({ mergeParams: true });
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
+const uploadZip = multer({ storage: multer.memoryStorage(), limits: { fileSize: 300 * 1024 * 1024 } });
 
 async function ensureThread(worksiteId: string) {
   const ws = await prisma.worksite.findUnique({ where: { id: worksiteId } });
@@ -84,6 +87,93 @@ threadRouter.post(
       },
     });
     res.status(201).json({ message: msg });
+  }),
+);
+
+/**
+ * Importe un export WhatsApp (zip contenant le .txt de discussion + les
+ * médias) directement dans le fil de ce chantier : les messages vont dans
+ * le chat, les photos/vidéos/fichiers dans les pièces jointes. Idempotent :
+ * relance l'import écrase le précédent (messages source "whatsapp" du fil).
+ */
+threadRouter.post(
+  '/import-whatsapp',
+  requireAuth(...FIELD_OFFICE),
+  uploadZip.single('zip'),
+  asyncHandler(async (req, res) => {
+    const worksiteId = req.params.worksiteId!;
+    if (!req.file) throw new HttpError(422, 'Aucun fichier');
+    const thread = await ensureThread(worksiteId);
+
+    let entries: Record<string, Uint8Array>;
+    try {
+      entries = unzipSync(new Uint8Array(req.file.buffer));
+    } catch {
+      throw new HttpError(422, 'Fichier zip illisible.');
+    }
+
+    const fileNames = Object.keys(entries).filter((n) => !n.endsWith('/'));
+    const txtCandidates = fileNames.filter((n) => n.toLowerCase().endsWith('.txt'));
+    const txtName = txtCandidates.find((n) => /chat|discussion/i.test(n)) ?? txtCandidates[0];
+    if (!txtName) throw new HttpError(422, 'Aucun fichier .txt trouvé dans le zip (export de discussion WhatsApp attendu).');
+
+    const text = Buffer.from(entries[txtName]!).toString('utf8');
+    const msgs = parseWhatsAppChat(text);
+
+    const byBasename = new Map<string, Uint8Array>();
+    for (const n of fileNames) byBasename.set(n.split('/').pop()!.toLowerCase(), entries[n]!);
+
+    const people = await prisma.person.findMany({
+      where: { active: true },
+      select: { id: true, firstName: true, lastName: true, displayName: true },
+    });
+    const matchAuthor = buildWhatsAppAuthorMatcher(people);
+
+    // idempotent : un nouvel import remplace le précédent pour ce fil
+    await prisma.message.deleteMany({ where: { threadId: thread.id, source: 'whatsapp' } });
+
+    let texts = 0, photos = 0, videos = 0, files = 0, skipped = 0;
+    const warnings: string[] = [];
+    let lastAt = 0; // garantit un ordre chronologique strict même en cas de rafale à la même minute
+
+    for (const msg of msgs) {
+      if (!msg.author) continue; // ligne système (création de groupe, chiffrement…)
+      const body = msg.body.trim();
+      if (!msg.attach && (WHATSAPP_SKIP_BODY.has(body) || body === '')) continue;
+      const who = matchAuthor(msg.author);
+      const at = Math.max(msg.at.getTime(), lastAt + 1);
+      lastAt = at;
+      const createdAt = new Date(at);
+
+      if (!msg.attach) {
+        await prisma.message.create({ data: { threadId: thread.id, authorName: who.label, kind: 'text', body, source: 'whatsapp', createdAt } });
+        texts++;
+        continue;
+      }
+      const buf = byBasename.get(msg.attach.toLowerCase());
+      if (!buf) { skipped++; warnings.push(`${msg.attach} — média absent du zip`); continue; }
+      const ext = msg.attach.toLowerCase().split('.').pop() ?? '';
+      try {
+        if (['jpg', 'jpeg', 'png', 'webp'].includes(ext)) {
+          const img = await storeImage(Buffer.from(buf));
+          await prisma.message.create({ data: { threadId: thread.id, authorName: who.label, kind: 'photo', fileUrl: img.url, thumbUrl: img.thumbUrl, source: 'whatsapp', createdAt } });
+          photos++;
+        } else if (['mp4', 'mov', '3gp'].includes(ext)) {
+          const url = storeFile(Buffer.from(buf), msg.attach, 'whatsapp');
+          await prisma.message.create({ data: { threadId: thread.id, authorName: who.label, kind: 'video', fileUrl: url, source: 'whatsapp', createdAt } });
+          videos++;
+        } else {
+          const url = storeFile(Buffer.from(buf), msg.attach, 'whatsapp');
+          await prisma.message.create({ data: { threadId: thread.id, authorName: who.label, kind: 'file', fileUrl: url, body: msg.attach, source: 'whatsapp', createdAt } });
+          files++;
+        }
+      } catch {
+        skipped++;
+        warnings.push(`${msg.attach} — média illisible`);
+      }
+    }
+
+    res.status(201).json({ imported: { texts, photos, videos, files, skipped }, warnings: warnings.slice(0, 30) });
   }),
 );
 

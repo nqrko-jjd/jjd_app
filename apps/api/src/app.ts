@@ -25,6 +25,7 @@ import { publicRouter } from './routes/public.js';
 import { worksiteReportsRouter, reportsRouter } from './routes/reports.js';
 import { worksiteTasksRouter, tasksRouter } from './routes/tasks.js';
 import { materielRouter } from './routes/materiel.js';
+import { stockRouter } from './routes/stock.js';
 
 export function createApp() {
   const app = express();
@@ -66,6 +67,7 @@ export function createApp() {
   app.use('/api/meta', metaRouter);
   app.use('/api/imports', importsRouter);
   app.use('/api/materiel', materielRouter);
+  app.use('/api/stock', stockRouter);
 
   app.use(errorMiddleware);
   return app;

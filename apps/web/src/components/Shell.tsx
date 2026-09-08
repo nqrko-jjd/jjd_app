@@ -42,6 +42,7 @@ const NAV: Group[] = [
       { href: '/app/equipe', label: 'Équipe', ic: '☺' },
       { href: '/app/flotte', label: 'Flotte', ic: '⛟' },
       { href: '/app/materiel', label: 'Matériel', ic: '⚒' },
+      { href: '/app/stock', label: 'Stock matériaux', ic: '▥' },
     ],
   },
   {

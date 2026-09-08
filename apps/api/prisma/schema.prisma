@@ -85,6 +85,7 @@ model User {
   createdLedger    LedgerEntry[]    @relation("LedgerEntryAuthor")
   reports          WorksiteReport[] @relation("ReportAuthor")
   createdTasks     WorksiteTask[]   @relation("TaskCreatedBy")
+  stockMovements   StockMovement[]  @relation("StockMovementBy")
 }
 
 /// Fiche personne : ouvrier ou chef de chantier. Toutes les infos utiles.
@@ -208,10 +209,10 @@ model Syndic {
 
 /// Contact : client (particulier, société, ACP, pouvoir public) ou fournisseur.
 model Contact {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   name           String
   normalizedName String
-  type           String   @default("client") // client | supplier | both
+  type           String    @default("client") // client | supplier | both
   kind           String? // individual | company | acp | syndic | public
   email          String?
   phone          String?
@@ -220,14 +221,14 @@ model Contact {
   postalCode     String?
   city           String?
   syndicId       String?
-  syndic         Syndic?  @relation(fields: [syndicId], references: [id])
+  syndic         Syndic?   @relation(fields: [syndicId], references: [id])
   buildingId     String? // ACP à laquelle ce contact (personne) est rattaché — distinct de `buildings` ci-dessous (ACP dont il est LE client facturé)
   building       Building? @relation("ContactOfBuilding", fields: [buildingId], references: [id])
   note           String?
   trustupId      String?
   source         String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   user             User?
   worksites        Worksite[]        @relation("WorksiteClient")
@@ -350,14 +351,15 @@ model Worksite {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  documents     Document[]
-  ledgerEntries LedgerEntry[]
-  timeEntries   TimeEntry[]
-  events        PlanningEvent[]
-  opportunity   CrmOpportunity?
-  thread        Thread?
-  reports       WorksiteReport[]
-  tasks         WorksiteTask[]
+  documents      Document[]
+  ledgerEntries  LedgerEntry[]
+  timeEntries    TimeEntry[]
+  events         PlanningEvent[]
+  opportunity    CrmOpportunity?
+  thread         Thread?
+  reports        WorksiteReport[]
+  tasks          WorksiteTask[]
+  stockMovements StockMovement[]
 
   @@index([status])
   @@index([entity])
@@ -406,27 +408,27 @@ model Category {
 /// En-tête de document commercial : devis, facture, note de crédit, acompte.
 /// Source de vérité = TrustUp pour l'instant (import). Le module lot 6 les créera.
 model Document {
-  id             String         @id @default(cuid())
+  id             String            @id @default(cuid())
   kind           String // quote | invoice | credit_note | deposit_invoice
-  direction      String         @default("sale") // sale | purchase | credit_note
+  direction      String            @default("sale") // sale | purchase | credit_note
   number         String? // null tant que le document est en brouillon
-  draftRef       String?        @unique // "BROUILLON-xxx" tant que non émis
+  draftRef       String?           @unique // "BROUILLON-xxx" tant que non émis
   worksiteId     String?
-  worksite       Worksite?      @relation(fields: [worksiteId], references: [id])
+  worksite       Worksite?         @relation(fields: [worksiteId], references: [id])
   contactId      String?
-  contact        Contact?       @relation(fields: [contactId], references: [id])
-  status         String         @default("draft")
+  contact        Contact?          @relation(fields: [contactId], references: [id])
+  status         String            @default("draft")
   title          String?
   intro          String? // texte d'introduction (devis)
   terms          String? // conditions / mentions de bas de page
   issuedOn       DateTime?
   dueOn          DateTime?
   validUntil     DateTime? // devis : date de validité
-  totalHt        Float          @default(0)
-  totalVat       Float          @default(0)
-  totalTtc       Float          @default(0)
+  totalHt        Float             @default(0)
+  totalVat       Float             @default(0)
+  totalTtc       Float             @default(0)
   vatRate        Float?
-  paidAmount     Float          @default(0)
+  paidAmount     Float             @default(0)
   paidOn         DateTime?
   note           String?
   // instantané client au moment de l'émission (le contact peut changer ensuite)
@@ -441,16 +443,16 @@ model Document {
   declinedReason String?
   lockedAt       DateTime? // émission = verrou : plus de modif des lignes
   parentId       String?
-  parent         Document?      @relation("DocumentLineage", fields: [parentId], references: [id])
-  children       Document[]     @relation("DocumentLineage")
+  parent         Document?         @relation("DocumentLineage", fields: [parentId], references: [id])
+  children       Document[]        @relation("DocumentLineage")
   trustupId      String?
   source         String?
   createdById    String?
-  createdBy      User?          @relation("DocumentAuthor", fields: [createdById], references: [id])
+  createdBy      User?             @relation("DocumentAuthor", fields: [createdById], references: [id])
   lines          DocumentLine[]
   bankMatches    BankTransaction[] @relation("DocumentBankMatches")
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
 
   @@unique([kind, number])
   @@index([worksiteId])
@@ -545,24 +547,24 @@ model LedgerEntry {
 /// Import brut des relevés bancaires (Belfius + ING). Rapprochement progressif.
 /// Compte bancaire connecté via Ponto (Ibanity) — ou saisi à la main.
 model BankAccount {
-  id          String            @id @default(cuid())
-  externalId  String?           @unique // id du compte côté Ponto
-  iban        String?
-  label       String?
-  currency    String?           @default("EUR")
-  balance     Float?
-  balanceAt   DateTime?
-  lastSyncAt  DateTime?
-  syncCursor  String? // pagination Ponto (page[after]) pour la synchro incrémentale
-  createdAt   DateTime          @default(now())
+  id           String            @id @default(cuid())
+  externalId   String?           @unique // id du compte côté Ponto
+  iban         String?
+  label        String?
+  currency     String?           @default("EUR")
+  balance      Float?
+  balanceAt    DateTime?
+  lastSyncAt   DateTime?
+  syncCursor   String? // pagination Ponto (page[after]) pour la synchro incrémentale
+  createdAt    DateTime          @default(now())
   transactions BankTransaction[]
 
   @@index([iban])
 }
 
 model BankTransaction {
-  id                  String    @id @default(cuid())
-  externalId          String?   @unique // id de la transaction côté Ponto (idempotence)
+  id                  String       @id @default(cuid())
+  externalId          String?      @unique // id de la transaction côté Ponto (idempotence)
   accountId           String?
   account             BankAccount? @relation(fields: [accountId], references: [id])
   bookingDate         DateTime?
@@ -572,17 +574,17 @@ model BankTransaction {
   description         String?
   valueDate           DateTime?
   amount              Float?
-  currency            String?   @default("EUR")
+  currency            String?      @default("EUR")
   communication       String?
   structuredComm      String? // communication structurée normalisée (+++xxx/xxxx/xxxxx+++)
   side                String? // "in" (crédit / encaissement) | "out" (débit / paiement)
   matchedLedgerId     String?
   matchedDocumentId   String?
-  matchedDocument     Document? @relation("DocumentBankMatches", fields: [matchedDocumentId], references: [id])
+  matchedDocument     Document?    @relation("DocumentBankMatches", fields: [matchedDocumentId], references: [id])
   matchConfidence     String? // "strong" | "good" | "manual"
   matchedAt           DateTime?
   source              String? // "xlsx" | "ponto"
-  createdAt           DateTime  @default(now())
+  createdAt           DateTime     @default(now())
 
   @@index([bookingDate])
   @@index([matchedLedgerId])
@@ -903,6 +905,49 @@ model WorksiteTask {
 
   @@index([worksiteId])
   @@index([status])
+}
+
+// ─────────────────────────────────────────────────────────── Stock de matériaux
+
+/// Article du dépôt de matériaux (distinct du parc d'outillage Bricoloc géré ailleurs).
+/// La quantité et le coût moyen pondéré sont dénormalisés ici pour la lecture rapide,
+/// recalculés à chaque mouvement (StockMovement) — jamais modifiés directement.
+model StockItem {
+  id        String   @id @default(cuid())
+  name      String
+  unit      String // "sac" | "m²" | "u" | "L" | …
+  category  String?
+  minQty    Float? // seuil d'alerte réappro
+  qty       Float    @default(0)
+  avgCost   Float? // coût unitaire moyen pondéré (mis à jour sur chaque entrée)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  movements StockMovement[]
+
+  @@index([active])
+}
+
+/// Bon d'entrée / de sortie / d'inventaire. Historique immuable (jamais modifié après coup,
+/// une correction se fait par un nouveau mouvement — comme un grand livre).
+model StockMovement {
+  id              String    @id @default(cuid())
+  stockItemId     String
+  stockItem       StockItem @relation(fields: [stockItemId], references: [id], onDelete: Cascade)
+  type            String // "in" (entrée) | "out" (sortie chantier) | "adjustment" (inventaire)
+  qty             Float // toujours positive ; le sens est donné par `type`
+  unitCost        Float? // renseigné sur une entrée, alimente le coût moyen pondéré
+  worksiteId      String? // obligatoire pour une sortie
+  worksite        Worksite? @relation(fields: [worksiteId], references: [id])
+  requestedByName String? // « le demandeur » (personne qui reçoit la sortie sur chantier)
+  note            String?
+  createdById     String?
+  createdBy       User?     @relation("StockMovementBy", fields: [createdById], references: [id])
+  createdAt       DateTime  @default(now())
+
+  @@index([stockItemId, createdAt])
+  @@index([worksiteId])
 }
 
 // ─────────────────────────────────────────────────────────── Import & contrôle

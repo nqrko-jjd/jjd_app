@@ -220,6 +220,25 @@ export const expenseInput = z.object({
 });
 export type ExpenseInput = z.infer<typeof expenseInput>;
 
+export const stockItemInput = z.object({
+  name: z.string().trim().min(1),
+  unit: z.string().trim().min(1),
+  category: z.string().trim().nullish(),
+  minQty: z.coerce.number().min(0).nullish(),
+});
+export type StockItemInput = z.infer<typeof stockItemInput>;
+
+export const stockMovementInput = z.object({
+  stockItemId: z.string(),
+  type: z.enum(['in', 'out', 'adjustment']),
+  qty: z.coerce.number(), // positive pour in/out ; valeur cible (pas un delta) pour adjustment
+  unitCost: z.coerce.number().min(0).nullish(),
+  worksiteId: z.string().nullish(),
+  requestedByName: z.string().trim().nullish(),
+  note: z.string().trim().nullish(),
+});
+export type StockMovementInput = z.infer<typeof stockMovementInput>;
+
 export const worksiteReportInput = z.object({
   eventId: z.string().nullish(),
   date: z.coerce.date().optional(),

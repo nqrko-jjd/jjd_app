@@ -14,9 +14,42 @@
  * l'excluent explicitement (voir lib/dashboard.ts, consolidated.ts, analytics.ts).
  * Ne JAMAIS retirer ce marquage sans vérifier ces exclusions.
  */
+import { mkdirSync, existsSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { PrismaClient } from '@prisma/client';
+import sharp from 'sharp';
+import { nanoid } from 'nanoid';
 import { normalizeName, computeDocTotals, belgianStructuredComm } from '@jjd/shared';
-import { storeImage, storeFile } from '../src/lib/media.js';
+
+// Stockage local, dupliqué en miniature de lib/media.ts plutôt qu'importé : ce script tourne
+// via `tsx` dans le conteneur de PRODUCTION, où seul le code compilé (dist/) est présent —
+// un import relatif vers ../src/lib/… n'y existe pas (contrairement à un environnement de dev).
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(root, 'uploads');
+
+async function storeImage(buffer: Buffer): Promise<{ url: string; thumbUrl: string }> {
+  const now = new Date();
+  const rel = path.join('media', String(now.getFullYear()), String(now.getMonth() + 1).padStart(2, '0'));
+  const dir = path.join(UPLOADS_DIR, rel);
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  const id = nanoid(14);
+  const img = sharp(buffer, { failOn: 'none' }).rotate();
+  await img.clone().resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true }).webp({ quality: 82 }).toFile(path.join(dir, `${id}.webp`));
+  await img.clone().resize({ width: 480, height: 480, fit: 'inside', withoutEnlargement: true }).webp({ quality: 72 }).toFile(path.join(dir, `${id}_t.webp`));
+  const base = `/uploads/${rel.replace(/\\/g, '/')}`;
+  return { url: `${base}/${id}.webp`, thumbUrl: `${base}/${id}_t.webp` };
+}
+function storeFile(buffer: Buffer, originalName: string, subdir = 'files'): string {
+  const now = new Date();
+  const rel = path.join(subdir, String(now.getFullYear()), String(now.getMonth() + 1).padStart(2, '0'));
+  const dir = path.join(UPLOADS_DIR, rel);
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  const ext = (originalName.match(/\.[a-z0-9]+$/i)?.[0] ?? '').toLowerCase();
+  const name = `${nanoid(14)}${ext}`;
+  writeFileSync(path.join(dir, name), buffer);
+  return `/uploads/${rel.replace(/\\/g, '/')}/${name}`;
+}
 
 const prisma = new PrismaClient();
 const REF = 'DEMO-1';

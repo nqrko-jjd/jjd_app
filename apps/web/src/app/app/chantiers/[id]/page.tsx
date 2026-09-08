@@ -248,6 +248,9 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
         title="Devis & factures"
         summary={w.documents.length ? `${w.documents.length} · ${formatEuro(w.documents.reduce((s, d) => s + d.totalHt, 0))} HT` : 'Aucun'}
       >
+        {data.margin && data.margin.quotedHt > 0 && (
+          <InvoicedProgress invoicedHt={data.margin.invoicedHt} quotedHt={data.margin.quotedHt} />
+        )}
         {w.documents.length === 0 ? (
           <p className="muted" style={{ margin: 0 }}>Aucun devis / facture rattaché.</p>
         ) : (
@@ -273,6 +276,22 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
 
       <WorksiteExpenses worksiteId={w.id} />
     </>
+  );
+}
+
+/** Barre « facturé vs devisé », sous la table Devis & factures (le donut « Avancement » en résume l'essentiel plus haut). */
+function InvoicedProgress({ invoicedHt, quotedHt }: { invoicedHt: number; quotedHt: number }) {
+  const pct = Math.max(0, Math.round((invoicedHt / quotedHt) * 100));
+  return (
+    <div style={{ marginBottom: '1rem' }}>
+      <div className="row" style={{ justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '0.3rem' }}>
+        <span className="muted">Facturé à ce jour</span>
+        <strong>{formatEuro(invoicedHt)} / {formatEuro(quotedHt)} devisé · {pct}%</strong>
+      </div>
+      <div className="progress-bar">
+        <div className={`progress-fill${pct > 100 ? ' over' : ''}`} style={{ width: `${Math.min(100, pct)}%` }} />
+      </div>
+    </div>
   );
 }
 

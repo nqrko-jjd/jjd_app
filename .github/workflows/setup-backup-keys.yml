@@ -1,19 +1,24 @@
-name: Autoriser une clé de pull de sauvegarde (NAS)
+name: Gérer les clés de pull de sauvegarde (NAS)
 
-# Usage ponctuel (workflow_dispatch) : ajoute une ou plusieurs clés publiques
-# SSH à ~/.ssh/authorized_keys sur le VPS, restreintes en lecture seule au
+# Usage ponctuel (workflow_dispatch) : ajoute et/ou révoque des clés publiques
+# SSH dans ~/.ssh/authorized_keys sur le VPS, restreintes en lecture seule au
 # dossier backups/ via deploy/rrsync-backups.sh (aucun shell, aucune écriture
 # possible avec ces clés). Réutilise les mêmes secrets que deploy.yml.
 # Idempotent : une clé déjà présente (même contenu) n'est pas dupliquée.
 #
-# add_pubkeys : une clé publique par ligne (format « ssh-ed25519 AAAA... label »).
+# add_pubkeys / remove_pubkeys : une clé publique par ligne
+# (format « ssh-ed25519 AAAA... label »). Les deux sont facultatives.
 
 on:
   workflow_dispatch:
     inputs:
       add_pubkeys:
         description: "Clé(s) publique(s) à autoriser, une par ligne"
-        required: true
+        required: false
+        type: string
+      remove_pubkeys:
+        description: "Clé(s) publique(s) à révoquer, une par ligne"
+        required: false
         type: string
 
 jobs:
@@ -28,7 +33,7 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script_stop: true
           command_timeout: 5m
-          envs: ADD_PUBKEYS
+          envs: ADD_PUBKEYS,REMOVE_PUBKEYS
           script: |
             set -e
             cd "${{ secrets.VPS_PATH }}"
@@ -42,6 +47,7 @@ jobs:
             chmod 700 ~/.ssh
             chmod 600 ~/.ssh/authorized_keys
             WRAPPER="$(pwd)/deploy/rrsync-backups.sh"
+
             while IFS= read -r pk; do
               if [ -z "$pk" ]; then continue; fi
               keybody=$(echo "$pk" | awk '{print $2}')
@@ -52,5 +58,19 @@ jobs:
               echo "command=\"$WRAPPER\",no-agent-forwarding,no-port-forwarding,no-pty,no-user-rc,no-X11-forwarding $pk" >> ~/.ssh/authorized_keys
               echo "ajoutée : $(echo "$pk" | awk '{print $3}')"
             done <<< "$ADD_PUBKEYS"
+
+            while IFS= read -r pk; do
+              if [ -z "$pk" ]; then continue; fi
+              keybody=$(echo "$pk" | awk '{print $2}')
+              if grep -qF "$keybody" ~/.ssh/authorized_keys 2>/dev/null; then
+                grep -vF "$keybody" ~/.ssh/authorized_keys > ~/.ssh/authorized_keys.tmp
+                mv ~/.ssh/authorized_keys.tmp ~/.ssh/authorized_keys
+                chmod 600 ~/.ssh/authorized_keys
+                echo "révoquée : $(echo "$pk" | awk '{print $3}')"
+              else
+                echo "absente (rien à révoquer) : $(echo "$pk" | awk '{print $3}')"
+              fi
+            done <<< "$REMOVE_PUBKEYS"
         env:
           ADD_PUBKEYS: ${{ inputs.add_pubkeys }}
+          REMOVE_PUBKEYS: ${{ inputs.remove_pubkeys }}

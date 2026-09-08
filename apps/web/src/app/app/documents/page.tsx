@@ -1,5 +1,5 @@
 'use client';
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
@@ -49,13 +49,21 @@ function DocumentsInner() {
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [exporting, setExporting] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(100);
   const active = TABS.find((t) => t.key === tab)!;
+
+  // revient à la 1ère page à chaque changement de filtre/onglet
+  useEffect(() => { setPage(1); }, [tab, status, q]);
+
   const params = new URLSearchParams();
   if (active.kind) params.set('kind', active.kind);
   if (active.scope) params.set('scope', active.scope);
   if (status && active.kind) params.set('status', status);
   if (q) params.set('q', q);
-  const { data, loading, reload } = useApi<{ items: Row[] }>(`/api/documents?${params}`);
+  params.set('page', String(page));
+  params.set('pageSize', String(pageSize));
+  const { data, loading, reload } = useApi<{ items: Row[]; page: number; pageSize: number; totalPages: number; totalCount: number }>(`/api/documents?${params}`);
   const ctx = useContextMenu<Row>();
   const statusOptions = active.kind ? (STATUS_BY_KIND[active.kind] ?? []) : [];
 
@@ -147,7 +155,7 @@ function DocumentsInner() {
       {ctx.menu && <ContextMenu x={ctx.menu.x} y={ctx.menu.y} items={rowMenu(ctx.menu.row)} onClose={ctx.close} />}
       <PageHead
         title="Devis & factures"
-        sub="Création, émission, suivi des paiements · clic droit sur une ligne pour les actions rapides"
+        sub={data ? `${data.totalCount} document${data.totalCount > 1 ? 's' : ''} · page ${data.page}/${data.totalPages} · clic droit pour les actions rapides` : 'Création, émission, suivi des paiements'}
         action={
           <div className="row">
             {selected.size > 0 && (
@@ -236,6 +244,25 @@ function DocumentsInner() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {data && data.totalPages > 1 && (
+        <div className="row" style={{ marginTop: '0.8rem', gap: '0.5rem', alignItems: 'center' }}>
+          <button className="btn" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>← Précédent</button>
+          <span className="muted">Page {data.page} / {data.totalPages}</span>
+          <button className="btn" disabled={page >= data.totalPages} onClick={() => setPage((p) => p + 1)}>Suivant →</button>
+          <select
+            className="select"
+            style={{ maxWidth: 140, marginLeft: 'auto' }}
+            value={pageSize}
+            onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
+          >
+            <option value={50}>50 / page</option>
+            <option value={100}>100 / page</option>
+            <option value={200}>200 / page</option>
+            <option value={500}>500 / page</option>
+          </select>
         </div>
       )}
     </>

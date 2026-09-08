@@ -59,7 +59,7 @@ documentsRouter.get(
   '/',
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
-    const { kind, status, q, worksiteId, contactId, scope } = req.query as Record<string, string>;
+    const { kind, status, q, worksiteId, contactId, scope, page: pageStr, pageSize: pageSizeStr } = req.query as Record<string, string>;
     const where: Record<string, unknown> = {};
     if (kind) where.kind = kind;
     if (status) where.status = status;
@@ -77,16 +77,23 @@ documentsRouter.get(
         { worksite: { ref: { contains: q } } },
       ];
     }
-    const items = await prisma.document.findMany({
-      where,
-      orderBy: [{ issuedOn: 'desc' }, { createdAt: 'desc' }],
-      take: 5000,
-      include: {
-        worksite: { select: { id: true, ref: true, title: true } },
-        contact: { select: { id: true, name: true } },
-      },
-    });
-    res.json({ items });
+    const page = Math.max(1, Math.trunc(Number(pageStr)) || 1);
+    // plafond haut : l'app mobile (écran Devis & factures) charge tout en une fois et cherche côté client
+    const pageSize = Math.min(5000, Math.max(20, Math.trunc(Number(pageSizeStr)) || 100));
+    const [items, totalCount] = await Promise.all([
+      prisma.document.findMany({
+        where,
+        orderBy: [{ issuedOn: 'desc' }, { createdAt: 'desc' }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: {
+          worksite: { select: { id: true, ref: true, title: true } },
+          contact: { select: { id: true, name: true } },
+        },
+      }),
+      prisma.document.count({ where }),
+    ]);
+    res.json({ items, page, pageSize, totalCount, totalPages: Math.max(1, Math.ceil(totalCount / pageSize)) });
   }),
 );
 

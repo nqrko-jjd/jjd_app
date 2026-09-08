@@ -41,7 +41,8 @@ export default function Documents() {
         ))}
       </View>
       <ResourceList<Doc>
-        endpoint={`/api/documents?kind=${kind}`}
+        // pageSize élevé : cet écran charge tout en une fois et filtre côté client (recherche en direct)
+        endpoint={`/api/documents?kind=${kind}&pageSize=5000`}
         search={(d, q) =>
           (d.number ?? d.draftRef ?? '').toLowerCase().includes(q) ||
           (d.title ?? '').toLowerCase().includes(q) ||

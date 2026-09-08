@@ -1,5 +1,5 @@
 'use client';
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import { PageHead, StatusBadge, PriorityBadge, EntityBadge, Money, formatDateBE } from '@/lib/ui';
 import { FormModal, type FieldDef } from '@/components/FormModal';
 import { ContextMenu, useContextMenu, openActions, type MenuItem } from '@/components/ContextMenu';
+import { PaginationBar } from '@/components/PaginationBar';
 import { useSort, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
 import { WORKSITE_STATUS_LABEL, WORKSITE_STATUSES, WORKSITE_PRIORITIES, WORKSITE_PRIORITY_LABEL, ENTITIES, ENTITY_LABEL } from '@jjd/shared';
@@ -33,12 +34,19 @@ function ChantiersInner() {
   const [status, setStatus] = useState(sp.get('statut') ?? '');
   const [kind, setKind] = useState<'project' | 'overhead'>('project');
   const [creating, setCreating] = useState(sp.get('new') === '1');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(100);
   const ctx = useContextMenu<WS>();
+
+  useEffect(() => { setPage(1); }, [q, status, kind]);
+
   const params = new URLSearchParams();
   if (q) params.set('q', q);
   if (status) params.set('status', status);
   params.set('kind', kind);
-  const { data, loading, reload } = useApi<{ items: WS[] }>(`/api/worksites?${params}`);
+  params.set('page', String(page));
+  params.set('pageSize', String(pageSize));
+  const { data, loading, reload } = useApi<{ items: WS[]; page: number; pageSize: number; totalPages: number; totalCount: number }>(`/api/worksites?${params}`);
   const sort = useSort<WS>(data?.items ?? [], {
     ref: (w) => w.ref,
     title: (w) => w.title,
@@ -118,7 +126,7 @@ function ChantiersInner() {
       )}
       <PageHead
         title={kind === 'project' ? 'Chantiers' : 'Charges'}
-        sub={data ? `${data.items.length} ${kind === 'project' ? 'chantiers' : 'postes de charges'} · clic droit sur une ligne pour les actions rapides` : undefined}
+        sub={data ? `${data.totalCount} ${kind === 'project' ? 'chantiers' : 'postes de charges'} · page ${data.page}/${data.totalPages} · clic droit pour les actions rapides` : undefined}
         action={kind === 'project' ? <button className="btn primary" onClick={() => setCreating(true)}>+ Nouveau chantier</button> : undefined}
       />
       <div className="seg" style={{ marginBottom: '1rem' }}>
@@ -174,6 +182,10 @@ function ChantiersInner() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {data && (
+        <PaginationBar page={data.page} totalPages={data.totalPages} pageSize={pageSize} onPage={setPage} onPageSize={(s) => { setPageSize(s); setPage(1); }} />
       )}
     </>
   );

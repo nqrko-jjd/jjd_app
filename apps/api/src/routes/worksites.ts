@@ -32,7 +32,7 @@ worksitesRouter.get(
   '/',
   requireAuth(...STAFF),
   asyncHandler(async (req, res) => {
-    const { status, entity, q, archived, kind } = req.query as Record<string, string>;
+    const { status, entity, q, archived, kind, page: pageStr, pageSize: pageSizeStr } = req.query as Record<string, string>;
     const where: Record<string, unknown> = { archived: archived === '1' ? true : false, kind: kind || 'project' };
     if (status) where.status = status;
     if (entity) where.entity = entity;
@@ -43,17 +43,26 @@ worksitesRouter.get(
         { city: { contains: q } },
       ];
     }
-    const items = await prisma.worksite.findMany({
-      where,
-      orderBy: { updatedAt: 'desc' },
-      take: 5000,
-      include: {
-        client: { select: { id: true, name: true } },
-        building: { select: { id: true, name: true } },
-        manager: { select: { id: true, displayName: true, firstName: true } },
-      },
-    });
-    res.json({ items });
+    // pagination facultative (page absent = comportement historique « tout charger », utilisé par
+    // le picker de planning et l'appli mobile) ; la page « Chantiers » du web l'active en passant page=.
+    const paginated = pageStr !== undefined;
+    const page = Math.max(1, Math.trunc(Number(pageStr)) || 1);
+    const pageSize = paginated ? Math.min(500, Math.max(20, Math.trunc(Number(pageSizeStr)) || 100)) : 5000;
+    const [items, totalCount] = await Promise.all([
+      prisma.worksite.findMany({
+        where,
+        orderBy: { updatedAt: 'desc' },
+        skip: paginated ? (page - 1) * pageSize : 0,
+        take: pageSize,
+        include: {
+          client: { select: { id: true, name: true } },
+          building: { select: { id: true, name: true } },
+          manager: { select: { id: true, displayName: true, firstName: true } },
+        },
+      }),
+      prisma.worksite.count({ where }),
+    ]);
+    res.json({ items, page, pageSize, totalCount, totalPages: Math.max(1, Math.ceil(totalCount / pageSize)) });
   }),
 );
 

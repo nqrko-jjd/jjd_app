@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { PageHead, formatDateBE } from '@/lib/ui';
+import { PaginationBar } from '@/components/PaginationBar';
 
 interface Unit {
   assetTag: string;
@@ -244,6 +245,13 @@ export default function MaterielPage() {
       .filter((p) => !q || `${p.name} ${p.brand ?? ''} ${p.category ?? ''}`.toLowerCase().includes(q));
   }, [products, search]);
 
+  // pagination côté client : le parc Bricoloc est chargé d'un coup (pas d'API paginée côté partenaire)
+  const [matPage, setMatPage] = useState(1);
+  const [matPageSize, setMatPageSize] = useState(50);
+  useEffect(() => { setMatPage(1); }, [search]);
+  const matTotalPages = Math.max(1, Math.ceil(filtered.length / matPageSize));
+  const paged = filtered.slice((matPage - 1) * matPageSize, matPage * matPageSize);
+
   const filteredCons = useMemo(() => {
     const q = search.trim().toLowerCase();
     return consumables.filter((c) => !q || `${c.name} ${c.shortDescription ?? ''}`.toLowerCase().includes(q));
@@ -417,7 +425,7 @@ export default function MaterielPage() {
           {loading && !stock && <div className="empty">Chargement du parc…</div>}
 
           <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
-            {filtered.map((p) => (
+            {paged.map((p) => (
               <button
                 key={p.id}
                 onClick={() => setOpenId(p.id)}
@@ -446,6 +454,8 @@ export default function MaterielPage() {
           </div>
 
           {!loading && filtered.length === 0 && <div className="empty">Aucun outil.</div>}
+
+          <PaginationBar page={matPage} totalPages={matTotalPages} pageSize={matPageSize} onPage={setMatPage} onPageSize={(s) => { setMatPageSize(s); setMatPage(1); }} sizes={[24, 50, 100]} />
 
           {open && (
             <div className="modal-scrim" onClick={() => { setOpenId(null); setCheckoutTarget(null); setReturnTarget(null); }}>

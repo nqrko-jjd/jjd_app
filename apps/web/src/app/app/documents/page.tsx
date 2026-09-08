@@ -7,6 +7,7 @@ import { api, apiBlobUrl } from '@/lib/api';
 import { PageHead, Money, formatDateBE } from '@/lib/ui';
 import { DocStatusBadge, DOC_KIND_LABEL } from '@/lib/doc-ui';
 import { ContextMenu, useContextMenu, openActions, type MenuItem } from '@/components/ContextMenu';
+import { PaginationBar } from '@/components/PaginationBar';
 import { useSort, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
 import { DOC_STATUS_LABEL } from '@jjd/shared';
@@ -247,23 +248,8 @@ function DocumentsInner() {
         </div>
       )}
 
-      {data && data.totalPages > 1 && (
-        <div className="row" style={{ marginTop: '0.8rem', gap: '0.5rem', alignItems: 'center' }}>
-          <button className="btn" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>← Précédent</button>
-          <span className="muted">Page {data.page} / {data.totalPages}</span>
-          <button className="btn" disabled={page >= data.totalPages} onClick={() => setPage((p) => p + 1)}>Suivant →</button>
-          <select
-            className="select"
-            style={{ maxWidth: 140, marginLeft: 'auto' }}
-            value={pageSize}
-            onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
-          >
-            <option value={50}>50 / page</option>
-            <option value={100}>100 / page</option>
-            <option value={200}>200 / page</option>
-            <option value={500}>500 / page</option>
-          </select>
-        </div>
+      {data && (
+        <PaginationBar page={data.page} totalPages={data.totalPages} pageSize={pageSize} onPage={setPage} onPageSize={(s) => { setPageSize(s); setPage(1); }} />
       )}
     </>
   );

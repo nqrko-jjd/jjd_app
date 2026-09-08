@@ -1,5 +1,5 @@
 'use client';
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import { PageHead } from '@/lib/ui';
 import { FormModal } from '@/components/FormModal';
 import { ContextMenu, useContextMenu, openActions, type MenuItem } from '@/components/ContextMenu';
+import { PaginationBar } from '@/components/PaginationBar';
 import { useSort, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
 import { CONTACT_FIELDS } from '@/lib/forms';
@@ -36,10 +37,17 @@ function ContactsInner() {
   const [q, setQ] = useState('');
   const [type, setType] = useState('all');
   const [creating, setCreating] = useState(sp.get('new') === '1');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(100);
   const ctx = useContextMenu<Contact>();
+
+  useEffect(() => { setPage(1); }, [q, type]);
+
   const params = new URLSearchParams({ type });
   if (q) params.set('q', q);
-  const { data, loading, reload } = useApi<{ items: Contact[] }>(`/api/contacts?${params}`);
+  params.set('page', String(page));
+  params.set('pageSize', String(pageSize));
+  const { data, loading, reload } = useApi<{ items: Contact[]; page: number; pageSize: number; totalPages: number; totalCount: number }>(`/api/contacts?${params}`);
   const { data: pick } = useApi<{ buildings: { id: string; name: string }[] }>('/api/meta/pickers');
 
   async function patch(id: string, body: Record<string, unknown>) {
@@ -89,7 +97,7 @@ function ContactsInner() {
       )}
       <PageHead
         title="Contacts"
-        sub={data ? `${data.items.length} affichés · clic droit sur une ligne pour les actions rapides` : undefined}
+        sub={data ? `${data.totalCount} contacts · page ${data.page}/${data.totalPages} · clic droit pour les actions rapides` : undefined}
         action={<button className="btn primary" onClick={() => setCreating(true)}>+ Nouveau contact</button>}
       />
       <div className="row" style={{ marginBottom: '1rem' }}>
@@ -137,6 +145,10 @@ function ContactsInner() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {data && (
+        <PaginationBar page={data.page} totalPages={data.totalPages} pageSize={pageSize} onPage={setPage} onPageSize={(s) => { setPageSize(s); setPage(1); }} />
       )}
     </>
   );

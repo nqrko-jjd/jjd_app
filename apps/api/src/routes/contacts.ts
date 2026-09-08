@@ -10,23 +10,31 @@ contactsRouter.get(
   '/',
   requireAuth(...STAFF),
   asyncHandler(async (req, res) => {
-    const { type, q } = req.query as Record<string, string>;
+    const { type, q, page: pageStr, pageSize: pageSizeStr } = req.query as Record<string, string>;
     const where: Record<string, unknown> = {};
     if (type && type !== 'all') where.OR = [{ type }, { type: 'both' }];
     if (q) {
       where.AND = [{ OR: [{ name: { contains: q } }, { city: { contains: q } }, { vat: { contains: q } }] }];
     }
-    const items = await prisma.contact.findMany({
-      where,
-      orderBy: { name: 'asc' },
-      take: 5000,
-      include: {
-        syndic: { select: { id: true, name: true } },
-        building: { select: { id: true, name: true } },
-        _count: { select: { worksites: true } },
-      },
-    });
-    res.json({ items });
+    // pagination facultative (page absent = tout charger, utilisé par l'appli mobile)
+    const paginated = pageStr !== undefined;
+    const page = Math.max(1, Math.trunc(Number(pageStr)) || 1);
+    const pageSize = paginated ? Math.min(500, Math.max(20, Math.trunc(Number(pageSizeStr)) || 100)) : 5000;
+    const [items, totalCount] = await Promise.all([
+      prisma.contact.findMany({
+        where,
+        orderBy: { name: 'asc' },
+        skip: paginated ? (page - 1) * pageSize : 0,
+        take: pageSize,
+        include: {
+          syndic: { select: { id: true, name: true } },
+          building: { select: { id: true, name: true } },
+          _count: { select: { worksites: true } },
+        },
+      }),
+      prisma.contact.count({ where }),
+    ]);
+    res.json({ items, page, pageSize, totalCount, totalPages: Math.max(1, Math.ceil(totalCount / pageSize)) });
   }),
 );
 

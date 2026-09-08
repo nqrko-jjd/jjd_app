@@ -25,9 +25,11 @@ export function ChantierThread({ worksiteId }: { worksiteId: string }) {
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [importMsg, setImportMsg] = useState<string | null>(null);
+  const [tab, setTab] = useState<'chat' | 'gallery'>('chat');
   const fileRef = useRef<HTMLInputElement>(null);
   const zipRef = useRef<HTMLInputElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const media = (data?.messages ?? []).filter((m) => (m.kind === 'photo' || m.kind === 'video') && m.fileUrl);
 
   useEffect(() => { endRef.current?.scrollIntoView(); }, [data?.messages.length]);
 
@@ -115,6 +117,31 @@ export function ChantierThread({ worksiteId }: { worksiteId: string }) {
         </div>
       )}
 
+      <div className="thread-tabs">
+        <button type="button" className={`thread-tab${tab === 'chat' ? ' active' : ''}`} onClick={() => setTab('chat')}>💬 Discussion</button>
+        <button type="button" className={`thread-tab${tab === 'gallery' ? ' active' : ''}`} onClick={() => setTab('gallery')}>
+          🖼️ Galerie{media.length ? ` (${media.length})` : ''}
+        </button>
+      </div>
+
+      {tab === 'gallery' ? (
+        media.length === 0 ? (
+          <div className="muted" style={{ padding: '1rem 1.15rem' }}>Aucune photo ni vidéo pour l’instant.</div>
+        ) : (
+          <div className="thread-gallery">
+            {media.map((m) => (
+              <a key={m.id} href={m.fileUrl!} target="_blank" rel="noreferrer" title={`${m.authorName ?? ''} · ${time(m.createdAt)}${m.body ? ` · ${m.body}` : ''}`}>
+                {m.kind === 'photo' ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={m.thumbUrl ?? m.fileUrl!} alt="" />
+                ) : (
+                  <video src={m.fileUrl!} preload="metadata" muted />
+                )}
+              </a>
+            ))}
+          </div>
+        )
+      ) : (
       <div style={{ maxHeight: 460, overflowY: 'auto', padding: '1rem 1.15rem', display: 'flex', flexDirection: 'column', gap: '0.7rem' }}>
         {data.messages.length === 0 && <div className="muted">Aucun message. Lance la conversation ci-dessous.</div>}
         {data.messages.map((m) => (
@@ -143,20 +170,23 @@ export function ChantierThread({ worksiteId }: { worksiteId: string }) {
         ))}
         <div ref={endRef} />
       </div>
+      )}
 
-      <div className="row" style={{ padding: '0.8rem 1.15rem', borderTop: '1px solid var(--line)', gap: '0.5rem' }}>
-        <input
-          className="input"
-          placeholder="Écrire un message…"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), send())}
-          style={{ flex: 1 }}
-        />
-        <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => upload(e.target.files)} />
-        <button className="btn" onClick={() => fileRef.current?.click()} disabled={busy}>📷</button>
-        <button className="btn primary" onClick={send} disabled={busy || !text.trim()}>Envoyer</button>
-      </div>
+      {tab === 'chat' && (
+        <div className="row" style={{ padding: '0.8rem 1.15rem', borderTop: '1px solid var(--line)', gap: '0.5rem' }}>
+          <input
+            className="input"
+            placeholder="Écrire un message…"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), send())}
+            style={{ flex: 1 }}
+          />
+          <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => upload(e.target.files)} />
+          <button className="btn" onClick={() => fileRef.current?.click()} disabled={busy}>📷</button>
+          <button className="btn primary" onClick={send} disabled={busy || !text.trim()}>Envoyer</button>
+        </div>
+      )}
     </div>
   );
 }

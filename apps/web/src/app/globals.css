@@ -365,6 +365,21 @@ p { margin: 0; }
 .collapsible-summary { margin-left: auto; font-size: 0.85rem; color: var(--ink-2); font-weight: 600; white-space: nowrap; padding-left: 0.6rem; }
 .collapsible-body { margin-top: 0.9rem; }
 
+/* ---------------------------------------------------- fil de chantier : onglets & galerie */
+.thread-tabs { display: flex; gap: 1.1rem; padding: 0 1.15rem; border-bottom: 1px solid var(--line); }
+.thread-tab {
+  background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; font: inherit;
+  padding: 0.65rem 0.1rem; font-size: 0.85rem; font-weight: 600; color: var(--ink-3);
+}
+.thread-tab.active { color: var(--ink); border-bottom-color: var(--primary); }
+.thread-gallery {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 0.5rem;
+  padding: 1rem 1.15rem; max-height: 460px; overflow-y: auto;
+}
+.thread-gallery img, .thread-gallery video {
+  width: 100%; aspect-ratio: 1 / 1; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); display: block;
+}
+
 /* ---------------------------------------------------- analyse / graphiques */
 .chart-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(178px, 1fr)); gap: 0.9rem; margin-bottom: 1.6rem; }
 @media (max-width: 460px) { .chart-tiles { grid-template-columns: 1fr 1fr; } }

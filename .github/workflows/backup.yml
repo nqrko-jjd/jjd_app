@@ -1,0 +1,36 @@
+name: Sauvegarde hebdomadaire JJD
+
+# Dump PostgreSQL + archive des médias sur le VPS, chaque dimanche à 3h (UTC).
+# Réutilise les secrets SSH de deploy.yml (mêmes VPS_HOST/VPS_USER/VPS_SSH_KEY/
+# VPS_PATH — aucun secret supplémentaire à ajouter). Le résultat est stocké
+# dans /opt/jjd-backups sur le VPS, en dehors du dépôt (donc jamais écrasé
+# par le déploiement). Voir deploy/backup.sh.
+#
+# Déclenchement manuel possible : onglet Actions → « Sauvegarde hebdomadaire
+# JJD » → Run workflow.
+
+on:
+  schedule:
+    - cron: '0 3 * * 0'   # dimanche 03:00 UTC (≈ 4-5h Belgique selon l'heure d'été)
+  workflow_dispatch: {}
+
+concurrency:
+  group: backup-jjd-vps
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sauvegarder via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script_stop: true
+          command_timeout: 20m
+          script: |
+            set -e
+            cd "${{ secrets.VPS_PATH }}"
+            bash deploy/backup.sh

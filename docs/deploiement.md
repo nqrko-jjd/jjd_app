@@ -197,18 +197,31 @@ L'API relance `db:deploy` à chaque fois (idempotent).
 
 ## 8. Sauvegardes
 
-Cron quotidien sur le VPS :
+**Automatique** : `.github/workflows/backup.yml` — chaque dimanche à 3h (+ déclenchement
+manuel via Actions → *Sauvegarde hebdomadaire JJD* → *Run workflow*), se connecte
+en SSH (mêmes secrets que le déploiement, rien à ajouter) et lance `deploy/backup.sh`
+sur le VPS :
+
+- dump PostgreSQL compressé (`pg_dump | gzip`)
+- archive des médias (`uploads`, photos/PDF)
+- écrit dans `/opt/jjd-backups`, **en dehors du dépôt git** (jamais touché par
+  le `git reset --hard` du déploiement)
+- purge automatiquement ce qui a plus de 45 jours (~6 sauvegardes hebdo conservées)
+
+Vérifier que ça tourne : onglet **Actions** du dépôt GitHub → *Sauvegarde
+hebdomadaire JJD*. Un échec y apparaît (et génère la notification GitHub
+habituelle). Lister/récupérer les fichiers sur le VPS :
 
 ```bash
-# dump base
-docker compose -f /opt/jjd/docker-compose.prod.yml --env-file /opt/jjd/.env.production \
-  exec -T db pg_dump -U jjd jjd | gzip > /opt/backups/jjd-$(date +\%F).sql.gz
-# médias
-docker run --rm -v jjd_uploads:/u -v /opt/backups:/b alpine \
-  tar czf /b/jjd-uploads-$(date +\%F).tar.gz -C /u .
+ls -lh /opt/jjd-backups
+scp bricoloc@136.144.209.157:/opt/jjd-backups/jjd-db-2026-09-06.sql.gz .
 ```
 
-Copier `/opt/backups/` vers un stockage externe.
+⚠️ Ces sauvegardes restent **sur le même serveur** que l'application : elles
+protègent contre une erreur humaine, un bug ou une mauvaise migration, mais
+pas contre la perte du VPS lui-même. Pour une copie hors-site (recommandé à
+terme), il faudrait ajouter une destination externe (stockage cloud, `rclone`,
+etc.) — nécessite un compte/des identifiants à fournir.
 
 ---
 

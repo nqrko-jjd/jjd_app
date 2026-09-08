@@ -1,6 +1,7 @@
 'use client';
 import { use, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { PageHead, StatusBadge, PriorityBadge, EntityBadge, Money, formatDateBE } from '@/lib/ui';
@@ -39,12 +40,35 @@ interface Detail {
 
 export default function ChantierDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const router = useRouter();
   const { data, loading, reload } = useApi<Detail>(`/api/worksites/${id}`);
   const [editing, setEditing] = useState(false);
+  const [invoicing, setInvoicing] = useState<string | null>(null);
 
   if (loading) return <div className="empty">Chargement…</div>;
   if (!data) return <div className="empty">Chantier introuvable.</div>;
   const w = data.worksite;
+
+  /** Raccourci « Facturer » depuis un rapport signé : ouvre une facture pré-remplie
+   * (chantier, client, texte de départ repris du rapport) — le bureau chiffre les lignes. */
+  async function invoiceFromReport(r: Detail['worksite']['reports'][number]) {
+    setInvoicing(r.id);
+    try {
+      const { document } = await api<{ document: { id: string } }>('/api/documents', { method: 'POST', body: { kind: 'invoice' } });
+      await api(`/api/documents/${document.id}`, {
+        method: 'PATCH',
+        body: {
+          worksiteId: w.id,
+          contactId: w.client?.id ?? null,
+          title: `Intervention du ${formatDateBE(r.date)}`,
+          intro: r.workDone ?? undefined,
+        },
+      });
+      router.push(`/app/documents/${document.id}`);
+    } finally {
+      setInvoicing(null);
+    }
+  }
 
   const editFields: FieldDef[] = [
     { name: 'title', label: 'Intitulé', required: true, full: true },
@@ -183,7 +207,20 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
                   {r.photos.length > 4 && <span className="muted" style={{ fontSize: '0.8rem', alignSelf: 'center' }}>+{r.photos.length - 4}</span>}
                 </div>
               )}
-              <a className="btn" style={{ marginTop: '0.6rem', padding: '0.25rem 0.6rem', fontSize: '0.78rem' }} href={`/rapport/${r.id}`} target="_blank" rel="noreferrer">Voir / imprimer →</a>
+              <div className="row" style={{ gap: '0.4rem', marginTop: '0.6rem' }}>
+                <a className="btn" style={{ padding: '0.25rem 0.6rem', fontSize: '0.78rem' }} href={`/rapport/${r.id}`} target="_blank" rel="noreferrer">Voir / imprimer →</a>
+                {r.status === 'signed' && (
+                  <button
+                    className="btn primary"
+                    style={{ padding: '0.25rem 0.6rem', fontSize: '0.78rem' }}
+                    disabled={invoicing === r.id}
+                    onClick={() => invoiceFromReport(r)}
+                    title="Ouvre une nouvelle facture pré-remplie (chantier, client) pour ce chantier"
+                  >
+                    {invoicing === r.id ? 'Création…' : 'Facturer →'}
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </div>

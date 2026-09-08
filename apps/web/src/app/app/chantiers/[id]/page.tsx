@@ -49,16 +49,6 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
   if (!data) return <div className="empty">Chantier introuvable.</div>;
   const w = data.worksite;
 
-  // état d'avancement (simple) : cumul facturé (factures + acomptes, moins avoirs, hors brouillons) vs devisé
-  const invoicedHt = w.documents
-    .filter((d) => d.status !== 'draft')
-    .reduce((s, d) => {
-      if (d.kind === 'invoice' || d.kind === 'deposit_invoice') return s + d.totalHt;
-      if (d.kind === 'credit_note') return s - d.totalHt;
-      return s;
-    }, 0);
-  const invoicedPct = w.quotedHt ? Math.max(0, Math.round((invoicedHt / w.quotedHt) * 100)) : null;
-
   /** Raccourci « Facturer » depuis un rapport signé : ouvre une facture pré-remplie
    * (chantier, client, texte de départ repris du rapport) — le bureau chiffre les lignes. */
   async function invoiceFromReport(r: Detail['worksite']['reports'][number]) {
@@ -165,18 +155,33 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
           </div>
           <TransportDetail t={data.margin.transport} />
           <LabourDetail rows={data.margin.labour} />
-          {data.margin.totalCost > 0 && (
-            <div className="card card-pad" style={{ marginBottom: '1.5rem', maxWidth: 420 }}>
-              <div className="eyebrow" style={{ marginBottom: '0.6rem' }}>Répartition des coûts</div>
-              <Donut
-                data={[
-                  { label: 'Matériaux', total: data.margin.materialCost },
-                  { label: "Main-d'œuvre", total: data.margin.labourCost },
-                  { label: 'Véhicule', total: data.margin.vehicleCost },
-                ].filter((d) => d.total > 0)}
-              />
-            </div>
-          )}
+          <div className="row" style={{ gap: '1.2rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
+            {data.margin.totalCost > 0 && (
+              <div className="card card-pad" style={{ maxWidth: 420 }}>
+                <div className="eyebrow" style={{ marginBottom: '0.6rem' }}>Répartition des coûts</div>
+                <Donut
+                  data={[
+                    { label: 'Matériaux', total: data.margin.materialCost },
+                    { label: "Main-d'œuvre", total: data.margin.labourCost },
+                    { label: 'Véhicule', total: data.margin.vehicleCost },
+                  ].filter((d) => d.total > 0)}
+                />
+              </div>
+            )}
+            {data.margin.quotedHt > 0 && (
+              <div className="card card-pad" style={{ maxWidth: 420 }}>
+                <div className="eyebrow" style={{ marginBottom: '0.6rem' }}>
+                  Avancement <span className="hint">{Math.round((data.margin.invoicedHt / data.margin.quotedHt) * 100)}% facturé</span>
+                </div>
+                <Donut
+                  data={[
+                    { label: 'Facturé', total: data.margin.invoicedHt },
+                    { label: 'Reste à facturer', total: Math.max(0, data.margin.leftToInvoice) },
+                  ].filter((d) => d.total > 0)}
+                />
+              </div>
+            )}
+          </div>
         </>
       )}
 
@@ -241,15 +246,8 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
 
       <CollapsibleSection
         title="Devis & factures"
-        summary={
-          w.documents.length === 0 ? 'Aucun'
-            : invoicedPct != null ? `${invoicedPct}% facturé`
-            : `${w.documents.length} · ${formatEuro(w.documents.reduce((s, d) => s + d.totalHt, 0))} HT`
-        }
+        summary={w.documents.length ? `${w.documents.length} · ${formatEuro(w.documents.reduce((s, d) => s + d.totalHt, 0))} HT` : 'Aucun'}
       >
-        {w.quotedHt != null && w.quotedHt > 0 && (
-          <InvoicedProgress invoicedHt={invoicedHt} quotedHt={w.quotedHt} pct={invoicedPct!} />
-        )}
         {w.documents.length === 0 ? (
           <p className="muted" style={{ margin: 0 }}>Aucun devis / facture rattaché.</p>
         ) : (
@@ -275,21 +273,6 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
 
       <WorksiteExpenses worksiteId={w.id} />
     </>
-  );
-}
-
-/** État d'avancement (simple) : cumul facturé vs devisé, en barre de progression. */
-function InvoicedProgress({ invoicedHt, quotedHt, pct }: { invoicedHt: number; quotedHt: number; pct: number }) {
-  return (
-    <div style={{ marginBottom: '1rem' }}>
-      <div className="row" style={{ justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '0.3rem' }}>
-        <span className="muted">Facturé à ce jour</span>
-        <strong>{formatEuro(invoicedHt)} / {formatEuro(quotedHt)} devisé · {pct}%</strong>
-      </div>
-      <div className="progress-bar">
-        <div className={`progress-fill${pct > 100 ? ' over' : ''}`} style={{ width: `${Math.min(100, pct)}%` }} />
-      </div>
-    </div>
   );
 }
 

@@ -1,16 +1,59 @@
 import { Router } from 'express';
 import path from 'node:path';
-import { createReadStream, existsSync } from 'node:fs';
+import { createReadStream, existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { zipSync } from 'fflate';
 import { documentInput, priceItemInput, DOC_KIND_LABEL } from '@jjd/shared';
 import { prisma, nextCounter } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, OFFICE } from '../lib/auth.js';
 import { docInclude, buildLineRows, cloneLineRows, refreshDocTotals, issueDocument, getCompany } from '../lib/documents.js';
+import { renderDocumentPdf } from '../lib/pdf.js';
 
 export const documentsRouter = Router();
+const PDF_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../uploads/documents');
 
 /* ---------------------------------------------------------------- Documents */
+
+/** Buffer PDF d'un document : celui de TrustUp s'il existe, sinon généré à la volée. */
+async function getDocPdfBuffer(docId: string): Promise<{ buffer: Buffer; filename: string }> {
+  const doc = await prisma.document.findUnique({ where: { id: docId }, include: docInclude });
+  if (!doc) throw new HttpError(404, 'Document introuvable');
+  const filename = `${(doc.number ?? doc.draftRef ?? doc.id).replace(/[/\\]/g, '-')}.pdf`;
+  if (doc.originalPdf) {
+    const file = path.join(PDF_DIR, path.basename(doc.originalPdf));
+    if (existsSync(file)) return { buffer: readFileSync(file), filename };
+  }
+  const company = await getCompany();
+  const buffer = await renderDocumentPdf(doc, company);
+  return { buffer, filename };
+}
+
+/** Export groupé : plusieurs devis/factures/avoirs en un seul .zip (à glisser chez le comptable). */
+documentsRouter.get(
+  '/export.zip',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const ids = String(req.query.ids ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+    if (!ids.length) throw new HttpError(422, 'Aucun document sélectionné');
+    if (ids.length > 300) throw new HttpError(422, 'Trop de documents sélectionnés (300 max)');
+
+    const files: Record<string, Uint8Array> = {};
+    const used = new Set<string>();
+    for (const id of ids) {
+      const { buffer, filename } = await getDocPdfBuffer(id);
+      let name = filename;
+      let i = 2;
+      while (used.has(name)) { name = filename.replace(/\.pdf$/, `-${i}.pdf`); i++; }
+      used.add(name);
+      files[name] = new Uint8Array(buffer);
+    }
+    const zipped = zipSync(files, { level: 6 });
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="documents-${new Date().toISOString().slice(0, 10)}.zip"`);
+    res.send(Buffer.from(zipped));
+  }),
+);
 
 documentsRouter.get(
   '/',
@@ -58,8 +101,6 @@ documentsRouter.get(
   }),
 );
 
-const PDF_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../uploads/documents');
-
 /** PDF TrustUp d'origine (import). Authentifié, streamé inline. */
 documentsRouter.get(
   '/:id/original.pdf',
@@ -73,6 +114,18 @@ documentsRouter.get(
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="${doc.number ?? safe}.pdf"`);
     createReadStream(file).pipe(res);
+  }),
+);
+
+/** PDF du document (généré à la volée pour les documents JJD natifs). Authentifié, streamé inline. */
+documentsRouter.get(
+  '/:id/pdf',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const { buffer, filename } = await getDocPdfBuffer(req.params.id!);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+    res.send(buffer);
   }),
 );
 

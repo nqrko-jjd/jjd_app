@@ -3,8 +3,9 @@
 
 FROM node:22-bookworm-slim AS base
 WORKDIR /repo
+# chromium : rendu PDF des devis/factures JJD natifs (lib/pdf.ts, puppeteer-core)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      openssl curl poppler-utils \
+      openssl curl poppler-utils chromium \
   && rm -rf /var/lib/apt/lists/*
 
 # ---------- dépendances complètes + build ----------

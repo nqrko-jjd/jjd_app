@@ -356,7 +356,16 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
             <button className="btn" disabled={!!busy} onClick={() => act('/credit-note', {})}>Note de crédit</button>
           )}
           <button className="btn" disabled={!!busy} onClick={() => act('/duplicate', {})}>Dupliquer</button>
-          {doc.originalPdf ? (
+          <button
+            className="btn"
+            onClick={async () => {
+              try { window.open(await apiBlobUrl(`/api/documents/${id}/pdf`), '_blank'); }
+              catch (e) { setMsg((e as Error).message); }
+            }}
+          >
+            Télécharger le PDF
+          </button>
+          {doc.originalPdf && (
             <button
               className="btn"
               onClick={async () => {
@@ -366,9 +375,8 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
             >
               PDF d’origine (TrustUp)
             </button>
-          ) : (
-            <a className="btn" href={`/imprimer/${id}`} target="_blank" rel="noreferrer">Imprimer / PDF</a>
           )}
+          <a className="btn" href={`/imprimer/${id}`} target="_blank" rel="noreferrer">Imprimer (aperçu navigateur)</a>
           {!locked && <button className="btn" style={{ marginLeft: 'auto', color: 'var(--crit)' }} onClick={del}>Supprimer</button>}
         </div>
         {isInvoiceLike && (

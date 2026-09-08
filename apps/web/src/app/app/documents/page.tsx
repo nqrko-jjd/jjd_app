@@ -3,7 +3,7 @@ import { Suspense, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
-import { api } from '@/lib/api';
+import { api, apiBlobUrl } from '@/lib/api';
 import { PageHead, Money, formatDateBE } from '@/lib/ui';
 import { DocStatusBadge, DOC_KIND_LABEL } from '@/lib/doc-ui';
 import { ContextMenu, useContextMenu, openActions, type MenuItem } from '@/components/ContextMenu';
@@ -47,6 +47,8 @@ function DocumentsInner() {
   const [q, setQ] = useState('');
   const [status, setStatus] = useState(sp.get('statut') ?? '');
   const [busy, setBusy] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [exporting, setExporting] = useState(false);
   const active = TABS.find((t) => t.key === tab)!;
   const params = new URLSearchParams();
   if (active.kind) params.set('kind', active.kind);
@@ -113,6 +115,33 @@ function DocumentsInner() {
     }
   }
 
+  function toggleSelected(id: string) {
+    setSelected((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+  function toggleAll() {
+    const rows = sort.rows;
+    setSelected((s) => (s.size === rows.length ? new Set() : new Set(rows.map((d) => d.id))));
+  }
+  async function exportZip() {
+    if (!selected.size) return;
+    setExporting(true);
+    try {
+      const url = await apiBlobUrl(`/api/documents/export.zip?ids=${[...selected].join(',')}`);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `documents-${new Date().toISOString().slice(0, 10)}.zip`;
+      a.click();
+    } catch (e) {
+      alert(`Échec de l’export : ${(e as Error).message}`);
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <>
       {ctx.menu && <ContextMenu x={ctx.menu.x} y={ctx.menu.y} items={rowMenu(ctx.menu.row)} onClose={ctx.close} />}
@@ -121,6 +150,11 @@ function DocumentsInner() {
         sub="Création, émission, suivi des paiements · clic droit sur une ligne pour les actions rapides"
         action={
           <div className="row">
+            {selected.size > 0 && (
+              <button className="btn" disabled={exporting} onClick={exportZip} title="PDF de chaque document sélectionné, dans un seul .zip">
+                📦 Exporter {selected.size} document{selected.size > 1 ? 's' : ''} (zip)
+              </button>
+            )}
             <button className="btn" disabled={busy} onClick={() => create('quote')}>+ Devis</button>
             <button className="btn primary" disabled={busy} onClick={() => create('invoice')}>+ Facture</button>
           </div>
@@ -129,7 +163,7 @@ function DocumentsInner() {
 
       <div className="row" style={{ marginBottom: '1rem', gap: '0.4rem' }}>
         {TABS.map((t) => (
-          <button key={t.key} className={`btn${tab === t.key ? ' primary' : ''}`} onClick={() => { setTab(t.key); setStatus(''); }}>
+          <button key={t.key} className={`btn${tab === t.key ? ' primary' : ''}`} onClick={() => { setTab(t.key); setStatus(''); setSelected(new Set()); }}>
             {t.label}
           </button>
         ))}
@@ -157,6 +191,14 @@ function DocumentsInner() {
           <table className="tbl">
             <thead>
               <tr>
+                <th style={{ width: 28 }}>
+                  <input
+                    type="checkbox"
+                    checked={sort.rows.length > 0 && selected.size === sort.rows.length}
+                    onChange={toggleAll}
+                    aria-label="Tout sélectionner"
+                  />
+                </th>
                 <SortTh k="number" sort={sort}>N°</SortTh>
                 <SortTh k="title" sort={sort}>Objet</SortTh>
                 <SortTh k="contact" sort={sort}>Client</SortTh>
@@ -175,6 +217,9 @@ function DocumentsInner() {
                   onClick={rowNav(`/app/documents/${d.id}`, (h) => router.push(h))}
                   onContextMenu={(e) => ctx.open(e, d)}
                 >
+                  <td onClick={(e) => e.stopPropagation()}>
+                    <input type="checkbox" checked={selected.has(d.id)} onChange={() => toggleSelected(d.id)} aria-label="Sélectionner" />
+                  </td>
                   <td className="mono">
                     <Link href={`/app/documents/${d.id}`}>{d.number ?? d.draftRef ?? '—'}</Link>
                     {d.originalPdf && <span title="PDF d’origine disponible" style={{ marginLeft: 6 }}>📄</span>}

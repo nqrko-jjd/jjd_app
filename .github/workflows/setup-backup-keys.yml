@@ -1,0 +1,50 @@
+name: Autoriser une clé de pull de sauvegarde (NAS)
+
+# Usage ponctuel (workflow_dispatch) : ajoute une ou plusieurs clés publiques
+# SSH à ~/.ssh/authorized_keys sur le VPS, restreintes en lecture seule au
+# dossier backups/ via deploy/rrsync-backups.sh (aucun shell, aucune écriture
+# possible avec ces clés). Réutilise les mêmes secrets que deploy.yml.
+# Idempotent : une clé déjà présente (même contenu) n'est pas dupliquée.
+#
+# add_pubkeys : une clé publique par ligne (format « ssh-ed25519 AAAA... label »).
+
+on:
+  workflow_dispatch:
+    inputs:
+      add_pubkeys:
+        description: "Clé(s) publique(s) à autoriser, une par ligne"
+        required: true
+        type: string
+
+jobs:
+  authorize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Provisionner via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script_stop: true
+          command_timeout: 5m
+          envs: ADD_PUBKEYS
+          script: |
+            set -e
+            cd "${{ secrets.VPS_PATH }}"
+            command -v rsync >/dev/null 2>&1 || sudo apt-get update -qq && sudo apt-get install -y rsync
+            chmod +x deploy/rrsync-backups.sh
+            mkdir -p ~/.ssh && touch ~/.ssh/authorized_keys && chmod 700 ~/.ssh && chmod 600 ~/.ssh/authorized_keys
+            WRAPPER="$(pwd)/deploy/rrsync-backups.sh"
+            while IFS= read -r pk; do
+              [ -z "$pk" ] && continue
+              keybody=$(echo "$pk" | awk '{print $2}')
+              if grep -qF "$keybody" ~/.ssh/authorized_keys 2>/dev/null; then
+                echo "déjà présente : $(echo "$pk" | awk '{print $3}')"
+                continue
+              fi
+              echo "command=\"$WRAPPER\",no-agent-forwarding,no-port-forwarding,no-pty,no-user-rc,no-X11-forwarding $pk" >> ~/.ssh/authorized_keys
+              echo "ajoutée : $(echo "$pk" | awk '{print $3}')"
+            done <<< "$ADD_PUBKEYS"
+        env:
+          ADD_PUBKEYS: ${{ inputs.add_pubkeys }}

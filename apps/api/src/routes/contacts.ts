@@ -1,8 +1,11 @@
 import { Router } from 'express';
-import { contactInput, normalizeName } from '@jjd/shared';
+import { contactInput, contactPersonInput, normalizeName, round2 } from '@jjd/shared';
 import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, STAFF, OFFICE, hashPassword } from '../lib/auth.js';
+
+const isPaidStr = (s: string | null) =>
+  (s ?? '').toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').trim() === 'paye';
 
 export const contactsRouter = Router();
 
@@ -51,10 +54,51 @@ contactsRouter.get(
         worksites: { orderBy: { updatedAt: 'desc' }, take: 50 },
         opportunities: { orderBy: { updatedAt: 'desc' }, take: 20 },
         user: { select: { email: true } },
+        contactPersons: { orderBy: { position: 'asc' } },
       },
     });
     if (!contact) throw new HttpError(404, 'Contact introuvable');
-    res.json({ contact });
+
+    // Achats : résumé (sur tout l'historique) + les documents les plus récents (liste affichée)
+    const purchaseWhere = { contactId: contact.id, direction: { in: ['purchase', 'credit_note'] }, source: { not: 'demo' } };
+    const [purchases, purchaseAgg] = await Promise.all([
+      prisma.ledgerEntry.findMany({
+        where: purchaseWhere,
+        orderBy: { date: 'desc' },
+        take: 100,
+        select: {
+          id: true, date: true, docNumber: true, categoryRaw: true, ht: true, ttc: true,
+          direction: true, paymentStatus: true, pdfPath: true, worksite: { select: { ref: true, title: true } },
+        },
+      }),
+      prisma.ledgerEntry.groupBy({
+        by: ['direction', 'paymentStatus'],
+        where: purchaseWhere,
+        _sum: { ht: true, ttc: true },
+        _count: true,
+      }),
+    ]);
+    let purchaseHt = 0, purchaseTtc = 0, purchaseCount = 0, unpaidTtc = 0;
+    for (const g of purchaseAgg) {
+      const sign = g.direction === 'credit_note' ? -1 : 1;
+      purchaseHt += sign * (g._sum.ht ?? 0);
+      purchaseTtc += sign * (g._sum.ttc ?? g._sum.ht ?? 0);
+      purchaseCount += g._count;
+      if (g.direction === 'purchase' && !isPaidStr(g.paymentStatus)) unpaidTtc += g._sum.ttc ?? g._sum.ht ?? 0;
+    }
+
+    res.json({
+      contact: {
+        ...contact,
+        purchases: purchases.map((p) => ({ ...p, paid: isPaidStr(p.paymentStatus), hasPdf: !!p.pdfPath })),
+        purchaseSummary: {
+          count: purchaseCount,
+          ht: round2(purchaseHt),
+          ttc: round2(purchaseTtc),
+          unpaidTtc: round2(unpaidTtc),
+        },
+      },
+    });
   }),
 );
 
@@ -122,5 +166,42 @@ contactsRouter.patch(
       },
     });
     res.json({ contact });
+  }),
+);
+
+/* ------------------------------------------------------ Personnes de contact */
+
+contactsRouter.post(
+  '/:id/persons',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const data = contactPersonInput.parse(req.body);
+    const count = await prisma.contactPerson.count({ where: { contactId: req.params.id } });
+    const person = await prisma.contactPerson.create({
+      data: { contactId: req.params.id as string, role: data.role ?? null, name: data.name, email: data.email || null, phone: data.phone ?? null, position: count },
+    });
+    res.status(201).json({ person });
+  }),
+);
+
+contactsRouter.patch(
+  '/:id/persons/:pid',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const data = contactPersonInput.partial().parse(req.body);
+    const person = await prisma.contactPerson.update({
+      where: { id: req.params.pid },
+      data: { ...data, email: data.email === undefined ? undefined : data.email || null },
+    });
+    res.json({ person });
+  }),
+);
+
+contactsRouter.delete(
+  '/:id/persons/:pid',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    await prisma.contactPerson.delete({ where: { id: req.params.pid } });
+    res.json({ ok: true });
   }),
 );

@@ -237,9 +237,27 @@ model Contact {
   documents        Document[]
   ledgerEntries    LedgerEntry[]
   buildingContacts BuildingContact[]
+  contactPersons   ContactPerson[]
 
   @@index([normalizedName])
   @@index([type])
+}
+
+/// Personne de contact chez ce fournisseur/client (fonction, nom, e-mail, tél) — pour joindre
+/// quelqu'un de précis plutôt que le standard (ex. « Comptabilité », « Commercial »).
+model ContactPerson {
+  id        String   @id @default(cuid())
+  contactId String
+  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  role      String? // fonction, texte libre : "Commercial", "Comptabilité", "Direction"…
+  name      String
+  email     String?
+  phone     String?
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([contactId])
 }
 
 /// Immeuble / ACP — le "dossier principal" du portail client.

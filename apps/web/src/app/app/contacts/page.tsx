@@ -89,8 +89,8 @@ function ContactsInner() {
       {creating && (
         <FormModal
           title="Nouveau contact"
-          fields={CONTACT_FIELDS(pick?.buildings ?? [])}
-          initial={{ type: 'client' }}
+          fields={CONTACT_FIELDS(type !== 'all' ? type : 'client', pick?.buildings ?? [])}
+          initial={{ type: type !== 'all' ? type : 'client' }}
           onClose={() => setCreating(false)}
           onSubmit={async (v) => { await api('/api/contacts', { method: 'POST', body: v }); reload(); }}
         />

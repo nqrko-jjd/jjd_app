@@ -27,6 +27,13 @@ export const contactInput = z.object({
   note: z.string().nullish(),
 });
 
+export const contactPersonInput = z.object({
+  role: z.string().trim().nullish(), // fonction, texte libre
+  name: nonEmpty,
+  email: z.string().trim().email().nullish().or(z.literal('')),
+  phone: z.string().trim().nullish(),
+});
+
 export const buildingInput = z.object({
   name: nonEmpty,
   address: z.string().trim().nullish(),

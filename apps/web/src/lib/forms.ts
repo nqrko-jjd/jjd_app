@@ -5,19 +5,29 @@ import {
   LEGAL_DOC_LABEL, LEGAL_DOC_TYPES,
 } from '@jjd/shared';
 
-export const CONTACT_FIELDS = (buildings: { id: string; name: string }[] = []): FieldDef[] => [
-  { name: 'name', label: 'Nom', required: true, full: true },
-  { name: 'type', label: 'Type', type: 'select', options: CONTACT_TYPES.map((t) => ({ value: t, label: t === 'client' ? 'Client' : t === 'supplier' ? 'Fournisseur' : 'Les deux' })) },
-  { name: 'kind', label: 'Catégorie', type: 'select', options: CLIENT_KINDS.map((k) => ({ value: k, label: CLIENT_KIND_LABEL[k] })) },
-  { name: 'buildingId', label: 'Immeuble / ACP', type: 'select', options: buildings.map((b) => ({ value: b.id, label: b.name })), full: true },
-  { name: 'email', label: 'E-mail' },
-  { name: 'phone', label: 'Téléphone' },
-  { name: 'vat', label: 'N° TVA' },
-  { name: 'address', label: 'Adresse', full: true },
-  { name: 'postalCode', label: 'Code postal' },
-  { name: 'city', label: 'Ville' },
-  { name: 'note', label: 'Note', type: 'textarea', full: true },
-];
+/**
+ * Champs différents selon le type de contact (`forType`, le type au moment où le formulaire
+ * s'ouvre — un client a une « Catégorie » et un immeuble/ACP éventuel, un fournisseur non ;
+ * les personnes de contact et l'historique d'achats d'un fournisseur sont gérés à part sur sa
+ * fiche, pas dans ce formulaire). Si le type change pendant l'édition, les champs affichés ne
+ * se recalculent pas en direct — acceptable, le type change rarement après coup.
+ */
+export const CONTACT_FIELDS = (forType?: string, buildings: { id: string; name: string }[] = []): FieldDef[] => {
+  const isSupplierOnly = forType === 'supplier';
+  return [
+    { name: 'name', label: 'Nom', required: true, full: true },
+    { name: 'type', label: 'Type', type: 'select', options: CONTACT_TYPES.map((t) => ({ value: t, label: t === 'client' ? 'Client' : t === 'supplier' ? 'Fournisseur' : 'Les deux' })) },
+    ...(!isSupplierOnly ? [{ name: 'kind', label: 'Catégorie', type: 'select' as const, options: CLIENT_KINDS.map((k) => ({ value: k, label: CLIENT_KIND_LABEL[k] })) }] : []),
+    ...(!isSupplierOnly ? [{ name: 'buildingId', label: 'Immeuble / ACP', type: 'select' as const, options: buildings.map((b) => ({ value: b.id, label: b.name })), full: true }] : []),
+    { name: 'email', label: 'E-mail' },
+    { name: 'phone', label: 'Téléphone' },
+    { name: 'vat', label: 'N° TVA' },
+    { name: 'address', label: 'Adresse', full: true },
+    { name: 'postalCode', label: 'Code postal' },
+    { name: 'city', label: 'Ville' },
+    { name: 'note', label: 'Note', type: 'textarea', full: true },
+  ];
+};
 
 export const PERSON_FIELDS: FieldDef[] = [
   { name: 'firstName', label: 'Prénom', required: true },

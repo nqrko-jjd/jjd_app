@@ -84,7 +84,7 @@ export interface ConsolidatedInput {
 }
 
 export async function consolidatedPnl(input: ConsolidatedInput) {
-  const where: Record<string, unknown> = {};
+  const where: Record<string, unknown> = { source: { not: 'demo' } };
   if (input.year) where.year = input.year;
   if (input.month && input.year) {
     where.date = {
@@ -134,6 +134,7 @@ export async function consolidatedPnl(input: ConsolidatedInput) {
   const timeAgg = await prisma.timeEntry.aggregate({
     where: {
       status: { in: ['approved', 'submitted'] },
+      source: { not: 'demo' },
       ...(input.year ? { date: { gte: new Date(Date.UTC(input.year, (input.month ?? 1) - 1, 1)) } } : {}),
     },
     _sum: { amount: true },
@@ -181,27 +182,27 @@ export async function consolidatedPnl(input: ConsolidatedInput) {
  */
 export async function profitShare(_year?: number) {
   const [worksites, buys, salesRaw, creditNotesRaw, times, transportMap, materielTontonAgg, dejaPayeTontonAgg] = await Promise.all([
-    prisma.worksite.findMany({ where: { kind: 'project' }, select: { id: true, entity: true } }),
+    prisma.worksite.findMany({ where: { kind: 'project', source: { not: 'demo' } }, select: { id: true, entity: true } }),
     prisma.ledgerEntry.findMany({
-      where: { direction: 'purchase', worksiteId: { not: null } },
+      where: { direction: 'purchase', worksiteId: { not: null }, source: { not: 'demo' } },
       select: { worksiteId: true, ht: true, categoryRaw: true },
     }),
     prisma.ledgerEntry.findMany({
-      where: { direction: 'sale', paymentStatus: 'Payé', worksiteId: { not: null } },
+      where: { direction: 'sale', paymentStatus: 'Payé', worksiteId: { not: null }, source: { not: 'demo' } },
       select: { worksiteId: true, ht: true },
     }),
     // Notes de crédit : réduisent le CA encaissé si "vente" (et payées), sinon le coût matériaux.
     prisma.ledgerEntry.findMany({
-      where: { direction: 'credit_note', worksiteId: { not: null } },
+      where: { direction: 'credit_note', worksiteId: { not: null }, source: { not: 'demo' } },
       select: { worksiteId: true, ht: true, categoryRaw: true, paymentStatus: true },
     }),
-    prisma.timeEntry.groupBy({ by: ['worksiteId'], where: { status: { in: ['approved', 'submitted'] }, worksiteId: { not: null } }, _sum: { amount: true } }),
+    prisma.timeEntry.groupBy({ by: ['worksiteId'], where: { status: { in: ['approved', 'submitted'] }, worksiteId: { not: null }, source: { not: 'demo' } }, _sum: { amount: true } }),
     allWorksitesTransport(),
     // Matériel que Tonton achète pour un chantier via sa société puis nous refacture (à
     // rembourser en plus de sa part de bénéfice — ce n'est pas une prestation).
-    prisma.ledgerEntry.aggregate({ where: { direction: 'purchase', categoryRaw: 'Matériel - Tonton' }, _sum: { ht: true } }),
+    prisma.ledgerEntry.aggregate({ where: { direction: 'purchase', categoryRaw: 'Matériel - Tonton', source: { not: 'demo' } }, _sum: { ht: true } }),
     // Déjà versé sur son bénéfice (factures "Rémunération - Tonton" à sa société GT Light Concept).
-    prisma.ledgerEntry.aggregate({ where: { direction: 'purchase', categoryRaw: 'Rémunération - Tonton' }, _sum: { ht: true } }),
+    prisma.ledgerEntry.aggregate({ where: { direction: 'purchase', categoryRaw: 'Rémunération - Tonton', source: { not: 'demo' } }, _sum: { ht: true } }),
   ]);
   // "Rémunération - Ouvrier" (ouvriers JJD pointés) remplace l'estimation par pointage plutôt
   // que de s'y ajouter (sinon double compte). Les autres achats — dont "Rémunération -

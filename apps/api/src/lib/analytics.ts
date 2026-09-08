@@ -38,18 +38,18 @@ export async function analytics(input: AnalyticsInput = {}) {
 
   const [ledger, times, docs, worksites] = await Promise.all([
     prisma.ledgerEntry.findMany({
-      where: { date: { gte: prevWin.from } },
+      where: { date: { gte: prevWin.from }, source: { not: 'demo' } },
       select: { date: true, direction: true, ht: true, categoryRaw: true, paymentStatus: true, contactId: true, worksite: { select: { entity: true } } },
     }),
     prisma.timeEntry.findMany({
-      where: { date: { gte: prevWin.from }, status: { in: ['approved', 'submitted'] } },
+      where: { date: { gte: prevWin.from }, status: { in: ['approved', 'submitted'] }, source: { not: 'demo' } },
       select: { date: true, hours: true, amount: true },
     }),
     prisma.document.findMany({
-      where: { kind: 'quote' },
+      where: { kind: 'quote', source: { not: 'demo' } },
       select: { status: true, totalHt: true, issuedOn: true, createdAt: true },
     }),
-    prisma.worksite.findMany({ where: { kind: 'project' }, select: { id: true, ref: true, title: true, entity: true } }),
+    prisma.worksite.findMany({ where: { kind: 'project', source: { not: 'demo' } }, select: { id: true, ref: true, title: true, entity: true } }),
   ]);
 
   const keep = (ent: 'jjd' | 'tonton' | 'm7' | 'autre') => !input.entity || ent === input.entity || ent === 'autre';
@@ -153,18 +153,18 @@ export async function analytics(input: AnalyticsInput = {}) {
   const wsMap = new Map(worksites.map((w) => [w.id, w]));
   const [buys, salesRaw, creditNotesRaw, timeByWs] = await Promise.all([
     prisma.ledgerEntry.findMany({
-      where: { direction: 'purchase', worksiteId: { not: null }, date: { gte: win.from } },
+      where: { direction: 'purchase', worksiteId: { not: null }, date: { gte: win.from }, source: { not: 'demo' } },
       select: { worksiteId: true, ht: true, categoryRaw: true },
     }),
     prisma.ledgerEntry.findMany({
-      where: { direction: 'sale', paymentStatus: 'Payé', worksiteId: { not: null }, date: { gte: win.from } },
+      where: { direction: 'sale', paymentStatus: 'Payé', worksiteId: { not: null }, date: { gte: win.from }, source: { not: 'demo' } },
       select: { worksiteId: true, ht: true },
     }),
     prisma.ledgerEntry.findMany({
-      where: { direction: 'credit_note', worksiteId: { not: null }, date: { gte: win.from } },
+      where: { direction: 'credit_note', worksiteId: { not: null }, date: { gte: win.from }, source: { not: 'demo' } },
       select: { worksiteId: true, ht: true, categoryRaw: true, paymentStatus: true },
     }),
-    prisma.timeEntry.groupBy({ by: ['worksiteId'], where: { status: { in: ['approved', 'submitted'] }, worksiteId: { not: null }, date: { gte: win.from } }, _sum: { amount: true } }),
+    prisma.timeEntry.groupBy({ by: ['worksiteId'], where: { status: { in: ['approved', 'submitted'] }, worksiteId: { not: null }, date: { gte: win.from }, source: { not: 'demo' } }, _sum: { amount: true } }),
   ]);
   // "Rémunération - Ouvrier" (ouvriers JJD pointés, payés à la journée puis facturés) remplace
   // l'estimation par pointage plutôt que de s'y ajouter (sinon la main-d'œuvre compte deux fois).
@@ -209,7 +209,7 @@ export async function analytics(input: AnalyticsInput = {}) {
   /* ---------------- top clients (CA sur la fenêtre) ---------------- */
   const salesByClient = await prisma.ledgerEntry.groupBy({
     by: ['contactId'],
-    where: { direction: 'sale', contactId: { not: null }, date: { gte: win.from } },
+    where: { direction: 'sale', contactId: { not: null }, date: { gte: win.from }, source: { not: 'demo' } },
     _sum: { ht: true },
     _count: true,
   });

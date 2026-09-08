@@ -52,7 +52,7 @@ metaRouter.get(
       prisma.contact.findMany({ where: { OR: [{ type: 'client' }, { type: 'both' }] }, orderBy: { name: 'asc' }, select: { id: true, name: true } }),
       prisma.building.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true, syndicId: true } }),
       prisma.person.findMany({ where: { active: true }, orderBy: { firstName: 'asc' }, select: { id: true, firstName: true, lastName: true, displayName: true } }),
-      prisma.worksite.findMany({ where: { archived: false, kind: 'project' }, orderBy: { updatedAt: 'desc' }, take: 5000, select: { id: true, ref: true, title: true, clientId: true } }),
+      prisma.worksite.findMany({ where: { archived: false, kind: 'project', source: { not: 'demo' } }, orderBy: { updatedAt: 'desc' }, take: 5000, select: { id: true, ref: true, title: true, clientId: true } }),
       prisma.syndic.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }),
     ]);
     res.json({

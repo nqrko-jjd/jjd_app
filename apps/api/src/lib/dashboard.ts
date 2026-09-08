@@ -26,23 +26,23 @@ export async function bureauDashboard() {
     crmNextActions,
   ] = await Promise.all([
     prisma.document.aggregate({
-      where: { kind: 'invoice', issuedOn: { gte: monthStart } }, _sum: { totalHt: true },
+      where: { kind: 'invoice', issuedOn: { gte: monthStart }, source: { not: 'demo' } }, _sum: { totalHt: true },
     }),
     prisma.document.aggregate({
-      where: { kind: 'invoice', status: 'paid', issuedOn: { gte: monthStart } }, _sum: { totalHt: true },
+      where: { kind: 'invoice', status: 'paid', issuedOn: { gte: monthStart }, source: { not: 'demo' } }, _sum: { totalHt: true },
     }),
-    prisma.document.findMany({ where: { kind: 'invoice', status: 'overdue' } }),
-    prisma.document.findMany({ where: { kind: 'invoice', status: { in: ['sent', 'partial', 'overdue'] } } }),
-    prisma.document.findMany({ where: { kind: 'quote', status: 'sent' } }),
-    prisma.worksite.count({ where: { status: 'to_invoice', archived: false } }),
+    prisma.document.findMany({ where: { kind: 'invoice', status: 'overdue', source: { not: 'demo' } } }),
+    prisma.document.findMany({ where: { kind: 'invoice', status: { in: ['sent', 'partial', 'overdue'] }, source: { not: 'demo' } } }),
+    prisma.document.findMany({ where: { kind: 'quote', status: 'sent', source: { not: 'demo' } } }),
+    prisma.worksite.count({ where: { status: 'to_invoice', archived: false, source: { not: 'demo' } } }),
     prisma.legalDoc.findMany({
       where: { expiresOn: { not: null, lte: in30 } },
       include: { person: true },
     }),
     prisma.vehicle.count({ where: { nextInspection: { not: null, lte: in30 } } }),
-    prisma.worksite.count({ where: { archived: false, kind: 'project', status: { in: ACTIVE_STATUS } } }),
+    prisma.worksite.count({ where: { archived: false, kind: 'project', status: { in: ACTIVE_STATUS }, source: { not: 'demo' } } }),
     prisma.worksite.findMany({
-      where: { archived: false, kind: 'project', status: { in: ACTIVE_STATUS } },
+      where: { archived: false, kind: 'project', status: { in: ACTIVE_STATUS }, source: { not: 'demo' } },
       orderBy: { updatedAt: 'desc' },
       take: 12,
       include: { client: { select: { name: true } }, manager: { select: { displayName: true, firstName: true } } },

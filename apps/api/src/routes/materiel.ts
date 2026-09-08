@@ -57,7 +57,7 @@ materielRouter.get(
   requireAuth(...STAFF),
   asyncHandler(async (_req, res) => {
     const items = await prisma.worksite.findMany({
-      where: { kind: 'project', archived: false, status: { notIn: ['done', 'closed', 'cancelled'] } },
+      where: { kind: 'project', archived: false, status: { notIn: ['done', 'closed', 'cancelled'] }, source: { not: 'demo' } },
       orderBy: { updatedAt: 'desc' },
       select: { id: true, ref: true, title: true, city: true, client: { select: { name: true } } },
       take: 400,

@@ -14,6 +14,7 @@ import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, OFFICE, FIELD_OFFICE } from '../lib/auth.js';
 import { storeFile, UPLOADS_DIR } from '../lib/media.js';
 import { nameOverlap } from '../lib/bank-match.js';
+import { extractDocumentInfo } from '../lib/document-extract.js';
 
 export const expensesRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
@@ -264,6 +265,22 @@ expensesRouter.get(
       .sort((a, b) => Number(b.nameMatch) - Number(a.nameMatch))
       .slice(0, 15);
     res.json({ items, supplier });
+  }),
+);
+
+/**
+ * Pré-lit une pièce (PDF) avant création : type (facture/NC), n°, date,
+ * montants, fournisseur et chantier détectés — best-effort, à vérifier
+ * ensuite dans le formulaire. Ne crée rien.
+ */
+expensesRouter.post(
+  '/extract',
+  requireAuth(...FIELD_OFFICE),
+  upload.single('file'),
+  asyncHandler(async (req, res) => {
+    if (!req.file) throw new HttpError(422, 'Aucun fichier');
+    const extraction = await extractDocumentInfo(req.file.buffer, req.file.mimetype, ['supplier', 'both']);
+    res.json({ extraction });
   }),
 );
 

@@ -1,9 +1,9 @@
 'use client';
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
-import { api, apiBlobUrl } from '@/lib/api';
+import { api, apiBlobUrl, apiUpload } from '@/lib/api';
 import { PageHead, Money, formatDateBE } from '@/lib/ui';
 import { DocStatusBadge, DOC_KIND_LABEL } from '@/lib/doc-ui';
 import { ContextMenu, useContextMenu, openActions, type MenuItem } from '@/components/ContextMenu';
@@ -52,6 +52,8 @@ function DocumentsInner() {
   const [exporting, setExporting] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(100);
+  const [importing, setImporting] = useState(false);
+  const importInputRef = useRef<HTMLInputElement>(null);
   const active = TABS.find((t) => t.key === tab)!;
 
   // revient à la 1ère page à chaque changement de filtre/onglet
@@ -124,6 +126,36 @@ function DocumentsInner() {
     }
   }
 
+  async function importFile(file: File) {
+    setImporting(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const r = await apiUpload<{
+        document: { id: string };
+        extraction: {
+          contactName: string | null; contactConfidence: 'vat' | 'name' | null;
+          worksiteRef: string | null; totalTtc: number | null; textExtracted: boolean;
+        };
+      }>('/api/documents/import', fd);
+      const ex = r.extraction;
+      const lines: string[] = [];
+      if (!ex.textExtracted) {
+        lines.push('PDF sans texte lisible (scan/photo) — à compléter à la main.');
+      } else {
+        lines.push(ex.contactName ? `Client détecté : ${ex.contactName}${ex.contactConfidence === 'name' ? ' (à vérifier)' : ''}` : 'Client non détecté — à sélectionner sur la fiche.');
+        if (ex.worksiteRef) lines.push(`Chantier détecté : ${ex.worksiteRef}`);
+        lines.push(ex.totalTtc != null ? `Montant détecté : ${ex.totalTtc.toFixed(2)} € TTC (à vérifier)` : 'Montant non détecté — à saisir à la main.');
+      }
+      alert(lines.join('\n'));
+      router.push(`/app/documents/${r.document.id}`);
+    } catch (e) {
+      alert(`Échec de l’import : ${(e as Error).message}`);
+    } finally {
+      setImporting(false);
+    }
+  }
+
   function toggleSelected(id: string) {
     setSelected((s) => {
       const next = new Set(s);
@@ -164,6 +196,16 @@ function DocumentsInner() {
                 📦 Exporter {selected.size} document{selected.size > 1 ? 's' : ''} (zip)
               </button>
             )}
+            <input
+              ref={importInputRef}
+              type="file"
+              accept="application/pdf"
+              hidden
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) importFile(f); e.target.value = ''; }}
+            />
+            <button className="btn" disabled={importing} onClick={() => importInputRef.current?.click()} title="Importer un PDF externe — client, chantier et montant pré-remplis quand c’est possible">
+              {importing ? 'Import…' : '⬆ Importer un PDF'}
+            </button>
             <button className="btn" disabled={busy} onClick={() => create('quote')}>+ Devis</button>
             <button className="btn primary" disabled={busy} onClick={() => create('invoice')}>+ Facture</button>
           </div>

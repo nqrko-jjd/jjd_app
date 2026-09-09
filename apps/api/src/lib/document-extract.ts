@@ -16,6 +16,7 @@ import { prisma } from '../db.js';
 export interface DocumentExtraction {
   kind: 'quote' | 'invoice' | 'credit_note' | 'deposit_invoice' | null;
   issuedOn: string | null; // ISO (yyyy-mm-dd)
+  docNumber: string | null;
   totalHt: number | null;
   totalVat: number | null;
   totalTtc: number | null;
@@ -30,7 +31,7 @@ export interface DocumentExtraction {
 }
 
 const EMPTY: DocumentExtraction = {
-  kind: null, issuedOn: null, totalHt: null, totalVat: null, totalTtc: null, vatRate: null,
+  kind: null, issuedOn: null, docNumber: null, totalHt: null, totalVat: null, totalTtc: null, vatRate: null,
   vatNumbersFound: [], contactId: null, contactName: null, contactConfidence: null,
   worksiteId: null, worksiteRef: null, textExtracted: false,
 };
@@ -57,6 +58,13 @@ function findDate(text: string): string | null {
   return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
 }
 
+/** N° de document (facture/devis/avoir) — best-effort, juste après un mot-clé. */
+function findDocNumber(text: string): string | null {
+  const m = text.match(/(?:facture|devis|note\s+de\s+cr[ée]dit|avoir|offre)\s*n[°o]\.?\s*:?\s*([A-Z0-9][A-Z0-9\-/.]{1,24})/i)
+    ?? text.match(/\bn[°o]\.?\s*:?\s*([A-Z0-9][A-Z0-9\-/.]{2,24})\b/i);
+  return m ? m[1]!.replace(/[.\-/]+$/, '') : null;
+}
+
 // un montant belge peut grouper les milliers par point OU espace : "1.498,17" / "1 498,17"
 const AMOUNT = '([\\d]+(?:[.,\\s\\u00A0][\\d]+)*)';
 
@@ -79,6 +87,7 @@ function findTotals(text: string): { ht: number | null; vat: number | null; ttc:
 export interface ParsedDocumentText {
   kind: DocumentExtraction['kind'];
   issuedOn: string | null;
+  docNumber: string | null;
   totalHt: number | null;
   totalVat: number | null;
   totalTtc: number | null;
@@ -93,6 +102,7 @@ export function parseDocumentText(text: string): ParsedDocumentText {
   return {
     kind: detectKind(text),
     issuedOn: findDate(text),
+    docNumber: findDocNumber(text),
     totalHt: totals.ht,
     totalVat: totals.vat,
     totalTtc: totals.ttc,
@@ -101,14 +111,26 @@ export function parseDocumentText(text: string): ParsedDocumentText {
   };
 }
 
-export async function extractDocumentInfo(buf: Buffer, mimetype: string): Promise<DocumentExtraction> {
+/**
+ * @param contactTypes types de `Contact` à considérer pour le repli "nom trouvé dans le texte"
+ *   (le n° de TVA, lui, est cherché sur tous les contacts quel que soit le type). Devis/factures
+ *   émis par JJD -> le client (`['client', 'both']`) ; dépense importée -> le fournisseur
+ *   (`['supplier', 'both']`).
+ */
+export async function extractDocumentInfo(
+  buf: Buffer,
+  mimetype: string,
+  contactTypes: string[] = ['client', 'both'],
+): Promise<DocumentExtraction> {
   if (mimetype !== 'application/pdf' || !(await pdftotextAvailable())) return EMPTY;
   const text = await pdfToRawText(buf);
   if (!text.trim()) return EMPTY;
 
-  const { kind, issuedOn, totalHt, totalVat, totalTtc, vatRate, vatNumbersFound } = parseDocumentText(text);
+  const { kind, issuedOn, docNumber, totalHt, totalVat, totalTtc, vatRate, vatNumbersFound } = parseDocumentText(text);
 
-  // client : n° de TVA d'abord (fiable), sinon un nom de contact retrouvé tel quel dans le texte
+  // contact : n° de TVA d'abord (fiable, tous types confondus), sinon un nom retrouvé tel quel
+  // dans le texte parmi les contacts du type attendu (client pour un devis/facture émis par
+  // JJD, fournisseur pour une dépense importée)
   let contactId: string | null = null;
   let contactName: string | null = null;
   let contactConfidence: DocumentExtraction['contactConfidence'] = null;
@@ -118,7 +140,7 @@ export async function extractDocumentInfo(buf: Buffer, mimetype: string): Promis
     if (hit) { contactId = hit.id; contactName = hit.name; contactConfidence = 'vat'; }
   }
   if (!contactId) {
-    const candidates = await prisma.contact.findMany({ where: { type: { in: ['client', 'both'] } }, select: { id: true, name: true }, take: 3000 });
+    const candidates = await prisma.contact.findMany({ where: { type: { in: contactTypes } }, select: { id: true, name: true }, take: 3000 });
     const lower = text.toLowerCase();
     let best: { id: string; name: string } | null = null;
     for (const c of candidates) {
@@ -139,7 +161,7 @@ export async function extractDocumentInfo(buf: Buffer, mimetype: string): Promis
   }
 
   return {
-    kind, issuedOn,
+    kind, issuedOn, docNumber,
     totalHt, totalVat, totalTtc, vatRate,
     vatNumbersFound, contactId, contactName, contactConfidence,
     worksiteId, worksiteRef, textExtracted: true,

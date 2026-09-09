@@ -328,8 +328,45 @@ function ExpenseModal({
   const [err, setErr] = useState<string | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [extracting, setExtracting] = useState(false);
   const [bankMatch, setBankMatch] = useState<BankTx | null>(null);
   const [bankSug, setBankSug] = useState<BankTx[] | null>(null);
+
+  // à la création seulement : lit le PDF déposé pour préremplir le formulaire
+  // (fournisseur, chantier, montants…) — l'utilisateur corrige ensuite si besoin
+  async function handleFile(f: File | null) {
+    setPendingFile(f);
+    if (!f || expense) return;
+    setExtracting(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', f);
+      const r = await apiUpload<{
+        extraction: {
+          kind: string | null; docNumber: string | null; issuedOn: string | null;
+          totalHt: number | null; totalTtc: number | null; vatRate: number | null;
+          contactId: string | null; worksiteId: string | null; textExtracted: boolean;
+        };
+      }>('/api/finance/expenses/extract', fd);
+      const ex = r.extraction;
+      if (!ex.textExtracted) return;
+      const ht = ex.totalHt ?? (ex.totalTtc != null ? Math.round((ex.totalTtc / (1 + (ex.vatRate ?? 0.21))) * 100) / 100 : null);
+      setV((prev) => ({
+        ...prev,
+        direction: ex.kind === 'credit_note' ? 'credit_note' : prev.direction,
+        date: ex.issuedOn || prev.date,
+        docNumber: prev.docNumber || ex.docNumber || '',
+        worksiteId: prev.worksiteId || ex.worksiteId || '',
+        contactId: prev.contactId || ex.contactId || '',
+        ht: prev.ht || (ht != null ? String(ht) : ''),
+        ttc: prev.ttc || (ex.totalTtc != null ? String(ex.totalTtc) : ''),
+      }));
+    } catch {
+      // best-effort : en cas d'échec le fichier reste joint, saisie à la main
+    } finally {
+      setExtracting(false);
+    }
+  }
 
   useEffect(() => {
     const onEsc = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -493,8 +530,12 @@ function ExpenseModal({
           </div>
 
           <div className="field" style={{ gridColumn: '1 / -1' }}>
-            <label>Pièce jointe (PDF ou photo)</label>
-            <FileDrop file={pendingFile} onFile={setPendingFile} existingUrl={pdfUrl} disabled={readOnly} />
+            <label>
+              Pièce jointe (PDF ou photo)
+              {!expense && <span className="muted" style={{ fontWeight: 400, fontSize: '0.8rem' }}> — un PDF texte préremplit le formulaire</span>}
+              {extracting && <span className="muted" style={{ fontSize: '0.8rem' }}> · lecture en cours…</span>}
+            </label>
+            <FileDrop file={pendingFile} onFile={handleFile} existingUrl={pdfUrl} disabled={readOnly} />
           </div>
 
           {expense && (

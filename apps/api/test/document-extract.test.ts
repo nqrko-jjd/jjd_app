@@ -20,6 +20,7 @@ test('parseDocumentText : facture — type, date, TVA et totaux détectés', () 
   const r = parseDocumentText(text);
   assert.equal(r.kind, 'invoice');
   assert.equal(r.issuedOn, '2026-07-09');
+  assert.equal(r.docNumber, '351682');
   assert.equal(r.totalHt, 1498.17);
   assert.equal(r.totalVat, 314.62);
   assert.equal(r.totalTtc, 1812.79);
@@ -31,6 +32,7 @@ test('parseDocumentText : note de crédit détectée avant "facture" même si le
   const text = 'NOTE DE CRÉDIT n° 205112\nSuite à notre facture du 01/09/2025\nTotal TTC 218,56';
   const r = parseDocumentText(text);
   assert.equal(r.kind, 'credit_note');
+  assert.equal(r.docNumber, '205112');
   assert.equal(r.totalTtc, 218.56);
 });
 
@@ -39,6 +41,7 @@ test('parseDocumentText : devis détecté', () => {
   const r = parseDocumentText(text);
   assert.equal(r.kind, 'quote');
   assert.equal(r.issuedOn, '2026-03-03');
+  assert.equal(r.docNumber, '2026-014');
   assert.equal(r.totalTtc, 4072.97);
 });
 

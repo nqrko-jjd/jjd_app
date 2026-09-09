@@ -85,11 +85,16 @@ export async function monthlyStatement(personId: string, year: number, month: nu
 
 /** Décompte du mois pour toute l'équipe (préparation des paiements). */
 export async function teamMonthlyStatement(year: number, month: number) {
-  const people = await prisma.person.findMany({ where: { active: true }, orderBy: { firstName: 'asc' } });
+  const people = await prisma.person.findMany({
+    where: { active: true },
+    orderBy: { firstName: 'asc' },
+    include: { adjustments: { where: { settled: false }, select: { amount: true } } },
+  });
   const rows = [];
   for (const p of people) {
     const s = await monthlyStatement(p.id, year, month);
     if (s.entryCount === 0) continue;
+    const toWithhold = round2(p.adjustments.reduce((sum, a) => sum + a.amount, 0));
     rows.push({
       personId: p.id,
       name: p.displayName || `${p.firstName} ${p.lastName ?? ''}`.trim(),
@@ -97,10 +102,18 @@ export async function teamMonthlyStatement(year: number, month: number) {
       hourlyRate: p.hourlyRate,
       hours: s.totalHours,
       amount: s.totalAmount,
+      // avances/dettes non réglées -> à déduire de ce paiement (simple repère, pas soustrait
+      // automatiquement des rapports de marge/consolidé, qui restent basés sur le pointage réel)
+      toWithhold,
+      netAmount: round2(s.totalAmount - toWithhold),
       pending: s.pendingCount,
     });
   }
-  return { year, month, rows, totalAmount: round2(rows.reduce((a, r) => a + r.amount, 0)) };
+  return {
+    year, month, rows,
+    totalAmount: round2(rows.reduce((a, r) => a + r.amount, 0)),
+    totalNetAmount: round2(rows.reduce((a, r) => a + r.netAmount, 0)),
+  };
 }
 
 /** Série mensuelle (montant, heures, nb de chantiers) pour le graphique de la fiche ouvrier. */

@@ -300,6 +300,14 @@ export const OCCUPANT_KIND_LABEL: Record<OccupantKind, string> = {
   unknown: 'Inconnu',
 };
 
+export const ADJUSTMENT_TYPES = ['advance', 'debt'] as const;
+export type AdjustmentType = (typeof ADJUSTMENT_TYPES)[number];
+
+export const ADJUSTMENT_TYPE_LABEL: Record<AdjustmentType, string> = {
+  advance: 'Avance',
+  debt: 'Dette',
+};
+
 /* --------------------------------------------------------- Compta / TVA */
 
 export const CATEGORY_KINDS = ['revenue', 'expense', 'salary', 'vat', 'tax', 'credit_note', 'internal'] as const;

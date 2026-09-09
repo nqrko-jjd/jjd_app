@@ -76,16 +76,17 @@ model User {
   lastLoginAt  DateTime?
   createdAt    DateTime  @default(now())
 
-  auditLogs        AuditLog[]
-  approvedEntries  TimeEntry[]      @relation("ApprovedBy")
-  ownedOpps        CrmOpportunity[] @relation("OppOwner")
-  createdEvents    PlanningEvent[]  @relation("EventCreatedBy")
-  messages         Message[]
-  createdDocuments Document[]       @relation("DocumentAuthor")
-  createdLedger    LedgerEntry[]    @relation("LedgerEntryAuthor")
-  reports          WorksiteReport[] @relation("ReportAuthor")
-  createdTasks     WorksiteTask[]   @relation("TaskCreatedBy")
-  stockMovements   StockMovement[]  @relation("StockMovementBy")
+  auditLogs         AuditLog[]
+  approvedEntries   TimeEntry[]        @relation("ApprovedBy")
+  ownedOpps         CrmOpportunity[]   @relation("OppOwner")
+  createdEvents     PlanningEvent[]    @relation("EventCreatedBy")
+  messages          Message[]
+  createdDocuments  Document[]         @relation("DocumentAuthor")
+  createdLedger     LedgerEntry[]      @relation("LedgerEntryAuthor")
+  reports           WorksiteReport[]   @relation("ReportAuthor")
+  createdTasks      WorksiteTask[]     @relation("TaskCreatedBy")
+  stockMovements    StockMovement[]    @relation("StockMovementBy")
+  personAdjustments PersonAdjustment[] @relation("PersonAdjustmentAuthor")
 }
 
 /// Fiche personne : ouvrier ou chef de chantier. Toutes les infos utiles.
@@ -122,9 +123,31 @@ model Person {
   teamMemberships      TeamMember[]
   threadParticipations ThreadParticipant[]
   assignedTasks        WorksiteTask[]      @relation("TaskAssignee")
+  adjustments          PersonAdjustment[]
 
   @@index([normalizedName])
   @@index([active])
+}
+
+/// Avance versée ou dette imputée à un ouvrier (acompte, amende/PV à sa charge…),
+/// à déduire de sa prochaine paie. Repère pour le bureau au moment de payer — ne
+/// modifie pas le décompte mensuel calculé sur le pointage (heures × taux).
+model PersonAdjustment {
+  id          String    @id @default(cuid())
+  personId    String
+  person      Person    @relation(fields: [personId], references: [id], onDelete: Cascade)
+  type        String // advance | debt
+  amount      Float
+  date        DateTime
+  note        String?
+  settled     Boolean   @default(false) // déjà déduit de la paie / remboursé
+  settledOn   DateTime?
+  createdById String?
+  createdBy   User?     @relation("PersonAdjustmentAuthor", fields: [createdById], references: [id])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([personId])
 }
 
 /// Document légal suivi sur une fiche personne (avec échéance -> alerte).

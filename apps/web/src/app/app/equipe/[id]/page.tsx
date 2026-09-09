@@ -4,12 +4,14 @@ import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
 import { api, apiBlobUrl, apiUpload } from '@/lib/api';
 import { PageHead, Money, formatDateBE } from '@/lib/ui';
-import { FormModal } from '@/components/FormModal';
+import { FormModal, toDateInput, type FieldDef } from '@/components/FormModal';
 import { PhotoHeader } from '@/components/PhotoHeader';
 import { MonthBars } from '@/lib/charts';
+import { useSort, SortTh } from '@/lib/sort';
 import { PERSON_FIELDS, LEGAL_DOC_FIELDS } from '@/lib/forms';
-import { PERSON_ROLE_LABEL, WORKER_CONTRACT_LABEL, LEGAL_DOC_LABEL, formatHours, formatEur } from '@jjd/shared';
+import { PERSON_ROLE_LABEL, WORKER_CONTRACT_LABEL, LEGAL_DOC_LABEL, ADJUSTMENT_TYPES, ADJUSTMENT_TYPE_LABEL, formatHours, formatEur } from '@jjd/shared';
 
+interface Adjustment { id: string; type: string; amount: number; date: string; note: string | null; settled: boolean; settledOn: string | null }
 interface Detail {
   person: {
     id: string; firstName: string; lastName: string | null; displayName: string | null;
@@ -19,9 +21,18 @@ interface Detail {
     legalDocs: { id: string; type: string; label: string | null; number: string | null; expiresOn: string | null; fileUrl: string | null }[];
     equipment: { id: string; name: string }[];
     user: { id: string; email: string; role: string } | null;
+    adjustments: Adjustment[];
   };
   monthStatement: { hours: number; amount: number; worksites: number; guaranteeApplied: boolean; dailyHours: number };
+  adjustmentBalance: number;
 }
+
+const ADJUSTMENT_FIELDS: FieldDef[] = [
+  { name: 'type', label: 'Type', type: 'select', required: true, options: ADJUSTMENT_TYPES.map((t) => ({ value: t, label: ADJUSTMENT_TYPE_LABEL[t] })) },
+  { name: 'amount', label: 'Montant (€)', type: 'number', required: true },
+  { name: 'date', label: 'Date', type: 'date', required: true },
+  { name: 'note', label: 'Note', type: 'textarea', full: true, placeholder: 'Raison de l’avance, référence du PV…' },
+];
 
 interface Earnings {
   total: { hours: number; amount: number; years: number; worksites: number };
@@ -37,6 +48,14 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
   const [created, setCreated] = useState<{ email: string; password: string } | null>(null);
   const [editing, setEditing] = useState(false);
   const [addingDoc, setAddingDoc] = useState(false);
+  const [adjModal, setAdjModal] = useState<'new' | Adjustment | null>(null);
+  const [worksitesShown, setWorksitesShown] = useState(10);
+  const worksiteSort = useSort<Earnings['byWorksite'][number]>(earnings?.byWorksite ?? [], {
+    ref: (w) => w.ref,
+    hours: (w) => w.hours,
+    amount: (w) => w.amount,
+    margin: (w) => w.marginPct,
+  });
   if (loading) return <div className="empty">Chargement…</div>;
   if (!data) return <div className="empty">Fiche introuvable.</div>;
   const p = data.person;
@@ -68,6 +87,16 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
     window.open(url, '_blank');
   }
 
+  async function toggleSettled(a: Adjustment) {
+    await api(`/api/people/${id}/adjustments/${a.id}/settle`, { method: 'POST', body: { settled: !a.settled } });
+    reload();
+  }
+  async function removeAdjustment(adjId: string) {
+    if (!confirm('Supprimer cette écriture ?')) return;
+    await api(`/api/people/${id}/adjustments/${adjId}`, { method: 'DELETE' });
+    reload();
+  }
+
   return (
     <>
       {editing && (
@@ -92,6 +121,22 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
           fields={LEGAL_DOC_FIELDS}
           onClose={() => setAddingDoc(false)}
           onSubmit={async (v) => { await api(`/api/people/${id}/legal-docs`, { method: 'POST', body: v }); reload(); }}
+        />
+      )}
+      {adjModal && (
+        <FormModal
+          title={adjModal === 'new' ? 'Nouvelle avance / dette' : 'Modifier'}
+          fields={ADJUSTMENT_FIELDS}
+          initial={adjModal === 'new'
+            ? { type: 'advance', date: toDateInput(new Date().toISOString()) }
+            : { type: adjModal.type, amount: adjModal.amount, date: toDateInput(adjModal.date), note: adjModal.note }}
+          onClose={() => setAdjModal(null)}
+          onSubmit={async (v) => {
+            const path = adjModal === 'new' ? `/api/people/${id}/adjustments` : `/api/people/${id}/adjustments/${(adjModal as Adjustment).id}`;
+            await api(path, { method: adjModal === 'new' ? 'POST' : 'PATCH', body: v });
+            setAdjModal(null);
+            reload();
+          }}
         />
       )}
       <PageHead
@@ -201,24 +246,38 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
               </table>
             </div>
 
-            <div className="tbl-wrap">
-              <table className="tbl">
-                <thead><tr><th>Chantier</th><th style={{ textAlign: 'right' }}>Heures</th><th style={{ textAlign: 'right' }}>Montant</th><th style={{ textAlign: 'right' }}>Rentabilité du chantier</th></tr></thead>
-                <tbody>
-                  {earnings.byWorksite.map((w) => (
-                    <tr key={w.id}>
-                      <td><Link href={`/app/chantiers/${w.id}`}>{w.ref} · {w.title}</Link></td>
-                      <td className="tnum">{formatHours(w.hours)}</td>
-                      <td className="tnum"><Money value={w.amount} /></td>
-                      <td className="tnum">
-                        {w.marginPct != null ? (
-                          <span className={`badge ${w.marginPct >= 0 ? 'ok' : 'crit'}`}>{w.marginPct} %</span>
-                        ) : '—'}
-                      </td>
+            <div>
+              <div className="tbl-wrap">
+                <table className="tbl">
+                  <thead>
+                    <tr>
+                      <SortTh k="ref" sort={worksiteSort}>Chantier</SortTh>
+                      <SortTh k="hours" sort={worksiteSort} align="right">Heures</SortTh>
+                      <SortTh k="amount" sort={worksiteSort} align="right">Montant</SortTh>
+                      <SortTh k="margin" sort={worksiteSort} align="right">Rentabilité du chantier</SortTh>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {worksiteSort.rows.slice(0, worksitesShown).map((w) => (
+                      <tr key={w.id}>
+                        <td><Link href={`/app/chantiers/${w.id}`}>{w.ref} · {w.title}</Link></td>
+                        <td className="tnum">{formatHours(w.hours)}</td>
+                        <td className="tnum"><Money value={w.amount} /></td>
+                        <td className="tnum">
+                          {w.marginPct != null ? (
+                            <span className={`badge ${w.marginPct >= 0 ? 'ok' : 'crit'}`}>{w.marginPct} %</span>
+                          ) : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {worksiteSort.rows.length > worksitesShown && (
+                <button className="btn" style={{ marginTop: '0.7rem' }} onClick={() => setWorksitesShown((n) => n + 10)}>
+                  Charger la suite ({worksiteSort.rows.length - worksitesShown} restants)
+                </button>
+              )}
             </div>
           </div>
           <p className="muted" style={{ fontSize: '0.78rem', marginTop: '0.5rem' }}>
@@ -226,6 +285,44 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
           </p>
         </section>
       )}
+
+      <section style={{ marginBottom: '1.4rem' }}>
+        <div className="section-title">
+          Avances &amp; dettes
+          {data.adjustmentBalance > 0 && <span className="hint">à retenir sur la prochaine paie : {formatEur(data.adjustmentBalance)}</span>}
+          <button className="btn primary" style={{ marginLeft: 'auto', padding: '0.2rem 0.7rem', fontSize: '0.8rem' }} onClick={() => setAdjModal('new')}>+ Ajouter</button>
+        </div>
+        {p.adjustments.length === 0 ? (
+          <div className="card card-pad muted">Aucune avance ni dette enregistrée.</div>
+        ) : (
+          <div className="tbl-wrap">
+            <table className="tbl">
+              <thead><tr><th>Date</th><th>Type</th><th style={{ textAlign: 'right' }}>Montant</th><th>Note</th><th>Statut</th><th /></tr></thead>
+              <tbody>
+                {p.adjustments.map((a) => (
+                  <tr key={a.id}>
+                    <td className="tnum">{formatDateBE(a.date)}</td>
+                    <td><span className={`badge ${a.type === 'debt' ? 'crit' : 'plain'}`}>{ADJUSTMENT_TYPE_LABEL[a.type as keyof typeof ADJUSTMENT_TYPE_LABEL] ?? a.type}</span></td>
+                    <td style={{ textAlign: 'right' }}><Money value={a.amount} /></td>
+                    <td className="muted" style={{ fontSize: '0.85rem' }}>{a.note ?? '—'}</td>
+                    <td>
+                      <button className={`badge ${a.settled ? 'ok' : 'warn'}`} style={{ border: 'none', cursor: 'pointer' }} onClick={() => toggleSettled(a)} title="Basculer réglé / à déduire">
+                        {a.settled ? 'Réglé' : 'À déduire'}
+                      </button>
+                    </td>
+                    <td style={{ textAlign: 'right' }}>
+                      <div className="row" style={{ gap: '0.3rem', justifyContent: 'flex-end' }}>
+                        <button className="btn ghost" style={{ padding: '0.15rem 0.45rem', fontSize: '0.75rem' }} onClick={() => setAdjModal(a)}>Modifier</button>
+                        <button className="btn ghost" style={{ padding: '0.15rem 0.45rem', fontSize: '0.75rem' }} onClick={() => removeAdjustment(a.id)}>✕</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
       <section style={{ marginBottom: '1.4rem' }}>
         <div className="section-title">

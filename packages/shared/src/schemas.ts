@@ -2,7 +2,7 @@ import { z } from 'zod';
 import {
   PERSON_ROLES, ENTITIES, WORKSITE_STATUSES, WORKSITE_PRIORITIES, CRM_STAGES, CRM_LOST_REASONS,
   CONTACT_TYPES, CLIENT_KINDS, WORKER_CONTRACT_TYPES, LEGAL_DOC_TYPES,
-  BUILDING_CONTACT_ROLES, OCCUPANT_KINDS, VEHICLE_STATUSES,
+  BUILDING_CONTACT_ROLES, OCCUPANT_KINDS, VEHICLE_STATUSES, ADJUSTMENT_TYPES,
 } from './enums.js';
 
 const nonEmpty = z.string().trim().min(1);
@@ -114,6 +114,14 @@ export const legalDocInput = z.object({
   number: z.string().trim().nullish(),
   issuedOn: z.coerce.date().nullish(),
   expiresOn: z.coerce.date().nullish(),
+});
+
+/** Avance versée ou dette imputée à un ouvrier — à déduire de sa prochaine paie. */
+export const personAdjustmentInput = z.object({
+  type: z.enum(ADJUSTMENT_TYPES),
+  amount: z.coerce.number().positive(),
+  date: z.coerce.date(),
+  note: z.string().trim().nullish(),
 });
 
 export const crmOpportunityInput = z.object({
@@ -334,6 +342,7 @@ export type ContactInput = z.infer<typeof contactInput>;
 export type BuildingInput = z.infer<typeof buildingInput>;
 export type WorksiteInput = z.infer<typeof worksiteInput>;
 export type PersonInput = z.infer<typeof personInput>;
+export type PersonAdjustmentInput = z.infer<typeof personAdjustmentInput>;
 export type CrmOpportunityInput = z.infer<typeof crmOpportunityInput>;
 export type PlanningEventInput = z.infer<typeof planningEventInput>;
 export type TeamInput = z.infer<typeof teamInput>;

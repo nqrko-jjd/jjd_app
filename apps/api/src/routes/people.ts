@@ -2,7 +2,7 @@ import { Router } from 'express';
 import path from 'node:path';
 import { createReadStream, existsSync } from 'node:fs';
 import multer from 'multer';
-import { personInput, legalDocInput, normalizeName } from '@jjd/shared';
+import { personInput, legalDocInput, personAdjustmentInput, normalizeName, round2 } from '@jjd/shared';
 import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, STAFF, OFFICE, hashPassword } from '../lib/auth.js';
@@ -53,6 +53,7 @@ peopleRouter.get(
         legalDocs: { orderBy: { expiresOn: 'asc' } },
         equipment: true,
         user: { select: { id: true, email: true, role: true } },
+        adjustments: { orderBy: { date: 'desc' } },
       },
     });
     if (!person) throw new HttpError(404, 'Fiche introuvable');
@@ -60,12 +61,15 @@ peopleRouter.get(
     // décompte du mois courant (jour presté garanti inclus)
     const now = new Date();
     const s = await monthlyStatement(person.id, now.getFullYear(), now.getMonth() + 1);
+    // avances + dettes pas encore réglées -> montant à retenir sur la prochaine paie
+    const toWithhold = round2(person.adjustments.filter((a) => !a.settled).reduce((sum, a) => sum + a.amount, 0));
     res.json({
       person,
       monthStatement: {
         hours: s.totalHours, amount: s.totalAmount,
         worksites: s.worksiteCount, guaranteeApplied: s.guaranteeApplied, dailyHours: s.dailyHoursGuarantee,
       },
+      adjustmentBalance: toWithhold,
     });
   }),
 );
@@ -205,5 +209,55 @@ peopleRouter.get(
     res.setHeader('Content-Type', type);
     res.setHeader('Content-Disposition', `inline; filename="${(doc.label ?? doc.type).replace(/[^\w.-]/g, '_')}${ext}"`);
     createReadStream(file).pipe(res);
+  }),
+);
+
+/* -------------------------------------------------------- Avances & dettes */
+
+peopleRouter.post(
+  '/:id/adjustments',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const data = personAdjustmentInput.parse(req.body);
+    const adj = await prisma.personAdjustment.create({
+      data: { personId: req.params.id as string, ...data, note: data.note ?? null, createdById: req.user!.id },
+    });
+    res.status(201).json({ adjustment: adj });
+  }),
+);
+
+peopleRouter.patch(
+  '/:id/adjustments/:adjId',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const data = personAdjustmentInput.partial().parse(req.body);
+    const adj = await prisma.personAdjustment.update({
+      where: { id: req.params.adjId },
+      data: { ...data, note: data.note === undefined ? undefined : data.note ?? null },
+    });
+    res.json({ adjustment: adj });
+  }),
+);
+
+/** Bascule réglé / à déduire (avance remboursée, dette payée…). */
+peopleRouter.post(
+  '/:id/adjustments/:adjId/settle',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const settled = req.body?.settled !== false;
+    const adj = await prisma.personAdjustment.update({
+      where: { id: req.params.adjId },
+      data: { settled, settledOn: settled ? new Date() : null },
+    });
+    res.json({ adjustment: adj });
+  }),
+);
+
+peopleRouter.delete(
+  '/:id/adjustments/:adjId',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    await prisma.personAdjustment.delete({ where: { id: req.params.adjId } });
+    res.json({ ok: true });
   }),
 );

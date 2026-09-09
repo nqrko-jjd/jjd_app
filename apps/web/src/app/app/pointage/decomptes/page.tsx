@@ -7,8 +7,8 @@ import { PageHead, Money } from '@/lib/ui';
 import { formatHours, WORKER_CONTRACT_LABEL } from '@jjd/shared';
 
 interface Team {
-  year: number; month: number; totalAmount: number;
-  rows: { personId: string; name: string; contractType: string; hourlyRate: number | null; hours: number; amount: number; pending: number }[];
+  year: number; month: number; totalAmount: number; totalNetAmount: number;
+  rows: { personId: string; name: string; contractType: string; hourlyRate: number | null; hours: number; amount: number; toWithhold: number; netAmount: number; pending: number }[];
 }
 interface Detail {
   totalHours: number; totalAmount: number;
@@ -42,6 +42,7 @@ export default function DecomptesPage() {
   const rows = data?.rows ?? [];
   const totalHours = rows.reduce((a, r) => a + r.hours, 0);
   const pending = rows.reduce((a, r) => a + r.pending, 0);
+  const hasWithholding = rows.some((r) => r.toWithhold > 0);
 
   return (
     <>
@@ -59,7 +60,11 @@ export default function DecomptesPage() {
 
       {data && rows.length > 0 && (
         <div className="kpis" style={{ marginBottom: '1.4rem' }}>
-          <div className="kpi"><span className="ic">€</span><div className="label">Total à payer</div><div className="value"><Money value={data.totalAmount} /></div></div>
+          <div className="kpi">
+            <span className="ic">€</span>
+            <div className="label">Total net à payer</div>
+            <div className="value"><Money value={data.totalNetAmount} /></div>
+          </div>
           <div className="kpi"><span className="ic">☺</span><div className="label">Personnes</div><div className="value">{rows.length}</div></div>
           <div className="kpi"><span className="ic">◷</span><div className="label">Heures</div><div className="value">{formatHours(totalHours)}</div></div>
           <div className={`kpi${pending ? ' warn' : ''}`}><span className="ic">!</span><div className="label">À valider</div><div className="value">{pending}</div></div>
@@ -72,11 +77,17 @@ export default function DecomptesPage() {
         <div className="tbl-wrap">
           <table className="tbl">
             <thead>
-              <tr><th></th><th>Personne</th><th>Contrat</th><th style={{ textAlign: 'right' }}>Taux</th><th style={{ textAlign: 'right' }}>Heures</th><th style={{ textAlign: 'right' }}>Montant</th><th></th></tr>
+              <tr>
+                <th></th><th>Personne</th><th>Contrat</th><th style={{ textAlign: 'right' }}>Taux</th>
+                <th style={{ textAlign: 'right' }}>Heures</th><th style={{ textAlign: 'right' }}>Montant</th>
+                {hasWithholding && <th style={{ textAlign: 'right' }}>À retenir</th>}
+                {hasWithholding && <th style={{ textAlign: 'right' }}>Net</th>}
+                <th></th>
+              </tr>
             </thead>
             <tbody>
               {rows.map((r) => (
-                <FragmentRow key={r.personId} r={r} open={open === r.personId} onToggle={() => toggle(r.personId)} detail={detail[r.personId]} />
+                <FragmentRow key={r.personId} r={r} open={open === r.personId} onToggle={() => toggle(r.personId)} detail={detail[r.personId]} showWithholding={hasWithholding} />
               ))}
             </tbody>
             <tfoot>
@@ -84,6 +95,8 @@ export default function DecomptesPage() {
                 <td colSpan={4}>Total</td>
                 <td style={{ textAlign: 'right' }}>{formatHours(totalHours)}</td>
                 <td style={{ textAlign: 'right' }}><Money value={data.totalAmount} /></td>
+                {hasWithholding && <td style={{ textAlign: 'right' }}><Money value={data.totalAmount - data.totalNetAmount} /></td>}
+                {hasWithholding && <td style={{ textAlign: 'right' }}><Money value={data.totalNetAmount} /></td>}
                 <td></td>
               </tr>
             </tfoot>
@@ -95,9 +108,9 @@ export default function DecomptesPage() {
 }
 
 function FragmentRow({
-  r, open, onToggle, detail,
+  r, open, onToggle, detail, showWithholding,
 }: {
-  r: Team['rows'][number]; open: boolean; onToggle: () => void; detail?: Detail;
+  r: Team['rows'][number]; open: boolean; onToggle: () => void; detail?: Detail; showWithholding: boolean;
 }) {
   return (
     <>
@@ -108,6 +121,8 @@ function FragmentRow({
         <td style={{ textAlign: 'right' }}>{r.hourlyRate != null ? <Money value={r.hourlyRate} /> : '—'}</td>
         <td style={{ textAlign: 'right' }} className="tnum">{formatHours(r.hours)}</td>
         <td style={{ textAlign: 'right' }}><Money value={r.amount} /></td>
+        {showWithholding && <td style={{ textAlign: 'right' }}>{r.toWithhold > 0 ? <Money value={r.toWithhold} /> : '—'}</td>}
+        {showWithholding && <td style={{ textAlign: 'right', fontWeight: r.toWithhold > 0 ? 700 : 400 }}><Money value={r.netAmount} /></td>}
         <td>{r.pending > 0 && <span className="badge warn">{r.pending} à valider</span>}</td>
       </tr>
       {open && detail && detail.byWorksite.map((w) => (
@@ -117,6 +132,8 @@ function FragmentRow({
           <td className="muted" style={{ textAlign: 'right', fontSize: '0.82rem' }}>{w.days} j</td>
           <td style={{ textAlign: 'right', fontSize: '0.85rem' }} className="tnum">{formatHours(w.hours)}</td>
           <td style={{ textAlign: 'right', fontSize: '0.85rem' }}><Money value={w.amount} /></td>
+          {showWithholding && <td></td>}
+          {showWithholding && <td></td>}
           <td></td>
         </tr>
       ))}

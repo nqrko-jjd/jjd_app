@@ -147,8 +147,10 @@ timesheetRouter.post(
         rateUsed: rate,
         task: d.task ?? null,
         note: d.note ?? null,
-        status: req.user!.role === 'worker' ? 'submitted' : 'approved',
-        approvedById: req.user!.role === 'worker' ? null : req.user!.id,
+        // toujours "à valider", même saisi par le bureau -> passe par la même file de
+        // validation qu'un pointage terrain, pas de raccourci auto-approuvé
+        status: 'submitted',
+        approvedById: null,
         source: 'manual',
       },
     });

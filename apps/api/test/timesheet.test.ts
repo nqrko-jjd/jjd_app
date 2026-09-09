@@ -131,6 +131,23 @@ test('validation : submitted -> approved par le bureau', async () => {
   assert.equal((await ap.json()).entry.status, 'approved');
 });
 
+test('pointage manuel (bureau) : reste "à valider", pas auto-approuvé', async () => {
+  const created = await fetch(`${base}/api/timesheet/entries`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${davidToken}` },
+    body: JSON.stringify({ personId: testPersonId, worksiteId, date: '2026-05-04', hours: 6, note: 'oublié de pointer' }),
+  });
+  assert.equal(created.status, 201);
+  const entry = (await created.json()).entry;
+  assert.equal(entry.status, 'submitted');
+  assert.equal(entry.approvedById, null);
+  assert.equal(entry.source, 'manual');
+
+  const pending = await fetch(`${base}/api/timesheet/pending`, { headers: { authorization: `Bearer ${davidToken}` } });
+  const { items } = await pending.json();
+  assert.ok(items.some((i: { id: string }) => i.id === entry.id), 'l’écriture manuelle apparaît dans la file de validation');
+});
+
 test('planning : création sans clé Google (dégradation OK)', async () => {
   const r = await fetch(`${base}/api/planning`, {
     method: 'POST',

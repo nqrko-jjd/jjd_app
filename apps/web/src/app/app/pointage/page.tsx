@@ -119,7 +119,7 @@ export default function PointagePage() {
   );
 }
 
-/** Saisie manuelle : ouvrier qui a oublié de pointer, correction, etc. Validé directement (source=manual). */
+/** Saisie manuelle : ouvrier qui a oublié de pointer, correction, etc. Reste "à valider" (source=manual). */
 function ManualEntryModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
   const { data: meta } = useApi<Meta>('/api/meta/pickers');
   const [personId, setPersonId] = useState('');
@@ -168,7 +168,7 @@ function ManualEntryModal({ onClose, onDone }: { onClose: () => void; onDone: ()
           <button type="button" className="btn ghost" onClick={onClose} aria-label="Fermer">✕</button>
         </div>
         <div className="modal-body">
-          <p className="muted" style={{ marginTop: 0 }}>Pour un ouvrier qui a oublié de pointer, ou une correction. Validé immédiatement (pas de file d’attente).</p>
+          <p className="muted" style={{ marginTop: 0 }}>Pour un ouvrier qui a oublié de pointer, ou une correction. Reste « à valider » comme un pointage terrain.</p>
           <div className="field">
             <label>Ouvrier *</label>
             <ComboBox placeholder="chercher un nom" value={personId} onChange={setPersonId} options={meta?.people.map((p) => ({ value: p.id, label: p.name })) ?? []} />

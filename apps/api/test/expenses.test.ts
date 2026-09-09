@@ -124,3 +124,23 @@ test('rapprochement bancaire -> facture d\'achat passe « payé », défaire la 
   assert.equal(afterUnmatch!.paymentStatus, 'Non payé');
   assert.equal(afterUnmatch!.paidOn, null);
 });
+
+test('note de crédit fournisseur : créable, et vient en déduction des totaux (pas en plus)', async () => {
+  const before = await jf<{ totals: { ht: number; ttc: number; unpaidTtc: number } }>(`/api/finance/expenses?worksiteId=${worksiteId}`);
+
+  const created = await jf<{ expense: { id: string; direction: string; docType: string } }>(
+    '/api/finance/expenses',
+    { method: 'POST', body: JSON.stringify({ date: '2026-09-06', direction: 'credit_note', supplierName: 'Test Fournisseur NC', worksiteId, ht: 30, ttc: 36.3, paymentStatus: 'Non payé' }) },
+  );
+  assert.equal(created.status, 201);
+  assert.equal(created.body.expense.direction, 'credit_note');
+  assert.equal(created.body.expense.docType, 'Note de crédit');
+
+  const after = await jf<{ totals: { ht: number; ttc: number; unpaidTtc: number } }>(`/api/finance/expenses?worksiteId=${worksiteId}`);
+  assert.equal(Math.round((after.body.totals.ht - before.body.totals.ht) * 100) / 100, -30);
+  assert.equal(Math.round((after.body.totals.ttc - before.body.totals.ttc) * 100) / 100, -36.3);
+  // une note de crédit n'est jamais "payée" : elle réduit le reste à payer immédiatement
+  assert.equal(Math.round((after.body.totals.unpaidTtc - before.body.totals.unpaidTtc) * 100) / 100, -36.3);
+
+  await prisma.ledgerEntry.delete({ where: { id: created.body.expense.id } });
+});

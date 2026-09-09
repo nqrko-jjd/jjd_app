@@ -43,9 +43,16 @@ expensesRouter.get(
   requireAuth(...FIELD_OFFICE),
   asyncHandler(async (req, res) => {
     const { q, paid, worksiteId, contactId, category, from, to, year, page: pageStr, pageSize: pageSizeStr } = req.query as Record<string, string>;
-    // achats + notes de crédit d'achat (une NC de vente réduit le CA, pas une dépense)
+    // achats + notes de crédit d'achat (une NC de vente réduit le CA, pas une dépense).
+    // categoryRaw peut être NULL (saisie manuelle sans catégorie) : NOT{contains} exclurait
+    // alors la ligne (NULL n'est ni "contient" ni "ne contient pas" en SQL) -> OR explicite.
     const and: Record<string, unknown>[] = [
-      { OR: [{ direction: 'purchase' }, { direction: 'credit_note', NOT: { categoryRaw: { contains: 'vente' } } }] },
+      {
+        OR: [
+          { direction: 'purchase' },
+          { direction: 'credit_note', OR: [{ categoryRaw: null }, { NOT: { categoryRaw: { contains: 'vente' } } }] },
+        ],
+      },
     ];
     if (worksiteId) and.push({ worksiteId });
     if (contactId) and.push({ contactId });
@@ -81,16 +88,19 @@ expensesRouter.get(
         include: inc,
       }),
       // totaux (KPI) sur l'ensemble du filtre, pas seulement la page affichée
-      prisma.ledgerEntry.findMany({ where: { AND: and }, select: { ht: true, ttc: true, paymentStatus: true } }),
+      prisma.ledgerEntry.findMany({ where: { AND: and }, select: { ht: true, ttc: true, paymentStatus: true, direction: true } }),
     ]);
 
     const totals = all.reduce(
       (acc, e) => {
         const ttc = e.ttc ?? e.ht;
+        const sign = e.direction === 'credit_note' ? -1 : 1;
         acc.count += 1;
-        acc.ht += e.ht;
-        acc.ttc += ttc;
-        if (!isPaidStr(e.paymentStatus)) acc.unpaidTtc += ttc;
+        acc.ht += sign * e.ht;
+        acc.ttc += sign * ttc;
+        // une note de crédit vient toujours en déduction (elle n'est jamais "payée")
+        if (e.direction === 'credit_note') acc.unpaidTtc -= ttc;
+        else if (!isPaidStr(e.paymentStatus)) acc.unpaidTtc += ttc;
         return acc;
       },
       { count: 0, ht: 0, ttc: 0, unpaidTtc: 0 },
@@ -274,8 +284,8 @@ expensesRouter.post(
         ...derive(d.date),
         date: d.date,
         dueDate: d.dueDate ?? null,
-        direction: 'purchase',
-        docType: "Facture d'achat",
+        direction: d.direction,
+        docType: d.direction === 'credit_note' ? 'Note de crédit' : "Facture d'achat",
         docNumber: d.docNumber ?? null,
         supplierName,
         contactId: d.contactId ?? null,
@@ -313,6 +323,10 @@ expensesRouter.patch(
     const data: Record<string, unknown> = {};
     if (d.date) Object.assign(data, derive(d.date), { date: d.date });
     if ('dueDate' in d) data.dueDate = d.dueDate ?? null;
+    if (d.direction) {
+      data.direction = d.direction;
+      data.docType = d.direction === 'credit_note' ? 'Note de crédit' : "Facture d'achat";
+    }
     if ('docNumber' in d) data.docNumber = d.docNumber ?? null;
     if ('worksiteId' in d) data.worksiteId = d.worksiteId ?? null;
     if ('ht' in d) data.ht = d.ht;

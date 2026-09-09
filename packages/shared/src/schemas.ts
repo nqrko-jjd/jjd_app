@@ -213,6 +213,7 @@ export const documentInput = z.object({
 export const expenseInput = z.object({
   date: z.coerce.date(),
   dueDate: z.coerce.date().nullish(),
+  direction: z.enum(['purchase', 'credit_note']).default('purchase'),
   supplierName: z.string().trim().nullish(),
   contactId: z.string().nullish(),
   docNumber: z.string().trim().nullish(),

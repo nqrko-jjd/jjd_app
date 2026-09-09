@@ -96,7 +96,7 @@ contactsRouter.get(
     res.json({
       contact: {
         ...contact,
-        purchases: ledger.slice(-150).reverse().map((p) => ({ ...p, paid: isPaidStr(p.paymentStatus), hasPdf: !!p.pdfPath })),
+        purchases: [...ledger].reverse().map((p) => ({ ...p, paid: isPaidStr(p.paymentStatus), hasPdf: !!p.pdfPath })),
         purchaseBalance: [...balanceLedger].reverse(),
         purchaseSummary: {
           count: ledger.length,

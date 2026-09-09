@@ -311,6 +311,7 @@ function ExpenseModal({
   const [v, setV] = useState({
     date: toDateInput(expense?.date ?? new Date().toISOString()),
     dueDate: toDateInput(expense?.dueDate ?? null),
+    direction: (expense?.direction === 'credit_note' ? 'credit_note' : 'purchase') as 'purchase' | 'credit_note',
     supplierName: expense?.contactId ? '' : (expense?.supplierName ?? ''),
     contactId: expense?.contactId ?? '',
     docNumber: expense?.docNumber ?? '',
@@ -382,6 +383,7 @@ function ExpenseModal({
       const body = {
         date: v.date,
         dueDate: v.dueDate || null,
+        direction: v.direction,
         supplierName: v.contactId ? null : (v.supplierName || null),
         contactId: v.contactId || null,
         docNumber: v.docNumber || null,
@@ -423,6 +425,13 @@ function ExpenseModal({
           <div className="field">
             <label>Échéance</label>
             <input className="input" type="date" disabled={readOnly} value={v.dueDate} onChange={(e) => set('dueDate', e.target.value)} />
+          </div>
+          <div className="field">
+            <label>Type</label>
+            <select className="select" disabled={readOnly} value={v.direction} onChange={(e) => set('direction', e.target.value)}>
+              <option value="purchase">Facture d’achat</option>
+              <option value="credit_note">Note de crédit fournisseur</option>
+            </select>
           </div>
           <div className="field" style={{ gridColumn: '1 / -1' }}>
             <label>Fournisseur</label>

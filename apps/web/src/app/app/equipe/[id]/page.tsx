@@ -23,10 +23,17 @@ interface Detail {
   monthStatement: { hours: number; amount: number; worksites: number; guaranteeApplied: boolean; dailyHours: number };
 }
 
+interface Earnings {
+  total: { hours: number; amount: number; years: number; worksites: number };
+  byYear: { year: number; hours: number; amount: number; worksites: number }[];
+  byWorksite: { id: string; ref: string; title: string; hours: number; amount: number; days: number; marginPct: number | null; margin: number | null }[];
+}
+
 export default function PersonDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { data, loading, reload } = useApi<Detail>(`/api/people/${id}`);
   const { data: stats } = useApi<{ months: { month: string; amount: number; hours: number; worksites: number }[] }>(`/api/people/${id}/stats`);
+  const { data: earnings } = useApi<Earnings>(`/api/people/${id}/earnings`);
   const [created, setCreated] = useState<{ email: string; password: string } | null>(null);
   const [editing, setEditing] = useState(false);
   const [addingDoc, setAddingDoc] = useState(false);
@@ -164,6 +171,59 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
               }))}
             />
           </div>
+        </section>
+      )}
+
+      {earnings && earnings.total.amount > 0 && (
+        <section style={{ marginBottom: '1.4rem' }}>
+          <div className="section-title">Revenus — tout l’historique</div>
+          <div className="kpis" style={{ marginBottom: '1rem' }}>
+            <div className="kpi"><span className="ic">€</span><div className="label">Total perçu</div><div className="value"><Money value={earnings.total.amount} /></div></div>
+            <div className="kpi"><span className="ic">Σ</span><div className="label">Heures payées</div><div className="value">{formatHours(earnings.total.hours)}</div></div>
+            <div className="kpi"><span className="ic">#</span><div className="label">Chantiers</div><div className="value">{earnings.total.worksites}</div></div>
+            <div className="kpi"><span className="ic">#</span><div className="label">Années</div><div className="value">{earnings.total.years}</div></div>
+          </div>
+
+          <div className="grid" style={{ gridTemplateColumns: '1fr 1.4fr', gap: '1.2rem', alignItems: 'start' }}>
+            <div className="tbl-wrap">
+              <table className="tbl">
+                <thead><tr><th>Année</th><th style={{ textAlign: 'right' }}>Heures</th><th style={{ textAlign: 'right' }}>Montant</th><th style={{ textAlign: 'right' }}>Chantiers</th></tr></thead>
+                <tbody>
+                  {earnings.byYear.map((y) => (
+                    <tr key={y.year}>
+                      <td className="mono">{y.year}</td>
+                      <td className="tnum">{formatHours(y.hours)}</td>
+                      <td className="tnum"><Money value={y.amount} /></td>
+                      <td className="tnum">{y.worksites}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="tbl-wrap">
+              <table className="tbl">
+                <thead><tr><th>Chantier</th><th style={{ textAlign: 'right' }}>Heures</th><th style={{ textAlign: 'right' }}>Montant</th><th style={{ textAlign: 'right' }}>Rentabilité du chantier</th></tr></thead>
+                <tbody>
+                  {earnings.byWorksite.map((w) => (
+                    <tr key={w.id}>
+                      <td><Link href={`/app/chantiers/${w.id}`}>{w.ref} · {w.title}</Link></td>
+                      <td className="tnum">{formatHours(w.hours)}</td>
+                      <td className="tnum"><Money value={w.amount} /></td>
+                      <td className="tnum">
+                        {w.marginPct != null ? (
+                          <span className={`badge ${w.marginPct >= 0 ? 'ok' : 'crit'}`}>{w.marginPct} %</span>
+                        ) : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <p className="muted" style={{ fontSize: '0.78rem', marginTop: '0.5rem' }}>
+            La rentabilité affichée est celle du chantier dans son ensemble (marge réelle), pas une part propre à cette personne — utile comme repère sur le type de chantiers où elle travaille.
+          </p>
         </section>
       )}
 

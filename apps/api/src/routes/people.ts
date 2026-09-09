@@ -8,7 +8,7 @@ import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, STAFF, OFFICE, hashPassword } from '../lib/auth.js';
 import { attachPhotoRoutes } from '../lib/photo-upload.js';
 import { storeFile, UPLOADS_DIR } from '../lib/media.js';
-import { monthlyStatement, personEarningsSeries } from '../lib/statement.js';
+import { monthlyStatement, personEarningsSeries, personEarningsBreakdown } from '../lib/statement.js';
 
 export const peopleRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
@@ -77,6 +77,15 @@ peopleRouter.get(
   asyncHandler(async (req, res) => {
     const months = Math.min(24, Math.max(3, Number(req.query.months) || 12));
     res.json({ months: await personEarningsSeries(req.params.id!, months) });
+  }),
+);
+
+/** Revenus tout l'historique : total, par année, par chantier (+ rentabilité du chantier). */
+peopleRouter.get(
+  '/:id/earnings',
+  requireAuth(...STAFF),
+  asyncHandler(async (req, res) => {
+    res.json(await personEarningsBreakdown(req.params.id!));
   }),
 );
 

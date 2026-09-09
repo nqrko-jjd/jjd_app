@@ -20,7 +20,7 @@ interface Detail {
     startedOn: string | null; endedOn: string | null; quotedHt: number | null; description: string | null;
     client: { id: string; name: string } | null;
     building: { id: string; name: string; syndic: { name: string } | null } | null;
-    manager: { displayName: string | null; firstName: string } | null;
+    manager: { id: string; displayName: string | null; firstName: string } | null;
     documents: { id: string; kind: string; number: string | null; draftRef: string | null; totalHt: number; status: string; issuedOn: string | null }[];
     events: { id: string; startAt: string; endAt: string; vehicle: { plate: string | null } | null; assignments: { person: { displayName: string | null; firstName: string } }[] }[];
     reports: {
@@ -42,6 +42,11 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
   const { id } = use(params);
   const router = useRouter();
   const { data, loading, reload } = useApi<Detail>(`/api/worksites/${id}`);
+  const { data: pick } = useApi<{
+    clients: { id: string; name: string }[];
+    buildings: { id: string; name: string }[];
+    people: { id: string; name: string }[];
+  }>('/api/meta/pickers');
   const [editing, setEditing] = useState(false);
   const [invoicing, setInvoicing] = useState<string | null>(null);
 
@@ -72,6 +77,9 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
 
   const editFields: FieldDef[] = [
     { name: 'title', label: 'Intitulé', required: true, full: true },
+    { name: 'clientId', label: 'Client', type: 'select', options: (pick?.clients ?? []).map((c) => ({ value: c.id, label: c.name })) },
+    { name: 'buildingId', label: 'Immeuble / ACP', type: 'select', options: (pick?.buildings ?? []).map((b) => ({ value: b.id, label: b.name })) },
+    { name: 'managerId', label: 'Chef de chantier', type: 'select', options: (pick?.people ?? []).map((p) => ({ value: p.id, label: p.name })) },
     { name: 'entity', label: 'Entité', type: 'select', options: ENTITIES.map((e) => ({ value: e, label: ENTITY_LABEL[e] })) },
     { name: 'status', label: 'Statut', type: 'select', options: WORKSITE_STATUSES.map((s) => ({ value: s, label: WORKSITE_STATUS_LABEL[s] })) },
     { name: 'priority', label: 'Priorité', type: 'select', options: WORKSITE_PRIORITIES.map((p) => ({ value: p, label: WORKSITE_PRIORITY_LABEL[p] })) },
@@ -91,7 +99,8 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
           title={`Modifier ${w.ref}`}
           fields={editFields}
           initial={{
-            title: w.title, entity: w.entity, status: w.status, priority: w.priority,
+            title: w.title, clientId: w.client?.id ?? '', buildingId: w.building?.id ?? '', managerId: w.manager?.id ?? '',
+            entity: w.entity, status: w.status, priority: w.priority,
             address: w.address, city: w.city,
             startedOn: toDateInput(w.startedOn), endedOn: toDateInput(w.endedOn),
             quotedHt: w.quotedHt, description: w.description,

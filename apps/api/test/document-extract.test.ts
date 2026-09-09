@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseDocumentText } from '../src/lib/document-extract.js';
+import { parseDocumentText, findWorksiteRefCandidates } from '../src/lib/document-extract.js';
 
 test('parseDocumentText : facture — type, date, TVA et totaux détectés', () => {
   const text = `
@@ -43,6 +43,41 @@ test('parseDocumentText : devis détecté', () => {
   assert.equal(r.issuedOn, '2026-03-03');
   assert.equal(r.docNumber, '2026-014');
   assert.equal(r.totalTtc, 4072.97);
+});
+
+test('parseDocumentText : facture en tableau (en-têtes de colonnes puis valeurs sur la ligne suivante)', () => {
+  // reproduit un vrai cas remonté : facture "No-Doc." style ERP, date sur 2 chiffres,
+  // aucun montant/n° adjacent à un libellé sur la même ligne (mise en page en colonnes)
+  const text = [
+    ' BV JJD CONSULT',
+    ' GIETERIJSTRAAT 49',
+    ' B-1601 RUISBROEK (BT.)',
+    'Tél: 0470/69.37.65',
+    ' Date No-Tva No-Cl. No-Doc. FACTURE',
+    ' 09/09/26 BE 1003.823.997 3958 20/358741',
+    ' Article Libellé Qté UV PV-Brut %-Rem PV-Net Montant C',
+    ' 197224 RAD. HENRAD 8 TROUS 600X1800 T22 3118W 1. PC 647.12 -65. % 226.49 226.49 3',
+    ' Votre référence:: R069',
+    ' De 09/09/26 ONTVANGEN MC/BC/C.CARD 395.05 EUR',
+    'C Tot-Marchandise Base Taxable %-TVA Total Tva Total A PAYER',
+    '3 326.49 326.49 21. 68.56 395.05 EUR',
+    'DATE D\'ECHEANCE: 09/09/26 ACOMPTE: 395.05 EUR',
+  ].join('\n');
+
+  const r = parseDocumentText(text);
+  // le tout premier motif "chiffre/chiffre/chiffre" du texte est un n° de tél (0470/69.37 ->
+  // 69 invalide comme mois) : ne doit pas faire échouer toute la détection de date
+  assert.equal(r.issuedOn, '2026-09-09');
+  assert.equal(r.docNumber, '20/358741');
+  assert.equal(r.totalTtc, 395.05);
+
+  const refs = findWorksiteRefCandidates(text);
+  assert.deepEqual(refs, ['R-69']);
+});
+
+test('findWorksiteRefCandidates : plusieurs chantiers cités (facture qui couvre plusieurs chantiers)', () => {
+  const refs = findWorksiteRefCandidates('Livraison pour R-69 et complément pour R123 (bon E07 joint)');
+  assert.deepEqual(refs, ['R-69', 'R-123', 'E-7']);
 });
 
 test('parseDocumentText : texte sans repère connu -> tout à null, pas d’erreur', () => {

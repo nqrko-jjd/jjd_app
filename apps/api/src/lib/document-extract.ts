@@ -27,13 +27,16 @@ export interface DocumentExtraction {
   contactConfidence: 'vat' | 'name' | null;
   worksiteId: string | null;
   worksiteRef: string | null;
+  /** Autres références chantier trouvées dans le texte (une même facture peut couvrir
+   *  plusieurs chantiers) — seule la 1ère (`worksiteId`) est prérempli, à répartir à la main. */
+  otherWorksiteRefs: string[];
   textExtracted: boolean;
 }
 
 const EMPTY: DocumentExtraction = {
   kind: null, issuedOn: null, docNumber: null, totalHt: null, totalVat: null, totalTtc: null, vatRate: null,
   vatNumbersFound: [], contactId: null, contactName: null, contactConfidence: null,
-  worksiteId: null, worksiteRef: null, textExtracted: false,
+  worksiteId: null, worksiteRef: null, otherWorksiteRefs: [], textExtracted: false,
 };
 
 // n° de TVA belge : "BE" + 10 chiffres, groupés 4-3-3 ("BE0746.980.568") — le 1er chiffre
@@ -49,11 +52,39 @@ function detectKind(text: string): DocumentExtraction['kind'] {
   return null;
 }
 
+/**
+ * Beaucoup de factures (imprimés de caisse/ERP) mettent les libellés de colonne sur une
+ * ligne d'en-tête et les valeurs sur la ligne suivante ("Date No-Tva No-Cl. No-Doc." puis
+ * "09/09/26 BE... 3958 20/358741") — le texte -raw les sépare donc par un saut de ligne,
+ * sans rien entre le libellé et la valeur sur la MÊME ligne. Les helpers ci-dessous captent
+ * ce cas : ligne du repère + ligne suivante, on prend le dernier jeton pertinent de la zone.
+ */
+function lineAndNext(text: string, atIndex: number): string {
+  const rest = text.slice(atIndex);
+  const lines = rest.split('\n');
+  return `${lines[0] ?? ''}\n${lines[1] ?? ''}`;
+}
+
 function findDate(text: string): string | null {
-  const m = text.match(/date[^\d]{0,20}(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})/i) ?? text.match(/\b(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})\b/);
-  if (!m) return null;
-  const day = Number(m[1]), month = Number(m[2]), year = Number(m[3]);
-  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  // jj/mm/aaaa OU jj/mm/aa (beaucoup de factures belges datent sur 2 chiffres)
+  const DATE_RE = /\b(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})\b/g;
+  const valid = (day: number, month: number) => month >= 1 && month <= 12 && day >= 1 && day <= 31;
+  const candidates = [...text.matchAll(DATE_RE)];
+
+  // priorité à un candidat proche du mot "date" (l'en-tête peut être sur la ligne d'avant,
+  // ex. mise en page en tableau -> jusqu'à 60 caractères de distance) ; le tout premier motif
+  // "chiffre/chiffre/chiffre" du texte peut être un faux ami (n° de téléphone…), donc on ne
+  // s'arrête pas au premier candidat trouvé mais au premier qui est une date plausible
+  const labelIdx = text.search(/date/i);
+  let best = labelIdx !== -1
+    ? candidates.find((m) => m.index! >= labelIdx && m.index! - labelIdx < 60 && valid(Number(m[1]), Number(m[2])))
+    : undefined;
+  best = best ?? candidates.find((m) => valid(Number(m[1]), Number(m[2])));
+  if (!best) return null;
+
+  const day = Number(best[1]);
+  const month = Number(best[2]);
+  const year = Number(best[3]) + (Number(best[3]) < 100 ? 2000 : 0);
   const d = new Date(Date.UTC(year, month - 1, day));
   return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
 }
@@ -62,11 +93,38 @@ function findDate(text: string): string | null {
 function findDocNumber(text: string): string | null {
   const m = text.match(/(?:facture|devis|note\s+de\s+cr[ée]dit|avoir|offre)\s*n[°o]\.?\s*:?\s*([A-Z0-9][A-Z0-9\-/.]{1,24})/i)
     ?? text.match(/\bn[°o]\.?\s*:?\s*([A-Z0-9][A-Z0-9\-/.]{2,24})\b/i);
-  return m ? m[1]!.replace(/[.\-/]+$/, '') : null;
+  if (m) return m[1]!.replace(/[.\-/]+$/, '');
+
+  // repli mise en page en tableau : en-tête "No-Doc." (ou variantes, y compris avec un tiret
+  // typographique "−" plutôt qu'un tiret ASCII selon la police du PDF d'origine), n° de
+  // document = dernier jeton de la ligne de valeurs qui suit
+  const idx = text.search(/no[\s\-‐-―−]{0,2}doc\.?/i);
+  if (idx === -1) return null;
+  const nextLine = lineAndNext(text, idx).split('\n')[1] ?? '';
+  const tokens = nextLine.trim().split(/\s+/).filter(Boolean);
+  const last = tokens[tokens.length - 1];
+  return last && /[A-Z0-9]/i.test(last) ? last.replace(/[.,;]+$/, '') : null;
+}
+
+/**
+ * Références chantier JJD (R-xxx / E-xx) citées dans le texte — normalisées ("R-69") même
+ * si le document les écrit autrement (sans tiret, avec des zéros de tête : "R069" côté
+ * fournisseur, dans son champ "Votre référence" par exemple). Dédoublonnées, dans l'ordre
+ * d'apparition.
+ */
+export function findWorksiteRefCandidates(text: string): string[] {
+  return [...new Set(
+    [...text.matchAll(/\b([RE])[\s-]?(\d{2,5})\b/gi)].map((m) => `${m[1]!.toUpperCase()}-${Number(m[2])}`),
+  )];
 }
 
 // un montant belge peut grouper les milliers par point OU espace : "1.498,17" / "1 498,17"
 const AMOUNT = '([\\d]+(?:[.,\\s\\u00A0][\\d]+)*)';
+// repli tableau uniquement : montant "propre" à 2 décimales, SANS tolérer l'espace comme
+// séparateur de milliers — sur une ligne de tableau l'espace sépare des CELLULES
+// différentes ("3 326.49 326.49 21. 68.56 395.05"), pas les milliers d'un même montant ;
+// le pattern souple ci-dessus fusionnerait plusieurs colonnes en un seul nombre absurde
+const AMOUNT_STRICT_G = /(\d+[.,]\d{2})/g;
 
 function findTotals(text: string): { ht: number | null; vat: number | null; ttc: number | null; vatRate: number | null } {
   const ttcM = text.match(new RegExp(`total\\s*(?:ttc|tvac)[^\\d]{0,15}${AMOUNT}`, 'i'))
@@ -76,10 +134,24 @@ function findTotals(text: string): { ht: number | null; vat: number | null; ttc:
   const vatAmtM = text.match(new RegExp(`total\\s*tva\\b[^\\d]{0,15}${AMOUNT}`, 'i'))
     ?? text.match(new RegExp(`\\btva\\s*\\d{1,2}\\s*%[^\\d]{0,15}${AMOUNT}`, 'i'));
   const vatRateM = text.match(/tva\s*(\d{1,2})\s*%/i);
+
+  let ttc = ttcM ? parseAmount(ttcM[1]) : null;
+  if (ttc == null) {
+    // repli mise en page en tableau : en-tête "... A PAYER" / "Total ... TVAC" puis les
+    // montants sur la ligne suivante -> on prend le dernier montant de cette zone (la
+    // colonne "total" est presque toujours la dernière du tableau)
+    const idx = text.search(/[aà]\s*payer/i);
+    if (idx !== -1) {
+      const zone = lineAndNext(text, idx);
+      const nums = [...zone.matchAll(AMOUNT_STRICT_G)].map((m) => parseAmount(m[1])).filter((n): n is number => n != null);
+      if (nums.length) ttc = nums[nums.length - 1]!;
+    }
+  }
+
   return {
     ht: htM ? parseAmount(htM[1]) : null,
     vat: vatAmtM ? parseAmount(vatAmtM[1]) : null,
-    ttc: ttcM ? parseAmount(ttcM[1]) : null,
+    ttc,
     vatRate: vatRateM ? Number(vatRateM[1]) / 100 : null,
   };
 }
@@ -141,7 +213,10 @@ export async function extractDocumentInfo(
   }
   if (!contactId) {
     const candidates = await prisma.contact.findMany({ where: { type: { in: contactTypes } }, select: { id: true, name: true }, take: 3000 });
-    const lower = text.toLowerCase();
+    // limité à l'en-tête du document (identité de l'émetteur/destinataire) : le reste
+    // (coordonnées bancaires, mentions légales…) peut contenir un nom qui coïncide par
+    // hasard avec un contact existant sans rapport (ex. "Belfius" comme nom de banque)
+    const lower = text.slice(0, 800).toLowerCase();
     let best: { id: string; name: string } | null = null;
     for (const c of candidates) {
       const name = c.name.trim();
@@ -151,19 +226,30 @@ export async function extractDocumentInfo(
     if (best) { contactId = best.id; contactName = best.name; contactConfidence = 'name'; }
   }
 
-  // chantier : référence JJD (R-xxx / E-xx) citée telle quelle dans le document
+  // chantier : référence JJD (R-xxx / E-xx) citée dans le document — pas toujours telle
+  // quelle : un fournisseur la reprend souvent sans tiret ni zéros de tête dans son propre
+  // champ "Votre référence" (ex. "R069" pour "R-69"), donc on normalise avant de chercher
   let worksiteId: string | null = null;
   let worksiteRef: string | null = null;
-  const refs = [...new Set((text.match(/\b[RE]-\d{2,5}\b/gi) ?? []).map((r) => r.toUpperCase()))];
+  let otherWorksiteRefs: string[] = [];
+  const refs = findWorksiteRefCandidates(text);
   if (refs.length) {
-    const ws = await prisma.worksite.findFirst({ where: { ref: { in: refs } }, select: { id: true, ref: true } });
-    if (ws) { worksiteId = ws.id; worksiteRef = ws.ref; }
+    // toutes les références citées peuvent correspondre à un chantier réel (une facture
+    // peut couvrir plusieurs chantiers) -> on ne pré-remplit que la 1ère, les autres sont
+    // juste signalées pour que l'utilisateur sache qu'il faut peut-être répartir la dépense
+    const matches = await prisma.worksite.findMany({ where: { ref: { in: refs } }, select: { id: true, ref: true } });
+    const ordered = refs.map((r) => matches.find((w) => w.ref === r)).filter((w): w is { id: string; ref: string } => !!w);
+    if (ordered.length) {
+      worksiteId = ordered[0]!.id;
+      worksiteRef = ordered[0]!.ref;
+      otherWorksiteRefs = ordered.slice(1).map((w) => w.ref);
+    }
   }
 
   return {
     kind, issuedOn, docNumber,
     totalHt, totalVat, totalTtc, vatRate,
     vatNumbersFound, contactId, contactName, contactConfidence,
-    worksiteId, worksiteRef, textExtracted: true,
+    worksiteId, worksiteRef, otherWorksiteRefs, textExtracted: true,
   };
 }

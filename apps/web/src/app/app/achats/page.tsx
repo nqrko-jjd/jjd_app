@@ -329,6 +329,7 @@ function ExpenseModal({
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [extracting, setExtracting] = useState(false);
+  const [extractNote, setExtractNote] = useState<string | null>(null);
   const [bankMatch, setBankMatch] = useState<BankTx | null>(null);
   const [bankSug, setBankSug] = useState<BankTx[] | null>(null);
 
@@ -336,6 +337,7 @@ function ExpenseModal({
   // (fournisseur, chantier, montants…) — l'utilisateur corrige ensuite si besoin
   async function handleFile(f: File | null) {
     setPendingFile(f);
+    setExtractNote(null);
     if (!f || expense) return;
     setExtracting(true);
     try {
@@ -345,11 +347,12 @@ function ExpenseModal({
         extraction: {
           kind: string | null; docNumber: string | null; issuedOn: string | null;
           totalHt: number | null; totalTtc: number | null; vatRate: number | null;
-          contactId: string | null; worksiteId: string | null; textExtracted: boolean;
+          contactId: string | null; worksiteId: string | null; worksiteRef: string | null;
+          otherWorksiteRefs: string[]; textExtracted: boolean;
         };
       }>('/api/finance/expenses/extract', fd);
       const ex = r.extraction;
-      if (!ex.textExtracted) return;
+      if (!ex.textExtracted) { setExtractNote('PDF sans texte lisible (scan/photo) — à compléter à la main.'); return; }
       const ht = ex.totalHt ?? (ex.totalTtc != null ? Math.round((ex.totalTtc / (1 + (ex.vatRate ?? 0.21))) * 100) / 100 : null);
       setV((prev) => ({
         ...prev,
@@ -361,6 +364,9 @@ function ExpenseModal({
         ht: prev.ht || (ht != null ? String(ht) : ''),
         ttc: prev.ttc || (ex.totalTtc != null ? String(ex.totalTtc) : ''),
       }));
+      if (ex.otherWorksiteRefs.length) {
+        setExtractNote(`Plusieurs chantiers détectés dans ce document (${[ex.worksiteRef, ...ex.otherWorksiteRefs].filter(Boolean).join(', ')}) — seul le premier est prérempli ; répartis en plusieurs dépenses si la facture couvre plusieurs chantiers.`);
+      }
     } catch {
       // best-effort : en cas d'échec le fichier reste joint, saisie à la main
     } finally {
@@ -536,6 +542,7 @@ function ExpenseModal({
               {extracting && <span className="muted" style={{ fontSize: '0.8rem' }}> · lecture en cours…</span>}
             </label>
             <FileDrop file={pendingFile} onFile={handleFile} existingUrl={pdfUrl} disabled={readOnly} />
+            {extractNote && <p className="muted" style={{ fontSize: '0.8rem', marginTop: '0.4rem', marginBottom: 0 }}>{extractNote}</p>}
           </div>
 
           {expense && (

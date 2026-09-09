@@ -135,7 +135,7 @@ function DocumentsInner() {
         document: { id: string };
         extraction: {
           contactName: string | null; contactConfidence: 'vat' | 'name' | null;
-          worksiteRef: string | null; totalTtc: number | null; textExtracted: boolean;
+          worksiteRef: string | null; otherWorksiteRefs: string[]; totalTtc: number | null; textExtracted: boolean;
         };
       }>('/api/documents/import', fd);
       const ex = r.extraction;
@@ -145,6 +145,7 @@ function DocumentsInner() {
       } else {
         lines.push(ex.contactName ? `Client détecté : ${ex.contactName}${ex.contactConfidence === 'name' ? ' (à vérifier)' : ''}` : 'Client non détecté — à sélectionner sur la fiche.');
         if (ex.worksiteRef) lines.push(`Chantier détecté : ${ex.worksiteRef}`);
+        if (ex.otherWorksiteRefs.length) lines.push(`Autres chantiers cités dans le document (non préremplis) : ${ex.otherWorksiteRefs.join(', ')}`);
         lines.push(ex.totalTtc != null ? `Montant détecté : ${ex.totalTtc.toFixed(2)} € TTC (à vérifier)` : 'Montant non détecté — à saisir à la main.');
       }
       alert(lines.join('\n'));

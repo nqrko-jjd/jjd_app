@@ -1,17 +1,21 @@
 import { Router } from 'express';
 import path from 'node:path';
-import { createReadStream, existsSync, readFileSync } from 'node:fs';
+import { createReadStream, existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { zipSync } from 'fflate';
+import multer from 'multer';
+import { nanoid } from 'nanoid';
 import { documentInput, priceItemInput, DOC_KIND_LABEL } from '@jjd/shared';
 import { prisma, nextCounter } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, OFFICE } from '../lib/auth.js';
 import { docInclude, buildLineRows, cloneLineRows, refreshDocTotals, issueDocument, getCompany } from '../lib/documents.js';
 import { renderDocumentPdf } from '../lib/pdf.js';
+import { extractDocumentInfo } from '../lib/document-extract.js';
 
 export const documentsRouter = Router();
 const PDF_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../uploads/documents');
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 
 /* ---------------------------------------------------------------- Documents */
 
@@ -52,6 +56,62 @@ documentsRouter.get(
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="documents-${new Date().toISOString().slice(0, 10)}.zip"`);
     res.send(Buffer.from(zipped));
+  }),
+);
+
+/**
+ * Importe un devis/facture/note de crédit externe (PDF) : crée le document
+ * avec le type/client/chantier/montant détectés (best-effort, à vérifier
+ * ensuite sur la fiche), et garde le PDF d'origine comme pièce de référence.
+ */
+documentsRouter.post(
+  '/import',
+  requireAuth(...OFFICE),
+  upload.single('file'),
+  asyncHandler(async (req, res) => {
+    if (!req.file) throw new HttpError(422, 'Aucun fichier');
+    if (req.file.mimetype !== 'application/pdf') {
+      throw new HttpError(422, 'Seuls les PDF sont lus automatiquement pour l’instant — un PDF sans texte (scan/photo) sera importé sans pré-remplissage.');
+    }
+
+    const extraction = await extractDocumentInfo(req.file.buffer, req.file.mimetype);
+    const seq = await nextCounter('doc:draft');
+    const doc = await prisma.document.create({
+      data: {
+        kind: extraction.kind ?? 'invoice',
+        direction: extraction.kind === 'credit_note' ? 'credit_note' : 'sale',
+        draftRef: `BROUILLON-${seq}`,
+        status: 'draft',
+        worksiteId: extraction.worksiteId,
+        contactId: extraction.contactId,
+        issuedOn: extraction.issuedOn ? new Date(extraction.issuedOn) : null,
+        source: 'import-pdf',
+        createdById: req.user!.id,
+      },
+    });
+
+    const ht = extraction.totalHt ?? (extraction.totalTtc != null ? Math.round((extraction.totalTtc / (1 + (extraction.vatRate ?? 0.21))) * 100) / 100 : null);
+    if (ht != null && ht > 0) {
+      await prisma.documentLine.createMany({
+        data: buildLineRows(doc.id, [{
+          kind: 'item', label: 'Montant importé (à vérifier)', description: null,
+          qty: 1, unit: 'forfait', unitPriceHt: ht, discountPct: 0, vatRate: extraction.vatRate ?? 0.21, priceItemId: null,
+        }]),
+      });
+      await refreshDocTotals(doc.id);
+    }
+
+    if (!existsSync(PDF_DIR)) mkdirSync(PDF_DIR, { recursive: true });
+    const filename = `${nanoid(14)}.pdf`;
+    writeFileSync(path.join(PDF_DIR, filename), req.file.buffer);
+    await prisma.document.update({ where: { id: doc.id }, data: { originalPdf: filename } });
+
+    await prisma.auditLog.create({
+      data: { actorId: req.user!.id, action: 'import', entity: 'document', entityId: doc.id, meta: { kind: doc.kind } },
+    });
+
+    const full = await prisma.document.findUnique({ where: { id: doc.id }, include: docInclude });
+    res.status(201).json({ document: full, extraction });
   }),
 );
 

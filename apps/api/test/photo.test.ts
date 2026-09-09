@@ -8,6 +8,7 @@ let server: Server;
 let base = '';
 let token = '';
 let personId = '';
+let buildingId = '';
 
 // PNG 1×1 rouge
 const PNG = Buffer.from(
@@ -31,10 +32,13 @@ before(async () => {
   ).token;
   const p = await prisma.person.create({ data: { firstName: 'Photo', lastName: 'Test', normalizedName: 'photo test', source: 'test' } });
   personId = p.id;
+  const b = await prisma.building.create({ data: { name: 'Photo Test Immeuble', normalizedName: 'photo test immeuble', source: 'test' } });
+  buildingId = b.id;
 });
 
 after(async () => {
   await prisma.person.deleteMany({ where: { id: personId } });
+  await prisma.building.deleteMany({ where: { id: buildingId } });
   server.close();
 });
 
@@ -57,6 +61,27 @@ test('photo : upload sur une fiche personne -> photoUrl + thumb, puis suppressio
   const del = await fetch(`${base}/api/people/${personId}/photo`, { method: 'DELETE', headers: { authorization: `Bearer ${token}` } });
   assert.equal(del.status, 200);
   const after2 = await prisma.person.findUnique({ where: { id: personId } });
+  assert.equal(after2?.photoUrl, null);
+});
+
+test('photo : upload sur une fiche immeuble -> photoUrl + thumb, puis suppression', async () => {
+  const form = new FormData();
+  form.append('file', new Blob([PNG], { type: 'image/png' }), 'b.png');
+  const up = await fetch(`${base}/api/buildings/${buildingId}/photo`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}` },
+    body: form,
+  });
+  assert.equal(up.status, 201);
+  const body = await up.json();
+  assert.match(body.photoUrl, /^\/uploads\/media\/.+\.webp$/);
+
+  const building = await prisma.building.findUnique({ where: { id: buildingId } });
+  assert.equal(building?.photoUrl, body.photoUrl);
+
+  const del = await fetch(`${base}/api/buildings/${buildingId}/photo`, { method: 'DELETE', headers: { authorization: `Bearer ${token}` } });
+  assert.equal(del.status, 200);
+  const after2 = await prisma.building.findUnique({ where: { id: buildingId } });
   assert.equal(after2?.photoUrl, null);
 });
 

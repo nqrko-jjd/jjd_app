@@ -3,8 +3,11 @@ import { buildingInput, buildingContactInput, buildingUnitInput, normalizeName }
 import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, STAFF, OFFICE, hashPassword } from '../lib/auth.js';
+import { attachPhotoRoutes } from '../lib/photo-upload.js';
 
 export const buildingsRouter = Router();
+
+attachPhotoRoutes(buildingsRouter, (id, data) => prisma.building.update({ where: { id }, data }));
 
 buildingsRouter.get(
   '/',

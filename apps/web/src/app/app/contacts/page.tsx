@@ -4,10 +4,11 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
-import { PageHead } from '@/lib/ui';
+import { PageHead, Avatar } from '@/lib/ui';
 import { FormModal } from '@/components/FormModal';
 import { ContextMenu, useContextMenu, openActions, type MenuItem } from '@/components/ContextMenu';
 import { PaginationBar } from '@/components/PaginationBar';
+import { ViewToggle, useViewMode } from '@/components/ViewToggle';
 import { useSort, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
 import { CONTACT_FIELDS } from '@/lib/forms';
@@ -39,6 +40,7 @@ function ContactsInner() {
   const [creating, setCreating] = useState(sp.get('new') === '1');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(100);
+  const [mode, setMode] = useViewMode('contacts');
   const ctx = useContextMenu<Contact>();
 
   useEffect(() => { setPage(1); }, [q, type]);
@@ -107,9 +109,28 @@ function ContactsInner() {
           <option value="client">Clients</option>
           <option value="supplier">Fournisseurs</option>
         </select>
+        <ViewToggle mode={mode} onChange={setMode} />
       </div>
       {loading && <div className="empty">Chargement…</div>}
-      {data && (
+      {data && mode === 'gallery' && (
+        <div className="gallery-grid">
+          {sort.rows.map((c) => (
+            <Link key={c.id} href={`/app/contacts/${c.id}`} className="card gallery-card">
+              <div className="gallery-thumb" style={{ borderRadius: '10px 10px 0 0' }}>
+                <Avatar label={c.name} size={56} />
+              </div>
+              <div className="gallery-body">
+                <div className="gallery-title">{c.name}</div>
+                <div className="gallery-sub">
+                  {c.kind ? CLIENT_KIND_LABEL[c.kind as keyof typeof CLIENT_KIND_LABEL] : c.type === 'supplier' ? 'Fournisseur' : '—'}
+                  {c.city && ` · ${c.city}`}
+                </div>
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
+      {data && mode === 'list' && (
         <div className="tbl-wrap">
           <table className="tbl">
             <thead>

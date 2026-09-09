@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import { PageHead, Money, Avatar } from '@/lib/ui';
 import { FormModal } from '@/components/FormModal';
 import { ContextMenu, useContextMenu, openActions, type MenuItem } from '@/components/ContextMenu';
+import { ViewToggle, useViewMode } from '@/components/ViewToggle';
 import { useSort, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
 import { PERSON_FIELDS } from '@/lib/forms';
@@ -25,6 +26,7 @@ export default function EquipePage() {
   const [role, setRole] = useState('');
   const [active, setActive] = useState('1');
   const [creating, setCreating] = useState(false);
+  const [mode, setMode] = useViewMode('equipe');
   const ctx = useContextMenu<Person>();
   const params = new URLSearchParams();
   if (q) params.set('q', q);
@@ -96,9 +98,25 @@ export default function EquipePage() {
           <option value="0">Anciens</option>
           <option value="">Tous</option>
         </select>
+        <ViewToggle mode={mode} onChange={setMode} />
       </div>
       {loading && <div className="empty">Chargement…</div>}
-      {data && (
+      {data && mode === 'gallery' && (
+        <div className="gallery-grid">
+          {sort.rows.map((p) => (
+            <Link key={p.id} href={`/app/equipe/${p.id}`} className="card gallery-card" style={p.active ? undefined : { opacity: 0.6 }}>
+              <div className="gallery-thumb">
+                {p.photoThumbUrl ? <img src={p.photoThumbUrl} alt="" /> : <Avatar label={name(p)} size={56} />}
+              </div>
+              <div className="gallery-body">
+                <div className="gallery-title">{name(p)}{!p.active && <span className="badge plain" style={{ marginLeft: 6 }}>Ancien</span>}</div>
+                <div className="gallery-sub">{PERSON_ROLE_LABEL[p.role as keyof typeof PERSON_ROLE_LABEL] ?? p.role}</div>
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
+      {data && mode === 'list' && (
         <div className="tbl-wrap">
           <table className="tbl">
             <thead>

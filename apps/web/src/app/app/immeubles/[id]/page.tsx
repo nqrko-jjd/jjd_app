@@ -5,6 +5,7 @@ import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { PageHead, StatusBadge, Money, formatDateBE } from '@/lib/ui';
 import { FormModal, type FieldDef } from '@/components/FormModal';
+import { PhotoHeader } from '@/components/PhotoHeader';
 import {
   BUILDING_CONTACT_ROLES, BUILDING_CONTACT_ROLE_LABEL, OCCUPANT_KINDS, OCCUPANT_KIND_LABEL, CLIENT_KIND_LABEL,
 } from '@jjd/shared';
@@ -22,6 +23,7 @@ interface Detail {
   building: {
     id: string; name: string; address: string | null; postalCode: string | null; city: string | null; note: string | null;
     reference: string | null; lotCount: number | null; digicode: string | null; accessNote: string | null;
+    photoUrl: string | null;
     syndic: { id: string; name: string; email: string | null; phone: string | null } | null;
     client: { id: string; name: string } | null;
     contacts: BContact[];
@@ -94,6 +96,14 @@ export default function ImmeubleDetail({ params }: { params: Promise<{ id: strin
             <Link href="/app/immeubles" className="btn">← Immeubles</Link>
           </div>
         }
+      />
+
+      <PhotoHeader
+        basePath={`/api/buildings/${b.id}`}
+        photoUrl={b.photoUrl}
+        alt={b.name}
+        fallback="⌂"
+        onChange={reload}
       />
 
       <div className="info-grid" style={{ marginBottom: '1.6rem' }}>

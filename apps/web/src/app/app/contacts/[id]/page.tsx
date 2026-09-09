@@ -14,6 +14,7 @@ interface Purchase {
   ht: number; ttc: number | null; direction: string; paid: boolean; hasPdf: boolean;
   worksite: { ref: string; title: string } | null;
 }
+interface BalanceLine { id: string; date: string | null; docNumber: string | null; direction: string; ht: number; ttc: number; balance: number }
 interface Detail {
   contact: {
     id: string; name: string; type: string; kind: string | null;
@@ -26,7 +27,8 @@ interface Detail {
     user?: { email: string } | null;
     contactPersons: ContactPerson[];
     purchases: Purchase[];
-    purchaseSummary: { count: number; ht: number; ttc: number; unpaidTtc: number };
+    purchaseBalance: BalanceLine[];
+    purchaseSummary: { count: number; ht: number; ttc: number; balance: number };
   };
 }
 
@@ -171,7 +173,11 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
           <div className="kpis" style={{ marginBottom: '1rem' }}>
             <div className="kpi"><span className="ic">Σ</span><div className="label">Total HT</div><div className="value"><Money value={c.purchaseSummary.ht} /></div></div>
             <div className="kpi"><span className="ic">€</span><div className="label">Total TTC</div><div className="value"><Money value={c.purchaseSummary.ttc} /></div></div>
-            <div className={`kpi${c.purchaseSummary.unpaidTtc ? ' warn' : ''}`}><span className="ic">!</span><div className="label">Reste à payer</div><div className="value"><Money value={c.purchaseSummary.unpaidTtc} /></div></div>
+            <div className={`kpi${c.purchaseSummary.balance > 0 ? ' warn' : ''}`}>
+              <span className="ic">{c.purchaseSummary.balance < 0 ? '+' : '!'}</span>
+              <div className="label">{c.purchaseSummary.balance < 0 ? 'Avoir en votre faveur' : 'Solde du compte'}</div>
+              <div className="value"><Money value={Math.abs(c.purchaseSummary.balance)} /></div>
+            </div>
             <div className="kpi"><span className="ic">#</span><div className="label">Factures</div><div className="value">{c.purchaseSummary.count}</div></div>
           </div>
           {c.purchases.length === 0 ? (
@@ -196,6 +202,30 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
                 </tbody>
               </table>
             </div>
+          )}
+
+          {c.purchaseBalance.length > 0 && (
+            <>
+              <div className="section-title">
+                Solde du compte <span className="hint">factures non soldées et notes de crédit — utile en compte, sans paiement à l’enlèvement</span>
+              </div>
+              <div className="tbl-wrap" style={{ marginBottom: '1.6rem' }}>
+                <table className="tbl">
+                  <thead><tr><th>Date</th><th>N°</th><th style={{ textAlign: 'right' }}>Débit</th><th style={{ textAlign: 'right' }}>Crédit</th><th style={{ textAlign: 'right' }}>Solde</th></tr></thead>
+                  <tbody>
+                    {c.purchaseBalance.map((b) => (
+                      <tr key={b.id}>
+                        <td className="tnum">{formatDateBE(b.date)}</td>
+                        <td className="mono" style={{ fontSize: '0.82rem' }}>{b.docNumber ?? '—'}{b.direction === 'credit_note' && <span className="badge warn" style={{ marginLeft: 6 }}>NC</span>}</td>
+                        <td style={{ textAlign: 'right' }}>{b.ttc > 0 ? <Money value={b.ttc} /> : '—'}</td>
+                        <td style={{ textAlign: 'right' }}>{b.ttc < 0 ? <Money value={-b.ttc} /> : '—'}</td>
+                        <td style={{ textAlign: 'right' }} className="tnum"><strong><Money value={b.balance} /></strong></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </>
       )}

@@ -59,43 +59,50 @@ contactsRouter.get(
     });
     if (!contact) throw new HttpError(404, 'Contact introuvable');
 
-    // Achats : résumé (sur tout l'historique) + les documents les plus récents (liste affichée)
-    const purchaseWhere = { contactId: contact.id, direction: { in: ['purchase', 'credit_note'] }, source: { not: 'demo' } };
-    const [purchases, purchaseAgg] = await Promise.all([
-      prisma.ledgerEntry.findMany({
-        where: purchaseWhere,
-        orderBy: { date: 'desc' },
-        take: 100,
-        select: {
-          id: true, date: true, docNumber: true, categoryRaw: true, ht: true, ttc: true,
-          direction: true, paymentStatus: true, pdfPath: true, worksite: { select: { ref: true, title: true } },
-        },
-      }),
-      prisma.ledgerEntry.groupBy({
-        by: ['direction', 'paymentStatus'],
-        where: purchaseWhere,
-        _sum: { ht: true, ttc: true },
-        _count: true,
-      }),
-    ]);
-    let purchaseHt = 0, purchaseTtc = 0, purchaseCount = 0, unpaidTtc = 0;
-    for (const g of purchaseAgg) {
-      const sign = g.direction === 'credit_note' ? -1 : 1;
-      purchaseHt += sign * (g._sum.ht ?? 0);
-      purchaseTtc += sign * (g._sum.ttc ?? g._sum.ht ?? 0);
-      purchaseCount += g._count;
-      if (g.direction === 'purchase' && !isPaidStr(g.paymentStatus)) unpaidTtc += g._sum.ttc ?? g._sum.ht ?? 0;
+    // Achats : tout l'historique (achats + notes de crédit) — sert au résumé, à la liste
+    // récente affichée et au solde du compte (« en compte » chez le fournisseur : les
+    // notes de crédit viennent en déduction des factures, pas payées une à une).
+    const ledger = await prisma.ledgerEntry.findMany({
+      where: { contactId: contact.id, direction: { in: ['purchase', 'credit_note'] }, source: { not: 'demo' } },
+      orderBy: [{ date: 'asc' }, { id: 'asc' }],
+      take: 20000,
+      select: {
+        id: true, date: true, docNumber: true, categoryRaw: true, ht: true, ttc: true,
+        direction: true, paymentStatus: true, pdfPath: true, worksite: { select: { ref: true, title: true } },
+      },
+    });
+
+    let purchaseHt = 0, purchaseTtc = 0, balance = 0;
+    const balanceLedger: { id: string; date: Date | null; docNumber: string | null; direction: string; ht: number; ttc: number; balance: number }[] = [];
+    for (const e of ledger) {
+      const ttc = e.ttc ?? e.ht ?? 0;
+      if (e.direction === 'credit_note') {
+        purchaseHt -= e.ht ?? 0;
+        purchaseTtc -= ttc;
+        balance -= ttc;
+        balanceLedger.push({ id: e.id, date: e.date, docNumber: e.docNumber, direction: e.direction, ht: -(e.ht ?? 0), ttc: -ttc, balance: round2(balance) });
+      } else {
+        purchaseHt += e.ht ?? 0;
+        purchaseTtc += ttc;
+        // solde ouvert : une facture déjà marquée payée ne pèse plus dans le compte,
+        // une note de crédit reste toujours en déduction (elle n'est jamais "payée")
+        if (!isPaidStr(e.paymentStatus)) {
+          balance += ttc;
+          balanceLedger.push({ id: e.id, date: e.date, docNumber: e.docNumber, direction: e.direction, ht: e.ht ?? 0, ttc, balance: round2(balance) });
+        }
+      }
     }
 
     res.json({
       contact: {
         ...contact,
-        purchases: purchases.map((p) => ({ ...p, paid: isPaidStr(p.paymentStatus), hasPdf: !!p.pdfPath })),
+        purchases: ledger.slice(-150).reverse().map((p) => ({ ...p, paid: isPaidStr(p.paymentStatus), hasPdf: !!p.pdfPath })),
+        purchaseBalance: [...balanceLedger].reverse(),
         purchaseSummary: {
-          count: purchaseCount,
+          count: ledger.length,
           ht: round2(purchaseHt),
           ttc: round2(purchaseTtc),
-          unpaidTtc: round2(unpaidTtc),
+          balance: round2(balance),
         },
       },
     });

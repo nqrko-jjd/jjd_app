@@ -82,13 +82,28 @@ test('devis : émission attribue un numéro continu et verrouille', async () => 
   assert.ok(document.lockedAt);
   assert.equal(document.draftRef, null);
 
-  // lignes non modifiables après émission
+  // le type reste verrouillé après émission…
+  const badKind = await fetch(`${base}/api/documents/${document.id}`, {
+    method: 'PATCH',
+    headers: auth(),
+    body: JSON.stringify({ kind: 'invoice' }),
+  });
+  assert.equal(badKind.status, 409);
+
+  // …mais les lignes restent modifiables (phase de test), et c'est tracé dans l'audit log
   const patch = await fetch(`${base}/api/documents/${document.id}`, {
     method: 'PATCH',
     headers: auth(),
-    body: JSON.stringify({ lines: [] }),
+    body: JSON.stringify({ lines: [{ label: 'Poste corrigé', qty: 1, unitPriceHt: 1200, vatRate: 0.21 }] }),
   });
-  assert.equal(patch.status, 409);
+  assert.equal(patch.status, 200);
+  const patched = await patch.json();
+  assert.equal(patched.document.lines.length, 1);
+  assert.equal(patched.document.totalHt, 1200);
+  assert.equal(patched.document.number, document.number, 'le numéro déjà émis ne change pas');
+
+  const log = await prisma.auditLog.findFirst({ where: { entity: 'document', entityId: document.id, action: 'edit_issued_lines' } });
+  assert.ok(log, 'la modification post-émission est tracée dans l’audit log');
 });
 
 test('facture depuis devis : lignes copiées + communication structurée belge', async () => {

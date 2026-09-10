@@ -243,8 +243,22 @@ documentsRouter.patch(
     if (!existing) throw new HttpError(404, 'Document introuvable');
     const data = documentInput.partial().parse(req.body);
 
-    if (existing.lockedAt && (data.lines || data.kind)) {
-      throw new HttpError(409, 'Document émis : les lignes ne sont plus modifiables. Créez une note de crédit.');
+    if (existing.lockedAt && data.kind) {
+      throw new HttpError(409, 'Document émis : le type (devis/facture/NC) n’est plus modifiable.');
+    }
+    // Modification des lignes/montants après émission — normalement on passerait par une
+    // note de crédit, mais autorisé pour l'instant (phase de test) ; tracé dans l'audit log
+    // pour garder une trace de ce qui a changé après coup.
+    if (existing.lockedAt && data.lines) {
+      await prisma.auditLog.create({
+        data: {
+          actorId: req.user!.id,
+          action: 'edit_issued_lines',
+          entity: 'document',
+          entityId: existing.id,
+          meta: { number: existing.number, previousTotalTtc: existing.totalTtc },
+        },
+      });
     }
 
     await prisma.document.update({

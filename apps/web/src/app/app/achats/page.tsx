@@ -354,6 +354,10 @@ function ExpenseModal({
       const ex = r.extraction;
       if (!ex.textExtracted) { setExtractNote('PDF sans texte lisible (scan/photo) — à compléter à la main.'); return; }
       const ht = ex.totalHt ?? (ex.totalTtc != null ? Math.round((ex.totalTtc / (1 + (ex.vatRate ?? 0.21))) * 100) / 100 : null);
+      // la TVA récupérable = TTC − HT, calculée à partir des montants déjà résolus ci-dessus
+      // plutôt que lue telle quelle dans le PDF (le repère de montant de TVA isolé est peu
+      // fiable — souvent noyé dans un tableau — alors que HT et TTC sont vérifiés)
+      const vatRecup = ht != null && ex.totalTtc != null ? Math.round((ex.totalTtc - ht) * 100) / 100 : null;
       setV((prev) => ({
         ...prev,
         direction: ex.kind === 'credit_note' ? 'credit_note' : prev.direction,
@@ -363,6 +367,7 @@ function ExpenseModal({
         worksiteId: prev.worksiteId || ex.worksiteId || '',
         contactId: prev.contactId || ex.contactId || '',
         ht: prev.ht || (ht != null ? String(ht) : ''),
+        vatRecup: prev.vatRecup || (vatRecup != null ? String(vatRecup) : ''),
         ttc: prev.ttc || (ex.totalTtc != null ? String(ex.totalTtc) : ''),
       }));
       if (ex.otherWorksiteRefs.length) {

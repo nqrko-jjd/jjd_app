@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import type { Prisma } from '@prisma/client';
 import multer from 'multer';
 import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
@@ -8,9 +9,16 @@ import { analytics } from '../lib/analytics.js';
 import { autoMatchAll } from '../lib/bank-match.js';
 import { parseBankCsv, decodeCsvBuffer, type ParsedBankRow } from '../lib/bank-csv.js';
 import { parseCardStatement, pdfToRawText, pdftotextAvailable } from '../lib/bank-pdf.js';
+import { toCsv, readTableBuffer, pick } from '../lib/table-io.js';
+import { parseAmount, parseLooseDate } from '@jjd/shared';
 
 export const financeRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
+function derive(date: Date) {
+  const m = date.getMonth() + 1;
+  return { year: date.getFullYear(), month: String(m), quarter: `T${Math.ceil(m / 3)}` };
+}
 
 /** Insère des lignes de relevé (dédoublonnage par externalId + inter-sources). */
 async function insertBankRows(rows: ParsedBankRow[], bankLabel: string, source: string) {
@@ -94,6 +102,133 @@ financeRouter.get(
   asyncHandler(async (_req, res) => {
     const rows = await prisma.ledgerEntry.groupBy({ by: ['year'], where: { year: { not: null } } });
     res.json({ years: rows.map((r) => r.year).filter(Boolean).sort((a, b) => (b as number) - (a as number)) });
+  }),
+);
+
+/* ------------------------------------------------------- ventes (grand livre, historique) */
+
+const SALES_CSV_COLUMNS = [
+  { key: 'id', label: 'id' },
+  { key: 'date', label: 'Date' },
+  { key: 'dueDate', label: 'Échéance' },
+  { key: 'client', label: 'Client' },
+  { key: 'docNumber', label: 'N° document' },
+  { key: 'worksiteRef', label: 'Chantier' },
+  { key: 'ht', label: 'HT' },
+  { key: 'vatDue', label: 'TVA due' },
+  { key: 'ttc', label: 'TTC' },
+  { key: 'paymentStatus', label: 'Statut' },
+  { key: 'notes', label: 'Notes' },
+];
+
+const salesInc = { worksite: { select: { id: true, ref: true } }, contact: { select: { id: true, name: true } } } as const;
+
+/** Export en CSV des ventes du grand livre (historique Excel + saisies manuelles). */
+financeRouter.get(
+  '/sales/export.csv',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const { from, to, worksiteId, year } = req.query as Record<string, string>;
+    const where: Record<string, unknown> = { direction: 'sale' };
+    if (worksiteId) where.worksiteId = worksiteId;
+    if (year) where.year = Number(year);
+    if (from || to) where.date = { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) };
+    const items = await prisma.ledgerEntry.findMany({ where, orderBy: { date: 'desc' }, take: 5000, include: salesInc });
+    const rows = items.map((e) => ({
+      id: e.id,
+      date: e.date,
+      dueDate: e.dueDate,
+      client: e.contact?.name ?? e.supplierName ?? '',
+      docNumber: e.docNumber ?? '',
+      worksiteRef: e.worksite?.ref ?? e.worksiteRef ?? '',
+      ht: e.ht,
+      vatDue: e.vatDue,
+      ttc: e.ttc,
+      paymentStatus: e.paymentStatus ?? 'Non payé',
+      notes: e.notes ?? '',
+    }));
+    const csv = toCsv(SALES_CSV_COLUMNS, rows);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="ventes-${new Date().toISOString().slice(0, 10)}.csv"`);
+    res.send(Buffer.from(csv, 'utf8'));
+  }),
+);
+
+/**
+ * Réimporte un fichier de ventes (précédemment exporté puis corrigé dans Excel, ou
+ * nouveau). Une ligne avec un `id` connu met à jour l'écriture ; sans `id` (ou
+ * inconnu), une nouvelle écriture est créée. Rien n'est jamais supprimé.
+ */
+financeRouter.post(
+  '/sales/import',
+  requireAuth(...OFFICE),
+  upload.single('file'),
+  asyncHandler(async (req, res) => {
+    if (!req.file) throw new HttpError(422, 'Aucun fichier');
+    const rows = readTableBuffer(req.file.buffer, req.file.originalname);
+    if (rows.length > 5000) throw new HttpError(422, 'Trop de lignes (5000 max)');
+
+    let created = 0;
+    let updated = 0;
+    const warnings: { row: number; message: string }[] = [];
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i]!;
+      const rowNum = i + 2;
+      const id = pick(row, 'id');
+      const date = parseLooseDate(pick(row, 'date'));
+      if (!date) { warnings.push({ row: rowNum, message: 'Date manquante ou invalide — ligne ignorée' }); continue; }
+
+      const worksiteRef = pick(row, 'chantier', 'worksiteref');
+      let worksiteId: string | null | undefined;
+      if (worksiteRef) {
+        const w = await prisma.worksite.findFirst({ where: { ref: worksiteRef } });
+        if (w) worksiteId = w.id;
+        else warnings.push({ row: rowNum, message: `Chantier « ${worksiteRef} » introuvable — non modifié` });
+      }
+
+      const clientName = pick(row, 'client');
+      let contactId: string | null | undefined;
+      if (clientName) {
+        const c = await prisma.contact.findFirst({ where: { name: { equals: clientName }, type: { in: ['client', 'both'] } } });
+        if (c) contactId = c.id;
+      }
+
+      const paidRaw = (pick(row, 'statut', 'paymentstatus') ?? '').toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').trim();
+      const paymentStatus = paidRaw === 'paye' ? 'Payé' : 'Non payé';
+
+      const data: Record<string, unknown> = {
+        date,
+        dueDate: parseLooseDate(pick(row, 'echeance', 'échéance', 'duedate')),
+        direction: 'sale',
+        docType: 'Facture de vente',
+        docNumber: pick(row, 'n document', 'docnumber', 'numero') || null,
+        worksiteRef: worksiteRef || null,
+        ...(worksiteId !== undefined ? { worksiteId } : {}),
+        supplierName: clientName || null,
+        ...(contactId !== undefined ? { contactId } : {}),
+        ht: parseAmount(pick(row, 'ht')) ?? 0,
+        vatDue: parseAmount(pick(row, 'tva due', 'vatdue')),
+        ttc: parseAmount(pick(row, 'ttc')),
+        paymentStatus,
+        ...derive(date),
+        notes: pick(row, 'notes') || null,
+      };
+
+      if (id) {
+        const existing = await prisma.ledgerEntry.findUnique({ where: { id } });
+        if (existing) {
+          await prisma.ledgerEntry.update({ where: { id }, data });
+          updated++;
+          continue;
+        }
+        warnings.push({ row: rowNum, message: `id « ${id} » introuvable — ligne créée comme nouvelle écriture` });
+      }
+      await prisma.ledgerEntry.create({ data: { ...data, source: 'manual', createdById: req.user!.id } as Prisma.LedgerEntryUncheckedCreateInput });
+      created++;
+    }
+
+    res.json({ created, updated, warnings });
   }),
 );
 

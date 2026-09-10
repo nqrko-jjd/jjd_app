@@ -26,7 +26,12 @@ function colLetters(ref: string): string {
 }
 
 export function readXlsx(path: string): SheetData[] {
-  const zip = unzipSync(readFileSync(path));
+  return readXlsxBuffer(readFileSync(path));
+}
+
+/** Variante acceptant directement un buffer (upload HTTP, pas de fichier disque). */
+export function readXlsxBuffer(buf: Uint8Array): SheetData[] {
+  const zip = unzipSync(buf);
   const get = (p: string) => (zip[p] ? strFromU8(zip[p]!) : '');
 
   // shared strings

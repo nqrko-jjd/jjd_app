@@ -4,17 +4,19 @@
  * les rapports (marge chantier, P&L, analyses) lisent déjà LedgerEntry.
  */
 import { Router } from 'express';
+import type { Prisma } from '@prisma/client';
 import path from 'node:path';
 import { createReadStream, existsSync, readFileSync } from 'node:fs';
 import multer from 'multer';
 import { zipSync } from 'fflate';
-import { expenseInput } from '@jjd/shared';
+import { expenseInput, parseAmount, parseLooseDate } from '@jjd/shared';
 import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, OFFICE, FIELD_OFFICE } from '../lib/auth.js';
 import { storeFile, UPLOADS_DIR } from '../lib/media.js';
 import { nameOverlap } from '../lib/bank-match.js';
 import { extractDocumentInfo } from '../lib/document-extract.js';
+import { toCsv, readTableBuffer, pick } from '../lib/table-io.js';
 
 export const expensesRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
@@ -39,42 +41,49 @@ function resolveUpload(rel: string): string {
 
 /* ------------------------------------------------------------------ liste */
 
+/** Filtre commun à la liste et à l'export CSV. */
+function buildWhere(q: Record<string, string>) {
+  const { q: search, paid, worksiteId, contactId, category, from, to, year } = q;
+  // achats + notes de crédit d'achat (une NC de vente réduit le CA, pas une dépense).
+  // categoryRaw peut être NULL (saisie manuelle sans catégorie) : NOT{contains} exclurait
+  // alors la ligne (NULL n'est ni "contient" ni "ne contient pas" en SQL) -> OR explicite.
+  const and: Record<string, unknown>[] = [
+    {
+      OR: [
+        { direction: 'purchase' },
+        { direction: 'credit_note', OR: [{ categoryRaw: null }, { NOT: { categoryRaw: { contains: 'vente' } } }] },
+      ],
+    },
+  ];
+  if (worksiteId) and.push({ worksiteId });
+  if (contactId) and.push({ contactId });
+  if (category) and.push({ categoryRaw: category });
+  if (year) and.push({ year: Number(year) });
+  if (from) and.push({ date: { gte: new Date(from) } });
+  if (to) and.push({ date: { lte: new Date(to) } });
+  if (paid === '1') and.push({ paymentStatus: { equals: 'Payé' } });
+  if (paid === '0') and.push({ NOT: { paymentStatus: { equals: 'Payé' } } });
+  if (search) {
+    and.push({
+      OR: [
+        { supplierName: { contains: search } },
+        { docNumber: { contains: search } },
+        { categoryRaw: { contains: search } },
+        { notes: { contains: search } },
+        { contact: { name: { contains: search } } },
+        { worksite: { ref: { contains: search } } },
+      ],
+    });
+  }
+  return and;
+}
+
 expensesRouter.get(
   '/',
   requireAuth(...FIELD_OFFICE),
   asyncHandler(async (req, res) => {
-    const { q, paid, worksiteId, contactId, category, from, to, year, page: pageStr, pageSize: pageSizeStr } = req.query as Record<string, string>;
-    // achats + notes de crédit d'achat (une NC de vente réduit le CA, pas une dépense).
-    // categoryRaw peut être NULL (saisie manuelle sans catégorie) : NOT{contains} exclurait
-    // alors la ligne (NULL n'est ni "contient" ni "ne contient pas" en SQL) -> OR explicite.
-    const and: Record<string, unknown>[] = [
-      {
-        OR: [
-          { direction: 'purchase' },
-          { direction: 'credit_note', OR: [{ categoryRaw: null }, { NOT: { categoryRaw: { contains: 'vente' } } }] },
-        ],
-      },
-    ];
-    if (worksiteId) and.push({ worksiteId });
-    if (contactId) and.push({ contactId });
-    if (category) and.push({ categoryRaw: category });
-    if (year) and.push({ year: Number(year) });
-    if (from) and.push({ date: { gte: new Date(from) } });
-    if (to) and.push({ date: { lte: new Date(to) } });
-    if (paid === '1') and.push({ paymentStatus: { equals: 'Payé' } });
-    if (paid === '0') and.push({ NOT: { paymentStatus: { equals: 'Payé' } } });
-    if (q) {
-      and.push({
-        OR: [
-          { supplierName: { contains: q } },
-          { docNumber: { contains: q } },
-          { categoryRaw: { contains: q } },
-          { notes: { contains: q } },
-          { contact: { name: { contains: q } } },
-          { worksite: { ref: { contains: q } } },
-        ],
-      });
-    }
+    const { page: pageStr, pageSize: pageSizeStr } = req.query as Record<string, string>;
+    const and = buildWhere(req.query as Record<string, string>);
     const page = Math.max(1, Math.trunc(Number(pageStr)) || 1);
     const pageSize = Math.min(500, Math.max(20, Math.trunc(Number(pageSizeStr)) || 100));
     const isPaidStr = (s: string | null) =>
@@ -210,6 +219,150 @@ expensesRouter.get(
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="depenses-${new Date().toISOString().slice(0, 10)}.zip"`);
     res.send(Buffer.from(zipped));
+  }),
+);
+
+/* --------------------------------------------------------- export/import Excel */
+
+const EXPENSE_CSV_COLUMNS = [
+  { key: 'id', label: 'id' },
+  { key: 'date', label: 'Date' },
+  { key: 'dueDate', label: 'Échéance' },
+  { key: 'type', label: 'Type' },
+  { key: 'supplier', label: 'Fournisseur' },
+  { key: 'docNumber', label: 'N° document' },
+  { key: 'worksiteRef', label: 'Chantier' },
+  { key: 'category', label: 'Catégorie' },
+  { key: 'ht', label: 'HT' },
+  { key: 'vatRecup', label: 'TVA récup' },
+  { key: 'ttc', label: 'TTC' },
+  { key: 'paymentStatus', label: 'Statut' },
+  { key: 'notes', label: 'Notes' },
+];
+
+/** Export en CSV (éditable dans Excel) — respecte les mêmes filtres que la liste. */
+expensesRouter.get(
+  '/export.csv',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const and = buildWhere(req.query as Record<string, string>);
+    const items = await prisma.ledgerEntry.findMany({
+      where: { AND: and },
+      orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+      take: 5000,
+      include: inc,
+    });
+    const rows = items.map((e) => ({
+      id: e.id,
+      date: e.date,
+      dueDate: e.dueDate,
+      type: e.direction === 'credit_note' ? 'Note de crédit' : 'Achat',
+      supplier: e.contact?.name ?? e.supplierName ?? '',
+      docNumber: e.docNumber ?? '',
+      worksiteRef: e.worksite?.ref ?? e.worksiteRef ?? '',
+      category: e.category?.label ?? e.categoryRaw ?? '',
+      ht: e.ht,
+      vatRecup: e.vatRecup,
+      ttc: e.ttc,
+      paymentStatus: e.paymentStatus ?? 'Non payé',
+      notes: e.notes ?? '',
+    }));
+    const csv = toCsv(EXPENSE_CSV_COLUMNS, rows);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="achats-${new Date().toISOString().slice(0, 10)}.csv"`);
+    res.send(Buffer.from(csv, 'utf8'));
+  }),
+);
+
+/**
+ * Réimporte un fichier (précédemment exporté puis corrigé dans Excel, ou nouveau).
+ * Une ligne avec un `id` connu met à jour l'écriture ; sans `id` (ou inconnu), une
+ * nouvelle écriture est créée. Une ligne absente du fichier n'est jamais supprimée.
+ */
+expensesRouter.post(
+  '/import',
+  requireAuth(...OFFICE),
+  upload.single('file'),
+  asyncHandler(async (req, res) => {
+    if (!req.file) throw new HttpError(422, 'Aucun fichier');
+    const rows = readTableBuffer(req.file.buffer, req.file.originalname);
+    if (rows.length > 5000) throw new HttpError(422, 'Trop de lignes (5000 max)');
+
+    let created = 0;
+    let updated = 0;
+    const warnings: { row: number; message: string }[] = [];
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i]!;
+      const rowNum = i + 2; // 1 = en-tête
+      const id = pick(row, 'id');
+      const date = parseLooseDate(pick(row, 'date'));
+      if (!date) { warnings.push({ row: rowNum, message: 'Date manquante ou invalide — ligne ignorée' }); continue; }
+
+      const worksiteRef = pick(row, 'chantier', 'worksiteref', 'ref chantier');
+      let worksiteId: string | null | undefined;
+      if (worksiteRef) {
+        const w = await prisma.worksite.findFirst({ where: { ref: worksiteRef } });
+        if (w) worksiteId = w.id;
+        else warnings.push({ row: rowNum, message: `Chantier « ${worksiteRef} » introuvable — non modifié` });
+      }
+
+      const supplierName = pick(row, 'fournisseur', 'supplier');
+      let contactId: string | null | undefined;
+      if (supplierName) {
+        const c = await prisma.contact.findFirst({
+          where: { name: { equals: supplierName }, type: { in: ['supplier', 'both'] } },
+        });
+        if (c) contactId = c.id;
+      }
+
+      const categoryLabel = pick(row, 'categorie', 'catégorie', 'category');
+      let categoryCode: string | null | undefined;
+      let categoryRaw: string | null | undefined = categoryLabel ?? undefined;
+      if (categoryLabel) {
+        const cat = await prisma.category.findFirst({ where: { label: { equals: categoryLabel } } });
+        if (cat) { categoryCode = cat.code; categoryRaw = cat.label; }
+      }
+
+      const typeRaw = (pick(row, 'type') ?? '').toLowerCase();
+      const direction = /credit|avoir/.test(typeRaw) ? 'credit_note' : 'purchase';
+      const paidRaw = (pick(row, 'statut', 'paymentstatus') ?? '').toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').trim();
+      const paymentStatus = paidRaw === 'paye' ? 'Payé' : 'Non payé';
+
+      const data: Record<string, unknown> = {
+        date,
+        dueDate: parseLooseDate(pick(row, 'echeance', 'échéance', 'duedate')),
+        direction,
+        docType: direction === 'credit_note' ? 'Note de crédit' : "Facture d'achat",
+        docNumber: pick(row, 'n document', 'docnumber', 'numero') || null,
+        worksiteRef: worksiteRef || null,
+        ...(worksiteId !== undefined ? { worksiteId } : {}),
+        supplierName: supplierName || null,
+        ...(contactId !== undefined ? { contactId } : {}),
+        categoryCode: categoryCode ?? null,
+        categoryRaw: categoryRaw ?? null,
+        ht: parseAmount(pick(row, 'ht')) ?? 0,
+        vatRecup: parseAmount(pick(row, 'tva recup', 'tva récup', 'vatrecup')),
+        ttc: parseAmount(pick(row, 'ttc')),
+        paymentStatus,
+        ...derive(date),
+        notes: pick(row, 'notes') || null,
+      };
+
+      if (id) {
+        const existing = await prisma.ledgerEntry.findUnique({ where: { id } });
+        if (existing) {
+          await prisma.ledgerEntry.update({ where: { id }, data });
+          updated++;
+          continue;
+        }
+        warnings.push({ row: rowNum, message: `id « ${id} » introuvable — ligne créée comme nouvelle écriture` });
+      }
+      await prisma.ledgerEntry.create({ data: { ...data, source: 'manual', createdById: req.user!.id } as Prisma.LedgerEntryUncheckedCreateInput });
+      created++;
+    }
+
+    res.json({ created, updated, warnings });
   }),
 );
 

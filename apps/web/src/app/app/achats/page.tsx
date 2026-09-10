@@ -9,6 +9,7 @@ import { ContextMenu, useContextMenu, type MenuItem } from '@/components/Context
 import { PaginationBar } from '@/components/PaginationBar';
 import { ComboBox } from '@/components/ComboBox';
 import { FileDrop } from '@/components/FileDrop';
+import { downloadCsv, pickAndImportCsv, summarizeImport } from '@/lib/csvIO';
 
 interface Expense {
   id: string;
@@ -147,6 +148,17 @@ export default function AchatsPage() {
     }
   }
 
+  function exportCsv() {
+    downloadCsv(`/api/finance/expenses/export.csv?${params}`, `achats-${new Date().toISOString().slice(0, 10)}.csv`);
+  }
+  function importCsv() {
+    pickAndImportCsv(
+      '/api/finance/expenses/import',
+      (r) => { alert(summarizeImport(r)); reload(); },
+      (msg) => alert(`Échec de l’import : ${msg}`),
+    );
+  }
+
   function rowMenu(e: Expense): MenuItem[] {
     return [
       { label: 'Ouvrir / modifier', onClick: () => setEdit(e) },
@@ -183,6 +195,8 @@ export default function AchatsPage() {
                 📦 Exporter {selected.size} pièce{selected.size > 1 ? 's' : ''} jointe{selected.size > 1 ? 's' : ''} (zip)
               </button>
             )}
+            <button className="btn" onClick={exportCsv} title="Exporter la liste filtrée en CSV (éditable dans Excel)">⇩ Exporter CSV</button>
+            <button className="btn" onClick={importCsv} title="Réimporter un CSV/Excel corrigé (met à jour par id, crée les nouvelles lignes)">⇧ Importer</button>
             <button className="btn primary" onClick={() => setEdit('new')}>+ Nouvelle dépense</button>
           </div>
         }

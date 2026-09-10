@@ -19,6 +19,13 @@ async function jf<T>(path: string, init?: RequestInit): Promise<{ status: number
   return { status: r.status, body: (await r.json().catch(() => null)) as T };
 }
 
+async function jfUpload<T>(path: string, filename: string, content: string): Promise<{ status: number; body: T }> {
+  const form = new FormData();
+  form.append('file', new Blob([content], { type: 'text/csv' }), filename);
+  const r = await fetch(base + path, { method: 'POST', headers: { authorization: `Bearer ${token}` }, body: form });
+  return { status: r.status, body: (await r.json().catch(() => null)) as T };
+}
+
 before(async () => {
   server = createApp().listen(0);
   await new Promise((r) => server.once('listening', r));
@@ -143,4 +150,41 @@ test('note de crédit fournisseur : créable, et vient en déduction des totaux 
   assert.equal(Math.round((after.body.totals.unpaidTtc - before.body.totals.unpaidTtc) * 100) / 100, -36.3);
 
   await prisma.ledgerEntry.delete({ where: { id: created.body.expense.id } });
+});
+
+test('export CSV puis réimport : met à jour par id, crée les nouvelles lignes, avertit sur chantier inconnu', async () => {
+  const toUpdate = await prisma.ledgerEntry.create({
+    data: { direction: 'purchase', worksiteId, ht: 10, ttc: 12.1, date: new Date('2026-09-01'), source: 'manual', supplierName: 'Avant import', paymentStatus: 'Non payé' },
+  });
+
+  const csv = [
+    'id;Date;Échéance;Type;Fournisseur;N° document;Chantier;Catégorie;HT;TVA récup;TTC;Statut;Notes',
+    `${toUpdate.id};2026-09-08;;Achat;Fournisseur MAJ;INV-MAJ;R-EXP-TEST;;200,5;;242,6;Payé;maj via import`,
+    ';2026-09-09;;Achat;Nouveau Fournisseur;INV-NEW;R-EXP-TEST;;50;;60,5;Non payé;créé via import',
+    ';2026-09-10;;Achat;Fournisseur Inconnu Chantier;INV-BADREF;R-INEXISTANT;;20;;24,2;Non payé;',
+  ].join('\r\n');
+
+  const r = await jfUpload<{ created: number; updated: number; warnings: { row: number; message: string }[] }>(
+    '/api/finance/expenses/import', 'achats.csv', csv,
+  );
+  assert.equal(r.status, 200);
+  assert.equal(r.body.created, 2);
+  assert.equal(r.body.updated, 1);
+  assert.equal(r.body.warnings.length, 1);
+  assert.match(r.body.warnings[0]!.message, /R-INEXISTANT/);
+
+  const updated = await prisma.ledgerEntry.findUnique({ where: { id: toUpdate.id } });
+  assert.equal(updated!.ht, 200.5);
+  assert.equal(updated!.ttc, 242.6);
+  assert.equal(updated!.docNumber, 'INV-MAJ');
+  assert.equal(updated!.paymentStatus, 'Payé');
+
+  const created = await prisma.ledgerEntry.findFirst({ where: { docNumber: 'INV-NEW' } });
+  assert.ok(created);
+  assert.equal(created!.ht, 50);
+  assert.equal(created!.worksiteId, worksiteId);
+
+  const badRef = await prisma.ledgerEntry.findFirst({ where: { docNumber: 'INV-BADREF' } });
+  assert.ok(badRef, 'la ligne est quand même créée malgré le chantier introuvable');
+  assert.equal(badRef!.worksiteId, null);
 });

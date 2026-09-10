@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { readdirSync, existsSync } from 'node:fs';
 import { PrismaClient } from '@prisma/client';
 import { parseLooseDate, parseAmount } from '@jjd/shared';
-import { readXlsx } from './lib/xlsx-read.js';
+import { readXlsx } from '../src/lib/xlsx-read.js';
 
 const prisma = new PrismaClient();
 const here = path.dirname(fileURLToPath(import.meta.url));

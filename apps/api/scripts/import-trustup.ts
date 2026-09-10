@@ -16,8 +16,8 @@ import { readdirSync, existsSync, mkdirSync, copyFileSync } from 'node:fs';
 import bcrypt from 'bcryptjs';
 import { PrismaClient } from '@prisma/client';
 import { parseLooseDate, parseAmount, normalizeName } from '@jjd/shared';
-import { readTable, pick, type TableRow } from './lib/table-read.js';
-import { readXlsx } from './lib/xlsx-read.js';
+import { readTable, pick, type TableRow } from '../src/lib/table-io.js';
+import { readXlsx } from '../src/lib/xlsx-read.js';
 
 const prisma = new PrismaClient();
 const here = path.dirname(fileURLToPath(import.meta.url));

@@ -1,9 +1,14 @@
 import { Router } from 'express';
-import { timeEntryInput, timerStartInput, timerStopInput, round2, distanceMeters, DEFAULT_GEO_RADIUS } from '@jjd/shared';
+import type { Prisma } from '@prisma/client';
+import multer from 'multer';
+import { timeEntryInput, timerStartInput, timerStopInput, round2, distanceMeters, DEFAULT_GEO_RADIUS, parseAmount, parseLooseDate } from '@jjd/shared';
 import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, STAFF, OFFICE } from '../lib/auth.js';
 import { monthlyStatement, teamMonthlyStatement } from '../lib/statement.js';
+import { toCsv, readTableBuffer, pick } from '../lib/table-io.js';
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 
 export const timesheetRouter = Router();
 
@@ -155,6 +160,140 @@ timesheetRouter.post(
       },
     });
     res.status(201).json({ entry });
+  }),
+);
+
+const TIMESHEET_STATUS_LABEL: Record<string, string> = {
+  running: 'En cours', submitted: 'À valider', approved: 'Validé', rejected: 'Refusé',
+};
+
+const TIMESHEET_CSV_COLUMNS = [
+  { key: 'id', label: 'id' },
+  { key: 'date', label: 'Date' },
+  { key: 'ouvrier', label: 'Ouvrier' },
+  { key: 'chantier', label: 'Chantier' },
+  { key: 'heures', label: 'Heures' },
+  { key: 'montant', label: 'Montant' },
+  { key: 'tache', label: 'Tâche' },
+  { key: 'statut', label: 'Statut' },
+  { key: 'note', label: 'Note' },
+];
+
+/** Export en CSV (éditable dans Excel) de tous les pointages sur une période. */
+timesheetRouter.get(
+  '/entries/export.csv',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const { from, to, personId, worksiteId } = req.query as Record<string, string>;
+    const where: Record<string, unknown> = {};
+    if (personId) where.personId = personId;
+    if (worksiteId) where.worksiteId = worksiteId;
+    if (from || to) where.date = { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) };
+    const items = await prisma.timeEntry.findMany({
+      where,
+      orderBy: { date: 'desc' },
+      take: 5000,
+      include: {
+        person: { select: { displayName: true, firstName: true, lastName: true } },
+        worksite: { select: { ref: true } },
+      },
+    });
+    const rows = items.map((e) => ({
+      id: e.id,
+      date: e.date,
+      ouvrier: e.person.displayName || `${e.person.firstName} ${e.person.lastName ?? ''}`.trim(),
+      chantier: e.worksite?.ref ?? e.worksiteRef ?? '',
+      heures: e.hours,
+      montant: e.amount,
+      tache: e.task ?? '',
+      statut: TIMESHEET_STATUS_LABEL[e.status] ?? e.status,
+      note: e.note ?? '',
+    }));
+    const csv = toCsv(TIMESHEET_CSV_COLUMNS, rows);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="horaires-${new Date().toISOString().slice(0, 10)}.csv"`);
+    res.send(Buffer.from(csv, 'utf8'));
+  }),
+);
+
+/**
+ * Réimporte un fichier (précédemment exporté puis corrigé dans Excel, ou nouveau).
+ * Une ligne avec un `id` connu met à jour le pointage ; sans `id` (ou inconnu), un
+ * nouveau pointage est créé. Comme la saisie manuelle, tout repasse par la file de
+ * validation (jamais auto-approuvé) — la colonne « Statut » est informative, ignorée
+ * à l'import. Une ligne absente du fichier n'est jamais supprimée.
+ */
+timesheetRouter.post(
+  '/entries/import',
+  requireAuth(...OFFICE),
+  upload.single('file'),
+  asyncHandler(async (req, res) => {
+    if (!req.file) throw new HttpError(422, 'Aucun fichier');
+    const rows = readTableBuffer(req.file.buffer, req.file.originalname);
+    if (rows.length > 5000) throw new HttpError(422, 'Trop de lignes (5000 max)');
+
+    let created = 0;
+    let updated = 0;
+    const warnings: { row: number; message: string }[] = [];
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i]!;
+      const rowNum = i + 2;
+      const id = pick(row, 'id');
+      const date = parseLooseDate(pick(row, 'date'));
+      if (!date) { warnings.push({ row: rowNum, message: 'Date manquante ou invalide — ligne ignorée' }); continue; }
+
+      const ouvrierName = pick(row, 'ouvrier', 'nom');
+      let personId: string | undefined;
+      if (ouvrierName) {
+        const p = await prisma.person.findFirst({
+          where: { OR: [{ displayName: { equals: ouvrierName } }, { firstName: { equals: ouvrierName } }] },
+        });
+        if (p) personId = p.id;
+      }
+      if (!personId && !id) {
+        const message = ouvrierName ? `Ouvrier « ${ouvrierName} » introuvable — ligne ignorée` : 'Ouvrier manquant et aucun id — ligne ignorée';
+        warnings.push({ row: rowNum, message });
+        continue;
+      }
+
+      const worksiteRef = pick(row, 'chantier', 'worksiteref');
+      let worksiteId: string | null | undefined;
+      if (worksiteRef) {
+        const w = await prisma.worksite.findFirst({ where: { ref: worksiteRef } });
+        if (w) worksiteId = w.id;
+        else warnings.push({ row: rowNum, message: `Chantier « ${worksiteRef} » introuvable — non modifié` });
+      }
+
+      const hours = parseAmount(pick(row, 'heures'));
+      const data: Record<string, unknown> = {
+        date,
+        ...(personId ? { personId } : {}),
+        ...(worksiteId !== undefined ? { worksiteId } : {}),
+        worksiteRef: worksiteRef || null,
+        hours,
+        amount: parseAmount(pick(row, 'montant')),
+        task: pick(row, 'tache', 'tâche') || null,
+        note: pick(row, 'note') || null,
+        status: 'submitted',
+        approvedById: null,
+      };
+
+      if (id) {
+        const existing = await prisma.timeEntry.findUnique({ where: { id } });
+        if (existing) {
+          await prisma.timeEntry.update({ where: { id }, data });
+          updated++;
+          continue;
+        }
+        warnings.push({ row: rowNum, message: `id « ${id} » introuvable — ligne créée comme nouveau pointage` });
+      }
+      if (!personId) { warnings.push({ row: rowNum, message: 'Ouvrier introuvable — ligne ignorée' }); continue; }
+      await prisma.timeEntry.create({ data: { ...data, personId, source: 'manual' } as Prisma.TimeEntryUncheckedCreateInput });
+      created++;
+    }
+
+    res.json({ created, updated, warnings });
   }),
 );
 

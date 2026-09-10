@@ -1,14 +1,19 @@
 import { Router } from 'express';
+import type { Prisma } from '@prisma/client';
 import path from 'node:path';
 import { createReadStream, existsSync } from 'node:fs';
 import multer from 'multer';
-import { personInput, legalDocInput, personAdjustmentInput, normalizeName, round2 } from '@jjd/shared';
+import {
+  personInput, legalDocInput, personAdjustmentInput, normalizeName, round2,
+  PERSON_ROLES, PERSON_ROLE_LABEL, WORKER_CONTRACT_TYPES, WORKER_CONTRACT_LABEL,
+} from '@jjd/shared';
 import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, STAFF, OFFICE, hashPassword } from '../lib/auth.js';
 import { attachPhotoRoutes } from '../lib/photo-upload.js';
 import { storeFile, UPLOADS_DIR } from '../lib/media.js';
 import { monthlyStatement, personEarningsSeries, personEarningsBreakdown } from '../lib/statement.js';
+import { toCsv, readTableBuffer, pick } from '../lib/table-io.js';
 
 export const peopleRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
@@ -40,6 +45,54 @@ peopleRouter.get(
       include: { _count: { select: { legalDocs: true, timeEntries: true } } },
     });
     res.json({ items });
+  }),
+);
+
+const PEOPLE_CSV_COLUMNS = [
+  { key: 'id', label: 'id' },
+  { key: 'firstName', label: 'Prénom' },
+  { key: 'lastName', label: 'Nom' },
+  { key: 'displayName', label: 'Nom affiché' },
+  { key: 'role', label: 'Rôle' },
+  { key: 'contractType', label: 'Contrat' },
+  { key: 'hourlyRate', label: 'Taux horaire' },
+  { key: 'dailyHours', label: 'Heures/jour' },
+  { key: 'phone', label: 'Téléphone' },
+  { key: 'email', label: 'Email' },
+  { key: 'address', label: 'Adresse' },
+  { key: 'active', label: 'Actif' },
+  { key: 'note', label: 'Note' },
+];
+
+peopleRouter.get(
+  '/export.csv',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const { role, active } = req.query as Record<string, string>;
+    const where: Record<string, unknown> = {};
+    if (role) where.role = role;
+    if (active === '1') where.active = true;
+    if (active === '0') where.active = false;
+    const items = await prisma.person.findMany({ where, orderBy: [{ active: 'desc' }, { firstName: 'asc' }] });
+    const rows = items.map((p) => ({
+      id: p.id,
+      firstName: p.firstName,
+      lastName: p.lastName ?? '',
+      displayName: p.displayName ?? '',
+      role: PERSON_ROLE_LABEL[p.role as keyof typeof PERSON_ROLE_LABEL] ?? p.role,
+      contractType: WORKER_CONTRACT_LABEL[p.contractType as keyof typeof WORKER_CONTRACT_LABEL] ?? p.contractType,
+      hourlyRate: p.hourlyRate,
+      dailyHours: p.dailyHours,
+      phone: p.phone ?? '',
+      email: p.email ?? '',
+      address: p.address ?? '',
+      active: p.active ? 'Oui' : 'Non',
+      note: p.note ?? '',
+    }));
+    const csv = toCsv(PEOPLE_CSV_COLUMNS, rows);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="equipe-${new Date().toISOString().slice(0, 10)}.csv"`);
+    res.send(Buffer.from(csv, 'utf8'));
   }),
 );
 
@@ -110,6 +163,90 @@ peopleRouter.post(
       },
     });
     res.status(201).json({ person });
+  }),
+);
+
+/** Résout un libellé FR ("Ouvrier qualifié") ou une valeur brute ("qualified_worker") vers l'enum. */
+function matchEnum<T extends string>(raw: string | null, values: readonly T[], labels: Record<T, string>): T | null {
+  if (!raw) return null;
+  const norm = raw.trim().toLowerCase();
+  const byLabel = values.find((v) => labels[v].toLowerCase() === norm);
+  if (byLabel) return byLabel;
+  const byValue = values.find((v) => v.toLowerCase() === norm);
+  return byValue ?? null;
+}
+
+function parseBool(raw: string | null, fallback: boolean): boolean {
+  if (raw == null || raw.trim() === '') return fallback;
+  return /^(oui|yes|true|1|actif)$/i.test(raw.trim());
+}
+
+/**
+ * Réimporte un fichier (précédemment exporté puis corrigé dans Excel, ou nouveau).
+ * Une ligne avec un `id` connu met à jour la fiche ; sans `id` (ou inconnu), une
+ * nouvelle fiche est créée. Une ligne absente du fichier n'est jamais supprimée.
+ */
+peopleRouter.post(
+  '/import',
+  requireAuth(...OFFICE),
+  upload.single('file'),
+  asyncHandler(async (req, res) => {
+    if (!req.file) throw new HttpError(422, 'Aucun fichier');
+    const rows = readTableBuffer(req.file.buffer, req.file.originalname);
+    if (rows.length > 5000) throw new HttpError(422, 'Trop de lignes (5000 max)');
+
+    let created = 0;
+    let updated = 0;
+    const warnings: { row: number; message: string }[] = [];
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i]!;
+      const rowNum = i + 2;
+      const id = pick(row, 'id');
+      const firstName = pick(row, 'prenom', 'prénom', 'firstname');
+      if (!id && !firstName) { warnings.push({ row: rowNum, message: 'Prénom manquant — ligne ignorée' }); continue; }
+
+      const role = matchEnum(pick(row, 'role', 'rôle'), PERSON_ROLES, PERSON_ROLE_LABEL);
+      const contractType = matchEnum(pick(row, 'contrat', 'contracttype'), WORKER_CONTRACT_TYPES, WORKER_CONTRACT_LABEL);
+      const lastName = pick(row, 'nom');
+      const displayName = pick(row, 'nom affiche', 'nom affiché', 'displayname');
+      const hourlyRate = pick(row, 'taux horaire', 'hourlyrate');
+      const dailyHours = pick(row, 'heures/jour', 'heures jour', 'dailyhours');
+      const email = pick(row, 'email');
+
+      const data: Record<string, unknown> = {
+        ...(firstName ? { firstName } : {}),
+        lastName: lastName || null,
+        displayName: displayName || firstName || undefined,
+        ...(role ? { role } : {}),
+        ...(contractType ? { contractType } : {}),
+        hourlyRate: hourlyRate ? Number(hourlyRate.replace(',', '.')) : null,
+        ...(dailyHours ? { dailyHours: Number(dailyHours.replace(',', '.')) } : {}),
+        phone: pick(row, 'telephone', 'téléphone', 'phone') || null,
+        email: email || null,
+        address: pick(row, 'adresse', 'address') || null,
+        active: parseBool(pick(row, 'actif', 'active'), true),
+        note: pick(row, 'note') || null,
+      };
+      if (firstName || lastName) {
+        data.normalizedName = normalizeName(`${firstName ?? ''} ${lastName ?? ''}`.trim());
+      }
+
+      if (id) {
+        const existing = await prisma.person.findUnique({ where: { id } });
+        if (existing) {
+          await prisma.person.update({ where: { id }, data });
+          updated++;
+          continue;
+        }
+        warnings.push({ row: rowNum, message: `id « ${id} » introuvable — ligne créée comme nouvelle fiche` });
+      }
+      if (!firstName) { warnings.push({ row: rowNum, message: 'Prénom manquant — ligne ignorée' }); continue; }
+      await prisma.person.create({ data: { ...data, firstName, source: 'manual' } as Prisma.PersonUncheckedCreateInput });
+      created++;
+    }
+
+    res.json({ created, updated, warnings });
   }),
 );
 

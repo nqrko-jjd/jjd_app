@@ -148,6 +148,42 @@ test('pointage manuel (bureau) : reste "à valider", pas auto-approuvé', async 
   assert.ok(items.some((i: { id: string }) => i.id === entry.id), 'l’écriture manuelle apparaît dans la file de validation');
 });
 
+test('export CSV puis réimport : met à jour par id, crée les nouveaux pointages, toujours « à valider »', async () => {
+  const ws = await prisma.worksite.findUnique({ where: { id: worksiteId } });
+  const toUpdate = await prisma.timeEntry.create({
+    data: { personId: testPersonId, worksiteId, date: new Date('2026-05-01'), hours: 3, status: 'approved', source: 'test', approvedById: null },
+  });
+
+  const csv = [
+    'id;Date;Ouvrier;Chantier;Heures;Montant;Tâche;Statut;Note',
+    `${toUpdate.id};2026-05-02;Test Ouvrier;${ws!.ref};7;140;maçonnerie;;maj via import`,
+    `;2026-05-03;Test Ouvrier;${ws!.ref};5;100;peinture;;créé via import`,
+    ';2026-05-04;Ouvrier Inconnu XYZ;;2;;;;',
+  ].join('\r\n');
+
+  const form = new FormData();
+  form.append('file', new Blob([csv], { type: 'text/csv' }), 'horaires.csv');
+  const r = await fetch(`${base}/api/timesheet/entries/import`, {
+    method: 'POST', headers: { authorization: `Bearer ${davidToken}` }, body: form,
+  });
+  assert.equal(r.status, 200);
+  const body = await r.json() as { created: number; updated: number; warnings: { row: number; message: string }[] };
+  assert.equal(body.created, 1);
+  assert.equal(body.updated, 1);
+  assert.equal(body.warnings.length, 1);
+  assert.match(body.warnings[0]!.message, /Ouvrier Inconnu XYZ/);
+
+  const updated = await prisma.timeEntry.findUnique({ where: { id: toUpdate.id } });
+  assert.equal(updated!.hours, 7);
+  assert.equal(updated!.status, 'submitted', 'repasse à valider même si elle était déjà approuvée');
+  assert.equal(updated!.approvedById, null);
+
+  const created = await prisma.timeEntry.findFirst({ where: { task: 'peinture', personId: testPersonId } });
+  assert.ok(created);
+  assert.equal(created!.status, 'submitted');
+  assert.equal(created!.source, 'manual');
+});
+
 test('planning : création sans clé Google (dégradation OK)', async () => {
   const r = await fetch(`${base}/api/planning`, {
     method: 'POST',

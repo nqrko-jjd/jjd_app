@@ -11,6 +11,7 @@ import { ViewToggle, useViewMode } from '@/components/ViewToggle';
 import { useSort, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
 import { PERSON_FIELDS } from '@/lib/forms';
+import { downloadCsv, pickAndImportCsv, summarizeImport } from '@/lib/csvIO';
 import { PERSON_ROLE_LABEL, PERSON_ROLES, WORKER_CONTRACT_LABEL } from '@jjd/shared';
 
 interface Person {
@@ -59,6 +60,16 @@ export default function EquipePage() {
         : { label: 'Réactiver', onClick: () => patch(p.id, { active: true }) },
     ];
   }
+  function exportCsv() {
+    downloadCsv(`/api/people/export.csv?${params}`, `equipe-${new Date().toISOString().slice(0, 10)}.csv`);
+  }
+  function importCsv() {
+    pickAndImportCsv(
+      '/api/people/import',
+      (r) => { alert(summarizeImport(r)); reload(); },
+      (msg) => alert(`Échec de l’import : ${msg}`),
+    );
+  }
   const sort = useSort<Person>(data?.items ?? [], {
     name,
     role: (p) => PERSON_ROLE_LABEL[p.role as keyof typeof PERSON_ROLE_LABEL] ?? p.role,
@@ -85,7 +96,13 @@ export default function EquipePage() {
       <PageHead
         title="Équipe"
         sub={data ? `${data.items.filter((p) => p.active).length} actifs · clic droit sur une ligne pour les actions rapides` : undefined}
-        action={<button className="btn primary" onClick={() => setCreating(true)}>+ Nouvelle personne</button>}
+        action={
+          <div className="row">
+            <button className="btn" onClick={exportCsv} title="Exporter la liste filtrée en CSV (éditable dans Excel)">⇩ Exporter CSV</button>
+            <button className="btn" onClick={importCsv} title="Réimporter un CSV/Excel corrigé (met à jour par id, crée les nouvelles fiches)">⇧ Importer</button>
+            <button className="btn primary" onClick={() => setCreating(true)}>+ Nouvelle personne</button>
+          </div>
+        }
       />
       <div className="row" style={{ marginBottom: '1rem' }}>
         <input className="input" style={{ maxWidth: 260 }} placeholder="Nom…" value={q} onChange={(e) => setQ(e.target.value)} />

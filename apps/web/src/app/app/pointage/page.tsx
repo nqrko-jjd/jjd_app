@@ -6,6 +6,7 @@ import { api } from '@/lib/api';
 import { PageHead, Money, formatDateBE } from '@/lib/ui';
 import { ComboBox } from '@/components/ComboBox';
 import { formatHours } from '@jjd/shared';
+import { downloadCsv, pickAndImportCsv, summarizeImport } from '@/lib/csvIO';
 
 interface Meta { people: { id: string; name: string }[]; worksites: { id: string; name: string }[] }
 
@@ -29,6 +30,16 @@ export default function PointagePage() {
     alert(`${r.approved} pointage(s) validé(s).`);
     reload();
   }
+  function exportCsv() {
+    downloadCsv('/api/timesheet/entries/export.csv', `horaires-${new Date().toISOString().slice(0, 10)}.csv`);
+  }
+  function importCsv() {
+    pickAndImportCsv(
+      '/api/timesheet/entries/import',
+      (r) => { alert(summarizeImport(r)); reload(); },
+      (msg) => alert(`Échec de l’import : ${msg}`),
+    );
+  }
 
   const items = data?.items ?? [];
   const totalHours = items.reduce((a, e) => a + (e.hours ?? 0), 0);
@@ -50,6 +61,8 @@ export default function PointagePage() {
         sub="Heures à valider avant le décompte de paie"
         action={
           <div className="row">
+            <button className="btn" onClick={exportCsv} title="Exporter tous les pointages en CSV (éditable dans Excel)">⇩ Exporter CSV</button>
+            <button className="btn" onClick={importCsv} title="Réimporter un CSV/Excel corrigé (met à jour par id, crée les nouveaux pointages)">⇧ Importer</button>
             <button className="btn" onClick={() => setAdding(true)}>+ Pointage manuel</button>
             {items.length > 0 && <button className="btn primary" onClick={approveAll}>Tout valider{flagged ? ' (sauf hors zone)' : ''}</button>}
             <Link href="/app/pointage/decomptes" className="btn">Décomptes du mois →</Link>

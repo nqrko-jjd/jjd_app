@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
 import { useAuth } from '@/lib/auth';
 import { PageHead, Money } from '@/lib/ui';
+import { downloadCsv, pickAndImportCsv, summarizeImport } from '@/lib/csvIO';
 
 interface Pnl {
   revenue: { total: number; byEntity: Record<string, number>; creditNotes: number; net: number };
@@ -37,12 +38,29 @@ export default function FinancesPage() {
   const { data: share } = useApi<Share>(user?.isPartner ? '/api/finance/profit-share' : null);
   const [openSec, setOpenSec] = useState<string | null>(null);
 
+  function exportSalesCsv() {
+    downloadCsv('/api/finance/sales/export.csv', `ventes-${new Date().toISOString().slice(0, 10)}.csv`);
+  }
+  function importSalesCsv() {
+    pickAndImportCsv(
+      '/api/finance/sales/import',
+      (r) => alert(summarizeImport(r)),
+      (msg) => alert(`Échec de l’import : ${msg}`),
+    );
+  }
+
   return (
     <>
       <PageHead
         title="Finances"
         sub="Compte de résultat consolidé"
-        action={<Link href="/app/finances/banque" className="btn">Rapprochement bancaire →</Link>}
+        action={
+          <div className="row">
+            <button className="btn" onClick={exportSalesCsv} title="Exporter les ventes du grand livre en CSV (éditable dans Excel)">⇩ Exporter ventes</button>
+            <button className="btn" onClick={importSalesCsv} title="Réimporter un CSV/Excel de ventes corrigé (met à jour par id, crée les nouvelles lignes)">⇧ Importer ventes</button>
+            <Link href="/app/finances/banque" className="btn">Rapprochement bancaire →</Link>
+          </div>
+        }
       />
 
       <div className="row" style={{ marginBottom: '1.3rem' }}>

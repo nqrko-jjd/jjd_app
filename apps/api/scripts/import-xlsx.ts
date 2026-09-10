@@ -13,7 +13,7 @@ import { PrismaClient, Prisma } from '@prisma/client';
 import {
   parseLooseDate, parseAmount, guessWorksiteStatus, parseStatusTags, normalizeName,
 } from '@jjd/shared';
-import { readXlsx, cell, type SheetData } from './lib/xlsx-read.js';
+import { readXlsx, cell, type SheetData } from '../src/lib/xlsx-read.js';
 import { extractSyndic, guessClientKind, DedupeMap, str, num, looksLikeRef } from './lib/import-helpers.js';
 
 const prisma = new PrismaClient();

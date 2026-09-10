@@ -2,8 +2,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
-import { PageHead, formatDateBE } from '@/lib/ui';
+import { PageHead, Thumb, formatDateBE } from '@/lib/ui';
 import { PaginationBar } from '@/components/PaginationBar';
+import { ViewToggle, useViewMode } from '@/components/ViewToggle';
 
 interface Unit {
   assetTag: string;
@@ -211,6 +212,7 @@ export default function MaterielPage() {
   const { data: consData, reload: reloadCons } = useApi<{ consumables: Consumable[] }>('/api/materiel/consumables');
 
   const [tab, setTab] = useState<'outils' | 'consommables'>('outils');
+  const [mode, setMode] = useViewMode('materiel', 'gallery');
   const [search, setSearch] = useState('');
   const [scan, setScan] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
@@ -369,7 +371,7 @@ export default function MaterielPage() {
 
       {tab === 'outils' && (
         <div className="card card-pad" style={{ marginBottom: '1rem', display: 'grid', gap: 12 }}>
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
             <div className="field" style={{ flex: '1 1 200px' }}>
               <label>Rechercher un outil</label>
               <input className="input" placeholder="perceuse, Makita, ponçage…" value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -385,6 +387,7 @@ export default function MaterielPage() {
                 onKeyDown={(e) => e.key === 'Enter' && resolveScan(scan)}
               />
             </div>
+            <ViewToggle mode={mode} onChange={setMode} />
           </div>
           {scanPending && (
             <WorksitePicker
@@ -424,34 +427,63 @@ export default function MaterielPage() {
         <>
           {loading && !stock && <div className="empty">Chargement du parc…</div>}
 
-          <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
-            {paged.map((p) => (
-              <button
-                key={p.id}
-                onClick={() => setOpenId(p.id)}
-                className="card"
-                style={{ padding: 0, textAlign: 'left', cursor: 'pointer', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
-              >
-                <div style={{ aspectRatio: '4 / 3', background: 'var(--surface-2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  {p.image ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={p.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-                  ) : (
-                    <span className="muted" style={{ fontSize: '0.75rem' }}>pas de photo</span>
-                  )}
-                </div>
-                <div style={{ padding: '0.6rem 0.7rem', display: 'grid', gap: 4 }}>
-                  <div style={{ fontWeight: 650, fontSize: '0.9rem', lineHeight: 1.25 }}>{p.name}</div>
-                  {p.brand && <div className="muted" style={{ fontSize: '0.75rem' }}>{p.brand}{p.model ? ` ${p.model}` : ''}</div>}
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 2 }}>
-                    <span className={`badge plain ${p.available > 0 ? 'ok' : ''}`} style={{ fontSize: '0.68rem' }}>{p.available} dispo</span>
-                    {p.onSite > 0 && <span className="badge plain warn" style={{ fontSize: '0.68rem' }}>{p.onSite} chantier</span>}
-                    {p.rented > 0 && <span className="badge plain" style={{ fontSize: '0.68rem' }}>{p.rented} loué</span>}
+          {mode === 'gallery' && (
+            <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
+              {paged.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => setOpenId(p.id)}
+                  className="card"
+                  style={{ padding: 0, textAlign: 'left', cursor: 'pointer', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
+                >
+                  <div style={{ aspectRatio: '4 / 3', background: 'var(--surface-2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {p.image ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={p.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                    ) : (
+                      <span className="muted" style={{ fontSize: '0.75rem' }}>pas de photo</span>
+                    )}
                   </div>
-                </div>
-              </button>
-            ))}
-          </div>
+                  <div style={{ padding: '0.6rem 0.7rem', display: 'grid', gap: 4 }}>
+                    <div style={{ fontWeight: 650, fontSize: '0.9rem', lineHeight: 1.25 }}>{p.name}</div>
+                    {p.brand && <div className="muted" style={{ fontSize: '0.75rem' }}>{p.brand}{p.model ? ` ${p.model}` : ''}</div>}
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 2 }}>
+                      <span className={`badge plain ${p.available > 0 ? 'ok' : ''}`} style={{ fontSize: '0.68rem' }}>{p.available} dispo</span>
+                      {p.onSite > 0 && <span className="badge plain warn" style={{ fontSize: '0.68rem' }}>{p.onSite} chantier</span>}
+                      {p.rented > 0 && <span className="badge plain" style={{ fontSize: '0.68rem' }}>{p.rented} loué</span>}
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {mode === 'list' && (
+            <div className="tbl-wrap">
+              <table className="tbl">
+                <thead>
+                  <tr><th></th><th>Outil</th><th>Catégorie</th><th style={{ textAlign: 'right' }}>Dépôt</th><th style={{ textAlign: 'right' }}>Chantier</th><th style={{ textAlign: 'right' }}>Loué</th></tr>
+                </thead>
+                <tbody>
+                  {paged.map((p) => (
+                    <tr key={p.id} className="row-link" onClick={() => setOpenId(p.id)}>
+                      <td style={{ width: 48 }}><Thumb src={p.image} /></td>
+                      <td>
+                        <div style={{ fontWeight: 650 }}>{p.name}</div>
+                        {p.brand && <div className="muted" style={{ fontSize: '0.78rem' }}>{p.brand}{p.model ? ` ${p.model}` : ''}</div>}
+                      </td>
+                      <td>{p.category ?? '—'}</td>
+                      <td style={{ textAlign: 'right' }} className="tnum">
+                        <span className={`badge plain ${p.available > 0 ? 'ok' : ''}`}>{p.available}</span>
+                      </td>
+                      <td style={{ textAlign: 'right' }} className="tnum">{p.onSite > 0 ? <span className="badge plain warn">{p.onSite}</span> : '—'}</td>
+                      <td style={{ textAlign: 'right' }} className="tnum">{p.rented > 0 ? <span className="badge plain">{p.rented}</span> : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           {!loading && filtered.length === 0 && <div className="empty">Aucun outil.</div>}
 

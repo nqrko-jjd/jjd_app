@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { PageHead } from '@/lib/ui';
@@ -7,6 +8,7 @@ import { PageHead } from '@/lib/ui';
 interface Issue {
   id: string; entity: string; sheet: string | null; rowRef: string | null;
   severity: string; message: string; resolved: boolean;
+  link: { label: string; href: string } | null;
 }
 
 const ENTITY_LABEL: Record<string, string> = {
@@ -32,6 +34,12 @@ export default function ControlePage() {
         title="File de contrôle"
         sub="Données de l'import qui demandent une vérification manuelle"
       />
+      <div className="card card-pad muted" style={{ marginBottom: '1rem', fontSize: '0.85rem' }}>
+        Ces lignes viennent de l'import initial du fichier Excel — la « Ligne » indique où c'était dans ce fichier,
+        que vous n'avez pas à rouvrir : utilisez le bouton « Ouvrir →/Chercher →» pour aller directement corriger
+        la donnée correspondante dans l'app (fiche chantier, contact, ouvrier…). « Traité » masque juste la ligne
+        ici, ça ne modifie rien tout seul.
+      </div>
       {data && (
         <div className="row" style={{ marginBottom: '1rem' }}>
           <span className="badge crit">{data.openBySeverity.error ?? 0} erreurs</span>
@@ -53,14 +61,20 @@ export default function ControlePage() {
       {data && data.items.length > 0 && (
         <div className="tbl-wrap">
           <table className="tbl">
-            <thead><tr><th>Sévérité</th><th>Catégorie</th><th>Ligne</th><th>Message</th><th></th></tr></thead>
+            <thead><tr><th>Sévérité</th><th>Catégorie</th><th>Message</th><th></th><th></th></tr></thead>
             <tbody>
               {data.items.map((i) => (
                 <tr key={i.id}>
                   <td><span className={`badge ${i.severity === 'error' ? 'crit' : i.severity === 'warning' ? 'warn' : ''}`}>{i.severity}</span></td>
                   <td>{ENTITY_LABEL[i.entity] ?? i.entity}</td>
-                  <td className="mono" style={{ fontSize: '0.78rem' }}>{i.rowRef ?? '—'}</td>
                   <td>{i.message}</td>
+                  <td>
+                    {i.link && (
+                      <Link href={i.link.href} className="btn ghost" style={{ padding: '0.2rem 0.5rem', fontSize: '0.78rem' }}>
+                        {i.link.label} →
+                      </Link>
+                    )}
+                  </td>
                   <td>{!i.resolved && <button className="btn" style={{ padding: '0.2rem 0.5rem', fontSize: '0.78rem' }} onClick={() => resolve(i.id)}>Traité</button>}</td>
                 </tr>
               ))}

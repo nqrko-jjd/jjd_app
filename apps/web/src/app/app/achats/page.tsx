@@ -1,5 +1,6 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
 import { api, apiUpload, apiBlobUrl } from '@/lib/api';
 import { PageHead, Money, formatDateBE } from '@/lib/ui';
@@ -58,7 +59,16 @@ function toDateInput(iso: string | null): string {
 }
 
 export default function AchatsPage() {
-  const [q, setQ] = useState('');
+  return (
+    <Suspense fallback={<div className="empty">Chargement…</div>}>
+      <AchatsInner />
+    </Suspense>
+  );
+}
+
+function AchatsInner() {
+  const sp = useSearchParams();
+  const [q, setQ] = useState(sp.get('q') ?? '');
   const [paid, setPaid] = useState('');
   const [worksiteId, setWorksiteId] = useState('');
   const [contactId, setContactId] = useState('');
@@ -342,6 +352,11 @@ function ExpenseModal({
     notes: expense?.notes ?? '',
     paymentStatus: (expense?.paid ? 'Payé' : 'Non payé') as 'Payé' | 'Non payé',
   });
+  // Une facture peut couvrir plusieurs chantiers (ex. sous-traitant intervenu sur
+  // plusieurs R-) : au-delà d'une ligne, le chantier unique + montant HT global sont
+  // remplacés par une répartition manuelle, HT par chantier (uniquement à la création —
+  // une dépense existante reste liée à un seul chantier, modifiable comme avant).
+  const [splits, setSplits] = useState<{ worksiteId: string; ht: string }[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
@@ -389,7 +404,9 @@ function ExpenseModal({
         ttc: prev.ttc || (ex.totalTtc != null ? String(ex.totalTtc) : ''),
       }));
       if (ex.otherWorksiteRefs.length) {
-        setExtractNote(`Plusieurs chantiers détectés dans ce document (${[ex.worksiteRef, ...ex.otherWorksiteRefs].filter(Boolean).join(', ')}) — seul le premier est prérempli ; répartis en plusieurs dépenses si la facture couvre plusieurs chantiers.`);
+        const refs = [ex.worksiteRef, ...ex.otherWorksiteRefs].filter(Boolean) as string[];
+        setExtractNote(`Plusieurs chantiers détectés dans ce document (${refs.join(', ')}) — une ligne de répartition a été ajoutée par chantier, choisis-les et indique le montant HT de chacun.`);
+        setSplits(refs.map((_, i) => ({ worksiteId: i === 0 ? (ex.worksiteId ?? '') : '', ht: '' })));
       }
     } catch {
       // best-effort : en cas d'échec le fichier reste joint, saisie à la main
@@ -442,34 +459,68 @@ function ExpenseModal({
     });
   }
 
+  async function attachFile(expenseId: string) {
+    if (!pendingFile) return;
+    const fd = new FormData();
+    fd.append('file', pendingFile);
+    await apiUpload(`/api/finance/expenses/${expenseId}/pdf`, fd);
+  }
+
+  function commonBody() {
+    return {
+      date: v.date,
+      dueDate: v.dueDate || null,
+      direction: v.direction,
+      supplierName: v.contactId ? null : (v.supplierName || null),
+      contactId: v.contactId || null,
+      docNumber: v.docNumber || null,
+      categoryCode: v.categoryCode || null,
+      notes: v.notes || null,
+      paymentStatus: v.paymentStatus,
+    };
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     setErr(null);
     try {
+      if (splits && splits.length > 1) {
+        if (splits.some((s) => !s.worksiteId || !(Number(s.ht) > 0))) {
+          throw new Error('Chaque ligne de répartition doit avoir un chantier et un montant HT > 0.');
+        }
+        const totalHt = splits.reduce((sum, s) => sum + Number(s.ht), 0);
+        const totalTtc = v.ttc === '' ? null : Number(v.ttc);
+        const totalVat = v.vatRecup === '' ? null : Number(v.vatRecup);
+        for (const s of splits) {
+          const share = Number(s.ht) / totalHt;
+          const saved = await api<{ expense: { id: string } }>('/api/finance/expenses', {
+            method: 'POST',
+            body: {
+              ...commonBody(),
+              worksiteId: s.worksiteId,
+              ht: Number(s.ht),
+              ttc: totalTtc != null ? Math.round(totalTtc * share * 100) / 100 : null,
+              vatRecup: totalVat != null ? Math.round(totalVat * share * 100) / 100 : null,
+            },
+          });
+          await attachFile(saved.expense.id);
+        }
+        onSaved();
+        return;
+      }
+
       const body = {
-        date: v.date,
-        dueDate: v.dueDate || null,
-        direction: v.direction,
-        supplierName: v.contactId ? null : (v.supplierName || null),
-        contactId: v.contactId || null,
-        docNumber: v.docNumber || null,
-        categoryCode: v.categoryCode || null,
+        ...commonBody(),
         worksiteId: v.worksiteId || null,
         ht: Number(v.ht || 0),
         vatRecup: v.vatRecup === '' ? null : Number(v.vatRecup),
         ttc: v.ttc === '' ? null : Number(v.ttc),
-        notes: v.notes || null,
-        paymentStatus: v.paymentStatus,
       };
       const saved = expense
         ? await api<{ expense: { id: string } }>(`/api/finance/expenses/${expense.id}`, { method: 'PATCH', body })
         : await api<{ expense: { id: string } }>('/api/finance/expenses', { method: 'POST', body });
-      if (pendingFile) {
-        const fd = new FormData();
-        fd.append('file', pendingFile);
-        await apiUpload(`/api/finance/expenses/${saved.expense.id}/pdf`, fd);
-      }
+      await attachFile(saved.expense.id);
       onSaved();
     } catch (e2) {
       setErr((e2 as Error).message ?? 'Erreur');
@@ -525,19 +576,83 @@ function ExpenseModal({
               {meta.categories.map((c) => <option key={c.code} value={c.code}>{c.label}</option>)}
             </select>
           </div>
-          <div className="field" style={{ gridColumn: '1 / -1' }}>
-            <label>Chantier</label>
-            <ComboBox
-              disabled={readOnly}
-              placeholder="— (frais général / non affecté)"
-              value={v.worksiteId}
-              onChange={(val) => set('worksiteId', val)}
-              options={meta.worksites.map((w) => ({ value: w.id, label: w.name }))}
-            />
-          </div>
+          {splits ? (
+            <div className="field" style={{ gridColumn: '1 / -1' }}>
+              <label>
+                Répartition par chantier
+                <span className="muted" style={{ fontWeight: 400, fontSize: '0.8rem' }}> — une facture, plusieurs chantiers : indique le HT de chacun</span>
+              </label>
+              <div className="grid" style={{ gap: '0.4rem' }}>
+                {splits.map((s, i) => (
+                  <div key={i} className="row" style={{ gap: '0.4rem' }}>
+                    <ComboBox
+                      style={{ flex: 1 }}
+                      placeholder="Chantier"
+                      value={s.worksiteId}
+                      onChange={(val) => setSplits((prev) => prev!.map((x, j) => (j === i ? { ...x, worksiteId: val } : x)))}
+                      options={meta.worksites.map((w) => ({ value: w.id, label: w.name }))}
+                    />
+                    <input
+                      className="input"
+                      style={{ maxWidth: 130 }}
+                      type="number"
+                      step="any"
+                      placeholder="HT"
+                      value={s.ht}
+                      onChange={(e) => setSplits((prev) => prev!.map((x, j) => (j === i ? { ...x, ht: e.target.value } : x)))}
+                    />
+                    <button
+                      type="button"
+                      className="btn ghost"
+                      onClick={() => setSplits((prev) => (prev!.length > 1 ? prev!.filter((_, j) => j !== i) : null))}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div className="row" style={{ gap: '0.6rem', marginTop: '0.4rem', alignItems: 'center' }}>
+                <button type="button" className="btn" onClick={() => setSplits((prev) => [...(prev ?? []), { worksiteId: '', ht: '' }])}>+ Chantier</button>
+                <span className="muted" style={{ fontSize: '0.8rem' }}>
+                  Total réparti : {splits.reduce((sum, s) => sum + (Number(s.ht) || 0), 0)} €
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div className="field" style={{ gridColumn: '1 / -1' }}>
+              <label>
+                Chantier
+                {!expense && (
+                  <button
+                    type="button"
+                    className="btn ghost"
+                    style={{ marginLeft: 8, padding: '0.05rem 0.4rem', fontSize: '0.72rem' }}
+                    onClick={() => setSplits([{ worksiteId: v.worksiteId, ht: v.ht }, { worksiteId: '', ht: '' }])}
+                  >
+                    + plusieurs chantiers
+                  </button>
+                )}
+              </label>
+              <ComboBox
+                disabled={readOnly}
+                placeholder="— (frais général / non affecté)"
+                value={v.worksiteId}
+                onChange={(val) => set('worksiteId', val)}
+                options={meta.worksites.map((w) => ({ value: w.id, label: w.name }))}
+              />
+            </div>
+          )}
           <div className="field">
-            <label>Montant HT *</label>
-            <input className="input" type="number" step="any" required disabled={readOnly} value={v.ht} onChange={(e) => set('ht', e.target.value)} />
+            <label>Montant HT *{splits && <span className="muted" style={{ fontWeight: 400, fontSize: '0.8rem' }}> (total réparti)</span>}</label>
+            <input
+              className="input"
+              type="number"
+              step="any"
+              required={!splits}
+              disabled={readOnly || !!splits}
+              value={splits ? splits.reduce((sum, s) => sum + (Number(s.ht) || 0), 0) : v.ht}
+              onChange={(e) => set('ht', e.target.value)}
+            />
           </div>
           <div className="field">
             <label>TVA récupérable</label>

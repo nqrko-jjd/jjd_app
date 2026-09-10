@@ -78,6 +78,38 @@ metaRouter.get(
 );
 
 export const importsRouter = Router();
+
+/**
+ * La file de contrôle pointe vers des lignes du fichier Excel d'origine
+ * (sheet/rowRef), inaccessible depuis l'app. On résout chaque issue vers
+ * l'endroit de l'app où on peut réellement corriger le problème :
+ * - chantier trouvé (juste incomplet, ex. "sans client") -> lien direct vers sa fiche.
+ * - référence de chantier inconnue (ligne orpheline dans le grand livre / pointage)
+ *   -> recherche pré-remplie dans Achats ou Équipe, pour la retrouver et la corriger
+ *   (via le formulaire, ou un import/export CSV pour un gros lot).
+ */
+async function resolveIssueLink(entity: string, rawData: unknown): Promise<{ label: string; href: string } | null> {
+  const d = (rawData ?? {}) as Record<string, unknown>;
+  if (entity === 'worksite' && typeof d.ref === 'string') {
+    const w = await prisma.worksite.findFirst({ where: { ref: d.ref }, select: { id: true } });
+    if (w) return { label: 'Ouvrir le chantier', href: `/app/chantiers/${w.id}` };
+  }
+  if (entity === 'ledger' && typeof d.ref === 'string') {
+    return { label: 'Chercher dans Achats', href: `/app/achats?q=${encodeURIComponent(d.ref)}` };
+  }
+  if (entity === 'time_entry' && typeof d.workerName === 'string') {
+    return { label: 'Chercher l’ouvrier', href: `/app/equipe?q=${encodeURIComponent(d.workerName)}` };
+  }
+  if (entity === 'person' && typeof d.name === 'string') {
+    const first = d.name.split(/[/,]/)[0]!.trim();
+    return { label: 'Chercher l’ouvrier', href: `/app/equipe?q=${encodeURIComponent(first)}` };
+  }
+  if (entity === 'contact' && typeof d.name === 'string') {
+    return { label: 'Chercher le contact', href: `/app/contacts?q=${encodeURIComponent(d.name)}` };
+  }
+  return null;
+}
+
 importsRouter.get(
   '/issues',
   requireAuth(...OFFICE),
@@ -92,7 +124,8 @@ importsRouter.get(
       prisma.importIssue.findMany({ where, orderBy: [{ severity: 'asc' }, { createdAt: 'asc' }], take: 500 }),
       prisma.importIssue.groupBy({ by: ['severity'], where: { resolved: false }, _count: true }),
     ]);
-    res.json({ items, openBySeverity: Object.fromEntries(counts.map((c) => [c.severity, c._count])) });
+    const withLinks = await Promise.all(items.map(async (i) => ({ ...i, link: await resolveIssueLink(i.entity, i.rawData) })));
+    res.json({ items: withLinks, openBySeverity: Object.fromEntries(counts.map((c) => [c.severity, c._count])) });
   }),
 );
 

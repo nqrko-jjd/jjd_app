@@ -1,7 +1,7 @@
 'use client';
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { PageHead, Money, Avatar } from '@/lib/ui';
@@ -22,8 +22,17 @@ interface Person {
 }
 
 export default function EquipePage() {
+  return (
+    <Suspense fallback={<div className="empty">Chargement…</div>}>
+      <EquipeInner />
+    </Suspense>
+  );
+}
+
+function EquipeInner() {
   const router = useRouter();
-  const [q, setQ] = useState('');
+  const sp = useSearchParams();
+  const [q, setQ] = useState(sp.get('q') ?? '');
   const [role, setRole] = useState('');
   const [active, setActive] = useState('1');
   const [creating, setCreating] = useState(false);

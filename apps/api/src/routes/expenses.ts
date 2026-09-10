@@ -70,6 +70,7 @@ function buildWhere(q: Record<string, string>) {
         { docNumber: { contains: search } },
         { categoryRaw: { contains: search } },
         { notes: { contains: search } },
+        { worksiteRef: { contains: search } },
         { contact: { name: { contains: search } } },
         { worksite: { ref: { contains: search } } },
       ],

@@ -35,7 +35,7 @@ export default function ContactsPage() {
 function ContactsInner() {
   const sp = useSearchParams();
   const router = useRouter();
-  const [q, setQ] = useState('');
+  const [q, setQ] = useState(sp.get('q') ?? '');
   const [type, setType] = useState('all');
   const [creating, setCreating] = useState(sp.get('new') === '1');
   const [page, setPage] = useState(1);

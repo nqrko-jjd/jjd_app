@@ -80,6 +80,17 @@ function mapHeaders(headers: string[]): Partial<Record<keyof ParsedBankRow, numb
 const stableId = (parts: (string | number | null)[]) =>
   crypto.createHash('sha1').update(parts.map((p) => String(p ?? '')).join('|')).digest('hex').slice(0, 24);
 
+/**
+ * Les exports bancaires belges (Belfius…) sont souvent en Windows-1252, pas en UTF-8 —
+ * un décodage UTF-8 direct remplace chaque caractère accentué par « � » (U+FFFD). On tente
+ * l'UTF-8 d'abord (le cas courant) et on ne bascule sur latin1 (identique à cp1252 pour les
+ * caractères français usuels : à, é, è, ç…) que si le résultat contient des remplacements.
+ */
+export function decodeCsvBuffer(buf: Buffer): string {
+  const utf8 = buf.toString('utf8');
+  return utf8.includes('�') ? buf.toString('latin1') : utf8;
+}
+
 export interface ParseResult {
   rows: ParsedBankRow[];
   headers: string[];
@@ -93,18 +104,36 @@ export function parseBankCsv(raw: string): ParseResult {
   if (lines.length < 2) return { rows: [], headers: [], mapped: [], skipped: 0 };
 
   const delim = detectDelimiter(lines[0]!);
-  const headers = splitLine(lines[0]!, delim);
-  const idx = mapHeaders(headers);
+
+  // certains exports (ex. "recherche de transactions" Belfius) font précéder le vrai
+  // tableau de quelques lignes de critères de recherche ("Date de comptabilisation à
+  // partir de;24/08/2026"…) avant l'en-tête réel -> on cherche, dans les ~20 premières
+  // lignes, la première qui ressemble à un vrai en-tête (date ET montant reconnus)
+  let headerLine = 0;
+  let headers = splitLine(lines[0]!, delim);
+  let idx = mapHeaders(headers);
+  if (idx.amount === undefined || (idx.bookingDate === undefined && idx.valueDate === undefined)) {
+    for (let i = 1; i < Math.min(lines.length, 20); i++) {
+      const cand = splitLine(lines[i]!, delim);
+      const candIdx = mapHeaders(cand);
+      if (candIdx.amount !== undefined && (candIdx.bookingDate !== undefined || candIdx.valueDate !== undefined)) {
+        headerLine = i;
+        headers = cand;
+        idx = candIdx;
+        break;
+      }
+    }
+  }
   if (idx.bookingDate === undefined && idx.valueDate !== undefined) idx.bookingDate = idx.valueDate;
   if (idx.amount === undefined || idx.bookingDate === undefined) {
-    return { rows: [], headers, mapped: Object.keys(idx), skipped: lines.length - 1 };
+    return { rows: [], headers, mapped: Object.keys(idx), skipped: lines.length - 1 - headerLine };
   }
 
   const at = (cells: string[], f: keyof ParsedBankRow) => (idx[f] !== undefined ? cells[idx[f]!] ?? null : null);
   const rows: ParsedBankRow[] = [];
   let skipped = 0;
 
-  for (const line of lines.slice(1)) {
+  for (const line of lines.slice(headerLine + 1)) {
     const cells = splitLine(line, delim);
     const amount = parseAmount(at(cells, 'amount'));
     const bookingDate = parseLooseDate(at(cells, 'bookingDate'));

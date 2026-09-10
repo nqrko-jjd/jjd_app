@@ -6,7 +6,7 @@ import { requireAuth, requirePartner, OFFICE } from '../lib/auth.js';
 import { consolidatedPnl, profitShare } from '../lib/consolidated.js';
 import { analytics } from '../lib/analytics.js';
 import { autoMatchAll } from '../lib/bank-match.js';
-import { parseBankCsv, type ParsedBankRow } from '../lib/bank-csv.js';
+import { parseBankCsv, decodeCsvBuffer, type ParsedBankRow } from '../lib/bank-csv.js';
 import { parseCardStatement, pdfToRawText, pdftotextAvailable } from '../lib/bank-pdf.js';
 
 export const financeRouter = Router();
@@ -313,7 +313,7 @@ financeRouter.post(
       return res.json({ imported, duplicates, kind: 'pdf', cardRef: st.cardRef, period: st.period, total: st.total, match });
     }
 
-    const parsed = parseBankCsv(req.file.buffer.toString('utf8'));
+    const parsed = parseBankCsv(decodeCsvBuffer(req.file.buffer));
     if (parsed.rows.length === 0) {
       throw new HttpError(422,
         `Aucune ligne exploitable. Colonnes détectées : ${parsed.headers.join(', ') || '—'}. `

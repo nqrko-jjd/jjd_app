@@ -9,6 +9,12 @@ export interface FieldDef {
   required?: boolean;
   placeholder?: string;
   full?: boolean;
+  /** Bouton à côté du champ (ex. "Rechercher") : lit la valeur actuelle du champ, renvoie un
+   *  ensemble de valeurs à fusionner dans le formulaire (ex. nom/adresse trouvés via un n° de TVA). */
+  action?: {
+    label: string;
+    run: (value: string) => Promise<Record<string, unknown>>;
+  };
 }
 
 export function FormModal({
@@ -27,6 +33,22 @@ export function FormModal({
   const [v, setV] = useState<Record<string, unknown>>(() => ({ ...initial }));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [actionBusy, setActionBusy] = useState<string | null>(null);
+  const [actionErr, setActionErr] = useState<string | null>(null);
+
+  async function runAction(f: FieldDef) {
+    if (!f.action) return;
+    setActionErr(null);
+    setActionBusy(f.name);
+    try {
+      const patch = await f.action.run(String(v[f.name] ?? ''));
+      setV((prev) => ({ ...prev, ...patch }));
+    } catch (e) {
+      setActionErr((e as Error).message ?? 'Erreur');
+    } finally {
+      setActionBusy(null);
+    }
+  }
 
   useEffect(() => {
     const onEsc = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -80,6 +102,27 @@ export function FormModal({
                   <option value="">—</option>
                   {(f.options ?? []).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
+              ) : f.action ? (
+                <div className="row" style={{ gap: '0.4rem' }}>
+                  <input
+                    id={f.name}
+                    className="input"
+                    style={{ flex: 1 }}
+                    type="text"
+                    value={(v[f.name] as string) ?? ''}
+                    onChange={(e) => setV({ ...v, [f.name]: e.target.value })}
+                    placeholder={f.placeholder}
+                    required={f.required}
+                  />
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={actionBusy === f.name || !(v[f.name] as string)?.trim()}
+                    onClick={() => runAction(f)}
+                  >
+                    {actionBusy === f.name ? '…' : f.action.label}
+                  </button>
+                </div>
               ) : (
                 <input
                   id={f.name}
@@ -95,6 +138,7 @@ export function FormModal({
             </div>
           ))}
         </div>
+        {actionErr && <div className="badge crit" style={{ margin: '0 1.15rem 0.7rem', padding: '0.4rem 0.7rem' }}>{actionErr}</div>}
         {err && <div className="badge crit" style={{ margin: '0 1.15rem', padding: '0.4rem 0.7rem' }}>{err}</div>}
         <div className="modal-foot">
           <button type="button" className="btn" onClick={onClose}>Annuler</button>

@@ -1,9 +1,24 @@
 import type { FieldDef } from '@/components/FormModal';
+import { api } from '@/lib/api';
 import {
   CLIENT_KIND_LABEL, CLIENT_KINDS, CONTACT_TYPES,
   PERSON_ROLE_LABEL, PERSON_ROLES, WORKER_CONTRACT_LABEL, WORKER_CONTRACT_TYPES,
   LEGAL_DOC_LABEL, LEGAL_DOC_TYPES,
 } from '@jjd/shared';
+
+interface VatLookupResult { vatNumber: string; name: string | null; address: string | null; postalCode: string | null; city: string | null }
+
+/** Cherche l'entreprise sur VIES (gratuit, officiel UE) à partir du n° de TVA saisi et
+ *  préremplit nom/adresse — seules les infos trouvées sont écrasées. */
+async function vatLookupAction(value: string): Promise<Record<string, unknown>> {
+  const r = await api<VatLookupResult>(`/api/contacts/vat-lookup?vat=${encodeURIComponent(value)}`);
+  const patch: Record<string, unknown> = { vat: r.vatNumber };
+  if (r.name) patch.name = r.name;
+  if (r.address) patch.address = r.address;
+  if (r.postalCode) patch.postalCode = r.postalCode;
+  if (r.city) patch.city = r.city;
+  return patch;
+}
 
 /**
  * Champs différents selon le type de contact (`forType`, le type au moment où le formulaire
@@ -21,7 +36,7 @@ export const CONTACT_FIELDS = (forType?: string, buildings: { id: string; name: 
     ...(!isSupplierOnly ? [{ name: 'buildingId', label: 'Immeuble / ACP', type: 'select' as const, options: buildings.map((b) => ({ value: b.id, label: b.name })), full: true }] : []),
     { name: 'email', label: 'E-mail' },
     { name: 'phone', label: 'Téléphone' },
-    { name: 'vat', label: 'N° TVA' },
+    { name: 'vat', label: 'N° TVA', placeholder: 'BE0123456789', action: { label: 'Rechercher', run: vatLookupAction } },
     { name: 'address', label: 'Adresse', full: true },
     { name: 'postalCode', label: 'Code postal' },
     { name: 'city', label: 'Ville' },

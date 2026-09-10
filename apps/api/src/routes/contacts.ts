@@ -3,11 +3,25 @@ import { contactInput, contactPersonInput, normalizeName, round2 } from '@jjd/sh
 import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, STAFF, OFFICE, hashPassword } from '../lib/auth.js';
+import { lookupBelgianVat } from '../lib/vies.js';
 
 const isPaidStr = (s: string | null) =>
   (s ?? '').toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').trim() === 'paye';
 
 export const contactsRouter = Router();
+
+/** Recherche une entreprise par n° de TVA (VIES) pour préremplir un nouveau contact. */
+contactsRouter.get(
+  '/vat-lookup',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const vat = String(req.query.vat ?? '').trim();
+    if (!vat) throw new HttpError(422, 'N° de TVA requis');
+    const result = await lookupBelgianVat(vat);
+    if ('error' in result) throw new HttpError(422, result.error);
+    res.json(result);
+  }),
+);
 
 contactsRouter.get(
   '/',

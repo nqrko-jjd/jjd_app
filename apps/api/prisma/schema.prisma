@@ -943,6 +943,7 @@ model WorksiteTask {
   createdBy   User?     @relation("TaskCreatedBy", fields: [createdById], references: [id])
   doneAt      DateTime?
   doneByName  String?
+  source      String? // "ai-draft" = proposée par l'assistant IA, à valider
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 

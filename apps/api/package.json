@@ -24,6 +24,7 @@
     "seed:demo": "tsx scripts/seed-demo-worksite.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.124.0",
     "@jjd/shared": "*",
     "@prisma/client": "^6.2.1",
     "@types/multer": "^1.4.12",

@@ -3,6 +3,8 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
+import { useApi } from '@/lib/use-api';
+import { AssistantChat } from './AssistantChat';
 
 type Item = { href: string; label: string; ic: string; roles?: string[]; ext?: boolean };
 type Group = { title: string; items: Item[] };
@@ -59,6 +61,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const [open, setOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const bureau = user?.role === 'admin' || user?.role === 'office';
+  const { data: assistant } = useApi<{ enabled: boolean }>(bureau ? '/api/assistant/status' : null);
 
   const isActive = (href: string) => (href === '/app' ? pathname === '/app' : pathname.startsWith(href));
   const visible = (i: Item) => !i.roles || (user && i.roles.includes(user.role));
@@ -119,6 +124,13 @@ export function Shell({ children }: { children: React.ReactNode }) {
       </nav>
 
       <main className="main">{children}</main>
+
+      {assistant?.enabled && !chatOpen && (
+        <button type="button" className="assistant-fab" title="Assistant IA" aria-label="Ouvrir l'assistant IA" onClick={() => setChatOpen(true)}>
+          ✨
+        </button>
+      )}
+      {assistant?.enabled && <AssistantChat open={chatOpen} onClose={() => setChatOpen(false)} />}
     </div>
   );
 }

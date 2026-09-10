@@ -15,7 +15,7 @@ import { DOC_STATUS_LABEL } from '@jjd/shared';
 interface Row {
   id: string; kind: string; number: string | null; draftRef: string | null; status: string;
   title: string | null; issuedOn: string | null; dueOn: string | null; totalTtc: number; paidAmount: number;
-  originalPdf: string | null;
+  originalPdf: string | null; source: string | null;
   worksite: { ref: string } | null; contact: { name: string } | null;
 }
 
@@ -276,6 +276,7 @@ function DocumentsInner() {
                     <Link href={`/app/documents/${d.id}`}>{d.number ?? d.draftRef ?? '—'}</Link>
                     {d.originalPdf && <span title="PDF d’origine disponible" style={{ marginLeft: 6 }}>📄</span>}
                     {!d.number && <span className="badge plain" style={{ marginLeft: 6 }}>{DOC_KIND_LABEL[d.kind]}</span>}
+                    {d.source === 'ai-draft' && <span className="badge warn" style={{ marginLeft: 6 }} title="Créé par l'assistant IA — à vérifier avant validation">✨ Proposé par l&apos;IA</span>}
                   </td>
                   <td>{d.title ?? '—'}</td>
                   <td>{d.contact?.name ?? '—'}</td>

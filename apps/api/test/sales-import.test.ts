@@ -61,7 +61,7 @@ test('export CSV puis réimport (ventes) : met à jour par id, crée les nouvell
   assert.equal(updated!.ht, 300);
   assert.equal(updated!.paymentStatus, 'Payé');
 
-  const created = await prisma.ledgerEntry.findFirst({ where: { docNumber: 'FAC-NEW' } });
+  const created = await prisma.ledgerEntry.findFirst({ where: { docNumber: 'FAC-NEW', worksiteId } });
   assert.ok(created);
   assert.equal(created!.direction, 'sale');
   assert.equal(created!.ht, 80);

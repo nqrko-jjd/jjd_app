@@ -61,30 +61,37 @@ test('pickMatch : plusieurs candidats -> départage par nom, sinon null', () => 
 
 /* ----------------------------------------------------------- autoMatchAll (DB) */
 
-const ids: string[] = [];
+let wsId = '';
+const ledgerIds: string[] = [];
+const txIds: string[] = [];
 before(async () => {
   const ws = await prisma.worksite.create({ data: { ref: 'R-BM-TEST', title: 'bank match', source: 'test' } });
-  ids.push(ws.id);
+  wsId = ws.id;
   const l1 = await prisma.ledgerEntry.create({
     data: { direction: 'sale', ttc: 1210, ht: 1000, date: new Date('2026-04-15'), bankComm: '+++090/9337/55493+++', worksiteId: ws.id, source: 'test' },
   });
   const l2 = await prisma.ledgerEntry.create({
     data: { direction: 'purchase', ttc: 480.75, ht: 397.31, date: new Date('2026-04-20'), supplierName: 'Cebeo', source: 'test' },
   });
-  ids.push(l1.id, l2.id);
-  await prisma.bankTransaction.createMany({
-    data: [
-      { amount: 1210, bookingDate: new Date('2026-04-16'), structuredComm: '090933755493', side: 'in', source: 'test' },
-      { amount: -480.75, bookingDate: new Date('2026-04-21'), counterpartyName: 'CEBEO NV', side: 'out', source: 'test' },
-      { amount: -1234567.89, bookingDate: new Date('2031-01-01'), counterpartyName: 'Inconnu', side: 'out', source: 'test' },
-    ],
+  ledgerIds.push(l1.id, l2.id);
+  const t1 = await prisma.bankTransaction.create({
+    data: { amount: 1210, bookingDate: new Date('2026-04-16'), structuredComm: '090933755493', side: 'in', source: 'test' },
   });
+  const t2 = await prisma.bankTransaction.create({
+    data: { amount: -480.75, bookingDate: new Date('2026-04-21'), counterpartyName: 'CEBEO NV', side: 'out', source: 'test' },
+  });
+  const t3 = await prisma.bankTransaction.create({
+    data: { amount: -1234567.89, bookingDate: new Date('2031-01-01'), counterpartyName: 'Inconnu', side: 'out', source: 'test' },
+  });
+  txIds.push(t1.id, t2.id, t3.id);
 });
 
 after(async () => {
-  await prisma.bankTransaction.deleteMany({ where: { source: 'test' } });
-  await prisma.ledgerEntry.deleteMany({ where: { source: 'test' } });
-  await prisma.worksite.deleteMany({ where: { ref: 'R-BM-TEST' } });
+  // scopé par id (pas par source:'test', qui matcherait aussi les écritures créées
+  // par d'autres fichiers de test tournant en parallèle)
+  await prisma.bankTransaction.deleteMany({ where: { id: { in: txIds } } });
+  await prisma.ledgerEntry.deleteMany({ where: { id: { in: ledgerIds } } });
+  await prisma.worksite.deleteMany({ where: { id: wsId } });
 });
 
 test('autoMatchAll : lie la comm structurée (strong) et le montant+nom (good)', async () => {

@@ -37,6 +37,9 @@ export const env = {
   deeplApiKey: deeplKey,
   deeplApiHost: deeplKey.endsWith(':fx') ? 'https://api-free.deepl.com' : 'https://api.deepl.com',
 
+  /** Assistant IA (chat) — brouillons de devis/planning/tâches. Sans clé = masqué. */
+  anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? '',
+
   google: {
     saKeyFile: process.env.GOOGLE_SA_KEY_FILE ?? './secrets/google-sa.json',
     calendarId: process.env.GOOGLE_CALENDAR_ID ?? '',

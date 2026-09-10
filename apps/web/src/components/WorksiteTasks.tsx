@@ -6,7 +6,7 @@ import { formatDateBE } from '@/lib/ui';
 
 interface Task {
   id: string; title: string; description: string | null; status: string;
-  dueOn: string | null; doneAt: string | null; doneByName: string | null;
+  dueOn: string | null; doneAt: string | null; doneByName: string | null; source: string | null;
   assignee: { id: string; displayName: string | null; firstName: string } | null;
 }
 
@@ -46,6 +46,7 @@ export function WorksiteTasks({ worksiteId }: { worksiteId: string }) {
           <div className="row" style={{ gap: '0.4rem', marginTop: 3 }}>
             {t.assignee && <span className="badge plain">{t.assignee.displayName || t.assignee.firstName}</span>}
             {t.dueOn && <span className={`badge ${late ? 'crit' : 'plain'}`}>{formatDateBE(t.dueOn)}</span>}
+            {t.source === 'ai-draft' && <span className="badge warn" title="Proposée par l'assistant IA — à valider">✨ Proposé par l&apos;IA</span>}
             {t.status === 'done' && t.doneByName && <span className="muted" style={{ fontSize: '0.76rem' }}>fait par {t.doneByName}</span>}
           </div>
         </div>

@@ -179,12 +179,16 @@ test('export CSV puis réimport : met à jour par id, crée les nouvelles lignes
   assert.equal(updated!.docNumber, 'INV-MAJ');
   assert.equal(updated!.paymentStatus, 'Payé');
 
-  const created = await prisma.ledgerEntry.findFirst({ where: { docNumber: 'INV-NEW' } });
+  const created = await prisma.ledgerEntry.findFirst({ where: { docNumber: 'INV-NEW', worksiteId } });
   assert.ok(created);
   assert.equal(created!.ht, 50);
   assert.equal(created!.worksiteId, worksiteId);
 
-  const badRef = await prisma.ledgerEntry.findFirst({ where: { docNumber: 'INV-BADREF' } });
+  const badRef = await prisma.ledgerEntry.findFirst({ where: { docNumber: 'INV-BADREF' }, orderBy: { createdAt: 'desc' } });
   assert.ok(badRef, 'la ligne est quand même créée malgré le chantier introuvable');
   assert.equal(badRef!.worksiteId, null);
+
+  // nettoyage immédiat : ces lignes ne sont pas liées à worksiteId (ou plus, pour INV-BADREF),
+  // donc pas couvertes par le nettoyage global du fichier
+  await prisma.ledgerEntry.deleteMany({ where: { id: { in: [created.id, badRef.id] } } });
 });

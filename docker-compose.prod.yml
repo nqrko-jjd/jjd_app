@@ -43,6 +43,8 @@ services:
       CORS_ORIGINS: ${SITE_URL}
       UPLOADS_DIR: /repo/apps/api/uploads
       DEEPL_API_KEY: ${DEEPL_API_KEY:-}
+      # Assistant IA (chat, brouillons) — laisser vide tant que non configuré
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       GOOGLE_CALENDAR_ID: ${GOOGLE_CALENDAR_ID:-}
       GOOGLE_SA_KEY_FILE: /repo/apps/api/secrets/google-sa.json
       # Parc d'outillage Bricoloc — même clé que PARTNER_API_KEY côté Bricoloc

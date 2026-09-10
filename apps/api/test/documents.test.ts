@@ -33,7 +33,9 @@ before(async () => {
 
 after(async () => {
   await prisma.document.deleteMany({ where: { source: 'manual', worksiteId: wsId } });
-  await prisma.worksite.deleteMany({ where: { source: 'test' } });
+  // scopé par id (pas par source:'test', qui matcherait aussi les chantiers créés
+  // par d'autres fichiers de test tournant en parallèle)
+  await prisma.worksite.deleteMany({ where: { id: wsId } });
   await prisma.counter.deleteMany({ where: { name: { startsWith: 'doc:' } } });
   server.close();
 });

@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { ContextMenu, useContextMenu, openActions, type MenuItem } from '@/components/ContextMenu';
+import { ViewToggle, useViewMode } from '@/components/ViewToggle';
 import { useSort, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
 import { PageHead, Money, formatDateBE, Thumb, VehicleStatusBadge } from '@/lib/ui';
@@ -22,6 +23,7 @@ export default function FlottePage() {
   const { data, loading, reload } = useApi<{ items: Vehicle[] }>('/api/vehicles');
   const soon = Date.now() + 30 * 86400000;
   const ctx = useContextMenu<Vehicle>();
+  const [mode, setMode] = useViewMode('flotte');
 
   async function setStatus(id: string, status: string) {
     await api(`/api/vehicles/${id}`, { method: 'PATCH', body: { status } });
@@ -63,8 +65,39 @@ export default function FlottePage() {
         sub={data ? `${data.items.filter((v) => v.status === 'active').length} véhicules actifs · clic droit sur une ligne pour les actions rapides` : undefined}
         action={<Link href="/app/flotte/pv" className="btn">PV / amendes →</Link>}
       />
+      <div className="row" style={{ marginBottom: '1rem', justifyContent: 'flex-end' }}>
+        <ViewToggle mode={mode} onChange={setMode} />
+      </div>
       {loading && <div className="empty">Chargement…</div>}
-      {data && (
+      {data && mode === 'gallery' && (
+        <div className="gallery-grid">
+          {sort.rows.map((v) => {
+            const ct = v.nextInspection ? new Date(v.nextInspection).getTime() : null;
+            return (
+              <Link
+                key={v.id}
+                href={`/app/flotte/${v.id}`}
+                className="card gallery-card"
+                style={v.status === 'sold' || v.status === 'retired' ? { opacity: 0.6 } : undefined}
+              >
+                <div className="gallery-thumb">
+                  {v.photoThumbUrl ? <img src={v.photoThumbUrl} alt="" /> : '🚐'}
+                </div>
+                <div className="gallery-body">
+                  <div className="gallery-title">{[v.brand, v.model].filter(Boolean).join(' ') || v.code || v.plate}</div>
+                  <div className="gallery-sub">
+                    {v.plate ?? '—'}{v.driver && ` · ${v.driver}`}
+                    {v.nextInspection && (
+                      <><br /><span className={ct && ct < soon ? 'badge crit' : ''}>CT {formatDateBE(v.nextInspection)}</span></>
+                    )}
+                  </div>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      )}
+      {data && mode === 'list' && (
         <div className="tbl-wrap">
           <table className="tbl">
             <thead>

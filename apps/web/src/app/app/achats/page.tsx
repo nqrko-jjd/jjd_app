@@ -345,7 +345,7 @@ function ExpenseModal({
       fd.append('file', f);
       const r = await apiUpload<{
         extraction: {
-          kind: string | null; docNumber: string | null; issuedOn: string | null;
+          kind: string | null; docNumber: string | null; issuedOn: string | null; dueOn: string | null;
           totalHt: number | null; totalTtc: number | null; vatRate: number | null;
           contactId: string | null; worksiteId: string | null; worksiteRef: string | null;
           otherWorksiteRefs: string[]; textExtracted: boolean;
@@ -358,6 +358,7 @@ function ExpenseModal({
         ...prev,
         direction: ex.kind === 'credit_note' ? 'credit_note' : prev.direction,
         date: ex.issuedOn || prev.date,
+        dueDate: prev.dueDate || ex.dueOn || '',
         docNumber: prev.docNumber || ex.docNumber || '',
         worksiteId: prev.worksiteId || ex.worksiteId || '',
         contactId: prev.contactId || ex.contactId || '',

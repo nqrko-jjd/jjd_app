@@ -16,6 +16,7 @@ import { prisma } from '../db.js';
 export interface DocumentExtraction {
   kind: 'quote' | 'invoice' | 'credit_note' | 'deposit_invoice' | null;
   issuedOn: string | null; // ISO (yyyy-mm-dd)
+  dueOn: string | null; // ISO — échéance
   docNumber: string | null;
   totalHt: number | null;
   totalVat: number | null;
@@ -34,7 +35,7 @@ export interface DocumentExtraction {
 }
 
 const EMPTY: DocumentExtraction = {
-  kind: null, issuedOn: null, docNumber: null, totalHt: null, totalVat: null, totalTtc: null, vatRate: null,
+  kind: null, issuedOn: null, dueOn: null, docNumber: null, totalHt: null, totalVat: null, totalTtc: null, vatRate: null,
   vatNumbersFound: [], contactId: null, contactName: null, contactConfidence: null,
   worksiteId: null, worksiteRef: null, otherWorksiteRefs: [], textExtracted: false,
 };
@@ -65,21 +66,21 @@ function lineAndNext(text: string, atIndex: number): string {
   return `${lines[0] ?? ''}\n${lines[1] ?? ''}`;
 }
 
-function findDate(text: string): string | null {
-  // jj/mm/aaaa OU jj/mm/aa (beaucoup de factures belges datent sur 2 chiffres)
-  const DATE_RE = /\b(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})\b/g;
-  const valid = (day: number, month: number) => month >= 1 && month <= 12 && day >= 1 && day <= 31;
-  const candidates = [...text.matchAll(DATE_RE)];
+const DATE_RE = /\b(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})\b/g;
+const validDate = (day: number, month: number) => month >= 1 && month <= 12 && day >= 1 && day <= 31;
 
-  // priorité à un candidat proche du mot "date" (l'en-tête peut être sur la ligne d'avant,
-  // ex. mise en page en tableau -> jusqu'à 60 caractères de distance) ; le tout premier motif
-  // "chiffre/chiffre/chiffre" du texte peut être un faux ami (n° de téléphone…), donc on ne
-  // s'arrête pas au premier candidat trouvé mais au premier qui est une date plausible
-  const labelIdx = text.search(/date/i);
-  let best = labelIdx !== -1
-    ? candidates.find((m) => m.index! >= labelIdx && m.index! - labelIdx < 60 && valid(Number(m[1]), Number(m[2])))
-    : undefined;
-  best = best ?? candidates.find((m) => valid(Number(m[1]), Number(m[2])));
+/**
+ * 1ère date plausible proche (jusqu'à `window` caractères après) la 1ère occurrence de
+ * `label` dans le texte. jj/mm/aaaa OU jj/mm/aa (beaucoup de factures belges datent sur 2
+ * chiffres). Le tout premier motif "chiffre/chiffre/chiffre" du texte entier peut être un
+ * faux ami (n° de téléphone…), donc on ne s'arrête pas au premier candidat trouvé après le
+ * repère mais au premier qui est une date plausible.
+ */
+function findDateNear(text: string, label: RegExp, window: number): string | null {
+  const labelIdx = text.search(label);
+  if (labelIdx === -1) return null;
+  const candidates = [...text.matchAll(DATE_RE)];
+  const best = candidates.find((m) => m.index! >= labelIdx && m.index! - labelIdx < window && validDate(Number(m[1]), Number(m[2])));
   if (!best) return null;
 
   const day = Number(best[1]);
@@ -89,9 +90,30 @@ function findDate(text: string): string | null {
   return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
 }
 
+function findDate(text: string): string | null {
+  const near = findDateNear(text, /date/i, 60);
+  if (near) return near;
+  // aucun repère "date" trouvé (ou rien de plausible à proximité) -> 1er motif de date
+  // plausible n'importe où dans le texte
+  const candidates = [...text.matchAll(DATE_RE)];
+  const best = candidates.find((m) => validDate(Number(m[1]), Number(m[2])));
+  if (!best) return null;
+  const day = Number(best[1]);
+  const month = Number(best[2]);
+  const year = Number(best[3]) + (Number(best[3]) < 100 ? 2000 : 0);
+  const d = new Date(Date.UTC(year, month - 1, day));
+  return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+}
+
+/** Date d'échéance : proche du mot "échéance" (accents variables selon l'encodage du PDF). */
+function findDueDate(text: string): string | null {
+  return findDateNear(text, /[ée]ch[ée]ance/i, 40);
+}
+
 /** N° de document (facture/devis/avoir) — best-effort, juste après un mot-clé. */
 function findDocNumber(text: string): string | null {
   const m = text.match(/(?:facture|devis|note\s+de\s+cr[ée]dit|avoir|offre)\s*n[°o]\.?\s*:?\s*([A-Z0-9][A-Z0-9\-/.]{1,24})/i)
+    ?? text.match(/num[eé]ro\s*(?:\/\s*date)?\s*du\s*document\s*:?\s*([A-Z0-9][A-Z0-9\-/.]{1,24})/i)
     ?? text.match(/\bn[°o]\.?\s*:?\s*([A-Z0-9][A-Z0-9\-/.]{2,24})\b/i);
   if (m) return m[1]!.replace(/[.\-/]+$/, '');
 
@@ -128,17 +150,32 @@ const AMOUNT_STRICT_G = /(\d+[.,]\d{2})/g;
 
 function findTotals(text: string): { ht: number | null; vat: number | null; ttc: number | null; vatRate: number | null } {
   const ttcM = text.match(new RegExp(`total\\s*(?:ttc|tvac)[^\\d]{0,15}${AMOUNT}`, 'i'))
+    // "Montant de la facture 24,99" / "Montant de vente(À payer) 411,98" — cherché AVANT le
+    // "à payer" générique ci-dessous : un document déjà réglé a souvent, plus loin, un
+    // second repère "(Total) à payer 0,00" qui désigne le RESTE à payer, pas le montant total
+    ?? text.match(new RegExp(`montant\\s*de\\s*(?:la\\s*facture|vente)[^\\d]{0,25}${AMOUNT}`, 'i'))
     ?? text.match(new RegExp(`(?:net\\s*[àa]\\s*payer|montant\\s*total|total\\s*[àa]\\s*payer)[^\\d]{0,15}${AMOUNT}`, 'i'));
-  const htM = text.match(new RegExp(`total\\s*h\\.?t\\.?v\\.?a\\.?[^\\d]{0,15}${AMOUNT}`, 'i')) ?? text.match(new RegExp(`total\\s*hors\\s*tva[^\\d]{0,15}${AMOUNT}`, 'i'));
+  const htM = text.match(new RegExp(`total\\s*h\\.?t\\.?v\\.?a\\.?[^\\d]{0,15}${AMOUNT}`, 'i'))
+    ?? text.match(new RegExp(`total\\s*hors\\s*tva[^\\d]{0,15}${AMOUNT}`, 'i'))
+    ?? text.match(new RegExp(`total\\s*sans\\s*tva[^\\d]{0,15}${AMOUNT}`, 'i'));
   // \b après "tva" pour ne pas matcher dans "TVAC" (Total TVAC = le TTC, pas la TVA)
   const vatAmtM = text.match(new RegExp(`total\\s*tva\\b[^\\d]{0,15}${AMOUNT}`, 'i'))
-    ?? text.match(new RegExp(`\\btva\\s*\\d{1,2}\\s*%[^\\d]{0,15}${AMOUNT}`, 'i'));
-  const vatRateM = text.match(/tva\s*(\d{1,2})\s*%/i);
+    ?? text.match(new RegExp(`\\btva\\s*\\d{1,2}(?:[,.]\\d+)?\\s*%[^\\d]{0,15}${AMOUNT}`, 'i'));
+  // taux en %, décimales tolérées ("21,00%" et pas seulement "21%")
+  const vatRateM = text.match(/tva\s*(\d{1,2})(?:[,.]\d+)?\s*%/i);
+  const vatRate = vatRateM ? Number(vatRateM[1]) / 100 : null;
+  const ht = htM ? parseAmount(htM[1]) : null;
 
   let ttc = ttcM ? parseAmount(ttcM[1]) : null;
+  if (ttc == null && ht != null) {
+    // le HT est connu (repère fiable) mais pas le TTC -> déduit du taux de TVA (par défaut
+    // 21 % BE) plutôt que de risquer le repli "à payer" ci-dessous, qui peut tomber sur un
+    // reste-à-payer à 0 (facture déjà réglée) au lieu du montant total réel
+    ttc = Math.round(ht * (1 + (vatRate ?? 0.21)) * 100) / 100;
+  }
   if (ttc == null) {
-    // repli mise en page en tableau : en-tête "... A PAYER" / "Total ... TVAC" puis les
-    // montants sur la ligne suivante -> on prend le dernier montant de cette zone (la
+    // dernier repli, mise en page en tableau : en-tête "... A PAYER" / "Total ... TVAC" puis
+    // les montants sur la ligne suivante -> on prend le dernier montant de cette zone (la
     // colonne "total" est presque toujours la dernière du tableau)
     const idx = text.search(/[aà]\s*payer/i);
     if (idx !== -1) {
@@ -149,16 +186,17 @@ function findTotals(text: string): { ht: number | null; vat: number | null; ttc:
   }
 
   return {
-    ht: htM ? parseAmount(htM[1]) : null,
+    ht,
     vat: vatAmtM ? parseAmount(vatAmtM[1]) : null,
     ttc,
-    vatRate: vatRateM ? Number(vatRateM[1]) / 100 : null,
+    vatRate,
   };
 }
 
 export interface ParsedDocumentText {
   kind: DocumentExtraction['kind'];
   issuedOn: string | null;
+  dueOn: string | null;
   docNumber: string | null;
   totalHt: number | null;
   totalVat: number | null;
@@ -174,6 +212,7 @@ export function parseDocumentText(text: string): ParsedDocumentText {
   return {
     kind: detectKind(text),
     issuedOn: findDate(text),
+    dueOn: findDueDate(text),
     docNumber: findDocNumber(text),
     totalHt: totals.ht,
     totalVat: totals.vat,
@@ -198,7 +237,7 @@ export async function extractDocumentInfo(
   const text = await pdfToRawText(buf);
   if (!text.trim()) return EMPTY;
 
-  const { kind, issuedOn, docNumber, totalHt, totalVat, totalTtc, vatRate, vatNumbersFound } = parseDocumentText(text);
+  const { kind, issuedOn, dueOn, docNumber, totalHt, totalVat, totalTtc, vatRate, vatNumbersFound } = parseDocumentText(text);
 
   // contact : n° de TVA d'abord (fiable, tous types confondus), sinon un nom retrouvé tel quel
   // dans le texte parmi les contacts du type attendu (client pour un devis/facture émis par
@@ -247,7 +286,7 @@ export async function extractDocumentInfo(
   }
 
   return {
-    kind, issuedOn, docNumber,
+    kind, issuedOn, dueOn, docNumber,
     totalHt, totalVat, totalTtc, vatRate,
     vatNumbersFound, contactId, contactName, contactConfidence,
     worksiteId, worksiteRef, otherWorksiteRefs, textExtracted: true,

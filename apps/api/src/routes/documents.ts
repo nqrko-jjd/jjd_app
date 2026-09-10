@@ -85,6 +85,7 @@ documentsRouter.post(
         worksiteId: extraction.worksiteId,
         contactId: extraction.contactId,
         issuedOn: extraction.issuedOn ? new Date(extraction.issuedOn) : null,
+        dueOn: extraction.dueOn ? new Date(extraction.dueOn) : null,
         source: 'import-pdf',
         createdById: req.user!.id,
       },

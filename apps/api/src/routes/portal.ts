@@ -346,7 +346,9 @@ async function loadWorksite(u: PortalUser, id: string) {
       reports: { where: { status: 'signed' }, orderBy: { date: 'desc' }, include: { photos: true } },
       thread: {
         include: {
-          messages: { orderBy: { createdAt: 'asc' } },
+          // seuls les messages destinés au client, + les photos/vidéos internes
+          // explicitement partagées (jamais le fil interne de l'équipe)
+          messages: { where: { OR: [{ audience: 'client' }, { sharedWithClient: true }] }, orderBy: { createdAt: 'asc' } },
         },
       },
     },
@@ -416,7 +418,9 @@ portalRouter.get(
       messages: messages.filter((m) => m.kind !== 'photo' && m.kind !== 'video').map((m) => ({
         id: m.id, body: m.body, kind: m.kind, fileUrl: m.fileUrl, thumbUrl: m.thumbUrl,
         authorName: m.authorName, createdAt: m.createdAt,
-        fromClient: m.authorName === u.label,
+        // un message du client n'a jamais d'auteur interne (compte User) —
+        // seul le bureau (réponse depuis l'app) ou le client (portail) postent ici
+        fromClient: !m.authorId,
       })),
       threadClosed: !!w.thread?.closedAt,
     });
@@ -433,7 +437,7 @@ portalRouter.post(
     if (!body) throw new HttpError(422, 'Message vide');
     const thread = w.thread ?? (await prisma.thread.create({ data: { worksiteId: w.id } }));
     const msg = await prisma.message.create({
-      data: { threadId: thread.id, authorName: u.label, kind: 'text', body },
+      data: { threadId: thread.id, authorName: u.label, kind: 'text', body, audience: 'client' },
     });
     res.status(201).json({ message: { id: msg.id, body: msg.body, createdAt: msg.createdAt } });
   }),

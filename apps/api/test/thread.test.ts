@@ -45,7 +45,9 @@ test('fil : créé à la demande, message posté, clôture -> statut done', asyn
     body: JSON.stringify({ body: 'On démarre demain' }),
   });
   assert.equal(post.status, 201);
-  assert.equal((await post.json()).message.authorName, 'David');
+  const posted = await post.json();
+  assert.equal(posted.message.authorName, 'David');
+  assert.equal(posted.message.audience, 'internal');
 
   const close = await fetch(`${base}/api/worksites/${wsId}/thread/close`, {
     method: 'POST',

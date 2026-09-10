@@ -6,12 +6,16 @@ import { useAuth } from '@/lib/auth';
 
 interface Msg {
   id: string; kind: string; body: string | null; fileUrl: string | null; thumbUrl: string | null;
-  authorName: string | null; createdAt: string;
+  authorName: string | null; authorId?: string | null; createdAt: string; sharedWithClient?: boolean;
 }
 interface ThreadData {
   thread: { id: string; closedAt: string | null };
   messages: Msg[];
   participants: { id: string; displayName: string | null; firstName: string }[];
+}
+interface ClientThreadData {
+  thread: { id: string; closedAt: string | null };
+  messages: Msg[];
 }
 
 function time(iso: string) {
@@ -21,17 +25,37 @@ function time(iso: string) {
 export function ChantierThread({ worksiteId }: { worksiteId: string }) {
   const { user } = useAuth();
   const canImport = !!user && !['worker', 'client'].includes(user.role);
+  const isOffice = user?.role === 'admin' || user?.role === 'office';
   const { data, loading, reload } = useApi<ThreadData>(`/api/worksites/${worksiteId}/thread`);
   const [text, setText] = useState('');
+  const [clientText, setClientText] = useState('');
   const [busy, setBusy] = useState(false);
   const [importMsg, setImportMsg] = useState<string | null>(null);
-  const [tab, setTab] = useState<'chat' | 'gallery'>('chat');
+  const [tab, setTab] = useState<'chat' | 'client' | 'gallery'>('chat');
   const fileRef = useRef<HTMLInputElement>(null);
   const zipRef = useRef<HTMLInputElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const clientEndRef = useRef<HTMLDivElement>(null);
   const media = (data?.messages ?? []).filter((m) => (m.kind === 'photo' || m.kind === 'video') && m.fileUrl);
+  const { data: clientData, reload: reloadClient } = useApi<ClientThreadData>(
+    isOffice && tab === 'client' ? `/api/worksites/${worksiteId}/thread/client` : null,
+  );
 
   useEffect(() => { endRef.current?.scrollIntoView(); }, [data?.messages.length]);
+  useEffect(() => { clientEndRef.current?.scrollIntoView(); }, [clientData?.messages.length]);
+
+  async function sendClient() {
+    if (!clientText.trim()) return;
+    setBusy(true);
+    await api(`/api/worksites/${worksiteId}/thread/client/messages`, { method: 'POST', body: { body: clientText.trim() } });
+    setClientText('');
+    setBusy(false);
+    reloadClient();
+  }
+  async function toggleShare(m: Msg) {
+    await api(`/api/worksites/${worksiteId}/thread/messages/${m.id}/share`, { method: 'PATCH', body: { shared: !m.sharedWithClient } });
+    reload();
+  }
 
   async function send() {
     if (!text.trim()) return;
@@ -119,6 +143,9 @@ export function ChantierThread({ worksiteId }: { worksiteId: string }) {
 
       <div className="thread-tabs">
         <button type="button" className={`thread-tab${tab === 'chat' ? ' active' : ''}`} onClick={() => setTab('chat')}>💬 Discussion</button>
+        {isOffice && (
+          <button type="button" className={`thread-tab${tab === 'client' ? ' active' : ''}`} onClick={() => setTab('client')}>👤 Client</button>
+        )}
         <button type="button" className={`thread-tab${tab === 'gallery' ? ' active' : ''}`} onClick={() => setTab('gallery')}>
           🖼️ Galerie{media.length ? ` (${media.length})` : ''}
         </button>
@@ -130,17 +157,46 @@ export function ChantierThread({ worksiteId }: { worksiteId: string }) {
         ) : (
           <div className="thread-gallery">
             {media.map((m) => (
-              <a key={m.id} href={m.fileUrl!} target="_blank" rel="noreferrer" title={`${m.authorName ?? ''} · ${time(m.createdAt)}${m.body ? ` · ${m.body}` : ''}`}>
-                {m.kind === 'photo' ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={m.thumbUrl ?? m.fileUrl!} alt="" />
-                ) : (
-                  <video src={m.fileUrl!} preload="metadata" muted />
+              <div key={m.id} style={{ position: 'relative' }}>
+                <a href={m.fileUrl!} target="_blank" rel="noreferrer" title={`${m.authorName ?? ''} · ${time(m.createdAt)}${m.body ? ` · ${m.body}` : ''}`}>
+                  {m.kind === 'photo' ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={m.thumbUrl ?? m.fileUrl!} alt="" />
+                  ) : (
+                    <video src={m.fileUrl!} preload="metadata" muted />
+                  )}
+                </a>
+                {isOffice && (
+                  <button
+                    type="button"
+                    className={`badge ${m.sharedWithClient ? 'ok' : 'plain'}`}
+                    style={{ position: 'absolute', bottom: 4, left: 4, right: 4, fontSize: '0.68rem', cursor: 'pointer' }}
+                    title={m.sharedWithClient ? 'Visible du client — cliquer pour retirer' : 'Partager cette photo avec le client'}
+                    onClick={() => toggleShare(m)}
+                  >
+                    {m.sharedWithClient ? '👤 Partagée' : '👤 Partager'}
+                  </button>
                 )}
-              </a>
+              </div>
             ))}
           </div>
         )
+      ) : tab === 'client' ? (
+        <div style={{ maxHeight: 460, overflowY: 'auto', padding: '1rem 1.15rem', display: 'flex', flexDirection: 'column', gap: '0.7rem' }}>
+          <div className="muted" style={{ fontSize: '0.78rem' }}>Conversation avec le client — visible dans son portail.</div>
+          {(clientData?.messages.length ?? 0) === 0 && <div className="muted">Aucun message échangé avec le client.</div>}
+          {(clientData?.messages ?? []).map((m) => (
+            <div key={m.id} style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', alignItems: m.authorId ? 'flex-end' : 'flex-start' }}>
+              <div style={{ fontSize: '0.72rem', color: 'var(--ink-3)' }}>{m.authorName} · {time(m.createdAt)}</div>
+              {m.body && (
+                <div style={{ background: m.authorId ? 'var(--primary-soft)' : 'var(--surface-2)', borderRadius: 8, padding: '0.5rem 0.7rem', fontSize: '0.9rem', maxWidth: '80%' }}>
+                  {m.body}
+                </div>
+              )}
+            </div>
+          ))}
+          <div ref={clientEndRef} />
+        </div>
       ) : (
       <div style={{ maxHeight: 460, overflowY: 'auto', padding: '1rem 1.15rem', display: 'flex', flexDirection: 'column', gap: '0.7rem' }}>
         {data.messages.length === 0 && <div className="muted">Aucun message. Lance la conversation ci-dessous.</div>}
@@ -170,6 +226,20 @@ export function ChantierThread({ worksiteId }: { worksiteId: string }) {
         ))}
         <div ref={endRef} />
       </div>
+      )}
+
+      {tab === 'client' && (
+        <div className="row" style={{ padding: '0.8rem 1.15rem', borderTop: '1px solid var(--line)', gap: '0.5rem' }}>
+          <input
+            className="input"
+            placeholder="Répondre au client…"
+            value={clientText}
+            onChange={(e) => setClientText(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), sendClient())}
+            style={{ flex: 1 }}
+          />
+          <button className="btn primary" onClick={sendClient} disabled={busy || !clientText.trim()}>Envoyer</button>
+        </div>
       )}
 
       {tab === 'chat' && (

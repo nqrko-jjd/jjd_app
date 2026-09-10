@@ -885,6 +885,8 @@ model Message {
   fileUrl    String?
   thumbUrl   String?
   source     String? // "whatsapp" | null (créé dans l'app)
+  audience   String   @default("internal") // "internal" (équipe) | "client"
+  sharedWithClient Boolean @default(false) // photo/vidéo interne explicitement partagée avec le client
   createdAt  DateTime @default(now())
 
   @@index([threadId, createdAt])

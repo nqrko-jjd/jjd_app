@@ -56,7 +56,7 @@ export default function Chantiers() {
         keyExtractor={(x) => x.id}
         contentContainerStyle={{ padding: 12, paddingTop: 0, gap: 8 }}
         renderItem={({ item }) => (
-          <Pressable style={s.row} onPress={() => router.push((worker ? `/fiche/${item.id}` : `/chantier/${item.id}`) as never)}>
+          <Pressable style={s.row} onPress={() => router.push((worker ? `/fil/${item.id}` : `/chantier/${item.id}`) as never)}>
             <View style={{ flex: 1 }}>
               <Text style={s.title}>
                 <Text style={s.ref}>{item.ref}</Text> — {item.title}

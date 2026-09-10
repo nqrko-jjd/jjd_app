@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Image, StyleSheet, KeyboardAvoidingView, Platform, Alert, Linking } from 'react-native';
-import { Stack, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { Stack, useLocalSearchParams, useFocusEffect, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { apiGet, apiSend, apiUploadPhoto, API_URL } from '@/lib/api';
 import { Loading } from '@/lib/ui';
@@ -22,6 +22,7 @@ function time(iso: string) {
 
 export default function Fil() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
   const [d, setD] = useState<Data | null>(null);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -42,14 +43,50 @@ export default function Fil() {
     setBusy(false);
     load();
   }
-  async function addPhoto() {
-    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 0.7 });
-    if (res.canceled || !res.assets[0]) return;
+  async function pickImage(fromCamera: boolean) {
+    const perm = fromCamera
+      ? await ImagePicker.requestCameraPermissionsAsync()
+      : await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) { Alert.alert('Permission refusée', fromCamera ? "Accès à l'appareil photo requis." : 'Accès aux photos requis.'); return null; }
+    const res = fromCamera
+      ? await ImagePicker.launchCameraAsync({ quality: 0.7 })
+      : await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 0.7 });
+    if (res.canceled || !res.assets[0]) return null;
+    return res.assets[0].uri;
+  }
+
+  function addPhoto() {
+    Alert.alert('Ajouter une photo', undefined, [
+      { text: 'Annuler', style: 'cancel' },
+      { text: 'Prendre une photo', onPress: async () => { const uri = await pickImage(true); if (uri) sendPhoto(uri); } },
+      { text: 'Choisir dans la galerie', onPress: async () => { const uri = await pickImage(false); if (uri) sendPhoto(uri); } },
+    ]);
+  }
+  async function sendPhoto(uri: string) {
     setBusy(true);
     try {
-      await apiUploadPhoto(`/api/worksites/${id}/thread/photos`, res.assets[0].uri);
+      await apiUploadPhoto(`/api/worksites/${id}/thread/photos`, uri);
     } catch {
       Alert.alert('Échec', "La photo n'a pas pu être envoyée (réseau ?).");
+    }
+    setBusy(false);
+    load();
+  }
+
+  function addInvoice() {
+    Alert.alert('Envoyer une facture', 'Elle sera ajoutée aux achats, à vérifier par le bureau.', [
+      { text: 'Annuler', style: 'cancel' },
+      { text: 'Prendre une photo', onPress: async () => { const uri = await pickImage(true); if (uri) sendInvoice(uri); } },
+      { text: 'Choisir dans la galerie', onPress: async () => { const uri = await pickImage(false); if (uri) sendInvoice(uri); } },
+    ]);
+  }
+  async function sendInvoice(uri: string) {
+    setBusy(true);
+    try {
+      await apiUploadPhoto(`/api/worksites/${id}/thread/invoice`, uri);
+      Alert.alert('Envoyée', 'Facture ajoutée aux achats, à vérifier par le bureau.');
+    } catch {
+      Alert.alert('Échec', "La facture n'a pas pu être envoyée (réseau ?).");
     }
     setBusy(false);
     load();
@@ -65,7 +102,17 @@ export default function Fil() {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: T.paper }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
-      <Stack.Screen options={{ title: 'Fil de chantier', headerBackTitle: 'Retour' }} />
+      <Stack.Screen
+        options={{
+          title: 'Fil de chantier',
+          headerBackTitle: 'Retour',
+          headerRight: () => (
+            <Pressable onPress={() => router.push(`/fiche/${id}` as never)} hitSlop={10}>
+              <Text style={{ color: T.primary, fontWeight: '700' }}>ℹ️ Infos</Text>
+            </Pressable>
+          ),
+        }}
+      />
       <ScrollView ref={scroll} contentContainerStyle={{ padding: 14, gap: 10 }}>
         {d.messages.length === 0 && <Text style={{ color: T.ink2 }}>Aucun message.</Text>}
         {d.messages.map((m) => (
@@ -99,6 +146,7 @@ export default function Fil() {
 
       <View style={s.composer}>
         <Pressable style={s.iconBtn} onPress={addPhoto} disabled={busy}><Text style={{ fontSize: 18 }}>📷</Text></Pressable>
+        <Pressable style={s.iconBtn} onPress={addInvoice} disabled={busy}><Text style={{ fontSize: 18 }}>📎</Text></Pressable>
         <TextInput style={s.input} placeholder="Message…" value={text} onChangeText={setText} placeholderTextColor={T.ink3} />
         <Pressable style={s.sendBtn} onPress={send} disabled={busy || !text.trim()}><Text style={{ color: '#fff', fontWeight: '700' }}>›</Text></Pressable>
       </View>

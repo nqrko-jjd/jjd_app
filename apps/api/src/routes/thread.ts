@@ -3,13 +3,19 @@ import multer from 'multer';
 import { unzipSync } from 'fflate';
 import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
-import { requireAuth, STAFF, FIELD_OFFICE } from '../lib/auth.js';
+import { requireAuth, STAFF, FIELD_OFFICE, OFFICE } from '../lib/auth.js';
 import { storeImage, storeFile } from '../lib/media.js';
 import { parseWhatsAppChat, buildWhatsAppAuthorMatcher, WHATSAPP_SKIP_BODY } from '../lib/whatsapp-import.js';
+import { extractDocumentInfo } from '../lib/document-extract.js';
 
 export const threadRouter = Router({ mergeParams: true });
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 const uploadZip = multer({ storage: multer.memoryStorage(), limits: { fileSize: 300 * 1024 * 1024 } });
+
+function deriveYM(date: Date) {
+  const m = date.getMonth() + 1;
+  return { year: date.getFullYear(), month: String(m), quarter: `T${Math.ceil(m / 3)}` };
+}
 
 async function ensureThread(worksiteId: string) {
   const ws = await prisma.worksite.findUnique({ where: { id: worksiteId } });
@@ -35,7 +41,7 @@ threadRouter.get(
     const thread = await ensureThread(worksiteId);
     const [messages, participants] = await Promise.all([
       prisma.message.findMany({
-        where: { threadId: thread.id },
+        where: { threadId: thread.id, audience: 'internal' },
         orderBy: { createdAt: 'asc' },
         include: { author: { select: { id: true } } },
       }),
@@ -59,7 +65,7 @@ threadRouter.post(
     const kind = req.body.kind === 'status' ? 'status' : 'text';
     if (!body) throw new HttpError(422, 'Message vide');
     const msg = await prisma.message.create({
-      data: { threadId: thread.id, authorId: req.user!.id, authorName: await authorName(req.user!.id), kind, body },
+      data: { threadId: thread.id, authorId: req.user!.id, authorName: await authorName(req.user!.id), kind, body, audience: 'internal' },
     });
     res.status(201).json({ message: msg });
   }),
@@ -84,6 +90,7 @@ threadRouter.post(
         body: String(req.body.caption ?? '').trim() || null,
         fileUrl: img.url,
         thumbUrl: img.thumbUrl,
+        audience: 'internal',
       },
     });
     res.status(201).json({ message: msg });
@@ -146,7 +153,7 @@ threadRouter.post(
       const createdAt = new Date(at);
 
       if (!msg.attach) {
-        await prisma.message.create({ data: { threadId: thread.id, authorName: who.label, kind: 'text', body, source: 'whatsapp', createdAt } });
+        await prisma.message.create({ data: { threadId: thread.id, authorName: who.label, kind: 'text', body, source: 'whatsapp', audience: 'internal', createdAt } });
         texts++;
         continue;
       }
@@ -156,15 +163,15 @@ threadRouter.post(
       try {
         if (['jpg', 'jpeg', 'png', 'webp'].includes(ext)) {
           const img = await storeImage(Buffer.from(buf));
-          await prisma.message.create({ data: { threadId: thread.id, authorName: who.label, kind: 'photo', fileUrl: img.url, thumbUrl: img.thumbUrl, source: 'whatsapp', createdAt } });
+          await prisma.message.create({ data: { threadId: thread.id, authorName: who.label, kind: 'photo', fileUrl: img.url, thumbUrl: img.thumbUrl, source: 'whatsapp', audience: 'internal', createdAt } });
           photos++;
         } else if (['mp4', 'mov', '3gp'].includes(ext)) {
           const url = storeFile(Buffer.from(buf), msg.attach, 'whatsapp');
-          await prisma.message.create({ data: { threadId: thread.id, authorName: who.label, kind: 'video', fileUrl: url, source: 'whatsapp', createdAt } });
+          await prisma.message.create({ data: { threadId: thread.id, authorName: who.label, kind: 'video', fileUrl: url, source: 'whatsapp', audience: 'internal', createdAt } });
           videos++;
         } else {
           const url = storeFile(Buffer.from(buf), msg.attach, 'whatsapp');
-          await prisma.message.create({ data: { threadId: thread.id, authorName: who.label, kind: 'file', fileUrl: url, body: msg.attach, source: 'whatsapp', createdAt } });
+          await prisma.message.create({ data: { threadId: thread.id, authorName: who.label, kind: 'file', fileUrl: url, body: msg.attach, source: 'whatsapp', audience: 'internal', createdAt } });
           files++;
         }
       } catch {
@@ -211,11 +218,129 @@ threadRouter.post(
         authorName: await authorName(req.user!.id),
         kind: 'status',
         body: closing ? 'Chantier signalé terminé' : 'Fil réouvert',
+        audience: 'internal',
       },
     });
     if (closing) {
       await prisma.worksite.update({ where: { id: worksiteId }, data: { status: 'done' } });
     }
     res.json({ ok: true });
+  }),
+);
+
+/* -------------------------------------------------------------- fil client */
+
+/** Le fil client de ce chantier (ce que le client voit/poste depuis le portail). */
+threadRouter.get(
+  '/client',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const worksiteId = req.params.worksiteId!;
+    const thread = await ensureThread(worksiteId);
+    const messages = await prisma.message.findMany({
+      where: { threadId: thread.id, audience: 'client' },
+      orderBy: { createdAt: 'asc' },
+    });
+    res.json({ thread, messages });
+  }),
+);
+
+/** Le bureau répond au client depuis l'app (pas besoin du portail). */
+threadRouter.post(
+  '/client/messages',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const worksiteId = req.params.worksiteId!;
+    const thread = await ensureThread(worksiteId);
+    const body = String(req.body.body ?? '').trim();
+    if (!body) throw new HttpError(422, 'Message vide');
+    const msg = await prisma.message.create({
+      data: { threadId: thread.id, authorId: req.user!.id, authorName: await authorName(req.user!.id), kind: 'text', body, audience: 'client' },
+    });
+    res.status(201).json({ message: msg });
+  }),
+);
+
+/** Partage (ou retire) une photo/vidéo interne dans la galerie visible du client. */
+threadRouter.patch(
+  '/messages/:id/share',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const worksiteId = req.params.worksiteId!;
+    const thread = await ensureThread(worksiteId);
+    const msg = await prisma.message.findFirst({ where: { id: req.params.id, threadId: thread.id } });
+    if (!msg) throw new HttpError(404, 'Message introuvable');
+    if (msg.kind !== 'photo' && msg.kind !== 'video') throw new HttpError(422, 'Seules les photos/vidéos peuvent être partagées.');
+    const shared = req.body?.shared !== false;
+    const updated = await prisma.message.update({ where: { id: msg.id }, data: { sharedWithClient: shared } });
+    res.json({ message: updated });
+  }),
+);
+
+/**
+ * Envoie une facture depuis le fil (photo ou PDF) : jointe au fil interne ET
+ * loggée en brouillon dans les achats (source "chat") pour vérification par le
+ * bureau — jamais publiée telle quelle, juste une piste de dépense à confirmer.
+ */
+threadRouter.post(
+  '/invoice',
+  requireAuth(...STAFF),
+  upload.single('file'),
+  asyncHandler(async (req, res) => {
+    const worksiteId = req.params.worksiteId!;
+    if (!req.file) throw new HttpError(422, 'Aucun fichier');
+    const thread = await ensureThread(worksiteId);
+    const isImage = /^image\/(jpe?g|png|webp|heic)$/.test(req.file.mimetype);
+    const isPdf = req.file.mimetype === 'application/pdf';
+    if (!isImage && !isPdf) throw new HttpError(422, 'Format accepté : photo ou PDF.');
+
+    let fileUrl: string;
+    let thumbUrl: string | undefined;
+    if (isImage) {
+      const img = await storeImage(req.file.buffer);
+      fileUrl = img.url;
+      thumbUrl = img.thumbUrl;
+    } else {
+      fileUrl = storeFile(req.file.buffer, req.file.originalname || 'facture.pdf', 'expenses');
+    }
+
+    const extraction = isPdf ? await extractDocumentInfo(req.file.buffer, req.file.mimetype) : null;
+    const date = extraction?.issuedOn ? new Date(extraction.issuedOn) : new Date();
+    const ht = extraction?.totalHt ?? (extraction?.totalTtc != null ? Math.round((extraction.totalTtc / (1 + (extraction.vatRate ?? 0.21))) * 100) / 100 : 0);
+    const expense = await prisma.ledgerEntry.create({
+      data: {
+        ...deriveYM(date),
+        date,
+        dueDate: extraction?.dueOn ? new Date(extraction.dueOn) : null,
+        direction: 'purchase',
+        docType: "Facture d'achat",
+        docNumber: extraction?.docNumber ?? null,
+        worksiteId,
+        contactId: extraction?.contactId ?? null,
+        ht,
+        ttc: extraction?.totalTtc ?? null,
+        vatRate: extraction?.vatRate ?? null,
+        pdfPath: fileUrl,
+        paymentStatus: 'Non payé',
+        source: 'chat',
+        createdById: req.user!.id,
+      },
+    });
+
+    const msg = await prisma.message.create({
+      data: {
+        threadId: thread.id,
+        authorId: req.user!.id,
+        authorName: await authorName(req.user!.id),
+        kind: isImage ? 'photo' : 'file',
+        body: isImage
+          ? 'Facture envoyée — ajoutée aux achats, à vérifier'
+          : (req.file.originalname || 'Facture') + ' — ajoutée aux achats, à vérifier',
+        fileUrl,
+        thumbUrl,
+        audience: 'internal',
+      },
+    });
+    res.status(201).json({ message: msg, expenseId: expense.id });
   }),
 );

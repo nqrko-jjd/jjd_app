@@ -283,7 +283,11 @@ export default function AchatsPage() {
                     />
                   </td>
                   <td className="tnum">{formatDateBE(e.date)}</td>
-                  <td>{e.supplier ?? '—'}{e.direction === 'credit_note' && <span className="badge warn" style={{ marginLeft: 6 }}>NC</span>}</td>
+                  <td>
+                    {e.supplier ?? '—'}
+                    {e.direction === 'credit_note' && <span className="badge warn" style={{ marginLeft: 6 }}>NC</span>}
+                    {e.source === 'chat' && <span className="badge plain" style={{ marginLeft: 6 }} title="Envoyée depuis le fil de chantier — à vérifier">📎 Fil de chantier</span>}
+                  </td>
                   <td className="mono" style={{ fontSize: '0.82rem' }}>{e.docNumber ?? '—'}</td>
                   <td className="mono">{e.worksite?.ref ?? '—'}</td>
                   <td>{e.categoryLabel ?? '—'}</td>

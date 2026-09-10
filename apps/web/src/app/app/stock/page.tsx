@@ -8,6 +8,7 @@ import { rowNav } from '@/lib/rowNav';
 import { ComboBox } from '@/components/ComboBox';
 import { FormModal, type FieldDef } from '@/components/FormModal';
 import { PaginationBar } from '@/components/PaginationBar';
+import { ViewToggle, useViewMode } from '@/components/ViewToggle';
 
 interface StockItem {
   id: string; name: string; unit: string; category: string | null;
@@ -32,6 +33,7 @@ export default function StockPage() {
   const [creating, setCreating] = useState(false);
   const [moveItem, setMoveItem] = useState<StockItem | null>(null);
   const [history, setHistory] = useState<StockItem | null>(null);
+  const [mode, setMode] = useViewMode('stock');
   const ctxItems = useApi<{ items: StockItem[] }>(`/api/stock/items?${q ? `q=${encodeURIComponent(q)}` : ''}`);
   const { data, loading, reload } = ctxItems;
   const { data: meta } = useApi<Meta>('/api/stock/meta');
@@ -82,11 +84,42 @@ export default function StockPage() {
 
       <div className="row" style={{ marginBottom: '1rem' }}>
         <input className="input" style={{ maxWidth: 280 }} placeholder="Nom, catégorie…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <ViewToggle mode={mode} onChange={setMode} />
       </div>
 
       {loading && <div className="empty">Chargement…</div>}
       {data && data.items.length === 0 && <div className="empty">Aucun article. Ajoute le premier matériau du dépôt.</div>}
-      {data && data.items.length > 0 && (
+      {data && data.items.length > 0 && mode === 'gallery' && (
+        <div className="gallery-grid">
+          {sort.rows.map((it) => (
+            <div
+              key={it.id}
+              className="card gallery-card"
+              style={{ cursor: 'pointer' }}
+              role="button"
+              tabIndex={0}
+              onClick={() => setHistory(it)}
+              onKeyDown={(e) => { if (e.key === 'Enter') setHistory(it); }}
+            >
+              <div className="gallery-thumb">▥</div>
+              <div className="gallery-body">
+                <div className="gallery-title">
+                  {it.name}
+                  {it.low && <span className="badge warn" style={{ marginLeft: 6, fontSize: '0.68rem' }}>bas</span>}
+                </div>
+                <div className="gallery-sub">
+                  {it.category ?? '—'} · {it.qty} {it.unit}
+                </div>
+              </div>
+              <div className="row" style={{ padding: '0 0.85rem 0.7rem', justifyContent: 'space-between' }}>
+                <Money value={it.value} />
+                <button type="button" className="btn" style={{ padding: '0.15rem 0.5rem', fontSize: '0.72rem' }} onClick={(e) => { e.stopPropagation(); setMoveItem(it); }}>Mouvement</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {data && data.items.length > 0 && mode === 'list' && (
         <div className="tbl-wrap">
           <table className="tbl">
             <thead>

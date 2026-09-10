@@ -103,7 +103,7 @@ financeRouter.get(
   '/bank',
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
-    const { matched, q, from, bank } = req.query as Record<string, string>;
+    const { matched, q, from, bank, page: pageStr, pageSize: pageSizeStr } = req.query as Record<string, string>;
     const and: Record<string, unknown>[] = [];
     if (matched === '1') and.push({ OR: [{ matchedLedgerId: { not: null } }, { matchedDocumentId: { not: null } }] });
     if (matched === '0') and.push({ matchedLedgerId: null }, { matchedDocumentId: null });
@@ -112,11 +112,16 @@ financeRouter.get(
     if (q) and.push({ OR: [{ counterpartyName: { contains: q } }, { description: { contains: q } }, { communication: { contains: q } }] });
     const where: Record<string, unknown> = and.length ? { AND: and } : {};
 
-    const [items, stats] = await Promise.all([
+    const page = Math.max(1, Math.trunc(Number(pageStr)) || 1);
+    const pageSize = Math.min(500, Math.max(20, Math.trunc(Number(pageSizeStr)) || 100));
+
+    const [items, filteredCount, stats] = await Promise.all([
       prisma.bankTransaction.findMany({
-        where, orderBy: { bookingDate: 'desc' }, take: 300,
+        where, orderBy: { bookingDate: 'desc' },
+        skip: (page - 1) * pageSize, take: pageSize,
         include: { account: { select: { label: true, iban: true } } },
       }),
+      prisma.bankTransaction.count({ where }),
       prisma.bankTransaction.groupBy({
         by: ['bank'],
         _count: true,
@@ -151,6 +156,7 @@ financeRouter.get(
         matchedDocument: t.matchedDocumentId ? docMap.get(t.matchedDocumentId) ?? null : null,
       })),
       byBank: stats, matched: done, total,
+      page, pageSize, totalCount: filteredCount, totalPages: Math.max(1, Math.ceil(filteredCount / pageSize)),
     });
   }),
 );
@@ -162,11 +168,68 @@ financeRouter.get(
   asyncHandler(async (req, res) => {
     const tx = await prisma.bankTransaction.findUnique({ where: { id: req.params.id } });
     if (!tx) throw new HttpError(404, 'Transaction introuvable');
+    const inc = { worksite: { select: { ref: true, title: true } } };
+
+    // recherche manuelle : l'utilisateur cherche lui-même (n° facture, fournisseur, chantier…)
+    // au lieu de se limiter aux propositions automatiques (montant/date proches) — utile
+    // quand il n'y a aucune proposition ou que la bonne facture n'y figure pas
+    const q = (req.query.q as string | undefined)?.trim();
+    if (q) {
+      const [ledgers, docs] = await Promise.all([
+        prisma.ledgerEntry.findMany({
+          where: {
+            OR: [
+              { docNumber: { contains: q } },
+              { supplierName: { contains: q } },
+              { worksite: { ref: { contains: q } } },
+              { worksite: { title: { contains: q } } },
+              { contact: { name: { contains: q } } },
+            ],
+          },
+          take: 20, include: inc, orderBy: { date: 'desc' },
+        }),
+        prisma.document.findMany({
+          where: {
+            OR: [
+              { number: { contains: q } },
+              { contact: { name: { contains: q } } },
+              { worksite: { ref: { contains: q } } },
+              { worksite: { title: { contains: q } } },
+            ],
+          },
+          take: 15, orderBy: { issuedOn: 'desc' },
+          select: { id: true, number: true, kind: true, totalTtc: true, issuedOn: true, status: true, contact: { select: { name: true } }, worksite: { select: { ref: true } } },
+        }),
+      ]);
+      return res.json({
+        items: [
+          ...ledgers.map((l) => ({
+            kind: 'ledger' as const,
+            id: l.id,
+            label: [l.docNumber, l.supplierName].filter(Boolean).join(' · ') || (l.direction === 'sale' ? 'Vente' : 'Achat'),
+            amount: l.ttc ?? l.ht,
+            date: l.date,
+            direction: l.direction,
+            worksiteRef: l.worksite?.ref ?? l.worksiteRef ?? null,
+          })),
+          ...docs.map((d) => ({
+            kind: 'document' as const,
+            id: d.id,
+            label: [d.number, d.contact?.name].filter(Boolean).join(' · ') || 'Facture de vente',
+            amount: d.totalTtc,
+            date: d.issuedOn,
+            direction: 'sale' as const,
+            worksiteRef: d.worksite?.ref ?? null,
+            status: d.status,
+          })),
+        ],
+      });
+    }
+
     const amount = Math.abs(tx.amount ?? 0);
     const window = tx.bookingDate
       ? { date: { gte: new Date(tx.bookingDate.getTime() - 20 * 86400000), lte: new Date(tx.bookingDate.getTime() + 20 * 86400000) } }
       : {};
-    const inc = { worksite: { select: { ref: true, title: true } } };
 
     const byComm = tx.structuredComm && tx.structuredComm.length >= 10
       ? await prisma.ledgerEntry.findMany({ where: { bankComm: { contains: tx.structuredComm.slice(0, 12) } }, take: 5, include: inc })

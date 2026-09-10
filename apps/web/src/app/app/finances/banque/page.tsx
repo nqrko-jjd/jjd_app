@@ -6,6 +6,7 @@ import { useApi } from '@/lib/use-api';
 import { api, apiUpload } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { PageHead, Money, formatDateBE } from '@/lib/ui';
+import { PaginationBar } from '@/components/PaginationBar';
 
 interface Tx {
   id: string; bookingDate: string | null; bank: string | null; counterpartyName: string | null;
@@ -40,16 +41,25 @@ function BanqueInner() {
   const [matched, setMatched] = useState('0');
   const [q, setQ] = useState('');
   const [bank, setBank] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(100);
   const [busy, setBusy] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
 
-  const qs = new URLSearchParams({ matched });
+  useEffect(() => { setPage(1); }, [q, bank, matched]);
+
+  const qs = new URLSearchParams({ matched, page: String(page), pageSize: String(pageSize) });
   if (q) qs.set('q', q);
   if (bank) qs.set('bank', bank);
-  const { data, loading, reload } = useApi<{ items: Tx[]; matched: number; total: number; byBank: { bank: string | null; _count: number }[] }>(`/api/finance/bank?${qs}`);
+  const { data, loading, reload } = useApi<{
+    items: Tx[]; matched: number; total: number; byBank: { bank: string | null; _count: number }[];
+    page: number; totalPages: number; totalCount: number;
+  }>(`/api/finance/bank?${qs}`);
   const { data: ponto, reload: reloadPonto } = useApi<PontoStatus>('/api/ponto/status');
   const [openTx, setOpenTx] = useState<string | null>(null);
-  const { data: sugg } = useApi<{ items: Suggestion[] }>(openTx ? `/api/finance/bank/${openTx}/suggestions` : null);
+  const [manualQ, setManualQ] = useState('');
+  const suggQs = manualQ.trim() ? `?q=${encodeURIComponent(manualQ.trim())}` : '';
+  const { data: sugg, loading: suggLoading } = useApi<{ items: Suggestion[] }>(openTx ? `/api/finance/bank/${openTx}/suggestions${suggQs}` : null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -112,7 +122,7 @@ function BanqueInner() {
     <>
       <PageHead
         title="Rapprochement bancaire"
-        sub={data ? `${data.matched} / ${data.total} transactions rapprochées` : undefined}
+        sub={data ? `${data.matched} / ${data.total} transactions rapprochées · page ${data.page}/${data.totalPages}` : undefined}
         action={<Link href="/app/finances" className="btn">← Finances</Link>}
       />
 
@@ -213,7 +223,7 @@ function BanqueInner() {
                       {t.matchedLedgerId || t.matchedDocumentId ? (
                         <button className="btn" style={{ padding: '0.2rem 0.5rem', fontSize: '0.76rem' }} onClick={() => match(t.id, { ledgerId: null, documentId: null })}>Défaire</button>
                       ) : (
-                        <button className="btn" style={{ padding: '0.2rem 0.5rem', fontSize: '0.76rem' }} onClick={() => setOpenTx(openTx === t.id ? null : t.id)}>
+                        <button className="btn" style={{ padding: '0.2rem 0.5rem', fontSize: '0.76rem' }} onClick={() => { setOpenTx(openTx === t.id ? null : t.id); setManualQ(''); }}>
                           {openTx === t.id ? 'Fermer' : 'Rapprocher'}
                         </button>
                       )}
@@ -222,8 +232,21 @@ function BanqueInner() {
                   {openTx === t.id && (
                     <tr>
                       <td colSpan={7} style={{ background: 'var(--surface-2)', padding: '0.8rem 0.9rem' }}>
-                        <div className="eyebrow" style={{ marginBottom: '0.5rem' }}>Factures proposées (achat & vente)</div>
-                        {!sugg ? 'Recherche…' : sugg.items.length === 0 ? <span className="muted">Aucune correspondance trouvée.</span> : (
+                        <div className="row" style={{ marginBottom: '0.6rem', gap: '0.5rem' }}>
+                          <div className="eyebrow" style={{ margin: 0 }}>{manualQ.trim() ? 'Recherche' : 'Factures proposées (achat & vente)'}</div>
+                          <input
+                            className="input"
+                            style={{ maxWidth: 260, marginLeft: 'auto' }}
+                            placeholder="Chercher toi-même : n°, fournisseur, chantier…"
+                            value={manualQ}
+                            onChange={(e) => setManualQ(e.target.value)}
+                          />
+                        </div>
+                        {suggLoading ? 'Recherche…' : !sugg ? 'Recherche…' : sugg.items.length === 0 ? (
+                          <span className="muted">
+                            {manualQ.trim() ? 'Aucune correspondance.' : 'Aucune proposition automatique — cherche toi-même ci-dessus.'}
+                          </span>
+                        ) : (
                           <div className="grid" style={{ gap: '0.4rem' }}>
                             {sugg.items.map((s) => (
                               <button
@@ -251,6 +274,10 @@ function BanqueInner() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {data && (
+        <PaginationBar page={data.page} totalPages={data.totalPages} pageSize={pageSize} onPage={setPage} onPageSize={(s) => { setPageSize(s); setPage(1); }} />
       )}
     </>
   );

@@ -22,26 +22,39 @@ async function vatLookupAction(value: string): Promise<Record<string, unknown>> 
 
 /**
  * Champs différents selon le type de contact (`forType`, le type au moment où le formulaire
- * s'ouvre — un client a une « Catégorie » et un immeuble/ACP éventuel, un fournisseur non ;
- * les personnes de contact et l'historique d'achats d'un fournisseur sont gérés à part sur sa
- * fiche, pas dans ce formulaire). Si le type change pendant l'édition, les champs affichés ne
- * se recalculent pas en direct — acceptable, le type change rarement après coup.
+ * s'ouvre — un client a une « Catégorie », un fournisseur non ; les personnes de contact et
+ * l'historique d'achats d'un fournisseur sont gérés à part sur sa fiche, pas dans ce formulaire)
+ * ET selon la « Catégorie » (`kind`) choisie en direct dans le formulaire : Immeuble/ACP lié et
+ * Syndic (pour l'adresse de facturation « c/o ») n'apparaissent que pour une ACP ; le n° de TVA
+ * disparaît pour un particulier.
  */
-export const CONTACT_FIELDS = (forType?: string, buildings: { id: string; name: string }[] = []): FieldDef[] => {
+export const CONTACT_FIELDS = (
+  forType?: string,
+  buildings: { id: string; name: string }[] = [],
+  syndics: { id: string; name: string }[] = [],
+) => {
   const isSupplierOnly = forType === 'supplier';
-  return [
-    { name: 'name', label: 'Nom', required: true, full: true },
-    { name: 'type', label: 'Type', type: 'select', options: CONTACT_TYPES.map((t) => ({ value: t, label: t === 'client' ? 'Client' : t === 'supplier' ? 'Fournisseur' : 'Les deux' })) },
-    ...(!isSupplierOnly ? [{ name: 'kind', label: 'Catégorie', type: 'select' as const, options: CLIENT_KINDS.map((k) => ({ value: k, label: CLIENT_KIND_LABEL[k] })) }] : []),
-    ...(!isSupplierOnly ? [{ name: 'buildingId', label: 'Immeuble / ACP', type: 'select' as const, options: buildings.map((b) => ({ value: b.id, label: b.name })), full: true }] : []),
-    { name: 'email', label: 'E-mail' },
-    { name: 'phone', label: 'Téléphone' },
-    { name: 'vat', label: 'N° TVA', placeholder: 'BE0123456789', action: { label: 'Rechercher', run: vatLookupAction } },
-    { name: 'address', label: 'Adresse', full: true, type: 'address', addressFill: { postalCode: 'postalCode', city: 'city' } },
-    { name: 'postalCode', label: 'Code postal' },
-    { name: 'city', label: 'Ville' },
-    { name: 'note', label: 'Note', type: 'textarea', full: true },
-  ];
+  return (values: Record<string, unknown>): FieldDef[] => {
+    const kind = (values.kind as string) || (isSupplierOnly ? undefined : 'individual');
+    const isAcp = !isSupplierOnly && kind === 'acp';
+    const showVat = isSupplierOnly || kind !== 'individual';
+    return [
+      { name: 'name', label: 'Nom', required: true, full: true },
+      { name: 'type', label: 'Type', type: 'select', options: CONTACT_TYPES.map((t) => ({ value: t, label: t === 'client' ? 'Client' : t === 'supplier' ? 'Fournisseur' : 'Les deux' })) },
+      ...(!isSupplierOnly ? [{ name: 'kind', label: 'Catégorie', type: 'select' as const, options: CLIENT_KINDS.map((k) => ({ value: k, label: CLIENT_KIND_LABEL[k] })) }] : []),
+      ...(isAcp ? [
+        { name: 'buildingId', label: 'Immeuble / ACP lié', type: 'select' as const, options: buildings.map((b) => ({ value: b.id, label: b.name })) },
+        { name: 'syndicId', label: 'Syndic (adresse de facturation "c/o")', type: 'select' as const, options: syndics.map((s) => ({ value: s.id, label: s.name })) },
+      ] : []),
+      { name: 'email', label: 'E-mail' },
+      { name: 'phone', label: 'Téléphone' },
+      ...(showVat ? [{ name: 'vat', label: 'N° TVA', placeholder: 'BE0123456789', action: { label: 'Rechercher', run: vatLookupAction } }] : []),
+      { name: 'address', label: 'Adresse', full: true, type: 'address' as const, addressFill: { postalCode: 'postalCode', city: 'city' } },
+      { name: 'postalCode', label: 'Code postal' },
+      { name: 'city', label: 'Ville' },
+      { name: 'note', label: 'Note', type: 'textarea', full: true },
+    ];
+  };
 };
 
 export const PERSON_FIELDS: FieldDef[] = [

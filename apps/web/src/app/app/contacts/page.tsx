@@ -50,7 +50,7 @@ function ContactsInner() {
   params.set('page', String(page));
   params.set('pageSize', String(pageSize));
   const { data, loading, reload } = useApi<{ items: Contact[]; page: number; pageSize: number; totalPages: number; totalCount: number }>(`/api/contacts?${params}`);
-  const { data: pick } = useApi<{ buildings: { id: string; name: string }[] }>('/api/meta/pickers');
+  const { data: pick } = useApi<{ buildings: { id: string; name: string }[]; syndics: { id: string; name: string }[] }>('/api/meta/pickers');
 
   async function patch(id: string, body: Record<string, unknown>) {
     await api(`/api/contacts/${id}`, { method: 'PATCH', body });
@@ -91,7 +91,7 @@ function ContactsInner() {
       {creating && (
         <FormModal
           title="Nouveau contact"
-          fields={CONTACT_FIELDS(type !== 'all' ? type : 'client', pick?.buildings ?? [])}
+          fields={CONTACT_FIELDS(type !== 'all' ? type : 'client', pick?.buildings ?? [], pick?.syndics ?? [])}
           initial={{ type: type !== 'all' ? type : 'client' }}
           onClose={() => setCreating(false)}
           onSubmit={async (v) => { await api('/api/contacts', { method: 'POST', body: v }); reload(); }}

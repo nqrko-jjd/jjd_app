@@ -46,7 +46,7 @@ const PERSON_FIELDS: FieldDef[] = [
 export default function ContactDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { data, loading, reload } = useApi<Detail>(`/api/contacts/${id}`);
-  const { data: pick } = useApi<{ buildings: { id: string; name: string }[] }>('/api/meta/pickers');
+  const { data: pick } = useApi<{ buildings: { id: string; name: string }[]; syndics: { id: string; name: string }[] }>('/api/meta/pickers');
   const [editing, setEditing] = useState(false);
   const [personModal, setPersonModal] = useState<'new' | ContactPerson | null>(null);
   const [portalInfo, setPortalInfo] = useState<{ email: string; portal: string } | null>(null);
@@ -100,11 +100,11 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
       {editing && (
         <FormModal
           title={`Modifier ${c.name}`}
-          fields={CONTACT_FIELDS(c.type, pick?.buildings ?? [])}
+          fields={CONTACT_FIELDS(c.type, pick?.buildings ?? [], pick?.syndics ?? [])}
           initial={{
             name: c.name, type: c.type, kind: c.kind, email: c.email, phone: c.phone,
             vat: c.vat, address: c.address, postalCode: c.postalCode, city: c.city, note: c.note,
-            buildingId: c.building?.id ?? '',
+            buildingId: c.building?.id ?? '', syndicId: c.syndic?.id ?? '',
           }}
           onClose={() => setEditing(false)}
           onSubmit={async (v) => { await api(`/api/contacts/${id}`, { method: 'PATCH', body: v }); reload(); }}

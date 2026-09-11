@@ -24,13 +24,16 @@ export interface FieldDef {
 
 export function FormModal({
   title,
-  fields,
+  fields: fieldsProp,
   initial,
   onClose,
   onSubmit,
 }: {
   title: string;
-  fields: FieldDef[];
+  /** Liste fixe, ou fonction des valeurs actuelles — pour un formulaire dont les champs
+   *  affichés dépendent d'un choix fait ailleurs dans le même formulaire (ex. le type de
+   *  contact change les champs pertinents). */
+  fields: FieldDef[] | ((values: Record<string, unknown>) => FieldDef[]);
   initial?: Record<string, unknown>;
   onClose: () => void;
   onSubmit: (values: Record<string, unknown>) => Promise<void>;
@@ -40,6 +43,7 @@ export function FormModal({
   const [err, setErr] = useState<string | null>(null);
   const [actionBusy, setActionBusy] = useState<string | null>(null);
   const [actionErr, setActionErr] = useState<string | null>(null);
+  const fields = typeof fieldsProp === 'function' ? fieldsProp(v) : fieldsProp;
 
   async function runAction(f: FieldDef) {
     if (!f.action) return;

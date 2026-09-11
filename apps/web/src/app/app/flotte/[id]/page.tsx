@@ -1,12 +1,13 @@
 'use client';
-import { use, useState } from 'react';
+import { use, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
-import { api } from '@/lib/api';
+import { api, apiBlobUrl, apiUpload } from '@/lib/api';
 import { PageHead, Money, formatDateBE, VehicleStatusBadge } from '@/lib/ui';
 import { PhotoHeader } from '@/components/PhotoHeader';
 import { FormModal, toDateInput, type FieldDef } from '@/components/FormModal';
-import { VEHICLE_STATUSES, VEHICLE_STATUS_LABEL } from '@jjd/shared';
+import { VEHICLE_DOC_FIELDS } from '@/lib/forms';
+import { VEHICLE_STATUSES, VEHICLE_STATUS_LABEL, VEHICLE_DOC_LABEL } from '@jjd/shared';
 
 interface Detail {
   vehicle: {
@@ -28,6 +29,7 @@ interface Detail {
     insurances: { provider: string | null; contractNumber: string | null; monthlyAmount: number | null; annualAmount: number | null; paymentMode: string | null }[];
     fines: { id: string; date: string | null; type: string | null; amount: number | null; status: string | null }[];
     payments: { id: string; dueOn: string | null; amount: number | null; principal: number | null; interest: number | null; balance: number | null }[];
+    docs: { id: string; type: string; label: string | null; number: string | null; expiresOn: string | null; fileUrl: string | null }[];
   };
 }
 
@@ -35,11 +37,22 @@ export default function VehicleDetail({ params }: { params: Promise<{ id: string
   const { id } = use(params);
   const { data, loading, reload } = useApi<Detail>(`/api/vehicles/${id}`);
   const [editing, setEditing] = useState(false);
+  const [addingDoc, setAddingDoc] = useState(false);
   if (loading) return <div className="empty">Chargement…</div>;
   if (!data) return <div className="empty">Véhicule introuvable.</div>;
   const v = data.vehicle;
   const ins = v.insurances[0];
   const nextPay = v.payments.find((p) => p.dueOn && new Date(p.dueOn).getTime() >= Date.now());
+
+  async function removeDoc(docId: string) {
+    if (!confirm('Supprimer ce document ?')) return;
+    await api(`/api/vehicles/${id}/docs/${docId}`, { method: 'DELETE' });
+    reload();
+  }
+  async function viewDocFile(docId: string) {
+    const url = await apiBlobUrl(`/api/vehicles/${id}/docs/${docId}/file`);
+    window.open(url, '_blank');
+  }
 
   const editFields: FieldDef[] = [
     { name: 'brand', label: 'Marque' },
@@ -68,6 +81,14 @@ export default function VehicleDetail({ params }: { params: Promise<{ id: string
 
   return (
     <>
+      {addingDoc && (
+        <FormModal
+          title="Nouveau document"
+          fields={VEHICLE_DOC_FIELDS}
+          onClose={() => setAddingDoc(false)}
+          onSubmit={async (body) => { await api(`/api/vehicles/${id}/docs`, { method: 'POST', body }); reload(); }}
+        />
+      )}
       {editing && (
         <FormModal
           title={`Modifier ${[v.brand, v.model].filter(Boolean).join(' ') || v.code || 'le véhicule'}`}
@@ -166,6 +187,36 @@ export default function VehicleDetail({ params }: { params: Promise<{ id: string
         </section>
       )}
 
+      <section style={{ marginBottom: '1.4rem' }}>
+        <div className="section-title">
+          Documents
+          <button className="btn primary" style={{ marginLeft: 'auto', padding: '0.2rem 0.7rem', fontSize: '0.8rem' }} onClick={() => setAddingDoc(true)}>+ Ajouter</button>
+        </div>
+        {v.docs.length === 0 ? (
+          <div className="card card-pad muted">Aucun document enregistré (certificat d’immatriculation, assurance, contrôle technique…).</div>
+        ) : (
+          <div className="tbl-wrap">
+            <table className="tbl">
+              <thead><tr><th>Type</th><th>Numéro</th><th>Échéance</th><th>Pièce jointe</th><th /></tr></thead>
+              <tbody>
+                {v.docs.map((d) => {
+                  const soon = d.expiresOn && new Date(d.expiresOn).getTime() < Date.now() + 30 * 86400000;
+                  return (
+                    <tr key={d.id}>
+                      <td>{d.label || VEHICLE_DOC_LABEL[d.type as keyof typeof VEHICLE_DOC_LABEL] || d.type}</td>
+                      <td className="mono">{d.number ?? '—'}</td>
+                      <td className="tnum">{d.expiresOn ? <span className={soon ? 'badge crit' : ''}>{formatDateBE(d.expiresOn)}</span> : '—'}</td>
+                      <td><VehicleDocFile vehicleId={id} docId={d.id} hasFile={!!d.fileUrl} onView={() => viewDocFile(d.id)} onUploaded={reload} /></td>
+                      <td style={{ textAlign: 'right' }}><button className="btn ghost" onClick={() => removeDoc(d.id)} aria-label="Supprimer">✕</button></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
       {v.fines.length > 0 && (
         <section>
           <h2 style={{ marginBottom: '0.7rem' }}>PV récents ({v.fines.length})</h2>
@@ -187,6 +238,33 @@ export default function VehicleDetail({ params }: { params: Promise<{ id: string
         </section>
       )}
     </>
+  );
+}
+
+function VehicleDocFile({ vehicleId, docId, hasFile, onView, onUploaded }: { vehicleId: string; docId: string; hasFile: boolean; onView: () => void; onUploaded: () => void }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function upload(f: File) {
+    setBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', f);
+      await apiUpload(`/api/vehicles/${vehicleId}/docs/${docId}/file`, fd);
+      onUploaded();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="row" style={{ gap: '0.4rem', alignItems: 'center' }}>
+      <input ref={inputRef} type="file" accept="application/pdf,image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); }} />
+      {hasFile && <button className="btn" style={{ padding: '0.15rem 0.5rem', fontSize: '0.76rem' }} onClick={onView}>Voir 📎</button>}
+      <button className="btn" style={{ padding: '0.15rem 0.5rem', fontSize: '0.76rem' }} disabled={busy} onClick={() => inputRef.current?.click()}>
+        {busy ? 'Envoi…' : hasFile ? 'Remplacer' : 'Joindre'}
+      </button>
+    </div>
   );
 }
 

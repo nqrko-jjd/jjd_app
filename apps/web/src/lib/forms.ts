@@ -3,7 +3,7 @@ import { api } from '@/lib/api';
 import {
   CLIENT_KIND_LABEL, CLIENT_KINDS, CONTACT_TYPES,
   PERSON_ROLE_LABEL, PERSON_ROLES, WORKER_CONTRACT_LABEL, WORKER_CONTRACT_TYPES,
-  LEGAL_DOC_LABEL, LEGAL_DOC_TYPES,
+  LEGAL_DOC_LABEL, LEGAL_DOC_TYPES, VEHICLE_DOC_LABEL, VEHICLE_DOC_TYPES,
 } from '@jjd/shared';
 
 interface VatLookupResult { vatNumber: string; name: string | null; address: string | null; postalCode: string | null; city: string | null }
@@ -65,6 +65,14 @@ export const PERSON_FIELDS: FieldDef[] = [
 export const LEGAL_DOC_FIELDS: FieldDef[] = [
   { name: 'type', label: 'Type', type: 'select', required: true, options: LEGAL_DOC_TYPES.map((t) => ({ value: t, label: LEGAL_DOC_LABEL[t] })) },
   { name: 'label', label: 'Libellé (optionnel)', placeholder: 'ex. VCA de base' },
+  { name: 'number', label: 'Numéro' },
+  { name: 'issuedOn', label: 'Délivré le', type: 'date' },
+  { name: 'expiresOn', label: 'Expire le', type: 'date' },
+];
+
+export const VEHICLE_DOC_FIELDS: FieldDef[] = [
+  { name: 'type', label: 'Type', type: 'select', required: true, options: VEHICLE_DOC_TYPES.map((t) => ({ value: t, label: VEHICLE_DOC_LABEL[t] })) },
+  { name: 'label', label: 'Libellé (optionnel)', placeholder: 'ex. Assurance omnium' },
   { name: 'number', label: 'Numéro' },
   { name: 'issuedOn', label: 'Délivré le', type: 'date' },
   { name: 'expiresOn', label: 'Expire le', type: 'date' },

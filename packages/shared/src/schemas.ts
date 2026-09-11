@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import {
   PERSON_ROLES, ENTITIES, WORKSITE_STATUSES, WORKSITE_PRIORITIES, CRM_STAGES, CRM_LOST_REASONS,
-  CONTACT_TYPES, CLIENT_KINDS, WORKER_CONTRACT_TYPES, LEGAL_DOC_TYPES,
+  CONTACT_TYPES, CLIENT_KINDS, WORKER_CONTRACT_TYPES, LEGAL_DOC_TYPES, VEHICLE_DOC_TYPES,
   BUILDING_CONTACT_ROLES, OCCUPANT_KINDS, VEHICLE_STATUSES, ADJUSTMENT_TYPES,
 } from './enums.js';
 
@@ -110,6 +110,15 @@ export const personInput = z.object({
 export const legalDocInput = z.object({
   personId: nonEmpty,
   type: z.enum(LEGAL_DOC_TYPES),
+  label: z.string().trim().nullish(),
+  number: z.string().trim().nullish(),
+  issuedOn: z.coerce.date().nullish(),
+  expiresOn: z.coerce.date().nullish(),
+});
+
+export const vehicleDocInput = z.object({
+  vehicleId: nonEmpty,
+  type: z.enum(VEHICLE_DOC_TYPES),
   label: z.string().trim().nullish(),
   number: z.string().trim().nullish(),
   issuedOn: z.coerce.date().nullish(),

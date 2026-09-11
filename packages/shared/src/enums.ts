@@ -256,6 +256,18 @@ export const LEGAL_DOC_LABEL: Record<LegalDocType, string> = {
   other: 'Autre',
 };
 
+/** Documents véhicule (registre Flotte, fiche d'un véhicule). */
+export const VEHICLE_DOC_TYPES = ['registration', 'insurance', 'inspection', 'green_card', 'other'] as const;
+export type VehicleDocType = (typeof VEHICLE_DOC_TYPES)[number];
+
+export const VEHICLE_DOC_LABEL: Record<VehicleDocType, string> = {
+  registration: "Certificat d'immatriculation",
+  insurance: 'Assurance',
+  inspection: 'Contrôle technique',
+  green_card: 'Carte verte',
+  other: 'Autre',
+};
+
 /** Niveau d'accès au portail client. */
 export const PORTAL_ACCESS = ['full', 'limited'] as const;
 export type PortalAccess = (typeof PORTAL_ACCESS)[number];

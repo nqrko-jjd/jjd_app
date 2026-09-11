@@ -1,11 +1,23 @@
 import { Router } from 'express';
-import { planningEventInput, teamInput, consumableInput, vehicleInput, vehicleCostPerKm } from '@jjd/shared';
+import path from 'node:path';
+import { createReadStream, existsSync } from 'node:fs';
+import multer from 'multer';
+import { planningEventInput, teamInput, consumableInput, vehicleInput, vehicleDocInput, vehicleCostPerKm } from '@jjd/shared';
 import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, STAFF, OFFICE } from '../lib/auth.js';
 import { upsertEvent, deleteEvent, gcalEnabled } from '../lib/gcal.js';
 import { attachPhotoRoutes } from '../lib/photo-upload.js';
 import { vehicleCostBreakdown } from '../lib/vehicle-cost.js';
+import { storeFile, UPLOADS_DIR } from '../lib/media.js';
+
+const docUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
+
+/** Résout le chemin disque d'un fichier « /uploads/… » stocké par storeFile. */
+function resolveUpload(rel: string): string {
+  const clean = rel.replace(/^\/?uploads\//, '').replace(/\\/g, '/');
+  return path.join(UPLOADS_DIR, path.normalize(clean));
+}
 
 export const planningRouter = Router();
 
@@ -369,10 +381,68 @@ vehiclesRouter.get(
         insurances: true,
         fines: { orderBy: { date: 'desc' }, take: 50 },
         payments: { orderBy: { dueOn: 'asc' } },
+        docs: { orderBy: [{ expiresOn: 'asc' }, { createdAt: 'desc' }] },
       },
     });
     if (!v) throw new HttpError(404, 'Véhicule introuvable');
     res.json({ vehicle: { ...v, costPerKm: vehicleCostPerKm(v), costBreakdown: await vehicleCostBreakdown(v.id) } });
+  }),
+);
+
+/* ---------------------------------------------------- documents véhicule */
+
+vehiclesRouter.post(
+  '/:id/docs',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const data = vehicleDocInput.parse({ ...req.body, vehicleId: req.params.id });
+    const doc = await prisma.vehicleDoc.create({ data });
+    res.status(201).json({ doc });
+  }),
+);
+
+vehiclesRouter.delete(
+  '/:id/docs/:docId',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    await prisma.vehicleDoc.delete({ where: { id: req.params.docId } });
+    res.status(204).end();
+  }),
+);
+
+/** Joint le scan/photo du document (PDF ou image). */
+vehiclesRouter.post(
+  '/:id/docs/:docId/file',
+  requireAuth(...OFFICE),
+  docUpload.single('file'),
+  asyncHandler(async (req, res) => {
+    if (!req.file) throw new HttpError(422, 'Aucun fichier');
+    const okType = req.file.mimetype === 'application/pdf' || /^image\/(jpe?g|png|webp|heic)$/.test(req.file.mimetype);
+    if (!okType) throw new HttpError(422, 'Format accepté : PDF ou image.');
+    const doc = await prisma.vehicleDoc.findFirst({ where: { id: req.params.docId, vehicleId: req.params.id } });
+    if (!doc) throw new HttpError(404, 'Document introuvable');
+    const rel = storeFile(req.file.buffer, req.file.originalname || 'document.pdf', 'vehicle-docs');
+    const updated = await prisma.vehicleDoc.update({ where: { id: doc.id }, data: { fileUrl: rel } });
+    res.status(201).json({ doc: updated });
+  }),
+);
+
+vehiclesRouter.get(
+  '/:id/docs/:docId/file',
+  requireAuth(...STAFF),
+  asyncHandler(async (req, res) => {
+    const doc = await prisma.vehicleDoc.findFirst({ where: { id: req.params.docId, vehicleId: req.params.id } });
+    if (!doc?.fileUrl) throw new HttpError(404, 'Aucune pièce jointe');
+    const file = resolveUpload(doc.fileUrl);
+    if (!existsSync(file)) throw new HttpError(404, 'Fichier introuvable sur le serveur');
+    const ext = path.extname(file).toLowerCase();
+    const type = ext === '.pdf' ? 'application/pdf'
+      : ext === '.png' ? 'image/png'
+      : ext === '.webp' ? 'image/webp'
+      : 'image/jpeg';
+    res.setHeader('Content-Type', type);
+    res.setHeader('Content-Disposition', `inline; filename="${(doc.label ?? doc.type).replace(/[^\w.-]/g, '_')}${ext}"`);
+    createReadStream(file).pipe(res);
   }),
 );
 

@@ -795,6 +795,23 @@ model Vehicle {
   events     PlanningEvent[] // legacy (voir PlanningEvent.vehicleId)
   eventLinks EventVehicle[]
   payments   VehiclePayment[]
+  docs       VehicleDoc[]
+}
+
+/// Document véhicule (certificat d'immatriculation, assurance, contrôle technique…).
+model VehicleDoc {
+  id        String    @id @default(cuid())
+  vehicleId String
+  vehicle   Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  type      String // registration | insurance | inspection | green_card | other
+  label     String?
+  number    String?
+  issuedOn  DateTime?
+  expiresOn DateTime?
+  fileUrl   String?
+  createdAt DateTime  @default(now())
+
+  @@index([expiresOn])
 }
 
 /// Échéancier de financement (onglet Paiements du registre véhicules).

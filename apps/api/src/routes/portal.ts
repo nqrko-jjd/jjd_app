@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import path from 'node:path';
 import { createReadStream, existsSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { nanoid } from 'nanoid';
 import { z } from 'zod';
 import {
@@ -13,11 +12,14 @@ import { env } from '../env.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { sendMail } from '../lib/mail.js';
 import { attachPortalUser, requirePortal, signPortalToken, worksiteScope, buildingScope, portalFull, type PortalUser } from '../lib/portal.js';
+import { UPLOADS_DIR } from '../lib/media.js';
 
 export const portalRouter = Router();
 portalRouter.use(attachPortalUser);
 
-const PORTAL_PDF_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../uploads/documents');
+// Voir la note dans routes/documents.ts : dérivé de UPLOADS_DIR, pas d'un chemin relatif
+// au fichier compilé (qui ne pointe pas au même endroit en dist/ qu'en dev).
+const PORTAL_PDF_DIR = path.join(UPLOADS_DIR, 'documents');
 const pdfBasename = (n: string) => path.basename(n);
 const portalPdfPath = (safe: string) => path.join(PORTAL_PDF_DIR, safe);
 

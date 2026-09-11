@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import path from 'node:path';
 import { createReadStream, existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { zipSync } from 'fflate';
 import multer from 'multer';
 import { nanoid } from 'nanoid';
@@ -12,9 +11,14 @@ import { requireAuth, OFFICE } from '../lib/auth.js';
 import { docInclude, buildLineRows, cloneLineRows, refreshDocTotals, issueDocument, getCompany } from '../lib/documents.js';
 import { renderDocumentPdf } from '../lib/pdf.js';
 import { extractDocumentInfo } from '../lib/document-extract.js';
+import { UPLOADS_DIR } from '../lib/media.js';
 
 export const documentsRouter = Router();
-const PDF_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../uploads/documents');
+// Dérivé de UPLOADS_DIR (respecte process.env.UPLOADS_DIR en prod) plutôt que d'un chemin
+// relatif au fichier compilé — un ../.. relatif à dist/src/routes/ ne pointe pas au même
+// endroit qu'un ../.. relatif à src/routes/ en dev (bug qui a fait planter le PDF TrustUp
+// en production : dist/uploads/documents au lieu de apps/api/uploads/documents).
+const PDF_DIR = path.join(UPLOADS_DIR, 'documents');
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 
 /* ---------------------------------------------------------------- Documents */

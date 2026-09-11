@@ -335,7 +335,6 @@ function ExpenseModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const readOnly = !!expense && !expense.editable;
   const [v, setV] = useState({
     date: toDateInput(expense?.date ?? new Date().toISOString()),
     dueDate: toDateInput(expense?.dueDate ?? null),
@@ -532,21 +531,21 @@ function ExpenseModal({
     <div className="modal-scrim" onClick={onClose}>
       <form className="modal" style={{ maxWidth: 640 }} onClick={(e) => e.stopPropagation()} onSubmit={submit}>
         <div className="modal-head">
-          <h2>{expense ? (readOnly ? 'Dépense (importée)' : 'Modifier la dépense') : 'Nouvelle dépense'}</h2>
+          <h2>{expense ? 'Modifier la dépense' : 'Nouvelle dépense'}</h2>
           <button type="button" className="btn ghost" onClick={onClose} aria-label="Fermer">✕</button>
         </div>
         <div className="modal-body">
           <div className="field">
             <label>Date *</label>
-            <input className="input" type="date" required disabled={readOnly} value={v.date} onChange={(e) => set('date', e.target.value)} />
+            <input className="input" type="date" required value={v.date} onChange={(e) => set('date', e.target.value)} />
           </div>
           <div className="field">
             <label>Échéance</label>
-            <input className="input" type="date" disabled={readOnly} value={v.dueDate} onChange={(e) => set('dueDate', e.target.value)} />
+            <input className="input" type="date" value={v.dueDate} onChange={(e) => set('dueDate', e.target.value)} />
           </div>
           <div className="field">
             <label>Type</label>
-            <select className="select" disabled={readOnly} value={v.direction} onChange={(e) => set('direction', e.target.value)}>
+            <select className="select" value={v.direction} onChange={(e) => set('direction', e.target.value)}>
               <option value="purchase">Facture d’achat</option>
               <option value="credit_note">Note de crédit fournisseur</option>
             </select>
@@ -554,7 +553,6 @@ function ExpenseModal({
           <div className="field" style={{ gridColumn: '1 / -1' }}>
             <label>Fournisseur</label>
             <ComboBox
-              disabled={readOnly}
               allowFree
               placeholder="chercher ou saisir un nom"
               value={v.contactId || v.supplierName}
@@ -567,11 +565,11 @@ function ExpenseModal({
           </div>
           <div className="field">
             <label>N° de facture</label>
-            <input className="input" disabled={readOnly} value={v.docNumber} onChange={(e) => set('docNumber', e.target.value)} />
+            <input className="input" value={v.docNumber} onChange={(e) => set('docNumber', e.target.value)} />
           </div>
           <div className="field">
             <label>Catégorie</label>
-            <select className="select" disabled={readOnly} value={v.categoryCode} onChange={(e) => set('categoryCode', e.target.value)}>
+            <select className="select" value={v.categoryCode} onChange={(e) => set('categoryCode', e.target.value)}>
               <option value="">{v.categoryRaw || '—'}</option>
               {meta.categories.map((c) => <option key={c.code} value={c.code}>{c.label}</option>)}
             </select>
@@ -634,7 +632,6 @@ function ExpenseModal({
                 )}
               </label>
               <ComboBox
-                disabled={readOnly}
                 placeholder="— (frais général / non affecté)"
                 value={v.worksiteId}
                 onChange={(val) => set('worksiteId', val)}
@@ -649,29 +646,29 @@ function ExpenseModal({
               type="number"
               step="any"
               required={!splits}
-              disabled={readOnly || !!splits}
+              disabled={!!splits}
               value={splits ? splits.reduce((sum, s) => sum + (Number(s.ht) || 0), 0) : v.ht}
               onChange={(e) => set('ht', e.target.value)}
             />
           </div>
           <div className="field">
             <label>TVA récupérable</label>
-            <input className="input" type="number" step="any" disabled={readOnly} value={v.vatRecup} onChange={(e) => set('vatRecup', e.target.value)} />
+            <input className="input" type="number" step="any" value={v.vatRecup} onChange={(e) => set('vatRecup', e.target.value)} />
           </div>
           <div className="field">
             <label>Montant TTC</label>
-            <input className="input" type="number" step="any" disabled={readOnly} value={v.ttc} onChange={(e) => set('ttc', e.target.value)} />
+            <input className="input" type="number" step="any" value={v.ttc} onChange={(e) => set('ttc', e.target.value)} />
           </div>
           <div className="field">
             <label>Statut</label>
-            <select className="select" disabled={readOnly} value={v.paymentStatus} onChange={(e) => set('paymentStatus', e.target.value)}>
+            <select className="select" value={v.paymentStatus} onChange={(e) => set('paymentStatus', e.target.value)}>
               <option value="Non payé">Non payé</option>
               <option value="Payé">Payé</option>
             </select>
           </div>
           <div className="field" style={{ gridColumn: '1 / -1' }}>
             <label>Notes</label>
-            <textarea className="input" rows={2} disabled={readOnly} value={v.notes} onChange={(e) => set('notes', e.target.value)} />
+            <textarea className="input" rows={2} value={v.notes} onChange={(e) => set('notes', e.target.value)} />
           </div>
 
           <div className="field" style={{ gridColumn: '1 / -1' }}>
@@ -680,7 +677,7 @@ function ExpenseModal({
               {!expense && <span className="muted" style={{ fontWeight: 400, fontSize: '0.8rem' }}> — un PDF texte préremplit le formulaire</span>}
               {extracting && <span className="muted" style={{ fontSize: '0.8rem' }}> · lecture en cours…</span>}
             </label>
-            <FileDrop file={pendingFile} onFile={handleFile} existingUrl={pdfUrl} disabled={readOnly} />
+            <FileDrop file={pendingFile} onFile={handleFile} existingUrl={pdfUrl} />
             {extractNote && <p className="muted" style={{ fontSize: '0.8rem', marginTop: '0.4rem', marginBottom: 0 }}>{extractNote}</p>}
           </div>
 
@@ -721,12 +718,10 @@ function ExpenseModal({
           )}
         </div>
         {err && <div className="badge crit" style={{ margin: '0 1.15rem', padding: '0.4rem 0.7rem' }}>{err}</div>}
-        {!readOnly && (
-          <div className="modal-foot">
-            <button type="button" className="btn" onClick={onClose}>Annuler</button>
-            <button type="submit" className="btn primary" disabled={busy}>{busy ? 'Enregistrement…' : 'Enregistrer'}</button>
-          </div>
-        )}
+        <div className="modal-foot">
+          <button type="button" className="btn" onClick={onClose}>Annuler</button>
+          <button type="submit" className="btn primary" disabled={busy}>{busy ? 'Enregistrement…' : 'Enregistrer'}</button>
+        </div>
       </form>
     </div>
   );

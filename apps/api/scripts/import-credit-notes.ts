@@ -19,14 +19,22 @@ import { PrismaClient } from '@prisma/client';
 import { parseLooseDate, parseAmount, normalizeName } from '@jjd/shared';
 import { readTable, pick, type TableRow } from '../src/lib/table-io.js';
 import { readXlsx } from '../src/lib/xlsx-read.js';
+import { UPLOADS_DIR } from '../src/lib/media.js';
 
 // Helpers dupliqués (pas importés) depuis import-trustup.ts : ce script doit rester
 // totalement indépendant de ce fichier, qui exécute un `main()` destructeur (deleteMany)
 // au chargement du module — l'importer, même juste pour ses fonctions, le déclencherait.
 const prisma = new PrismaClient();
 const here = path.dirname(fileURLToPath(import.meta.url));
-const dataDir = path.resolve(here, '../../../data-import');
-const pdfOutDir = path.resolve(here, '../uploads/documents');
+// data-import/ : profondeur relative différente lancé via tsx (scripts/) ou compilé
+// (dist/scripts/) — même classe de bug que celle corrigée plus tôt sur documents.ts/
+// portal.ts (PDF_DIR) — on teste les deux profondeurs plutôt que d'en figer une.
+function resolveDataDir(): string {
+  const candidates = [path.resolve(here, '../../../data-import'), path.resolve(here, '../../../../data-import')];
+  return candidates.find((p) => existsSync(p)) ?? candidates[0]!;
+}
+const dataDir = resolveDataDir();
+const pdfOutDir = path.join(UPLOADS_DIR, 'documents');
 
 function copyOriginalPdf(csvFile: string, number: string): string | null {
   const src = path.join(path.dirname(csvFile), 'documents', `${number}.pdf`);
@@ -229,6 +237,7 @@ async function main() {
   console.log('Import notes de crédit —', files.map((f) => path.basename(f)).join(', '));
 
   const docToWs = buildDocToWorksite();
+  console.log(`  ${docToWs.size} numéros de document reliés à un chantier (via l'Excel) — dataDir=${dataDir}`);
   const worksites = await prisma.worksite.findMany({ select: { id: true, ref: true } });
   const wsByRef = new Map(worksites.map((w) => [w.ref.toUpperCase(), w.id]));
 

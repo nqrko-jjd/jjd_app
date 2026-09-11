@@ -5,7 +5,7 @@ import { API_URL } from '@/lib/api';
 import { T } from '@/lib/theme';
 
 const LINKS: { href: string; label: string; ic: string; roles?: string[] }[] = [
-  { href: '/immeubles', label: 'Immeubles / ACP', ic: '⌂' },
+  { href: '/immeubles', label: 'Immeubles / Projets', ic: '⌂' },
   { href: '/contacts', label: 'Contacts', ic: '☰' },
   { href: '/equipe', label: 'Équipe', ic: '☺' },
   { href: '/flotte', label: 'Flotte', ic: '⛟' },

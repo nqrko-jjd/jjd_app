@@ -24,27 +24,29 @@ async function vatLookupAction(value: string): Promise<Record<string, unknown>> 
  * Champs différents selon le type de contact (`forType`, le type au moment où le formulaire
  * s'ouvre — un client a une « Catégorie », un fournisseur non ; les personnes de contact et
  * l'historique d'achats d'un fournisseur sont gérés à part sur sa fiche, pas dans ce formulaire)
- * ET selon la « Catégorie » (`kind`) choisie en direct dans le formulaire : Immeuble/ACP lié et
- * Syndic (pour l'adresse de facturation « c/o ») n'apparaissent que pour une ACP ; le n° de TVA
- * disparaît pour un particulier.
+ * ET selon la « Catégorie » (`kind`) choisie en direct dans le formulaire : Immeuble/Projet lié
+ * n'apparaît que pour une ACP ou un Promoteur (les deux regroupent plusieurs interventions sous
+ * un même bâtiment/projet — cf. `type:'building'`, qui permet de créer l'immeuble à la volée
+ * s'il n'existe pas encore) ; le Syndic (adresse de facturation « c/o ») reste propre aux ACP,
+ * un promoteur n'en a pas. Le n° de TVA disparaît pour un particulier.
  */
 export const CONTACT_FIELDS = (
   forType?: string,
-  buildings: { id: string; name: string }[] = [],
   syndics: { id: string; name: string }[] = [],
 ) => {
   const isSupplierOnly = forType === 'supplier';
   return (values: Record<string, unknown>): FieldDef[] => {
     const kind = (values.kind as string) || (isSupplierOnly ? undefined : 'individual');
     const isAcp = !isSupplierOnly && kind === 'acp';
+    const isDeveloper = !isSupplierOnly && kind === 'developer';
     const showVat = isSupplierOnly || kind !== 'individual';
     return [
       { name: 'name', label: 'Nom', required: true, full: true },
       { name: 'type', label: 'Type', type: 'select', options: CONTACT_TYPES.map((t) => ({ value: t, label: t === 'client' ? 'Client' : t === 'supplier' ? 'Fournisseur' : 'Les deux' })) },
       ...(!isSupplierOnly ? [{ name: 'kind', label: 'Catégorie', type: 'select' as const, options: CLIENT_KINDS.map((k) => ({ value: k, label: CLIENT_KIND_LABEL[k] })) }] : []),
-      ...(isAcp ? [
-        { name: 'buildingId', label: 'Immeuble / ACP lié', type: 'select' as const, options: buildings.map((b) => ({ value: b.id, label: b.name })) },
-        { name: 'syndicId', label: 'Syndic (adresse de facturation "c/o")', type: 'select' as const, options: syndics.map((s) => ({ value: s.id, label: s.name })) },
+      ...(isAcp || isDeveloper ? [
+        { name: 'buildingId', label: isAcp ? 'Immeuble / ACP lié' : 'Projet lié', type: 'building' as const, full: true },
+        ...(isAcp ? [{ name: 'syndicId', label: 'Syndic (adresse de facturation "c/o")', type: 'select' as const, options: syndics.map((s) => ({ value: s.id, label: s.name })) }] : []),
       ] : []),
       { name: 'email', label: 'E-mail' },
       { name: 'phone', label: 'Téléphone' },
@@ -91,10 +93,16 @@ export const VEHICLE_DOC_FIELDS: FieldDef[] = [
   { name: 'expiresOn', label: 'Expire le', type: 'date' },
 ];
 
-export const BUILDING_FIELDS: FieldDef[] = [
-  { name: 'name', label: "Nom de l'immeuble / ACP", required: true, full: true },
+export const BUILDING_FIELDS = (syndics: { id: string; name: string }[] = []): FieldDef[] => [
+  { name: 'name', label: "Nom de l'immeuble / ACP / projet", required: true, full: true },
+  { name: 'syndicId', label: 'Syndic (si ACP)', type: 'select', options: syndics.map((s) => ({ value: s.id, label: s.name })) },
+  { name: 'clientId', label: 'Client facturé (ACP / promoteur)', type: 'contact', full: true },
   { name: 'address', label: 'Adresse', full: true, type: 'address', addressFill: { postalCode: 'postalCode', city: 'city' } },
   { name: 'postalCode', label: 'Code postal' },
   { name: 'city', label: 'Ville' },
+  { name: 'reference', label: 'Référence dossier (syndic / ACP)' },
+  { name: 'lotCount', label: 'Nombre de lots', type: 'number' },
+  { name: 'digicode', label: 'Digicode' },
+  { name: 'accessNote', label: 'Accès (clés, badges, parking…)', type: 'textarea', full: true },
   { name: 'note', label: 'Note', type: 'textarea', full: true },
 ];

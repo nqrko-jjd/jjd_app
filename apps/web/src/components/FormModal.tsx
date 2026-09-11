@@ -1,11 +1,13 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { AddressAutocomplete } from './AddressAutocomplete';
+import { ContactPicker } from './ContactPicker';
+import { BuildingPicker } from './BuildingPicker';
 
 export interface FieldDef {
   name: string;
   label: string;
-  type?: 'text' | 'textarea' | 'number' | 'date' | 'select' | 'tags' | 'checkbox' | 'address';
+  type?: 'text' | 'textarea' | 'number' | 'date' | 'select' | 'tags' | 'checkbox' | 'address' | 'contact' | 'building';
   options?: { value: string; label: string }[];
   required?: boolean;
   placeholder?: string;
@@ -20,6 +22,9 @@ export interface FieldDef {
    *  quand une suggestion est choisie (code postal / ville). Si absent, ce champ reçoit
    *  l'adresse complète en une ligne (cas d'un formulaire sans champs séparés). */
   addressFill?: { postalCode?: string; city?: string };
+  /** Pour un champ `type: 'contact'` : restreint la recherche/création aux contacts client ou
+   *  fournisseur. Par défaut 'client'. */
+  contactTypeFilter?: 'client' | 'supplier';
 }
 
 export function FormModal({
@@ -128,6 +133,23 @@ export function FormModal({
                       setV((prev) => ({ ...prev, [f.name]: [hit.street, [hit.postalCode, hit.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') }));
                     }
                   }}
+                  placeholder={f.placeholder}
+                  required={f.required}
+                />
+              ) : f.type === 'contact' ? (
+                <ContactPicker
+                  id={f.name}
+                  value={(v[f.name] as string) ?? ''}
+                  typeFilter={f.contactTypeFilter ?? 'client'}
+                  onChange={(cid) => setV((prev) => ({ ...prev, [f.name]: cid }))}
+                  placeholder={f.placeholder}
+                  required={f.required}
+                />
+              ) : f.type === 'building' ? (
+                <BuildingPicker
+                  id={f.name}
+                  value={(v[f.name] as string) ?? ''}
+                  onChange={(bid) => setV((prev) => ({ ...prev, [f.name]: bid }))}
                   placeholder={f.placeholder}
                   required={f.required}
                 />

@@ -61,6 +61,7 @@ export const buildingUnitInput = z.object({
   label: nonEmpty,
   floor: z.string().trim().nullish(),
   door: z.string().trim().nullish(),
+  contactId: z.string().nullish(),
   occupantName: z.string().trim().nullish(),
   occupantPhone: z.string().trim().nullish(),
   occupantEmail: z.string().trim().email().nullish().or(z.literal('')),

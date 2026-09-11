@@ -12,7 +12,7 @@ export default function Immeubles() {
   const push = useRouterPush();
   return (
     <>
-      <Stack.Screen options={{ title: 'Immeubles / ACP', headerBackTitle: 'Retour' }} />
+      <Stack.Screen options={{ title: 'Immeubles / Projets', headerBackTitle: 'Retour' }} />
       <ResourceList<B>
         endpoint="/api/buildings"
         search={(b, q) => b.name.toLowerCase().includes(q) || (b.city ?? '').toLowerCase().includes(q)}

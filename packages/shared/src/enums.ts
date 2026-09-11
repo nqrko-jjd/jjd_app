@@ -206,7 +206,7 @@ export const CRM_LOST_REASON_LABEL: Record<CrmLostReason, string> = {
 export const CONTACT_TYPES = ['client', 'supplier', 'both'] as const;
 export type ContactType = (typeof CONTACT_TYPES)[number];
 
-export const CLIENT_KINDS = ['individual', 'company', 'acp', 'syndic', 'public'] as const;
+export const CLIENT_KINDS = ['individual', 'company', 'acp', 'syndic', 'developer', 'public'] as const;
 export type ClientKind = (typeof CLIENT_KINDS)[number];
 
 export const CLIENT_KIND_LABEL: Record<ClientKind, string> = {
@@ -214,6 +214,7 @@ export const CLIENT_KIND_LABEL: Record<ClientKind, string> = {
   company: 'Société',
   acp: 'ACP / Copropriété',
   syndic: 'Syndic',
+  developer: 'Promoteur',
   public: 'Pouvoir public',
 };
 

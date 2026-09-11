@@ -6,6 +6,7 @@ import { api, apiBlobUrl } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { PageHead, Money, formatEur } from '@/lib/ui';
 import { DocStatusBadge, DOC_KIND_LABEL, type DocFull, type DocLine } from '@/lib/doc-ui';
+import { ContactPicker } from '@/components/ContactPicker';
 import { computeDocTotals, VAT_RATES } from '@jjd/shared';
 
 type Picker = {
@@ -120,7 +121,6 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
     router.push('/app/documents');
   }
 
-  const clientOpts = pick?.clients ?? [];
   const worksiteOpts = pick?.worksites ?? [];
   const isQuote = doc.kind === 'quote';
   const isInvoiceLike = doc.kind === 'invoice' || doc.kind === 'deposit_invoice';
@@ -168,17 +168,12 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
         <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
           <label className="field">
             <span>Client</span>
-            <select
-              className="select"
+            <ContactPicker
               value={doc.contact?.id ?? ''}
-              onChange={(e) => {
-                const c = clientOpts.find((x) => x.id === e.target.value);
-                patch({ contact: c ? { id: c.id, name: c.name, vat: null, address: null, postalCode: null, city: null, email: null } : null });
+              onChange={(cid, name) => {
+                patch({ contact: cid ? { id: cid, name, vat: null, address: null, postalCode: null, city: null, email: null } : null });
               }}
-            >
-              <option value="">—</option>
-              {clientOpts.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            />
           </label>
           <label className="field">
             <span>Chantier</span>

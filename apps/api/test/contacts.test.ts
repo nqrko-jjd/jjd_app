@@ -113,3 +113,31 @@ test('DELETE /api/contacts/:id : supprime un contact sans données liées (et so
   assert.equal(await prisma.contact.findUnique({ where: { id: orphan.id } }), null);
   assert.equal(await prisma.user.findUnique({ where: { email: 'orphelin-test@jjd-consult.be' } }), null);
 });
+
+test('kind "developer" (promoteur) : accepté par le schéma, distinct d\'une ACP', async () => {
+  const r = await jf<{ contact: { id: string; kind: string } }>('/api/contacts', {
+    method: 'POST',
+    body: JSON.stringify({ name: 'NV MATEXI BRUSSEL — test', type: 'client', kind: 'developer' }),
+  });
+  assert.equal(r.status, 201);
+  assert.equal(r.body.contact.kind, 'developer');
+  await prisma.contact.deleteMany({ where: { id: r.body.contact.id } });
+});
+
+test('immeuble/projet créé "à la volée" puis lié à un contact ACP (flux chercher-ou-créer)', async () => {
+  const building = await jf<{ building: { id: string; name: string } }>('/api/buildings', {
+    method: 'POST',
+    body: JSON.stringify({ name: 'ACP Nouvelle Demande — test' }),
+  });
+  assert.equal(building.status, 201);
+
+  const contact = await jf<{ contact: { id: string; buildingId: string | null } }>('/api/contacts', {
+    method: 'POST',
+    body: JSON.stringify({ name: 'ACP Nouvelle Demande — test', type: 'client', kind: 'acp', buildingId: building.body.building.id }),
+  });
+  assert.equal(contact.status, 201);
+  assert.equal(contact.body.contact.buildingId, building.body.building.id);
+
+  await prisma.contact.deleteMany({ where: { id: contact.body.contact.id } });
+  await prisma.building.deleteMany({ where: { id: building.body.building.id } });
+});

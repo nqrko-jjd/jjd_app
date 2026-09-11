@@ -44,7 +44,10 @@ buildingsRouter.get(
           orderBy: { name: 'asc' },
           select: { id: true, name: true, type: true, kind: true, phone: true, email: true },
         },
-        units: { orderBy: [{ position: 'asc' }, { label: 'asc' }] },
+        units: {
+          orderBy: [{ position: 'asc' }, { label: 'asc' }],
+          include: { contact: { select: { id: true, name: true, phone: true, email: true } } },
+        },
         worksites: {
           orderBy: { updatedAt: 'desc' },
           include: {
@@ -201,6 +204,7 @@ buildingsRouter.post(
         label: data.label,
         floor: data.floor ?? null,
         door: data.door ?? null,
+        contactId: data.contactId ?? null,
         occupantName: data.occupantName ?? null,
         occupantPhone: data.occupantPhone ?? null,
         occupantEmail: data.occupantEmail || null,

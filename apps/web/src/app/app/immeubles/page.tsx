@@ -25,19 +25,20 @@ export default function ImmeublesPage() {
   const params = new URLSearchParams();
   if (q) params.set('q', q);
   const { data, loading, reload } = useApi<{ items: Building[] }>(`/api/buildings?${params}`);
+  const { data: pick } = useApi<{ syndics: { id: string; name: string }[] }>(creating ? '/api/meta/pickers' : null);
 
   return (
     <>
       {creating && (
         <FormModal
-          title="Nouvel immeuble / ACP"
-          fields={BUILDING_FIELDS}
+          title="Nouvel immeuble / projet"
+          fields={BUILDING_FIELDS(pick?.syndics ?? [])}
           onClose={() => setCreating(false)}
           onSubmit={async (v) => { await api('/api/buildings', { method: 'POST', body: v }); reload(); }}
         />
       )}
       <PageHead
-        title="Immeubles / ACP"
+        title="Immeubles / Projets"
         sub={data ? `${data.items.length} dossiers` : undefined}
         action={<button className="btn primary" onClick={() => setCreating(true)}>+ Nouvel immeuble</button>}
       />

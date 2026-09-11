@@ -111,7 +111,7 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
       {editing && (
         <FormModal
           title={`Modifier ${c.name}`}
-          fields={CONTACT_FIELDS(c.type, pick?.buildings ?? [], pick?.syndics ?? [])}
+          fields={CONTACT_FIELDS(c.type, pick?.syndics ?? [])}
           initial={{
             name: c.name, type: c.type, kind: c.kind, email: c.email, phone: c.phone,
             vat: c.vat, address: c.address, postalCode: c.postalCode, city: c.city, note: c.note,

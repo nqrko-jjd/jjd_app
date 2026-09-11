@@ -260,6 +260,7 @@ model Contact {
   documents        Document[]
   ledgerEntries    LedgerEntry[]
   buildingContacts BuildingContact[]
+  buildingUnits    BuildingUnit[]
   contactPersons   ContactPerson[]
 
   @@index([normalizedName])
@@ -346,7 +347,9 @@ model BuildingUnit {
   label         String // "C1", "Lot 12", "2A"
   floor         String? // "1er étage", "RdC"
   door          String? // "App C", "porte gauche"
-  occupantName  String?
+  contactId     String? // lien vers une vraie fiche Contact (occupant identifié)
+  contact       Contact? @relation(fields: [contactId], references: [id])
+  occupantName  String? // legacy (texte libre, fiches historiques sans contact lié)
   occupantPhone String?
   occupantEmail String?
   occupantKind  String? // owner | tenant | unknown

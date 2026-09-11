@@ -39,7 +39,7 @@ const NAV: Group[] = [
   {
     title: 'Répertoires',
     items: [
-      { href: '/app/immeubles', label: 'Immeubles / ACP', ic: '⌂' },
+      { href: '/app/immeubles', label: 'Immeubles / Projets', ic: '⌂' },
       { href: '/app/contacts', label: 'Contacts', ic: '☰' },
       { href: '/app/equipe', label: 'Équipe', ic: '☺' },
       { href: '/app/flotte', label: 'Flotte', ic: '⛟' },

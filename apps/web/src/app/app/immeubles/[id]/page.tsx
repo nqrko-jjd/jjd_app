@@ -6,6 +6,7 @@ import { api } from '@/lib/api';
 import { PageHead, StatusBadge, Money, formatDateBE } from '@/lib/ui';
 import { FormModal, type FieldDef } from '@/components/FormModal';
 import { PhotoHeader } from '@/components/PhotoHeader';
+import { BUILDING_FIELDS } from '@/lib/forms';
 import {
   BUILDING_CONTACT_ROLES, BUILDING_CONTACT_ROLE_LABEL, OCCUPANT_KINDS, OCCUPANT_KIND_LABEL, CLIENT_KIND_LABEL,
 } from '@jjd/shared';
@@ -16,6 +17,7 @@ interface BContact {
 }
 interface BUnit {
   id: string; label: string; floor: string | null; door: string | null;
+  contactId: string | null; contact: { id: string; name: string; phone: string | null; email: string | null } | null;
   occupantName: string | null; occupantPhone: string | null; occupantEmail: string | null;
   occupantKind: string | null; note: string | null;
 }
@@ -37,24 +39,7 @@ interface Detail {
   };
 }
 
-const buildingFields = (
-  syndics: { id: string; name: string }[],
-  clients: { id: string; name: string }[],
-): FieldDef[] => [
-  { name: 'name', label: 'Nom de l’immeuble / ACP', required: true, full: true },
-  { name: 'syndicId', label: 'Syndic', type: 'select', options: syndics.map((s) => ({ value: s.id, label: s.name })) },
-  { name: 'clientId', label: 'Client / ACP (contact)', type: 'select', options: clients.map((c) => ({ value: c.id, label: c.name })) },
-  { name: 'address', label: 'Adresse', full: true, type: 'address', addressFill: { postalCode: 'postalCode', city: 'city' } },
-  { name: 'postalCode', label: 'Code postal' },
-  { name: 'city', label: 'Ville' },
-  { name: 'reference', label: 'Référence dossier (syndic / ACP)' },
-  { name: 'lotCount', label: 'Nombre de lots', type: 'number' },
-  { name: 'digicode', label: 'Digicode' },
-  { name: 'accessNote', label: 'Accès (clés, badges, parking…)', type: 'textarea', full: true },
-  { name: 'note', label: 'Note', type: 'textarea', full: true },
-];
-
-const CONTACT_FIELDS: FieldDef[] = [
+const BUILDING_CONTACT_FIELDS: FieldDef[] = [
   { name: 'role', label: 'Rôle', type: 'select', options: BUILDING_CONTACT_ROLES.map((r) => ({ value: r, label: BUILDING_CONTACT_ROLE_LABEL[r] })) },
   { name: 'name', label: 'Nom', required: true, full: true },
   { name: 'phone', label: 'Téléphone' },
@@ -66,9 +51,7 @@ const UNIT_FIELDS: FieldDef[] = [
   { name: 'label', label: 'Lot / appartement', required: true, placeholder: 'C1, Lot 12, 2A…' },
   { name: 'floor', label: 'Étage', placeholder: '1er étage, RdC…' },
   { name: 'door', label: 'Porte / précision', placeholder: 'App C, porte gauche…' },
-  { name: 'occupantName', label: 'Occupant', full: true, placeholder: 'Mme Pinto' },
-  { name: 'occupantPhone', label: 'Téléphone' },
-  { name: 'occupantEmail', label: 'E-mail' },
+  { name: 'contactId', label: 'Occupant', type: 'contact', full: true, placeholder: 'Chercher ou créer le contact de cette personne…' },
   { name: 'occupantKind', label: 'Statut', type: 'select', options: OCCUPANT_KINDS.map((k) => ({ value: k, label: OCCUPANT_KIND_LABEL[k] })) },
   { name: 'note', label: 'Note', type: 'textarea', full: true },
 ];
@@ -76,7 +59,7 @@ const UNIT_FIELDS: FieldDef[] = [
 export default function ImmeubleDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { data, loading, reload } = useApi<Detail>(`/api/buildings/${id}`);
-  const { data: pick } = useApi<{ syndics: { id: string; name: string }[]; clients: { id: string; name: string }[] }>('/api/meta/pickers');
+  const { data: pick } = useApi<{ syndics: { id: string; name: string }[] }>('/api/meta/pickers');
   const [modal, setModal] = useState<null | { kind: 'building' | 'contact' | 'unit'; row?: BContact | BUnit }>(null);
 
   if (loading) return <div className="empty">Chargement…</div>;
@@ -184,12 +167,20 @@ export default function ImmeubleDetail({ params }: { params: Promise<{ id: strin
                   <td className="mono">{u.label}</td>
                   <td>{u.floor ?? '—'}</td>
                   <td>{u.door ?? '—'}</td>
-                  <td>{u.occupantName ?? '—'}</td>
+                  <td>{u.contact ? <Link href={`/app/contacts/${u.contact.id}`}>{u.contact.name}</Link> : (u.occupantName ?? '—')}</td>
                   <td>
-                    {u.occupantPhone && <a href={`tel:${u.occupantPhone}`}>{u.occupantPhone}</a>}
-                    {u.occupantPhone && u.occupantEmail && <br />}
-                    {u.occupantEmail && <span className="muted" style={{ fontSize: '0.82rem' }}>{u.occupantEmail}</span>}
-                    {!u.occupantPhone && !u.occupantEmail && '—'}
+                    {(() => {
+                      const phone = u.contact?.phone ?? u.occupantPhone;
+                      const email = u.contact?.email ?? u.occupantEmail;
+                      if (!phone && !email) return '—';
+                      return (
+                        <>
+                          {phone && <a href={`tel:${phone}`}>{phone}</a>}
+                          {phone && email && <br />}
+                          {email && <span className="muted" style={{ fontSize: '0.82rem' }}>{email}</span>}
+                        </>
+                      );
+                    })()}
                   </td>
                   <td>{u.occupantKind ? OCCUPANT_KIND_LABEL[u.occupantKind as keyof typeof OCCUPANT_KIND_LABEL] : '—'}</td>
                   <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
@@ -238,7 +229,7 @@ export default function ImmeubleDetail({ params }: { params: Promise<{ id: strin
       {modal?.kind === 'building' && (
         <FormModal
           title="Modifier l’immeuble"
-          fields={buildingFields(pick?.syndics ?? [], pick?.clients ?? [])}
+          fields={BUILDING_FIELDS(pick?.syndics ?? [])}
           initial={{ ...(b as unknown as Record<string, unknown>), syndicId: b.syndic?.id, clientId: b.client?.id }}
           onClose={() => setModal(null)}
           onSubmit={async (v) => { await api(`/api/buildings/${id}`, { method: 'PATCH', body: v }); closeAndReload(); }}
@@ -247,7 +238,7 @@ export default function ImmeubleDetail({ params }: { params: Promise<{ id: strin
       {modal?.kind === 'contact' && (
         <FormModal
           title={modal.row ? 'Modifier le contact' : 'Nouveau contact'}
-          fields={CONTACT_FIELDS}
+          fields={BUILDING_CONTACT_FIELDS}
           initial={(modal.row as unknown as Record<string, unknown>) ?? { role: 'concierge' }}
           onClose={() => setModal(null)}
           onSubmit={async (v) => {

@@ -67,6 +67,37 @@ test('immeuble : contacts clés + lots/occupants', async () => {
   assert.equal(del.status, 200);
 });
 
+test('immeuble : un lot peut être lié à une vraie fiche contact (pas juste du texte libre)', async () => {
+  await prisma.contact.deleteMany({ where: { name: 'Mme Pinto — test' } });
+  const contact = await prisma.contact.create({
+    data: { name: 'Mme Pinto — test', normalizedName: 'mme pinto test', type: 'client', phone: '0470 12 34 56', source: 'test' },
+  });
+  try {
+    const u = await fetch(`${base}/api/buildings/${buildingId}/units`, {
+      method: 'POST',
+      headers: auth(),
+      body: JSON.stringify({ label: 'C2', contactId: contact.id }),
+    });
+    assert.equal(u.status, 201);
+    const unitId = (await u.json()).unit.id;
+
+    const detail = await (await fetch(`${base}/api/buildings/${buildingId}`, { headers: auth() })).json();
+    const unit = detail.building.units.find((x: { id: string }) => x.id === unitId);
+    assert.equal(unit.contactId, contact.id);
+    assert.equal(unit.contact.name, 'Mme Pinto — test');
+    assert.equal(unit.contact.phone, '0470 12 34 56');
+
+    const cleared = await fetch(`${base}/api/buildings/${buildingId}/units/${unitId}`, {
+      method: 'PATCH', headers: auth(), body: JSON.stringify({ contactId: null }),
+    });
+    assert.equal((await cleared.json()).unit.contactId, null);
+
+    await fetch(`${base}/api/buildings/${buildingId}/units/${unitId}`, { method: 'DELETE', headers: auth() });
+  } finally {
+    await prisma.contact.deleteMany({ where: { id: contact.id } });
+  }
+});
+
 test('immeuble : champs ACP éditables', async () => {
   const r = await fetch(`${base}/api/buildings/${buildingId}`, {
     method: 'PATCH',

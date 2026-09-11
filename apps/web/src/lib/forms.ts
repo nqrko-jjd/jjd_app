@@ -37,7 +37,7 @@ export const CONTACT_FIELDS = (forType?: string, buildings: { id: string; name: 
     { name: 'email', label: 'E-mail' },
     { name: 'phone', label: 'Téléphone' },
     { name: 'vat', label: 'N° TVA', placeholder: 'BE0123456789', action: { label: 'Rechercher', run: vatLookupAction } },
-    { name: 'address', label: 'Adresse', full: true },
+    { name: 'address', label: 'Adresse', full: true, type: 'address', addressFill: { postalCode: 'postalCode', city: 'city' } },
     { name: 'postalCode', label: 'Code postal' },
     { name: 'city', label: 'Ville' },
     { name: 'note', label: 'Note', type: 'textarea', full: true },
@@ -55,7 +55,7 @@ export const PERSON_FIELDS: FieldDef[] = [
   { name: 'dailyHours', label: 'Heures payées par jour presté', type: 'number', placeholder: '10' },
   { name: 'phone', label: 'Téléphone' },
   { name: 'email', label: 'E-mail' },
-  { name: 'address', label: 'Adresse', full: true },
+  { name: 'address', label: 'Adresse', full: true, type: 'address' },
   { name: 'languages', label: 'Langues (séparées par des virgules)', type: 'tags', full: true, placeholder: 'fr, nl, pt' },
   { name: 'emergencyContact', label: "Contact d'urgence", full: true },
   { name: 'active', label: 'Statut', type: 'checkbox', placeholder: 'Actif (décocher pour un ancien — les données sont conservées)', full: true },
@@ -80,7 +80,7 @@ export const VEHICLE_DOC_FIELDS: FieldDef[] = [
 
 export const BUILDING_FIELDS: FieldDef[] = [
   { name: 'name', label: "Nom de l'immeuble / ACP", required: true, full: true },
-  { name: 'address', label: 'Adresse', full: true },
+  { name: 'address', label: 'Adresse', full: true, type: 'address', addressFill: { postalCode: 'postalCode', city: 'city' } },
   { name: 'postalCode', label: 'Code postal' },
   { name: 'city', label: 'Ville' },
   { name: 'note', label: 'Note', type: 'textarea', full: true },

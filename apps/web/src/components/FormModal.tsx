@@ -1,10 +1,11 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { AddressAutocomplete } from './AddressAutocomplete';
 
 export interface FieldDef {
   name: string;
   label: string;
-  type?: 'text' | 'textarea' | 'number' | 'date' | 'select' | 'tags' | 'checkbox';
+  type?: 'text' | 'textarea' | 'number' | 'date' | 'select' | 'tags' | 'checkbox' | 'address';
   options?: { value: string; label: string }[];
   required?: boolean;
   placeholder?: string;
@@ -15,6 +16,10 @@ export interface FieldDef {
     label: string;
     run: (value: string) => Promise<Record<string, unknown>>;
   };
+  /** Pour un champ `type: 'address'` : noms des autres champs du formulaire à préremplir
+   *  quand une suggestion est choisie (code postal / ville). Si absent, ce champ reçoit
+   *  l'adresse complète en une ligne (cas d'un formulaire sans champs séparés). */
+  addressFill?: { postalCode?: string; city?: string };
 }
 
 export function FormModal({
@@ -102,6 +107,26 @@ export function FormModal({
                   <option value="">—</option>
                   {(f.options ?? []).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
+              ) : f.type === 'address' ? (
+                <AddressAutocomplete
+                  id={f.name}
+                  value={(v[f.name] as string) ?? ''}
+                  onChange={(val) => setV((prev) => ({ ...prev, [f.name]: val }))}
+                  onSelect={(hit) => {
+                    if (f.addressFill) {
+                      setV((prev) => ({
+                        ...prev,
+                        [f.name]: hit.street,
+                        ...(f.addressFill!.postalCode ? { [f.addressFill!.postalCode]: hit.postalCode } : {}),
+                        ...(f.addressFill!.city ? { [f.addressFill!.city]: hit.city } : {}),
+                      }));
+                    } else {
+                      setV((prev) => ({ ...prev, [f.name]: [hit.street, [hit.postalCode, hit.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') }));
+                    }
+                  }}
+                  placeholder={f.placeholder}
+                  required={f.required}
+                />
               ) : f.action ? (
                 <div className="row" style={{ gap: '0.4rem' }}>
                   <input

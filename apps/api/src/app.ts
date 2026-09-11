@@ -27,6 +27,7 @@ import { worksiteTasksRouter, tasksRouter } from './routes/tasks.js';
 import { materielRouter } from './routes/materiel.js';
 import { stockRouter } from './routes/stock.js';
 import { assistantRouter } from './routes/assistant.js';
+import { geocodeRouter } from './routes/geocode.js';
 
 export function createApp() {
   const app = express();
@@ -70,6 +71,7 @@ export function createApp() {
   app.use('/api/materiel', materielRouter);
   app.use('/api/stock', stockRouter);
   app.use('/api/assistant', assistantRouter);
+  app.use('/api/geocode', geocodeRouter);
 
   app.use(errorMiddleware);
   return app;

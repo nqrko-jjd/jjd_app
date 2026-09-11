@@ -85,7 +85,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
     { name: 'entity', label: 'Entité', type: 'select', options: ENTITIES.map((e) => ({ value: e, label: ENTITY_LABEL[e] })) },
     { name: 'status', label: 'Statut', type: 'select', options: WORKSITE_STATUSES.map((s) => ({ value: s, label: WORKSITE_STATUS_LABEL[s] })) },
     { name: 'priority', label: 'Priorité', type: 'select', options: WORKSITE_PRIORITIES.map((p) => ({ value: p, label: WORKSITE_PRIORITY_LABEL[p] })) },
-    { name: 'address', label: 'Adresse', full: true },
+    { name: 'address', label: 'Adresse', full: true, type: 'address', addressFill: { postalCode: 'postalCode', city: 'city' } },
     { name: 'postalCode', label: 'Code postal' },
     { name: 'city', label: 'Ville' },
     { name: 'startedOn', label: 'Début', type: 'date' },

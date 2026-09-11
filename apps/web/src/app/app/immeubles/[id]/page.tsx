@@ -44,7 +44,7 @@ const buildingFields = (
   { name: 'name', label: 'Nom de l’immeuble / ACP', required: true, full: true },
   { name: 'syndicId', label: 'Syndic', type: 'select', options: syndics.map((s) => ({ value: s.id, label: s.name })) },
   { name: 'clientId', label: 'Client / ACP (contact)', type: 'select', options: clients.map((c) => ({ value: c.id, label: c.name })) },
-  { name: 'address', label: 'Adresse', full: true },
+  { name: 'address', label: 'Adresse', full: true, type: 'address', addressFill: { postalCode: 'postalCode', city: 'city' } },
   { name: 'postalCode', label: 'Code postal' },
   { name: 'city', label: 'Ville' },
   { name: 'reference', label: 'Référence dossier (syndic / ACP)' },

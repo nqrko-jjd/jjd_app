@@ -6,6 +6,7 @@ import { useAuth } from '@/lib/auth';
 import { PageHead, Money } from '@/lib/ui';
 import type { Company } from '@/lib/doc-ui';
 import { VAT_RATES } from '@jjd/shared';
+import { AddressAutocomplete } from '@/components/AddressAutocomplete';
 
 interface PriceItem {
   id: string; ref: string | null; label: string; description: string | null;
@@ -75,7 +76,12 @@ function DepotForm({ canEdit }: { canEdit: boolean }) {
       </p>
       <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
         <label className="field" style={{ gridColumn: '1 / -1' }}><span>Adresse</span>
-          <input className="input" disabled={!canEdit} value={f.address} onChange={(e) => upd('address', e.target.value)} /></label>
+          <AddressAutocomplete
+            disabled={!canEdit}
+            value={f.address}
+            onChange={(v) => upd('address', v)}
+            onSelect={(hit) => { setF({ ...f, address: hit.street, postalCode: hit.postalCode || f.postalCode, city: hit.city || f.city }); setMsg(null); }}
+          /></label>
         <label className="field"><span>Code postal</span>
           <input className="input" disabled={!canEdit} value={f.postalCode} onChange={(e) => upd('postalCode', e.target.value)} /></label>
         <label className="field"><span>Ville</span>
@@ -134,10 +140,10 @@ function GeoForm({ canEdit }: { canEdit: boolean }) {
   );
 }
 
-const FIELDS: { name: keyof Company; label: string; full?: boolean; area?: boolean }[] = [
+const FIELDS: { name: keyof Company; label: string; full?: boolean; area?: boolean; address?: boolean }[] = [
   { name: 'name', label: 'Raison sociale' },
   { name: 'vat', label: 'N° TVA' },
-  { name: 'address', label: 'Adresse', full: true },
+  { name: 'address', label: 'Adresse', full: true, address: true },
   { name: 'postalCode', label: 'Code postal' },
   { name: 'city', label: 'Ville' },
   { name: 'iban', label: 'IBAN' },
@@ -163,6 +169,13 @@ function CompanyForm({ canEdit }: { canEdit: boolean }) {
             <span>{f.label}</span>
             {f.area ? (
               <textarea className="input" rows={2} disabled={!canEdit} value={form[f.name]} onChange={(e) => { setForm({ ...form, [f.name]: e.target.value }); setSaved(false); }} />
+            ) : f.address ? (
+              <AddressAutocomplete
+                disabled={!canEdit}
+                value={form.address}
+                onChange={(v) => { setForm({ ...form, address: v }); setSaved(false); }}
+                onSelect={(hit) => { setForm({ ...form, address: hit.street, postalCode: hit.postalCode || form.postalCode, city: hit.city || form.city }); setSaved(false); }}
+              />
             ) : (
               <input className="input" disabled={!canEdit} value={form[f.name]} onChange={(e) => { setForm({ ...form, [f.name]: e.target.value }); setSaved(false); }} />
             )}

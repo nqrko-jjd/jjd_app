@@ -101,7 +101,7 @@ function ChantiersInner() {
     { name: 'clientId', label: 'Client', type: 'select', options: (refs?.clients ?? []).map((c) => ({ value: c.id, label: c.name })) },
     { name: 'buildingId', label: 'Immeuble / ACP', type: 'select', options: (refs?.buildings ?? []).map((b) => ({ value: b.id, label: b.name })) },
     { name: 'managerId', label: 'Chef de chantier', type: 'select', options: (refs?.people ?? []).map((p) => ({ value: p.id, label: p.name })) },
-    { name: 'address', label: 'Adresse', full: true },
+    { name: 'address', label: 'Adresse', full: true, type: 'address', addressFill: { postalCode: 'postalCode', city: 'city' } },
     { name: 'postalCode', label: 'Code postal' },
     { name: 'city', label: 'Ville' },
     { name: 'startedOn', label: 'Date de début', type: 'date' },

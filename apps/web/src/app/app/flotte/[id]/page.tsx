@@ -6,8 +6,8 @@ import { api, apiBlobUrl, apiUpload } from '@/lib/api';
 import { PageHead, Money, formatDateBE, VehicleStatusBadge } from '@/lib/ui';
 import { PhotoHeader } from '@/components/PhotoHeader';
 import { FormModal, toDateInput, type FieldDef } from '@/components/FormModal';
-import { VEHICLE_DOC_FIELDS } from '@/lib/forms';
-import { VEHICLE_STATUSES, VEHICLE_STATUS_LABEL, VEHICLE_DOC_LABEL } from '@jjd/shared';
+import { DocWithFileModal } from '@/components/DocWithFileModal';
+import { VEHICLE_STATUSES, VEHICLE_STATUS_LABEL, VEHICLE_DOC_LABEL, VEHICLE_DOC_TYPES } from '@jjd/shared';
 
 interface Detail {
   vehicle: {
@@ -82,11 +82,28 @@ export default function VehicleDetail({ params }: { params: Promise<{ id: string
   return (
     <>
       {addingDoc && (
-        <FormModal
+        <DocWithFileModal
           title="Nouveau document"
-          fields={VEHICLE_DOC_FIELDS}
+          typeOptions={VEHICLE_DOC_TYPES.map((t) => ({ value: t, label: VEHICLE_DOC_LABEL[t] }))}
           onClose={() => setAddingDoc(false)}
-          onSubmit={async (body) => { await api(`/api/vehicles/${id}/docs`, { method: 'POST', body }); reload(); }}
+          onSubmit={async (v, file) => {
+            const { doc } = await api<{ doc: { id: string } }>(`/api/vehicles/${id}/docs`, {
+              method: 'POST',
+              body: {
+                type: v.type,
+                label: v.label || null,
+                number: v.number || null,
+                issuedOn: v.issuedOn || null,
+                expiresOn: v.expiresOn || null,
+              },
+            });
+            if (file) {
+              const fd = new FormData();
+              fd.append('file', file);
+              await apiUpload(`/api/vehicles/${id}/docs/${doc.id}/file`, fd);
+            }
+            reload();
+          }}
         />
       )}
       {editing && (

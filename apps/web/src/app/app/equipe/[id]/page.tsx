@@ -5,11 +5,12 @@ import { useApi } from '@/lib/use-api';
 import { api, apiBlobUrl, apiUpload } from '@/lib/api';
 import { PageHead, Money, formatDateBE } from '@/lib/ui';
 import { FormModal, toDateInput, type FieldDef } from '@/components/FormModal';
+import { DocWithFileModal } from '@/components/DocWithFileModal';
 import { PhotoHeader } from '@/components/PhotoHeader';
 import { MonthBars } from '@/lib/charts';
 import { useSort, SortTh } from '@/lib/sort';
-import { PERSON_FIELDS, LEGAL_DOC_FIELDS } from '@/lib/forms';
-import { PERSON_ROLE_LABEL, WORKER_CONTRACT_LABEL, LEGAL_DOC_LABEL, ADJUSTMENT_TYPES, ADJUSTMENT_TYPE_LABEL, formatHours, formatEur } from '@jjd/shared';
+import { PERSON_FIELDS } from '@/lib/forms';
+import { PERSON_ROLE_LABEL, WORKER_CONTRACT_LABEL, LEGAL_DOC_LABEL, LEGAL_DOC_TYPES, ADJUSTMENT_TYPES, ADJUSTMENT_TYPE_LABEL, formatHours, formatEur } from '@jjd/shared';
 
 interface Adjustment { id: string; type: string; amount: number; date: string; note: string | null; settled: boolean; settledOn: string | null }
 interface Detail {
@@ -116,11 +117,28 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
         />
       )}
       {addingDoc && (
-        <FormModal
+        <DocWithFileModal
           title="Nouveau document légal"
-          fields={LEGAL_DOC_FIELDS}
+          typeOptions={LEGAL_DOC_TYPES.map((t) => ({ value: t, label: LEGAL_DOC_LABEL[t] }))}
           onClose={() => setAddingDoc(false)}
-          onSubmit={async (v) => { await api(`/api/people/${id}/legal-docs`, { method: 'POST', body: v }); reload(); }}
+          onSubmit={async (v, file) => {
+            const { doc } = await api<{ doc: { id: string } }>(`/api/people/${id}/legal-docs`, {
+              method: 'POST',
+              body: {
+                type: v.type,
+                label: v.label || null,
+                number: v.number || null,
+                issuedOn: v.issuedOn || null,
+                expiresOn: v.expiresOn || null,
+              },
+            });
+            if (file) {
+              const fd = new FormData();
+              fd.append('file', file);
+              await apiUpload(`/api/people/${id}/legal-docs/${doc.id}/file`, fd);
+            }
+            reload();
+          }}
         />
       )}
       {adjModal && (

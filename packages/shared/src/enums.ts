@@ -67,6 +67,7 @@ export const ENTITY_PROFIT_SHARE: Record<Entity, number> = {
  */
 export const WORKSITE_STATUSES = [
   'lead', // demande / devis pas encore accepté
+  'quote_needed', // demande reçue, devis à rédiger
   'to_plan', // accepté, à planifier
   'scheduled', // planifié
   'in_progress', // en cours
@@ -75,12 +76,14 @@ export const WORKSITE_STATUSES = [
   'to_invoice', // terminé, à facturer
   'invoiced', // facturé
   'closed', // facturé + payé, clôturé
+  'refused', // devis refusé par le client
   'cancelled', // abandonné
 ] as const;
 export type WorksiteStatus = (typeof WORKSITE_STATUSES)[number];
 
 export const WORKSITE_STATUS_LABEL: Record<WorksiteStatus, string> = {
   lead: 'Demande',
+  quote_needed: 'Devis à faire',
   to_plan: 'À planifier',
   scheduled: 'Planifié',
   in_progress: 'En cours',
@@ -89,11 +92,12 @@ export const WORKSITE_STATUS_LABEL: Record<WorksiteStatus, string> = {
   to_invoice: 'À facturer',
   invoiced: 'Facturé',
   closed: 'Clôturé',
+  refused: 'Refusé',
   cancelled: 'Abandonné',
 };
 
 export const WORKSITE_STATUS_OPEN: WorksiteStatus[] = [
-  'lead', 'to_plan', 'scheduled', 'in_progress', 'on_hold', 'done', 'to_invoice',
+  'lead', 'quote_needed', 'to_plan', 'scheduled', 'in_progress', 'on_hold', 'done', 'to_invoice',
 ];
 
 export const VEHICLE_STATUSES = [

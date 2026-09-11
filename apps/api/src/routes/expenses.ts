@@ -86,7 +86,7 @@ expensesRouter.get(
     const { page: pageStr, pageSize: pageSizeStr } = req.query as Record<string, string>;
     const and = buildWhere(req.query as Record<string, string>);
     const page = Math.max(1, Math.trunc(Number(pageStr)) || 1);
-    const pageSize = Math.min(500, Math.max(20, Math.trunc(Number(pageSizeStr)) || 100));
+    const pageSize = Math.min(5000, Math.max(20, Math.trunc(Number(pageSizeStr)) || 100));
     const isPaidStr = (s: string | null) =>
       (s ?? '').toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').trim() === 'paye';
 

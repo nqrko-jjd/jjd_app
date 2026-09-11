@@ -47,7 +47,7 @@ worksitesRouter.get(
     // le picker de planning et l'appli mobile) ; la page « Chantiers » du web l'active en passant page=.
     const paginated = pageStr !== undefined;
     const page = Math.max(1, Math.trunc(Number(pageStr)) || 1);
-    const pageSize = paginated ? Math.min(500, Math.max(20, Math.trunc(Number(pageSizeStr)) || 100)) : 5000;
+    const pageSize = paginated ? Math.min(5000, Math.max(20, Math.trunc(Number(pageSizeStr)) || 100)) : 5000;
     const [items, totalCount] = await Promise.all([
       prisma.worksite.findMany({
         where,

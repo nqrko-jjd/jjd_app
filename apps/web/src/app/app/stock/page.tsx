@@ -7,7 +7,7 @@ import { useSort, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
 import { ComboBox } from '@/components/ComboBox';
 import { FormModal, type FieldDef } from '@/components/FormModal';
-import { PaginationBar } from '@/components/PaginationBar';
+import { PaginationBar, PAGE_SIZE_ALL } from '@/components/PaginationBar';
 import { ViewToggle, useViewMode } from '@/components/ViewToggle';
 
 interface StockItem {
@@ -263,8 +263,9 @@ function MovementModal({
 
 function HistoryModal({ item, onClose }: { item: StockItem; onClose: () => void }) {
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(30);
   const { data } = useApi<{ items: Movement[]; page: number; totalPages: number }>(
-    `/api/stock/movements?stockItemId=${item.id}&page=${page}&pageSize=30`,
+    `/api/stock/movements?stockItemId=${item.id}&page=${page}&pageSize=${pageSize}`,
   );
 
   useEffect(() => {
@@ -301,7 +302,7 @@ function HistoryModal({ item, onClose }: { item: StockItem; onClose: () => void 
               </table>
             </div>
           )}
-          {data && <PaginationBar page={data.page} totalPages={data.totalPages} pageSize={30} onPage={setPage} onPageSize={() => {}} sizes={[30]} />}
+          {data && <PaginationBar page={data.page} totalPages={data.totalPages} pageSize={pageSize} onPage={setPage} onPageSize={(s) => { setPageSize(s); setPage(1); }} sizes={[30, 100, 200, PAGE_SIZE_ALL]} />}
         </div>
       </div>
     </div>

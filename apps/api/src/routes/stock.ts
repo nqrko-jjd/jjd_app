@@ -85,7 +85,7 @@ stockRouter.get(
     if (worksiteId) where.worksiteId = worksiteId;
     if (type) where.type = type;
     const page = Math.max(1, Math.trunc(Number(pageStr)) || 1);
-    const pageSize = Math.min(500, Math.max(20, Math.trunc(Number(pageSizeStr)) || 50));
+    const pageSize = Math.min(5000, Math.max(20, Math.trunc(Number(pageSizeStr)) || 50));
     const [items, totalCount] = await Promise.all([
       prisma.stockMovement.findMany({
         where,

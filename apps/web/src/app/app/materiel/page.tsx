@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { PageHead, Thumb, formatDateBE } from '@/lib/ui';
-import { PaginationBar } from '@/components/PaginationBar';
+import { PaginationBar, PAGE_SIZE_ALL } from '@/components/PaginationBar';
 import { ViewToggle, useViewMode } from '@/components/ViewToggle';
 
 interface Unit {
@@ -487,7 +487,7 @@ export default function MaterielPage() {
 
           {!loading && filtered.length === 0 && <div className="empty">Aucun outil.</div>}
 
-          <PaginationBar page={matPage} totalPages={matTotalPages} pageSize={matPageSize} onPage={setMatPage} onPageSize={(s) => { setMatPageSize(s); setMatPage(1); }} sizes={[24, 50, 100]} />
+          <PaginationBar page={matPage} totalPages={matTotalPages} pageSize={matPageSize} onPage={setMatPage} onPageSize={(s) => { setMatPageSize(s); setMatPage(1); }} sizes={[24, 50, 100, PAGE_SIZE_ALL]} />
 
           {open && (
             <div className="modal-scrim" onClick={() => { setOpenId(null); setCheckoutTarget(null); setReturnTarget(null); }}>

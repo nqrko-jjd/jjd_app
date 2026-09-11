@@ -36,7 +36,7 @@ contactsRouter.get(
     // pagination facultative (page absent = tout charger, utilisé par l'appli mobile)
     const paginated = pageStr !== undefined;
     const page = Math.max(1, Math.trunc(Number(pageStr)) || 1);
-    const pageSize = paginated ? Math.min(500, Math.max(20, Math.trunc(Number(pageSizeStr)) || 100)) : 5000;
+    const pageSize = paginated ? Math.min(5000, Math.max(20, Math.trunc(Number(pageSizeStr)) || 100)) : 5000;
     const [items, totalCount] = await Promise.all([
       prisma.contact.findMany({
         where,

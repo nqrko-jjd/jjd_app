@@ -85,7 +85,7 @@ export async function syncChantier(ws: WorksiteLike): Promise<void> {
       name: `${ws.ref} — ${ws.title}`,
       client: ws.client?.name ?? null,
       address: address || null,
-      active: !ws.archived && !['done', 'closed', 'cancelled', 'archived'].includes(ws.status ?? ''),
+      active: !ws.archived && !['done', 'closed', 'cancelled', 'refused', 'archived'].includes(ws.status ?? ''),
     },
   });
 }

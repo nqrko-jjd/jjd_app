@@ -248,7 +248,7 @@ financeRouter.get(
     const where: Record<string, unknown> = and.length ? { AND: and } : {};
 
     const page = Math.max(1, Math.trunc(Number(pageStr)) || 1);
-    const pageSize = Math.min(500, Math.max(20, Math.trunc(Number(pageSizeStr)) || 100));
+    const pageSize = Math.min(5000, Math.max(20, Math.trunc(Number(pageSizeStr)) || 100));
 
     const [items, filteredCount, stats] = await Promise.all([
       prisma.bankTransaction.findMany({

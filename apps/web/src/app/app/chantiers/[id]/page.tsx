@@ -18,6 +18,8 @@ interface Detail {
     entity: string; address: string | null; city: string | null; billTo: string | null;
     lat: number | null; lng: number | null; geoSetAt: string | null;
     startedOn: string | null; endedOn: string | null; quotedHt: number | null; description: string | null;
+    ownerName: string | null; ownerPhone: string | null; ownerEmail: string | null;
+    tenantName: string | null; tenantPhone: string | null; tenantPhone2: string | null; tenantEmail: string | null;
     client: { id: string; name: string } | null;
     building: { id: string; name: string; syndic: { name: string } | null } | null;
     manager: { id: string; displayName: string | null; firstName: string } | null;
@@ -90,6 +92,13 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
     { name: 'endedOn', label: 'Fin', type: 'date' },
     { name: 'quotedHt', label: 'Total devisé HT', type: 'number' },
     { name: 'description', label: 'Description', type: 'textarea', full: true },
+    { name: 'ownerName', label: 'Propriétaire — nom' },
+    { name: 'ownerPhone', label: 'Propriétaire — téléphone' },
+    { name: 'ownerEmail', label: 'Propriétaire — e-mail' },
+    { name: 'tenantName', label: 'Locataire — nom' },
+    { name: 'tenantPhone', label: 'Locataire — téléphone' },
+    { name: 'tenantPhone2', label: 'Locataire — téléphone 2' },
+    { name: 'tenantEmail', label: 'Locataire — e-mail' },
   ];
 
   return (
@@ -104,6 +113,8 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
             address: w.address, city: w.city,
             startedOn: toDateInput(w.startedOn), endedOn: toDateInput(w.endedOn),
             quotedHt: w.quotedHt, description: w.description,
+            ownerName: w.ownerName, ownerPhone: w.ownerPhone, ownerEmail: w.ownerEmail,
+            tenantName: w.tenantName, tenantPhone: w.tenantPhone, tenantPhone2: w.tenantPhone2, tenantEmail: w.tenantEmail,
           }}
           onClose={() => setEditing(false)}
           onSubmit={async (v) => { await api(`/api/worksites/${id}`, { method: 'PATCH', body: v }); reload(); }}
@@ -140,6 +151,21 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
         <Info label="Début" value={formatDateBE(w.startedOn)} />
         <Info label="Fin" value={formatDateBE(w.endedOn)} />
       </div>
+
+      {(w.ownerName || w.tenantName) && (
+        <div className="info-grid" style={{ marginBottom: '1.5rem' }}>
+          <Info
+            label="Propriétaire"
+            value={w.ownerName ? `${w.ownerName}${w.ownerPhone ? ` · ${w.ownerPhone}` : ''}${w.ownerEmail ? ` · ${w.ownerEmail}` : ''}` : '—'}
+          />
+          <Info
+            label="Locataire (contact terrain)"
+            value={w.tenantName
+              ? `${w.tenantName}${w.tenantPhone ? ` · ${w.tenantPhone}` : ''}${w.tenantPhone2 ? ` / ${w.tenantPhone2}` : ''}${w.tenantEmail ? ` · ${w.tenantEmail}` : ''}`
+              : '—'}
+          />
+        </div>
+      )}
 
       {data.margin && (
         <>

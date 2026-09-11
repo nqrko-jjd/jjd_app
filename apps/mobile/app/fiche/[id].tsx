@@ -17,6 +17,8 @@ interface Field {
   building: { name: string; digicode: string | null; accessNote: string | null; contacts: { role: string; name: string; phone: string | null }[] } | null;
   client: { name: string; phone: string | null } | null;
   manager: { name: string; phone: string | null } | null;
+  owner: { name: string; phone: string | null; email: string | null } | null;
+  tenant: { name: string; phone: string | null; phone2: string | null; email: string | null } | null;
   today: {
     startAt: string; endAt: string; allDay: boolean; toDo: string | null; materials: string | null;
     team: string | null; vehicle: string | null; people: { name: string; phone: string | null }[];
@@ -123,8 +125,11 @@ export default function FicheDuJour() {
         <Label>Contacts</Label>
         {d.manager ? <Phone label="Chef de chantier" name={d.manager.name} phone={d.manager.phone} /> : null}
         {d.client ? <Phone label="Client" name={d.client.name} phone={d.client.phone} /> : null}
+        {d.owner ? <Phone label="Propriétaire" name={d.owner.name} phone={d.owner.phone} /> : null}
+        {d.tenant ? <Phone label="Locataire" name={d.tenant.name} phone={d.tenant.phone} /> : null}
+        {d.tenant?.phone2 ? <Phone label="Locataire (2)" name={d.tenant.name} phone={d.tenant.phone2} /> : null}
         {(d.building?.contacts ?? []).map((c, i) => <Phone key={i} label={ROLE[c.role] ?? c.role} name={c.name} phone={c.phone} />)}
-        {!d.manager && !d.client && !(d.building?.contacts ?? []).length ? <Muted>Aucun contact renseigné.</Muted> : null}
+        {!d.manager && !d.client && !d.owner && !d.tenant && !(d.building?.contacts ?? []).length ? <Muted>Aucun contact renseigné.</Muted> : null}
       </Card>
 
       <View style={{ gap: 8, marginTop: 4 }}>

@@ -87,6 +87,13 @@ export const worksiteInput = z.object({
   endedOn: z.coerce.date().nullish(),
   quotedHt: z.number().nonnegative().nullish(),
   description: z.string().nullish(),
+  ownerName: z.string().trim().nullish(),
+  ownerPhone: z.string().trim().nullish(),
+  ownerEmail: z.string().trim().nullish(),
+  tenantName: z.string().trim().nullish(),
+  tenantPhone: z.string().trim().nullish(),
+  tenantPhone2: z.string().trim().nullish(),
+  tenantEmail: z.string().trim().nullish(),
 });
 
 export const personInput = z.object({

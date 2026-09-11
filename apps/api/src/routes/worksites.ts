@@ -168,6 +168,8 @@ worksitesRouter.get(
         : null,
       client: ws.client,
       manager: ws.manager ? { name: ws.manager.displayName || ws.manager.firstName, phone: ws.manager.phone } : null,
+      owner: ws.ownerName ? { name: ws.ownerName, phone: ws.ownerPhone, email: ws.ownerEmail } : null,
+      tenant: ws.tenantName ? { name: ws.tenantName, phone: ws.tenantPhone, phone2: ws.tenantPhone2, email: ws.tenantEmail } : null,
       today: ev
         ? {
             date: ev.startAt, startAt: ev.startAt, endAt: ev.endAt, allDay: ev.allDay,

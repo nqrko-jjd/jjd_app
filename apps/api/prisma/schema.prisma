@@ -388,6 +388,17 @@ model Worksite {
   geoSetAt    DateTime?
   quotedHt    Float? // "Total Devisé"
   description String?
+  // Contacts propres à cette intervention (distincts du client facturé et des
+  // contacts fixes de l'immeuble type concierge/syndic) : le propriétaire du lot
+  // concerné et le locataire — le syndic transmet ces coordonnées à l'ouverture
+  // du dossier, on recontacte le locataire pour le rdv sur place.
+  ownerName    String?
+  ownerPhone   String?
+  ownerEmail   String?
+  tenantName   String?
+  tenantPhone  String?
+  tenantPhone2 String?
+  tenantEmail  String?
   trustupId   String?
   source      String?
   archived    Boolean   @default(false)

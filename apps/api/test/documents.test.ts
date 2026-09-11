@@ -162,3 +162,39 @@ test('worker ne voit pas les documents', async () => {
   const r = await fetch(`${base}/api/documents`, { headers: { authorization: `Bearer ${wt}` } });
   assert.equal(r.status, 403);
 });
+
+test('émission : adresse de facturation "c/o syndic" quand le contact (ACP) a un syndic lié', async () => {
+  const syndic = await prisma.syndic.create({ data: { name: 'Baltimo', normalizedName: 'baltimo', address: 'Rue du Siège 1', city: '1000 Bruxelles' } });
+  const acp = await prisma.contact.create({
+    data: { name: 'ACP Les Tilleuls', normalizedName: 'acp les tilleuls', type: 'client', kind: 'acp', address: 'Avenue du Chantier 5', city: '1050 Ixelles', syndicId: syndic.id, source: 'test' },
+  });
+  try {
+    const created = await (
+      await fetch(`${base}/api/documents`, { method: 'POST', headers: auth(), body: JSON.stringify({ kind: 'quote', worksiteId: wsId, contactId: acp.id, lines: [{ label: 'Poste', qty: 1, unitPriceHt: 100 }] }) })
+    ).json();
+    const issued = await (await fetch(`${base}/api/documents/${created.document.id}/issue`, { method: 'POST', headers: auth(), body: '{}' })).json();
+    assert.equal(issued.document.billingName, 'ACP Les Tilleuls');
+    assert.match(issued.document.billingAddress, /^c\/o Baltimo/);
+    assert.match(issued.document.billingAddress, /Rue du Siège 1/);
+    assert.doesNotMatch(issued.document.billingAddress, /Avenue du Chantier/, 'ne doit pas utiliser l’adresse du chantier (ACP), mais celle du siège du syndic');
+  } finally {
+    await prisma.contact.deleteMany({ where: { id: acp.id } });
+    await prisma.syndic.deleteMany({ where: { id: syndic.id } });
+  }
+});
+
+test('émission : sans syndic lié, adresse de facturation = adresse du contact (comportement inchangé)', async () => {
+  const client = await prisma.contact.create({
+    data: { name: 'Client Sans Syndic', normalizedName: 'client sans syndic', type: 'client', address: 'Rue Directe 9', city: '1200 Woluwe', source: 'test' },
+  });
+  try {
+    const created = await (
+      await fetch(`${base}/api/documents`, { method: 'POST', headers: auth(), body: JSON.stringify({ kind: 'quote', worksiteId: wsId, contactId: client.id, lines: [{ label: 'Poste', qty: 1, unitPriceHt: 100 }] }) })
+    ).json();
+    const issued = await (await fetch(`${base}/api/documents/${created.document.id}/issue`, { method: 'POST', headers: auth(), body: '{}' })).json();
+    assert.doesNotMatch(issued.document.billingAddress ?? '', /^c\/o/);
+    assert.match(issued.document.billingAddress, /Rue Directe 9/);
+  } finally {
+    await prisma.contact.deleteMany({ where: { id: client.id } });
+  }
+});

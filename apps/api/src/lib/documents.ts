@@ -104,7 +104,7 @@ export async function refreshDocTotals(documentId: string) {
  * structurée pour les factures, pose le verrou.
  */
 export async function issueDocument(documentId: string, opts: { issuedOn?: Date; dueDays?: number } = {}) {
-  const doc = await prisma.document.findUnique({ where: { id: documentId }, include: { contact: true } });
+  const doc = await prisma.document.findUnique({ where: { id: documentId }, include: { contact: { include: { syndic: true } } } });
   if (!doc) throw new HttpError(404, 'Document introuvable');
   if (doc.lockedAt) throw new HttpError(409, 'Document déjà émis');
 
@@ -122,6 +122,12 @@ export async function issueDocument(documentId: string, opts: { issuedOn?: Date;
     [doc.contact?.address, [doc.contact?.postalCode, doc.contact?.city].filter(Boolean).join(' ').trim()]
       .filter(Boolean)
       .join(', ');
+  // L'ACP a une adresse (le chantier, là où on intervient) mais la facture part au
+  // siège du syndic qui la gère — d'où la mention « c/o Baltimo » / « c/o Kadaner ».
+  const syndic = doc.contact?.syndic;
+  const syndicAddress = syndic
+    ? [`c/o ${syndic.name}`, syndic.address, syndic.city].filter(Boolean).join(', ')
+    : null;
 
   return prisma.document.update({
     where: { id: documentId },
@@ -136,7 +142,7 @@ export async function issueDocument(documentId: string, opts: { issuedOn?: Date;
       status: 'sent',
       billingName: doc.billingName ?? doc.contact?.name ?? null,
       billingVat: doc.billingVat ?? doc.contact?.vat ?? null,
-      billingAddress: doc.billingAddress ?? (contactAddress || null),
+      billingAddress: doc.billingAddress ?? (syndicAddress || contactAddress || null),
     },
     include: docInclude,
   });

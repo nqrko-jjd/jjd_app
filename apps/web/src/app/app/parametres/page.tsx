@@ -3,9 +3,9 @@ import { useEffect, useState } from 'react';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { PageHead, Money } from '@/lib/ui';
+import { PageHead, Money, formatDateBE } from '@/lib/ui';
 import type { Company } from '@/lib/doc-ui';
-import { VAT_RATES } from '@jjd/shared';
+import { VAT_RATES, ROLES, ROLE_LABEL } from '@jjd/shared';
 import { AddressAutocomplete } from '@/components/AddressAutocomplete';
 
 interface PriceItem {
@@ -15,21 +15,104 @@ interface PriceItem {
 
 export default function ParametresPage() {
   const { user } = useAuth();
-  const [tab, setTab] = useState<'company' | 'library' | 'pointage' | 'depot'>('company');
+  const [tab, setTab] = useState<'company' | 'library' | 'pointage' | 'depot' | 'users'>('company');
   const admin = user?.role === 'admin';
   return (
     <>
-      <PageHead title="Paramètres" sub="Société, bibliothèque de prix, dépôt, pointage" />
+      <PageHead title="Paramètres" sub="Société, bibliothèque de prix, dépôt, pointage, utilisateurs" />
       <div className="row" style={{ marginBottom: '1rem', gap: '0.4rem' }}>
         <button className={`btn${tab === 'company' ? ' primary' : ''}`} onClick={() => setTab('company')}>Société</button>
         <button className={`btn${tab === 'depot' ? ' primary' : ''}`} onClick={() => setTab('depot')}>Dépôt</button>
         <button className={`btn${tab === 'library' ? ' primary' : ''}`} onClick={() => setTab('library')}>Bibliothèque de prix</button>
         <button className={`btn${tab === 'pointage' ? ' primary' : ''}`} onClick={() => setTab('pointage')}>Pointage</button>
+        {admin && <button className={`btn${tab === 'users' ? ' primary' : ''}`} onClick={() => setTab('users')}>Utilisateurs</button>}
       </div>
       {tab === 'company' ? <CompanyForm canEdit={admin} />
         : tab === 'depot' ? <DepotForm canEdit={admin} />
         : tab === 'library' ? <PriceLibrary />
+        : tab === 'users' ? <UsersTab />
         : <GeoForm canEdit={admin} />}
+    </>
+  );
+}
+
+interface UserRow {
+  id: string; email: string; role: string; active: boolean; portalAccess: string;
+  lastLoginAt: string | null; label: string; link: string | null;
+}
+
+function UsersTab() {
+  const { data, reload } = useApi<{ items: UserRow[] }>('/api/users');
+  const [msg, setMsg] = useState<string | null>(null);
+
+  async function setRole(id: string, role: string) {
+    await api(`/api/users/${id}`, { method: 'PATCH', body: { role } });
+    reload();
+  }
+  async function setActive(id: string, active: boolean) {
+    await api(`/api/users/${id}`, { method: 'PATCH', body: { active } });
+    reload();
+  }
+  async function resetPassword(id: string) {
+    if (!confirm('Générer un nouveau mot de passe pour ce compte ?')) return;
+    try {
+      const r = await api<{ email: string; password: string }>(`/api/users/${id}/reset-password`, { method: 'POST' });
+      setMsg(`Nouveau mot de passe pour ${r.email} : ${r.password} — à communiquer à la personne, il ne sera plus affiché.`);
+    } catch (e) {
+      setMsg((e as Error).message);
+    }
+  }
+  async function removeUser(id: string) {
+    if (!confirm('Supprimer ce compte de connexion ? La fiche personne/contact liée est conservée.')) return;
+    try {
+      await api(`/api/users/${id}`, { method: 'DELETE' });
+      reload();
+    } catch (e) {
+      alert((e as Error).message);
+    }
+  }
+
+  if (!data) return <div className="empty">Chargement…</div>;
+  return (
+    <>
+      {msg && (
+        <div className="card card-pad" style={{ marginBottom: '1rem', borderColor: 'var(--ok)' }}>
+          {msg} <button className="btn ghost" style={{ marginLeft: '0.5rem' }} onClick={() => setMsg(null)}>✕</button>
+        </div>
+      )}
+      <div className="tbl-wrap">
+        <table className="tbl">
+          <thead>
+            <tr>
+              <th>Compte</th><th>E-mail</th><th>Rôle</th><th>Actif</th><th>Dernière connexion</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.items.map((u) => (
+              <tr key={u.id}>
+                <td>{u.link ? <a href={u.link}>{u.label}</a> : u.label}</td>
+                <td className="muted" style={{ fontSize: '0.85rem' }}>{u.email}</td>
+                <td>
+                  <select className="select" value={u.role} onChange={(e) => setRole(u.id, e.target.value)}>
+                    {ROLES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
+                  </select>
+                </td>
+                <td>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <input type="checkbox" checked={u.active} onChange={(e) => setActive(u.id, e.target.checked)} />
+                    {u.active ? 'Actif' : 'Désactivé'}
+                  </label>
+                </td>
+                <td className="muted" style={{ fontSize: '0.82rem' }}>{u.lastLoginAt ? formatDateBE(u.lastLoginAt) : 'Jamais'}</td>
+                <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                  <button className="btn ghost" style={{ fontSize: '0.78rem' }} onClick={() => resetPassword(u.id)}>Réinitialiser mdp</button>
+                  <button className="btn ghost" style={{ fontSize: '0.78rem' }} onClick={() => removeUser(u.id)}>Supprimer</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </>
   );
 }

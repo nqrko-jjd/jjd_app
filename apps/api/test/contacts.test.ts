@@ -83,3 +83,33 @@ test('solde fournisseur : les notes de crédit viennent en déduction des factur
   const last = r.body.contact.purchaseBalance[0];
   assert.equal(last.balance, 302.5); // solde cumulé le plus récent = solde final
 });
+
+test('DELETE /api/contacts/:id : refusé si des données y sont encore liées', async () => {
+  await prisma.contact.deleteMany({ where: { name: 'Contact lié — test' } });
+  const linked = await prisma.contact.create({
+    data: { name: 'Contact lié — test', normalizedName: 'contact lie test', type: 'client', source: 'manual' },
+  });
+  try {
+    await prisma.worksite.create({ data: { ref: 'R-CTLINK', title: 'Chantier lié', clientId: linked.id, source: 'test' } });
+    const r = await jf(`/api/contacts/${linked.id}`, { method: 'DELETE' });
+    assert.equal(r.status, 409);
+    assert.ok(await prisma.contact.findUnique({ where: { id: linked.id } }), 'le contact ne doit pas être supprimé');
+  } finally {
+    await prisma.worksite.deleteMany({ where: { ref: 'R-CTLINK' } });
+    await prisma.contact.delete({ where: { id: linked.id } }).catch(() => {});
+  }
+});
+
+test('DELETE /api/contacts/:id : supprime un contact sans données liées (et son compte portail éventuel)', async () => {
+  await prisma.contact.deleteMany({ where: { name: 'Contact orphelin — test' } });
+  const orphan = await prisma.contact.create({
+    data: { name: 'Contact orphelin — test', normalizedName: 'contact orphelin test', type: 'client', source: 'manual' },
+  });
+  await prisma.user.create({
+    data: { email: 'orphelin-test@jjd-consult.be', passwordHash: 'x', role: 'client', contactId: orphan.id },
+  });
+  const r = await jf(`/api/contacts/${orphan.id}`, { method: 'DELETE' });
+  assert.equal(r.status, 204);
+  assert.equal(await prisma.contact.findUnique({ where: { id: orphan.id } }), null);
+  assert.equal(await prisma.user.findUnique({ where: { email: 'orphelin-test@jjd-consult.be' } }), null);
+});

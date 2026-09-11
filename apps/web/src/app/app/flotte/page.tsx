@@ -1,14 +1,28 @@
 'use client';
+import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { ContextMenu, useContextMenu, openActions, type MenuItem } from '@/components/ContextMenu';
 import { ViewToggle, useViewMode } from '@/components/ViewToggle';
+import { FormModal, type FieldDef } from '@/components/FormModal';
 import { useSort, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
 import { PageHead, Money, formatDateBE, Thumb, VehicleStatusBadge } from '@/lib/ui';
 import { VEHICLE_STATUSES, VEHICLE_STATUS_LABEL } from '@jjd/shared';
+
+const NEW_VEHICLE_FIELDS: FieldDef[] = [
+  { name: 'code', label: 'Code interne', placeholder: 'V004' },
+  { name: 'brand', label: 'Marque' },
+  { name: 'model', label: 'Modèle' },
+  { name: 'plate', label: 'Plaque' },
+  { name: 'type', label: 'Type', placeholder: 'Camionette, Moto, Clark, Voiture…' },
+  { name: 'status', label: 'Statut', type: 'select', required: true, options: VEHICLE_STATUSES.map((s) => ({ value: s, label: VEHICLE_STATUS_LABEL[s] })) },
+  { name: 'fuel', label: 'Carburant' },
+  { name: 'driver', label: 'Conducteur' },
+  { name: 'depot', label: 'Dépôt' },
+];
 
 interface Vehicle {
   id: string; code: string | null; brand: string | null; model: string | null; plate: string | null;
@@ -24,6 +38,7 @@ export default function FlottePage() {
   const soon = Date.now() + 30 * 86400000;
   const ctx = useContextMenu<Vehicle>();
   const [mode, setMode] = useViewMode('flotte');
+  const [creating, setCreating] = useState(false);
 
   async function setStatus(id: string, status: string) {
     await api(`/api/vehicles/${id}`, { method: 'PATCH', body: { status } });
@@ -60,10 +75,27 @@ export default function FlottePage() {
   return (
     <>
       {ctx.menu && <ContextMenu x={ctx.menu.x} y={ctx.menu.y} items={rowMenu(ctx.menu.row)} onClose={ctx.close} />}
+      {creating && (
+        <FormModal
+          title="Nouveau véhicule"
+          fields={NEW_VEHICLE_FIELDS}
+          initial={{ status: 'active' }}
+          onClose={() => setCreating(false)}
+          onSubmit={async (v) => {
+            const { vehicle } = await api<{ vehicle: { id: string } }>('/api/vehicles', { method: 'POST', body: v });
+            router.push(`/app/flotte/${vehicle.id}`);
+          }}
+        />
+      )}
       <PageHead
         title="Flotte"
         sub={data ? `${data.items.filter((v) => v.status === 'active').length} véhicules actifs · clic droit sur une ligne pour les actions rapides` : undefined}
-        action={<Link href="/app/flotte/pv" className="btn">PV / amendes →</Link>}
+        action={
+          <div className="row">
+            <button className="btn primary" onClick={() => setCreating(true)}>+ Nouveau véhicule</button>
+            <Link href="/app/flotte/pv" className="btn">PV / amendes →</Link>
+          </div>
+        }
       />
       <div className="row" style={{ marginBottom: '1rem', justifyContent: 'flex-end' }}>
         <ViewToggle mode={mode} onChange={setMode} />

@@ -306,6 +306,7 @@ export type VehicleCostInput = z.infer<typeof vehicleCostInput>;
 
 /** Fiche véhicule — infos générales + statut. Le coût de revient se modifie dans la même fiche. */
 export const vehicleInput = z.object({
+  code: z.string().trim().nullish(),
   brand: z.string().trim().nullish(),
   model: z.string().trim().nullish(),
   plate: z.string().trim().nullish(),

@@ -329,13 +329,26 @@ vehiclesRouter.get(
   }),
 );
 
+vehiclesRouter.post(
+  '/',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const d = vehicleInput.parse(req.body);
+    if (d.code && (await prisma.vehicle.findUnique({ where: { code: d.code } }))) {
+      throw new HttpError(409, `Le code "${d.code}" est déjà utilisé par un autre véhicule.`);
+    }
+    const vehicle = await prisma.vehicle.create({ data: { ...d, status: d.status ?? 'active', source: 'manual' } });
+    res.status(201).json({ vehicle: await withCost(vehicle.id) });
+  }),
+);
+
 vehiclesRouter.patch(
   '/:id',
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
     const d = vehicleInput.partial().parse(req.body);
     const keys = [
-      'brand', 'model', 'plate', 'type', 'seats', 'fuel', 'vin', 'km', 'firstRegistration', 'nextInspection',
+      'code', 'brand', 'model', 'plate', 'type', 'seats', 'fuel', 'vin', 'km', 'firstRegistration', 'nextInspection',
       'circulationTax', 'biv', 'driver', 'equipment', 'depot', 'status', 'note',
       'fuelConsoL100', 'fuelPricePerL', 'costPerKmExtra', 'parkingMonthly', 'otherMonthly',
     ] as const;

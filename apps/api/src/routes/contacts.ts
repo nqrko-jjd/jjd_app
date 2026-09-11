@@ -190,6 +190,33 @@ contactsRouter.patch(
   }),
 );
 
+/** Supprime un contact — refusé (409) s'il est encore lié à un chantier, un immeuble, une
+ *  opportunité, un devis/facture ou un achat/vente, pour ne jamais faire disparaître silencieusement
+ *  des données commerciales/comptables. Un compte portail lié est supprimé avec le contact
+ *  (accès, pas donnée métier). */
+contactsRouter.delete(
+  '/:id',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const id = req.params.id as string;
+    const [worksites, buildings, opportunities, documents, ledgerEntries, buildingContacts] = await Promise.all([
+      prisma.worksite.count({ where: { clientId: id } }),
+      prisma.building.count({ where: { clientId: id } }),
+      prisma.crmOpportunity.count({ where: { contactId: id } }),
+      prisma.document.count({ where: { contactId: id } }),
+      prisma.ledgerEntry.count({ where: { contactId: id } }),
+      prisma.buildingContact.count({ where: { contactId: id } }),
+    ]);
+    const refs = worksites + buildings + opportunities + documents + ledgerEntries + buildingContacts;
+    if (refs > 0) {
+      throw new HttpError(409, `Ce contact est encore lié à des données (${refs} référence${refs > 1 ? 's' : ''} : chantiers, immeubles, devis/factures, achats…) — impossible de le supprimer.`);
+    }
+    await prisma.user.deleteMany({ where: { contactId: id } });
+    await prisma.contact.delete({ where: { id } });
+    res.status(204).end();
+  }),
+);
+
 /* ------------------------------------------------------ Personnes de contact */
 
 contactsRouter.post(

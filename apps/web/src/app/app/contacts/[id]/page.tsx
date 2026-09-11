@@ -1,6 +1,7 @@
 'use client';
 import { use, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
 import { api, apiBlobUrl } from '@/lib/api';
 import { PageHead, StatusBadge, Money, formatDateBE } from '@/lib/ui';
@@ -45,6 +46,7 @@ const PERSON_FIELDS: FieldDef[] = [
 
 export default function ContactDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const router = useRouter();
   const { data, loading, reload } = useApi<Detail>(`/api/contacts/${id}`);
   const { data: pick } = useApi<{ buildings: { id: string; name: string }[]; syndics: { id: string; name: string }[] }>('/api/meta/pickers');
   const [editing, setEditing] = useState(false);
@@ -94,6 +96,15 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
     await api(`/api/contacts/${id}/persons/${pid}`, { method: 'DELETE' });
     reload();
   }
+  async function removeContact() {
+    if (!confirm(`Supprimer définitivement « ${c.name} » ? Cette action est irréversible.`)) return;
+    try {
+      await api(`/api/contacts/${id}`, { method: 'DELETE' });
+      router.push('/app/contacts');
+    } catch (e) {
+      alert((e as Error).message);
+    }
+  }
 
   return (
     <>
@@ -130,6 +141,7 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
         action={
           <div className="row">
             <button className="btn" onClick={() => setEditing(true)}>Modifier</button>
+            <button className="btn" onClick={removeContact}>Supprimer</button>
             <Link href="/app/contacts" className="btn">← Contacts</Link>
           </div>
         }

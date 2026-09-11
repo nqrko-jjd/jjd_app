@@ -40,6 +40,9 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
   }, [data]);
 
   const locked = !!doc?.lockedAt || (!!doc?.number && doc?.source !== 'manual');
+  // Documents importés de TrustUp (sans détail de lignes d'origine) : juste une info
+  // affichée désormais, ça ne bloque plus l'édition (phase de test — même logique que
+  // les documents émis par l'app, voir `locked`).
   const imported = !!doc?.source && doc.source !== 'manual';
   const totals = useMemo(() => computeDocTotals(lines), [lines]);
 
@@ -126,15 +129,16 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
     <>
       <PageHead
         title={`${DOC_KIND_LABEL[doc.kind]} ${doc.number ?? doc.draftRef ?? ''}`}
-        sub={locked ? `Émis le ${doc.issuedOn?.slice(0, 10)}${imported ? ' — lecture seule' : ''}` : 'Brouillon modifiable'}
+        sub={locked ? `Émis le ${doc.issuedOn?.slice(0, 10)}` : 'Brouillon modifiable'}
         action={<Link href="/app/documents" className="btn">← Liste</Link>}
       />
 
       {msg && <div className="card card-pad" style={{ marginBottom: '1rem', borderLeft: '3px solid var(--primary)' }}>{msg}</div>}
       {imported && (
         <div className="card card-pad muted" style={{ marginBottom: '1rem', fontSize: '0.85rem', borderLeft: '3px solid var(--warn)' }}>
-          Document importé de TrustUp — en lecture seule (le détail des lignes n’a pas été repris). Le PDF d’origine reste dans TrustUp.
-          Vous pouvez le dupliquer pour repartir d’une base.
+          Document importé de TrustUp (le détail des lignes n’a pas été repris à l’import — la liste ci-dessous est
+          donc vide au départ). Le PDF d’origine reste dans TrustUp. Modifiable comme les autres pendant la phase de
+          test.
         </div>
       )}
       {locked && !imported && (
@@ -167,7 +171,6 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
             <select
               className="select"
               value={doc.contact?.id ?? ''}
-              disabled={imported}
               onChange={(e) => {
                 const c = clientOpts.find((x) => x.id === e.target.value);
                 patch({ contact: c ? { id: c.id, name: c.name, vat: null, address: null, postalCode: null, city: null, email: null } : null });
@@ -236,8 +239,8 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
             {lines.map((l, i) => (
               <tr key={i}>
                 <td style={{ padding: '0.3rem', whiteSpace: 'nowrap' }}>
-                  <button className="btn ghost" style={btnMini} disabled={imported} onClick={() => moveLine(i, -1)}>↑</button>
-                  <button className="btn ghost" style={btnMini} disabled={imported} onClick={() => moveLine(i, 1)}>↓</button>
+                  <button className="btn ghost" style={btnMini} onClick={() => moveLine(i, -1)}>↑</button>
+                  <button className="btn ghost" style={btnMini} onClick={() => moveLine(i, 1)}>↓</button>
                 </td>
                 <td>
                   <input
@@ -245,7 +248,6 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
                     style={l.kind === 'section' ? { fontWeight: 700 } : undefined}
                     placeholder={l.kind === 'section' ? 'Titre de section' : l.kind === 'text' ? 'Texte libre' : 'Désignation'}
                     value={l.label}
-                    disabled={imported}
                     onChange={(e) => setLine(i, { label: e.target.value })}
                   />
                   {l.kind === 'item' && (
@@ -254,19 +256,18 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
                       style={{ marginTop: 4, fontSize: '0.8rem' }}
                       placeholder="Détail (optionnel)"
                       value={l.description ?? ''}
-                      disabled={imported}
                       onChange={(e) => setLine(i, { description: e.target.value })}
                     />
                   )}
                 </td>
                 {l.kind === 'item' ? (
                   <>
-                    <td><input className="input" type="number" style={{ textAlign: 'right' }} value={l.qty} disabled={imported} onChange={(e) => setLine(i, { qty: Number(e.target.value) })} /></td>
-                    <td><input className="input" value={l.unit ?? ''} disabled={imported} onChange={(e) => setLine(i, { unit: e.target.value })} /></td>
-                    <td><input className="input" type="number" style={{ textAlign: 'right' }} value={l.unitPriceHt} disabled={imported} onChange={(e) => setLine(i, { unitPriceHt: Number(e.target.value) })} /></td>
-                    <td><input className="input" type="number" style={{ textAlign: 'right' }} value={l.discountPct} disabled={imported} onChange={(e) => setLine(i, { discountPct: Number(e.target.value) })} /></td>
+                    <td><input className="input" type="number" style={{ textAlign: 'right' }} value={l.qty} onChange={(e) => setLine(i, { qty: Number(e.target.value) })} /></td>
+                    <td><input className="input" value={l.unit ?? ''} onChange={(e) => setLine(i, { unit: e.target.value })} /></td>
+                    <td><input className="input" type="number" style={{ textAlign: 'right' }} value={l.unitPriceHt} onChange={(e) => setLine(i, { unitPriceHt: Number(e.target.value) })} /></td>
+                    <td><input className="input" type="number" style={{ textAlign: 'right' }} value={l.discountPct} onChange={(e) => setLine(i, { discountPct: Number(e.target.value) })} /></td>
                     <td>
-                      <select className="select" value={l.vatRate} disabled={imported} onChange={(e) => setLine(i, { vatRate: Number(e.target.value) })}>
+                      <select className="select" value={l.vatRate} onChange={(e) => setLine(i, { vatRate: Number(e.target.value) })}>
                         {VAT_RATES.map((r) => <option key={r} value={r}>{Math.round(r * 100)}%</option>)}
                       </select>
                     </td>
@@ -278,7 +279,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
                   <td colSpan={6}></td>
                 )}
                 <td style={{ textAlign: 'right' }}>
-                  <button className="btn ghost" style={btnMini} disabled={imported} onClick={() => removeLine(i)}>✕</button>
+                  <button className="btn ghost" style={btnMini} onClick={() => removeLine(i)}>✕</button>
                 </td>
               </tr>
             ))}
@@ -286,8 +287,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
         </table>
       </div>
 
-      {!imported && (
-        <div style={{ marginBottom: '1rem' }}>
+      <div style={{ marginBottom: '1rem' }}>
           <div className="row" style={{ gap: '0.4rem' }}>
             <button className="btn" onClick={() => addLine('item')}>+ Ligne</button>
             <button className="btn" onClick={() => addLine('section')}>+ Section</button>
@@ -318,8 +318,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
               ))}
             </div>
           )}
-        </div>
-      )}
+      </div>
 
       {/* Totaux */}
       <div className="card card-pad" style={{ marginBottom: '1rem', maxWidth: 360, marginLeft: 'auto' }}>
@@ -336,7 +335,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
       <div className="card card-pad">
         <div className="section-title">Actions</div>
         <div className="row" style={{ gap: '0.5rem' }}>
-          {!imported && <button className="btn primary" disabled={busy === 'save'} onClick={save}>Enregistrer</button>}
+          <button className="btn primary" disabled={busy === 'save'} onClick={save}>Enregistrer</button>
           {!locked && (
             <button className="btn" disabled={!!busy} onClick={() => act('/issue', {}, 'Émettre : un numéro définitif sera attribué et les lignes verrouillées. Continuer ?')}>
               Émettre {isQuote ? 'le devis' : 'la facture'}

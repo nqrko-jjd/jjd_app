@@ -8,7 +8,7 @@ import { PageHead, Money, formatDateBE } from '@/lib/ui';
 import { DocStatusBadge, DOC_KIND_LABEL } from '@/lib/doc-ui';
 import { ContextMenu, useContextMenu, openActions, type MenuItem } from '@/components/ContextMenu';
 import { PaginationBar } from '@/components/PaginationBar';
-import { useSort, SortTh } from '@/lib/sort';
+import { useSort, useColumnFilter, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
 import { DOC_STATUS_LABEL } from '@jjd/shared';
 
@@ -105,16 +105,18 @@ function DocumentsInner() {
         : []),
     ];
   }
-  const sort = useSort<Row>(data?.items ?? [], {
-    number: (d) => d.number ?? d.draftRef,
-    title: (d) => d.title,
-    contact: (d) => d.contact?.name,
-    worksite: (d) => d.worksite?.ref,
-    issuedOn: (d) => (d.issuedOn ? new Date(d.issuedOn) : null),
-    dueOn: (d) => (d.dueOn ? new Date(d.dueOn) : null),
-    status: (d) => DOC_STATUS_LABEL[d.status] ?? d.status,
-    totalTtc: (d) => d.totalTtc,
-  });
+  const docAccessors = {
+    number: (d: Row) => d.number ?? d.draftRef,
+    title: (d: Row) => d.title,
+    contact: (d: Row) => d.contact?.name,
+    worksite: (d: Row) => d.worksite?.ref,
+    issuedOn: (d: Row) => (d.issuedOn ? new Date(d.issuedOn) : null),
+    dueOn: (d: Row) => (d.dueOn ? new Date(d.dueOn) : null),
+    status: (d: Row) => DOC_STATUS_LABEL[d.status] ?? d.status,
+    totalTtc: (d: Row) => d.totalTtc,
+  };
+  const colFilter = useColumnFilter<Row>(data?.items ?? [], docAccessors);
+  const sort = useSort<Row>(colFilter.rows, docAccessors);
 
   async function create(kind: string) {
     setBusy(true);
@@ -251,14 +253,14 @@ function DocumentsInner() {
                     aria-label="Tout sélectionner"
                   />
                 </th>
-                <SortTh k="number" sort={sort}>N°</SortTh>
-                <SortTh k="title" sort={sort}>Objet</SortTh>
-                <SortTh k="contact" sort={sort}>Client</SortTh>
-                <SortTh k="worksite" sort={sort}>Chantier</SortTh>
-                <SortTh k="issuedOn" sort={sort}>Émis</SortTh>
-                <SortTh k="dueOn" sort={sort}>Échéance</SortTh>
-                <SortTh k="status" sort={sort}>Statut</SortTh>
-                <SortTh k="totalTtc" sort={sort} align="right">TTC</SortTh>
+                <SortTh k="number" sort={sort} filter={colFilter}>N°</SortTh>
+                <SortTh k="title" sort={sort} filter={colFilter}>Objet</SortTh>
+                <SortTh k="contact" sort={sort} filter={colFilter}>Client</SortTh>
+                <SortTh k="worksite" sort={sort} filter={colFilter}>Chantier</SortTh>
+                <SortTh k="issuedOn" sort={sort} filter={colFilter}>Émis</SortTh>
+                <SortTh k="dueOn" sort={sort} filter={colFilter}>Échéance</SortTh>
+                <SortTh k="status" sort={sort} filter={colFilter}>Statut</SortTh>
+                <SortTh k="totalTtc" sort={sort} align="right" filter={colFilter}>TTC</SortTh>
               </tr>
             </thead>
             <tbody>

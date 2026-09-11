@@ -326,6 +326,14 @@ p { margin: 0; }
 .tbl th.sortable[aria-sort="descending"] { color: var(--primary); }
 .tbl th.sortable[aria-sort="ascending"] .sort-ind,
 .tbl th.sortable[aria-sort="descending"] .sort-ind { opacity: 1; color: var(--primary); }
+.tbl th .col-filter {
+  display: block; width: 100%; margin-top: 0.35rem; padding: 0.2rem 0.4rem;
+  font-size: 0.72rem; font-weight: 400; text-transform: none; letter-spacing: normal;
+  color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 5px;
+  cursor: text;
+}
+.tbl th .col-filter::placeholder { color: var(--ink-3); }
+.tbl th .col-filter:focus { outline: none; border-color: var(--primary); }
 .tbl td { padding: 0.65rem 0.9rem; border-bottom: 1px solid var(--line); vertical-align: top; }
 .tbl tr:last-child td { border-bottom: none; }
 .tbl tbody tr { transition: background 0.1s; }

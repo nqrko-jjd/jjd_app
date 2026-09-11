@@ -8,7 +8,7 @@ import { PageHead, StatusBadge, PriorityBadge, EntityBadge, Money, formatDateBE 
 import { FormModal, type FieldDef } from '@/components/FormModal';
 import { ContextMenu, useContextMenu, openActions, type MenuItem } from '@/components/ContextMenu';
 import { PaginationBar } from '@/components/PaginationBar';
-import { useSort, SortTh } from '@/lib/sort';
+import { useSort, useColumnFilter, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
 import { WORKSITE_STATUS_LABEL, WORKSITE_STATUSES, WORKSITE_PRIORITIES, WORKSITE_PRIORITY_LABEL, ENTITIES, ENTITY_LABEL } from '@jjd/shared';
 
@@ -47,16 +47,18 @@ function ChantiersInner() {
   params.set('page', String(page));
   params.set('pageSize', String(pageSize));
   const { data, loading, reload } = useApi<{ items: WS[]; page: number; pageSize: number; totalPages: number; totalCount: number }>(`/api/worksites?${params}`);
-  const sort = useSort<WS>(data?.items ?? [], {
-    ref: (w) => w.ref,
-    title: (w) => w.title,
-    client: (w) => w.client?.name,
-    manager: (w) => w.manager?.displayName ?? w.manager?.firstName,
-    status: (w) => WORKSITE_STATUS_LABEL[w.status as keyof typeof WORKSITE_STATUS_LABEL] ?? w.status,
-    entity: (w) => ENTITY_LABEL[w.entity as keyof typeof ENTITY_LABEL] ?? w.entity,
-    quotedHt: (w) => w.quotedHt,
-    endedOn: (w) => (w.endedOn ? new Date(w.endedOn) : null),
-  });
+  const wsAccessors = {
+    ref: (w: WS) => w.ref,
+    title: (w: WS) => w.title,
+    client: (w: WS) => w.client?.name,
+    manager: (w: WS) => w.manager?.displayName ?? w.manager?.firstName,
+    status: (w: WS) => WORKSITE_STATUS_LABEL[w.status as keyof typeof WORKSITE_STATUS_LABEL] ?? w.status,
+    entity: (w: WS) => ENTITY_LABEL[w.entity as keyof typeof ENTITY_LABEL] ?? w.entity,
+    quotedHt: (w: WS) => w.quotedHt,
+    endedOn: (w: WS) => (w.endedOn ? new Date(w.endedOn) : null),
+  };
+  const colFilter = useColumnFilter<WS>(data?.items ?? [], wsAccessors);
+  const sort = useSort<WS>(colFilter.rows, wsAccessors);
   const { data: refs } = useApi<{
     clients: { id: string; name: string }[];
     buildings: { id: string; name: string; syndicId: string | null }[];
@@ -151,14 +153,14 @@ function ChantiersInner() {
           <table className="tbl">
             <thead>
               <tr>
-                <SortTh k="ref" sort={sort}>Réf</SortTh>
-                <SortTh k="title" sort={sort}>Chantier</SortTh>
-                <SortTh k="client" sort={sort}>Client</SortTh>
-                <SortTh k="manager" sort={sort}>Chef</SortTh>
-                <SortTh k="status" sort={sort}>Statut</SortTh>
-                <SortTh k="entity" sort={sort}>Entité</SortTh>
-                <SortTh k="quotedHt" sort={sort} align="right">Devisé</SortTh>
-                <SortTh k="endedOn" sort={sort}>Fin</SortTh>
+                <SortTh k="ref" sort={sort} filter={colFilter}>Réf</SortTh>
+                <SortTh k="title" sort={sort} filter={colFilter}>Chantier</SortTh>
+                <SortTh k="client" sort={sort} filter={colFilter}>Client</SortTh>
+                <SortTh k="manager" sort={sort} filter={colFilter}>Chef</SortTh>
+                <SortTh k="status" sort={sort} filter={colFilter}>Statut</SortTh>
+                <SortTh k="entity" sort={sort} filter={colFilter}>Entité</SortTh>
+                <SortTh k="quotedHt" sort={sort} align="right" filter={colFilter}>Devisé</SortTh>
+                <SortTh k="endedOn" sort={sort} filter={colFilter}>Fin</SortTh>
               </tr>
             </thead>
             <tbody>

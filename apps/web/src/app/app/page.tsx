@@ -6,7 +6,7 @@ import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { PageHead, Money, formatDateBE } from '@/lib/ui';
-import { useSort, SortTh } from '@/lib/sort';
+import { useSort, useColumnFilter, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
 import { LEGAL_DOC_LABEL, WORKSITE_STATUS_LABEL } from '@jjd/shared';
 
@@ -158,13 +158,15 @@ type InProgressRow = Dashboard['inProgress'][number];
 
 function InProgressTable({ rows }: { rows: InProgressRow[] }) {
   const router = useRouter();
-  const sort = useSort<InProgressRow>(rows, {
-    ref: (w) => w.ref,
-    title: (w) => w.title,
-    client: (w) => w.client,
-    manager: (w) => w.manager,
-    status: (w) => WORKSITE_STATUS_LABEL[w.status as keyof typeof WORKSITE_STATUS_LABEL] ?? w.status,
-  });
+  const wsAccessors = {
+    ref: (w: InProgressRow) => w.ref,
+    title: (w: InProgressRow) => w.title,
+    client: (w: InProgressRow) => w.client,
+    manager: (w: InProgressRow) => w.manager,
+    status: (w: InProgressRow) => WORKSITE_STATUS_LABEL[w.status as keyof typeof WORKSITE_STATUS_LABEL] ?? w.status,
+  };
+  const colFilter = useColumnFilter<InProgressRow>(rows, wsAccessors);
+  const sort = useSort<InProgressRow>(colFilter.rows, wsAccessors);
   return (
     <>
       <div className="section-title">Chantiers en cours <span className="hint">{rows.length} — clique pour ouvrir le dossier</span></div>
@@ -172,11 +174,11 @@ function InProgressTable({ rows }: { rows: InProgressRow[] }) {
         <table className="tbl">
           <thead>
             <tr>
-              <SortTh k="ref" sort={sort}>Réf</SortTh>
-              <SortTh k="title" sort={sort}>Chantier</SortTh>
-              <SortTh k="client" sort={sort}>Client</SortTh>
-              <SortTh k="manager" sort={sort}>Chef</SortTh>
-              <SortTh k="status" sort={sort}>Statut</SortTh>
+              <SortTh k="ref" sort={sort} filter={colFilter}>Réf</SortTh>
+              <SortTh k="title" sort={sort} filter={colFilter}>Chantier</SortTh>
+              <SortTh k="client" sort={sort} filter={colFilter}>Client</SortTh>
+              <SortTh k="manager" sort={sort} filter={colFilter}>Chef</SortTh>
+              <SortTh k="status" sort={sort} filter={colFilter}>Statut</SortTh>
             </tr>
           </thead>
           <tbody>

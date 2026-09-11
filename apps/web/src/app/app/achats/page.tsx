@@ -4,7 +4,7 @@ import { useSearchParams } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
 import { api, apiUpload, apiBlobUrl } from '@/lib/api';
 import { PageHead, Money, formatDateBE } from '@/lib/ui';
-import { useSort, SortTh } from '@/lib/sort';
+import { useSort, useColumnFilter, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
 import { ContextMenu, useContextMenu, type MenuItem } from '@/components/ContextMenu';
 import { PaginationBar } from '@/components/PaginationBar';
@@ -103,16 +103,18 @@ function AchatsInner() {
   }>(`/api/finance/expenses?${params}`);
   const { data: meta } = useApi<Meta>('/api/finance/expenses/meta');
 
-  const sort = useSort<Expense>(data?.items ?? [], {
-    date: (e) => (e.date ? new Date(e.date) : null),
-    supplier: (e) => e.supplier,
-    docNumber: (e) => e.docNumber,
-    worksite: (e) => e.worksite?.ref,
-    category: (e) => e.categoryLabel,
-    ht: (e) => e.ht,
-    ttc: (e) => e.ttc ?? e.ht,
-    status: (e) => (e.paid ? 1 : 0),
-  });
+  const expenseAccessors = {
+    date: (e: Expense) => (e.date ? new Date(e.date) : null),
+    supplier: (e: Expense) => e.supplier,
+    docNumber: (e: Expense) => e.docNumber,
+    worksite: (e: Expense) => e.worksite?.ref,
+    category: (e: Expense) => e.categoryLabel,
+    ht: (e: Expense) => e.ht,
+    ttc: (e: Expense) => e.ttc ?? e.ht,
+    status: (e: Expense) => (e.paid ? 1 : 0),
+  };
+  const colFilter = useColumnFilter<Expense>(data?.items ?? [], expenseAccessors);
+  const sort = useSort<Expense>(colFilter.rows, expenseAccessors);
 
   const total = data?.totals.ttc ?? 0;
   const unpaidTotal = data?.totals.unpaidTtc ?? 0;
@@ -263,13 +265,13 @@ function AchatsInner() {
                     aria-label="Tout sélectionner (pièces jointes disponibles)"
                   />
                 </th>
-                <SortTh k="date" sort={sort}>Date</SortTh>
-                <SortTh k="supplier" sort={sort}>Fournisseur</SortTh>
-                <SortTh k="docNumber" sort={sort}>N°</SortTh>
-                <SortTh k="worksite" sort={sort}>Chantier</SortTh>
-                <SortTh k="category" sort={sort}>Catégorie</SortTh>
-                <SortTh k="ht" sort={sort} align="right">HT</SortTh>
-                <SortTh k="ttc" sort={sort} align="right">TTC</SortTh>
+                <SortTh k="date" sort={sort} filter={colFilter}>Date</SortTh>
+                <SortTh k="supplier" sort={sort} filter={colFilter}>Fournisseur</SortTh>
+                <SortTh k="docNumber" sort={sort} filter={colFilter}>N°</SortTh>
+                <SortTh k="worksite" sort={sort} filter={colFilter}>Chantier</SortTh>
+                <SortTh k="category" sort={sort} filter={colFilter}>Catégorie</SortTh>
+                <SortTh k="ht" sort={sort} align="right" filter={colFilter}>HT</SortTh>
+                <SortTh k="ttc" sort={sort} align="right" filter={colFilter}>TTC</SortTh>
                 <SortTh k="status" sort={sort}>Statut</SortTh>
                 <th />
               </tr>

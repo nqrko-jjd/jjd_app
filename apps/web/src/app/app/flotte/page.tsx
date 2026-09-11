@@ -7,7 +7,7 @@ import { api } from '@/lib/api';
 import { ContextMenu, useContextMenu, openActions, type MenuItem } from '@/components/ContextMenu';
 import { ViewToggle, useViewMode } from '@/components/ViewToggle';
 import { FormModal, type FieldDef } from '@/components/FormModal';
-import { useSort, SortTh } from '@/lib/sort';
+import { useSort, useColumnFilter, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
 import { PageHead, Money, formatDateBE, Thumb, VehicleStatusBadge } from '@/lib/ui';
 import { VEHICLE_STATUSES, VEHICLE_STATUS_LABEL } from '@jjd/shared';
@@ -61,16 +61,18 @@ export default function FlottePage() {
     ];
   }
 
-  const sort = useSort<Vehicle>(data?.items ?? [], {
-    vehicle: (v) => [v.brand, v.model].filter(Boolean).join(' ') || v.code,
-    plate: (v) => v.plate,
-    type: (v) => v.type,
-    status: (v) => VEHICLE_STATUS_LABEL[v.status as keyof typeof VEHICLE_STATUS_LABEL] ?? v.status,
-    driver: (v) => v.driver,
-    insurance: (v) => v.insurances[0]?.provider,
-    monthlyPayment: (v) => v.monthlyPayment,
-    nextInspection: (v) => (v.nextInspection ? new Date(v.nextInspection) : null),
-  });
+  const vehicleAccessors = {
+    vehicle: (v: Vehicle) => [v.brand, v.model].filter(Boolean).join(' ') || v.code,
+    plate: (v: Vehicle) => v.plate,
+    type: (v: Vehicle) => v.type,
+    status: (v: Vehicle) => VEHICLE_STATUS_LABEL[v.status as keyof typeof VEHICLE_STATUS_LABEL] ?? v.status,
+    driver: (v: Vehicle) => v.driver,
+    insurance: (v: Vehicle) => v.insurances[0]?.provider,
+    monthlyPayment: (v: Vehicle) => v.monthlyPayment,
+    nextInspection: (v: Vehicle) => (v.nextInspection ? new Date(v.nextInspection) : null),
+  };
+  const colFilter = useColumnFilter<Vehicle>(data?.items ?? [], vehicleAccessors);
+  const sort = useSort<Vehicle>(colFilter.rows, vehicleAccessors);
 
   return (
     <>
@@ -134,14 +136,14 @@ export default function FlottePage() {
           <table className="tbl">
             <thead>
               <tr>
-                <SortTh k="vehicle" sort={sort}>Véhicule</SortTh>
-                <SortTh k="plate" sort={sort}>Plaque</SortTh>
-                <SortTh k="type" sort={sort}>Type</SortTh>
-                <SortTh k="status" sort={sort}>Statut</SortTh>
-                <SortTh k="driver" sort={sort}>Conducteur</SortTh>
-                <SortTh k="insurance" sort={sort}>Assurance</SortTh>
-                <SortTh k="monthlyPayment" sort={sort} align="right">Mensualité</SortTh>
-                <SortTh k="nextInspection" sort={sort}>Contrôle technique</SortTh>
+                <SortTh k="vehicle" sort={sort} filter={colFilter}>Véhicule</SortTh>
+                <SortTh k="plate" sort={sort} filter={colFilter}>Plaque</SortTh>
+                <SortTh k="type" sort={sort} filter={colFilter}>Type</SortTh>
+                <SortTh k="status" sort={sort} filter={colFilter}>Statut</SortTh>
+                <SortTh k="driver" sort={sort} filter={colFilter}>Conducteur</SortTh>
+                <SortTh k="insurance" sort={sort} filter={colFilter}>Assurance</SortTh>
+                <SortTh k="monthlyPayment" sort={sort} align="right" filter={colFilter}>Mensualité</SortTh>
+                <SortTh k="nextInspection" sort={sort} filter={colFilter}>Contrôle technique</SortTh>
               </tr>
             </thead>
             <tbody>

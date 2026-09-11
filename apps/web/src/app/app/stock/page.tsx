@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { PageHead, Money, formatDateBE } from '@/lib/ui';
-import { useSort, SortTh } from '@/lib/sort';
+import { useSort, useColumnFilter, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
 import { ComboBox } from '@/components/ComboBox';
 import { FormModal, type FieldDef } from '@/components/FormModal';
@@ -38,12 +38,14 @@ export default function StockPage() {
   const { data, loading, reload } = ctxItems;
   const { data: meta } = useApi<Meta>('/api/stock/meta');
 
-  const sort = useSort<StockItem>(data?.items ?? [], {
-    name: (i) => i.name,
-    category: (i) => i.category,
-    qty: (i) => i.qty,
-    value: (i) => i.value,
-  });
+  const stockAccessors = {
+    name: (i: StockItem) => i.name,
+    category: (i: StockItem) => i.category,
+    qty: (i: StockItem) => i.qty,
+    value: (i: StockItem) => i.value,
+  };
+  const colFilter = useColumnFilter<StockItem>(data?.items ?? [], stockAccessors);
+  const sort = useSort<StockItem>(colFilter.rows, stockAccessors);
 
   const totalValue = (data?.items ?? []).reduce((s, i) => s + i.value, 0);
   const lowCount = (data?.items ?? []).filter((i) => i.low).length;
@@ -124,10 +126,10 @@ export default function StockPage() {
           <table className="tbl">
             <thead>
               <tr>
-                <SortTh k="name" sort={sort}>Article</SortTh>
-                <SortTh k="category" sort={sort}>Catégorie</SortTh>
-                <SortTh k="qty" sort={sort} align="right">Quantité</SortTh>
-                <SortTh k="value" sort={sort} align="right">Valeur</SortTh>
+                <SortTh k="name" sort={sort} filter={colFilter}>Article</SortTh>
+                <SortTh k="category" sort={sort} filter={colFilter}>Catégorie</SortTh>
+                <SortTh k="qty" sort={sort} align="right" filter={colFilter}>Quantité</SortTh>
+                <SortTh k="value" sort={sort} align="right" filter={colFilter}>Valeur</SortTh>
                 <th></th>
               </tr>
             </thead>

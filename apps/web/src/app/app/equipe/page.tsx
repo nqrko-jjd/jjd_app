@@ -8,7 +8,7 @@ import { PageHead, Money, Avatar } from '@/lib/ui';
 import { FormModal } from '@/components/FormModal';
 import { ContextMenu, useContextMenu, openActions, type MenuItem } from '@/components/ContextMenu';
 import { ViewToggle, useViewMode } from '@/components/ViewToggle';
-import { useSort, SortTh } from '@/lib/sort';
+import { useSort, useColumnFilter, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
 import { PERSON_FIELDS } from '@/lib/forms';
 import { downloadCsv, pickAndImportCsv, summarizeImport } from '@/lib/csvIO';
@@ -79,16 +79,18 @@ function EquipeInner() {
       (msg) => alert(`Échec de l’import : ${msg}`),
     );
   }
-  const sort = useSort<Person>(data?.items ?? [], {
+  const personAccessors = {
     name,
-    role: (p) => PERSON_ROLE_LABEL[p.role as keyof typeof PERSON_ROLE_LABEL] ?? p.role,
-    contract: (p) => WORKER_CONTRACT_LABEL[p.contractType as keyof typeof WORKER_CONTRACT_LABEL] ?? p.contractType,
-    rate: (p) => p.hourlyRate,
-    languages: (p) => (p.languages ?? []).join(' '),
-    specialties: (p) => (p.specialties ?? []).join(' '),
-    docs: (p) => p._count.legalDocs,
-    entries: (p) => p._count.timeEntries,
-  });
+    role: (p: Person) => PERSON_ROLE_LABEL[p.role as keyof typeof PERSON_ROLE_LABEL] ?? p.role,
+    contract: (p: Person) => WORKER_CONTRACT_LABEL[p.contractType as keyof typeof WORKER_CONTRACT_LABEL] ?? p.contractType,
+    rate: (p: Person) => p.hourlyRate,
+    languages: (p: Person) => (p.languages ?? []).join(' '),
+    specialties: (p: Person) => (p.specialties ?? []).join(' '),
+    docs: (p: Person) => p._count.legalDocs,
+    entries: (p: Person) => p._count.timeEntries,
+  };
+  const colFilter = useColumnFilter<Person>(data?.items ?? [], personAccessors);
+  const sort = useSort<Person>(colFilter.rows, personAccessors);
 
   return (
     <>
@@ -147,14 +149,14 @@ function EquipeInner() {
           <table className="tbl">
             <thead>
               <tr>
-                <SortTh k="name" sort={sort}>Nom</SortTh>
-                <SortTh k="role" sort={sort}>Rôle</SortTh>
-                <SortTh k="specialties" sort={sort}>Spécialités</SortTh>
-                <SortTh k="contract" sort={sort}>Contrat</SortTh>
-                <SortTh k="rate" sort={sort} align="right">Taux</SortTh>
-                <SortTh k="languages" sort={sort}>Langues</SortTh>
-                <SortTh k="docs" sort={sort}>Docs</SortTh>
-                <SortTh k="entries" sort={sort}>Pointages</SortTh>
+                <SortTh k="name" sort={sort} filter={colFilter}>Nom</SortTh>
+                <SortTh k="role" sort={sort} filter={colFilter}>Rôle</SortTh>
+                <SortTh k="specialties" sort={sort} filter={colFilter}>Spécialités</SortTh>
+                <SortTh k="contract" sort={sort} filter={colFilter}>Contrat</SortTh>
+                <SortTh k="rate" sort={sort} align="right" filter={colFilter}>Taux</SortTh>
+                <SortTh k="languages" sort={sort} filter={colFilter}>Langues</SortTh>
+                <SortTh k="docs" sort={sort} filter={colFilter}>Docs</SortTh>
+                <SortTh k="entries" sort={sort} filter={colFilter}>Pointages</SortTh>
               </tr>
             </thead>
             <tbody>

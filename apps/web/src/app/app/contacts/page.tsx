@@ -9,7 +9,7 @@ import { FormModal } from '@/components/FormModal';
 import { ContextMenu, useContextMenu, openActions, type MenuItem } from '@/components/ContextMenu';
 import { PaginationBar } from '@/components/PaginationBar';
 import { ViewToggle, useViewMode } from '@/components/ViewToggle';
-import { useSort, SortTh } from '@/lib/sort';
+import { useSort, useColumnFilter, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
 import { CONTACT_FIELDS } from '@/lib/forms';
 import { CLIENT_KIND_LABEL, formatVat } from '@jjd/shared';
@@ -76,14 +76,16 @@ function ContactsInner() {
     ];
   }
 
-  const sort = useSort<Contact>(data?.items ?? [], {
-    name: (c) => c.name,
-    kind: (c) => (c.kind ? CLIENT_KIND_LABEL[c.kind as keyof typeof CLIENT_KIND_LABEL] : c.type === 'supplier' ? 'Fournisseur' : ''),
-    city: (c) => c.city,
-    vat: (c) => c.vat,
-    contact: (c) => c.email ?? c.phone,
-    worksites: (c) => c._count.worksites,
-  });
+  const contactAccessors = {
+    name: (c: Contact) => c.name,
+    kind: (c: Contact) => (c.kind ? CLIENT_KIND_LABEL[c.kind as keyof typeof CLIENT_KIND_LABEL] : c.type === 'supplier' ? 'Fournisseur' : ''),
+    city: (c: Contact) => c.city,
+    vat: (c: Contact) => c.vat,
+    contact: (c: Contact) => c.email ?? c.phone,
+    worksites: (c: Contact) => c._count.worksites,
+  };
+  const colFilter = useColumnFilter<Contact>(data?.items ?? [], contactAccessors);
+  const sort = useSort<Contact>(colFilter.rows, contactAccessors);
 
   return (
     <>
@@ -135,12 +137,12 @@ function ContactsInner() {
           <table className="tbl">
             <thead>
               <tr>
-                <SortTh k="name" sort={sort}>Nom</SortTh>
-                <SortTh k="kind" sort={sort}>Type</SortTh>
-                <SortTh k="city" sort={sort}>Ville</SortTh>
-                <SortTh k="vat" sort={sort}>TVA</SortTh>
-                <SortTh k="contact" sort={sort}>Contact</SortTh>
-                <SortTh k="worksites" sort={sort} align="right">Chantiers</SortTh>
+                <SortTh k="name" sort={sort} filter={colFilter}>Nom</SortTh>
+                <SortTh k="kind" sort={sort} filter={colFilter}>Type</SortTh>
+                <SortTh k="city" sort={sort} filter={colFilter}>Ville</SortTh>
+                <SortTh k="vat" sort={sort} filter={colFilter}>TVA</SortTh>
+                <SortTh k="contact" sort={sort} filter={colFilter}>Contact</SortTh>
+                <SortTh k="worksites" sort={sort} align="right" filter={colFilter}>Chantiers</SortTh>
               </tr>
             </thead>
             <tbody>

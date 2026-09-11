@@ -13,6 +13,7 @@
     "seed": "tsx prisma/seed.ts",
     "import": "tsx scripts/import-xlsx.ts",
     "import:trustup": "tsx scripts/import-trustup.ts",
+    "import:credit-notes": "tsx scripts/import-credit-notes.ts",
     "dev": "tsx watch src/index.ts",
     "build": "npm run db:provider && prisma generate && tsc -p tsconfig.json",
     "start": "node dist/src/index.js",

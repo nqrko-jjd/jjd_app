@@ -1,33 +1,33 @@
 /**
- * Import des DEVIS et FACTURES depuis l'export TrustUp.
- * (Le reste — contacts, chantiers, pointage… — vient de l'Excel, plus complet.)
+ * Import additif des notes de crédit (et factures isolées) depuis un export TrustUp
+ * déposé après coup — contrairement à `import-trustup.ts`, ce script n'efface RIEN :
+ * il ne fait qu'ajouter/mettre à jour (upsert sur kind+number), donc sûr à relancer
+ * sans perdre les devis/factures déjà importés.
  *
- *   npm run import:trustup -- data-import/invoice-.../xxxx.csv data-import/quote-.../yyyy.csv
- *   npm run import:trustup                 (détecte tout seul les CSV dans data-import/)
+ *   npm run import:credit-notes -- data-import/credit-note-.../xxxx.csv
+ *   npm run import:credit-notes             (détecte tout seul les CSV dans un dossier
+ *                                             data-import/credit-note-* / *credit-note*)
  *
- * Rattachement au chantier : via la colonne « N° Facture » de l'onglet
- * Data Projets du fichier de rentabilité (numéro F/D -> réf R-).
- * Le client (ACP, syndic, n° TVA) est créé / enrichi au passage.
- * Idempotent : remplace les Document de source "trustup".
+ * Le type de chaque ligne est déduit du préfixe de son numéro (NC… -> note de crédit,
+ * F… -> facture, D… -> devis), pas du nom de fichier — un même export peut mélanger
+ * les deux (cf. l'export du 2026-09-11, une NC et une facture dans le même CSV).
  */
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readdirSync, existsSync, mkdirSync, copyFileSync } from 'node:fs';
-import bcrypt from 'bcryptjs';
 import { PrismaClient } from '@prisma/client';
 import { parseLooseDate, parseAmount, normalizeName } from '@jjd/shared';
 import { readTable, pick, type TableRow } from '../src/lib/table-io.js';
 import { readXlsx } from '../src/lib/xlsx-read.js';
 
+// Helpers dupliqués (pas importés) depuis import-trustup.ts : ce script doit rester
+// totalement indépendant de ce fichier, qui exécute un `main()` destructeur (deleteMany)
+// au chargement du module — l'importer, même juste pour ses fonctions, le déclencherait.
 const prisma = new PrismaClient();
 const here = path.dirname(fileURLToPath(import.meta.url));
 const dataDir = path.resolve(here, '../../../data-import');
 const pdfOutDir = path.resolve(here, '../uploads/documents');
 
-/**
- * Copie le PDF TrustUp d'origine (dossier « documents/ » à côté du CSV) vers
- * uploads/documents/<numéro>.pdf. Renvoie le nom de fichier, ou null.
- */
 function copyOriginalPdf(csvFile: string, number: string): string | null {
   const src = path.join(path.dirname(csvFile), 'documents', `${number}.pdf`);
   if (!existsSync(src)) return null;
@@ -41,31 +41,6 @@ function copyOriginalPdf(csvFile: string, number: string): string | null {
   }
 }
 
-function findCsvs(): string[] {
-  const args = process.argv.slice(2);
-  if (args.length) return args.map((f) => path.resolve(f));
-  const out: string[] = [];
-  const walk = (dir: string, depth: number) => {
-    if (depth > 2 || !existsSync(dir)) return;
-    for (const e of readdirSync(dir, { withFileTypes: true })) {
-      const p = path.join(dir, e.name);
-      if (e.isDirectory()) walk(p, depth + 1);
-      else if (e.name.endsWith('.csv') && /invoice|quote|facture|devis/i.test(p)) out.push(p);
-    }
-  };
-  walk(dataDir, 0);
-  return out;
-}
-
-const INVOICE_STATUS: Record<string, string> = {
-  draft: 'draft', sent: 'sent', paid: 'paid', overdue: 'overdue', cancelled: 'credited',
-  partially_paid: 'partial',
-};
-const QUOTE_STATUS: Record<string, string> = {
-  draft: 'draft', sent: 'sent', accepted: 'accepted', rejected: 'declined', declined: 'declined',
-  expired: 'expired',
-};
-
 /** number (F2024090040 / D2024...) -> réf chantier (R-xxx), depuis le fichier Excel. */
 function buildDocToWorksite(): Map<string, string> {
   const map = new Map<string, string>();
@@ -73,7 +48,6 @@ function buildDocToWorksite(): Map<string, string> {
   if (!existsSync(xlsx)) return map;
   const sheets = readXlsx(xlsx);
 
-  // Data Projets : col A = réf, col J = numéros de facture (multi-lignes)
   const dp = sheets.find((s) => s.name.trim().toLowerCase() === 'data projets');
   for (const row of dp?.rows ?? []) {
     if (row.r < 26) continue;
@@ -84,7 +58,6 @@ function buildDocToWorksite(): Map<string, string> {
     }
   }
 
-  // Relance Devis : col C = n° devis, col D = réf chantier
   const rd = sheets.find((s) => s.name.trim().toLowerCase() === 'relance devis');
   for (const row of rd?.rows ?? []) {
     if (row.r < 2) continue;
@@ -132,7 +105,6 @@ async function contactFor(name: string | null, vat: string | null): Promise<stri
     if (Object.keys(patch).length) await prisma.contact.update({ where: { id: c.id }, data: patch });
   }
 
-  // un ACP avec syndic -> aussi un immeuble rattaché à ce syndic
   if (kind === 'acp' && syndicId) {
     const bn = normalizeName(base || name);
     const existing = await prisma.building.findFirst({ where: { normalizedName: bn } });
@@ -147,24 +119,47 @@ async function contactFor(name: string | null, vat: string | null): Promise<stri
   return c.id;
 }
 
+function findCsvs(): string[] {
+  const args = process.argv.slice(2);
+  if (args.length) return args.map((f) => path.resolve(f));
+  const out: string[] = [];
+  const walk = (dir: string, depth: number) => {
+    if (depth > 2 || !existsSync(dir)) return;
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) walk(p, depth + 1);
+      else if (e.name.endsWith('.csv') && /credit.?note/i.test(dir)) out.push(p);
+    }
+  };
+  walk(dataDir, 0);
+  return out;
+}
+
+const STATUS_MAP: Record<string, string> = {
+  draft: 'draft', sent: 'sent', paid: 'paid', overdue: 'overdue', cancelled: 'credited',
+  partially_paid: 'partial', accepted: 'accepted', rejected: 'declined', declined: 'declined', expired: 'expired',
+};
+
+function kindFor(number: string): 'credit_note' | 'invoice' | 'quote' {
+  if (/^NC/i.test(number)) return 'credit_note';
+  if (/^F/i.test(number)) return 'invoice';
+  return 'quote';
+}
+
 async function importFile(file: string, docToWs: Map<string, string>, wsByRef: Map<string, string>) {
   const rows = readTable(file);
-  if (!rows.length) return { kind: '?', ok: 0, noWs: 0 };
-  const isInvoice = /invoice|facture/i.test(file) || rows.some((r) => /^F/i.test(pick(r, 'number') ?? ''));
-  const kind = isInvoice ? 'invoice' : 'quote';
-  const statusMap = isInvoice ? INVOICE_STATUS : QUOTE_STATUS;
-
-  let ok = 0;
+  const counts: Record<string, number> = {};
   let noWs = 0;
+
   for (const r of rows as TableRow[]) {
     const number = pick(r, 'number');
     if (!number) continue;
+    const kind = kindFor(number);
     const key = number.replace(/\s/g, '').toUpperCase();
 
     let wsId = docToWs.get(key) ? wsByRef.get(docToWs.get(key)!) ?? null : null;
     if (!wsId) {
-      // parfois le n° apparaît dans le titre
-      const m = (pick(r, 'title') ?? '').match(/\bR-\s?\d+/i);
+      const m = (pick(r, 'title') ?? '').match(/\bR-\s?\d+/i) ?? (pick(r, 'description') ?? '').match(/\bR-\s?\d+/i);
       if (m) wsId = wsByRef.get(m[0].replace(/\s/g, '').toUpperCase()) ?? null;
     }
     if (!wsId) noWs++;
@@ -174,7 +169,6 @@ async function importFile(file: string, docToWs: Map<string, string>, wsByRef: M
     const tax = parseAmount(pick(r, 'total_tax')) ?? 0;
     const ttc = parseAmount(pick(r, 'total')) ?? ht + tax;
     const paid = parseAmount(pick(r, 'total_paid')) ?? 0;
-    const peppol = pick(r, 'peppol_status');
     const originalPdf = copyOriginalPdf(file, number);
 
     await prisma.document.upsert({
@@ -184,7 +178,7 @@ async function importFile(file: string, docToWs: Map<string, string>, wsByRef: M
         originalPdf,
         number,
         direction: 'sale',
-        status: statusMap[(pick(r, 'status') ?? '').toLowerCase()] ?? 'draft',
+        status: STATUS_MAP[(pick(r, 'status') ?? '').toLowerCase()] ?? 'draft',
         worksiteId: wsId,
         contactId,
         title: pick(r, 'title'),
@@ -196,12 +190,11 @@ async function importFile(file: string, docToWs: Map<string, string>, wsByRef: M
         totalTtc: ttc,
         paidAmount: paid,
         paidOn: paid > 0 ? parseLooseDate(pick(r, 'due_at')) : null,
-        note: peppol && peppol !== '' ? `Peppol: ${peppol}` : null,
         trustupId: pick(r, 'id'),
         source: 'trustup',
       },
       update: {
-        status: statusMap[(pick(r, 'status') ?? '').toLowerCase()] ?? 'draft',
+        status: STATUS_MAP[(pick(r, 'status') ?? '').toLowerCase()] ?? 'draft',
         worksiteId: wsId,
         contactId,
         totalHt: ht,
@@ -211,9 +204,8 @@ async function importFile(file: string, docToWs: Map<string, string>, wsByRef: M
         originalPdf: originalPdf ?? undefined,
       },
     });
-    ok++;
+    counts[kind] = (counts[kind] ?? 0) + 1;
 
-    // rattache le chantier à son client / immeuble via le document
     if (wsId && contactId) {
       const ws = await prisma.worksite.findUnique({ where: { id: wsId }, select: { clientId: true, buildingId: true } });
       const patch: Record<string, unknown> = {};
@@ -225,89 +217,31 @@ async function importFile(file: string, docToWs: Map<string, string>, wsByRef: M
       if (Object.keys(patch).length) await prisma.worksite.update({ where: { id: wsId }, data: patch });
     }
   }
-  return { kind, ok, noWs };
+  return { counts, noWs, total: rows.length };
 }
 
 async function main() {
   const files = findCsvs();
   if (!files.length) {
-    console.error('Aucun CSV trouvé. Dépose les exports TrustUp dans data-import/ ou passe les chemins en argument.');
+    console.error('Aucun CSV trouvé. Dépose l\'export dans un dossier data-import/credit-note-… ou passe le chemin en argument.');
     process.exit(1);
   }
-  console.log('Import TrustUp —', files.map((f) => path.basename(f)).join(', '));
+  console.log('Import notes de crédit —', files.map((f) => path.basename(f)).join(', '));
 
-  await prisma.document.deleteMany({ where: { source: 'trustup' } });
-  await prisma.building.deleteMany({ where: { source: 'trustup', worksites: { none: {} } } });
   const docToWs = buildDocToWorksite();
-  console.log(`  ${docToWs.size} numéros de document reliés à un chantier (via l'Excel)`);
   const worksites = await prisma.worksite.findMany({ select: { id: true, ref: true } });
   const wsByRef = new Map(worksites.map((w) => [w.ref.toUpperCase(), w.id]));
 
   for (const f of files) {
     const r = await importFile(f, docToWs, wsByRef);
-    console.log(`  ${path.basename(f)} : ${r.ok} ${r.kind === 'invoice' ? 'factures' : 'devis'} (${r.noWs} sans chantier)`);
+    const byKind = Object.entries(r.counts).map(([k, n]) => `${n} ${k}`).join(', ');
+    console.log(`  ${path.basename(f)} : ${byKind} sur ${r.total} lignes (${r.noWs} sans chantier retrouvé)`);
   }
-
-  const byKind = await prisma.document.groupBy({ by: ['kind'], where: { source: 'trustup' }, _count: true });
-  const linked = await prisma.document.count({ where: { source: 'trustup', worksiteId: { not: null } } });
-  const total = await prisma.document.count({ where: { source: 'trustup' } });
-  console.log(`\nTotal : ${byKind.map((c) => `${c._count} ${c.kind}`).join(', ')} — ${linked}/${total} rattachés à un chantier`);
-
-  await seedPortalDemo();
 }
 
-/** Comptes de démo du portail client — créés après tous les imports. */
-async function seedPortalDemo() {
-  await prisma.user.deleteMany({ where: { email: { endsWith: '@portail.demo' } } });
-  const pw = await bcrypt.hash('demo', 10);
-
-  const syndic = await prisma.syndic.findFirst({ orderBy: { buildings: { _count: 'desc' } } });
-  if (syndic) {
-    await prisma.user.create({ data: { email: 'syndic@portail.demo', passwordHash: pw, role: 'client', syndicId: syndic.id } });
-    // rend le tableau de bord démo vivant : quelques interventions "en cours" + priorités
-    const ws = await prisma.worksite.findMany({
-      where: { building: { syndicId: syndic.id } },
-      orderBy: { updatedAt: 'desc' },
-      take: 6,
-      select: { id: true },
-    });
-    const demo: { status?: string; priority?: string }[] = [
-      { status: 'in_progress', priority: 'urgent' },
-      { status: 'scheduled', priority: 'high' },
-      { status: 'in_progress' },
-      { status: 'to_invoice' },
-      { status: 'done' },
-      { status: 'scheduled' },
-    ];
-    for (let i = 0; i < ws.length; i++) {
-      await prisma.worksite.update({ where: { id: ws[i]!.id }, data: demo[i] ?? {} });
-    }
-    // accès résident limité (voit suivi/photos/messages d'un seul immeuble)
-    const oneBuilding = await prisma.building.findFirst({ where: { syndicId: syndic.id }, orderBy: { worksites: { _count: 'desc' } } });
-    if (oneBuilding) {
-      await prisma.user.create({
-        data: { email: 'resident@portail.demo', passwordHash: pw, role: 'client', buildingId: oneBuilding.id, portalAccess: 'limited' },
-      });
-    }
-  }
-  const client = await prisma.contact.findFirst({
-    where: { type: { in: ['client', 'both'] }, kind: 'individual', worksites: { some: { documents: { some: {} } } } },
-    orderBy: { worksites: { _count: 'desc' } },
-  });
-  if (client) {
-    await prisma.user.create({ data: { email: 'client@portail.demo', passwordHash: pw, role: 'client', contactId: client.id } });
-  }
-  console.log(`Portail démo : syndic@portail.demo (${syndic?.name ?? '—'}) · client@portail.demo (${client?.name ?? '—'})`);
-}
-
-// Ne s'exécute que si le script est lancé directement (`tsx scripts/import-trustup.ts`) —
-// pas quand un autre script importe ses helpers (contactFor, buildDocToWorksite…), sans quoi
-// ce `main()` destructeur (deleteMany des Document source:"trustup") tournerait par effet de bord.
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  main()
-    .catch((e) => {
-      console.error(e);
-      process.exit(1);
-    })
-    .finally(() => prisma.$disconnect());
-}
+main()
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
+  })
+  .finally(() => prisma.$disconnect());

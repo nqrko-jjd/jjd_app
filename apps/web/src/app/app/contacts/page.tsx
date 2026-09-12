@@ -11,7 +11,7 @@ import { PaginationBar } from '@/components/PaginationBar';
 import { ViewToggle, useViewMode } from '@/components/ViewToggle';
 import { useSort, useColumnFilter, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
-import { CONTACT_FIELDS } from '@/lib/forms';
+import { CONTACT_FIELDS, composeContactPayload } from '@/lib/forms';
 import { CLIENT_KIND_LABEL, formatVat } from '@jjd/shared';
 
 const CONTACT_TYPE_LABEL: Record<string, string> = { client: 'Client', supplier: 'Fournisseur', both: 'Client + Fournisseur' };
@@ -96,7 +96,7 @@ function ContactsInner() {
           fields={CONTACT_FIELDS(type !== 'all' ? type : 'client', pick?.syndics ?? [])}
           initial={{ type: type !== 'all' ? type : 'client' }}
           onClose={() => setCreating(false)}
-          onSubmit={async (v) => { await api('/api/contacts', { method: 'POST', body: v }); reload(); }}
+          onSubmit={async (v) => { await api('/api/contacts', { method: 'POST', body: composeContactPayload(v) }); reload(); }}
         />
       )}
       <PageHead

@@ -98,6 +98,48 @@ test('immeuble : un lot peut être lié à une vraie fiche contact (pas juste du
   }
 });
 
+test('immeuble : poser le client facturé pose aussi le lien inverse sur le contact', async () => {
+  await prisma.contact.deleteMany({ where: { name: 'Promoteur — test' } });
+  const client = await prisma.contact.create({
+    data: { name: 'Promoteur — test', normalizedName: 'promoteur test', type: 'client', kind: 'developer', source: 'test' },
+  });
+  try {
+    const created = await fetch(`${base}/api/buildings`, {
+      method: 'POST', headers: auth(), body: JSON.stringify({ name: 'Projet — test', clientId: client.id }),
+    });
+    assert.equal(created.status, 201);
+    const building = (await created.json()).building;
+
+    const c = await prisma.contact.findUnique({ where: { id: client.id } });
+    assert.equal(c?.buildingId, building.id, 'le contact doit maintenant montrer ce bâtiment/projet comme lié');
+
+    await prisma.building.deleteMany({ where: { id: building.id } });
+  } finally {
+    await prisma.contact.deleteMany({ where: { id: client.id } });
+  }
+});
+
+test('immeuble : ne remplace pas un lien contact déjà existant vers un autre bâtiment', async () => {
+  const otherBuilding = await prisma.building.create({ data: { name: 'Autre — test', normalizedName: 'autre test', source: 'test' } });
+  const client = await prisma.contact.create({
+    data: { name: 'Déjà lié — test', normalizedName: 'deja lie test', type: 'client', buildingId: otherBuilding.id, source: 'test' },
+  });
+  try {
+    const created = await fetch(`${base}/api/buildings`, {
+      method: 'POST', headers: auth(), body: JSON.stringify({ name: 'Nouveau — test', clientId: client.id }),
+    });
+    const building = (await created.json()).building;
+
+    const c = await prisma.contact.findUnique({ where: { id: client.id } });
+    assert.equal(c?.buildingId, otherBuilding.id, 'le lien existant ne doit pas être écrasé');
+
+    await prisma.building.deleteMany({ where: { id: { in: [building.id] } } });
+  } finally {
+    await prisma.contact.deleteMany({ where: { id: client.id } });
+    await prisma.building.deleteMany({ where: { id: otherBuilding.id } });
+  }
+});
+
 test('immeuble : champs ACP éditables', async () => {
   const r = await fetch(`${base}/api/buildings/${buildingId}`, {
     method: 'PATCH',

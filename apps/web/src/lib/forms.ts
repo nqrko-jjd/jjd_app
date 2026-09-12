@@ -20,15 +20,35 @@ async function vatLookupAction(value: string): Promise<Record<string, unknown>> 
   return patch;
 }
 
+/** « Jean-Pierre Dupont » -> { firstName: 'Jean-Pierre', lastName: 'Dupont' } — heuristique
+ *  simple (1er mot = prénom) pour préremplir Prénom/Nom en édition à partir du nom existant ;
+ *  imprécis pour les noms composés, mais les deux champs restent librement modifiables. */
+export function splitContactName(name: string): { firstName: string; lastName: string } {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length <= 1) return { firstName: name.trim(), lastName: '' };
+  return { firstName: parts[0]!, lastName: parts.slice(1).join(' ') };
+}
+
+/** Pour un contact « Particulier », le formulaire affiche Prénom/Nom séparément (cf.
+ *  CONTACT_FIELDS) mais l'API attend un seul champ `name` — recompose avant l'appel. Sans
+ *  effet si le formulaire affichait déjà un seul champ Nom (autres catégories). */
+export function composeContactPayload(v: Record<string, unknown>): Record<string, unknown> {
+  if (!v.firstName && !v.lastName) return v;
+  const { firstName, lastName, ...rest } = v;
+  return { ...rest, name: [firstName, lastName].filter(Boolean).join(' ').trim() };
+}
+
 /**
  * Champs différents selon le type de contact (`forType`, le type au moment où le formulaire
  * s'ouvre — un client a une « Catégorie », un fournisseur non ; les personnes de contact et
  * l'historique d'achats d'un fournisseur sont gérés à part sur sa fiche, pas dans ce formulaire)
- * ET selon la « Catégorie » (`kind`) choisie en direct dans le formulaire : Immeuble/Projet lié
- * n'apparaît que pour une ACP ou un Promoteur (les deux regroupent plusieurs interventions sous
- * un même bâtiment/projet — cf. `type:'building'`, qui permet de créer l'immeuble à la volée
- * s'il n'existe pas encore) ; le Syndic (adresse de facturation « c/o ») reste propre aux ACP,
- * un promoteur n'en a pas. Le n° de TVA disparaît pour un particulier.
+ * ET selon la « Catégorie » (`kind`) choisie en direct dans le formulaire : un particulier a
+ * Prénom/Nom séparés (cf. `composeContactPayload`, à appeler dans `onSubmit`) plutôt qu'un
+ * seul champ Nom ; Immeuble/Projet lié n'apparaît que pour une ACP ou un Promoteur (les deux
+ * regroupent plusieurs interventions sous un même bâtiment/projet — cf. `type:'building'`, qui
+ * permet de créer l'immeuble à la volée s'il n'existe pas encore) ; le Syndic (adresse de
+ * facturation « c/o ») reste propre aux ACP, un promoteur n'en a pas. Le n° de TVA disparaît
+ * pour un particulier.
  */
 export const CONTACT_FIELDS = (
   forType?: string,
@@ -37,13 +57,17 @@ export const CONTACT_FIELDS = (
   const isSupplierOnly = forType === 'supplier';
   return (values: Record<string, unknown>): FieldDef[] => {
     const kind = (values.kind as string) || (isSupplierOnly ? undefined : 'individual');
+    const isIndividual = !isSupplierOnly && kind === 'individual';
     const isAcp = !isSupplierOnly && kind === 'acp';
     const isDeveloper = !isSupplierOnly && kind === 'developer';
     const showVat = isSupplierOnly || kind !== 'individual';
     return [
-      { name: 'name', label: 'Nom', required: true, full: true },
       { name: 'type', label: 'Type', type: 'select', options: CONTACT_TYPES.map((t) => ({ value: t, label: t === 'client' ? 'Client' : t === 'supplier' ? 'Fournisseur' : 'Les deux' })) },
       ...(!isSupplierOnly ? [{ name: 'kind', label: 'Catégorie', type: 'select' as const, options: CLIENT_KINDS.map((k) => ({ value: k, label: CLIENT_KIND_LABEL[k] })) }] : []),
+      ...(isIndividual ? [
+        { name: 'firstName', label: 'Prénom', required: true },
+        { name: 'lastName', label: 'Nom' },
+      ] : [{ name: 'name', label: 'Nom', required: true, full: true }]),
       ...(isAcp || isDeveloper ? [
         { name: 'buildingId', label: isAcp ? 'Immeuble / ACP lié' : 'Projet lié', type: 'building' as const, full: true },
         ...(isAcp ? [{ name: 'syndicId', label: 'Syndic (adresse de facturation "c/o")', type: 'select' as const, options: syndics.map((s) => ({ value: s.id, label: s.name })) }] : []),

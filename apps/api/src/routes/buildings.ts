@@ -62,6 +62,16 @@ buildingsRouter.get(
   }),
 );
 
+/** Le client facturé d'un immeuble (Building.clientId) lui est forcément « rattaché » — pose
+ *  aussi le lien inverse (Contact.buildingId) pour que sa fiche affiche bien ce bâtiment/projet,
+ *  sans jamais écraser un lien différent déjà en place. */
+async function linkClientBack(clientId: string, buildingId: string) {
+  const contact = await prisma.contact.findUnique({ where: { id: clientId }, select: { buildingId: true } });
+  if (contact && !contact.buildingId) {
+    await prisma.contact.update({ where: { id: clientId }, data: { buildingId } });
+  }
+}
+
 buildingsRouter.post(
   '/',
   requireAuth(...OFFICE),
@@ -77,6 +87,7 @@ buildingsRouter.post(
         source: 'manual',
       },
     });
+    if (data.clientId) await linkClientBack(data.clientId, building.id);
     res.status(201).json({ building });
   }),
 );
@@ -93,6 +104,7 @@ buildingsRouter.patch(
         ...(data.name ? { normalizedName: normalizeName(data.name) } : {}),
       },
     });
+    if (data.clientId) await linkClientBack(data.clientId, building.id);
     res.json({ building });
   }),
 );

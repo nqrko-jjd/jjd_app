@@ -8,7 +8,7 @@ import { PageHead, StatusBadge, Money, formatDateBE } from '@/lib/ui';
 import { FormModal, type FieldDef } from '@/components/FormModal';
 import { CollapsibleSection } from '@/components/CollapsibleSection';
 import { useSort, SortTh } from '@/lib/sort';
-import { CONTACT_FIELDS } from '@/lib/forms';
+import { CONTACT_FIELDS, composeContactPayload, splitContactName } from '@/lib/forms';
 import { CLIENT_KIND_LABEL, formatVat } from '@jjd/shared';
 
 const PAGE = 30;
@@ -113,12 +113,12 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
           title={`Modifier ${c.name}`}
           fields={CONTACT_FIELDS(c.type, pick?.syndics ?? [])}
           initial={{
-            name: c.name, type: c.type, kind: c.kind, email: c.email, phone: c.phone,
+            name: c.name, ...(c.kind === 'individual' ? splitContactName(c.name) : {}), type: c.type, kind: c.kind, email: c.email, phone: c.phone,
             vat: c.vat, address: c.address, postalCode: c.postalCode, city: c.city, note: c.note,
             buildingId: c.building?.id ?? '', syndicId: c.syndic?.id ?? '',
           }}
           onClose={() => setEditing(false)}
-          onSubmit={async (v) => { await api(`/api/contacts/${id}`, { method: 'PATCH', body: v }); reload(); }}
+          onSubmit={async (v) => { await api(`/api/contacts/${id}`, { method: 'PATCH', body: composeContactPayload(v) }); reload(); }}
         />
       )}
       {personModal && (

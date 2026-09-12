@@ -3,7 +3,7 @@ import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { SearchCreateSelect, type PickerItem } from './SearchCreateSelect';
 import { FormModal } from './FormModal';
-import { CONTACT_FIELDS } from '@/lib/forms';
+import { CONTACT_FIELDS, composeContactPayload, splitContactName } from '@/lib/forms';
 
 /** Cherche un contact existant (`GET /api/contacts?type=...&q=...`) ou en crée un à la volée
  *  (formulaire adaptatif par catégorie déjà en place) — pour ne jamais bloquer un formulaire
@@ -74,10 +74,10 @@ function ContactQuickCreate({
     <FormModal
       title="Nouveau contact"
       fields={CONTACT_FIELDS(typeFilter, pick?.syndics ?? [])}
-      initial={{ name: initialName, type: typeFilter }}
+      initial={{ name: initialName, ...splitContactName(initialName), type: typeFilter }}
       onClose={onCancel}
       onSubmit={async (v) => {
-        const { contact } = await api<{ contact: { id: string; name: string } }>('/api/contacts', { method: 'POST', body: v });
+        const { contact } = await api<{ contact: { id: string; name: string } }>('/api/contacts', { method: 'POST', body: composeContactPayload(v) });
         onCreated({ id: contact.id, name: contact.name });
       }}
     />

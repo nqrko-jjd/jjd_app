@@ -1,11 +1,11 @@
 import { useCallback, useState } from 'react';
-import { ScrollView, Text, View, Pressable, Linking } from 'react-native';
+import { ScrollView, Text, View, Pressable, Linking, TextInput } from 'react-native';
 import { Stack, useLocalSearchParams, useFocusEffect, useRouter } from 'expo-router';
 import { apiGet, apiSend } from '@/lib/api';
 import { Card, Label, Loading, Row, Muted, dateBE } from '@/lib/ui';
 import { T } from '@/lib/theme';
 
-interface Task { id: string; title: string; status: string; assignee: { displayName: string | null; firstName: string } | null }
+interface Task { id: string; title: string; status: string; assignees: { id: string; name: string }[] }
 
 const ROLE: Record<string, string> = {
   concierge: 'Concierge', president: 'Président', council: 'Conseil', syndic_manager: 'Gestionnaire syndic',
@@ -21,7 +21,7 @@ interface Field {
   tenant: { name: string; phone: string | null; phone2: string | null; email: string | null } | null;
   today: {
     startAt: string; endAt: string; allDay: boolean; toDo: string | null; materials: string | null;
-    team: string | null; vehicle: string | null; people: { name: string; phone: string | null }[];
+    team: string | null; vehicle: string | null; people: { userId: string | null; name: string; phone: string | null }[];
     equipment: { name: string; reference: string | null }[];
     consumables: { name: string; qty: number; unit: string }[];
   } | null;
@@ -43,6 +43,9 @@ export default function FicheDuJour() {
   const router = useRouter();
   const [d, setD] = useState<Field | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [newTaskAssignees, setNewTaskAssignees] = useState<Set<string>>(new Set());
+  const [addingTask, setAddingTask] = useState(false);
   const load = useCallback(() => {
     apiGet<Field>(`/api/worksites/${id}/field`).then(setD).catch(() => {});
     apiGet<{ items: Task[] }>(`/api/worksites/${id}/tasks`).then((r) => setTasks(r.items)).catch(() => {});
@@ -56,6 +59,29 @@ export default function FicheDuJour() {
     setTasks((ts) => ts.map((x) => (x.id === t.id ? { ...x, status: next } : x)));
     await apiSend(`/api/tasks/${t.id}`, 'PATCH', { status: next });
   };
+  const toggleNewTaskAssignee = (userId: string) => {
+    setNewTaskAssignees((s) => {
+      const next = new Set(s);
+      if (next.has(userId)) next.delete(userId); else next.add(userId);
+      return next;
+    });
+  };
+  const addTask = async () => {
+    if (!newTaskTitle.trim()) return;
+    setAddingTask(true);
+    try {
+      const r = await apiSend<{ task: Task }>(`/api/worksites/${id}/tasks`, 'POST', {
+        title: newTaskTitle.trim(),
+        assigneeIds: [...newTaskAssignees],
+      });
+      if ('task' in r) setTasks((ts) => [...ts, r.task]);
+      setNewTaskTitle('');
+      setNewTaskAssignees(new Set());
+    } finally {
+      setAddingTask(false);
+    }
+  };
+  const assignableToday = (d.today?.people ?? []).filter((p): p is typeof p & { userId: string } => !!p.userId);
   const openTasks = tasks.filter((t) => t.status !== 'done');
   const doneTasks = tasks.filter((t) => t.status === 'done');
 
@@ -98,21 +124,52 @@ export default function FicheDuJour() {
         </Card>
       ) : null}
 
-      {tasks.length > 0 ? (
-        <Card>
-          <Label>Tâches ({openTasks.length} à faire)</Label>
-          {[...openTasks, ...doneTasks].map((t) => (
-            <Pressable key={t.id} onPress={() => toggleTask(t)} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 7 }}>
-              <View style={{ width: 20, height: 20, borderRadius: 5, borderWidth: 2, borderColor: t.status === 'done' ? T.ok : T.line, backgroundColor: t.status === 'done' ? T.ok : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
-                {t.status === 'done' && <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>✓</Text>}
-              </View>
-              <Text style={{ flex: 1, color: t.status === 'done' ? T.ink3 : T.ink, textDecorationLine: t.status === 'done' ? 'line-through' : 'none' }}>
-                {t.title}{t.assignee ? `  ·  ${t.assignee.displayName || t.assignee.firstName}` : ''}
-              </Text>
-            </Pressable>
-          ))}
-        </Card>
-      ) : null}
+      <Card>
+        <Label>Tâches ({openTasks.length} à faire)</Label>
+        {[...openTasks, ...doneTasks].map((t) => (
+          <Pressable key={t.id} onPress={() => toggleTask(t)} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 7 }}>
+            <View style={{ width: 20, height: 20, borderRadius: 5, borderWidth: 2, borderColor: t.status === 'done' ? T.ok : T.line, backgroundColor: t.status === 'done' ? T.ok : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
+              {t.status === 'done' && <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>✓</Text>}
+            </View>
+            <Text style={{ flex: 1, color: t.status === 'done' ? T.ink3 : T.ink, textDecorationLine: t.status === 'done' ? 'line-through' : 'none' }}>
+              {t.title}{t.assignees.length ? `  ·  ${t.assignees.map((a) => a.name).join(', ')}` : ''}
+            </Text>
+          </Pressable>
+        ))}
+
+        <View style={{ marginTop: 8, gap: 8 }}>
+          <TextInput
+            value={newTaskTitle}
+            onChangeText={setNewTaskTitle}
+            placeholder="+ Nouvelle tâche…"
+            placeholderTextColor={T.ink3}
+            style={{ borderWidth: 1, borderColor: T.line, borderRadius: 8, padding: 10, fontSize: 15, color: T.ink }}
+          />
+          {assignableToday.length > 0 ? (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+              {assignableToday.map((p) => {
+                const on = newTaskAssignees.has(p.userId);
+                return (
+                  <Pressable
+                    key={p.userId}
+                    onPress={() => toggleNewTaskAssignee(p.userId)}
+                    style={{ paddingVertical: 5, paddingHorizontal: 10, borderRadius: 999, borderWidth: 1, borderColor: on ? T.primary : T.line, backgroundColor: on ? T.primary : 'transparent' }}
+                  >
+                    <Text style={{ color: on ? '#fff' : T.ink2, fontSize: 13 }}>{p.name}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : null}
+          <Pressable
+            disabled={!newTaskTitle.trim() || addingTask}
+            onPress={addTask}
+            style={{ alignSelf: 'flex-start', backgroundColor: newTaskTitle.trim() ? T.primary : T.surface2, borderRadius: 8, paddingVertical: 8, paddingHorizontal: 14 }}
+          >
+            <Text style={{ color: newTaskTitle.trim() ? '#fff' : T.ink3, fontWeight: '700' }}>{addingTask ? 'Ajout…' : 'Ajouter'}</Text>
+          </Pressable>
+        </View>
+      </Card>
 
       {d.today && d.today.people.length > 0 ? (
         <Card>

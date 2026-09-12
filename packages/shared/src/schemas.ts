@@ -280,10 +280,11 @@ export const worksiteReportInput = z.object({
 });
 
 export const worksiteTaskInput = z.object({
+  worksiteId: z.string().nullish(), // absent = tâche générale (pas de chantier)
   title: nonEmpty,
   description: z.string().trim().nullish(),
   status: z.enum(['todo', 'doing', 'done']).default('todo'),
-  assigneeId: z.string().nullish(),
+  assigneeIds: z.array(z.string()).default([]),
   dueOn: z.coerce.date().nullish(),
 });
 export type WorksiteTaskInput = z.infer<typeof worksiteTaskInput>;

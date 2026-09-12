@@ -12,6 +12,7 @@ import { computeDocTotals, VAT_RATES } from '@jjd/shared';
 type Picker = {
   clients: { id: string; name: string }[];
   worksites: { id: string; name: string; clientId: string | null }[];
+  staff: { id: string; name: string }[];
 };
 
 const emptyLine = (): DocLine => ({ kind: 'item', label: '', qty: 1, unit: '', unitPriceHt: 0, discountPct: 0, vatRate: 0.21 });
@@ -28,6 +29,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [libQ, setLibQ] = useState('');
+  const [tasksModal, setTasksModal] = useState(false);
   const { data: lib } = useApi<{ items: { id: string; label: string; unit: string | null; unitPriceHt: number; vatRate: number }[] }>(
     libQ.length >= 2 ? `/api/price-items?q=${encodeURIComponent(libQ)}` : null,
   );
@@ -347,6 +349,9 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
           {isQuote && (
             <button className="btn" disabled={!!busy} onClick={() => act('/convert', {})}>Convertir en facture</button>
           )}
+          {isQuote && doc.worksite && (
+            <button className="btn" disabled={!!busy} onClick={() => setTasksModal(true)}>Créer des tâches depuis ce devis</button>
+          )}
           {isQuote && locked && (
             <>
               <button className="btn" disabled={!!busy} onClick={() => act('/status', { status: 'accepted' })}>Accepté</button>
@@ -387,11 +392,109 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
           </p>
         )}
       </div>
+
+      {tasksModal && (
+        <TasksFromLinesModal
+          docId={id}
+          lines={lines.filter((l) => l.kind === 'item' && l.label.trim())}
+          staff={pick?.staff ?? []}
+          onClose={() => setTasksModal(false)}
+          onDone={(count) => { setTasksModal(false); setMsg(`${count} tâche(s) créée(s) sur le chantier — visibles dans l'onglet Tâches de sa fiche.`); }}
+        />
+      )}
     </>
   );
 }
 
 const btnMini: React.CSSProperties = { padding: '0.15rem 0.4rem', fontSize: '0.75rem', minWidth: 0 };
+
+function TasksFromLinesModal({
+  docId,
+  lines,
+  staff,
+  onClose,
+  onDone,
+}: {
+  docId: string;
+  lines: DocLine[];
+  staff: { id: string; name: string }[];
+  onClose: () => void;
+  onDone: (count: number) => void;
+}) {
+  const linesWithId = lines.filter((l): l is DocLine & { id: string } => !!l.id);
+  const [checked, setChecked] = useState<Set<string>>(new Set(linesWithId.map((l) => l.id)));
+  const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  function toggle(id: string) {
+    setChecked((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  async function submit() {
+    if (!checked.size) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      const r = await api<{ tasks: unknown[] }>(`/api/documents/${docId}/tasks-from-lines`, {
+        method: 'POST',
+        body: { lineIds: [...checked], assigneeIds },
+      });
+      onDone(r.tasks.length);
+    } catch (e) {
+      setErr((e as Error).message);
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="modal-scrim" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <h2>Créer des tâches depuis ce devis</h2>
+          <button type="button" className="btn ghost" onClick={onClose} aria-label="Fermer">✕</button>
+        </div>
+        <div className="modal-body">
+          {linesWithId.length === 0 ? (
+            <p className="muted">Ce devis n’a pas encore de ligne enregistrée — enregistre-le d’abord.</p>
+          ) : (
+            <div className="grid" style={{ gap: '0.3rem' }}>
+              {linesWithId.map((l) => (
+                <label key={l.id} className="row" style={{ gap: '0.5rem', alignItems: 'center' }}>
+                  <input type="checkbox" checked={checked.has(l.id)} onChange={() => toggle(l.id)} />
+                  <span>{l.label}</span>
+                </label>
+              ))}
+            </div>
+          )}
+          <div className="field" style={{ marginTop: '0.9rem' }}>
+            <label>Assigner à (optionnel)</label>
+            <select
+              className="select"
+              multiple
+              style={{ height: 90 }}
+              value={assigneeIds}
+              onChange={(e) => setAssigneeIds(Array.from(e.target.selectedOptions).map((o) => o.value))}
+            >
+              {staff.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
+        </div>
+        {err && <div className="badge crit" style={{ margin: '0 1.15rem', padding: '0.4rem 0.7rem' }}>{err}</div>}
+        <div className="modal-foot">
+          <button type="button" className="btn" onClick={onClose}>Annuler</button>
+          <button type="button" className="btn primary" disabled={busy || !checked.size} onClick={submit}>
+            {busy ? 'Création…' : `Créer ${checked.size} tâche${checked.size > 1 ? 's' : ''}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function Row2({ label, value, strong, muted }: { label: string; value: string; strong?: boolean; muted?: boolean }) {
   return (

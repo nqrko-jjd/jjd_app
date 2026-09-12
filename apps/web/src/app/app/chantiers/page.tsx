@@ -10,6 +10,7 @@ import { ContextMenu, useContextMenu, openActions, type MenuItem } from '@/compo
 import { PaginationBar } from '@/components/PaginationBar';
 import { useSort, useColumnFilter, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
+import { downloadCsv, pickAndImportCsv, summarizeImport } from '@/lib/csvIO';
 import { WORKSITE_STATUS_LABEL, WORKSITE_STATUSES, WORKSITE_PRIORITIES, WORKSITE_PRIORITY_LABEL, ENTITIES, ENTITY_LABEL } from '@jjd/shared';
 
 interface WS {
@@ -36,9 +37,10 @@ function ChantiersInner() {
   const [creating, setCreating] = useState(sp.get('new') === '1');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(100);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const ctx = useContextMenu<WS>();
 
-  useEffect(() => { setPage(1); }, [q, status, kind]);
+  useEffect(() => { setPage(1); setSelected(new Set()); }, [q, status, kind]);
 
   const params = new URLSearchParams();
   if (q) params.set('q', q);
@@ -68,6 +70,36 @@ function ChantiersInner() {
   async function patchWs(id: string, body: Record<string, unknown>) {
     await api(`/api/worksites/${id}`, { method: 'PATCH', body });
     reload();
+  }
+
+  function toggleSelected(id: string) {
+    setSelected((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+  function toggleAll() {
+    setSelected((s) => (s.size === sort.rows.length ? new Set() : new Set(sort.rows.map((w) => w.id))));
+  }
+  async function bulkSetStatus(newStatus: string) {
+    const ids = [...selected];
+    if (!ids.length) return;
+    await Promise.all(ids.map((id) => api(`/api/worksites/${id}`, { method: 'PATCH', body: { status: newStatus } })));
+    setSelected(new Set());
+    reload();
+  }
+
+  function exportCsv() {
+    const p = new URLSearchParams(params);
+    downloadCsv(`/api/worksites/export.csv?${p}`, `chantiers-${new Date().toISOString().slice(0, 10)}.csv`);
+  }
+  function importCsv() {
+    pickAndImportCsv(
+      '/api/worksites/import',
+      (r) => { alert(summarizeImport(r)); reload(); },
+      (msg) => alert(`Échec de l’import : ${msg}`),
+    );
   }
 
   function rowMenu(w: WS): MenuItem[] {
@@ -129,7 +161,26 @@ function ChantiersInner() {
       <PageHead
         title={kind === 'project' ? 'Chantiers' : 'Charges'}
         sub={data ? `${data.totalCount} ${kind === 'project' ? 'chantiers' : 'postes de charges'} · page ${data.page}/${data.totalPages} · clic droit pour les actions rapides` : undefined}
-        action={kind === 'project' ? <button className="btn primary" onClick={() => setCreating(true)}>+ Nouveau chantier</button> : undefined}
+        action={
+          kind === 'project' ? (
+            <div className="row">
+              {selected.size > 0 && (
+                <select
+                  className="select"
+                  value=""
+                  onChange={(e) => { if (e.target.value) bulkSetStatus(e.target.value); }}
+                  title={`Changer le statut des ${selected.size} chantier(s) sélectionné(s)`}
+                >
+                  <option value="">Statut → {selected.size} sélectionné{selected.size > 1 ? 's' : ''}…</option>
+                  {WORKSITE_STATUSES.map((s) => <option key={s} value={s}>{WORKSITE_STATUS_LABEL[s]}</option>)}
+                </select>
+              )}
+              <button className="btn" onClick={exportCsv} title="Exporter la liste filtrée en CSV (éditable dans Excel)">⇩ Exporter CSV</button>
+              <button className="btn" onClick={importCsv} title="Réimporter un CSV/Excel corrigé (met à jour par id, ne crée pas de nouveau chantier)">⇧ Importer</button>
+              <button className="btn primary" onClick={() => setCreating(true)}>+ Nouveau chantier</button>
+            </div>
+          ) : undefined
+        }
       />
       <div className="seg" style={{ marginBottom: '1rem' }}>
         <button className={kind === 'project' ? 'on' : ''} onClick={() => setKind('project')}>Chantiers</button>
@@ -153,12 +204,20 @@ function ChantiersInner() {
           <table className="tbl">
             <thead>
               <tr>
+                <th style={{ width: 28 }}>
+                  <input
+                    type="checkbox"
+                    checked={sort.rows.length > 0 && selected.size === sort.rows.length}
+                    onChange={toggleAll}
+                    aria-label="Tout sélectionner"
+                  />
+                </th>
                 <SortTh k="ref" sort={sort} filter={colFilter}>Réf</SortTh>
                 <SortTh k="title" sort={sort} filter={colFilter}>Chantier</SortTh>
                 <SortTh k="client" sort={sort} filter={colFilter}>Client</SortTh>
                 <SortTh k="manager" sort={sort} filter={colFilter}>Chef</SortTh>
-                <SortTh k="status" sort={sort} filter={colFilter}>Statut</SortTh>
-                <SortTh k="entity" sort={sort} filter={colFilter}>Entité</SortTh>
+                <SortTh k="status" sort={sort} filter={colFilter} filterOptions={WORKSITE_STATUSES.map((s) => WORKSITE_STATUS_LABEL[s])}>Statut</SortTh>
+                <SortTh k="entity" sort={sort} filter={colFilter} filterOptions={ENTITIES.map((e) => ENTITY_LABEL[e])}>Entité</SortTh>
                 <SortTh k="quotedHt" sort={sort} align="right" filter={colFilter}>Devisé</SortTh>
                 <SortTh k="endedOn" sort={sort} filter={colFilter}>Fin</SortTh>
               </tr>
@@ -171,6 +230,9 @@ function ChantiersInner() {
                   onClick={rowNav(`/app/chantiers/${w.id}`, (h) => router.push(h))}
                   onContextMenu={(e) => ctx.open(e, w)}
                 >
+                  <td onClick={(e) => e.stopPropagation()}>
+                    <input type="checkbox" checked={selected.has(w.id)} onChange={() => toggleSelected(w.id)} aria-label="Sélectionner" />
+                  </td>
                   <td className="mono">{w.ref}</td>
                   <td><Link href={`/app/chantiers/${w.id}`}>{w.title}</Link></td>
                   <td>{w.client?.name ?? '—'}</td>

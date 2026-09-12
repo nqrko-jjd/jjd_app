@@ -85,6 +85,7 @@ model User {
   createdLedger     LedgerEntry[]      @relation("LedgerEntryAuthor")
   reports           WorksiteReport[]   @relation("ReportAuthor")
   createdTasks      WorksiteTask[]     @relation("TaskCreatedBy")
+  taskAssignments   TaskAssignment[]
   stockMovements    StockMovement[]    @relation("StockMovementBy")
   personAdjustments PersonAdjustment[] @relation("PersonAdjustmentAuthor")
 }
@@ -963,25 +964,37 @@ model ReportPhoto {
 /// Tâche d'un chantier — checklist façon TrustUp.
 model WorksiteTask {
   id          String    @id @default(cuid())
-  worksiteId  String
-  worksite    Worksite  @relation(fields: [worksiteId], references: [id], onDelete: Cascade)
+  worksiteId  String? // absent = tâche générale (administratif, pas de chantier)
+  worksite    Worksite? @relation(fields: [worksiteId], references: [id], onDelete: Cascade)
   title       String
   description String?
   status      String    @default("todo") // todo | doing | done
-  assigneeId  String?
+  assigneeId  String? // legacy — remplacé par `assignees` (multi), retiré une fois le rattrapage fait
   assignee    Person?   @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  assignees   TaskAssignment[]
   dueOn       DateTime?
   position    Int       @default(0)
   createdById String?
   createdBy   User?     @relation("TaskCreatedBy", fields: [createdById], references: [id])
   doneAt      DateTime?
   doneByName  String?
-  source      String? // "ai-draft" = proposée par l'assistant IA, à valider
+  source      String? // "ai-draft" = proposée par l'assistant IA · "quote" = générée depuis un devis
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
   @@index([worksiteId])
   @@index([status])
+}
+
+/// Assignation multi-personnes d'une tâche — n'importe quel compte (ouvrier, chef, bureau),
+/// pas seulement l'équipe terrain (cf. Person, qui ne couvre pas les rôles bureau).
+model TaskAssignment {
+  taskId String
+  task   WorksiteTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId String
+  user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, userId])
 }
 
 // ─────────────────────────────────────────────────────────── Stock de matériaux

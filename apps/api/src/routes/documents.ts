@@ -12,6 +12,7 @@ import { docInclude, buildLineRows, cloneLineRows, refreshDocTotals, issueDocume
 import { renderDocumentPdf } from '../lib/pdf.js';
 import { extractDocumentInfo } from '../lib/document-extract.js';
 import { UPLOADS_DIR } from '../lib/media.js';
+import { taskInclude, serializeTask } from './tasks.js';
 
 export const documentsRouter = Router();
 // Dérivé de UPLOADS_DIR (respecte process.env.UPLOADS_DIR en prod) plutôt que d'un chemin
@@ -463,6 +464,40 @@ documentsRouter.post(
       include: docInclude,
     });
     res.json({ document: updated });
+  }),
+);
+
+/** Crée une tâche par ligne de devis sélectionnée — jamais automatique (cf. l'assistant IA :
+ *  tout ce qui est généré reste une proposition explicite, pas une action déclenchée seule
+ *  à l'acceptation du devis). */
+documentsRouter.post(
+  '/:id/tasks-from-lines',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const { lineIds, assigneeIds } = req.body as { lineIds: string[]; assigneeIds?: string[] };
+    const doc = await prisma.document.findUnique({ where: { id: req.params.id }, include: { lines: true } });
+    if (!doc) throw new HttpError(404, 'Document introuvable');
+    if (!doc.worksiteId) throw new HttpError(422, "Ce devis n'est pas lié à un chantier — impossible d'y créer des tâches.");
+    const lines = doc.lines.filter((l) => l.kind === 'item' && lineIds.includes(l.id));
+    if (!lines.length) throw new HttpError(422, 'Aucune ligne sélectionnée.');
+
+    const count = await prisma.worksiteTask.count({ where: { worksiteId: doc.worksiteId } });
+    const tasks = [];
+    for (let i = 0; i < lines.length; i++) {
+      const task = await prisma.worksiteTask.create({
+        data: {
+          worksiteId: doc.worksiteId,
+          title: lines[i]!.label,
+          position: count + i,
+          source: 'quote',
+          createdById: req.user!.id,
+          assignees: { create: (assigneeIds ?? []).map((userId) => ({ userId })) },
+        },
+        include: taskInclude,
+      });
+      tasks.push(serializeTask(task));
+    }
+    res.status(201).json({ tasks });
   }),
 );
 

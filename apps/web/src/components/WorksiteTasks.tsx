@@ -7,17 +7,21 @@ import { formatDateBE } from '@/lib/ui';
 interface Task {
   id: string; title: string; description: string | null; status: string;
   dueOn: string | null; doneAt: string | null; doneByName: string | null; source: string | null;
-  assignee: { id: string; displayName: string | null; firstName: string } | null;
+  assignees: { id: string; name: string }[];
 }
 
 const NEXT: Record<string, string> = { todo: 'doing', doing: 'done', done: 'todo' };
 const DOT: Record<string, string> = { todo: 'var(--ink-3)', doing: 'var(--warn)', done: 'var(--ok)' };
 
+function selectedOptions(e: React.ChangeEvent<HTMLSelectElement>): string[] {
+  return Array.from(e.target.selectedOptions).map((o) => o.value);
+}
+
 export function WorksiteTasks({ worksiteId }: { worksiteId: string }) {
   const { data, reload } = useApi<{ items: Task[] }>(`/api/worksites/${worksiteId}/tasks`);
-  const { data: pick } = useApi<{ people: { id: string; name: string }[] }>('/api/meta/pickers');
+  const { data: pick } = useApi<{ staff: { id: string; name: string }[] }>('/api/meta/pickers');
   const [title, setTitle] = useState('');
-  const [assignee, setAssignee] = useState('');
+  const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
   const [due, setDue] = useState('');
 
   const tasks = data?.items ?? [];
@@ -26,8 +30,8 @@ export function WorksiteTasks({ worksiteId }: { worksiteId: string }) {
 
   async function add() {
     if (!title.trim()) return;
-    await api(`/api/worksites/${worksiteId}/tasks`, { method: 'POST', body: { title: title.trim(), assigneeId: assignee || null, dueOn: due || null } });
-    setTitle(''); setAssignee(''); setDue('');
+    await api(`/api/worksites/${worksiteId}/tasks`, { method: 'POST', body: { title: title.trim(), assigneeIds, dueOn: due || null } });
+    setTitle(''); setAssigneeIds([]); setDue('');
     reload();
   }
   const patch = (id: string, body: Record<string, unknown>) => api(`/api/tasks/${id}`, { method: 'PATCH', body }).then(reload);
@@ -43,10 +47,11 @@ export function WorksiteTasks({ worksiteId }: { worksiteId: string }) {
         />
         <div style={{ flex: 1 }}>
           <span style={{ textDecoration: t.status === 'done' ? 'line-through' : undefined, color: t.status === 'done' ? 'var(--ink-3)' : undefined }}>{t.title}</span>
-          <div className="row" style={{ gap: '0.4rem', marginTop: 3 }}>
-            {t.assignee && <span className="badge plain">{t.assignee.displayName || t.assignee.firstName}</span>}
+          <div className="row" style={{ gap: '0.4rem', marginTop: 3, flexWrap: 'wrap' }}>
+            {t.assignees.map((a) => <span key={a.id} className="badge plain">{a.name}</span>)}
             {t.dueOn && <span className={`badge ${late ? 'crit' : 'plain'}`}>{formatDateBE(t.dueOn)}</span>}
             {t.source === 'ai-draft' && <span className="badge warn" title="Proposée par l'assistant IA — à valider">✨ Proposé par l&apos;IA</span>}
+            {t.source === 'quote' && <span className="badge plain" title="Créée depuis les lignes d'un devis">📄 Depuis un devis</span>}
             {t.status === 'done' && t.doneByName && <span className="muted" style={{ fontSize: '0.76rem' }}>fait par {t.doneByName}</span>}
           </div>
         </div>
@@ -67,9 +72,15 @@ export function WorksiteTasks({ worksiteId }: { worksiteId: string }) {
       )}
       <div className="row" style={{ gap: '0.4rem', marginTop: '0.9rem', borderTop: '1px solid var(--line)', paddingTop: '0.8rem' }}>
         <input className="input" style={{ flex: 1, minWidth: 160 }} placeholder="Nouvelle tâche…" value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} />
-        <select className="select" style={{ maxWidth: 140 }} value={assignee} onChange={(e) => setAssignee(e.target.value)}>
-          <option value="">Qui ?</option>
-          {(pick?.people ?? []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+        <select
+          className="select"
+          multiple
+          style={{ maxWidth: 160, height: 62 }}
+          value={assigneeIds}
+          onChange={(e) => setAssigneeIds(selectedOptions(e))}
+          title="Qui (ctrl/cmd + clic pour plusieurs)"
+        >
+          {(pick?.staff ?? []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
         <input className="input" style={{ maxWidth: 150 }} type="date" value={due} onChange={(e) => setDue(e.target.value)} />
         <button className="btn primary" onClick={add}>Ajouter</button>

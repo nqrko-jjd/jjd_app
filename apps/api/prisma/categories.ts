@@ -47,8 +47,12 @@ export const CATEGORY_SEED: { code: string; label: string; kind: string; entity?
   { code: 'E-08', label: 'Charges fixes dépôt', kind: 'expense' },
   { code: 'E-09', label: 'Assurance Dépôt', kind: 'expense' },
   { code: 'E-10', label: 'Rémunération ouvrier', kind: 'expense' },
+  { code: 'E-11', label: 'PV / Parking', kind: 'expense' },
   { code: 'E-12', label: 'Crédit Auto', kind: 'expense' },
+  { code: 'E-13', label: "Mam's", kind: 'expense' },
   { code: 'E-14', label: 'Réparation auto', kind: 'expense' },
+  { code: 'E-15', label: 'Assurances auto', kind: 'expense' },
+  { code: 'E-16', label: 'Charges auto', kind: 'expense' },
   { code: 'E-17', label: 'TVA', kind: 'expense' },
   { code: 'E-18', label: 'Impôt', kind: 'tax' },
 ];

@@ -234,6 +234,9 @@ async function insertChunked<T>(model: { createMany: (a: { data: T[] }) => Promi
   }
 }
 
+/** Codes de pointage volontaires (pas des chantiers) — jamais un "réf non standard". */
+const ABSENCE_CODES = new Set(['A', 'C', 'CP']);
+
 async function importTime(sh: SheetData) {
   const batchRows: Prisma.TimeEntryCreateManyInput[] = [];
   for (const row of sh.rows) {
@@ -265,7 +268,7 @@ async function importTime(sh: SheetData) {
         issue('time_entry', sh.name, rowRef, 'warning', `Pointage sur chantier inconnu ${ref}`, { workerName, ref, amount });
         bump('time_orphan');
       }
-    } else if (ref) {
+    } else if (ref && !ABSENCE_CODES.has(ref.toUpperCase())) {
       issue('time_entry', sh.name, rowRef, 'info', `Pointage avec réf non standard « ${ref} »`, { workerName, ref });
     }
     if (amount === null) {

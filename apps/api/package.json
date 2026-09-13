@@ -16,6 +16,8 @@
     "import:credit-notes": "tsx scripts/import-credit-notes.ts",
     "backfill:contact-building": "tsx scripts/backfill-contact-building.ts",
     "backfill:task-assignees": "tsx scripts/backfill-task-assignees.ts",
+    "backfill:office-person": "tsx scripts/backfill-office-person.ts",
+    "backfill:worksite-building": "tsx scripts/backfill-worksite-building.ts",
     "fix:overhead-labor-codes": "tsx scripts/fix-overhead-and-labor-codes.ts",
     "dev": "tsx watch src/index.ts",
     "build": "npm run db:provider && prisma generate && tsc -p tsconfig.json",

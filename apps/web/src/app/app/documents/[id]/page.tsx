@@ -7,12 +7,13 @@ import { useApi } from '@/lib/use-api';
 import { PageHead, Money, formatEur } from '@/lib/ui';
 import { DocStatusBadge, DOC_KIND_LABEL, type DocFull, type DocLine } from '@/lib/doc-ui';
 import { ContactPicker } from '@/components/ContactPicker';
+import { AssigneePicker } from '@/components/AssigneePicker';
 import { computeDocTotals, VAT_RATES } from '@jjd/shared';
 
 type Picker = {
   clients: { id: string; name: string }[];
   worksites: { id: string; name: string; clientId: string | null }[];
-  staff: { id: string; name: string }[];
+  people: { id: string; name: string }[];
 };
 
 const emptyLine = (): DocLine => ({ kind: 'item', label: '', qty: 1, unit: '', unitPriceHt: 0, discountPct: 0, vatRate: 0.21 });
@@ -397,7 +398,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
         <TasksFromLinesModal
           docId={id}
           lines={lines.filter((l) => l.kind === 'item' && l.label.trim())}
-          staff={pick?.staff ?? []}
+          people={pick?.people ?? []}
           onClose={() => setTasksModal(false)}
           onDone={(count) => { setTasksModal(false); setMsg(`${count} tâche(s) créée(s) sur le chantier — visibles dans l'onglet Tâches de sa fiche.`); }}
         />
@@ -411,13 +412,13 @@ const btnMini: React.CSSProperties = { padding: '0.15rem 0.4rem', fontSize: '0.7
 function TasksFromLinesModal({
   docId,
   lines,
-  staff,
+  people,
   onClose,
   onDone,
 }: {
   docId: string;
   lines: DocLine[];
-  staff: { id: string; name: string }[];
+  people: { id: string; name: string }[];
   onClose: () => void;
   onDone: (count: number) => void;
 }) {
@@ -473,15 +474,7 @@ function TasksFromLinesModal({
           )}
           <div className="field" style={{ marginTop: '0.9rem' }}>
             <label>Assigner à (optionnel)</label>
-            <select
-              className="select"
-              multiple
-              style={{ height: 90 }}
-              value={assigneeIds}
-              onChange={(e) => setAssigneeIds(Array.from(e.target.selectedOptions).map((o) => o.value))}
-            >
-              {staff.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
+            <AssigneePicker people={people} value={assigneeIds} onChange={setAssigneeIds} />
           </div>
         </div>
         {err && <div className="badge crit" style={{ margin: '0 1.15rem', padding: '0.4rem 0.7rem' }}>{err}</div>}

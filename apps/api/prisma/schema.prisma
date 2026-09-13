@@ -85,7 +85,6 @@ model User {
   createdLedger     LedgerEntry[]      @relation("LedgerEntryAuthor")
   reports           WorksiteReport[]   @relation("ReportAuthor")
   createdTasks      WorksiteTask[]     @relation("TaskCreatedBy")
-  taskAssignments   TaskAssignment[]
   stockMovements    StockMovement[]    @relation("StockMovementBy")
   personAdjustments PersonAdjustment[] @relation("PersonAdjustmentAuthor")
 }
@@ -124,6 +123,7 @@ model Person {
   teamMemberships      TeamMember[]
   threadParticipations ThreadParticipant[]
   assignedTasks        WorksiteTask[]      @relation("TaskAssignee")
+  taskAssignments      TaskAssignment[]
   adjustments          PersonAdjustment[]
 
   @@index([normalizedName])
@@ -1004,15 +1004,16 @@ model WorksiteTask {
   @@index([status])
 }
 
-/// Assignation multi-personnes d'une tâche — n'importe quel compte (ouvrier, chef, bureau),
-/// pas seulement l'équipe terrain (cf. Person, qui ne couvre pas les rôles bureau).
+/// Assignation multi-personnes d'une tâche — sur `Person` (l'équipe, foreman/worker/office…),
+/// comme les affectations planning (`EventAssignment`). Couvre aussi le bureau (rôle `office`
+/// sur `Person`) sans obliger chaque ouvrier à avoir un compte de connexion.
 model TaskAssignment {
-  taskId String
-  task   WorksiteTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  userId String
-  user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskId   String
+  task     WorksiteTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  personId String
+  person   Person       @relation(fields: [personId], references: [id], onDelete: Cascade)
 
-  @@id([taskId, userId])
+  @@id([taskId, personId])
 }
 
 // ─────────────────────────────────────────────────────────── Stock de matériaux

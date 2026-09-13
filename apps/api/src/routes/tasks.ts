@@ -6,19 +6,19 @@ import { requireAuth, STAFF, OFFICE } from '../lib/auth.js';
 
 export const taskInclude = {
   assignees: {
-    include: { user: { select: { id: true, email: true, person: { select: { displayName: true, firstName: true } } } } },
+    include: { person: { select: { id: true, displayName: true, firstName: true } } },
   },
 } as const;
 
-interface TaskAssigneeUser { id: string; email: string; person: { displayName: string | null; firstName: string } | null }
-interface RawTask { assignees: { user: TaskAssigneeUser }[]; [key: string]: unknown }
+interface TaskAssigneePerson { id: string; displayName: string | null; firstName: string }
+interface RawTask { assignees: { person: TaskAssigneePerson }[]; [key: string]: unknown }
 
-function assigneeLabel(u: TaskAssigneeUser): string {
-  return u.person?.displayName || u.person?.firstName || u.email;
+function assigneeLabel(p: TaskAssigneePerson): string {
+  return p.displayName || p.firstName;
 }
 
 export function serializeTask(t: RawTask) {
-  return { ...t, assignees: t.assignees.map((a) => ({ id: a.user.id, name: assigneeLabel(a.user) })) };
+  return { ...t, assignees: t.assignees.map((a) => ({ id: a.person.id, name: assigneeLabel(a.person) })) };
 }
 
 async function myName(userId: string): Promise<string> {
@@ -26,9 +26,9 @@ async function myName(userId: string): Promise<string> {
   return u?.person?.displayName || u?.person?.firstName || u?.email || 'Terrain';
 }
 
-async function setAssignees(taskId: string, userIds: string[]) {
+async function setAssignees(taskId: string, personIds: string[]) {
   await prisma.taskAssignment.deleteMany({ where: { taskId } });
-  if (userIds.length) await prisma.taskAssignment.createMany({ data: userIds.map((userId) => ({ taskId, userId })) });
+  if (personIds.length) await prisma.taskAssignment.createMany({ data: personIds.map((personId) => ({ taskId, personId })) });
 }
 
 /* ------------------------------------- sous /api/worksites/:worksiteId/phases */
@@ -118,7 +118,7 @@ worksiteTasksRouter.post(
         dueOn: data.dueOn ?? null,
         position: count,
         createdById: req.user!.id,
-        assignees: { create: data.assigneeIds.map((userId) => ({ userId })) },
+        assignees: { create: data.assigneeIds.map((personId) => ({ personId })) },
       },
       include: taskInclude,
     });
@@ -141,7 +141,7 @@ tasksRouter.get(
   asyncHandler(async (req, res) => {
     const { mine, view } = req.query as Record<string, string>;
     const and: Record<string, unknown>[] = [];
-    if (mine === '1') and.push({ assignees: { some: { userId: req.user!.id } } });
+    if (mine === '1') and.push({ assignees: { some: { personId: req.user!.personId ?? '__none__' } } });
     if (view === 'today' || view === 'week' || view === 'overdue') {
       const now = new Date();
       const d0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -182,7 +182,7 @@ tasksRouter.post(
         dueOn: data.dueOn ?? null,
         position: count,
         createdById: req.user!.id,
-        assignees: { create: data.assigneeIds.map((userId) => ({ userId })) },
+        assignees: { create: data.assigneeIds.map((personId) => ({ personId })) },
       },
       include: taskInclude,
     });

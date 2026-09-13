@@ -54,6 +54,16 @@ function cellText(val: SortVal): string {
 }
 
 /**
+ * Valeurs distinctes d'une colonne (façon filtre Google Sheets / Excel) — à passer en
+ * `filterOptions` sur `SortTh` pour un filtre à cases à cocher plutôt qu'un champ texte.
+ * Calculé sur l'ensemble des lignes (pas seulement celles déjà filtrées), trié alphabétique.
+ */
+export function distinctValues<T>(rows: T[], accessor: Accessor<T>): string[] {
+  const set = new Set(rows.map((r) => cellText(accessor(r))));
+  return [...set].sort((a, b) => a.localeCompare(b, 'fr', { numeric: true, sensitivity: 'base' }));
+}
+
+/**
  * Filtre de colonne côté client — se branche sur les mêmes `accessors` que `useSort`. À
  * composer avant le tri : `useSort(filter.rows, accessors)`. Deux modes par colonne :
  * - texte (`setFilter`) : sous-chaîne, insensible à la casse — pour les colonnes libres.
@@ -110,7 +120,10 @@ type ColumnFilter = {
   clearValue: (k: string) => void;
 };
 
-/** Menu déroulant à cases à cocher (façon filtre Excel) pour une colonne à choix fermé. */
+/**
+ * Menu déroulant à cases à cocher (façon filtre Excel/Google Sheets) pour n'importe quelle
+ * colonne — recherche en tête pour les colonnes à beaucoup de valeurs distinctes.
+ */
 function MultiFilterMenu({ options, checked, onToggle, onClear, onClose }: {
   options: string[];
   checked: Set<string>;
@@ -119,6 +132,7 @@ function MultiFilterMenu({ options, checked, onToggle, onClear, onClose }: {
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const [q, setQ] = useState('');
   useEffect(() => {
     const onDown = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) onClose(); };
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -129,14 +143,28 @@ function MultiFilterMenu({ options, checked, onToggle, onClear, onClose }: {
       window.removeEventListener('keydown', onKey);
     };
   }, [onClose]);
+  const label = (o: string) => (o === '' ? '(Vides)' : o);
+  const visible = q.trim() ? options.filter((o) => label(o).toLowerCase().includes(q.trim().toLowerCase())) : options;
   return (
     <div ref={ref} className="ctx-menu col-filter-menu" role="menu" onClick={(e) => e.stopPropagation()}>
-      {options.map((o) => (
-        <button key={o} type="button" role="menuitemcheckbox" aria-checked={checked.has(o)} className="ctx-item" onClick={() => onToggle(o)}>
-          <span className="ctx-check">{checked.has(o) ? '✓' : ''}</span>
-          <span>{o}</span>
-        </button>
-      ))}
+      {options.length > 8 && (
+        <input
+          className="col-filter-search"
+          placeholder="Rechercher…"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          autoFocus
+        />
+      )}
+      <div className="col-filter-list">
+        {visible.map((o) => (
+          <button key={o} type="button" role="menuitemcheckbox" aria-checked={checked.has(o)} className="ctx-item" onClick={() => onToggle(o)}>
+            <span className="ctx-check">{checked.has(o) ? '✓' : ''}</span>
+            <span>{label(o)}</span>
+          </button>
+        ))}
+        {visible.length === 0 && <div className="muted" style={{ padding: '0.4rem 0.6rem', fontSize: '0.8rem' }}>Aucune valeur.</div>}
+      </div>
       {checked.size > 0 && (
         <>
           <div className="ctx-sep" />

@@ -301,7 +301,7 @@ worksitesRouter.get(
       where: { worksiteId: ws.id, startAt: { gte: d0, lt: d1 } },
       orderBy: { startAt: 'asc' },
       include: {
-        assignments: { include: { person: { select: { displayName: true, firstName: true, phone: true, user: { select: { id: true } } } } } },
+        assignments: { include: { person: { select: { displayName: true, firstName: true, phone: true } } } },
         vehicles: { include: { vehicle: { select: { code: true, brand: true, model: true, plate: true } } } },
         team: { select: { name: true } },
         equipment: { include: { equipment: { select: { name: true, reference: true } } } },
@@ -332,7 +332,7 @@ worksitesRouter.get(
             vehicle: ev.vehicles.length
               ? ev.vehicles.map((v) => `${v.vehicle.code ?? ''} ${v.vehicle.brand ?? ''} ${v.vehicle.model ?? ''}`.trim()).join(', ')
               : null,
-            people: ev.assignments.map((a) => ({ userId: a.person.user?.id ?? null, name: a.person.displayName || a.person.firstName, phone: a.person.phone })),
+            people: ev.assignments.map((a) => ({ personId: a.personId, name: a.person.displayName || a.person.firstName, phone: a.person.phone })),
             equipment: ev.equipment.map((e) => ({ name: e.equipment.name, reference: e.equipment.reference })),
             consumables: ev.consumables.map((c) => ({ name: c.consumable.name, qty: c.qty, unit: c.consumable.unit })),
           }
@@ -341,12 +341,24 @@ worksitesRouter.get(
   }),
 );
 
+/** Un chantier facturé à un contact ACP/immeuble sans son propre `buildingId` reste
+ *  invisible sur la fiche Immeuble (onglet Interventions) même s'il apparaît bien sur la
+ *  fiche Contact (onglet Chantiers) — même défaut de fond que Building.clientId/
+ *  Contact.buildingId (déjà corrigé plus tôt), côté chantier cette fois. Dérive `buildingId`
+ *  depuis le client facturé quand celui-ci est lié à un immeuble, sans jamais écraser un
+ *  `buildingId` déjà posé explicitement. */
+async function deriveBuildingFromClient(clientId: string): Promise<string | null> {
+  const contact = await prisma.contact.findUnique({ where: { id: clientId }, select: { buildingId: true } });
+  return contact?.buildingId ?? null;
+}
+
 worksitesRouter.post(
   '/',
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
     const data = worksiteInput.parse(req.body);
     const ref = await nextWorksiteRef();
+    const buildingId = data.buildingId ?? (data.clientId ? await deriveBuildingFromClient(data.clientId) : null);
     const ws = await prisma.worksite.create({
       data: {
         ref,
@@ -356,7 +368,7 @@ worksitesRouter.post(
         priority: data.priority,
         statusTags: data.statusTags,
         clientId: data.clientId ?? null,
-        buildingId: data.buildingId ?? null,
+        buildingId,
         managerId: data.managerId ?? null,
         address: data.address ?? null,
         postalCode: data.postalCode ?? null,
@@ -424,10 +436,16 @@ worksitesRouter.patch(
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
     const data = worksiteInput.partial().parse(req.body);
+    let buildingId: string | null | undefined = data.buildingId;
+    if (data.clientId && buildingId === undefined) {
+      const existing = await prisma.worksite.findUnique({ where: { id: req.params.id }, select: { buildingId: true } });
+      if (existing && !existing.buildingId) buildingId = (await deriveBuildingFromClient(data.clientId)) ?? undefined;
+    }
     const ws = await prisma.worksite.update({
       where: { id: req.params.id },
       data: {
         ...data,
+        buildingId,
         statusTags: data.statusTags ?? undefined,
       },
     });

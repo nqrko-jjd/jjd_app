@@ -48,17 +48,12 @@ metaRouter.get(
   '/pickers',
   requireAuth(...STAFF),
   asyncHandler(async (_req, res) => {
-    const [clients, buildings, people, worksites, syndics, staff] = await Promise.all([
+    const [clients, buildings, people, worksites, syndics] = await Promise.all([
       prisma.contact.findMany({ where: { OR: [{ type: 'client' }, { type: 'both' }] }, orderBy: { name: 'asc' }, select: { id: true, name: true } }),
       prisma.building.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true, syndicId: true } }),
       prisma.person.findMany({ where: { active: true }, orderBy: { firstName: 'asc' }, select: { id: true, firstName: true, lastName: true, displayName: true } }),
       prisma.worksite.findMany({ where: { archived: false, kind: 'project', source: { not: 'demo' } }, orderBy: { updatedAt: 'desc' }, take: 5000, select: { id: true, ref: true, title: true, clientId: true } }),
       prisma.syndic.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }),
-      prisma.user.findMany({
-        where: { active: true, role: { in: STAFF } },
-        orderBy: { email: 'asc' },
-        select: { id: true, email: true, person: { select: { displayName: true, firstName: true } } },
-      }),
     ]);
     res.json({
       clients,
@@ -66,7 +61,6 @@ metaRouter.get(
       syndics,
       people: people.map((p) => ({ id: p.id, name: p.displayName || `${p.firstName} ${p.lastName ?? ''}`.trim() })),
       worksites: worksites.map((w) => ({ id: w.id, name: `${w.ref} · ${w.title}`, clientId: w.clientId })),
-      staff: staff.map((u) => ({ id: u.id, name: u.person?.displayName || u.person?.firstName || u.email })),
     });
   }),
 );

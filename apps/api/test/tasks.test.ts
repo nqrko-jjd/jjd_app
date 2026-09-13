@@ -7,8 +7,8 @@ import { prisma } from '../src/db.js';
 let server: Server;
 let base = '';
 let token = '';
-let davidId = '';
-let melvinaId = '';
+let davidId = ''; // Person id (les assignations de tâches ciblent Person, pas User)
+let melvinaId = ''; // idem — Melvina (bureau) n'a de Person que via le backfill office-person
 let wsId = '';
 
 before(async () => {
@@ -23,9 +23,17 @@ before(async () => {
   });
   const loginJson = await login.json();
   token = loginJson.token;
-  davidId = loginJson.user.id;
+  davidId = loginJson.user.personId;
   const melvina = await prisma.user.findUniqueOrThrow({ where: { email: 'melvina@jjd-consult.be' } });
-  melvinaId = melvina.id;
+  if (melvina.personId) {
+    melvinaId = melvina.personId;
+  } else {
+    const person = await prisma.person.create({
+      data: { firstName: 'Melvina', displayName: 'Melvina', normalizedName: 'melvina', role: 'office', active: true, source: 'test' },
+    });
+    await prisma.user.update({ where: { id: melvina.id }, data: { personId: person.id } });
+    melvinaId = person.id;
+  }
   const ws = await prisma.worksite.create({ data: { ref: 'R-TASKTEST', title: 'Tasks test', source: 'test' } });
   wsId = ws.id;
 });

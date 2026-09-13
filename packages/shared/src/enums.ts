@@ -28,7 +28,7 @@ export const INTERNAL_ROLES: Role[] = ['admin', 'office', 'foreman', 'worker'];
  * chef de chantier à la création (routes/people.ts, POST /:id/account) ;
  * les 3 autres valeurs restent de simples ouvriers côté accès.
  */
-export const PERSON_ROLES = ['foreman', 'team_leader', 'qualified_worker', 'worker'] as const;
+export const PERSON_ROLES = ['foreman', 'team_leader', 'qualified_worker', 'worker', 'office'] as const;
 export type PersonRole = (typeof PERSON_ROLES)[number];
 
 export const PERSON_ROLE_LABEL: Record<PersonRole, string> = {
@@ -36,6 +36,7 @@ export const PERSON_ROLE_LABEL: Record<PersonRole, string> = {
   team_leader: "Chef d'équipe",
   qualified_worker: 'Ouvrier qualifié',
   worker: 'Ouvrier',
+  office: 'Bureau',
 };
 
 /* ------------------------------------------------------ Entité d'attribution */

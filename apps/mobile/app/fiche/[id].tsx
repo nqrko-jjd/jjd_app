@@ -21,7 +21,7 @@ interface Field {
   tenant: { name: string; phone: string | null; phone2: string | null; email: string | null } | null;
   today: {
     startAt: string; endAt: string; allDay: boolean; toDo: string | null; materials: string | null;
-    team: string | null; vehicle: string | null; people: { userId: string | null; name: string; phone: string | null }[];
+    team: string | null; vehicle: string | null; people: { personId: string; name: string; phone: string | null }[];
     equipment: { name: string; reference: string | null }[];
     consumables: { name: string; qty: number; unit: string }[];
   } | null;
@@ -59,10 +59,10 @@ export default function FicheDuJour() {
     setTasks((ts) => ts.map((x) => (x.id === t.id ? { ...x, status: next } : x)));
     await apiSend(`/api/tasks/${t.id}`, 'PATCH', { status: next });
   };
-  const toggleNewTaskAssignee = (userId: string) => {
+  const toggleNewTaskAssignee = (personId: string) => {
     setNewTaskAssignees((s) => {
       const next = new Set(s);
-      if (next.has(userId)) next.delete(userId); else next.add(userId);
+      if (next.has(personId)) next.delete(personId); else next.add(personId);
       return next;
     });
   };
@@ -81,7 +81,7 @@ export default function FicheDuJour() {
       setAddingTask(false);
     }
   };
-  const assignableToday = (d.today?.people ?? []).filter((p): p is typeof p & { userId: string } => !!p.userId);
+  const assignableToday = d.today?.people ?? [];
   const openTasks = tasks.filter((t) => t.status !== 'done');
   const doneTasks = tasks.filter((t) => t.status === 'done');
 
@@ -148,11 +148,11 @@ export default function FicheDuJour() {
           {assignableToday.length > 0 ? (
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
               {assignableToday.map((p) => {
-                const on = newTaskAssignees.has(p.userId);
+                const on = newTaskAssignees.has(p.personId);
                 return (
                   <Pressable
-                    key={p.userId}
-                    onPress={() => toggleNewTaskAssignee(p.userId)}
+                    key={p.personId}
+                    onPress={() => toggleNewTaskAssignee(p.personId)}
                     style={{ paddingVertical: 5, paddingHorizontal: 10, borderRadius: 999, borderWidth: 1, borderColor: on ? T.primary : T.line, backgroundColor: on ? T.primary : 'transparent' }}
                   >
                     <Text style={{ color: on ? '#fff' : T.ink2, fontSize: 13 }}>{p.name}</Text>

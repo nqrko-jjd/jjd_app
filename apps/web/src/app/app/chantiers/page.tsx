@@ -8,7 +8,7 @@ import { PageHead, StatusBadge, PriorityBadge, EntityBadge, Money, formatDateBE 
 import { FormModal, type FieldDef } from '@/components/FormModal';
 import { ContextMenu, useContextMenu, openActions, type MenuItem } from '@/components/ContextMenu';
 import { PaginationBar } from '@/components/PaginationBar';
-import { useSort, useColumnFilter, SortTh } from '@/lib/sort';
+import { useSort, useColumnFilter, SortTh, distinctValues } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
 import { downloadCsv, pickAndImportCsv, summarizeImport } from '@/lib/csvIO';
 import { WORKSITE_STATUS_LABEL, WORKSITE_STATUSES, WORKSITE_PRIORITIES, WORKSITE_PRIORITY_LABEL, ENTITIES, ENTITY_LABEL } from '@jjd/shared';
@@ -61,6 +61,16 @@ function ChantiersInner() {
   };
   const colFilter = useColumnFilter<WS>(data?.items ?? [], wsAccessors);
   const sort = useSort<WS>(colFilter.rows, wsAccessors);
+
+  // Valeurs distinctes pour les filtres à cases à cocher : calculées sur TOUS les chantiers
+  // correspondant à la recherche/statut du haut (pas seulement la page affichée), sinon
+  // le filtre ne proposerait que les valeurs de la page en cours.
+  const filterScopeParams = new URLSearchParams();
+  if (q) filterScopeParams.set('q', q);
+  if (status) filterScopeParams.set('status', status);
+  filterScopeParams.set('kind', kind);
+  const { data: filterScope } = useApi<{ items: WS[] }>(`/api/worksites?${filterScopeParams}`);
+  const filterRows = filterScope?.items ?? [];
   const { data: refs } = useApi<{
     clients: { id: string; name: string }[];
     buildings: { id: string; name: string; syndicId: string | null }[];
@@ -212,14 +222,14 @@ function ChantiersInner() {
                     aria-label="Tout sélectionner"
                   />
                 </th>
-                <SortTh k="ref" sort={sort} filter={colFilter}>Réf</SortTh>
-                <SortTh k="title" sort={sort} filter={colFilter}>Chantier</SortTh>
-                <SortTh k="client" sort={sort} filter={colFilter}>Client</SortTh>
-                <SortTh k="manager" sort={sort} filter={colFilter}>Chef</SortTh>
+                <SortTh k="ref" sort={sort} filter={colFilter} filterOptions={distinctValues(filterRows, wsAccessors.ref)}>Réf</SortTh>
+                <SortTh k="title" sort={sort} filter={colFilter} filterOptions={distinctValues(filterRows, wsAccessors.title)}>Chantier</SortTh>
+                <SortTh k="client" sort={sort} filter={colFilter} filterOptions={distinctValues(filterRows, wsAccessors.client)}>Client</SortTh>
+                <SortTh k="manager" sort={sort} filter={colFilter} filterOptions={distinctValues(filterRows, wsAccessors.manager)}>Chef</SortTh>
                 <SortTh k="status" sort={sort} filter={colFilter} filterOptions={WORKSITE_STATUSES.map((s) => WORKSITE_STATUS_LABEL[s])}>Statut</SortTh>
                 <SortTh k="entity" sort={sort} filter={colFilter} filterOptions={ENTITIES.map((e) => ENTITY_LABEL[e])}>Entité</SortTh>
-                <SortTh k="quotedHt" sort={sort} align="right" filter={colFilter}>Devisé</SortTh>
-                <SortTh k="endedOn" sort={sort} filter={colFilter}>Fin</SortTh>
+                <SortTh k="quotedHt" sort={sort} align="right" filter={colFilter} filterOptions={distinctValues(filterRows, wsAccessors.quotedHt)}>Devisé</SortTh>
+                <SortTh k="endedOn" sort={sort} filter={colFilter} filterOptions={distinctValues(filterRows, wsAccessors.endedOn)}>Fin</SortTh>
               </tr>
             </thead>
             <tbody>

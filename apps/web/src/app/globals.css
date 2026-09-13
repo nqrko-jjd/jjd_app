@@ -343,8 +343,16 @@ p { margin: 0; }
 .tbl th .col-filter-btn.on { color: var(--primary-ink, var(--primary)); border-color: var(--primary); }
 .tbl th .col-filter-menu {
   position: absolute; z-index: 60; top: 100%; left: 0; margin-top: 2px;
-  max-height: 260px; overflow-y: auto;
+  min-width: 220px; max-width: 320px; display: flex; flex-direction: column;
 }
+.tbl th .col-filter-search {
+  width: 100%; margin-bottom: 4px; padding: 0.3rem 0.5rem;
+  font-size: 0.8rem; font-weight: 400; text-transform: none; letter-spacing: normal;
+  color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 6px;
+}
+.tbl th .col-filter-search::placeholder { color: var(--ink-3); }
+.tbl th .col-filter-search:focus { outline: none; border-color: var(--primary); }
+.tbl th .col-filter-list { max-height: 220px; overflow-y: auto; }
 .tbl td { padding: 0.65rem 0.9rem; border-bottom: 1px solid var(--line); vertical-align: top; }
 .tbl tr:last-child td { border-bottom: none; }
 .tbl tbody tr { transition: background 0.1s; }

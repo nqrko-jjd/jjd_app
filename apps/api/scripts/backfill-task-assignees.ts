@@ -1,9 +1,7 @@
 /**
- * Étape 2/3 de la migration vers l'assignation multi-personnes des tâches (voir le plan
- * "Tâches" — `WorksiteTask.assigneeId` -> table `TaskAssignment`). Pour chaque tâche ayant
- * encore un `assigneeId` (Person), retrouve le compte `User` lié à ce `Person`
- * (`User.personId`) et crée la ligne `TaskAssignment` correspondante. Une tâche dont le
- * `Person` assigné n'a pas de compte `User` est signalée mais pas bloquante.
+ * Rattrapage pour l'ancien champ `WorksiteTask.assigneeId` (FK vers `Person`, un seul
+ * assigné) — recrée la ligne `TaskAssignment` (multi-assignés, sur `Person`) équivalente
+ * pour chaque tâche qui a encore ce champ posé. Idempotent.
  *
  *   npm run backfill:task-assignees
  */
@@ -18,23 +16,15 @@ async function main() {
   });
 
   let linked = 0;
-  let noAccount = 0;
   for (const t of tasks) {
-    const person = await prisma.person.findUnique({ where: { id: t.assigneeId! }, select: { user: true, firstName: true } });
-    const userId = person?.user?.id;
-    if (!userId) {
-      console.log(`  (pas de compte) ${t.title} — assigné à ${person?.firstName ?? t.assigneeId}`);
-      noAccount++;
-      continue;
-    }
     await prisma.taskAssignment.upsert({
-      where: { taskId_userId: { taskId: t.id, userId } },
-      create: { taskId: t.id, userId },
+      where: { taskId_personId: { taskId: t.id, personId: t.assigneeId! } },
+      create: { taskId: t.id, personId: t.assigneeId! },
       update: {},
     });
     linked++;
   }
-  console.log(`\n${linked} tâche(s) reliée(s) à leur assigné (compte utilisateur), ${noAccount} sans compte associé.`);
+  console.log(`\n${linked} tâche(s) reliée(s) à leur ancien assigné.`);
 }
 
 main()

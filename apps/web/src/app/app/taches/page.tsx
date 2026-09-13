@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { PageHead, formatDateBE } from '@/lib/ui';
+import { AssigneePicker } from '@/components/AssigneePicker';
 
 interface Task {
   id: string; title: string; description: string | null; status: string;
@@ -25,10 +26,6 @@ const VIEWS: { key: View; label: string }[] = [
 const NEXT: Record<string, string> = { todo: 'doing', doing: 'done', done: 'todo' };
 const DOT: Record<string, string> = { todo: 'var(--ink-3)', doing: 'var(--warn)', done: 'var(--ok)' };
 
-function selectedOptions(e: React.ChangeEvent<HTMLSelectElement>): string[] {
-  return Array.from(e.target.selectedOptions).map((o) => o.value);
-}
-
 function queryFor(view: View): string {
   if (view === 'mine') return '?mine=1';
   if (view === 'all') return '';
@@ -38,22 +35,13 @@ function queryFor(view: View): string {
 export default function TachesPage() {
   const [view, setView] = useState<View>('all');
   const { data, reload } = useApi<{ items: Task[] }>(`/api/tasks${queryFor(view)}`);
-  const { data: pick } = useApi<{ staff: { id: string; name: string }[] }>('/api/meta/pickers');
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
-  const [due, setDue] = useState('');
+  const { data: pick } = useApi<{ people: { id: string; name: string }[]; worksites: { id: string; name: string }[] }>('/api/meta/pickers');
+  const [creating, setCreating] = useState(false);
 
   const tasks = data?.items ?? [];
   const open = tasks.filter((t) => t.status !== 'done');
   const done = tasks.filter((t) => t.status === 'done');
 
-  async function add() {
-    if (!title.trim()) return;
-    await api('/api/tasks', { method: 'POST', body: { title: title.trim(), description: description.trim() || null, assigneeIds, dueOn: due || null } });
-    setTitle(''); setDescription(''); setAssigneeIds([]); setDue('');
-    reload();
-  }
   const patch = (id: string, body: Record<string, unknown>) => api(`/api/tasks/${id}`, { method: 'PATCH', body }).then(reload);
 
   function Row({ t }: { t: Task }) {
@@ -84,7 +72,11 @@ export default function TachesPage() {
 
   return (
     <>
-      <PageHead title="Tâches" sub="Toutes les tâches, sur chantier ou générales — façon TrustUp" />
+      <PageHead
+        title="Tâches"
+        sub="Toutes les tâches, sur chantier ou générales — façon TrustUp"
+        action={<button className="btn primary" onClick={() => setCreating(true)}>+ Nouvelle tâche</button>}
+      />
       <div className="seg" style={{ marginBottom: '1rem' }}>
         {VIEWS.map((v) => (
           <button key={v.key} className={view === v.key ? 'on' : ''} onClick={() => setView(v.key)}>{v.label}</button>
@@ -92,7 +84,7 @@ export default function TachesPage() {
       </div>
 
       <div className="card card-pad">
-        {open.length === 0 && done.length === 0 && <p className="muted" style={{ margin: '0 0 0.6rem' }}>Aucune tâche.</p>}
+        {open.length === 0 && done.length === 0 && <p className="muted" style={{ margin: 0 }}>Aucune tâche.</p>}
         {open.map((t) => <Row key={t.id} t={t} />)}
         {done.length > 0 && (
           <>
@@ -100,23 +92,86 @@ export default function TachesPage() {
             {done.map((t) => <Row key={t.id} t={t} />)}
           </>
         )}
-        <div className="row" style={{ gap: '0.4rem', marginTop: '0.9rem', borderTop: '1px solid var(--line)', paddingTop: '0.8rem', flexWrap: 'wrap' }}>
-          <input className="input" style={{ flex: 1, minWidth: 160 }} placeholder="+ Nouvelle tâche générale (sans chantier)…" value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} />
-          <input className="input" style={{ flex: 1, minWidth: 160 }} placeholder="Description (optionnel)" value={description} onChange={(e) => setDescription(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} />
-          <select
-            className="select"
-            multiple
-            style={{ maxWidth: 160, height: 62 }}
-            value={assigneeIds}
-            onChange={(e) => setAssigneeIds(selectedOptions(e))}
-            title="Qui (ctrl/cmd + clic pour plusieurs)"
-          >
-            {(pick?.staff ?? []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-          <input className="input" style={{ maxWidth: 150 }} type="date" value={due} onChange={(e) => setDue(e.target.value)} />
-          <button className="btn primary" onClick={add}>Ajouter</button>
-        </div>
       </div>
+
+      {creating && (
+        <TaskCreateModal
+          people={pick?.people ?? []}
+          worksites={pick?.worksites ?? []}
+          onClose={() => setCreating(false)}
+          onSubmit={async (body) => {
+            await api('/api/tasks', { method: 'POST', body });
+            setCreating(false);
+            reload();
+          }}
+        />
+      )}
     </>
+  );
+}
+
+function TaskCreateModal({
+  people,
+  worksites,
+  onClose,
+  onSubmit,
+}: {
+  people: { id: string; name: string }[];
+  worksites: { id: string; name: string }[];
+  onClose: () => void;
+  onSubmit: (body: { title: string; description: string | null; assigneeIds: string[]; dueOn: string | null; worksiteId: string | null }) => Promise<void>;
+}) {
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [worksiteId, setWorksiteId] = useState('');
+  const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
+  const [dueOn, setDueOn] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!title.trim()) return;
+    setBusy(true);
+    await onSubmit({ title: title.trim(), description: description.trim() || null, assigneeIds, dueOn: dueOn || null, worksiteId: worksiteId || null });
+  }
+
+  return (
+    <div className="modal-scrim" onClick={onClose}>
+      <form className="modal" style={{ maxWidth: 480 }} onClick={(e) => e.stopPropagation()} onSubmit={submit}>
+        <div className="modal-head">
+          <h2>Nouvelle tâche</h2>
+          <button type="button" className="btn ghost" onClick={onClose} aria-label="Fermer">✕</button>
+        </div>
+        <div className="modal-body">
+          <div className="field">
+            <label>Titre *</label>
+            <input className="input" required autoFocus value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Renouveler l'assurance flotte" />
+          </div>
+          <div className="field">
+            <label>Description</label>
+            <textarea className="input" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} />
+          </div>
+          <div className="field">
+            <label>Chantier <span className="muted" style={{ fontWeight: 400, fontSize: '0.8rem' }}>— vide = tâche générale</span></label>
+            <select className="select" value={worksiteId} onChange={(e) => setWorksiteId(e.target.value)}>
+              <option value="">— (tâche générale)</option>
+              {worksites.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+            </select>
+          </div>
+          <div className="field">
+            <label>Échéance</label>
+            <input className="input" type="date" value={dueOn} onChange={(e) => setDueOn(e.target.value)} />
+          </div>
+          <div className="field">
+            <label>Assigné(s)</label>
+            <AssigneePicker people={people} value={assigneeIds} onChange={setAssigneeIds} />
+          </div>
+        </div>
+        <div className="modal-foot">
+          <button type="button" className="btn" onClick={onClose}>Annuler</button>
+          <button type="submit" className="btn primary" disabled={busy}>{busy ? 'Création…' : 'Créer'}</button>
+        </div>
+      </form>
+    </div>
   );
 }

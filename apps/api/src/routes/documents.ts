@@ -491,7 +491,7 @@ documentsRouter.post(
           position: count + i,
           source: 'quote',
           createdById: req.user!.id,
-          assignees: { create: (assigneeIds ?? []).map((userId) => ({ userId })) },
+          assignees: { create: (assigneeIds ?? []).map((personId) => ({ personId })) },
         },
         include: taskInclude,
       });

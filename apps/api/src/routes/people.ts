@@ -286,7 +286,7 @@ peopleRouter.post(
       data: {
         email,
         passwordHash: await hashPassword(password),
-        role: person.role === 'foreman' ? 'foreman' : 'worker',
+        role: person.role === 'foreman' ? 'foreman' : person.role === 'office' ? 'office' : 'worker',
         personId: person.id,
       },
     });

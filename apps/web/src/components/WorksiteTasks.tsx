@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { formatDateBE } from '@/lib/ui';
+import { AssigneePicker } from './AssigneePicker';
 
 interface Task {
   id: string; title: string; description: string | null; status: string; phaseId: string | null;
@@ -14,14 +15,11 @@ interface Phase { id: string; name: string; position: number }
 const NEXT: Record<string, string> = { todo: 'doing', doing: 'done', done: 'todo' };
 const DOT: Record<string, string> = { todo: 'var(--ink-3)', doing: 'var(--warn)', done: 'var(--ok)' };
 
-function selectedOptions(e: React.ChangeEvent<HTMLSelectElement>): string[] {
-  return Array.from(e.target.selectedOptions).map((o) => o.value);
-}
-
 export function WorksiteTasks({ worksiteId }: { worksiteId: string }) {
   const { data, reload } = useApi<{ items: Task[] }>(`/api/worksites/${worksiteId}/tasks`);
   const { data: phaseData, reload: reloadPhases } = useApi<{ items: Phase[] }>(`/api/worksites/${worksiteId}/phases`);
-  const { data: pick } = useApi<{ staff: { id: string; name: string }[] }>('/api/meta/pickers');
+  const { data: pick } = useApi<{ people: { id: string; name: string }[] }>('/api/meta/pickers');
+  const [creatingFor, setCreatingFor] = useState<{ phaseId: string | null } | null>(null);
 
   const tasks = data?.items ?? [];
   const phases = phaseData?.items ?? [];
@@ -58,6 +56,7 @@ export function WorksiteTasks({ worksiteId }: { worksiteId: string }) {
         />
         <div style={{ flex: 1 }}>
           <span style={{ textDecoration: t.status === 'done' ? 'line-through' : undefined, color: t.status === 'done' ? 'var(--ink-3)' : undefined }}>{t.title}</span>
+          {t.description && <div className="muted" style={{ fontSize: '0.8rem', marginTop: 2 }}>{t.description}</div>}
           <div className="row" style={{ gap: '0.4rem', marginTop: 3, flexWrap: 'wrap' }}>
             {t.assignees.map((a) => <span key={a.id} className="badge plain">{a.name}</span>)}
             {t.dueOn && <span className={`badge ${late ? 'crit' : 'plain'}`}>{formatDateBE(t.dueOn)}</span>}
@@ -71,35 +70,6 @@ export function WorksiteTasks({ worksiteId }: { worksiteId: string }) {
     );
   }
 
-  function Composer({ phaseId }: { phaseId: string | null }) {
-    const [title, setTitle] = useState('');
-    const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
-    const [due, setDue] = useState('');
-    async function add() {
-      if (!title.trim()) return;
-      await api(`/api/worksites/${worksiteId}/tasks`, { method: 'POST', body: { title: title.trim(), phaseId, assigneeIds, dueOn: due || null } });
-      setTitle(''); setAssigneeIds([]); setDue('');
-      reload();
-    }
-    return (
-      <div className="row" style={{ gap: '0.4rem', marginTop: '0.6rem', flexWrap: 'wrap' }}>
-        <input className="input" style={{ flex: 1, minWidth: 160 }} placeholder="+ Nouvelle tâche…" value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} />
-        <select
-          className="select"
-          multiple
-          style={{ maxWidth: 160, height: 62 }}
-          value={assigneeIds}
-          onChange={(e) => setAssigneeIds(selectedOptions(e))}
-          title="Qui (ctrl/cmd + clic pour plusieurs)"
-        >
-          {(pick?.staff ?? []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
-        <input className="input" style={{ maxWidth: 150 }} type="date" value={due} onChange={(e) => setDue(e.target.value)} />
-        <button className="btn primary" onClick={add}>Ajouter</button>
-      </div>
-    );
-  }
-
   function Section({ phase, items }: { phase: Phase | null; items: Task[] }) {
     const open = items.filter((t) => t.status !== 'done');
     const done = items.filter((t) => t.status === 'done');
@@ -109,12 +79,15 @@ export function WorksiteTasks({ worksiteId }: { worksiteId: string }) {
           <div className="muted" style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             {phase ? phase.name : 'Tâches sans phase'}
           </div>
-          {phase && (
-            <div className="row" style={{ gap: '0.3rem' }}>
-              <button className="btn ghost" style={{ padding: '0.1rem 0.4rem', fontSize: '0.72rem' }} onClick={() => renamePhase(phase)}>Renommer</button>
-              <button className="btn ghost" style={{ padding: '0.1rem 0.4rem', fontSize: '0.72rem' }} onClick={() => deletePhase(phase)}>Supprimer</button>
-            </div>
-          )}
+          <div className="row" style={{ gap: '0.3rem' }}>
+            <button className="btn ghost" style={{ padding: '0.1rem 0.4rem', fontSize: '0.72rem' }} onClick={() => setCreatingFor({ phaseId: phase?.id ?? null })}>+ Tâche</button>
+            {phase && (
+              <>
+                <button className="btn ghost" style={{ padding: '0.1rem 0.4rem', fontSize: '0.72rem' }} onClick={() => renamePhase(phase)}>Renommer</button>
+                <button className="btn ghost" style={{ padding: '0.1rem 0.4rem', fontSize: '0.72rem' }} onClick={() => deletePhase(phase)}>Supprimer</button>
+              </>
+            )}
+          </div>
         </div>
         {open.length === 0 && done.length === 0 && <p className="muted" style={{ margin: '0.4rem 0 0', fontSize: '0.85rem' }}>Aucune tâche.</p>}
         {open.map((t) => <Row key={t.id} t={t} />)}
@@ -124,7 +97,6 @@ export function WorksiteTasks({ worksiteId }: { worksiteId: string }) {
             {done.map((t) => <Row key={t.id} t={t} />)}
           </>
         )}
-        <Composer phaseId={phase?.id ?? null} />
       </div>
     );
   }
@@ -138,6 +110,74 @@ export function WorksiteTasks({ worksiteId }: { worksiteId: string }) {
         <Section key={phase.id} phase={phase} items={tasks.filter((t) => t.phaseId === phase.id)} />
       ))}
       <Section phase={null} items={tasks.filter((t) => !t.phaseId)} />
+
+      {creatingFor && (
+        <TaskCreateModal
+          people={pick?.people ?? []}
+          onClose={() => setCreatingFor(null)}
+          onSubmit={async (body) => {
+            await api(`/api/worksites/${worksiteId}/tasks`, { method: 'POST', body: { ...body, phaseId: creatingFor.phaseId } });
+            setCreatingFor(null);
+            reload();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function TaskCreateModal({
+  people,
+  onClose,
+  onSubmit,
+}: {
+  people: { id: string; name: string }[];
+  onClose: () => void;
+  onSubmit: (body: { title: string; description: string | null; assigneeIds: string[]; dueOn: string | null }) => Promise<void>;
+}) {
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
+  const [dueOn, setDueOn] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!title.trim()) return;
+    setBusy(true);
+    await onSubmit({ title: title.trim(), description: description.trim() || null, assigneeIds, dueOn: dueOn || null });
+  }
+
+  return (
+    <div className="modal-scrim" onClick={onClose}>
+      <form className="modal" style={{ maxWidth: 480 }} onClick={(e) => e.stopPropagation()} onSubmit={submit}>
+        <div className="modal-head">
+          <h2>Nouvelle tâche</h2>
+          <button type="button" className="btn ghost" onClick={onClose} aria-label="Fermer">✕</button>
+        </div>
+        <div className="modal-body">
+          <div className="field">
+            <label>Titre *</label>
+            <input className="input" required autoFocus value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Poser le carrelage" />
+          </div>
+          <div className="field">
+            <label>Description</label>
+            <textarea className="input" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} />
+          </div>
+          <div className="field">
+            <label>Échéance</label>
+            <input className="input" type="date" value={dueOn} onChange={(e) => setDueOn(e.target.value)} />
+          </div>
+          <div className="field">
+            <label>Assigné(s)</label>
+            <AssigneePicker people={people} value={assigneeIds} onChange={setAssigneeIds} />
+          </div>
+        </div>
+        <div className="modal-foot">
+          <button type="button" className="btn" onClick={onClose}>Annuler</button>
+          <button type="submit" className="btn primary" disabled={busy}>{busy ? 'Création…' : 'Créer'}</button>
+        </div>
+      </form>
     </div>
   );
 }

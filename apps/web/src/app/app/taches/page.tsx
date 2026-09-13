@@ -12,6 +12,16 @@ interface Task {
   worksite: { id: string; ref: string; title: string } | null;
 }
 
+type View = 'all' | 'today' | 'week' | 'overdue' | 'mine';
+
+const VIEWS: { key: View; label: string }[] = [
+  { key: 'all', label: 'Toutes les tâches' },
+  { key: 'today', label: "Aujourd'hui" },
+  { key: 'week', label: 'Cette semaine' },
+  { key: 'overdue', label: 'En retard' },
+  { key: 'mine', label: 'Mes tâches' },
+];
+
 const NEXT: Record<string, string> = { todo: 'doing', doing: 'done', done: 'todo' };
 const DOT: Record<string, string> = { todo: 'var(--ink-3)', doing: 'var(--warn)', done: 'var(--ok)' };
 
@@ -19,9 +29,15 @@ function selectedOptions(e: React.ChangeEvent<HTMLSelectElement>): string[] {
   return Array.from(e.target.selectedOptions).map((o) => o.value);
 }
 
+function queryFor(view: View): string {
+  if (view === 'mine') return '?mine=1';
+  if (view === 'all') return '';
+  return `?view=${view}`;
+}
+
 export default function TachesPage() {
-  const [tab, setTab] = useState<'general' | 'mine'>('general');
-  const { data, reload } = useApi<{ items: Task[] }>(`/api/tasks${tab === 'mine' ? '?mine=1' : ''}`);
+  const [view, setView] = useState<View>('all');
+  const { data, reload } = useApi<{ items: Task[] }>(`/api/tasks${queryFor(view)}`);
   const { data: pick } = useApi<{ staff: { id: string; name: string }[] }>('/api/meta/pickers');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -53,7 +69,7 @@ export default function TachesPage() {
           <span style={{ textDecoration: t.status === 'done' ? 'line-through' : undefined, color: t.status === 'done' ? 'var(--ink-3)' : undefined }}>{t.title}</span>
           {t.description && <div className="muted" style={{ fontSize: '0.8rem', marginTop: 2 }}>{t.description}</div>}
           <div className="row" style={{ gap: '0.4rem', marginTop: 3, flexWrap: 'wrap' }}>
-            {t.worksite && <Link href={`/app/chantiers/${t.worksite.id}`} className="badge plain">{t.worksite.ref}</Link>}
+            {t.worksite && <Link href={`/app/chantiers/${t.worksite.id}`} className="badge plain">{t.worksite.ref} · {t.worksite.title}</Link>}
             {t.assignees.map((a) => <span key={a.id} className="badge plain">{a.name}</span>)}
             {t.dueOn && <span className={`badge ${late ? 'crit' : 'plain'}`}>{formatDateBE(t.dueOn)}</span>}
             {t.source === 'ai-draft' && <span className="badge warn" title="Proposée par l'assistant IA — à valider">✨ Proposé par l&apos;IA</span>}
@@ -68,10 +84,11 @@ export default function TachesPage() {
 
   return (
     <>
-      <PageHead title="Tâches" sub="Tâches générales (administratif, bureau) et tâches qui te sont assignées, sur ou hors chantier" />
+      <PageHead title="Tâches" sub="Toutes les tâches, sur chantier ou générales — façon TrustUp" />
       <div className="seg" style={{ marginBottom: '1rem' }}>
-        <button className={tab === 'general' ? 'on' : ''} onClick={() => setTab('general')}>Tâches générales</button>
-        <button className={tab === 'mine' ? 'on' : ''} onClick={() => setTab('mine')}>Mes tâches</button>
+        {VIEWS.map((v) => (
+          <button key={v.key} className={view === v.key ? 'on' : ''} onClick={() => setView(v.key)}>{v.label}</button>
+        ))}
       </div>
 
       <div className="card card-pad">
@@ -83,24 +100,22 @@ export default function TachesPage() {
             {done.map((t) => <Row key={t.id} t={t} />)}
           </>
         )}
-        {tab === 'general' && (
-          <div className="row" style={{ gap: '0.4rem', marginTop: '0.9rem', borderTop: '1px solid var(--line)', paddingTop: '0.8rem', flexWrap: 'wrap' }}>
-            <input className="input" style={{ flex: 1, minWidth: 160 }} placeholder="Nouvelle tâche générale…" value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} />
-            <input className="input" style={{ flex: 1, minWidth: 160 }} placeholder="Description (optionnel)" value={description} onChange={(e) => setDescription(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} />
-            <select
-              className="select"
-              multiple
-              style={{ maxWidth: 160, height: 62 }}
-              value={assigneeIds}
-              onChange={(e) => setAssigneeIds(selectedOptions(e))}
-              title="Qui (ctrl/cmd + clic pour plusieurs)"
-            >
-              {(pick?.staff ?? []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-            <input className="input" style={{ maxWidth: 150 }} type="date" value={due} onChange={(e) => setDue(e.target.value)} />
-            <button className="btn primary" onClick={add}>Ajouter</button>
-          </div>
-        )}
+        <div className="row" style={{ gap: '0.4rem', marginTop: '0.9rem', borderTop: '1px solid var(--line)', paddingTop: '0.8rem', flexWrap: 'wrap' }}>
+          <input className="input" style={{ flex: 1, minWidth: 160 }} placeholder="+ Nouvelle tâche générale (sans chantier)…" value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} />
+          <input className="input" style={{ flex: 1, minWidth: 160 }} placeholder="Description (optionnel)" value={description} onChange={(e) => setDescription(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} />
+          <select
+            className="select"
+            multiple
+            style={{ maxWidth: 160, height: 62 }}
+            value={assigneeIds}
+            onChange={(e) => setAssigneeIds(selectedOptions(e))}
+            title="Qui (ctrl/cmd + clic pour plusieurs)"
+          >
+            {(pick?.staff ?? []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+          <input className="input" style={{ maxWidth: 150 }} type="date" value={due} onChange={(e) => setDue(e.target.value)} />
+          <button className="btn primary" onClick={add}>Ajouter</button>
+        </div>
       </div>
     </>
   );

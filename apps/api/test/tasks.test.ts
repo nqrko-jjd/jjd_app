@@ -135,3 +135,66 @@ test('POST /api/documents/:id/tasks-from-lines : 422 si le devis n’a pas de ch
   assert.equal(r.status, 422);
   await prisma.document.delete({ where: { id: doc.id } });
 });
+
+test('phases : créée, tâche rattachée, renommée, supprimée -> la tâche repasse sans phase', async () => {
+  const create = await fetch(`${base}/api/worksites/${wsId}/phases`, {
+    method: 'POST',
+    headers: auth(),
+    body: JSON.stringify({ name: 'Gros-oeuvre' }),
+  });
+  assert.equal(create.status, 201);
+  const { phase } = await create.json();
+
+  const list = await (await fetch(`${base}/api/worksites/${wsId}/phases`, { headers: auth() })).json();
+  assert.ok(list.items.some((p: { id: string }) => p.id === phase.id));
+
+  const rename = await fetch(`${base}/api/phases/${phase.id}`, {
+    method: 'PATCH',
+    headers: auth(),
+    body: JSON.stringify({ name: 'Gros-oeuvre & structure' }),
+  });
+  assert.equal(rename.status, 200);
+  assert.equal((await rename.json()).phase.name, 'Gros-oeuvre & structure');
+
+  const taskPost = await fetch(`${base}/api/worksites/${wsId}/tasks`, {
+    method: 'POST',
+    headers: auth(),
+    body: JSON.stringify({ title: 'Couler la dalle', phaseId: phase.id }),
+  });
+  const { task } = await taskPost.json();
+  assert.equal(task.phaseId, phase.id);
+
+  const del = await fetch(`${base}/api/phases/${phase.id}`, { method: 'DELETE', headers: auth() });
+  assert.equal(del.status, 200);
+
+  const after2 = await (await fetch(`${base}/api/worksites/${wsId}/tasks`, { headers: auth() })).json();
+  const found = after2.items.find((t: { id: string }) => t.id === task.id);
+  assert.equal(found.phaseId, null); // la tâche survit, juste sans phase (SetNull)
+});
+
+test('GET /api/tasks?view=overdue|today : filtre par échéance, exclut les tâches terminées pour "overdue"', async () => {
+  const yesterday = new Date(Date.now() - 24 * 3600 * 1000).toISOString().slice(0, 10);
+  const today = new Date().toISOString().slice(0, 10);
+
+  const lateTask = await (
+    await fetch(`${base}/api/tasks`, { method: 'POST', headers: auth(), body: JSON.stringify({ title: 'En retard', dueOn: yesterday }) })
+  ).json();
+  const lateDoneTask = await (
+    await fetch(`${base}/api/tasks`, { method: 'POST', headers: auth(), body: JSON.stringify({ title: 'En retard mais faite', dueOn: yesterday }) })
+  ).json();
+  await fetch(`${base}/api/tasks/${lateDoneTask.task.id}`, { method: 'PATCH', headers: auth(), body: JSON.stringify({ status: 'done' }) });
+  const todayTask = await (
+    await fetch(`${base}/api/tasks`, { method: 'POST', headers: auth(), body: JSON.stringify({ title: 'Pour aujourd’hui', dueOn: today }) })
+  ).json();
+
+  const overdue = await (await fetch(`${base}/api/tasks?view=overdue`, { headers: auth() })).json();
+  assert.ok(overdue.items.some((t: { id: string }) => t.id === lateTask.task.id));
+  assert.ok(!overdue.items.some((t: { id: string }) => t.id === lateDoneTask.task.id));
+  assert.ok(!overdue.items.some((t: { id: string }) => t.id === todayTask.task.id));
+
+  const dueToday = await (await fetch(`${base}/api/tasks?view=today`, { headers: auth() })).json();
+  assert.ok(dueToday.items.some((t: { id: string }) => t.id === todayTask.task.id));
+  assert.ok(!dueToday.items.some((t: { id: string }) => t.id === lateTask.task.id));
+
+  await prisma.worksiteTask.deleteMany({ where: { id: { in: [lateTask.task.id, lateDoneTask.task.id, todayTask.task.id] } } });
+});

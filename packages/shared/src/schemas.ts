@@ -281,6 +281,7 @@ export const worksiteReportInput = z.object({
 
 export const worksiteTaskInput = z.object({
   worksiteId: z.string().nullish(), // absent = tâche générale (pas de chantier)
+  phaseId: z.string().nullish(), // groupe d'affichage au sein du chantier ; absent = "sans phase"
   title: nonEmpty,
   description: z.string().trim().nullish(),
   status: z.enum(['todo', 'doing', 'done']).default('todo'),
@@ -288,6 +289,11 @@ export const worksiteTaskInput = z.object({
   dueOn: z.coerce.date().nullish(),
 });
 export type WorksiteTaskInput = z.infer<typeof worksiteTaskInput>;
+
+export const taskPhaseInput = z.object({
+  name: nonEmpty,
+});
+export type TaskPhaseInput = z.infer<typeof taskPhaseInput>;
 
 export const reportSignInput = z.object({
   clientName: z.string().trim().min(2),

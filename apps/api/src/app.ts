@@ -23,7 +23,7 @@ import { documentsRouter, priceItemsRouter } from './routes/documents.js';
 import { settingsRouter } from './routes/settings.js';
 import { publicRouter } from './routes/public.js';
 import { worksiteReportsRouter, reportsRouter } from './routes/reports.js';
-import { worksiteTasksRouter, tasksRouter } from './routes/tasks.js';
+import { worksiteTasksRouter, tasksRouter, worksitePhasesRouter, phasesRouter } from './routes/tasks.js';
 import { materielRouter } from './routes/materiel.js';
 import { stockRouter } from './routes/stock.js';
 import { assistantRouter } from './routes/assistant.js';
@@ -46,6 +46,8 @@ export function createApp() {
   app.use('/api/worksites/:worksiteId/thread', threadRouter);
   app.use('/api/worksites/:worksiteId/reports', worksiteReportsRouter);
   app.use('/api/reports', reportsRouter);
+  app.use('/api/worksites/:worksiteId/phases', worksitePhasesRouter);
+  app.use('/api/phases', phasesRouter);
   app.use('/api/worksites/:worksiteId/tasks', worksiteTasksRouter);
   app.use('/api/tasks', tasksRouter);
   app.use('/api/dashboard', dashboardRouter);

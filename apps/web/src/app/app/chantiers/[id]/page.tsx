@@ -79,8 +79,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
 
   const editFields: FieldDef[] = [
     { name: 'title', label: 'Intitulé', required: true, full: true },
-    { name: 'clientId', label: 'Client', type: 'contact', full: true },
-    { name: 'buildingId', label: 'Immeuble / ACP', type: 'select', options: (pick?.buildings ?? []).map((b) => ({ value: b.id, label: b.name })) },
+    { name: 'clientId', label: 'Client / Immeuble', type: 'client-or-building', buildingField: 'buildingId', full: true },
     { name: 'managerId', label: 'Chef de chantier', type: 'select', options: (pick?.people ?? []).map((p) => ({ value: p.id, label: p.name })) },
     { name: 'entity', label: 'Entité', type: 'select', options: ENTITIES.map((e) => ({ value: e, label: ENTITY_LABEL[e] })) },
     { name: 'status', label: 'Statut', type: 'select', options: WORKSITE_STATUSES.map((s) => ({ value: s, label: WORKSITE_STATUS_LABEL[s] })) },

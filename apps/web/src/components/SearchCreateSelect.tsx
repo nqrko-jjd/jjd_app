@@ -6,6 +6,9 @@ export interface PickerItem {
   id: string;
   name: string;
   sub?: string; // ex. ville, sous-titre affiché en petit sous le nom
+  /** Données additionnelles portées par ce résultat (ex. l'immeuble lié à un contact) —
+   *  transmises telles quelles au 3e argument de `onChange` quand ce résultat est choisi. */
+  meta?: Record<string, unknown>;
 }
 
 /**
@@ -29,7 +32,7 @@ export function SearchCreateSelect({
 }: {
   id?: string;
   value: string;
-  onChange: (id: string, label: string) => void;
+  onChange: (id: string, label: string, meta?: PickerItem['meta']) => void;
   search: (q: string) => Promise<PickerItem[]>;
   resolveLabel?: (id: string) => Promise<string | null>;
   createLabel: string;
@@ -94,7 +97,7 @@ export function SearchCreateSelect({
 
   function pick(item: PickerItem) {
     pickedRef.current = true;
-    onChange(item.id, item.name);
+    onChange(item.id, item.name, item.meta);
     setQuery(item.name);
     setOpen(false);
     setItems([]);

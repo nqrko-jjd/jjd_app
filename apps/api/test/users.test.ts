@@ -84,6 +84,52 @@ test('POST /api/users/:id/reset-password : renvoie un nouveau mot de passe utili
   assert.equal(loginCheck.status, 200);
 });
 
+test('POST /api/users : crée un compte autonome (sans fiche Équipe liée)', async () => {
+  await prisma.user.deleteMany({ where: { email: 'users-test-new@jjd-consult.be' } });
+  const r = await fetch(`${base}/api/users`, {
+    method: 'POST',
+    headers: auth(adminToken),
+    body: JSON.stringify({ email: 'users-test-new@jjd-consult.be', role: 'office' }),
+  });
+  assert.equal(r.status, 201);
+  const { email, password } = await r.json();
+  assert.equal(email, 'users-test-new@jjd-consult.be');
+  const loginCheck = await fetch(`${base}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+  assert.equal(loginCheck.status, 200);
+  await prisma.user.deleteMany({ where: { email: 'users-test-new@jjd-consult.be' } });
+});
+
+test('POST /api/users : refuse un e-mail déjà pris et un rôle invalide', async () => {
+  const dup = await fetch(`${base}/api/users`, {
+    method: 'POST',
+    headers: auth(adminToken),
+    body: JSON.stringify({ email: 'david@jjd-consult.be', role: 'office' }),
+  });
+  assert.equal(dup.status, 409);
+
+  const badRole = await fetch(`${base}/api/users`, {
+    method: 'POST',
+    headers: auth(adminToken),
+    body: JSON.stringify({ email: 'users-test-badrole@jjd-consult.be', role: 'client' }),
+  });
+  assert.equal(badRole.status, 422);
+});
+
+test('POST /api/users : lié à une fiche Équipe, refuse si elle a déjà un compte', async () => {
+  const person = await prisma.person.findFirst({ where: { user: { isNot: null } } });
+  assert.ok(person, 'attendu : au moins une Person liée à un User dans le jeu de test');
+  const r = await fetch(`${base}/api/users`, {
+    method: 'POST',
+    headers: auth(adminToken),
+    body: JSON.stringify({ email: 'users-test-linked@jjd-consult.be', role: 'worker', personId: person!.id }),
+  });
+  assert.equal(r.status, 409);
+});
+
 test('DELETE /api/users/:id : refuse de se supprimer soi-même, mais supprime un autre compte', async () => {
   const self = await fetch(`${base}/api/users/${adminUserId}`, { method: 'DELETE', headers: auth(adminToken) });
   assert.equal(self.status, 409);

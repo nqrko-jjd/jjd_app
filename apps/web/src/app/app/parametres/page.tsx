@@ -5,8 +5,9 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { PageHead, Money, formatDateBE } from '@/lib/ui';
 import type { Company } from '@/lib/doc-ui';
-import { VAT_RATES, ROLES, ROLE_LABEL } from '@jjd/shared';
+import { VAT_RATES, ROLES, ROLE_LABEL, INTERNAL_ROLES } from '@jjd/shared';
 import { AddressAutocomplete } from '@/components/AddressAutocomplete';
+import { FormModal, type FieldDef } from '@/components/FormModal';
 
 interface PriceItem {
   id: string; ref: string | null; label: string; description: string | null;
@@ -38,12 +39,25 @@ export default function ParametresPage() {
 
 interface UserRow {
   id: string; email: string; role: string; active: boolean; portalAccess: string;
-  lastLoginAt: string | null; label: string; link: string | null;
+  lastLoginAt: string | null; label: string; link: string | null; personId: string | null;
 }
 
 function UsersTab() {
   const { data, reload } = useApi<{ items: UserRow[] }>('/api/users');
   const [msg, setMsg] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const { data: pick } = useApi<{ people: { id: string; name: string }[] }>(creating ? '/api/meta/pickers' : null);
+  const linkedPersonIds = new Set((data?.items ?? []).map((u) => u.personId).filter(Boolean));
+  const unlinkedPeople = (pick?.people ?? []).filter((p) => !linkedPersonIds.has(p.id));
+
+  const createFields: FieldDef[] = [
+    { name: 'email', label: 'E-mail', required: true },
+    { name: 'role', label: 'Rôle', type: 'select', required: true, options: INTERNAL_ROLES.map((r) => ({ value: r, label: ROLE_LABEL[r] })) },
+    {
+      name: 'personId', label: 'Fiche Équipe liée (optionnel)', type: 'select',
+      options: unlinkedPeople.map((p) => ({ value: p.id, label: p.name })),
+    },
+  ];
 
   async function setRole(id: string, role: string) {
     await api(`/api/users/${id}`, { method: 'PATCH', body: { role } });
@@ -75,11 +89,27 @@ function UsersTab() {
   if (!data) return <div className="empty">Chargement…</div>;
   return (
     <>
+      {creating && (
+        <FormModal
+          title="Nouveau compte"
+          fields={createFields}
+          initial={{ role: 'worker' }}
+          onClose={() => setCreating(false)}
+          onSubmit={async (v) => {
+            const r = await api<{ email: string; password: string }>('/api/users', { method: 'POST', body: v });
+            setMsg(`Compte créé pour ${r.email} — mot de passe provisoire : ${r.password} (à communiquer à la personne, il ne sera plus affiché).`);
+            reload();
+          }}
+        />
+      )}
       {msg && (
         <div className="card card-pad" style={{ marginBottom: '1rem', borderColor: 'var(--ok)' }}>
           {msg} <button className="btn ghost" style={{ marginLeft: '0.5rem' }} onClick={() => setMsg(null)}>✕</button>
         </div>
       )}
+      <div className="row" style={{ marginBottom: '1rem' }}>
+        <button className="btn primary" onClick={() => setCreating(true)}>+ Nouveau compte</button>
+      </div>
       <div className="tbl-wrap">
         <table className="tbl">
           <thead>

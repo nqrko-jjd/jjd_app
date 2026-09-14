@@ -109,6 +109,29 @@ buildingsRouter.patch(
   }),
 );
 
+/** Les contacts-clés et lots de l'immeuble sont supprimés en cascade avec lui (métadonnées
+ *  propres au bâtiment) — mais tant que des chantiers, opportunités, contacts ACP liés ou
+ *  comptes portail « résident » y font encore référence, la suppression est bloquée. */
+buildingsRouter.delete(
+  '/:id',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const id = req.params.id;
+    const [worksites, opportunities, linkedContacts, portalUsers] = await Promise.all([
+      prisma.worksite.count({ where: { buildingId: id } }),
+      prisma.crmOpportunity.count({ where: { buildingId: id } }),
+      prisma.contact.count({ where: { buildingId: id } }),
+      prisma.user.count({ where: { buildingId: id } }),
+    ]);
+    const refs = worksites + opportunities + linkedContacts + portalUsers;
+    if (refs > 0) {
+      throw new HttpError(409, `Cet immeuble est encore lié à des données (${refs} référence${refs > 1 ? 's' : ''} : chantiers, opportunités, contacts ACP, comptes portail…) — impossible de le supprimer.`);
+    }
+    await prisma.building.delete({ where: { id } });
+    res.status(204).end();
+  }),
+);
+
 /* ------------------------------------------------------ Accès portail (résidents) */
 
 buildingsRouter.get(

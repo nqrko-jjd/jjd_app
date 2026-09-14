@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { ROLES } from '@jjd/shared';
+import { ROLES, INTERNAL_ROLES } from '@jjd/shared';
 import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, hashPassword } from '../lib/auth.js';
@@ -44,9 +44,38 @@ usersRouter.get(
         lastLoginAt: u.lastLoginAt,
         createdAt: u.createdAt,
         label: label(u),
+        personId: u.person?.id ?? null,
         link: u.person ? `/app/equipe/${u.person.id}` : u.contact ? `/app/contacts/${u.contact.id}` : u.building ? `/app/immeubles/${u.building.id}` : null,
       })),
     });
+  }),
+);
+
+/** Crée un compte de connexion (équipe bureau/terrain) — optionnellement lié à une fiche
+ *  Équipe existante (`personId`), sinon un compte autonome (ex. un admin sans fiche Équipe). */
+usersRouter.post(
+  '/',
+  requireAuth('admin'),
+  asyncHandler(async (req, res) => {
+    const { email: rawEmail, role, personId } = req.body as { email?: string; role?: string; personId?: string };
+    const email = String(rawEmail ?? '').trim().toLowerCase();
+    if (!/.+@.+\..+/.test(email)) throw new HttpError(422, 'E-mail invalide');
+    if (await prisma.user.findUnique({ where: { email } })) throw new HttpError(409, 'Cet e-mail est déjà pris');
+    if (!role || !INTERNAL_ROLES.includes(role as (typeof INTERNAL_ROLES)[number])) throw new HttpError(422, 'Rôle invalide');
+
+    let resolvedPersonId: string | null = null;
+    if (personId) {
+      const person = await prisma.person.findUnique({ where: { id: personId }, include: { user: true } });
+      if (!person) throw new HttpError(404, 'Fiche équipe introuvable');
+      if (person.user) throw new HttpError(409, 'Un compte existe déjà pour cette personne');
+      resolvedPersonId = person.id;
+    }
+
+    const password = Math.random().toString(36).slice(2, 8);
+    const user = await prisma.user.create({
+      data: { email, passwordHash: await hashPassword(password), role, personId: resolvedPersonId },
+    });
+    res.status(201).json({ email: user.email, password });
   }),
 );
 

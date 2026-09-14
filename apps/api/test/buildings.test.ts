@@ -28,6 +28,7 @@ before(async () => {
 });
 
 after(async () => {
+  await prisma.worksite.deleteMany({ where: { ref: 'R-TESTDEL' } });
   await prisma.building.deleteMany({ where: { source: 'test' } });
   server.close();
 });
@@ -138,6 +139,20 @@ test('immeuble : ne remplace pas un lien contact déjà existant vers un autre b
     await prisma.contact.deleteMany({ where: { id: client.id } });
     await prisma.building.deleteMany({ where: { id: otherBuilding.id } });
   }
+});
+
+test('immeuble : suppression bloquée si encore référencé, permise sinon', async () => {
+  await prisma.worksite.deleteMany({ where: { ref: 'R-TESTDEL' } });
+  const b = await prisma.building.create({ data: { name: 'Test à supprimer', normalizedName: 'test a supprimer', source: 'test' } });
+  const ws = await prisma.worksite.create({ data: { ref: 'R-TESTDEL', title: 'Test', buildingId: b.id, source: 'test' } });
+
+  const blocked = await fetch(`${base}/api/buildings/${b.id}`, { method: 'DELETE', headers: auth() });
+  assert.equal(blocked.status, 409);
+
+  await prisma.worksite.delete({ where: { id: ws.id } });
+  const ok = await fetch(`${base}/api/buildings/${b.id}`, { method: 'DELETE', headers: auth() });
+  assert.equal(ok.status, 204);
+  assert.equal(await prisma.building.findUnique({ where: { id: b.id } }), null);
 });
 
 test('immeuble : champs ACP éditables', async () => {

@@ -15,7 +15,7 @@ before(async () => {
   base = `http://127.0.0.1:${typeof addr === 'object' && addr ? addr.port : 0}`;
 
   // le compte syndic de démo est recréé par import:trustup ; on s'assure qu'il existe
-  const syndic = await prisma.syndic.findFirst({ orderBy: { buildings: { _count: 'desc' } } });
+  const syndic = await prisma.syndic.findFirst({ orderBy: { contacts: { _count: 'desc' } } });
   if (!syndic) return;
   await prisma.user.upsert({
     where: { email: 'test-syndic@portal.test' },
@@ -73,12 +73,12 @@ test('portail : dashboard refusé sans token', async () => {
 });
 
 test('portail : accès résident limité — scoping immeuble + pas de devis/factures', async () => {
-  const b = await prisma.building.findFirst({ where: { worksites: { some: { documents: { some: { number: { not: null } } } } } } });
+  const b = await prisma.contact.findFirst({ where: { kind: { in: ['acp', 'developer'] }, acpWorksites: { some: { documents: { some: { number: { not: null } } } } } } });
   if (!b) return;
   await prisma.user.upsert({
     where: { email: 'test-resident@portal.test' },
-    create: { email: 'test-resident@portal.test', passwordHash: 'x', role: 'client', buildingId: b.id, portalAccess: 'limited' },
-    update: { buildingId: b.id, portalAccess: 'limited', active: true },
+    create: { email: 'test-resident@portal.test', passwordHash: 'x', role: 'client', residentOfId: b.id, portalAccess: 'limited' },
+    update: { residentOfId: b.id, portalAccess: 'limited', active: true },
   });
   const link = await (await fetch(`${base}/api/portal/request-link`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'test-resident@portal.test' }) })).json();
   const { token: rt } = await (await fetch(`${base}/api/portal/verify`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: link.devToken }) })).json();

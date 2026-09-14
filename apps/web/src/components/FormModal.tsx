@@ -2,13 +2,11 @@
 import { useEffect, useState } from 'react';
 import { AddressAutocomplete } from './AddressAutocomplete';
 import { ContactPicker } from './ContactPicker';
-import { BuildingPicker } from './BuildingPicker';
-import { ClientOrBuildingPicker } from './ClientOrBuildingPicker';
 
 export interface FieldDef {
   name: string;
   label: string;
-  type?: 'text' | 'textarea' | 'number' | 'date' | 'select' | 'tags' | 'checkbox' | 'address' | 'contact' | 'building' | 'client-or-building';
+  type?: 'text' | 'textarea' | 'number' | 'date' | 'select' | 'tags' | 'checkbox' | 'address' | 'contact';
   options?: { value: string; label: string }[];
   required?: boolean;
   placeholder?: string;
@@ -26,9 +24,10 @@ export interface FieldDef {
   /** Pour un champ `type: 'contact'` : restreint la recherche/création aux contacts client ou
    *  fournisseur. Par défaut 'client'. */
   contactTypeFilter?: 'client' | 'supplier';
-  /** Pour un champ `type: 'client-or-building'` : nom de l'autre champ du formulaire où
-   *  stocker le `buildingId` dérivé en même temps que ce champ pose le `clientId`. */
-  buildingField?: string;
+  /** Pour un champ `type: 'contact'` : restreint la recherche (pas la création) aux contacts
+   *  d'une ou plusieurs catégories (ex. `['acp', 'developer']` pour ne chercher que des
+   *  immeubles/projets). */
+  contactKindFilter?: string[];
 }
 
 export function FormModal({
@@ -88,7 +87,6 @@ export function FormModal({
         if (f.type === 'checkbox') { clean[f.name] = !!val; continue; }
         if (val === '') val = null;
         clean[f.name] = val;
-        if (f.type === 'client-or-building' && f.buildingField) clean[f.buildingField] = v[f.buildingField] ?? null;
       }
       await onSubmit(clean);
       onClose();
@@ -146,24 +144,8 @@ export function FormModal({
                   id={f.name}
                   value={(v[f.name] as string) ?? ''}
                   typeFilter={f.contactTypeFilter ?? 'client'}
+                  kindFilter={f.contactKindFilter}
                   onChange={(cid) => setV((prev) => ({ ...prev, [f.name]: cid }))}
-                  placeholder={f.placeholder}
-                  required={f.required}
-                />
-              ) : f.type === 'building' ? (
-                <BuildingPicker
-                  id={f.name}
-                  value={(v[f.name] as string) ?? ''}
-                  onChange={(bid) => setV((prev) => ({ ...prev, [f.name]: bid }))}
-                  placeholder={f.placeholder}
-                  required={f.required}
-                />
-              ) : f.type === 'client-or-building' ? (
-                <ClientOrBuildingPicker
-                  id={f.name}
-                  clientId={(v[f.name] as string) ?? ''}
-                  buildingId={(v[f.buildingField!] as string) ?? null}
-                  onChange={({ clientId, buildingId }) => setV((prev) => ({ ...prev, [f.name]: clientId, [f.buildingField!]: buildingId }))}
                   placeholder={f.placeholder}
                   required={f.required}
                 />

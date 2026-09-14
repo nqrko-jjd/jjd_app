@@ -10,6 +10,14 @@ const isPaidStr = (s: string | null) =>
 
 export const contactsRouter = Router();
 
+/** L'API expose l'auto-référence `linkedAcpId`/`linkedAcp` (l'ACP à laquelle CE contact est
+ *  rattaché) sous le nom `buildingId`/`building`, conservé pour la compatibilité avec les
+ *  clients existants (web/mobile). */
+function shapeContact<T extends { linkedAcpId?: string | null; linkedAcp?: unknown }>(c: T) {
+  const { linkedAcpId, linkedAcp, ...rest } = c;
+  return { ...rest, buildingId: linkedAcpId, ...(linkedAcp !== undefined ? { building: linkedAcp } : {}) };
+}
+
 /** Recherche une entreprise par n° de TVA (VIES) pour préremplir un nouveau contact. */
 contactsRouter.get(
   '/vat-lookup',
@@ -27,9 +35,10 @@ contactsRouter.get(
   '/',
   requireAuth(...STAFF),
   asyncHandler(async (req, res) => {
-    const { type, q, page: pageStr, pageSize: pageSizeStr } = req.query as Record<string, string>;
+    const { type, kind, q, page: pageStr, pageSize: pageSizeStr } = req.query as Record<string, string>;
     const where: Record<string, unknown> = {};
     if (type && type !== 'all') where.OR = [{ type }, { type: 'both' }];
+    if (kind) where.kind = { in: kind.split(',') };
     if (q) {
       where.AND = [{ OR: [{ name: { contains: q } }, { city: { contains: q } }, { vat: { contains: q } }] }];
     }
@@ -45,13 +54,16 @@ contactsRouter.get(
         take: pageSize,
         include: {
           syndic: { select: { id: true, name: true } },
-          building: { select: { id: true, name: true } },
+          linkedAcp: { select: { id: true, name: true } },
           _count: { select: { worksites: true } },
         },
       }),
       prisma.contact.count({ where }),
     ]);
-    res.json({ items, page, pageSize, totalCount, totalPages: Math.max(1, Math.ceil(totalCount / pageSize)) });
+    res.json({
+      items: items.map(shapeContact),
+      page, pageSize, totalCount, totalPages: Math.max(1, Math.ceil(totalCount / pageSize)),
+    });
   }),
 );
 
@@ -59,19 +71,19 @@ contactsRouter.get(
   '/:id',
   requireAuth(...STAFF),
   asyncHandler(async (req, res) => {
-    const contact = await prisma.contact.findUnique({
+    const found = await prisma.contact.findUnique({
       where: { id: req.params.id },
       include: {
         syndic: true,
-        building: { select: { id: true, name: true } },
-        buildings: true,
+        linkedAcp: { select: { id: true, name: true } },
         worksites: { orderBy: { updatedAt: 'desc' }, take: 50 },
         opportunities: { orderBy: { updatedAt: 'desc' }, take: 20 },
         user: { select: { email: true } },
         contactPersons: { orderBy: { position: 'asc' } },
       },
     });
-    if (!contact) throw new HttpError(404, 'Contact introuvable');
+    if (!found) throw new HttpError(404, 'Contact introuvable');
+    const contact = shapeContact(found);
 
     // Achats : tout l'historique (achats + notes de crédit) — sert au résumé, à la liste
     // récente affichée et au solde du compte (« en compte » chez le fournisseur : les
@@ -127,18 +139,18 @@ contactsRouter.post(
   '/',
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
-    const data = contactInput.parse(req.body);
+    const { buildingId, ...data } = contactInput.parse(req.body);
     const contact = await prisma.contact.create({
       data: {
         ...data,
         email: data.email || null,
         normalizedName: normalizeName(data.name),
         syndicId: data.syndicId ?? null,
-        buildingId: data.buildingId ?? null,
+        linkedAcpId: buildingId ?? null,
         source: 'manual',
       },
     });
-    res.status(201).json({ contact });
+    res.status(201).json({ contact: shapeContact(contact) });
   }),
 );
 
@@ -157,15 +169,15 @@ contactsRouter.post(
     // si le contact EST un syndic -> accès syndic (voit tous ses immeubles)
     const asSyndic = contact.kind === 'syndic' && contact.syndicId;
     const access = req.body.access === 'limited' ? 'limited' : 'full';
-    const buildingId = typeof req.body.buildingId === 'string' && req.body.buildingId ? req.body.buildingId : null;
+    const residentOfId = typeof req.body.buildingId === 'string' && req.body.buildingId ? req.body.buildingId : null;
     await prisma.user.create({
       data: {
         email,
         passwordHash: await hashPassword(Math.random().toString(36).slice(2)),
         role: 'client',
-        contactId: asSyndic || buildingId ? null : contact.id,
+        contactId: asSyndic || residentOfId ? null : contact.id,
         syndicId: asSyndic ? contact.syndicId : null,
-        buildingId,
+        residentOfId,
         portalAccess: asSyndic ? 'full' : access,
       },
     });
@@ -177,16 +189,17 @@ contactsRouter.patch(
   '/:id',
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
-    const data = contactInput.partial().parse(req.body);
+    const { buildingId, ...data } = contactInput.partial().parse(req.body);
     const contact = await prisma.contact.update({
       where: { id: req.params.id },
       data: {
         ...data,
         email: data.email === '' ? null : data.email,
         ...(data.name ? { normalizedName: normalizeName(data.name) } : {}),
+        ...(buildingId !== undefined ? { linkedAcpId: buildingId } : {}),
       },
     });
-    res.json({ contact });
+    res.json({ contact: shapeContact(contact) });
   }),
 );
 
@@ -199,17 +212,21 @@ contactsRouter.delete(
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
     const id = req.params.id as string;
-    const [worksites, buildings, opportunities, documents, ledgerEntries, buildingContacts] = await Promise.all([
+    const [worksites, acpWorksites, opportunities, acpOpportunities, documents, ledgerEntries, buildingContacts, buildingUnits, residents, portalUsers] = await Promise.all([
       prisma.worksite.count({ where: { clientId: id } }),
-      prisma.building.count({ where: { clientId: id } }),
+      prisma.worksite.count({ where: { acpId: id } }),
       prisma.crmOpportunity.count({ where: { contactId: id } }),
+      prisma.crmOpportunity.count({ where: { acpId: id } }),
       prisma.document.count({ where: { contactId: id } }),
       prisma.ledgerEntry.count({ where: { contactId: id } }),
       prisma.buildingContact.count({ where: { contactId: id } }),
+      prisma.buildingUnit.count({ where: { contactId: id } }),
+      prisma.contact.count({ where: { linkedAcpId: id } }),
+      prisma.user.count({ where: { residentOfId: id } }),
     ]);
-    const refs = worksites + buildings + opportunities + documents + ledgerEntries + buildingContacts;
+    const refs = worksites + acpWorksites + opportunities + acpOpportunities + documents + ledgerEntries + buildingContacts + buildingUnits + residents + portalUsers;
     if (refs > 0) {
-      throw new HttpError(409, `Ce contact est encore lié à des données (${refs} référence${refs > 1 ? 's' : ''} : chantiers, immeubles, devis/factures, achats…) — impossible de le supprimer.`);
+      throw new HttpError(409, `Ce contact est encore lié à des données (${refs} référence${refs > 1 ? 's' : ''} : chantiers, opportunités, devis/factures, achats, résidents, comptes portail…) — impossible de le supprimer.`);
     }
     await prisma.user.deleteMany({ where: { contactId: id } });
     await prisma.contact.delete({ where: { id } });

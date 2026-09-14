@@ -32,13 +32,13 @@ before(async () => {
   ).token;
   const p = await prisma.person.create({ data: { firstName: 'Photo', lastName: 'Test', normalizedName: 'photo test', source: 'test' } });
   personId = p.id;
-  const b = await prisma.building.create({ data: { name: 'Photo Test Immeuble', normalizedName: 'photo test immeuble', source: 'test' } });
+  const b = await prisma.contact.create({ data: { name: 'Photo Test Immeuble', normalizedName: 'photo test immeuble', type: 'client', kind: 'acp', source: 'test' } });
   buildingId = b.id;
 });
 
 after(async () => {
   await prisma.person.deleteMany({ where: { id: personId } });
-  await prisma.building.deleteMany({ where: { id: buildingId } });
+  await prisma.contact.deleteMany({ where: { id: buildingId } });
   server.close();
 });
 
@@ -76,12 +76,12 @@ test('photo : upload sur une fiche immeuble -> photoUrl + thumb, puis suppressio
   const body = await up.json();
   assert.match(body.photoUrl, /^\/uploads\/media\/.+\.webp$/);
 
-  const building = await prisma.building.findUnique({ where: { id: buildingId } });
+  const building = await prisma.contact.findUnique({ where: { id: buildingId } });
   assert.equal(building?.photoUrl, body.photoUrl);
 
   const del = await fetch(`${base}/api/buildings/${buildingId}/photo`, { method: 'DELETE', headers: { authorization: `Bearer ${token}` } });
   assert.equal(del.status, 200);
-  const after2 = await prisma.building.findUnique({ where: { id: buildingId } });
+  const after2 = await prisma.contact.findUnique({ where: { id: buildingId } });
   assert.equal(after2?.photoUrl, null);
 });
 

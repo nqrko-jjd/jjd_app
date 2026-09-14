@@ -34,7 +34,6 @@ const bump = (k: string, n = 1) => (stats[k] = (stats[k] ?? 0) + n);
 const syndics = new DedupeMap();
 const contacts = new DedupeMap();
 const people = new DedupeMap();
-const buildings = new DedupeMap();
 const worksiteByRef = new Map<string, string>(); // "R-523" -> id
 
 async function getSyndic(name: string): Promise<string> {
@@ -56,7 +55,7 @@ async function getContact(rawName: string, type: 'client' | 'supplier'): Promise
     // si on le connaissait comme client et qu'il est aussi fournisseur -> both
     return existing;
   }
-  const { base, syndic } = extractSyndic(name);
+  const { syndic } = extractSyndic(name);
   const syndicId = syndic ? await getSyndic(syndic) : null;
   const row = await prisma.contact.create({
     data: {
@@ -70,33 +69,7 @@ async function getContact(rawName: string, type: 'client' | 'supplier'): Promise
   });
   contacts.set(name, row.id);
   bump(type === 'client' ? 'contacts_client' : 'contacts_supplier');
-  // un ACP => aussi un immeuble
-  if (type === 'client' && (row.kind === 'acp')) {
-    await getBuilding(base || name, { syndicId, clientId: row.id });
-  }
-  return row.id;
-}
-
-async function getBuilding(
-  rawName: string,
-  opts: { syndicId?: string | null; clientId?: string | null; address?: string | null; city?: string | null } = {},
-): Promise<string | null> {
-  const name = rawName.trim();
-  if (!name) return null;
-  const existing = buildings.get(name);
-  if (existing) return existing;
-  const row = await prisma.building.create({
-    data: {
-      name,
-      normalizedName: normalizeName(name),
-      syndicId: opts.syndicId ?? null,
-      clientId: opts.clientId ?? null,
-      address: opts.address ?? null,
-      city: opts.city ?? null,
-    },
-  });
-  buildings.set(name, row.id);
-  bump('buildings');
+  // un ACP EST l'immeuble (fusion Contact/Immeuble) — rien de plus à créer.
   return row.id;
 }
 
@@ -134,7 +107,6 @@ async function purge() {
     prisma.fine.deleteMany({}), // ré-importées ici ; véhicules/assurances = registre dédié
     prisma.worksite.deleteMany({ where: { source: 'xlsx' } }),
     prisma.person.deleteMany({ where: { source: 'xlsx', user: { is: null } } }),
-    prisma.building.deleteMany({}),
     prisma.contact.deleteMany({ where: { source: 'xlsx', user: { is: null } } }),
     prisma.syndic.deleteMany({}),
     prisma.importIssue.deleteMany({}),
@@ -189,11 +161,12 @@ async function importWorksites(sh: SheetData, tontonRefs: Set<string>) {
     const entity = tontonRefs.has(ref.toUpperCase()) ? 'tonton' : attribution.includes('m7') ? 'm7' : 'jjd';
     const clientId = clientName ? await getContact(clientName, 'client') : null;
 
-    // immeuble : si le client est un ACP, getContact l'a déjà créé ; on le relie
-    let buildingId: string | null = null;
-    if (clientName) {
-      const { base } = extractSyndic(clientName);
-      buildingId = buildings.get(base) ?? buildings.get(clientName);
+    // immeuble : un ACP EST son propre immeuble (fusion Contact/Immeuble) — si le client
+    // facturé est une ACP/promoteur, il est aussi "l'immeuble" du chantier.
+    let acpId: string | null = null;
+    if (clientId) {
+      const clientContact = await prisma.contact.findUnique({ where: { id: clientId }, select: { kind: true } });
+      if (clientContact?.kind === 'acp' || clientContact?.kind === 'developer') acpId = clientId;
     }
 
     const managerId = managerName ? await getPerson(managerName, 'foreman') : null;
@@ -208,7 +181,7 @@ async function importWorksites(sh: SheetData, tontonRefs: Set<string>) {
         statusRaw,
         statusTags: statusRaw ? parseStatusTags(statusRaw) : undefined,
         clientId,
-        buildingId,
+        acpId,
         managerId,
         billTo,
         address,

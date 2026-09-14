@@ -10,9 +10,15 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 
 
 const reportInclude = {
   photos: { orderBy: { createdAt: 'asc' } },
-  worksite: { select: { id: true, ref: true, title: true, address: true, postalCode: true, city: true, client: { select: { name: true } }, building: { select: { name: true } } } },
+  worksite: { select: { id: true, ref: true, title: true, address: true, postalCode: true, city: true, client: { select: { name: true } }, acp: { select: { name: true } } } },
   author: { select: { email: true } },
 } as const;
+
+interface ReportWithWorksite { worksite: { acp: { name: string } | null } & Record<string, unknown> }
+function shapeReport<T extends ReportWithWorksite>(r: T) {
+  const { acp, ...worksiteRest } = r.worksite;
+  return { ...r, worksite: { ...worksiteRest, building: acp } };
+}
 
 async function authorName(userId: string | undefined): Promise<string> {
   if (!userId) return 'Terrain';
@@ -33,7 +39,7 @@ worksiteReportsRouter.get(
       orderBy: { date: 'desc' },
       include: reportInclude,
     });
-    res.json({ items });
+    res.json({ items: items.map(shapeReport) });
   }),
 );
 
@@ -57,7 +63,7 @@ worksiteReportsRouter.post(
       },
       include: reportInclude,
     });
-    res.status(201).json({ report });
+    res.status(201).json({ report: shapeReport(report) });
   }),
 );
 
@@ -71,7 +77,7 @@ reportsRouter.get(
   asyncHandler(async (req, res) => {
     const report = await prisma.worksiteReport.findUnique({ where: { id: req.params.id }, include: reportInclude });
     if (!report) throw new HttpError(404, 'Rapport introuvable');
-    res.json({ report });
+    res.json({ report: shapeReport(report) });
   }),
 );
 
@@ -93,7 +99,7 @@ reportsRouter.patch(
       },
       include: reportInclude,
     });
-    res.json({ report });
+    res.json({ report: shapeReport(report) });
   }),
 );
 
@@ -155,7 +161,7 @@ reportsRouter.post(
       data: { threadId: thread.id, authorName: updated.authorName, kind: 'status', body: `Rapport d'intervention signé par ${clientName}` },
     });
 
-    res.json({ report: updated });
+    res.json({ report: shapeReport(updated) });
   }),
 );
 

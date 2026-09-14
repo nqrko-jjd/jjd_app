@@ -187,12 +187,12 @@ planningRouter.get(
             postalCode: true,
             city: true,
             client: { select: { name: true, phone: true } },
-            building: {
+            acp: {
               select: {
                 name: true,
                 digicode: true,
                 accessNote: true,
-                contacts: { orderBy: { position: 'asc' }, select: { role: true, name: true, phone: true } },
+                acpKeyContacts: { orderBy: { position: 'asc' }, select: { role: true, name: true, phone: true } },
               },
             },
             manager: { select: { displayName: true, firstName: true, phone: true } },
@@ -228,8 +228,8 @@ planningRouter.get(
         instructions: ev.note,
         worksite: { id: w.id, ref: w.ref, title: w.title, description: w.description, address },
         client: w.client,
-        building: w.building
-          ? { name: w.building.name, digicode: w.building.digicode, accessNote: w.building.accessNote, contacts: w.building.contacts }
+        building: w.acp
+          ? { name: w.acp.name, digicode: w.acp.digicode, accessNote: w.acp.accessNote, contacts: w.acp.acpKeyContacts }
           : null,
         manager: w.manager ? { name: w.manager.displayName || w.manager.firstName, phone: w.manager.phone } : null,
         team: ev.team?.name ?? null,

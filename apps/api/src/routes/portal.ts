@@ -99,27 +99,27 @@ portalRouter.get(
     const mSel = { select: { displayName: true, firstName: true } } as const;
 
     const [buildingCount, worksites, quotes, events, docs] = await Promise.all([
-      prisma.building.count({ where: buildingScope(u) }),
+      prisma.contact.count({ where: buildingScope(u) }),
       prisma.worksite.findMany({
         where: scope,
         orderBy: { updatedAt: 'desc' },
-        include: { building: { select: { id: true, name: true } }, manager: mSel },
+        include: { acp: { select: { id: true, name: true } }, manager: mSel },
       }),
       prisma.document.findMany({
         where: { kind: 'quote', status: 'sent', number: { not: null }, worksite: scope },
         orderBy: { issuedOn: 'desc' },
-        include: { worksite: { select: { id: true, ref: true, building: { select: { name: true } } } } },
+        include: { worksite: { select: { id: true, ref: true, acp: { select: { name: true } } } } },
       }),
       prisma.planningEvent.findMany({
         where: { worksite: scope, endAt: { gte: startOfWeek(new Date()) }, startAt: { lt: addDays(startOfWeek(new Date()), 21) } },
         orderBy: { startAt: 'asc' },
-        include: { worksite: { select: { id: true, ref: true, building: { select: { name: true } } } } },
+        include: { worksite: { select: { id: true, ref: true, acp: { select: { name: true } } } } },
       }),
       prisma.document.findMany({
         where: { number: { not: null }, worksite: scope },
         orderBy: [{ issuedOn: 'desc' }, { createdAt: 'desc' }],
         take: 6,
-        include: { worksite: { select: { building: { select: { name: true } } } } },
+        include: { worksite: { select: { acp: { select: { name: true } } } } },
       }),
     ]);
 
@@ -136,11 +136,11 @@ portalRouter.get(
         urgent: urgent.length,
       },
       urgentItems: urgent.slice(0, 4).map((w) => ({
-        id: w.id, ref: w.ref, title: w.title, building: w.building?.name ?? null,
+        id: w.id, ref: w.ref, title: w.title, building: w.acp?.name ?? null,
         statusLabel: wsLabel(w.status), priority: w.priority,
       })),
       recentInterventions: worksites.slice(0, 6).map((w) => ({
-        id: w.id, ref: w.ref, title: w.title, building: w.building?.name ?? null,
+        id: w.id, ref: w.ref, title: w.title, building: w.acp?.name ?? null,
         status: w.status, statusLabel: wsLabel(w.status),
         priority: w.priority, priorityLabel: prioLabel(w.priority),
         manager: managerName(w.manager), updatedAt: w.updatedAt,
@@ -148,12 +148,12 @@ portalRouter.get(
       weekPlanning: groupWeek(events),
       quotesToValidate: full ? quotes.slice(0, 4).map((d) => ({
         id: d.id, number: d.number, title: d.title, totalHt: d.totalHt,
-        building: d.worksite?.building?.name ?? null, worksiteId: d.worksite?.id ?? null,
+        building: d.worksite?.acp?.name ?? null, worksiteId: d.worksite?.id ?? null,
         worksiteRef: d.worksite?.ref ?? null, issuedOn: d.issuedOn,
       })) : [],
       recentDocuments: full ? docs.map((d) => ({
         id: d.id, kind: d.kind, kindLabel: DOC_KIND_LABEL[d.kind] ?? d.kind, number: d.number,
-        title: d.title, building: d.worksite?.building?.name ?? null, issuedOn: d.issuedOn, hasPdf: !!d.originalPdf,
+        title: d.title, building: d.worksite?.acp?.name ?? null, issuedOn: d.issuedOn, hasPdf: !!d.originalPdf,
       })) : [],
     });
   }),
@@ -173,7 +173,7 @@ function addDays(d: Date, n: number): Date {
 }
 type PEvt = {
   startAt: Date; endAt: Date; allDay: boolean; title: string | null;
-  worksite: { id: string; ref: string; building: { name: string | null } | null } | null;
+  worksite: { id: string; ref: string; acp: { name: string | null } | null } | null;
 };
 function groupWeek(events: PEvt[]) {
   const week0 = startOfWeek(new Date());
@@ -193,7 +193,7 @@ function groupWeek(events: PEvt[]) {
     if (!day) continue;
     day.items.push({
       time: e.allDay ? '' : new Date(e.startAt).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' }),
-      label: `${e.worksite?.building?.name ?? e.worksite?.ref ?? ''}${e.title ? ` — ${e.title}` : ''}`.trim() || 'Intervention',
+      label: `${e.worksite?.acp?.name ?? e.worksite?.ref ?? ''}${e.title ? ` — ${e.title}` : ''}`.trim() || 'Intervention',
       worksiteId: e.worksite?.id ?? null,
     });
   }
@@ -211,20 +211,20 @@ portalRouter.get(
     const where: Record<string, unknown> = { ...worksiteScope(u) };
     if (status === 'open') where.status = { in: OPEN_STATUSES };
     else if (status) where.status = status;
-    if (buildingId) where.buildingId = buildingId;
+    if (buildingId) where.acpId = buildingId;
     if (q) where.OR = [{ ref: { contains: q } }, { title: { contains: q } }];
     const items = await prisma.worksite.findMany({
       where,
       orderBy: [{ updatedAt: 'desc' }],
       take: 300,
-      include: { building: { select: { id: true, name: true } }, manager: { select: { displayName: true, firstName: true } } },
+      include: { acp: { select: { id: true, name: true } }, manager: { select: { displayName: true, firstName: true } } },
     });
     res.json({
       items: items.map((w) => ({
         id: w.id, ref: w.ref, title: w.title,
         status: w.status, statusLabel: wsLabel(w.status),
         priority: w.priority, priorityLabel: prioLabel(w.priority),
-        building: w.building, manager: managerName(w.manager),
+        building: w.acp, manager: managerName(w.manager),
         startedOn: w.startedOn, endedOn: w.endedOn, updatedAt: w.updatedAt,
       })),
     });
@@ -240,14 +240,14 @@ portalRouter.get(
     const items = await prisma.document.findMany({
       where: { kind: 'quote', number: { not: null }, worksite: worksiteScope(u) },
       orderBy: { issuedOn: 'desc' },
-      include: { worksite: { select: { id: true, ref: true, building: { select: { name: true } } } } },
+      include: { worksite: { select: { id: true, ref: true, acp: { select: { name: true } } } } },
     });
     res.json({
       items: items.map((d) => ({
         id: d.id, number: d.number, title: d.title, status: d.status, hasPdf: !!d.originalPdf,
         totalHt: d.totalHt, totalTtc: d.totalTtc, issuedOn: d.issuedOn, dueOn: d.dueOn,
         worksiteId: d.worksite?.id ?? null, worksiteRef: d.worksite?.ref ?? null,
-        building: d.worksite?.building?.name ?? null,
+        building: d.worksite?.acp?.name ?? null,
       })),
     });
   }),
@@ -266,13 +266,13 @@ portalRouter.get(
       where,
       orderBy: [{ issuedOn: 'desc' }, { createdAt: 'desc' }],
       take: 200,
-      include: { worksite: { select: { id: true, ref: true, building: { select: { name: true } } } } },
+      include: { worksite: { select: { id: true, ref: true, acp: { select: { name: true } } } } },
     });
     res.json({
       items: items.map((d) => ({
         id: d.id, kind: d.kind, kindLabel: DOC_KIND_LABEL[d.kind] ?? d.kind, number: d.number, title: d.title,
         status: d.status, totalTtc: d.totalTtc, issuedOn: d.issuedOn, hasPdf: !!d.originalPdf,
-        worksiteId: d.worksite?.id ?? null, building: d.worksite?.building?.name ?? null,
+        worksiteId: d.worksite?.id ?? null, building: d.worksite?.acp?.name ?? null,
       })),
     });
   }),
@@ -288,7 +288,7 @@ portalRouter.get(
       where: { worksite: worksiteScope(u), endAt: { gte: from }, startAt: { lt: addDays(from, 42) } },
       orderBy: { startAt: 'asc' },
       include: {
-        worksite: { select: { id: true, ref: true, title: true, building: { select: { name: true } } } },
+        worksite: { select: { id: true, ref: true, title: true, acp: { select: { name: true } } } },
         team: { select: { name: true } },
         assignments: { include: { person: { select: { displayName: true, firstName: true } } } },
       },
@@ -297,7 +297,7 @@ portalRouter.get(
       items: events.map((e) => ({
         id: e.id, startAt: e.startAt, endAt: e.endAt, allDay: e.allDay, title: e.title,
         worksiteId: e.worksite?.id ?? null, worksiteRef: e.worksite?.ref ?? null,
-        worksiteTitle: e.worksite?.title ?? null, building: e.worksite?.building?.name ?? null,
+        worksiteTitle: e.worksite?.title ?? null, building: e.worksite?.acp?.name ?? null,
         team: e.team?.name ?? null,
         people: e.assignments.map((a) => managerName(a.person)).filter(Boolean),
       })),
@@ -312,12 +312,12 @@ portalRouter.get(
   requirePortal,
   asyncHandler(async (req, res) => {
     const u = req.portalUser!;
-    const buildings = await prisma.building.findMany({
+    const buildings = await prisma.contact.findMany({
       where: buildingScope(u),
       orderBy: { name: 'asc' },
       include: {
         syndic: { select: { name: true } },
-        worksites: {
+        acpWorksites: {
           where: worksiteScope(u),
           select: { id: true, ref: true, title: true, status: true, endedOn: true },
           orderBy: { updatedAt: 'desc' },
@@ -330,8 +330,8 @@ portalRouter.get(
         name: b.name,
         address: [b.address, b.city].filter(Boolean).join(', '),
         syndic: b.syndic?.name ?? null,
-        open: b.worksites.filter((w) => OPEN_STATUSES.includes(w.status as WorksiteStatus)).length,
-        worksites: b.worksites,
+        open: b.acpWorksites.filter((w) => OPEN_STATUSES.includes(w.status as WorksiteStatus)).length,
+        worksites: b.acpWorksites,
       })),
     });
   }),
@@ -343,7 +343,7 @@ async function loadWorksite(u: PortalUser, id: string) {
   const w = await prisma.worksite.findFirst({
     where: { id, ...worksiteScope(u) },
     include: {
-      building: { select: { id: true, name: true } },
+      acp: { select: { id: true, name: true } },
       documents: { orderBy: { issuedOn: 'desc' } },
       reports: { where: { status: 'signed' }, orderBy: { date: 'desc' }, include: { photos: true } },
       thread: {
@@ -367,7 +367,7 @@ portalRouter.get(
     const items = await prisma.worksite.findMany({
       where: worksiteScope(u),
       orderBy: { updatedAt: 'desc' },
-      include: { building: { select: { id: true, name: true } } },
+      include: { acp: { select: { id: true, name: true } } },
     });
     res.json({
       items: items.map((w) => ({
@@ -376,7 +376,7 @@ portalRouter.get(
         title: w.title,
         status: w.status,
         statusLabel: WORKSITE_STATUS_LABEL[w.status as WorksiteStatus] ?? w.status,
-        building: w.building,
+        building: w.acp,
         endedOn: w.endedOn,
         urgent: w.status === 'to_invoice' || w.status === 'on_hold',
       })),
@@ -397,7 +397,7 @@ portalRouter.get(
         id: w.id, ref: w.ref, title: w.title, status: w.status,
         statusLabel: WORKSITE_STATUS_LABEL[w.status as WorksiteStatus] ?? w.status,
         address: [w.address, w.city].filter(Boolean).join(', '),
-        building: w.building, startedOn: w.startedOn, endedOn: w.endedOn,
+        building: w.acp, startedOn: w.startedOn, endedOn: w.endedOn,
         description: w.description,
       },
       access: u.access,
@@ -516,7 +516,7 @@ portalRouter.post(
         title: input.title,
         stage: 'new',
         contactId: u.contactId,
-        buildingId: input.buildingId ?? null,
+        acpId: input.buildingId ?? null,
         source: 'portail',
         nextActionOn: new Date(),
         nextActionNote: input.urgent ? 'Demande client — URGENT' : 'Demande client (portail)',

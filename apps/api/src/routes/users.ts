@@ -11,12 +11,12 @@ function label(u: {
   person: { firstName: string; lastName: string | null; displayName: string | null } | null;
   contact: { name: string } | null;
   syndic: { name: string } | null;
-  building: { name: string } | null;
+  residentOf: { name: string } | null;
 }) {
   if (u.person) return u.person.displayName || `${u.person.firstName} ${u.person.lastName ?? ''}`.trim();
   if (u.contact) return u.contact.name;
   if (u.syndic) return `${u.syndic.name} (syndic)`;
-  if (u.building) return `${u.building.name} (résident)`;
+  if (u.residentOf) return `${u.residentOf.name} (résident)`;
   return u.email;
 }
 
@@ -31,7 +31,7 @@ usersRouter.get(
         person: { select: { id: true, firstName: true, lastName: true, displayName: true } },
         contact: { select: { id: true, name: true } },
         syndic: { select: { id: true, name: true } },
-        building: { select: { id: true, name: true } },
+        residentOf: { select: { id: true, name: true } },
       },
     });
     res.json({
@@ -45,7 +45,7 @@ usersRouter.get(
         createdAt: u.createdAt,
         label: label(u),
         personId: u.person?.id ?? null,
-        link: u.person ? `/app/equipe/${u.person.id}` : u.contact ? `/app/contacts/${u.contact.id}` : u.building ? `/app/immeubles/${u.building.id}` : null,
+        link: u.person ? `/app/equipe/${u.person.id}` : u.contact ? `/app/contacts/${u.contact.id}` : u.residentOf ? `/app/immeubles/${u.residentOf.id}` : null,
       })),
     });
   }),

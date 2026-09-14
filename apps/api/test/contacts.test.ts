@@ -139,5 +139,5 @@ test('immeuble/projet créé "à la volée" puis lié à un contact ACP (flux ch
   assert.equal(contact.body.contact.buildingId, building.body.building.id);
 
   await prisma.contact.deleteMany({ where: { id: contact.body.contact.id } });
-  await prisma.building.deleteMany({ where: { id: building.body.building.id } });
+  await prisma.contact.deleteMany({ where: { id: building.body.building.id } });
 });

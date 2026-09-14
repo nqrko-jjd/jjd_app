@@ -69,13 +69,16 @@ worksitesRouter.get(
         take: pageSize,
         include: {
           client: { select: { id: true, name: true } },
-          building: { select: { id: true, name: true } },
+          acp: { select: { id: true, name: true } },
           manager: { select: { id: true, displayName: true, firstName: true } },
         },
       }),
       prisma.worksite.count({ where }),
     ]);
-    res.json({ items, page, pageSize, totalCount, totalPages: Math.max(1, Math.ceil(totalCount / pageSize)) });
+    res.json({
+      items: items.map(({ acp, ...w }) => ({ ...w, building: acp })),
+      page, pageSize, totalCount, totalPages: Math.max(1, Math.ceil(totalCount / pageSize)),
+    });
   }),
 );
 
@@ -102,10 +105,10 @@ worksitesRouter.get(
       take: 200,
       include: {
         client: { select: { name: true } },
-        building: { select: { name: true } },
+        acp: { select: { name: true } },
       },
     });
-    res.json({ items });
+    res.json({ items: items.map(({ acp, ...w }) => ({ ...w, building: acp })) });
   }),
 );
 
@@ -258,7 +261,7 @@ worksitesRouter.get(
       where: { id: req.params.id },
       include: {
         client: true,
-        building: { include: { syndic: true } },
+        acp: { include: { syndic: true } },
         manager: true,
         documents: { orderBy: { issuedOn: 'desc' } },
         events: { orderBy: { startAt: 'desc' }, take: 20, include: { assignments: { include: { person: true } }, vehicle: true } },
@@ -270,7 +273,9 @@ worksitesRouter.get(
     // devis/factures ni la rentabilité si jamais ils atterrissent quand même sur cette route.
     const isWorker = req.user!.role === 'worker';
     const margin = isWorker ? null : await worksiteMargin(ws.id);
-    res.json({ worksite: isWorker ? { ...ws, documents: [] } : ws, margin });
+    const { acp, ...wsRest } = ws;
+    const shaped = { ...wsRest, building: acp };
+    res.json({ worksite: isWorker ? { ...shaped, documents: [] } : shaped, margin });
   }),
 );
 
@@ -283,10 +288,10 @@ worksitesRouter.get(
       where: { id: req.params.id },
       include: {
         client: { select: { name: true, phone: true } },
-        building: {
+        acp: {
           select: {
             name: true, address: true, postalCode: true, city: true, digicode: true, accessNote: true,
-            contacts: { orderBy: { position: 'asc' }, select: { role: true, name: true, phone: true } },
+            acpKeyContacts: { orderBy: { position: 'asc' }, select: { role: true, name: true, phone: true } },
           },
         },
         manager: { select: { displayName: true, firstName: true, phone: true } },
@@ -309,15 +314,15 @@ worksitesRouter.get(
       },
     });
 
-    const addr = [ws.address ?? ws.building?.address, [ws.postalCode ?? ws.building?.postalCode, ws.city ?? ws.building?.city].filter(Boolean).join(' ')]
+    const addr = [ws.address ?? ws.acp?.address, [ws.postalCode ?? ws.acp?.postalCode, ws.city ?? ws.acp?.city].filter(Boolean).join(' ')]
       .filter(Boolean).join(', ');
 
     res.json({
       worksite: { id: ws.id, ref: ws.ref, title: ws.title, status: ws.status, description: ws.description, address: addr },
-      building: ws.building
+      building: ws.acp
         ? {
-            name: ws.building.name, digicode: ws.building.digicode, accessNote: ws.building.accessNote,
-            contacts: ws.building.contacts,
+            name: ws.acp.name, digicode: ws.acp.digicode, accessNote: ws.acp.accessNote,
+            contacts: ws.acp.acpKeyContacts,
           }
         : null,
       client: ws.client,
@@ -341,15 +346,17 @@ worksitesRouter.get(
   }),
 );
 
-/** Un chantier facturé à un contact ACP/immeuble sans son propre `buildingId` reste
- *  invisible sur la fiche Immeuble (onglet Interventions) même s'il apparaît bien sur la
- *  fiche Contact (onglet Chantiers) — même défaut de fond que Building.clientId/
- *  Contact.buildingId (déjà corrigé plus tôt), côté chantier cette fois. Dérive `buildingId`
- *  depuis le client facturé quand celui-ci est lié à un immeuble, sans jamais écraser un
- *  `buildingId` déjà posé explicitement. */
+/** Un chantier facturé à un contact ACP/immeuble sans son propre `acpId` reste invisible
+ *  sur la fiche Immeuble (onglet Interventions) même s'il apparaît bien sur la fiche
+ *  Contact (onglet Chantiers). Dérive `acpId` depuis le client facturé : si ce contact EST
+ *  une ACP/promoteur, l'intervention se déroule chez lui-même ; sinon (particulier/société
+ *  rattaché à une ACP), dérive depuis l'ACP à laquelle il est lié — sans jamais écraser un
+ *  `acpId` déjà posé explicitement. */
 async function deriveBuildingFromClient(clientId: string): Promise<string | null> {
-  const contact = await prisma.contact.findUnique({ where: { id: clientId }, select: { buildingId: true } });
-  return contact?.buildingId ?? null;
+  const contact = await prisma.contact.findUnique({ where: { id: clientId }, select: { kind: true, linkedAcpId: true } });
+  if (!contact) return null;
+  if (contact.kind === 'acp' || contact.kind === 'developer') return clientId;
+  return contact.linkedAcpId ?? null;
 }
 
 worksitesRouter.post(
@@ -358,7 +365,7 @@ worksitesRouter.post(
   asyncHandler(async (req, res) => {
     const data = worksiteInput.parse(req.body);
     const ref = await nextWorksiteRef();
-    const buildingId = data.buildingId ?? (data.clientId ? await deriveBuildingFromClient(data.clientId) : null);
+    const acpId = data.buildingId ?? (data.clientId ? await deriveBuildingFromClient(data.clientId) : null);
     const ws = await prisma.worksite.create({
       data: {
         ref,
@@ -370,7 +377,7 @@ worksitesRouter.post(
         billingMode: data.billingMode ?? null,
         statusTags: data.statusTags,
         clientId: data.clientId ?? null,
-        buildingId,
+        acpId,
         managerId: data.managerId ?? null,
         address: data.address ?? null,
         postalCode: data.postalCode ?? null,
@@ -412,12 +419,12 @@ worksitesRouter.post(
   asyncHandler(async (req, res) => {
     const ws = await prisma.worksite.findUnique({
       where: { id: req.params.id },
-      include: { building: { select: { address: true, postalCode: true, city: true } } },
+      include: { acp: { select: { address: true, postalCode: true, city: true } } },
     });
     if (!ws) throw new HttpError(404, 'Chantier introuvable');
     const q = [
-      req.body?.address || ws.address || ws.building?.address,
-      [ws.postalCode || ws.building?.postalCode, ws.city || ws.building?.city].filter(Boolean).join(' '),
+      req.body?.address || ws.address || ws.acp?.address,
+      [ws.postalCode || ws.acp?.postalCode, ws.city || ws.acp?.city].filter(Boolean).join(' '),
       'Belgique',
     ].filter(Boolean).join(', ');
     if (!q || q === 'Belgique') throw new HttpError(422, 'Aucune adresse à géocoder');
@@ -437,17 +444,17 @@ worksitesRouter.patch(
   '/:id',
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
-    const data = worksiteInput.partial().parse(req.body);
-    let buildingId: string | null | undefined = data.buildingId;
-    if (data.clientId && buildingId === undefined) {
-      const existing = await prisma.worksite.findUnique({ where: { id: req.params.id }, select: { buildingId: true } });
-      if (existing && !existing.buildingId) buildingId = (await deriveBuildingFromClient(data.clientId)) ?? undefined;
+    const { buildingId: buildingIdInput, ...data } = worksiteInput.partial().parse(req.body);
+    let acpId: string | null | undefined = buildingIdInput;
+    if (data.clientId && acpId === undefined) {
+      const existing = await prisma.worksite.findUnique({ where: { id: req.params.id }, select: { acpId: true } });
+      if (existing && !existing.acpId) acpId = (await deriveBuildingFromClient(data.clientId)) ?? undefined;
     }
     const ws = await prisma.worksite.update({
       where: { id: req.params.id },
       data: {
         ...data,
-        buildingId,
+        acpId,
         statusTags: data.statusTags ?? undefined,
       },
     });

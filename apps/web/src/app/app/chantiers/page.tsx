@@ -169,7 +169,7 @@ function ChantiersInner() {
     { name: 'priority', label: 'Priorité', type: 'select', options: WORKSITE_PRIORITIES.map((p) => ({ value: p, label: WORKSITE_PRIORITY_LABEL[p] })) },
     { name: 'scope', label: 'Portée', type: 'select', options: WORKSITE_SCOPES.map((s) => ({ value: s, label: WORKSITE_SCOPE_LABEL[s] })) },
     { name: 'billingMode', label: 'Facturation', type: 'select', options: WORKSITE_BILLING_MODES.map((b) => ({ value: b, label: WORKSITE_BILLING_MODE_LABEL[b] })) },
-    { name: 'clientId', label: 'Client / Immeuble', type: 'client-or-building', buildingField: 'buildingId', full: true },
+    { name: 'clientId', label: 'Client / Immeuble', type: 'contact', full: true },
     { name: 'managerId', label: 'Chef de chantier', type: 'select', options: (refs?.people ?? []).map((p) => ({ value: p.id, label: p.name })) },
     { name: 'address', label: 'Adresse', full: true, type: 'address', addressFill: { postalCode: 'postalCode', city: 'city' } },
     { name: 'postalCode', label: 'Code postal' },

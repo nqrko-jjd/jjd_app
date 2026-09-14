@@ -39,17 +39,17 @@ export async function attachPortalUser(req: Request, _res: Response, next: NextF
   try {
     const p = jwt.verify(h.slice(7), env.jwtSecret) as { sub: string; portal?: boolean };
     if (!p.portal) return next();
-    const u = await prisma.user.findUnique({ where: { id: p.sub }, include: { contact: true, syndic: true, building: true } });
+    const u = await prisma.user.findUnique({ where: { id: p.sub }, include: { contact: true, syndic: true, residentOf: true } });
     if (u && u.active && u.role === 'client') {
       req.portalUser = {
         id: u.id,
         email: u.email,
         contactId: u.contactId,
         syndicId: u.syndicId,
-        buildingId: u.buildingId,
-        buildingName: u.building?.name ?? null,
+        buildingId: u.residentOfId,
+        buildingName: u.residentOf?.name ?? null,
         access: u.portalAccess === 'limited' ? 'limited' : 'full',
-        label: u.syndic?.name ?? u.contact?.name ?? u.building?.name ?? u.email,
+        label: u.syndic?.name ?? u.contact?.name ?? u.residentOf?.name ?? u.email,
       };
     }
   } catch {
@@ -63,20 +63,18 @@ export function requirePortal(req: Request, _res: Response, next: NextFunction) 
   next();
 }
 
+const ACP_KINDS = ['acp', 'developer'];
+
 /** Clause Prisma : les chantiers visibles par ce client. */
 export function worksiteScope(u: PortalUser): object {
-  if (u.buildingId) return { buildingId: u.buildingId };
-  if (u.syndicId) return { building: { syndicId: u.syndicId } };
-  return {
-    OR: [
-      { clientId: u.contactId },
-      { building: { clientId: u.contactId } },
-    ],
-  };
+  if (u.buildingId) return { acpId: u.buildingId };
+  if (u.syndicId) return { acp: { syndicId: u.syndicId } };
+  return { OR: [{ clientId: u.contactId }, { acpId: u.contactId }] };
 }
 
+/** Clause Prisma (contre `Contact`) : les immeubles/ACP visibles par ce client. */
 export function buildingScope(u: PortalUser): object {
   if (u.buildingId) return { id: u.buildingId };
-  if (u.syndicId) return { syndicId: u.syndicId };
-  return { OR: [{ clientId: u.contactId }, { worksites: { some: { clientId: u.contactId } } }] };
+  if (u.syndicId) return { syndicId: u.syndicId, kind: { in: ACP_KINDS } };
+  return { OR: [{ id: u.contactId, kind: { in: ACP_KINDS } }, { acpWorksites: { some: { clientId: u.contactId } } }] };
 }

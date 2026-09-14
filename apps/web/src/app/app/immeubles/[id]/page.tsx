@@ -28,7 +28,6 @@ interface Detail {
     reference: string | null; lotCount: number | null; digicode: string | null; accessNote: string | null;
     photoUrl: string | null;
     syndic: { id: string; name: string; email: string | null; phone: string | null } | null;
-    client: { id: string; name: string } | null;
     contacts: BContact[];
     linkedContacts: { id: string; name: string; type: string; kind: string | null; phone: string | null; email: string | null }[];
     units: BUnit[];
@@ -104,7 +103,6 @@ export default function ImmeubleDetail({ params }: { params: Promise<{ id: strin
 
       <div className="info-grid" style={{ marginBottom: '1.6rem' }}>
         {b.syndic && <Info label="Syndic" value={<>{b.syndic.name}<br /><span className="muted" style={{ fontSize: '0.8rem' }}>{b.syndic.email ?? b.syndic.phone ?? ''}</span></>} />}
-        {b.client && <Info label="Client / ACP" value={<Link href={`/app/contacts/${b.client.id}`}>{b.client.name}</Link>} />}
         {b.reference && <Info label="Référence" value={b.reference} />}
         {b.lotCount != null && <Info label="Lots" value={String(b.lotCount)} />}
         {b.digicode && <Info label="Digicode" value={b.digicode} />}
@@ -243,7 +241,7 @@ export default function ImmeubleDetail({ params }: { params: Promise<{ id: strin
         <FormModal
           title="Modifier l’immeuble"
           fields={BUILDING_FIELDS(pick?.syndics ?? [])}
-          initial={{ ...(b as unknown as Record<string, unknown>), syndicId: b.syndic?.id, clientId: b.client?.id }}
+          initial={{ ...(b as unknown as Record<string, unknown>), syndicId: b.syndic?.id }}
           onClose={() => setModal(null)}
           onSubmit={async (v) => { await api(`/api/buildings/${id}`, { method: 'PATCH', body: v }); closeAndReload(); }}
         />

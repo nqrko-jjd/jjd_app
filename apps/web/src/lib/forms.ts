@@ -44,11 +44,11 @@ export function composeContactPayload(v: Record<string, unknown>): Record<string
  * l'historique d'achats d'un fournisseur sont gérés à part sur sa fiche, pas dans ce formulaire)
  * ET selon la « Catégorie » (`kind`) choisie en direct dans le formulaire : un particulier a
  * Prénom/Nom séparés (cf. `composeContactPayload`, à appeler dans `onSubmit`) plutôt qu'un
- * seul champ Nom ; Immeuble/Projet lié n'apparaît que pour une ACP ou un Promoteur (les deux
- * regroupent plusieurs interventions sous un même bâtiment/projet — cf. `type:'building'`, qui
- * permet de créer l'immeuble à la volée s'il n'existe pas encore) ; le Syndic (adresse de
- * facturation « c/o ») reste propre aux ACP, un promoteur n'en a pas. Le n° de TVA disparaît
- * pour un particulier.
+ * seul champ Nom ; une ACP/Promoteur EST son propre immeuble/projet (fusion Contact/Immeuble —
+ * digicode, lots, contacts clés directement sur cette fiche, cf. `app/immeubles`) ; le Syndic
+ * (adresse de facturation « c/o ») reste propre aux ACP, un promoteur n'en a pas. Le n° de TVA
+ * disparaît pour un particulier. Le lien "rattaché à une ACP" (un résident/propriétaire lié à
+ * SON immeuble) reste possible via `buildingId` pour les autres catégories (individual/company).
  */
 export const CONTACT_FIELDS = (
   forType?: string,
@@ -60,6 +60,7 @@ export const CONTACT_FIELDS = (
     const isIndividual = !isSupplierOnly && kind === 'individual';
     const isAcp = !isSupplierOnly && kind === 'acp';
     const isDeveloper = !isSupplierOnly && kind === 'developer';
+    const isAcpOrDeveloper = isAcp || isDeveloper;
     const showVat = isSupplierOnly || kind !== 'individual';
     return [
       { name: 'type', label: 'Type', type: 'select', options: CONTACT_TYPES.map((t) => ({ value: t, label: t === 'client' ? 'Client' : t === 'supplier' ? 'Fournisseur' : 'Les deux' })) },
@@ -68,14 +69,18 @@ export const CONTACT_FIELDS = (
         { name: 'firstName', label: 'Prénom', required: true },
         { name: 'lastName', label: 'Nom' },
       ] : [{ name: 'name', label: 'Nom', required: true, full: true }]),
-      ...(isAcp || isDeveloper ? [
-        { name: 'buildingId', label: isAcp ? 'Immeuble / ACP lié' : 'Projet lié', type: 'building' as const, full: true },
-        ...(isAcp ? [{ name: 'syndicId', label: 'Syndic (adresse de facturation "c/o")', type: 'select' as const, options: syndics.map((s) => ({ value: s.id, label: s.name })) }] : []),
-      ] : []),
+      ...(isAcp ? [{ name: 'syndicId', label: 'Syndic (adresse de facturation "c/o")', type: 'select' as const, options: syndics.map((s) => ({ value: s.id, label: s.name })) }] : []),
+      ...(!isAcpOrDeveloper ? [{ name: 'buildingId', label: 'Immeuble / ACP rattaché(e)', type: 'contact' as const, contactKindFilter: ['acp', 'developer'], full: true }] : []),
       { name: 'email', label: 'E-mail' },
       { name: 'phone', label: 'Téléphone' },
       ...(showVat ? [{ name: 'vat', label: 'N° TVA', placeholder: 'BE0123456789', action: { label: 'Rechercher', run: vatLookupAction } }] : []),
       { name: 'address', label: 'Adresse', full: true, type: 'address' as const, addressFill: { postalCode: 'postalCode', city: 'city' } },
+      ...(isAcpOrDeveloper ? [
+        { name: 'reference', label: 'Référence dossier (syndic / ACP)' },
+        { name: 'lotCount', label: 'Nombre de lots', type: 'number' as const },
+        { name: 'digicode', label: 'Digicode' },
+        { name: 'accessNote', label: 'Accès (clés, badges, parking…)', type: 'textarea' as const, full: true },
+      ] : []),
       { name: 'postalCode', label: 'Code postal' },
       { name: 'city', label: 'Ville' },
       { name: 'note', label: 'Note', type: 'textarea', full: true },
@@ -117,10 +122,13 @@ export const VEHICLE_DOC_FIELDS: FieldDef[] = [
   { name: 'expiresOn', label: 'Expire le', type: 'date' },
 ];
 
+/** Un immeuble/ACP/projet EST directement un Contact (fusion Contact/Immeuble) — ce formulaire
+ *  crée/édite ce même Contact, juste avec les champs pertinents pour "le dossier immeuble"
+ *  (pas de champ "client facturé" séparé : c'est cette fiche elle-même). */
 export const BUILDING_FIELDS = (syndics: { id: string; name: string }[] = []): FieldDef[] => [
   { name: 'name', label: "Nom de l'immeuble / ACP / projet", required: true, full: true },
+  { name: 'kind', label: 'Catégorie', type: 'select', options: [{ value: 'acp', label: 'ACP / Copropriété' }, { value: 'developer', label: 'Promoteur' }] },
   { name: 'syndicId', label: 'Syndic (si ACP)', type: 'select', options: syndics.map((s) => ({ value: s.id, label: s.name })) },
-  { name: 'clientId', label: 'Client facturé (ACP / promoteur)', type: 'contact', full: true },
   { name: 'address', label: 'Adresse', full: true, type: 'address', addressFill: { postalCode: 'postalCode', city: 'city' } },
   { name: 'postalCode', label: 'Code postal' },
   { name: 'city', label: 'Ville' },

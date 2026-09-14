@@ -117,7 +117,7 @@ async function contactFor(name: string | null, vat: string | null): Promise<stri
   if (!name) return null;
   const nn = normalizeName(name);
   let c = await prisma.contact.findFirst({ where: { normalizedName: nn } });
-  const { base, syndic } = splitSyndic(name);
+  const { syndic } = splitSyndic(name);
   const syndicId = syndic ? await getSyndic(syndic) : null;
   const kind = /\bacp\b|copropri|\bvme\b/i.test(name) ? 'acp' : /\b(srl|sprl|sa|nv|bv|scrl)\b/i.test(name) ? 'company' : 'individual';
 
@@ -131,19 +131,8 @@ async function contactFor(name: string | null, vat: string | null): Promise<stri
     if (syndicId && !c.syndicId) patch.syndicId = syndicId;
     if (Object.keys(patch).length) await prisma.contact.update({ where: { id: c.id }, data: patch });
   }
-
-  // un ACP avec syndic -> aussi un immeuble rattaché à ce syndic
-  if (kind === 'acp' && syndicId) {
-    const bn = normalizeName(base || name);
-    const existing = await prisma.building.findFirst({ where: { normalizedName: bn } });
-    if (!existing) {
-      await prisma.building.create({
-        data: { name: base || name, normalizedName: bn, syndicId, clientId: c.id, source: 'trustup' },
-      });
-    } else if (!existing.syndicId) {
-      await prisma.building.update({ where: { id: existing.id }, data: { syndicId, clientId: c.id } });
-    }
-  }
+  // un ACP EST l'immeuble (fusion Contact/Immeuble) — rien de plus à créer, le syndic
+  // est déjà posé sur ce même contact ci-dessus.
   return c.id;
 }
 
@@ -213,14 +202,15 @@ async function importFile(file: string, docToWs: Map<string, string>, wsByRef: M
     });
     ok++;
 
-    // rattache le chantier à son client / immeuble via le document
+    // rattache le chantier à son client / immeuble (ACP) via le document
     if (wsId && contactId) {
-      const ws = await prisma.worksite.findUnique({ where: { id: wsId }, select: { clientId: true, buildingId: true } });
+      const ws = await prisma.worksite.findUnique({ where: { id: wsId }, select: { clientId: true, acpId: true } });
+      const contact = await prisma.contact.findUnique({ where: { id: contactId }, select: { kind: true, linkedAcpId: true } });
       const patch: Record<string, unknown> = {};
       if (!ws?.clientId) patch.clientId = contactId;
-      if (!ws?.buildingId) {
-        const b = await prisma.building.findFirst({ where: { clientId: contactId } });
-        if (b) patch.buildingId = b.id;
+      if (!ws?.acpId) {
+        const acpId = contact?.kind === 'acp' || contact?.kind === 'developer' ? contactId : contact?.linkedAcpId;
+        if (acpId) patch.acpId = acpId;
       }
       if (Object.keys(patch).length) await prisma.worksite.update({ where: { id: wsId }, data: patch });
     }
@@ -237,7 +227,6 @@ async function main() {
   console.log('Import TrustUp —', files.map((f) => path.basename(f)).join(', '));
 
   await prisma.document.deleteMany({ where: { source: 'trustup' } });
-  await prisma.building.deleteMany({ where: { source: 'trustup', worksites: { none: {} } } });
   const docToWs = buildDocToWorksite();
   console.log(`  ${docToWs.size} numéros de document reliés à un chantier (via l'Excel)`);
   const worksites = await prisma.worksite.findMany({ select: { id: true, ref: true } });
@@ -261,12 +250,12 @@ async function seedPortalDemo() {
   await prisma.user.deleteMany({ where: { email: { endsWith: '@portail.demo' } } });
   const pw = await bcrypt.hash('demo', 10);
 
-  const syndic = await prisma.syndic.findFirst({ orderBy: { buildings: { _count: 'desc' } } });
+  const syndic = await prisma.syndic.findFirst({ orderBy: { contacts: { _count: 'desc' } } });
   if (syndic) {
     await prisma.user.create({ data: { email: 'syndic@portail.demo', passwordHash: pw, role: 'client', syndicId: syndic.id } });
     // rend le tableau de bord démo vivant : quelques interventions "en cours" + priorités
     const ws = await prisma.worksite.findMany({
-      where: { building: { syndicId: syndic.id } },
+      where: { acp: { syndicId: syndic.id } },
       orderBy: { updatedAt: 'desc' },
       take: 6,
       select: { id: true },
@@ -283,10 +272,13 @@ async function seedPortalDemo() {
       await prisma.worksite.update({ where: { id: ws[i]!.id }, data: demo[i] ?? {} });
     }
     // accès résident limité (voit suivi/photos/messages d'un seul immeuble)
-    const oneBuilding = await prisma.building.findFirst({ where: { syndicId: syndic.id }, orderBy: { worksites: { _count: 'desc' } } });
-    if (oneBuilding) {
+    const oneAcp = await prisma.contact.findFirst({
+      where: { syndicId: syndic.id, kind: { in: ['acp', 'developer'] } },
+      orderBy: { acpWorksites: { _count: 'desc' } },
+    });
+    if (oneAcp) {
       await prisma.user.create({
-        data: { email: 'resident@portail.demo', passwordHash: pw, role: 'client', buildingId: oneBuilding.id, portalAccess: 'limited' },
+        data: { email: 'resident@portail.demo', passwordHash: pw, role: 'client', residentOfId: oneAcp.id, portalAccess: 'limited' },
       });
     }
   }

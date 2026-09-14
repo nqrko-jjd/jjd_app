@@ -7,26 +7,28 @@ import { attachPhotoRoutes } from '../lib/photo-upload.js';
 
 export const buildingsRouter = Router();
 
-attachPhotoRoutes(buildingsRouter, (id, data) => prisma.building.update({ where: { id }, data }));
+const ACP_KINDS = ['acp', 'developer'];
+
+attachPhotoRoutes(buildingsRouter, (id, data) => prisma.contact.update({ where: { id }, data }));
 
 buildingsRouter.get(
   '/',
   requireAuth(...STAFF),
   asyncHandler(async (req, res) => {
     const { q, syndicId } = req.query as Record<string, string>;
-    const where: Record<string, unknown> = {};
+    const where: Record<string, unknown> = { kind: { in: ACP_KINDS } };
     if (syndicId) where.syndicId = syndicId;
     if (q) where.OR = [{ name: { contains: q } }, { city: { contains: q } }];
-    const items = await prisma.building.findMany({
+    const items = await prisma.contact.findMany({
       where,
       orderBy: { name: 'asc' },
       include: {
         syndic: { select: { id: true, name: true } },
-        _count: { select: { worksites: true, units: true } },
+        _count: { select: { acpWorksites: true, acpUnits: true } },
       },
       take: 5000,
     });
-    res.json({ items });
+    res.json({ items: items.map((b) => ({ ...b, _count: { worksites: b._count.acpWorksites, units: b._count.acpUnits } })) });
   }),
 );
 
@@ -34,21 +36,20 @@ buildingsRouter.get(
   '/:id',
   requireAuth(...STAFF),
   asyncHandler(async (req, res) => {
-    const building = await prisma.building.findUnique({
+    const building = await prisma.contact.findUnique({
       where: { id: req.params.id },
       include: {
         syndic: true,
-        client: true,
-        contacts: { orderBy: [{ position: 'asc' }, { createdAt: 'asc' }], include: { contact: { select: { id: true, name: true } } } },
-        linkedContacts: {
+        acpKeyContacts: { orderBy: [{ position: 'asc' }, { createdAt: 'asc' }], include: { contact: { select: { id: true, name: true } } } },
+        residents: {
           orderBy: { name: 'asc' },
           select: { id: true, name: true, type: true, kind: true, phone: true, email: true },
         },
-        units: {
+        acpUnits: {
           orderBy: [{ position: 'asc' }, { label: 'asc' }],
           include: { contact: { select: { id: true, name: true, phone: true, email: true } } },
         },
-        worksites: {
+        acpWorksites: {
           orderBy: { updatedAt: 'desc' },
           include: {
             manager: { select: { firstName: true, displayName: true } },
@@ -57,37 +58,27 @@ buildingsRouter.get(
         },
       },
     });
-    if (!building) throw new HttpError(404, 'Immeuble introuvable');
-    res.json({ building });
+    if (!building || !ACP_KINDS.includes(building.kind ?? '')) throw new HttpError(404, 'Immeuble introuvable');
+    const { acpKeyContacts, acpUnits, acpWorksites, residents, ...rest } = building;
+    res.json({ building: { ...rest, contacts: acpKeyContacts, units: acpUnits, worksites: acpWorksites, linkedContacts: residents } });
   }),
 );
-
-/** Le client facturé d'un immeuble (Building.clientId) lui est forcément « rattaché » — pose
- *  aussi le lien inverse (Contact.buildingId) pour que sa fiche affiche bien ce bâtiment/projet,
- *  sans jamais écraser un lien différent déjà en place. */
-async function linkClientBack(clientId: string, buildingId: string) {
-  const contact = await prisma.contact.findUnique({ where: { id: clientId }, select: { buildingId: true } });
-  if (contact && !contact.buildingId) {
-    await prisma.contact.update({ where: { id: clientId }, data: { buildingId } });
-  }
-}
 
 buildingsRouter.post(
   '/',
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
     const data = buildingInput.parse(req.body);
-    const building = await prisma.building.create({
+    const building = await prisma.contact.create({
       data: {
         ...data,
+        type: 'client',
         normalizedName: normalizeName(data.name),
         syndicId: data.syndicId ?? null,
-        clientId: data.clientId ?? null,
         lotCount: data.lotCount ?? null,
         source: 'manual',
       },
     });
-    if (data.clientId) await linkClientBack(data.clientId, building.id);
     res.status(201).json({ building });
   }),
 );
@@ -97,37 +88,39 @@ buildingsRouter.patch(
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
     const data = buildingInput.partial().parse(req.body);
-    const building = await prisma.building.update({
+    const building = await prisma.contact.update({
       where: { id: req.params.id },
       data: {
         ...data,
         ...(data.name ? { normalizedName: normalizeName(data.name) } : {}),
       },
     });
-    if (data.clientId) await linkClientBack(data.clientId, building.id);
     res.json({ building });
   }),
 );
 
 /** Les contacts-clés et lots de l'immeuble sont supprimés en cascade avec lui (métadonnées
- *  propres au bâtiment) — mais tant que des chantiers, opportunités, contacts ACP liés ou
+ *  propres au bâtiment) — mais tant que des chantiers, opportunités, résidents liés ou
  *  comptes portail « résident » y font encore référence, la suppression est bloquée. */
 buildingsRouter.delete(
   '/:id',
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
     const id = req.params.id;
-    const [worksites, opportunities, linkedContacts, portalUsers] = await Promise.all([
-      prisma.worksite.count({ where: { buildingId: id } }),
-      prisma.crmOpportunity.count({ where: { buildingId: id } }),
-      prisma.contact.count({ where: { buildingId: id } }),
-      prisma.user.count({ where: { buildingId: id } }),
+    const [worksites, opportunities, documents, ledgerEntries, residents, portalUsers] = await Promise.all([
+      prisma.worksite.count({ where: { OR: [{ clientId: id }, { acpId: id }] } }),
+      prisma.crmOpportunity.count({ where: { OR: [{ contactId: id }, { acpId: id }] } }),
+      prisma.document.count({ where: { contactId: id } }),
+      prisma.ledgerEntry.count({ where: { contactId: id } }),
+      prisma.contact.count({ where: { linkedAcpId: id } }),
+      prisma.user.count({ where: { residentOfId: id } }),
     ]);
-    const refs = worksites + opportunities + linkedContacts + portalUsers;
+    const refs = worksites + opportunities + documents + ledgerEntries + residents + portalUsers;
     if (refs > 0) {
-      throw new HttpError(409, `Cet immeuble est encore lié à des données (${refs} référence${refs > 1 ? 's' : ''} : chantiers, opportunités, contacts ACP, comptes portail…) — impossible de le supprimer.`);
+      throw new HttpError(409, `Cet immeuble est encore lié à des données (${refs} référence${refs > 1 ? 's' : ''} : chantiers, opportunités, devis/factures, achats, résidents, comptes portail…) — impossible de le supprimer.`);
     }
-    await prisma.building.delete({ where: { id } });
+    await prisma.user.deleteMany({ where: { contactId: id } });
+    await prisma.contact.delete({ where: { id } });
     res.status(204).end();
   }),
 );
@@ -139,7 +132,7 @@ buildingsRouter.get(
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
     const users = await prisma.user.findMany({
-      where: { buildingId: req.params.id, role: 'client' },
+      where: { residentOfId: req.params.id, role: 'client' },
       select: { id: true, email: true, portalAccess: true, lastLoginAt: true },
       orderBy: { createdAt: 'asc' },
     });
@@ -151,7 +144,7 @@ buildingsRouter.post(
   '/:id/portal-access',
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
-    const building = await prisma.building.findUnique({ where: { id: req.params.id } });
+    const building = await prisma.contact.findUnique({ where: { id: req.params.id } });
     if (!building) throw new HttpError(404, 'Immeuble introuvable');
     const email = String(req.body.email ?? '').trim().toLowerCase();
     if (!/.+@.+\..+/.test(email)) throw new HttpError(422, 'E-mail requis');
@@ -162,7 +155,7 @@ buildingsRouter.post(
         email,
         passwordHash: await hashPassword(Math.random().toString(36).slice(2)),
         role: 'client',
-        buildingId: building.id,
+        residentOfId: building.id,
         portalAccess: access,
       },
     });
@@ -174,7 +167,7 @@ buildingsRouter.delete(
   '/:id/portal-access/:userId',
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
-    await prisma.user.deleteMany({ where: { id: req.params.userId, buildingId: req.params.id } });
+    await prisma.user.deleteMany({ where: { id: req.params.userId, residentOfId: req.params.id } });
     res.json({ ok: true });
   }),
 );
@@ -186,10 +179,10 @@ buildingsRouter.post(
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
     const data = buildingContactInput.parse(req.body);
-    const count = await prisma.buildingContact.count({ where: { buildingId: req.params.id } });
+    const count = await prisma.buildingContact.count({ where: { acpId: req.params.id } });
     const contact = await prisma.buildingContact.create({
       data: {
-        buildingId: req.params.id as string,
+        acpId: req.params.id as string,
         role: data.role,
         name: data.name,
         phone: data.phone ?? null,
@@ -232,10 +225,10 @@ buildingsRouter.post(
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
     const data = buildingUnitInput.parse(req.body);
-    const count = await prisma.buildingUnit.count({ where: { buildingId: req.params.id } });
+    const count = await prisma.buildingUnit.count({ where: { acpId: req.params.id } });
     const unit = await prisma.buildingUnit.create({
       data: {
-        buildingId: req.params.id as string,
+        acpId: req.params.id as string,
         label: data.label,
         floor: data.floor ?? null,
         door: data.door ?? null,

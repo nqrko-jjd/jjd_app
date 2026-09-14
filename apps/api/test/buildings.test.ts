@@ -23,13 +23,17 @@ before(async () => {
       })
     ).json()
   ).token;
-  const b = await prisma.building.create({ data: { name: 'Test Algarve', normalizedName: 'test algarve', source: 'test' } });
+  // un "immeuble" est un Contact de kind 'acp'/'developer' (fusion Contact/Immeuble) —
+  // /api/buildings n'est qu'une vue filtrée de /api/contacts.
+  const b = await prisma.contact.create({
+    data: { name: 'Test Algarve', normalizedName: 'test algarve', type: 'client', kind: 'acp', source: 'test' },
+  });
   buildingId = b.id;
 });
 
 after(async () => {
   await prisma.worksite.deleteMany({ where: { ref: 'R-TESTDEL' } });
-  await prisma.building.deleteMany({ where: { source: 'test' } });
+  await prisma.contact.deleteMany({ where: { source: 'test' } });
   server.close();
 });
 
@@ -99,52 +103,44 @@ test('immeuble : un lot peut être lié à une vraie fiche contact (pas juste du
   }
 });
 
-test('immeuble : poser le client facturé pose aussi le lien inverse sur le contact', async () => {
-  await prisma.contact.deleteMany({ where: { name: 'Promoteur — test' } });
-  const client = await prisma.contact.create({
-    data: { name: 'Promoteur — test', normalizedName: 'promoteur test', type: 'client', kind: 'developer', source: 'test' },
+test('immeuble : créer un immeuble crée directement un contact ACP (plus de fiche séparée)', async () => {
+  await prisma.contact.deleteMany({ where: { name: 'Projet — test' } });
+  const created = await fetch(`${base}/api/buildings`, {
+    method: 'POST', headers: auth(), body: JSON.stringify({ name: 'Projet — test', kind: 'developer' }),
   });
+  assert.equal(created.status, 201);
+  const building = (await created.json()).building;
   try {
-    const created = await fetch(`${base}/api/buildings`, {
-      method: 'POST', headers: auth(), body: JSON.stringify({ name: 'Projet — test', clientId: client.id }),
-    });
-    assert.equal(created.status, 201);
-    const building = (await created.json()).building;
-
-    const c = await prisma.contact.findUnique({ where: { id: client.id } });
-    assert.equal(c?.buildingId, building.id, 'le contact doit maintenant montrer ce bâtiment/projet comme lié');
-
-    await prisma.building.deleteMany({ where: { id: building.id } });
+    assert.equal(building.kind, 'developer');
+    assert.equal(building.type, 'client');
+    // la fiche est directement accessible comme contact ET comme immeuble — une seule ligne
+    const asContact = await (await fetch(`${base}/api/contacts/${building.id}`, { headers: auth() })).json();
+    assert.equal(asContact.contact.name, 'Projet — test');
   } finally {
-    await prisma.contact.deleteMany({ where: { id: client.id } });
+    await prisma.contact.deleteMany({ where: { id: building.id } });
   }
 });
 
-test('immeuble : ne remplace pas un lien contact déjà existant vers un autre bâtiment', async () => {
-  const otherBuilding = await prisma.building.create({ data: { name: 'Autre — test', normalizedName: 'autre test', source: 'test' } });
-  const client = await prisma.contact.create({
-    data: { name: 'Déjà lié — test', normalizedName: 'deja lie test', type: 'client', buildingId: otherBuilding.id, source: 'test' },
+test('immeuble : un résident (particulier) peut être lié à son ACP', async () => {
+  await prisma.contact.deleteMany({ where: { name: 'M. Résident — test' } });
+  const resident = await prisma.contact.create({
+    data: { name: 'M. Résident — test', normalizedName: 'm resident test', type: 'client', kind: 'individual', linkedAcpId: buildingId, source: 'test' },
   });
   try {
-    const created = await fetch(`${base}/api/buildings`, {
-      method: 'POST', headers: auth(), body: JSON.stringify({ name: 'Nouveau — test', clientId: client.id }),
-    });
-    const building = (await created.json()).building;
-
-    const c = await prisma.contact.findUnique({ where: { id: client.id } });
-    assert.equal(c?.buildingId, otherBuilding.id, 'le lien existant ne doit pas être écrasé');
-
-    await prisma.building.deleteMany({ where: { id: { in: [building.id] } } });
+    const detail = await (await fetch(`${base}/api/buildings/${buildingId}`, { headers: auth() })).json();
+    const residents = detail.building.linkedContacts as { id: string }[];
+    assert.ok(residents.some((r) => r.id === resident.id));
   } finally {
-    await prisma.contact.deleteMany({ where: { id: client.id } });
-    await prisma.building.deleteMany({ where: { id: otherBuilding.id } });
+    await prisma.contact.deleteMany({ where: { id: resident.id } });
   }
 });
 
 test('immeuble : suppression bloquée si encore référencé, permise sinon', async () => {
   await prisma.worksite.deleteMany({ where: { ref: 'R-TESTDEL' } });
-  const b = await prisma.building.create({ data: { name: 'Test à supprimer', normalizedName: 'test a supprimer', source: 'test' } });
-  const ws = await prisma.worksite.create({ data: { ref: 'R-TESTDEL', title: 'Test', buildingId: b.id, source: 'test' } });
+  const b = await prisma.contact.create({
+    data: { name: 'Test à supprimer', normalizedName: 'test a supprimer', type: 'client', kind: 'acp', source: 'test' },
+  });
+  const ws = await prisma.worksite.create({ data: { ref: 'R-TESTDEL', title: 'Test', acpId: b.id, source: 'test' } });
 
   const blocked = await fetch(`${base}/api/buildings/${b.id}`, { method: 'DELETE', headers: auth() });
   assert.equal(blocked.status, 409);
@@ -152,7 +148,7 @@ test('immeuble : suppression bloquée si encore référencé, permise sinon', as
   await prisma.worksite.delete({ where: { id: ws.id } });
   const ok = await fetch(`${base}/api/buildings/${b.id}`, { method: 'DELETE', headers: auth() });
   assert.equal(ok.status, 204);
-  assert.equal(await prisma.building.findUnique({ where: { id: b.id } }), null);
+  assert.equal(await prisma.contact.findUnique({ where: { id: b.id } }), null);
 });
 
 test('immeuble : champs ACP éditables', async () => {

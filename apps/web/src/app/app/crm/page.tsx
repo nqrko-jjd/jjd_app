@@ -10,7 +10,7 @@ interface Opp {
   id: string; title: string; stage: string; estimatedValue: number | null;
   source: string | null; nextActionOn: string | null; nextActionNote: string | null;
   contact: { name: string } | null;
-  building: { name: string } | null;
+  acp: { name: string } | null;
 }
 
 export default function CrmPage() {
@@ -69,7 +69,7 @@ function CrmInner() {
                   <div key={o.id} className="kanban-card">
                     <div className="title">{o.title}</div>
                     <div className="meta">
-                      <span>{o.contact?.name ?? o.building?.name ?? '—'}</span>
+                      <span>{o.contact?.name ?? o.acp?.name ?? '—'}</span>
                       {o.estimatedValue != null && <span><Money value={o.estimatedValue} /></span>}
                     </div>
                     {o.nextActionOn && (

@@ -37,11 +37,11 @@ export const contactPersonInput = z.object({
 
 export const buildingInput = z.object({
   name: nonEmpty,
+  kind: z.enum(['acp', 'developer']).default('acp'),
   address: z.string().trim().nullish(),
   postalCode: z.string().trim().nullish(),
   city: z.string().trim().nullish(),
   syndicId: z.string().nullish(),
-  clientId: z.string().nullish(),
   reference: z.string().trim().nullish(),
   lotCount: z.coerce.number().int().nonnegative().nullish(),
   digicode: z.string().trim().nullish(),
@@ -148,7 +148,7 @@ export const crmOpportunityInput = z.object({
   title: nonEmpty,
   stage: z.enum(CRM_STAGES).default('new'),
   contactId: z.string().nullish(),
-  buildingId: z.string().nullish(),
+  acpId: z.string().nullish(),
   worksiteId: z.string().nullish(),
   estimatedValue: z.number().nonnegative().nullish(),
   source: z.string().trim().nullish(),

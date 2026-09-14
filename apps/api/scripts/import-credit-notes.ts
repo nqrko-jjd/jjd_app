@@ -98,7 +98,7 @@ async function contactFor(name: string | null, vat: string | null): Promise<stri
   if (!name) return null;
   const nn = normalizeName(name);
   let c = await prisma.contact.findFirst({ where: { normalizedName: nn } });
-  const { base, syndic } = splitSyndic(name);
+  const { syndic } = splitSyndic(name);
   const syndicId = syndic ? await getSyndic(syndic) : null;
   const kind = /\bacp\b|copropri|\bvme\b/i.test(name) ? 'acp' : /\b(srl|sprl|sa|nv|bv|scrl)\b/i.test(name) ? 'company' : 'individual';
 
@@ -112,18 +112,7 @@ async function contactFor(name: string | null, vat: string | null): Promise<stri
     if (syndicId && !c.syndicId) patch.syndicId = syndicId;
     if (Object.keys(patch).length) await prisma.contact.update({ where: { id: c.id }, data: patch });
   }
-
-  if (kind === 'acp' && syndicId) {
-    const bn = normalizeName(base || name);
-    const existing = await prisma.building.findFirst({ where: { normalizedName: bn } });
-    if (!existing) {
-      await prisma.building.create({
-        data: { name: base || name, normalizedName: bn, syndicId, clientId: c.id, source: 'trustup' },
-      });
-    } else if (!existing.syndicId) {
-      await prisma.building.update({ where: { id: existing.id }, data: { syndicId, clientId: c.id } });
-    }
-  }
+  // un ACP EST l'immeuble (fusion Contact/Immeuble) — rien de plus à créer.
   return c.id;
 }
 
@@ -215,12 +204,13 @@ async function importFile(file: string, docToWs: Map<string, string>, wsByRef: M
     counts[kind] = (counts[kind] ?? 0) + 1;
 
     if (wsId && contactId) {
-      const ws = await prisma.worksite.findUnique({ where: { id: wsId }, select: { clientId: true, buildingId: true } });
+      const ws = await prisma.worksite.findUnique({ where: { id: wsId }, select: { clientId: true, acpId: true } });
+      const contact = await prisma.contact.findUnique({ where: { id: contactId }, select: { kind: true, linkedAcpId: true } });
       const patch: Record<string, unknown> = {};
       if (!ws?.clientId) patch.clientId = contactId;
-      if (!ws?.buildingId) {
-        const b = await prisma.building.findFirst({ where: { clientId: contactId } });
-        if (b) patch.buildingId = b.id;
+      if (!ws?.acpId) {
+        const acpId = contact?.kind === 'acp' || contact?.kind === 'developer' ? contactId : contact?.linkedAcpId;
+        if (acpId) patch.acpId = acpId;
       }
       if (Object.keys(patch).length) await prisma.worksite.update({ where: { id: wsId }, data: patch });
     }

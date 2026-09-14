@@ -16,7 +16,7 @@ crmRouter.get(
       orderBy: [{ nextActionOn: 'asc' }, { updatedAt: 'desc' }],
       include: {
         contact: { select: { id: true, name: true } },
-        building: { select: { id: true, name: true } },
+        acp: { select: { id: true, name: true } },
         owner: { select: { id: true, email: true } },
       },
     });
@@ -81,7 +81,7 @@ crmRouter.post(
         title: opp.title,
         status: 'to_plan',
         clientId: opp.contactId,
-        buildingId: opp.buildingId,
+        acpId: opp.acpId,
         quotedHt: opp.estimatedValue,
         source: 'crm',
       },

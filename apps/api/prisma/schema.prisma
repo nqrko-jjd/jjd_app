@@ -70,10 +70,7 @@ model User {
   contact      Contact?  @relation("UserClientAccount", fields: [contactId], references: [id])
   syndicId     String? // compte client "syndic" -> voit tous ses immeubles
   syndic       Syndic?   @relation(fields: [syndicId], references: [id])
-  buildingId   String? // compte "résident" -> limité à un immeuble
-  building     Building? @relation("BuildingPortalUsers", fields: [buildingId], references: [id])
-  // Fusion Contact/Immeuble en cours : remplace `buildingId`/`building` ci-dessus.
-  residentOfId String?
+  residentOfId String? // compte "résident" -> limité à un immeuble/ACP (non unique : plusieurs résidents peuvent partager un immeuble)
   residentOf   Contact?  @relation("ResidentOfAcp", fields: [residentOfId], references: [id])
   portalAccess String    @default("full") // full | limited (limited = suivi/photos/messages, sans devis/factures/montants)
   lastLoginAt  DateTime?
@@ -227,19 +224,18 @@ model Syndic {
   note           String?
   createdAt      DateTime @default(now())
 
-  buildings Building[]
-  contacts  Contact[]
-  users     User[]
+  contacts Contact[]
+  users    User[]
 
   @@index([normalizedName])
 }
 
 /// Contact : client (particulier, société, ACP, pouvoir public) ou fournisseur.
 model Contact {
-  id             String    @id @default(cuid())
+  id             String   @id @default(cuid())
   name           String
   normalizedName String
-  type           String    @default("client") // client | supplier | both
+  type           String   @default("client") // client | supplier | both
   kind           String? // individual | company | acp | syndic | public
   email          String?
   phone          String?
@@ -248,28 +244,25 @@ model Contact {
   postalCode     String?
   city           String?
   syndicId       String?
-  syndic         Syndic?   @relation(fields: [syndicId], references: [id])
-  buildingId     String? // ACP à laquelle ce contact (personne) est rattaché — distinct de `buildings` ci-dessous (ACP dont il est LE client facturé)
-  building       Building? @relation("ContactOfBuilding", fields: [buildingId], references: [id])
+  syndic         Syndic?  @relation(fields: [syndicId], references: [id])
   note           String?
   trustupId      String?
   source         String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  // ─── Fusion Contact/Immeuble en cours (voir plan "compressed-enchanting-quiche") ───
-  // Champs absorbés de `Building` — renseignés pour un Contact de kind 'acp'/'developer',
-  // qui devient LA fiche de l'immeuble (adresse, digicode, lots...) en plus de son identité
-  // de facturation. Additifs, nullable : pas de valeur imposée aux contacts existants.
+  // Champs propres à un Contact de kind 'acp'/'developer', qui EST la fiche de l'immeuble/
+  // projet (adresse d'intervention, digicode, lots...) en plus de son identité de
+  // facturation — une ACP n'est plus deux fiches séparées à garder synchronisées.
   reference     String? // n° de dossier syndic / ACP
   lotCount      Int? // nombre de lots dans la copropriété
   digicode      String?
   accessNote    String? // clés, badges, où se garer…
   photoUrl      String?
   photoThumbUrl String?
-  // Remplace `buildingId`/`building` ci-dessus (autoréférence vers le Contact-ACP fusionné
-  // plutôt qu'un Building séparé) — coexiste temporairement avec l'ancien champ pendant la
-  // migration, sera le seul à subsister une fois `Building` supprimé.
+  // Immeuble/ACP auquel ce contact (une personne : résident, propriétaire...) est
+  // rattaché — autoréférence, distinct de `residents` ci-dessous (les contacts rattachés
+  // à CE contact quand il est lui-même une ACP).
   linkedAcpId   String?
   linkedAcp     Contact?  @relation("ContactLinkedAcp", fields: [linkedAcpId], references: [id])
   residents     Contact[] @relation("ContactLinkedAcp")
@@ -277,7 +270,6 @@ model Contact {
   user             User?             @relation("UserClientAccount")
   worksites        Worksite[]        @relation("WorksiteClient")
   acpWorksites     Worksite[]        @relation("WorksiteAcp")
-  buildings        Building[]        @relation("BuildingClient")
   opportunities    CrmOpportunity[]  @relation("CrmOpportunityContact")
   acpOpportunities CrmOpportunity[]  @relation("CrmOpportunityAcp")
   documents        Document[]
@@ -310,70 +302,31 @@ model ContactPerson {
   @@index([contactId])
 }
 
-/// Immeuble / ACP — le "dossier principal" du portail client.
-model Building {
-  id             String   @id @default(cuid())
-  name           String
-  normalizedName String
-  address        String?
-  postalCode     String?
-  city           String?
-  syndicId       String?
-  syndic         Syndic?  @relation(fields: [syndicId], references: [id])
-  clientId       String?
-  client         Contact? @relation("BuildingClient", fields: [clientId], references: [id])
-  note           String?
-  // infos ACP
-  reference      String? // n° de dossier syndic / ACP
-  lotCount       Int? // nombre de lots dans la copropriété
-  digicode       String?
-  accessNote     String? // clés, badges, où se garer…
-  photoUrl       String?
-  photoThumbUrl  String?
-  source         String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  worksites      Worksite[]
-  opportunities  CrmOpportunity[]
-  contacts       BuildingContact[]
-  linkedContacts Contact[]         @relation("ContactOfBuilding")
-  units          BuildingUnit[]
-  portalUsers    User[]            @relation("BuildingPortalUsers")
-
-  @@index([normalizedName])
-}
-
-/// Contact rattaché à un immeuble : concierge, président d'assemblée,
-/// gestionnaire syndic, contact ACP… (texte libre, lien Contact optionnel).
+/// Contact rattaché à un immeuble/ACP (Contact de kind 'acp'/'developer') : concierge,
+/// président d'assemblée, gestionnaire syndic… (texte libre, lien Contact optionnel).
 model BuildingContact {
-  id         String   @id @default(cuid())
-  buildingId String
-  building   Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
-  role       String // concierge | president | council | syndic_manager | contact | owner_rep | other
-  name       String
-  phone      String?
-  email      String?
-  note       String?
-  contactId  String? // lien éventuel vers un Contact existant
-  contact    Contact? @relation("BuildingContactPerson", fields: [contactId], references: [id])
-  position   Int      @default(0)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id        String   @id @default(cuid())
+  role      String // concierge | president | council | syndic_manager | contact | owner_rep | other
+  name      String
+  phone     String?
+  email     String?
+  note      String?
+  contactId String? // lien éventuel vers un Contact existant
+  contact   Contact? @relation("BuildingContactPerson", fields: [contactId], references: [id])
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  // Fusion Contact/Immeuble en cours : remplace `buildingId`/`building` ci-dessus.
-  acpId String?
-  acp   Contact? @relation("AcpKeyContact", fields: [acpId], references: [id], onDelete: Cascade)
+  acpId String
+  acp   Contact @relation("AcpKeyContact", fields: [acpId], references: [id], onDelete: Cascade)
 
-  @@index([buildingId])
+  @@index([acpId])
 }
 
-/// Lot / appartement d'un immeuble + occupant connu.
+/// Lot / appartement d'un immeuble (Contact de kind 'acp'/'developer') + occupant connu.
 /// Ex. « Algarve C1 — Mme Pinto — 1er étage — App C ».
 model BuildingUnit {
   id            String   @id @default(cuid())
-  buildingId    String
-  building      Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
   label         String // "C1", "Lot 12", "2A"
   floor         String? // "1er étage", "RdC"
   door          String? // "App C", "porte gauche"
@@ -388,11 +341,10 @@ model BuildingUnit {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  // Fusion Contact/Immeuble en cours : remplace `buildingId`/`building` ci-dessus.
-  acpId String?
-  acp   Contact? @relation("AcpUnit", fields: [acpId], references: [id], onDelete: Cascade)
+  acpId String
+  acp   Contact @relation("AcpUnit", fields: [acpId], references: [id], onDelete: Cascade)
 
-  @@index([buildingId])
+  @@index([acpId])
 }
 
 // ─────────────────────────────────────────────────────────── Chantiers & CRM
@@ -416,11 +368,7 @@ model Worksite {
   statusTags   Json? // ["Terminé","A vérifier"]
   clientId     String?
   client       Contact?  @relation("WorksiteClient", fields: [clientId], references: [id])
-  buildingId   String?
-  building     Building? @relation(fields: [buildingId], references: [id])
-  // Fusion Contact/Immeuble en cours : remplace `buildingId`/`building` ci-dessus une fois
-  // la bascule faite (voir plan "compressed-enchanting-quiche").
-  acpId        String?
+  acpId        String? // immeuble/ACP où se déroule l'intervention (dérivé du client s'il est ACP)
   acp          Contact?  @relation("WorksiteAcp", fields: [acpId], references: [id])
   managerId    String?
   manager      Person?   @relation("WorksiteManager", fields: [managerId], references: [id])
@@ -475,9 +423,6 @@ model CrmOpportunity {
   stage          String    @default("new") // new | to_qualify | visit_scheduled | quote_sent | follow_up | won | lost
   contactId      String?
   contact        Contact?  @relation("CrmOpportunityContact", fields: [contactId], references: [id])
-  buildingId     String?
-  building       Building? @relation(fields: [buildingId], references: [id])
-  // Fusion Contact/Immeuble en cours : remplace `buildingId`/`building` ci-dessus.
   acpId          String?
   acp            Contact?  @relation("CrmOpportunityAcp", fields: [acpId], references: [id])
   worksiteId     String?   @unique

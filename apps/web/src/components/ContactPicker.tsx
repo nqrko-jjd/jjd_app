@@ -13,6 +13,7 @@ export function ContactPicker({
   value,
   onChange,
   typeFilter = 'client',
+  kindFilter,
   placeholder,
   required,
   disabled,
@@ -21,13 +22,17 @@ export function ContactPicker({
   value: string;
   onChange: (id: string, label: string) => void;
   typeFilter?: 'client' | 'supplier';
+  /** Restreint la recherche (pas la création) à une ou plusieurs catégories, ex. `['acp',
+   *  'developer']` pour ne proposer que des immeubles/projets existants. */
+  kindFilter?: string[];
   placeholder?: string;
   required?: boolean;
   disabled?: boolean;
 }) {
   async function search(q: string): Promise<PickerItem[]> {
+    const kindParam = kindFilter?.length ? `&kind=${kindFilter.join(',')}` : '';
     const r = await api<{ items: { id: string; name: string; city: string | null }[] }>(
-      `/api/contacts?type=${typeFilter}&q=${encodeURIComponent(q)}&pageSize=20`,
+      `/api/contacts?type=${typeFilter}&q=${encodeURIComponent(q)}${kindParam}&pageSize=20`,
     );
     return r.items.slice(0, 8).map((c) => ({ id: c.id, name: c.name, sub: c.city ?? undefined }));
   }
@@ -52,7 +57,7 @@ export function ContactPicker({
       required={required}
       disabled={disabled}
       renderCreate={(query, onCreated, onCancel) => (
-        <ContactQuickCreate initialName={query} typeFilter={typeFilter} onCreated={onCreated} onCancel={onCancel} />
+        <ContactQuickCreate initialName={query} typeFilter={typeFilter} defaultKind={kindFilter?.length === 1 ? kindFilter[0] : undefined} onCreated={onCreated} onCancel={onCancel} />
       )}
     />
   );
@@ -61,11 +66,13 @@ export function ContactPicker({
 function ContactQuickCreate({
   initialName,
   typeFilter,
+  defaultKind,
   onCreated,
   onCancel,
 }: {
   initialName: string;
   typeFilter: 'client' | 'supplier';
+  defaultKind?: string;
   onCreated: (item: PickerItem) => void;
   onCancel: () => void;
 }) {
@@ -74,7 +81,7 @@ function ContactQuickCreate({
     <FormModal
       title="Nouveau contact"
       fields={CONTACT_FIELDS(typeFilter, pick?.syndics ?? [])}
-      initial={{ name: initialName, ...splitContactName(initialName), type: typeFilter }}
+      initial={{ name: initialName, ...splitContactName(initialName), type: typeFilter, ...(defaultKind ? { kind: defaultKind } : {}) }}
       onClose={onCancel}
       onSubmit={async (v) => {
         const { contact } = await api<{ contact: { id: string; name: string } }>('/api/contacts', { method: 'POST', body: composeContactPayload(v) });

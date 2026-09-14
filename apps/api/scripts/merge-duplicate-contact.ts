@@ -1,9 +1,8 @@
 /**
  * Fusionne un contact en doublon dans un contact canonique : réassigne toutes ses
- * références (chantiers, immeuble, opportunités, devis/factures, achats, contacts clés)
- * puis supprime le doublon vidé. Généralise le geste déjà fait à la main pour
- * Poincoin/Poincon — réutilisable pour n'importe quelle paire de doublons repérée par
- * `report-acp-duplicates.ts`.
+ * références (chantiers, immeuble/ACP lié, résidents, opportunités, devis/factures,
+ * achats, contacts clés, lots) puis supprime le doublon vidé. Généralise le geste déjà
+ * fait à la main pour Poincoin/Poincon, Oregon et Algarve.
  *
  *   npm run merge:duplicate-contact -- <canonicalId> <duplicateId>
  */
@@ -26,26 +25,30 @@ async function main() {
   if (!duplicate) throw new Error(`Contact doublon introuvable : ${duplicateId}`);
   console.log(`Fusion de « ${duplicate.name} » (${duplicateId}) -> « ${canonical.name} » (${canonicalId})`);
 
-  // Le doublon pointe peut-être sur un immeuble différent (rare) — si le canonique n'a pas
-  // encore d'immeuble lié, on récupère celui du doublon plutôt que de le perdre.
-  if (duplicate.buildingId && !canonical.buildingId) {
-    await prisma.contact.update({ where: { id: canonicalId }, data: { buildingId: duplicate.buildingId } });
-    console.log('  immeuble lié du doublon repris (le canonique n\'en avait pas)');
+  // Le doublon pointe peut-être sur une ACP différente (rare) — si le canonique n'a pas
+  // encore d'ACP liée, on récupère celle du doublon plutôt que de la perdre.
+  if (duplicate.linkedAcpId && !canonical.linkedAcpId) {
+    await prisma.contact.update({ where: { id: canonicalId }, data: { linkedAcpId: duplicate.linkedAcpId } });
+    console.log('  ACP liée du doublon reprise (le canonique n\'en avait pas)');
   }
 
-  const [ws, opp, doc, ledger, bc, bu] = await Promise.all([
+  const [ws, acpWs, opp, acpOpp, doc, ledger, bc, bu, residents, users] = await Promise.all([
     prisma.worksite.updateMany({ where: { clientId: duplicateId }, data: { clientId: canonicalId } }),
+    prisma.worksite.updateMany({ where: { acpId: duplicateId }, data: { acpId: canonicalId } }),
     prisma.crmOpportunity.updateMany({ where: { contactId: duplicateId }, data: { contactId: canonicalId } }),
+    prisma.crmOpportunity.updateMany({ where: { acpId: duplicateId }, data: { acpId: canonicalId } }),
     prisma.document.updateMany({ where: { contactId: duplicateId }, data: { contactId: canonicalId } }),
     prisma.ledgerEntry.updateMany({ where: { contactId: duplicateId }, data: { contactId: canonicalId } }),
-    prisma.buildingContact.updateMany({ where: { contactId: duplicateId }, data: { contactId: canonicalId } }),
-    prisma.buildingUnit.updateMany({ where: { contactId: duplicateId }, data: { contactId: canonicalId } }),
+    prisma.buildingContact.updateMany({ where: { acpId: duplicateId }, data: { acpId: canonicalId } }),
+    prisma.buildingUnit.updateMany({ where: { acpId: duplicateId }, data: { acpId: canonicalId } }),
+    prisma.contact.updateMany({ where: { linkedAcpId: duplicateId }, data: { linkedAcpId: canonicalId } }),
+    prisma.user.updateMany({ where: { residentOfId: duplicateId }, data: { residentOfId: canonicalId } }),
   ]);
-  console.log('  réassignés :', { worksites: ws.count, opportunities: opp.count, documents: doc.count, ledgerEntries: ledger.count, buildingContacts: bc.count, buildingUnits: bu.count });
-
-  // Building.clientId pointant sur le doublon (le doublon était "le client" d'un immeuble)
-  const buildingsClientOfDup = await prisma.building.updateMany({ where: { clientId: duplicateId }, data: { clientId: canonicalId } });
-  if (buildingsClientOfDup.count) console.log(`  ${buildingsClientOfDup.count} immeuble(s) dont clientId pointait sur le doublon, repointé(s)`);
+  console.log('  réassignés :', {
+    worksites: ws.count, worksitesAcp: acpWs.count, opportunities: opp.count, opportunitiesAcp: acpOpp.count,
+    documents: doc.count, ledgerEntries: ledger.count, buildingContacts: bc.count, buildingUnits: bu.count,
+    residents: residents.count, portalUsers: users.count,
+  });
 
   await prisma.contact.delete({ where: { id: duplicateId } });
   console.log('  doublon supprimé.');

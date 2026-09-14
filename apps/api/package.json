@@ -15,6 +15,7 @@
     "sync": "tsx scripts/sync-xlsx.ts",
     "report:acp-namesim": "tsx scripts/check-acp-namesim.ts",
     "report:contact-refs": "tsx scripts/check-contact-refs.ts",
+    "delete:orphan-contact": "tsx scripts/delete-orphan-contact.ts",
     "import:trustup": "tsx scripts/import-trustup.ts",
     "import:credit-notes": "tsx scripts/import-credit-notes.ts",
     "backfill:task-assignees": "tsx scripts/backfill-task-assignees.ts",

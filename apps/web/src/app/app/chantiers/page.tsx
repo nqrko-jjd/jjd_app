@@ -4,17 +4,22 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
-import { PageHead, StatusBadge, PriorityBadge, EntityBadge, Money, formatDateBE } from '@/lib/ui';
+import { PageHead, StatusBadge, PriorityBadge, EntityBadge, ScopeBadge, BillingModeBadge, Money, formatDateBE } from '@/lib/ui';
 import { FormModal, type FieldDef } from '@/components/FormModal';
 import { ContextMenu, useContextMenu, openActions, type MenuItem } from '@/components/ContextMenu';
 import { PaginationBar } from '@/components/PaginationBar';
 import { useSort, useColumnFilter, SortTh, distinctValues } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
 import { downloadCsv, pickAndImportCsv, summarizeImport } from '@/lib/csvIO';
-import { WORKSITE_STATUS_LABEL, WORKSITE_STATUSES, WORKSITE_PRIORITIES, WORKSITE_PRIORITY_LABEL, ENTITIES, ENTITY_LABEL } from '@jjd/shared';
+import {
+  WORKSITE_STATUS_LABEL, WORKSITE_STATUSES, WORKSITE_PRIORITIES, WORKSITE_PRIORITY_LABEL,
+  WORKSITE_SCOPES, WORKSITE_SCOPE_LABEL, WORKSITE_BILLING_MODES, WORKSITE_BILLING_MODE_LABEL,
+  ENTITIES, ENTITY_LABEL,
+} from '@jjd/shared';
 
 interface WS {
   id: string; ref: string; title: string; status: string; priority: string; entity: string;
+  scope: string | null; billingMode: string | null;
   city: string | null; quotedHt: number | null; endedOn: string | null;
   client: { name: string } | null;
   manager: { displayName: string | null; firstName: string } | null;
@@ -56,6 +61,8 @@ function ChantiersInner() {
     manager: (w: WS) => w.manager?.displayName ?? w.manager?.firstName,
     status: (w: WS) => WORKSITE_STATUS_LABEL[w.status as keyof typeof WORKSITE_STATUS_LABEL] ?? w.status,
     entity: (w: WS) => ENTITY_LABEL[w.entity as keyof typeof ENTITY_LABEL] ?? w.entity,
+    scope: (w: WS) => (w.scope ? WORKSITE_SCOPE_LABEL[w.scope as keyof typeof WORKSITE_SCOPE_LABEL] ?? w.scope : undefined),
+    billingMode: (w: WS) => (w.billingMode ? WORKSITE_BILLING_MODE_LABEL[w.billingMode as keyof typeof WORKSITE_BILLING_MODE_LABEL] ?? w.billingMode : undefined),
     quotedHt: (w: WS) => w.quotedHt,
     endedOn: (w: WS) => (w.endedOn ? new Date(w.endedOn) : null),
   };
@@ -134,6 +141,24 @@ function ChantiersInner() {
           onClick: () => patchWs(w.id, { priority: p }),
         })),
       },
+      {
+        label: 'Portée',
+        items: WORKSITE_SCOPES.map((s) => ({
+          label: WORKSITE_SCOPE_LABEL[s],
+          check: s === w.scope,
+          disabled: s === w.scope,
+          onClick: () => patchWs(w.id, { scope: s }),
+        })),
+      },
+      {
+        label: 'Facturation',
+        items: WORKSITE_BILLING_MODES.map((b) => ({
+          label: WORKSITE_BILLING_MODE_LABEL[b],
+          check: b === w.billingMode,
+          disabled: b === w.billingMode,
+          onClick: () => patchWs(w.id, { billingMode: b }),
+        })),
+      },
     ];
   }
 
@@ -142,6 +167,8 @@ function ChantiersInner() {
     { name: 'entity', label: 'Entité', type: 'select', options: ENTITIES.filter((e) => e !== 'm7').map((e) => ({ value: e, label: ENTITY_LABEL[e] })) },
     { name: 'status', label: 'Statut', type: 'select', options: WORKSITE_STATUSES.map((s) => ({ value: s, label: WORKSITE_STATUS_LABEL[s] })) },
     { name: 'priority', label: 'Priorité', type: 'select', options: WORKSITE_PRIORITIES.map((p) => ({ value: p, label: WORKSITE_PRIORITY_LABEL[p] })) },
+    { name: 'scope', label: 'Portée', type: 'select', options: WORKSITE_SCOPES.map((s) => ({ value: s, label: WORKSITE_SCOPE_LABEL[s] })) },
+    { name: 'billingMode', label: 'Facturation', type: 'select', options: WORKSITE_BILLING_MODES.map((b) => ({ value: b, label: WORKSITE_BILLING_MODE_LABEL[b] })) },
     { name: 'clientId', label: 'Client / Immeuble', type: 'client-or-building', buildingField: 'buildingId', full: true },
     { name: 'managerId', label: 'Chef de chantier', type: 'select', options: (refs?.people ?? []).map((p) => ({ value: p.id, label: p.name })) },
     { name: 'address', label: 'Adresse', full: true, type: 'address', addressFill: { postalCode: 'postalCode', city: 'city' } },
@@ -246,7 +273,7 @@ function ChantiersInner() {
                   <td><Link href={`/app/chantiers/${w.id}`}>{w.title}</Link></td>
                   <td>{w.client?.name ?? '—'}</td>
                   <td>{w.manager?.displayName ?? w.manager?.firstName ?? '—'}</td>
-                  <td><span style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap' }}><StatusBadge status={w.status} /><PriorityBadge priority={w.priority} /></span></td>
+                  <td><span style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap' }}><StatusBadge status={w.status} /><PriorityBadge priority={w.priority} /><ScopeBadge scope={w.scope} /><BillingModeBadge billingMode={w.billingMode} /></span></td>
                   <td><EntityBadge entity={w.entity} /></td>
                   <td style={{ textAlign: 'right' }}><Money value={w.quotedHt} /></td>
                   <td className="tnum">{w.endedOn ? formatDateBE(w.endedOn) : '—'}</td>

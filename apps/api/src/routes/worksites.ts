@@ -366,6 +366,8 @@ worksitesRouter.post(
         entity: data.entity,
         status: data.status,
         priority: data.priority,
+        scope: data.scope ?? null,
+        billingMode: data.billingMode ?? null,
         statusTags: data.statusTags,
         clientId: data.clientId ?? null,
         buildingId,

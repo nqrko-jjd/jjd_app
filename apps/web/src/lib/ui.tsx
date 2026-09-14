@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
 import {
-  WORKSITE_STATUS_LABEL, WORKSITE_PRIORITY_LABEL, ENTITY_LABEL, CRM_STAGE_LABEL, formatEur, formatDateBE,
-  VEHICLE_STATUS_LABEL, type WorksiteStatus, type WorksitePriority, type VehicleStatus,
+  WORKSITE_STATUS_LABEL, WORKSITE_PRIORITY_LABEL, WORKSITE_SCOPE_LABEL, WORKSITE_BILLING_MODE_LABEL,
+  ENTITY_LABEL, CRM_STAGE_LABEL, formatEur, formatDateBE,
+  VEHICLE_STATUS_LABEL, type WorksiteStatus, type WorksitePriority, type WorksiteScope, type WorksiteBillingMode, type VehicleStatus,
 } from '@jjd/shared';
 
 export { formatEur, formatDateBE };
@@ -33,6 +34,18 @@ export function PriorityBadge({ priority }: { priority: string | null | undefine
 
 export function EntityBadge({ entity }: { entity: string }) {
   return <span className="badge">{ENTITY_LABEL[entity as keyof typeof ENTITY_LABEL] ?? entity}</span>;
+}
+
+/** N'affiche rien tant que non classé (informatif, la plupart des chantiers historiques ne
+ *  le sont pas encore). */
+export function ScopeBadge({ scope }: { scope: string | null | undefined }) {
+  if (!scope) return null;
+  return <span className="badge plain">{WORKSITE_SCOPE_LABEL[scope as WorksiteScope] ?? scope}</span>;
+}
+
+export function BillingModeBadge({ billingMode }: { billingMode: string | null | undefined }) {
+  if (!billingMode) return null;
+  return <span className="badge plain">{WORKSITE_BILLING_MODE_LABEL[billingMode as WorksiteBillingMode] ?? billingMode}</span>;
 }
 
 const VEHICLE_STATUS_TONE: Partial<Record<VehicleStatus, string>> = {

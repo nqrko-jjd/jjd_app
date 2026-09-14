@@ -4,17 +4,22 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
-import { PageHead, StatusBadge, PriorityBadge, EntityBadge, Money, formatDateBE } from '@/lib/ui';
+import { PageHead, StatusBadge, PriorityBadge, EntityBadge, ScopeBadge, BillingModeBadge, Money, formatDateBE } from '@/lib/ui';
 import { FormModal, toDateInput, type FieldDef } from '@/components/FormModal';
 import { ChantierThread } from '@/components/ChantierThread';
 import { WorksiteTasks } from '@/components/WorksiteTasks';
 import { CollapsibleSection } from '@/components/CollapsibleSection';
 import { Donut } from '@/lib/charts';
-import { WORKSITE_STATUSES, WORKSITE_STATUS_LABEL, WORKSITE_PRIORITIES, WORKSITE_PRIORITY_LABEL, ENTITIES, ENTITY_LABEL, formatHours, type WorksiteMargin } from '@jjd/shared';
+import {
+  WORKSITE_STATUSES, WORKSITE_STATUS_LABEL, WORKSITE_PRIORITIES, WORKSITE_PRIORITY_LABEL,
+  WORKSITE_SCOPES, WORKSITE_SCOPE_LABEL, WORKSITE_BILLING_MODES, WORKSITE_BILLING_MODE_LABEL,
+  ENTITIES, ENTITY_LABEL, formatHours, type WorksiteMargin,
+} from '@jjd/shared';
 
 interface Detail {
   worksite: {
     id: string; ref: string; title: string; status: string; priority: string; statusRaw: string | null;
+    scope: string | null; billingMode: string | null;
     entity: string; address: string | null; city: string | null; billTo: string | null;
     lat: number | null; lng: number | null; geoSetAt: string | null;
     startedOn: string | null; endedOn: string | null; quotedHt: number | null; description: string | null;
@@ -84,6 +89,8 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
     { name: 'entity', label: 'Entité', type: 'select', options: ENTITIES.map((e) => ({ value: e, label: ENTITY_LABEL[e] })) },
     { name: 'status', label: 'Statut', type: 'select', options: WORKSITE_STATUSES.map((s) => ({ value: s, label: WORKSITE_STATUS_LABEL[s] })) },
     { name: 'priority', label: 'Priorité', type: 'select', options: WORKSITE_PRIORITIES.map((p) => ({ value: p, label: WORKSITE_PRIORITY_LABEL[p] })) },
+    { name: 'scope', label: 'Portée', type: 'select', options: WORKSITE_SCOPES.map((s) => ({ value: s, label: WORKSITE_SCOPE_LABEL[s] })) },
+    { name: 'billingMode', label: 'Facturation', type: 'select', options: WORKSITE_BILLING_MODES.map((b) => ({ value: b, label: WORKSITE_BILLING_MODE_LABEL[b] })) },
     { name: 'address', label: 'Adresse', full: true, type: 'address', addressFill: { postalCode: 'postalCode', city: 'city' } },
     { name: 'postalCode', label: 'Code postal' },
     { name: 'city', label: 'Ville' },
@@ -108,7 +115,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
           fields={editFields}
           initial={{
             title: w.title, clientId: w.client?.id ?? '', buildingId: w.building?.id ?? '', managerId: w.manager?.id ?? '',
-            entity: w.entity, status: w.status, priority: w.priority,
+            entity: w.entity, status: w.status, priority: w.priority, scope: w.scope, billingMode: w.billingMode,
             address: w.address, city: w.city,
             startedOn: toDateInput(w.startedOn), endedOn: toDateInput(w.endedOn),
             quotedHt: w.quotedHt, description: w.description,
@@ -139,6 +146,8 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
         <StatusBadge status={w.status} />
         <PriorityBadge priority={w.priority} />
         <EntityBadge entity={w.entity} />
+        <ScopeBadge scope={w.scope} />
+        <BillingModeBadge billingMode={w.billingMode} />
         {w.statusRaw && w.statusRaw !== w.status && <span className="chip">{w.statusRaw}</span>}
       </div>
 

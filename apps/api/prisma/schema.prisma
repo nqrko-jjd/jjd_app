@@ -373,6 +373,12 @@ model Worksite {
   entity      String    @default("jjd") // jjd | tonton | m7
   status      String    @default("to_plan")
   priority    String    @default("normal") // low | normal | high | urgent
+  // Portée et facturation : informatifs, modifiables à tout moment (jamais figés à la
+  // création) — une intervention peut grandir en cours de route, et rester en régie ou
+  // basculer en devis indépendamment de sa taille. Pas de valeur par défaut : laissés vides
+  // (non classés) plutôt que de deviner pour les chantiers déjà existants.
+  scope       String? // intervention | long_term
+  billingMode String? // regie | devis
   statusRaw   String? // texte d'origine (Excel / TrustUp)
   statusTags  Json? // ["Terminé","A vérifier"]
   clientId    String?

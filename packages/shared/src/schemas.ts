@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
-  PERSON_ROLES, ENTITIES, WORKSITE_STATUSES, WORKSITE_PRIORITIES, CRM_STAGES, CRM_LOST_REASONS,
+  PERSON_ROLES, ENTITIES, WORKSITE_STATUSES, WORKSITE_PRIORITIES, WORKSITE_SCOPES, WORKSITE_BILLING_MODES,
+  CRM_STAGES, CRM_LOST_REASONS,
   CONTACT_TYPES, CLIENT_KINDS, WORKER_CONTRACT_TYPES, LEGAL_DOC_TYPES, VEHICLE_DOC_TYPES,
   BUILDING_CONTACT_ROLES, OCCUPANT_KINDS, VEHICLE_STATUSES, ADJUSTMENT_TYPES,
 } from './enums.js';
@@ -77,6 +78,8 @@ export const worksiteInput = z.object({
   entity: z.enum(ENTITIES).default('jjd'),
   status: z.enum(WORKSITE_STATUSES).default('to_plan'),
   priority: z.enum(WORKSITE_PRIORITIES).default('normal'),
+  scope: z.enum(WORKSITE_SCOPES).nullish(),
+  billingMode: z.enum(WORKSITE_BILLING_MODES).nullish(),
   statusTags: z.array(z.string()).default([]),
   clientId: z.string().nullish(),
   buildingId: z.string().nullish(),

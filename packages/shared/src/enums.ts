@@ -293,6 +293,28 @@ export const WORKSITE_PRIORITY_LABEL: Record<WorksitePriority, string> = {
   urgent: 'Urgente',
 };
 
+/** Portée du chantier — informatif, modifiable à tout moment : une intervention peut grandir
+ *  en cours de route (ex. une fuite qui oblige à casser plus haut) et devenir un chantier long
+ *  terme, jamais figé à la création. */
+export const WORKSITE_SCOPES = ['intervention', 'long_term'] as const;
+export type WorksiteScope = (typeof WORKSITE_SCOPES)[number];
+
+export const WORKSITE_SCOPE_LABEL: Record<WorksiteScope, string> = {
+  intervention: 'Intervention',
+  long_term: 'Chantier long terme',
+};
+
+/** Mode de facturation prévu — informatif, modifiable à tout moment : régie (temps/matériel
+ *  facturé tel quel, sans devis préalable) tant que c'est rapide/pas cher, devis dès que
+ *  l'intervention dure plus longtemps ou qu'on découvre beaucoup de travail. */
+export const WORKSITE_BILLING_MODES = ['regie', 'devis'] as const;
+export type WorksiteBillingMode = (typeof WORKSITE_BILLING_MODES)[number];
+
+export const WORKSITE_BILLING_MODE_LABEL: Record<WorksiteBillingMode, string> = {
+  regie: 'Régie',
+  devis: 'Devis',
+};
+
 /** Rôles d'un contact rattaché à un immeuble / ACP. */
 export const BUILDING_CONTACT_ROLES = [
   'concierge', 'president', 'council', 'syndic_manager', 'contact', 'owner_rep', 'other',

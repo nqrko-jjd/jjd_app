@@ -77,3 +77,25 @@ test('PATCH /api/worksites/:id : propriétaire/locataire (contacts propres à l�
   assert.deepEqual(field.owner, { name: 'M. Dupont', phone: '0470 11 22 33', email: null });
   assert.equal(field.tenant.phone2, '0470 77 88 99');
 });
+
+test('PATCH /api/worksites/:id : portée/facturation (informatif, modifiable à tout moment) persistés', async () => {
+  const patch = await fetch(`${base}/api/worksites/${worksiteId}`, {
+    method: 'PATCH',
+    headers: { authorization: `Bearer ${officeToken}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ scope: 'intervention', billingMode: 'regie' }),
+  });
+  assert.equal(patch.status, 200);
+  let body = await patch.json();
+  assert.equal(body.worksite.scope, 'intervention');
+  assert.equal(body.worksite.billingMode, 'regie');
+
+  // une intervention peut grandir en cours de route et basculer en devis — jamais figé
+  const grown = await fetch(`${base}/api/worksites/${worksiteId}`, {
+    method: 'PATCH',
+    headers: { authorization: `Bearer ${officeToken}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ scope: 'long_term', billingMode: 'devis' }),
+  });
+  body = await grown.json();
+  assert.equal(body.worksite.scope, 'long_term');
+  assert.equal(body.worksite.billingMode, 'devis');
+});

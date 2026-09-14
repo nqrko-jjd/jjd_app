@@ -19,6 +19,7 @@
     "scan:invoice-mailbox": "tsx scripts/scan-invoice-mailbox-history.ts",
     "report:mailbox-scan-sample": "tsx scripts/check-mailbox-scan-sample.ts",
     "report:mailbox-scan-triage": "tsx scripts/triage-mailbox-scan-blanks.ts",
+    "delete:blank-mailbox-scan-entries": "tsx scripts/delete-blank-mailbox-scan-entries.ts",
     "report:contact-documents": "tsx scripts/check-contact-documents.ts",
     "import:trustup": "tsx scripts/import-trustup.ts",
     "import:credit-notes": "tsx scripts/import-credit-notes.ts",

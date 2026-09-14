@@ -67,11 +67,14 @@ model User {
   personId     String?   @unique
   person       Person?   @relation(fields: [personId], references: [id])
   contactId    String?   @unique // compte client -> voit ses chantiers
-  contact      Contact?  @relation(fields: [contactId], references: [id])
+  contact      Contact?  @relation("UserClientAccount", fields: [contactId], references: [id])
   syndicId     String? // compte client "syndic" -> voit tous ses immeubles
   syndic       Syndic?   @relation(fields: [syndicId], references: [id])
   buildingId   String? // compte "résident" -> limité à un immeuble
   building     Building? @relation("BuildingPortalUsers", fields: [buildingId], references: [id])
+  // Fusion Contact/Immeuble en cours : remplace `buildingId`/`building` ci-dessus.
+  residentOfId String?
+  residentOf   Contact?  @relation("ResidentOfAcp", fields: [residentOfId], references: [id])
   portalAccess String    @default("full") // full | limited (limited = suivi/photos/messages, sans devis/factures/montants)
   lastLoginAt  DateTime?
   createdAt    DateTime  @default(now())
@@ -254,14 +257,36 @@ model Contact {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  user             User?
+  // ─── Fusion Contact/Immeuble en cours (voir plan "compressed-enchanting-quiche") ───
+  // Champs absorbés de `Building` — renseignés pour un Contact de kind 'acp'/'developer',
+  // qui devient LA fiche de l'immeuble (adresse, digicode, lots...) en plus de son identité
+  // de facturation. Additifs, nullable : pas de valeur imposée aux contacts existants.
+  reference     String? // n° de dossier syndic / ACP
+  lotCount      Int? // nombre de lots dans la copropriété
+  digicode      String?
+  accessNote    String? // clés, badges, où se garer…
+  photoUrl      String?
+  photoThumbUrl String?
+  // Remplace `buildingId`/`building` ci-dessus (autoréférence vers le Contact-ACP fusionné
+  // plutôt qu'un Building séparé) — coexiste temporairement avec l'ancien champ pendant la
+  // migration, sera le seul à subsister une fois `Building` supprimé.
+  linkedAcpId   String?
+  linkedAcp     Contact?  @relation("ContactLinkedAcp", fields: [linkedAcpId], references: [id])
+  residents     Contact[] @relation("ContactLinkedAcp")
+
+  user             User?             @relation("UserClientAccount")
   worksites        Worksite[]        @relation("WorksiteClient")
+  acpWorksites     Worksite[]        @relation("WorksiteAcp")
   buildings        Building[]        @relation("BuildingClient")
-  opportunities    CrmOpportunity[]
+  opportunities    CrmOpportunity[]  @relation("CrmOpportunityContact")
+  acpOpportunities CrmOpportunity[]  @relation("CrmOpportunityAcp")
   documents        Document[]
   ledgerEntries    LedgerEntry[]
-  buildingContacts BuildingContact[]
-  buildingUnits    BuildingUnit[]
+  buildingContacts BuildingContact[] @relation("BuildingContactPerson")
+  buildingUnits    BuildingUnit[]    @relation("BuildingUnitOccupant")
+  acpKeyContacts   BuildingContact[] @relation("AcpKeyContact")
+  acpUnits         BuildingUnit[]    @relation("AcpUnit")
+  residentUsers    User[]            @relation("ResidentOfAcp")
   contactPersons   ContactPerson[]
 
   @@index([normalizedName])
@@ -331,10 +356,14 @@ model BuildingContact {
   email      String?
   note       String?
   contactId  String? // lien éventuel vers un Contact existant
-  contact    Contact? @relation(fields: [contactId], references: [id])
+  contact    Contact? @relation("BuildingContactPerson", fields: [contactId], references: [id])
   position   Int      @default(0)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+
+  // Fusion Contact/Immeuble en cours : remplace `buildingId`/`building` ci-dessus.
+  acpId String?
+  acp   Contact? @relation("AcpKeyContact", fields: [acpId], references: [id], onDelete: Cascade)
 
   @@index([buildingId])
 }
@@ -349,7 +378,7 @@ model BuildingUnit {
   floor         String? // "1er étage", "RdC"
   door          String? // "App C", "porte gauche"
   contactId     String? // lien vers une vraie fiche Contact (occupant identifié)
-  contact       Contact? @relation(fields: [contactId], references: [id])
+  contact       Contact? @relation("BuildingUnitOccupant", fields: [contactId], references: [id])
   occupantName  String? // legacy (texte libre, fiches historiques sans contact lié)
   occupantPhone String?
   occupantEmail String?
@@ -359,6 +388,10 @@ model BuildingUnit {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
+  // Fusion Contact/Immeuble en cours : remplace `buildingId`/`building` ci-dessus.
+  acpId String?
+  acp   Contact? @relation("AcpUnit", fields: [acpId], references: [id], onDelete: Cascade)
+
   @@index([buildingId])
 }
 
@@ -366,38 +399,42 @@ model BuildingUnit {
 
 /// Chantier — le pivot. `ref` = R-xxx (unique, attribué automatiquement).
 model Worksite {
-  id          String    @id @default(cuid())
-  ref         String    @unique
-  title       String
-  kind        String    @default("project") // project | overhead (codes E-xx : frais sans chantier)
-  entity      String    @default("jjd") // jjd | tonton | m7
-  status      String    @default("to_plan")
-  priority    String    @default("normal") // low | normal | high | urgent
+  id           String    @id @default(cuid())
+  ref          String    @unique
+  title        String
+  kind         String    @default("project") // project | overhead (codes E-xx : frais sans chantier)
+  entity       String    @default("jjd") // jjd | tonton | m7
+  status       String    @default("to_plan")
+  priority     String    @default("normal") // low | normal | high | urgent
   // Portée et facturation : informatifs, modifiables à tout moment (jamais figés à la
   // création) — une intervention peut grandir en cours de route, et rester en régie ou
   // basculer en devis indépendamment de sa taille. Pas de valeur par défaut : laissés vides
   // (non classés) plutôt que de deviner pour les chantiers déjà existants.
-  scope       String? // intervention | long_term
-  billingMode String? // regie | devis
-  statusRaw   String? // texte d'origine (Excel / TrustUp)
-  statusTags  Json? // ["Terminé","A vérifier"]
-  clientId    String?
-  client      Contact?  @relation("WorksiteClient", fields: [clientId], references: [id])
-  buildingId  String?
-  building    Building? @relation(fields: [buildingId], references: [id])
-  managerId   String?
-  manager     Person?   @relation("WorksiteManager", fields: [managerId], references: [id])
-  billTo      String? // "Facture à" texte libre du fichier (à rapprocher)
-  address     String?
-  postalCode  String?
-  city        String?
-  startedOn   DateTime?
-  endedOn     DateTime?
-  lat         Float? // point GPS de référence (capturé au 1er pointage sur place, ajustable)
-  lng         Float?
-  geoSetAt    DateTime?
-  quotedHt    Float? // "Total Devisé"
-  description String?
+  scope        String? // intervention | long_term
+  billingMode  String? // regie | devis
+  statusRaw    String? // texte d'origine (Excel / TrustUp)
+  statusTags   Json? // ["Terminé","A vérifier"]
+  clientId     String?
+  client       Contact?  @relation("WorksiteClient", fields: [clientId], references: [id])
+  buildingId   String?
+  building     Building? @relation(fields: [buildingId], references: [id])
+  // Fusion Contact/Immeuble en cours : remplace `buildingId`/`building` ci-dessus une fois
+  // la bascule faite (voir plan "compressed-enchanting-quiche").
+  acpId        String?
+  acp          Contact?  @relation("WorksiteAcp", fields: [acpId], references: [id])
+  managerId    String?
+  manager      Person?   @relation("WorksiteManager", fields: [managerId], references: [id])
+  billTo       String? // "Facture à" texte libre du fichier (à rapprocher)
+  address      String?
+  postalCode   String?
+  city         String?
+  startedOn    DateTime?
+  endedOn      DateTime?
+  lat          Float? // point GPS de référence (capturé au 1er pointage sur place, ajustable)
+  lng          Float?
+  geoSetAt     DateTime?
+  quotedHt     Float? // "Total Devisé"
+  description  String?
   // Contacts propres à cette intervention (distincts du client facturé et des
   // contacts fixes de l'immeuble type concierge/syndic) : le propriétaire du lot
   // concerné et le locataire — le syndic transmet ces coordonnées à l'ouverture
@@ -409,11 +446,11 @@ model Worksite {
   tenantPhone  String?
   tenantPhone2 String?
   tenantEmail  String?
-  trustupId   String?
-  source      String?
-  archived    Boolean   @default(false)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  trustupId    String?
+  source       String?
+  archived     Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   documents      Document[]
   ledgerEntries  LedgerEntry[]
@@ -437,9 +474,12 @@ model CrmOpportunity {
   title          String
   stage          String    @default("new") // new | to_qualify | visit_scheduled | quote_sent | follow_up | won | lost
   contactId      String?
-  contact        Contact?  @relation(fields: [contactId], references: [id])
+  contact        Contact?  @relation("CrmOpportunityContact", fields: [contactId], references: [id])
   buildingId     String?
   building       Building? @relation(fields: [buildingId], references: [id])
+  // Fusion Contact/Immeuble en cours : remplace `buildingId`/`building` ci-dessus.
+  acpId          String?
+  acp            Contact?  @relation("CrmOpportunityAcp", fields: [acpId], references: [id])
   worksiteId     String?   @unique
   worksite       Worksite? @relation(fields: [worksiteId], references: [id])
   ownerId        String?
@@ -913,20 +953,20 @@ model ThreadParticipant {
 }
 
 model Message {
-  id         String   @id @default(cuid())
-  threadId   String
-  thread     Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
-  authorId   String?
-  author     User?    @relation(fields: [authorId], references: [id])
-  authorName String? // nom figé (l'auteur peut être un ouvrier sans compte)
-  kind       String   @default("text") // text | photo | video | file | status
-  body       String?
-  fileUrl    String?
-  thumbUrl   String?
-  source     String? // "whatsapp" | null (créé dans l'app)
-  audience   String   @default("internal") // "internal" (équipe) | "client"
-  sharedWithClient Boolean @default(false) // photo/vidéo interne explicitement partagée avec le client
-  createdAt  DateTime @default(now())
+  id               String   @id @default(cuid())
+  threadId         String
+  thread           Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  authorId         String?
+  author           User?    @relation(fields: [authorId], references: [id])
+  authorName       String? // nom figé (l'auteur peut être un ouvrier sans compte)
+  kind             String   @default("text") // text | photo | video | file | status
+  body             String?
+  fileUrl          String?
+  thumbUrl         String?
+  source           String? // "whatsapp" | null (créé dans l'app)
+  audience         String   @default("internal") // "internal" (équipe) | "client"
+  sharedWithClient Boolean  @default(false) // photo/vidéo interne explicitement partagée avec le client
+  createdAt        DateTime @default(now())
 
   @@index([threadId, createdAt])
 }

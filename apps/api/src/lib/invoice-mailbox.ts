@@ -66,6 +66,36 @@ interface SyncStats {
 }
 
 /**
+ * Cherche une écriture déjà existante correspondant à une extraction PDF — sert au scan
+ * rétroactif pour ne jamais dupliquer une facture déjà connue (import Excel, TrustUp, saisie
+ * manuelle...). D'abord par n° de document exact (fiable s'il est présent), sinon par
+ * montant TTC (± 2 c) et date proche (± 5 j). Amounts à 0/absents = extraction peu fiable,
+ * jamais utilisés comme clé (risque de faux positif entre plusieurs factures à 0 €).
+ */
+async function findExistingMatch(extraction: Awaited<ReturnType<typeof extractDocumentInfo>>): Promise<string | null> {
+  if (extraction.docNumber) {
+    const byDoc = await prisma.ledgerEntry.findFirst({
+      where: { direction: 'purchase', docNumber: extraction.docNumber },
+      select: { id: true },
+    });
+    if (byDoc) return byDoc.id;
+  }
+  if (extraction.totalTtc) {
+    const where: Record<string, unknown> = {
+      direction: 'purchase',
+      ttc: { gte: extraction.totalTtc - 0.02, lte: extraction.totalTtc + 0.02 },
+    };
+    if (extraction.issuedOn) {
+      const d = new Date(extraction.issuedOn);
+      where.date = { gte: new Date(d.getTime() - 5 * 86400000), lte: new Date(d.getTime() + 5 * 86400000) };
+    }
+    const byAmount = await prisma.ledgerEntry.findFirst({ where, select: { id: true } });
+    if (byAmount) return byAmount.id;
+  }
+  return null;
+}
+
+/**
  * Se connecte à la boîte, traite les messages non lus de INBOX (pièces jointes PDF ->
  * dépense « à vérifier »), puis déplace le message traité dans `PROCESSED_MAILBOX` (créé si
  * besoin) pour ne jamais le retraiter. Un message sans PDF est juste marqué lu (laissé dans
@@ -115,6 +145,108 @@ export async function syncInvoiceMailbox(): Promise<SyncStats> {
       }
     } finally {
       lock.release();
+    }
+  } finally {
+    await client.logout().catch(() => client.close());
+  }
+  return stats;
+}
+
+interface ScanStats {
+  folders: number;
+  messagesScanned: number;
+  pdfsFound: number;
+  alreadyInSystem: number;
+  created: number;
+  unreliableExtraction: number; // créées quand même (à vérifier), mais sans clé de dédoublonnage fiable
+  errors: string[];
+}
+
+/**
+ * Scan rétroactif (historique) : passe en revue TOUS les messages (lus ou non) des dossiers
+ * donnés — par défaut, tous les dossiers de la boîte sauf Sent/Drafts/Junk/Trash et le
+ * dossier de traitement de `syncInvoiceMailbox()`. Contrairement au sync courant, ne
+ * modifie JAMAIS le mail (pas de \Seen, pas de déplacement) : le classement existant par
+ * fournisseur reste intact, on ne fait qu'y piocher. Chaque PDF déjà retrouvé dans le grand
+ * livre (`findExistingMatch`) est ignoré ; les nouveaux deviennent des dépenses « à
+ * vérifier » comme le sync courant (`source: 'email'`).
+ */
+export async function scanInvoiceMailboxHistory(folders?: string[]): Promise<ScanStats> {
+  const stats: ScanStats = { folders: 0, messagesScanned: 0, pdfsFound: 0, alreadyInSystem: 0, created: 0, unreliableExtraction: 0, errors: [] };
+  if (!invoiceMailboxConfigured()) return stats;
+
+  const client = new ImapFlow({
+    host: env.invoicesMailbox.host,
+    port: env.invoicesMailbox.port,
+    secure: true,
+    auth: { user: env.invoicesMailbox.user, pass: env.invoicesMailbox.password },
+    logger: false,
+  });
+
+  await client.connect();
+  try {
+    const list = await client.list();
+    const skip = new Set(['Sent', 'Drafts', 'Junk', 'Trash']);
+    const targets = folders ?? list.map((m) => m.path).filter((p) => !skip.has(p) && !p.includes(PROCESSED_MAILBOX));
+
+    for (const path of targets) {
+      const lock = await client.getMailboxLock(path).catch(() => null);
+      if (!lock) { stats.errors.push(`dossier introuvable : ${path}`); continue; }
+      stats.folders++;
+      try {
+        const uids = await client.search({ all: true }, { uid: true });
+        for (const uid of uids as number[]) {
+          stats.messagesScanned++;
+          try {
+            const msg = (await client.fetchOne(String(uid), { source: true, envelope: true }, { uid: true })) as FetchMessageObject | false;
+            if (!msg || !msg.source) continue;
+            const parsed = await simpleParser(msg.source);
+            for (const att of parsed.attachments) {
+              if (att.contentType !== 'application/pdf') continue;
+              stats.pdfsFound++;
+              const extraction = await extractDocumentInfo(att.content, 'application/pdf', ['supplier', 'both']);
+              // le n° de document est une clé fiable même sans montant détecté (findExistingMatch
+              // ignore déjà, en interne, la piste montant quand totalTtc est vide/nul) — donc
+              // toujours tenter la correspondance, seul le compteur "extraction incomplète" en
+              // dessous dépend des montants
+              const reliable = !!(extraction.totalTtc || extraction.totalHt);
+              const existingId = await findExistingMatch(extraction);
+              if (existingId) { stats.alreadyInSystem++; continue; }
+              const date = extraction.issuedOn ? new Date(extraction.issuedOn) : new Date(msg.envelope?.date ?? Date.now());
+              const ht = extraction.totalHt
+                ?? (extraction.totalTtc != null ? Math.round((extraction.totalTtc / (1 + (extraction.vatRate ?? 0.21))) * 100) / 100 : 0);
+              const pdfPath = storeFile(att.content, att.filename || 'facture.pdf', 'expenses');
+              await prisma.ledgerEntry.create({
+                data: {
+                  ...deriveYM(date),
+                  date,
+                  dueDate: extraction.dueOn ? new Date(extraction.dueOn) : null,
+                  direction: 'purchase',
+                  docType: "Facture d'achat",
+                  docNumber: extraction.docNumber,
+                  worksiteId: extraction.worksiteId,
+                  contactId: extraction.contactId,
+                  supplierName: extraction.contactName,
+                  ht,
+                  ttc: extraction.totalTtc,
+                  vatRate: extraction.vatRate,
+                  pdfPath,
+                  paymentStatus: 'Non payé',
+                  source: 'email',
+                  notes: `Retrouvée dans le dossier mail « ${path} »`,
+                  createdById: null,
+                },
+              });
+              stats.created++;
+              if (!reliable) stats.unreliableExtraction++;
+            }
+          } catch (e) {
+            stats.errors.push(`${path} uid ${uid} : ${(e as Error).message}`);
+          }
+        }
+      } finally {
+        lock.release();
+      }
     }
   } finally {
     await client.logout().catch(() => client.close());

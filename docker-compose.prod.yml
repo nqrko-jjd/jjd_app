@@ -57,6 +57,11 @@ services:
       PONTO_CERT_FILE: /repo/apps/api/secrets/ponto-certificate.pem
       PONTO_KEY_FILE: /repo/apps/api/secrets/ponto-private-key.pem
       PONTO_KEY_PASSPHRASE: ${PONTO_KEY_PASSPHRASE:-}
+      # Boîte mail factures (invoices@…) — alternative à Ponto, laisser vide si non utilisée
+      INVOICES_IMAP_HOST: ${INVOICES_IMAP_HOST:-}
+      INVOICES_IMAP_PORT: ${INVOICES_IMAP_PORT:-993}
+      INVOICES_IMAP_USER: ${INVOICES_IMAP_USER:-}
+      INVOICES_IMAP_PASSWORD: ${INVOICES_IMAP_PASSWORD:-}
     volumes:
       - uploads:/repo/apps/api/uploads
       - ./apps/api/secrets:/repo/apps/api/secrets:ro

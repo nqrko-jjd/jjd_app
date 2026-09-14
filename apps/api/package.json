@@ -17,6 +17,7 @@
     "report:contact-refs": "tsx scripts/check-contact-refs.ts",
     "delete:orphan-contact": "tsx scripts/delete-orphan-contact.ts",
     "scan:invoice-mailbox": "tsx scripts/scan-invoice-mailbox-history.ts",
+    "report:mailbox-scan-sample": "tsx scripts/check-mailbox-scan-sample.ts",
     "report:contact-documents": "tsx scripts/check-contact-documents.ts",
     "import:trustup": "tsx scripts/import-trustup.ts",
     "import:credit-notes": "tsx scripts/import-credit-notes.ts",

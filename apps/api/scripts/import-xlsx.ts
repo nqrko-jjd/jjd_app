@@ -6,6 +6,13 @@
  *
  * Idempotent : purge d'abord tout ce qui a source = "xlsx", puis réimporte.
  * Tout ce qui est douteux part dans ImportIssue (la « file de contrôle »).
+ *
+ * ATTENTION — ⚠️ NE PLUS EXÉCUTER CE SCRIPT EN PRODUCTION ⚠️ : maintenant que l'appli
+ * est utilisée pour du travail réel (chantiers modifiés depuis l'appli, contacts
+ * fusionnés, devis, tâches, comptes portail…), la purge ci-dessous effacerait ce
+ * travail. Pour faire entrer de nouvelles lignes Excel (nouveaux R-, nouvelles
+ * factures) sans rien toucher à l'existant, utiliser `npm run sync` (scripts/sync-xlsx.ts)
+ * à la place — seul script sûr à rejouer désormais.
  */
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';

@@ -97,6 +97,8 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
     { name: 'startedOn', label: 'Début', type: 'date' },
     { name: 'endedOn', label: 'Fin', type: 'date' },
     { name: 'quotedHt', label: 'Total devisé HT', type: 'number' },
+    { name: 'billTo', label: 'Facturé à (si différent du client)' },
+    { name: 'statusRaw', label: 'Statut d’origine (ancien fichier Excel)' },
     { name: 'description', label: 'Description', type: 'textarea', full: true },
     { name: 'ownerName', label: 'Propriétaire — nom' },
     { name: 'ownerPhone', label: 'Propriétaire — téléphone' },
@@ -118,7 +120,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
             entity: w.entity, status: w.status, priority: w.priority, scope: w.scope, billingMode: w.billingMode,
             address: w.address, city: w.city,
             startedOn: toDateInput(w.startedOn), endedOn: toDateInput(w.endedOn),
-            quotedHt: w.quotedHt, description: w.description,
+            quotedHt: w.quotedHt, billTo: w.billTo, statusRaw: w.statusRaw, description: w.description,
             ownerName: w.ownerName, ownerPhone: w.ownerPhone, ownerEmail: w.ownerEmail,
             tenantName: w.tenantName, tenantPhone: w.tenantPhone, tenantPhone2: w.tenantPhone2, tenantEmail: w.tenantEmail,
           }}

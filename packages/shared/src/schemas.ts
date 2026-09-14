@@ -81,6 +81,8 @@ export const worksiteInput = z.object({
   scope: z.enum(WORKSITE_SCOPES).nullish(),
   billingMode: z.enum(WORKSITE_BILLING_MODES).nullish(),
   statusTags: z.array(z.string()).default([]),
+  statusRaw: z.string().trim().nullish(),
+  billTo: z.string().trim().nullish(),
   clientId: z.string().nullish(),
   buildingId: z.string().nullish(),
   managerId: z.string().nullish(),

@@ -17,6 +17,7 @@ import { storeFile, UPLOADS_DIR } from '../lib/media.js';
 import { nameOverlap } from '../lib/bank-match.js';
 import { extractDocumentInfo } from '../lib/document-extract.js';
 import { toCsv, readTableBuffer, pick } from '../lib/table-io.js';
+import { invoiceMailboxConfigured, syncInvoiceMailbox } from '../lib/invoice-mailbox.js';
 
 export const expensesRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
@@ -435,6 +436,25 @@ expensesRouter.post(
     if (!req.file) throw new HttpError(422, 'Aucun fichier');
     const extraction = await extractDocumentInfo(req.file.buffer, req.file.mimetype, ['supplier', 'both']);
     res.json({ extraction });
+  }),
+);
+
+/** Statut + déclenchement manuel de la boîte mail factures (voir lib/invoice-mailbox.ts). */
+expensesRouter.get(
+  '/mailbox-status',
+  requireAuth(...OFFICE),
+  asyncHandler(async (_req, res) => {
+    res.json({ configured: invoiceMailboxConfigured() });
+  }),
+);
+
+expensesRouter.post(
+  '/sync-mailbox',
+  requireAuth(...OFFICE),
+  asyncHandler(async (_req, res) => {
+    if (!invoiceMailboxConfigured()) throw new HttpError(409, 'Boîte mail non configurée');
+    const stats = await syncInvoiceMailbox();
+    res.json(stats);
   }),
 );
 

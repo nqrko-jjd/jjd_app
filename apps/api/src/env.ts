@@ -74,4 +74,16 @@ export const env = {
     signKeyFile: process.env.PONTO_SIGNATURE_KEY_FILE ?? './secrets/ponto-signature-key.pem',
     sandbox: (process.env.PONTO_SANDBOX ?? '') === '1',
   },
+
+  /**
+   * Boîte mail dédiée aux factures fournisseurs (ex. invoices@jjd-consult.be) — alternative
+   * à Ponto pour l'automatisation : lue en IMAP, chaque PDF reçu devient une dépense
+   * "à vérifier" (voir lib/invoice-mailbox.ts). Sans config = fonctionnalité désactivée.
+   */
+  invoicesMailbox: {
+    host: process.env.INVOICES_IMAP_HOST ?? '',
+    port: Number(process.env.INVOICES_IMAP_PORT ?? 993),
+    user: process.env.INVOICES_IMAP_USER ?? '',
+    password: process.env.INVOICES_IMAP_PASSWORD ?? '',
+  },
 };

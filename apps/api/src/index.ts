@@ -2,6 +2,7 @@ import os from 'node:os';
 import { createApp } from './app.js';
 import { env } from './env.js';
 import { prisma } from './db.js';
+import { invoiceMailboxConfigured, syncInvoiceMailbox } from './lib/invoice-mailbox.js';
 
 function lanAddresses(): string[] {
   const out: string[] = [];
@@ -44,3 +45,23 @@ createApp().listen(env.port, '0.0.0.0', () => {
     console.log(`  réseau : http://${ip}:${env.port}`);
   }
 });
+
+/**
+ * Boîte mail factures (invoices@…) : sans config, `invoiceMailboxConfigured()` renvoie
+ * false et rien ne se lance — voir lib/invoice-mailbox.ts. Une passe au démarrage (délai
+ * court pour laisser le serveur finir de démarrer) puis toutes les 20 minutes.
+ */
+if (invoiceMailboxConfigured()) {
+  const runSync = () => {
+    syncInvoiceMailbox()
+      .then((stats) => {
+        if (stats.pdfsImported || stats.errors.length) {
+          // eslint-disable-next-line no-console
+          console.log(`[invoices-mailbox] ${stats.messagesSeen} message(s), ${stats.pdfsImported} facture(s) importée(s)${stats.errors.length ? `, ${stats.errors.length} erreur(s) : ${stats.errors.join(' | ')}` : ''}`);
+        }
+      })
+      .catch((e) => console.error('[invoices-mailbox] échec de synchronisation :', e.message));
+  };
+  setTimeout(runSync, 15_000);
+  setInterval(runSync, 20 * 60_000);
+}

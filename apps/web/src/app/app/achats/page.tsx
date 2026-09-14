@@ -102,6 +102,8 @@ function AchatsInner() {
     totalPages: number;
   }>(`/api/finance/expenses?${params}`);
   const { data: meta } = useApi<Meta>('/api/finance/expenses/meta');
+  const { data: mailbox } = useApi<{ configured: boolean }>('/api/finance/expenses/mailbox-status');
+  const [syncingMailbox, setSyncingMailbox] = useState(false);
 
   const expenseAccessors = {
     date: (e: Expense) => (e.date ? new Date(e.date) : null),
@@ -160,6 +162,19 @@ function AchatsInner() {
     }
   }
 
+  async function syncMailbox() {
+    setSyncingMailbox(true);
+    try {
+      const r = await api<{ messagesSeen: number; pdfsImported: number; errors: string[] }>('/api/finance/expenses/sync-mailbox', { method: 'POST' });
+      alert(`${r.pdfsImported} facture(s) importée(s) sur ${r.messagesSeen} mail(s) vérifié(s).${r.errors.length ? `\n${r.errors.length} erreur(s).` : ''}`);
+      reload();
+    } catch (e) {
+      alert(`Échec de la synchronisation : ${(e as Error).message}`);
+    } finally {
+      setSyncingMailbox(false);
+    }
+  }
+
   function exportCsv() {
     downloadCsv(`/api/finance/expenses/export.csv?${params}`, `achats-${new Date().toISOString().slice(0, 10)}.csv`);
   }
@@ -205,6 +220,11 @@ function AchatsInner() {
             {selected.size > 0 && (
               <button className="btn" disabled={exporting} onClick={exportZip} title="Pièce jointe de chaque dépense sélectionnée, dans un seul .zip">
                 📦 Exporter {selected.size} pièce{selected.size > 1 ? 's' : ''} jointe{selected.size > 1 ? 's' : ''} (zip)
+              </button>
+            )}
+            {mailbox?.configured && (
+              <button className="btn" disabled={syncingMailbox} onClick={syncMailbox} title="Vérifie la boîte mail factures et importe les nouveaux PDF reçus">
+                {syncingMailbox ? 'Synchronisation…' : '✉️ Synchroniser la boîte mail'}
               </button>
             )}
             <button className="btn" onClick={exportCsv} title="Exporter la liste filtrée en CSV (éditable dans Excel)">⇩ Exporter CSV</button>
@@ -299,6 +319,7 @@ function AchatsInner() {
                     {e.supplier ?? '—'}
                     {e.direction === 'credit_note' && <span className="badge warn" style={{ marginLeft: 6 }}>NC</span>}
                     {e.source === 'chat' && <span className="badge plain" style={{ marginLeft: 6 }} title="Envoyée depuis le fil de chantier — à vérifier">📎 Fil de chantier</span>}
+                    {e.source === 'email' && <span className="badge plain" style={{ marginLeft: 6 }} title="Reçue sur la boîte mail factures — à vérifier">✉️ Boîte mail</span>}
                   </td>
                   <td className="mono" style={{ fontSize: '0.82rem' }}>{e.docNumber ?? '—'}</td>
                   <td className="mono">{e.worksite?.ref ?? '—'}</td>

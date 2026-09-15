@@ -270,6 +270,7 @@ model Contact {
   user             User?             @relation("UserClientAccount")
   worksites        Worksite[]        @relation("WorksiteClient")
   acpWorksites     Worksite[]        @relation("WorksiteAcp")
+  billToWorksites  Worksite[]        @relation("WorksiteBillTo")
   opportunities    CrmOpportunity[]  @relation("CrmOpportunityContact")
   acpOpportunities CrmOpportunity[]  @relation("CrmOpportunityAcp")
   documents        Document[]
@@ -372,7 +373,9 @@ model Worksite {
   acp          Contact?  @relation("WorksiteAcp", fields: [acpId], references: [id])
   managerId    String?
   manager      Person?   @relation("WorksiteManager", fields: [managerId], references: [id])
-  billTo       String? // "Facture à" texte libre du fichier (à rapprocher)
+  billTo       String? // "Facture à" texte libre du fichier (legacy, non rapproché) — remplacé par billToContact pour la saisie
+  billToContactId String? // contact réel à facturer si différent du client (par défaut = client)
+  billToContact   Contact?  @relation("WorksiteBillTo", fields: [billToContactId], references: [id])
   address      String?
   postalCode   String?
   city         String?

@@ -83,6 +83,7 @@ export const worksiteInput = z.object({
   statusTags: z.array(z.string()).default([]),
   statusRaw: z.string().trim().nullish(),
   billTo: z.string().trim().nullish(),
+  billToContactId: z.string().nullish(),
   clientId: z.string().nullish(),
   buildingId: z.string().nullish(),
   managerId: z.string().nullish(),

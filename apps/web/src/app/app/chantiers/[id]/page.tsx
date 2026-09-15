@@ -29,6 +29,7 @@ interface Detail {
     ownerName: string | null; ownerPhone: string | null; ownerEmail: string | null;
     tenantName: string | null; tenantPhone: string | null; tenantPhone2: string | null; tenantEmail: string | null;
     client: { id: string; name: string } | null;
+    billToContact: { id: string; name: string } | null;
     building: { id: string; name: string; syndic: { name: string } | null } | null;
     manager: { id: string; displayName: string | null; firstName: string } | null;
     documents: { id: string; kind: string; number: string | null; draftRef: string | null; totalHt: number; status: string; issuedOn: string | null }[];
@@ -106,7 +107,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
     { name: 'startedOn', label: 'Début', type: 'date' },
     { name: 'endedOn', label: 'Fin', type: 'date' },
     { name: 'quotedHt', label: 'Total devisé HT', type: 'number' },
-    { name: 'billTo', label: 'Facturé à (si différent du client)' },
+    { name: 'billToContactId', label: 'Facturé à (si différent du client)', type: 'contact', full: true },
     { name: 'statusRaw', label: 'Statut d’origine (ancien fichier Excel)' },
     { name: 'description', label: 'Description', type: 'textarea', full: true },
     { name: 'ownerName', label: 'Propriétaire — nom' },
@@ -129,7 +130,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
             entity: w.entity, status: w.status, priority: w.priority, scope: w.scope, billingMode: w.billingMode,
             address: w.address, city: w.city,
             startedOn: toDateInput(w.startedOn), endedOn: toDateInput(w.endedOn),
-            quotedHt: w.quotedHt, billTo: w.billTo, statusRaw: w.statusRaw, description: w.description,
+            quotedHt: w.quotedHt, billToContactId: w.billToContact?.id ?? '', statusRaw: w.statusRaw, description: w.description,
             ownerName: w.ownerName, ownerPhone: w.ownerPhone, ownerEmail: w.ownerEmail,
             tenantName: w.tenantName, tenantPhone: w.tenantPhone, tenantPhone2: w.tenantPhone2, tenantEmail: w.tenantEmail,
           }}
@@ -216,7 +217,12 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
                   )}
                   <Info label="Début des travaux" value={formatDateBE(w.startedOn)} />
                   <Info label="Fin prévisionnelle" value={formatDateBE(w.endedOn)} />
-                  {w.billTo && <Info label="Facturé à" value={w.billTo} />}
+                  {(w.billToContact || w.billTo) && (
+                    <Info
+                      label="Facturé à"
+                      value={w.billToContact ? <Link href={`/app/contacts/${w.billToContact.id}`}>{w.billToContact.name}</Link> : w.billTo}
+                    />
+                  )}
                 </div>
               </div>
 

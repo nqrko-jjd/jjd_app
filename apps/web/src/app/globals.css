@@ -423,11 +423,11 @@ p { margin: 0; }
 
 .empty { padding: 3.5rem 1rem; text-align: center; color: var(--ink-2); }
 
-.info-grid { display: grid; gap: 0.9rem; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
-.info-cell {
-  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
-  padding: 0.85rem 0.95rem; box-shadow: var(--shadow-sm);
-}
+/* Grille de paires libellé/valeur — texte simple, sans carte imbriquée (chaque champ n'est
+   pas sa propre petite carte à bordure, contrairement à l'ancien style : la maquette n'a
+   qu'une grille de texte nue à l'intérieur de la carte englobante). */
+.info-grid { display: grid; gap: 1.1rem 1.5rem; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+.info-cell { padding: 0; }
 .info-cell .k { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.09em; color: var(--ink-3); font-weight: 700; }
 .info-cell .v { margin-top: 0.3rem; font-weight: 600; }
 

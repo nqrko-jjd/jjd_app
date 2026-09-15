@@ -265,6 +265,7 @@ worksitesRouter.get(
         client: true,
         acp: { include: { syndic: true } },
         manager: true,
+        billToContact: true,
         documents: { orderBy: { issuedOn: 'desc' } },
         events: { orderBy: { startAt: 'desc' }, take: 20, include: { assignments: { include: { person: true } }, vehicle: true } },
         reports: { orderBy: { date: 'desc' }, include: { photos: true, author: { select: { email: true } } } },

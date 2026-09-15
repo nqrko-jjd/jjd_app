@@ -238,16 +238,17 @@ p { margin: 0; }
   padding: 0.5rem 0.9rem; border-radius: var(--radius-sm);
   border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink);
   font-weight: 600; font-size: 0.86rem; white-space: nowrap;
-  transition: border-color 0.12s, background 0.12s, transform 0.05s;
+  transition: border-color 0.12s, background 0.12s, transform 0.12s, box-shadow 0.12s;
 }
-.btn:hover { border-color: var(--ink-3); background: var(--surface-2); }
-.btn:active { transform: translateY(0.5px); }
+.btn:hover { border-color: var(--ink-3); background: var(--surface-2); transform: translateY(-1px); box-shadow: 0 3px 12px rgba(28,41,36,0.09); }
+.btn:active { transform: translateY(0.5px); box-shadow: none; }
 .btn.primary {
   background: var(--primary); border-color: var(--primary); color: #fbf8ef;
   box-shadow: 0 1px 2px rgba(28,41,36,0.28);
 }
-.btn.primary:hover { background: var(--primary-ink); border-color: var(--primary-ink); }
+.btn.primary:hover { background: var(--primary-ink); border-color: var(--primary-ink); box-shadow: 0 6px 16px rgba(18,54,42,0.28); }
 .btn.ghost { border-color: transparent; background: var(--surface-2); }
+.btn.ghost:hover { box-shadow: none; transform: none; }
 
 .input, .select {
   padding: 0.5rem 0.65rem; border-radius: var(--radius-sm);

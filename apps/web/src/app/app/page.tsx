@@ -6,7 +6,7 @@ import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { PageHead, Money, formatDateBE, Avatar, ProgressCell, Kpi } from '@/lib/ui';
-import { useSort, useColumnFilter, SortTh } from '@/lib/sort';
+import { useSort, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
 import { LEGAL_DOC_LABEL, WORKSITE_STATUS_LABEL, WORKSITE_PROGRESS_PCT, type WorksiteStatus } from '@jjd/shared';
 import { BarChart3, Wallet, Building2, Flag, FileText, Clock } from 'lucide-react';
@@ -155,29 +155,6 @@ function QuickActionsPrimary() {
   );
 }
 
-/** Les autres raccourcis, en second plan sous le titre. */
-function QuickActions() {
-  const router = useRouter();
-  const [busy, setBusy] = useState(false);
-  async function newInvoice() {
-    setBusy(true);
-    try {
-      const { document } = await api<{ document: { id: string } }>('/api/documents', { method: 'POST', body: { kind: 'invoice' } });
-      router.push(`/app/documents/${document.id}`);
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <div className="quick-actions">
-      <button className="qa" disabled={busy} onClick={newInvoice}><span className="qa-ic">€</span>Nouvelle facture</button>
-      <Link className="qa" href="/app/contacts?new=1"><span className="qa-ic">☰</span>Nouveau contact</Link>
-      <Link className="qa" href="/app/crm?new=1"><span className="qa-ic">⇗</span>Nouvelle opportunité</Link>
-      <Link className="qa" href="/app/planning"><span className="qa-ic">▦</span>Planifier</Link>
-    </div>
-  );
-}
-
 const WS_STATUS_TONE: Record<string, string> = { scheduled: 'primary', in_progress: 'ok', on_hold: 'warn' };
 const ALERT_ICON: Record<string, string> = { critical: '!', warning: '✎', info: '✓' };
 
@@ -186,14 +163,11 @@ type InProgressRow = Dashboard['inProgress'][number];
 function InProgressTable({ rows }: { rows: InProgressRow[] }) {
   const router = useRouter();
   const wsAccessors = {
-    ref: (w: InProgressRow) => w.ref,
     title: (w: InProgressRow) => w.title,
-    client: (w: InProgressRow) => w.client,
     manager: (w: InProgressRow) => w.manager,
     status: (w: InProgressRow) => WORKSITE_STATUS_LABEL[w.status as keyof typeof WORKSITE_STATUS_LABEL] ?? w.status,
   };
-  const colFilter = useColumnFilter<InProgressRow>(rows, wsAccessors);
-  const sort = useSort<InProgressRow>(colFilter.rows, wsAccessors);
+  const sort = useSort<InProgressRow>(rows, wsAccessors);
   return (
     <>
       <div className="row" style={{ justifyContent: 'space-between', margin: '1.8rem 0 0.8rem' }}>
@@ -204,26 +178,24 @@ function InProgressTable({ rows }: { rows: InProgressRow[] }) {
         <table className="tbl">
           <thead>
             <tr>
-              <SortTh k="ref" sort={sort} filter={colFilter}>Réf</SortTh>
-              <SortTh k="title" sort={sort} filter={colFilter}>Chantier</SortTh>
-              <SortTh k="client" sort={sort} filter={colFilter}>Client</SortTh>
-              <SortTh k="manager" sort={sort} filter={colFilter}>Chef</SortTh>
-              <SortTh k="status" sort={sort} filter={colFilter}>Statut</SortTh>
+              <SortTh k="title" sort={sort}>Chantier</SortTh>
+              <SortTh k="manager" sort={sort}>Responsable</SortTh>
+              <SortTh k="status" sort={sort}>Statut</SortTh>
               <th>Avancement</th>
+              <th />
             </tr>
           </thead>
           <tbody>
             {sort.rows.map((w) => (
               <tr key={w.id} className="row-link" onClick={rowNav(`/app/chantiers/${w.id}`, (h) => router.push(h))}>
-                <td className="mono">{w.ref}</td>
                 <td>
                   <Link href={`/app/chantiers/${w.id}`}>{w.title}</Link>
-                  {w.city && <div className="muted" style={{ fontSize: '0.78rem' }}>{w.city}</div>}
+                  <div className="muted" style={{ fontSize: '0.78rem' }}>{w.ref}{w.city ? ` · ${w.city}` : ''}</div>
                 </td>
-                <td>{w.client ?? '—'}</td>
                 <td>{w.manager ? <><Avatar label={w.manager} size={22} />{w.manager}</> : '—'}</td>
                 <td><span className={`badge ${WS_STATUS_TONE[w.status] ?? ''}`}>{WORKSITE_STATUS_LABEL[w.status as keyof typeof WORKSITE_STATUS_LABEL] ?? w.status}</span></td>
                 <td><ProgressCell pct={WORKSITE_PROGRESS_PCT[w.status as WorksiteStatus] ?? 0} /></td>
+                <td className="muted">→</td>
               </tr>
             ))}
           </tbody>
@@ -263,8 +235,6 @@ export default function DashboardPage() {
           </div>
         }
       />
-
-      <QuickActions />
 
       {loading && <div className="empty">Chargement…</div>}
       {data && (

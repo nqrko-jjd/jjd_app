@@ -77,7 +77,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
   const isActive = (href: string) => (href === '/app' ? pathname === '/app' : pathname.startsWith(href));
   const visible = (i: Item) => !i.roles || (user && i.roles.includes(user.role));
-  const nav = user?.role === 'worker' ? WORKER_NAV : NAV;
+  const isWorker = user?.role === 'worker';
+  const nav = isWorker ? WORKER_NAV : NAV;
   const current =
     nav.flatMap((g) => g.items).find((i) => isActive(i.href))?.label ?? 'JJD App';
 
@@ -140,7 +141,18 @@ export function Shell({ children }: { children: React.ReactNode }) {
         </div>
       </nav>
 
-      <main className="main">{children}</main>
+      <main className={`main${isWorker ? ' has-bottom-tabs' : ''}`}>{children}</main>
+
+      {isWorker && (
+        <nav className="bottom-tabs worker">
+          {WORKER_NAV[0]!.items.map((i) => (
+            <Link key={i.href} href={i.href} className={`bottom-tab${isActive(i.href) ? ' active' : ''}`}>
+              <span className="ic">{i.ic}</span>
+              {i.label}
+            </Link>
+          ))}
+        </nav>
+      )}
 
       {assistant?.enabled && !chatOpen && (
         <button type="button" className="assistant-fab" title="Assistant IA" aria-label="Ouvrir l'assistant IA" onClick={() => setChatOpen(true)}>

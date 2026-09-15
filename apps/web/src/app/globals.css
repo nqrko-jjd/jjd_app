@@ -132,6 +132,7 @@ p { margin: 0; }
 /* ---------------------------------------------------- shell */
 .shell { display: grid; grid-template-columns: 244px minmax(0, 1fr); min-height: 100vh; }
 .topbar { display: none; }
+.bottom-tabs { display: none; }
 
 .sidebar {
   background: var(--nav-bg);
@@ -570,8 +571,24 @@ p { margin: 0; }
   .sidebar.open { transform: translateX(0); }
   .scrim { position: fixed; inset: 0; background: rgba(10,14,22,0.5); z-index: 40; backdrop-filter: blur(1px); }
   .main { padding: 1rem; }
+  .main.has-bottom-tabs { padding-bottom: 5.2rem; }
   .page-head { margin-bottom: 1rem; }
   .page-head h1 { font-size: 1.3rem; }
+
+  /* barre de navigation basse — espace ouvrier sur mobile, à la place du tiroir latéral */
+  .bottom-tabs.worker {
+    display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 45;
+    background: var(--nav-bg); border-top: 1px solid var(--nav-line);
+    padding: 0.45rem 0.3rem calc(0.45rem + env(safe-area-inset-bottom, 0px));
+    justify-content: space-around; box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.18);
+  }
+  .bottom-tab {
+    display: flex; flex-direction: column; align-items: center; gap: 0.2rem;
+    color: var(--nav-fg); font-size: 0.66rem; font-weight: 600;
+    padding: 0.35rem 0.4rem; border-radius: var(--radius-sm); flex: 1; text-align: center;
+  }
+  .bottom-tab .ic { font-size: 1.2rem; }
+  .bottom-tab.active { color: var(--nav-fg-active); background: var(--nav-active-bg); }
 }
 @media (max-width: 560px) {
   .grid[style*="repeat(auto-fit"], .info-grid { grid-template-columns: 1fr !important; }

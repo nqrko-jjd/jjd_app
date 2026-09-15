@@ -13,6 +13,8 @@ import { Donut } from '@/lib/charts';
 import {
   WORKSITE_STATUSES, WORKSITE_STATUS_LABEL, WORKSITE_PRIORITIES, WORKSITE_PRIORITY_LABEL,
   WORKSITE_SCOPES, WORKSITE_SCOPE_LABEL, WORKSITE_BILLING_MODES, WORKSITE_BILLING_MODE_LABEL,
+  WORKSITE_REQUEST_KINDS, WORKSITE_REQUEST_KIND_LABEL, WORKSITE_BILLING_CADENCES, WORKSITE_BILLING_CADENCE_LABEL,
+  WORKSITE_CONTACT_ROLE_LABEL, WORKSITE_CONTACT_FOR_LABEL,
   ENTITIES, ENTITY_LABEL, formatHours, WORKSITE_PROGRESS_PCT, type WorksiteMargin,
 } from '@jjd/shared';
 import {
@@ -22,14 +24,18 @@ import {
 interface Detail {
   worksite: {
     id: string; ref: string; title: string; status: string; priority: string; statusRaw: string | null;
-    scope: string | null; billingMode: string | null;
-    entity: string; address: string | null; city: string | null; billTo: string | null;
+    scope: string | null; billingMode: string | null; requestKind: string | null;
+    entity: string; address: string | null; city: string | null; unitLabel: string | null; billTo: string | null;
     lat: number | null; lng: number | null; geoSetAt: string | null;
-    startedOn: string | null; endedOn: string | null; quotedHt: number | null; description: string | null;
+    startedOn: string | null; endedOn: string | null; quotedHt: number | null; quoteRef: string | null; description: string | null;
+    accessNotes: string | null;
+    billToAttn: string | null; billToEmail: string | null; clientRef: string | null;
+    billingCadence: string | null; billingConditions: string | null;
     ownerName: string | null; ownerPhone: string | null; ownerEmail: string | null;
     tenantName: string | null; tenantPhone: string | null; tenantPhone2: string | null; tenantEmail: string | null;
     client: { id: string; name: string } | null;
     billToContact: { id: string; name: string } | null;
+    contacts: { id: string; role: string; name: string; phone: string | null; email: string | null; contactFor: string | null }[];
     building: { id: string; name: string; syndic: { name: string } | null } | null;
     manager: { id: string; displayName: string | null; firstName: string } | null;
     documents: { id: string; kind: string; number: string | null; draftRef: string | null; totalHt: number; status: string; issuedOn: string | null }[];
@@ -101,13 +107,22 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
     { name: 'priority', label: 'Priorité', type: 'select', options: WORKSITE_PRIORITIES.map((p) => ({ value: p, label: WORKSITE_PRIORITY_LABEL[p] })) },
     { name: 'scope', label: 'Portée', type: 'select', options: WORKSITE_SCOPES.map((s) => ({ value: s, label: WORKSITE_SCOPE_LABEL[s] })) },
     { name: 'billingMode', label: 'Facturation', type: 'select', options: WORKSITE_BILLING_MODES.map((b) => ({ value: b, label: WORKSITE_BILLING_MODE_LABEL[b] })) },
+    { name: 'requestKind', label: 'Type de demande', type: 'select', options: WORKSITE_REQUEST_KINDS.map((k) => ({ value: k, label: WORKSITE_REQUEST_KIND_LABEL[k] })) },
     { name: 'address', label: 'Adresse', full: true, type: 'address', addressFill: { postalCode: 'postalCode', city: 'city' } },
     { name: 'postalCode', label: 'Code postal' },
     { name: 'city', label: 'Ville' },
+    { name: 'unitLabel', label: 'Lot, étage, bâtiment ou zone' },
     { name: 'startedOn', label: 'Début', type: 'date' },
     { name: 'endedOn', label: 'Fin', type: 'date' },
     { name: 'quotedHt', label: 'Total devisé HT', type: 'number' },
+    { name: 'quoteRef', label: 'Référence du devis' },
     { name: 'billToContactId', label: 'Facturé à (si différent du client)', type: 'contact', full: true },
+    { name: 'billToAttn', label: 'À l’attention de / chez' },
+    { name: 'billToEmail', label: 'E-mail de facturation (si différent)' },
+    { name: 'clientRef', label: 'Référence client / bon de commande' },
+    { name: 'billingCadence', label: 'Rythme de facturation', type: 'select', options: WORKSITE_BILLING_CADENCES.map((c) => ({ value: c, label: WORKSITE_BILLING_CADENCE_LABEL[c] })) },
+    { name: 'billingConditions', label: 'Conditions convenues', type: 'textarea', full: true },
+    { name: 'accessNotes', label: 'Accès et prise de rendez-vous', type: 'textarea', full: true },
     { name: 'statusRaw', label: 'Statut d’origine (ancien fichier Excel)' },
     { name: 'description', label: 'Description', type: 'textarea', full: true },
     { name: 'ownerName', label: 'Propriétaire — nom' },
@@ -127,10 +142,12 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
           fields={editFields}
           initial={{
             title: w.title, clientId: w.client?.id ?? '', buildingId: w.building?.id ?? '', managerId: w.manager?.id ?? '',
-            entity: w.entity, status: w.status, priority: w.priority, scope: w.scope, billingMode: w.billingMode,
-            address: w.address, city: w.city,
+            entity: w.entity, status: w.status, priority: w.priority, scope: w.scope, billingMode: w.billingMode, requestKind: w.requestKind,
+            address: w.address, city: w.city, unitLabel: w.unitLabel,
             startedOn: toDateInput(w.startedOn), endedOn: toDateInput(w.endedOn),
-            quotedHt: w.quotedHt, billToContactId: w.billToContact?.id ?? '', statusRaw: w.statusRaw, description: w.description,
+            quotedHt: w.quotedHt, quoteRef: w.quoteRef, billToContactId: w.billToContact?.id ?? '', statusRaw: w.statusRaw, description: w.description,
+            billToAttn: w.billToAttn, billToEmail: w.billToEmail, clientRef: w.clientRef,
+            billingCadence: w.billingCadence, billingConditions: w.billingConditions, accessNotes: w.accessNotes,
             ownerName: w.ownerName, ownerPhone: w.ownerPhone, ownerEmail: w.ownerEmail,
             tenantName: w.tenantName, tenantPhone: w.tenantPhone, tenantPhone2: w.tenantPhone2, tenantEmail: w.tenantEmail,
           }}
@@ -211,7 +228,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
                     <Info label="Immeuble / ACP" value={<Link href={`/app/immeubles/${w.building.id}`}>{w.building.name}{w.building.syndic ? ` · ${w.building.syndic.name}` : ''}</Link>} />
                   )}
                   <Info label="Responsable" value={w.manager?.displayName ?? w.manager?.firstName ?? '—'} />
-                  <Info label="Localisation" value={[w.address, w.city].filter(Boolean).join(', ') || '—'} />
+                  <Info label="Localisation" value={[w.address, w.unitLabel, w.city].filter(Boolean).join(', ') || '—'} />
                   {nextEvent && nextEvent.assignments.length > 0 && (
                     <Info label="Équipe affectée" value={[...new Set(nextEvent.assignments.map((a) => a.person.displayName || a.person.firstName))].join(', ')} />
                   )}
@@ -223,8 +240,27 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
                       value={w.billToContact ? <Link href={`/app/contacts/${w.billToContact.id}`}>{w.billToContact.name}</Link> : w.billTo}
                     />
                   )}
+                  {w.requestKind && (
+                    <Info label="Type de demande" value={WORKSITE_REQUEST_KIND_LABEL[w.requestKind as keyof typeof WORKSITE_REQUEST_KIND_LABEL] ?? w.requestKind} />
+                  )}
+                  {w.accessNotes && <Info label="Accès et RDV" value={w.accessNotes} />}
                 </div>
               </div>
+
+              {w.contacts.length > 0 && (
+                <div className="card card-pad" style={{ marginBottom: '1rem' }}>
+                  <div className="section-title" style={{ marginTop: 0 }}>Personnes de contact</div>
+                  <div className="info-grid">
+                    {w.contacts.map((c) => (
+                      <Info
+                        key={c.id}
+                        label={WORKSITE_CONTACT_ROLE_LABEL[c.role as keyof typeof WORKSITE_CONTACT_ROLE_LABEL] ?? c.role}
+                        value={`${c.name}${c.phone ? ` · ${c.phone}` : ''}${c.email ? ` · ${c.email}` : ''}${c.contactFor ? ` — ${WORKSITE_CONTACT_FOR_LABEL[c.contactFor as keyof typeof WORKSITE_CONTACT_FOR_LABEL] ?? c.contactFor}` : ''}`}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {(w.ownerName || w.tenantName) && (
                 <div className="card card-pad" style={{ marginBottom: '1rem' }}>

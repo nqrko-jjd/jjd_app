@@ -324,6 +324,27 @@ model BuildingContact {
   @@index([acpId])
 }
 
+/// Personne à joindre pour un chantier précis (demandeur, gestionnaire, propriétaire,
+/// locataire, contact sur place, architecte, responsable facturation…) — distinct du
+/// client facturé (Worksite.client) et des contacts fixes de l'immeuble (BuildingContact) :
+/// propre au dossier, saisi à l'ouverture, peut être plusieurs personnes différentes.
+model WorksiteContact {
+  id         String   @id @default(cuid())
+  role       String // demandeur | gestionnaire | proprietaire | locataire | sur_place | architecte | facturation
+  name       String
+  phone      String?
+  email      String?
+  contactFor String? // demande | rdv_acces | suivi_technique | factures | demande_acces_suivi
+  position   Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  worksiteId String
+  worksite   Worksite @relation(fields: [worksiteId], references: [id], onDelete: Cascade)
+
+  @@index([worksiteId])
+}
+
 /// Lot / appartement d'un immeuble (Contact de kind 'acp'/'developer') + occupant connu.
 /// Ex. « Algarve C1 — Mme Pinto — 1er étage — App C ».
 model BuildingUnit {
@@ -364,7 +385,8 @@ model Worksite {
   // basculer en devis indépendamment de sa taille. Pas de valeur par défaut : laissés vides
   // (non classés) plutôt que de deviner pour les chantiers déjà existants.
   scope        String? // intervention | long_term
-  billingMode  String? // regie | devis
+  billingMode  String? // regie | devis | mixte | contrat
+  requestKind  String? // ponctuelle | renovation | entretien | sav — nature de la demande à l'ouverture du dossier
   statusRaw    String? // texte d'origine (Excel / TrustUp)
   statusTags   Json? // ["Terminé","A vérifier"]
   clientId     String?
@@ -376,9 +398,17 @@ model Worksite {
   billTo       String? // "Facture à" texte libre du fichier (legacy, non rapproché) — remplacé par billToContact pour la saisie
   billToContactId String? // contact réel à facturer si différent du client (par défaut = client)
   billToContact   Contact?  @relation("WorksiteBillTo", fields: [billToContactId], references: [id])
+  billToAttn        String? // "À l'attention de / chez" propre à la facturation de ce chantier
+  billToEmail       String? // e-mail de facturation si différent de celui du contact facturé
+  clientRef         String? // référence client / bon de commande à rappeler sur la facture
+  billingCadence    String? // fin_intervention | acompte_avancement_solde | mensuel | contrat
+  billingConditions String? // acompte, délai de paiement, validation préalable… (texte libre)
+  quoteRef     String? // référence du devis lié, si déjà connue à l'ouverture du dossier
   address      String?
   postalCode   String?
   city         String?
+  unitLabel    String? // lot, étage, bâtiment ou zone concernée (immeubles à plusieurs lots)
+  accessNotes  String? // accès et prise de rendez-vous — comment/quand intervenir sur place
   startedOn    DateTime?
   endedOn      DateTime?
   lat          Float? // point GPS de référence (capturé au 1er pointage sur place, ajustable)
@@ -413,6 +443,7 @@ model Worksite {
   tasks          WorksiteTask[]
   taskPhases     WorksiteTaskPhase[]
   stockMovements StockMovement[]
+  contacts       WorksiteContact[]
 
   @@index([status])
   @@index([entity])

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   PERSON_ROLES, ENTITIES, WORKSITE_STATUSES, WORKSITE_PRIORITIES, WORKSITE_SCOPES, WORKSITE_BILLING_MODES,
+  WORKSITE_REQUEST_KINDS, WORKSITE_BILLING_CADENCES, WORKSITE_CONTACT_ROLES, WORKSITE_CONTACT_FOR,
   CRM_STAGES, CRM_LOST_REASONS,
   CONTACT_TYPES, CLIENT_KINDS, WORKER_CONTRACT_TYPES, LEGAL_DOC_TYPES, VEHICLE_DOC_TYPES,
   BUILDING_CONTACT_ROLES, OCCUPANT_KINDS, VEHICLE_STATUSES, ADJUSTMENT_TYPES,
@@ -73,6 +74,16 @@ export const buildingUnitInput = z.object({
 export type BuildingContactInput = z.infer<typeof buildingContactInput>;
 export type BuildingUnitInput = z.infer<typeof buildingUnitInput>;
 
+export const worksiteContactInput = z.object({
+  role: z.enum(WORKSITE_CONTACT_ROLES).default('sur_place'),
+  name: nonEmpty,
+  phone: z.string().trim().nullish(),
+  email: z.string().trim().email().nullish().or(z.literal('')),
+  contactFor: z.enum(WORKSITE_CONTACT_FOR).nullish(),
+});
+
+export type WorksiteContactInput = z.infer<typeof worksiteContactInput>;
+
 export const worksiteInput = z.object({
   title: nonEmpty,
   entity: z.enum(ENTITIES).default('jjd'),
@@ -80,16 +91,25 @@ export const worksiteInput = z.object({
   priority: z.enum(WORKSITE_PRIORITIES).default('normal'),
   scope: z.enum(WORKSITE_SCOPES).nullish(),
   billingMode: z.enum(WORKSITE_BILLING_MODES).nullish(),
+  requestKind: z.enum(WORKSITE_REQUEST_KINDS).nullish(),
   statusTags: z.array(z.string()).default([]),
   statusRaw: z.string().trim().nullish(),
   billTo: z.string().trim().nullish(),
   billToContactId: z.string().nullish(),
+  billToAttn: z.string().trim().nullish(),
+  billToEmail: z.string().trim().email().nullish().or(z.literal('')),
+  clientRef: z.string().trim().nullish(),
+  billingCadence: z.enum(WORKSITE_BILLING_CADENCES).nullish(),
+  billingConditions: z.string().trim().nullish(),
+  quoteRef: z.string().trim().nullish(),
   clientId: z.string().nullish(),
   buildingId: z.string().nullish(),
   managerId: z.string().nullish(),
   address: z.string().trim().nullish(),
   postalCode: z.string().trim().nullish(),
   city: z.string().trim().nullish(),
+  unitLabel: z.string().trim().nullish(),
+  accessNotes: z.string().trim().nullish(),
   startedOn: z.coerce.date().nullish(),
   endedOn: z.coerce.date().nullish(),
   quotedHt: z.number().nonnegative().nullish(),
@@ -101,6 +121,7 @@ export const worksiteInput = z.object({
   tenantPhone: z.string().trim().nullish(),
   tenantPhone2: z.string().trim().nullish(),
   tenantEmail: z.string().trim().nullish(),
+  contacts: z.array(worksiteContactInput).nullish(),
 });
 
 export const personInput = z.object({

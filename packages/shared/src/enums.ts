@@ -316,12 +316,66 @@ export const WORKSITE_SCOPE_LABEL: Record<WorksiteScope, string> = {
 /** Mode de facturation prévu — informatif, modifiable à tout moment : régie (temps/matériel
  *  facturé tel quel, sans devis préalable) tant que c'est rapide/pas cher, devis dès que
  *  l'intervention dure plus longtemps ou qu'on découvre beaucoup de travail. */
-export const WORKSITE_BILLING_MODES = ['regie', 'devis'] as const;
+export const WORKSITE_BILLING_MODES = ['regie', 'devis', 'mixte', 'contrat'] as const;
 export type WorksiteBillingMode = (typeof WORKSITE_BILLING_MODES)[number];
 
 export const WORKSITE_BILLING_MODE_LABEL: Record<WorksiteBillingMode, string> = {
   regie: 'Régie',
   devis: 'Devis',
+  mixte: 'Mixte : devis + régie',
+  contrat: 'Contrat / garantie',
+};
+
+/** Nature de la demande à l'ouverture du dossier — informatif, ne conditionne rien d'autre
+ *  dans l'app (contrairement à `scope`/`billingMode`, modifiables librement ensuite). */
+export const WORKSITE_REQUEST_KINDS = ['ponctuelle', 'renovation', 'entretien', 'sav'] as const;
+export type WorksiteRequestKind = (typeof WORKSITE_REQUEST_KINDS)[number];
+
+export const WORKSITE_REQUEST_KIND_LABEL: Record<WorksiteRequestKind, string> = {
+  ponctuelle: 'Intervention ponctuelle',
+  renovation: 'Rénovation / chantier long',
+  entretien: 'Entretien / maintenance',
+  sav: 'SAV / levée de réserves',
+};
+
+/** Rythme de facturation propre à ce chantier (indicatif, pour cadrer la facturation). */
+export const WORKSITE_BILLING_CADENCES = ['fin_intervention', 'acompte_avancement_solde', 'mensuel', 'contrat'] as const;
+export type WorksiteBillingCadence = (typeof WORKSITE_BILLING_CADENCES)[number];
+
+export const WORKSITE_BILLING_CADENCE_LABEL: Record<WorksiteBillingCadence, string> = {
+  fin_intervention: 'En fin d’intervention',
+  acompte_avancement_solde: 'Acompte + états d’avancement + solde',
+  mensuel: 'Mensuel',
+  contrat: 'Selon contrat',
+};
+
+/** Rôle d'une personne à joindre pour un chantier précis (distinct des contacts fixes de
+ *  l'immeuble, cf. BUILDING_CONTACT_ROLES, et du client facturé). */
+export const WORKSITE_CONTACT_ROLES = [
+  'demandeur', 'gestionnaire', 'proprietaire', 'locataire', 'sur_place', 'architecte', 'facturation',
+] as const;
+export type WorksiteContactRole = (typeof WORKSITE_CONTACT_ROLES)[number];
+
+export const WORKSITE_CONTACT_ROLE_LABEL: Record<WorksiteContactRole, string> = {
+  demandeur: 'Demandeur',
+  gestionnaire: 'Gestionnaire / syndic',
+  proprietaire: 'Propriétaire',
+  locataire: 'Locataire / occupant',
+  sur_place: 'Contact sur place',
+  architecte: 'Architecte',
+  facturation: 'Responsable facturation',
+};
+
+/** Raison pour laquelle joindre cette personne de contact. */
+export const WORKSITE_CONTACT_FOR = ['demande', 'rdv_acces', 'suivi_technique', 'factures', 'demande_acces_suivi'] as const;
+export type WorksiteContactFor = (typeof WORKSITE_CONTACT_FOR)[number];
+
+export const WORKSITE_CONTACT_FOR_LABEL: Record<WorksiteContactFor, string> = {
+  demande: 'Demande et validation',
+  rdv_acces: 'Rendez-vous / accès',
+  suivi_technique: 'Suivi technique',
+  factures: 'Factures',
+  demande_acces_suivi: 'Demande, accès et suivi',
 };
 
 /** Rôles d'un contact rattaché à un immeuble / ACP. */

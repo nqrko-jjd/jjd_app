@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { PageHead, StatusBadge, Money, ProgressCell } from '@/lib/ui';
-import { FormModal, type FieldDef } from '@/components/FormModal';
+import { NewWorksiteWizard } from '@/components/NewWorksiteWizard';
 import { ContextMenu, useContextMenu, openActions, type MenuItem } from '@/components/ContextMenu';
 import { PaginationBar } from '@/components/PaginationBar';
 import { useSort, SortTh } from '@/lib/sort';
@@ -14,7 +14,7 @@ import { downloadCsv, pickAndImportCsv, summarizeImport } from '@/lib/csvIO';
 import {
   WORKSITE_STATUS_LABEL, WORKSITE_STATUSES, WORKSITE_PRIORITIES, WORKSITE_PRIORITY_LABEL,
   WORKSITE_SCOPES, WORKSITE_SCOPE_LABEL, WORKSITE_BILLING_MODES, WORKSITE_BILLING_MODE_LABEL,
-  ENTITIES, ENTITY_LABEL, WORKSITE_PROGRESS_PCT, type WorksiteStatus,
+  WORKSITE_PROGRESS_PCT, type WorksiteStatus,
 } from '@jjd/shared';
 
 const STATUS_VIEWS: { key: string; label: string }[] = [
@@ -154,33 +154,13 @@ function ChantiersInner() {
     ];
   }
 
-  const fields: FieldDef[] = [
-    { name: 'title', label: 'Intitulé du chantier', required: true, full: true, placeholder: 'Uccle - Dupont - Toiture' },
-    { name: 'entity', label: 'Entité', type: 'select', options: ENTITIES.filter((e) => e !== 'm7').map((e) => ({ value: e, label: ENTITY_LABEL[e] })) },
-    { name: 'status', label: 'Statut', type: 'select', options: WORKSITE_STATUSES.map((s) => ({ value: s, label: WORKSITE_STATUS_LABEL[s] })) },
-    { name: 'priority', label: 'Priorité', type: 'select', options: WORKSITE_PRIORITIES.map((p) => ({ value: p, label: WORKSITE_PRIORITY_LABEL[p] })) },
-    { name: 'scope', label: 'Portée', type: 'select', options: WORKSITE_SCOPES.map((s) => ({ value: s, label: WORKSITE_SCOPE_LABEL[s] })) },
-    { name: 'billingMode', label: 'Facturation', type: 'select', options: WORKSITE_BILLING_MODES.map((b) => ({ value: b, label: WORKSITE_BILLING_MODE_LABEL[b] })) },
-    { name: 'clientId', label: 'Client / Immeuble', type: 'contact', full: true },
-    { name: 'managerId', label: 'Chef de chantier', type: 'select', options: (refs?.people ?? []).map((p) => ({ value: p.id, label: p.name })) },
-    { name: 'address', label: 'Adresse', full: true, type: 'address', addressFill: { postalCode: 'postalCode', city: 'city' } },
-    { name: 'postalCode', label: 'Code postal' },
-    { name: 'city', label: 'Ville' },
-    { name: 'startedOn', label: 'Date de début', type: 'date' },
-    { name: 'endedOn', label: 'Date de fin', type: 'date' },
-    { name: 'quotedHt', label: 'Total devisé HT', type: 'number' },
-    { name: 'description', label: 'Description', type: 'textarea', full: true },
-  ];
-
   return (
     <>
       {creating && (
-        <FormModal
-          title="Nouveau chantier"
-          fields={fields}
-          initial={{ entity: 'jjd', status: 'to_plan', priority: 'normal' }}
+        <NewWorksiteWizard
+          people={refs?.people ?? []}
           onClose={() => setCreating(false)}
-          onSubmit={async (v) => { await api('/api/worksites', { method: 'POST', body: v }); reload(); }}
+          onCreated={() => { setCreating(false); reload(); }}
         />
       )}
       {ctx.menu && (

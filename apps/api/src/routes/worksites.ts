@@ -266,6 +266,7 @@ worksitesRouter.get(
         acp: { include: { syndic: true } },
         manager: true,
         billToContact: true,
+        contacts: { orderBy: { position: 'asc' } },
         documents: { orderBy: { issuedOn: 'desc' } },
         events: { orderBy: { startAt: 'desc' }, take: 20, include: { assignments: { include: { person: true } }, vehicle: true } },
         reports: { orderBy: { date: 'desc' }, include: { photos: true, author: { select: { email: true } } } },
@@ -403,6 +404,7 @@ worksitesRouter.post(
         priority: data.priority,
         scope: data.scope ?? null,
         billingMode: data.billingMode ?? null,
+        requestKind: data.requestKind ?? null,
         statusTags: data.statusTags,
         clientId: data.clientId ?? null,
         acpId,
@@ -410,11 +412,21 @@ worksitesRouter.post(
         address: data.address ?? null,
         postalCode: data.postalCode ?? null,
         city: data.city ?? null,
+        unitLabel: data.unitLabel ?? null,
+        accessNotes: data.accessNotes ?? null,
         startedOn: data.startedOn ?? null,
         endedOn: data.endedOn ?? null,
         quotedHt: data.quotedHt ?? null,
+        quoteRef: data.quoteRef ?? null,
         description: data.description ?? null,
+        billToContactId: data.billToContactId ?? null,
+        billToAttn: data.billToAttn ?? null,
+        billToEmail: data.billToEmail ?? null,
+        clientRef: data.clientRef ?? null,
+        billingCadence: data.billingCadence ?? null,
+        billingConditions: data.billingConditions ?? null,
         source: 'manual',
+        contacts: data.contacts?.length ? { create: data.contacts.map((c, i) => ({ ...c, position: i })) } : undefined,
       },
     });
     await prisma.auditLog.create({
@@ -472,7 +484,7 @@ worksitesRouter.patch(
   '/:id',
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
-    const { buildingId: buildingIdInput, ...data } = worksiteInput.partial().parse(req.body);
+    const { buildingId: buildingIdInput, contacts: contactsInput, ...data } = worksiteInput.partial().parse(req.body);
     let acpId: string | null | undefined = buildingIdInput;
     if (data.clientId && acpId === undefined) {
       const existing = await prisma.worksite.findUnique({ where: { id: req.params.id }, select: { acpId: true } });
@@ -484,6 +496,9 @@ worksitesRouter.patch(
         ...data,
         acpId,
         statusTags: data.statusTags ?? undefined,
+        ...(contactsInput !== undefined
+          ? { contacts: { deleteMany: {}, create: (contactsInput ?? []).map((c, i) => ({ ...c, position: i })) } }
+          : {}),
       },
     });
     await prisma.auditLog.create({

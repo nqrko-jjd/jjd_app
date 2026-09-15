@@ -144,6 +144,8 @@ function ContactsInner() {
                 <SortTh k="vat" sort={sort} filter={colFilter}>TVA</SortTh>
                 <SortTh k="contact" sort={sort} filter={colFilter}>Contact</SortTh>
                 <SortTh k="worksites" sort={sort} align="right" filter={colFilter}>Chantiers</SortTh>
+                <th>Statut</th>
+                <th />
               </tr>
             </thead>
             <tbody>
@@ -164,6 +166,8 @@ function ContactsInner() {
                   <td className="mono" style={{ fontSize: '0.82rem' }}>{formatVat(c.vat) ?? '—'}</td>
                   <td>{c.email ?? c.phone ?? '—'}</td>
                   <td style={{ textAlign: 'right' }} className="tnum">{c._count.worksites || ''}</td>
+                  <td><span className={`badge ${c._count.worksites > 0 ? 'ok' : 'plain'}`}>{c._count.worksites > 0 ? 'Actif' : 'Prospect'}</span></td>
+                  <td className="muted">→</td>
                 </tr>
               ))}
             </tbody>

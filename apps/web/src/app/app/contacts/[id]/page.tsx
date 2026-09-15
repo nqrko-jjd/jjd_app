@@ -27,7 +27,6 @@ interface Detail {
     address: string | null; postalCode: string | null; city: string | null; note: string | null;
     syndic: { id: string; name: string } | null;
     building: { id: string; name: string } | null;
-    buildings: { id: string; name: string }[];
     worksites: { id: string; ref: string; title: string; status: string; quotedHt: number | null }[];
     user?: { email: string } | null;
     contactPersons: ContactPerson[];
@@ -135,17 +134,19 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
           }}
         />
       )}
-      <PageHead
-        title={c.name}
-        sub={c.kind ? CLIENT_KIND_LABEL[c.kind as keyof typeof CLIENT_KIND_LABEL] : c.type === 'supplier' ? 'Fournisseur' : c.type === 'both' ? 'Client + Fournisseur' : c.type}
-        action={
-          <div className="row">
-            <button className="btn" onClick={() => setEditing(true)}>Modifier</button>
-            <button className="btn" onClick={removeContact}>Supprimer</button>
-            <Link href="/app/contacts" className="btn">← Contacts</Link>
-          </div>
-        }
-      />
+      <div className="row" style={{ justifyContent: 'space-between', marginBottom: '0.9rem', flexWrap: 'wrap' }}>
+        <Link href="/app/contacts" className="btn ghost">← Contacts</Link>
+        <div className="row">
+          <button className="btn" onClick={() => setEditing(true)}>Modifier</button>
+          <button className="btn" onClick={removeContact}>Supprimer</button>
+        </div>
+      </div>
+
+      <div className="detail-hero">
+        <div className="eyebrow">Contact</div>
+        <h1>{c.name}</h1>
+        <div className="sub">{c.kind ? CLIENT_KIND_LABEL[c.kind as keyof typeof CLIENT_KIND_LABEL] : c.type === 'supplier' ? 'Fournisseur' : c.type === 'both' ? 'Client + Fournisseur' : c.type}</div>
+      </div>
       <div className="info-grid" style={{ marginBottom: '1.4rem' }}>
         <Info label="E-mail" value={c.email ?? '—'} />
         <Info label="Téléphone" value={c.phone ?? '—'} />
@@ -302,17 +303,6 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
             </CollapsibleSection>
           )}
         </>
-      )}
-
-      {isClientLike && c.buildings.length > 0 && (
-        <section style={{ marginBottom: '1.4rem' }}>
-          <h2 style={{ marginBottom: '0.7rem' }}>Immeubles ({c.buildings.length})</h2>
-          <div className="row">
-            {c.buildings.map((b) => (
-              <Link key={b.id} href={`/app/immeubles/${b.id}`} className="badge primary">{b.name}</Link>
-            ))}
-          </div>
-        </section>
       )}
 
       {isClientLike && (

@@ -81,17 +81,19 @@ export default function ImmeubleDetail({ params }: { params: Promise<{ id: strin
 
   return (
     <>
-      <PageHead
-        title={b.name}
-        sub={[b.address, [b.postalCode, b.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') || undefined}
-        action={
-          <div className="row">
-            <button className="btn" onClick={() => setModal({ kind: 'building' })}>Modifier</button>
-            <button className="btn" onClick={removeBuilding}>Supprimer</button>
-            <Link href="/app/immeubles" className="btn">← Immeubles</Link>
-          </div>
-        }
-      />
+      <div className="row" style={{ justifyContent: 'space-between', marginBottom: '0.9rem', flexWrap: 'wrap' }}>
+        <Link href="/app/immeubles" className="btn ghost">← Immeubles</Link>
+        <div className="row">
+          <button className="btn" onClick={() => setModal({ kind: 'building' })}>Modifier</button>
+          <button className="btn" onClick={removeBuilding}>Supprimer</button>
+        </div>
+      </div>
+
+      <div className="detail-hero">
+        <div className="eyebrow">Immeuble</div>
+        <h1>{b.name}</h1>
+        <div className="sub">{[b.address, [b.postalCode, b.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') || 'Adresse non renseignée'}</div>
+      </div>
 
       <PhotoHeader
         basePath={`/api/buildings/${b.id}`}

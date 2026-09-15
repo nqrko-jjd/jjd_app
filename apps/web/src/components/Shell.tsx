@@ -82,7 +82,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
       {open && <div className="scrim" onClick={() => setOpen(false)} />}
       <nav className={`sidebar${open ? ' open' : ''}`}>
-        <div className="brand"><span className="mark">J</span> JD Consult</div>
+        <div className="brand"><span className="mark">J</span>JD Consult</div>
         {nav.map((g) => {
           const items = g.items.filter(visible);
           if (!items.length) return null;

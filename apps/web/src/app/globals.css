@@ -4,16 +4,16 @@
    ============================================================ */
 
 :root {
-  /* neutres — crème chaud */
-  --paper: #f6f3ea;
-  --surface: #fffdf7;
-  --surface-2: #efeadd;
-  --surface-3: #e6dfcd;
+  /* neutres — crème plus frais (moins jaune que l'ancienne charte) */
+  --paper: #f2f4ef;
+  --surface: #fdfefb;
+  --surface-2: #eef1ea;
+  --surface-3: #e3e8de;
   --ink: #1c2924;
   --ink-2: #45544d;
   --ink-3: #77837c;
-  --line: #ddd6c6;
-  --line-strong: #cdc4ae;
+  --line: #dbe0d6;
+  --line-strong: #c7cec1;
 
   /* marque — vert (actions) + or (accent) */
   --primary: #1d4235;
@@ -41,13 +41,13 @@
   --info: #2f6bd0;
   --info-soft: #e6eefb;
 
-  --radius: 12px;
-  --radius-sm: 8px;
-  --shadow-sm: 0 1px 2px rgba(28, 41, 36, 0.06);
-  --shadow: 0 1px 3px rgba(28, 41, 36, 0.07), 0 6px 18px rgba(28, 41, 36, 0.06);
-  --shadow-lg: 0 12px 34px rgba(28, 41, 36, 0.14);
+  --radius: 16px;
+  --radius-sm: 10px;
+  --shadow-sm: 0 1px 2px rgba(28, 41, 36, 0.05);
+  --shadow: 0 2px 6px rgba(28, 41, 36, 0.05), 0 10px 26px rgba(28, 41, 36, 0.055);
+  --shadow-lg: 0 16px 42px rgba(28, 41, 36, 0.12);
 
-  --font: "Manrope", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font: "DM Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-serif: var(--font); /* plus de sérif dans l'appli : moins lisible à l'usage (retour David) */
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
@@ -78,9 +78,9 @@
     --warn: #d6a34e; --warn-soft: #2a2313;
     --crit: #df6a5d; --crit-soft: #2a1917;
     --info: #6a9bea; --info-soft: #14202c;
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-    --shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 8px 22px rgba(0, 0, 0, 0.35);
-    --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.5);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+    --shadow: 0 2px 6px rgba(0, 0, 0, 0.32), 0 10px 26px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 18px 44px rgba(0, 0, 0, 0.45);
     color-scheme: dark;
   }
 }
@@ -92,9 +92,9 @@
   --nav-bg: #0a221b; --nav-bg-2: #103228;
   --ok: #43b881; --ok-soft: #16281f; --warn: #d6a34e; --warn-soft: #2a2313;
   --crit: #df6a5d; --crit-soft: #2a1917; --info: #6a9bea; --info-soft: #14202c;
-  --shadow-sm: 0 1px 2px rgba(0,0,0,.4);
-  --shadow: 0 1px 3px rgba(0,0,0,.4), 0 8px 22px rgba(0,0,0,.35);
-  --shadow-lg: 0 16px 40px rgba(0,0,0,.5);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.35);
+  --shadow: 0 2px 6px rgba(0,0,0,.32), 0 10px 26px rgba(0,0,0,.3);
+  --shadow-lg: 0 18px 44px rgba(0,0,0,.45);
   color-scheme: dark;
 }
 
@@ -279,6 +279,16 @@ p { margin: 0; }
 .kpi .sub { font-size: 0.76rem; color: var(--ink-2); }
 .kpi.warn { border-color: var(--warn); background: var(--warn-soft); }
 .kpi.warn .ic { background: var(--warn); color: #fff; }
+/* tuile « hero » : met en avant LE chiffre du jour (ex. facturé ce mois-ci) au milieu de
+   tuiles neutres — à utiliser sur une seule tuile par rangée, pas en style par défaut.
+   Fond = celui de la sidebar (--nav-bg-2), volontairement PAS --primary : --primary
+   s'inverse en clair en mode sombre (couleur de texte/accent, pas de fond), alors que
+   --nav-bg-2 reste un vert profond dans les deux thèmes (la sidebar est toujours sombre). */
+.kpi.hero { background: var(--nav-bg-2); border-color: var(--nav-bg-2); color: var(--nav-fg-active); }
+.kpi.hero .ic { background: rgba(255, 255, 255, 0.14); color: var(--nav-fg-active); }
+.kpi.hero .label { color: var(--nav-fg); }
+.kpi.hero .sub { color: var(--nav-fg); }
+.kpi.hero .value.neg { color: #ffb4a8; }
 
 /* ---------------------------------------------------- alerts */
 .alert-list { display: flex; flex-direction: column; gap: 0.55rem; }
@@ -300,10 +310,14 @@ p { margin: 0; }
   background: var(--surface-2); border-radius: 999px; padding: 0.1rem 0.5rem; font-size: 0.85rem;
 }
 
-/* ---------------------------------------------------- segmented control */
-.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
-.seg button { border: 0; background: var(--surface); padding: 0.45rem 0.9rem; cursor: pointer; font: inherit; font-weight: 600; font-size: 0.85rem; color: var(--ink-2); }
-.seg button + button { border-left: 1px solid var(--line); }
+/* ---------------------------------------------------- pilules de filtre (onglets Tous/En cours/…) */
+.seg { display: inline-flex; gap: 0.25rem; padding: 0.25rem; background: var(--surface-2); border-radius: 999px; }
+.seg button {
+  border: 0; background: transparent; border-radius: 999px;
+  padding: 0.42rem 0.95rem; cursor: pointer; font: inherit; font-weight: 600; font-size: 0.85rem;
+  color: var(--ink-2); transition: background 0.12s, color 0.12s;
+}
+.seg button:hover:not(.on) { background: var(--surface-3); color: var(--ink); }
 .seg button.on { background: var(--primary); color: #fff; }
 
 /* ---------------------------------------------------- tables */
@@ -649,9 +663,7 @@ p { margin: 0; }
 .cal-toolbar .nav button:hover { background: var(--surface-2); }
 .cal-toolbar .nav button + button { border-left: 1px solid var(--line); }
 .cal-toolbar .range { font-weight: 700; text-transform: capitalize; }
-.cal-toolbar .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
-.cal-toolbar .seg button { border: 0; background: var(--surface); padding: 0.45rem 0.8rem; cursor: pointer; font: inherit; color: var(--ink-2); }
-.cal-toolbar .seg button.on { background: var(--primary); color: #fff; }
+/* .cal-toolbar .seg : hérite du style pilule commun (.seg, plus haut) */
 
 .cal-frame { border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--surface); }
 .cal-scroll { overflow-x: auto; }

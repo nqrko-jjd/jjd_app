@@ -218,7 +218,7 @@ export default function DashboardPage() {
       {data && (
         <>
           <div className="kpis">
-            <Kpi ic="€" label="Facturé ce mois" value={<Money value={data.kpis.invoicedMonth} />} />
+            <Kpi ic="€" label="Facturé ce mois" value={<Money value={data.kpis.invoicedMonth} />} hero />
             <Kpi ic="✓" label="Encaissé ce mois" value={<Money value={data.kpis.paidMonth} />} />
             <Kpi ic="!" label="Impayés" value={<Money value={data.kpis.overdueAmount} />} sub={`${data.kpis.overdueCount} factures en retard`} />
             <Kpi ic="◷" label="À encaisser" value={<Money value={data.kpis.receivableAmount} />} sub="factures émises non payées" />
@@ -269,9 +269,9 @@ export default function DashboardPage() {
   );
 }
 
-function Kpi({ ic, label, value, sub }: { ic: string; label: string; value: React.ReactNode; sub?: string }) {
+function Kpi({ ic, label, value, sub, hero }: { ic: string; label: string; value: React.ReactNode; sub?: string; hero?: boolean }) {
   return (
-    <div className="kpi">
+    <div className={`kpi${hero ? ' hero' : ''}`}>
       <span className="ic">{ic}</span>
       <div className="label">{label}</div>
       <div className="value">{value}</div>

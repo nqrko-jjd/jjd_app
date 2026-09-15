@@ -715,7 +715,7 @@ p { margin: 0; }
 /* ---------------------------------------------------- planning calendrier */
 .cal { --cal-hour-h: 46px; --cal-gutter: 54px; }
 .cal-toolbar { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.9rem; }
-.cal-toolbar .nav { display: inline-flex; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+.cal-toolbar .nav { display: inline-flex; border: 1px solid var(--line); border-radius: var(--radius-sm); overflow: hidden; }
 .cal-toolbar .nav button { border: 0; background: var(--surface); padding: 0.45rem 0.7rem; cursor: pointer; color: var(--ink-2); font: inherit; }
 .cal-toolbar .nav button:hover { background: var(--surface-2); }
 .cal-toolbar .nav button + button { border-left: 1px solid var(--line); }
@@ -748,7 +748,7 @@ p { margin: 0; }
 .cal-col .line:nth-child(odd) { background: color-mix(in srgb, var(--surface-2) 40%, transparent); }
 
 .cal-ev {
-  position: absolute; border-radius: 7px; padding: 3px 6px; overflow: hidden; cursor: pointer;
+  position: absolute; border-radius: var(--radius-sm); padding: 3px 6px; overflow: hidden; cursor: pointer;
   font-size: 0.72rem; line-height: 1.25; border-left: 3px solid var(--ev, var(--primary));
   background: color-mix(in srgb, var(--ev, var(--primary)) 14%, var(--surface));
   color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,0.06);
@@ -759,7 +759,7 @@ p { margin: 0; }
 .cal-ev.mini { padding: 1px 5px; font-size: 0.68rem; }
 
 .cal-allday .chip-ev {
-  font-size: 0.68rem; border-radius: 5px; padding: 1px 5px; cursor: pointer;
+  font-size: 0.68rem; border-radius: 6px; padding: 1px 5px; cursor: pointer;
   border-left: 3px solid var(--ev, var(--primary));
   background: color-mix(in srgb, var(--ev, var(--primary)) 15%, var(--surface));
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;

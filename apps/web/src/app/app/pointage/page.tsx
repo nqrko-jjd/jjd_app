@@ -73,7 +73,7 @@ export default function PointagePage() {
 
       {items.length > 0 && (
         <div className="kpis" style={{ marginBottom: '1.4rem' }}>
-          <div className="kpi"><span className="ic">◷</span><div className="label">À valider</div><div className="value">{items.length}</div></div>
+          <div className="kpi hero"><span className="ic">◷</span><div className="label">À valider</div><div className="value">{items.length}</div></div>
           <div className="kpi"><span className="ic">Σ</span><div className="label">Heures</div><div className="value">{formatHours(totalHours)}</div></div>
           <div className="kpi"><span className="ic">€</span><div className="label">Montant</div><div className="value"><Money value={totalAmount} /></div></div>
           <div className={`kpi${flagged ? ' warn' : ''}`}><span className="ic">⚑</span><div className="label">Hors zone</div><div className="value">{flagged}</div></div>

@@ -3,7 +3,6 @@ import { use, useCallback, useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
-import { PageHead } from '@/lib/ui';
 import { ChantierThread } from '@/components/ChantierThread';
 
 interface Task { id: string; title: string; status: string; assignee: { displayName: string | null; firstName: string } | null }
@@ -57,7 +56,11 @@ export default function WorkerFichePage({ params }: { params: Promise<{ id: stri
 
   return (
     <>
-      <PageHead title={`${w.ref} — ${w.title}`} sub={w.address} />
+      <div className="detail-hero" style={{ marginBottom: '1.1rem' }}>
+        <div className="eyebrow">{w.ref}</div>
+        <h1>{w.title}</h1>
+        {w.address && <div className="sub">{w.address}</div>}
+      </div>
 
       {w.address && (
         <a

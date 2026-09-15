@@ -1,6 +1,7 @@
 'use client';
 import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { portalApi, usePortalGuard } from '@/lib/portal';
 import { PortalShell } from '../../PortalShell';
 
@@ -16,6 +17,7 @@ const STATUS: Record<string, string> = {
 export default function BuildingPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { me, loading } = usePortalGuard();
+  const router = useRouter();
   const [b, setB] = useState<Building | null>(null);
 
   useEffect(() => {
@@ -28,25 +30,29 @@ export default function BuildingPage({ params }: { params: Promise<{ id: string 
   if (loading || !me) return null;
 
   return (
-    <PortalShell
-      title={b?.name ?? 'Immeuble'}
-      subtitle={b ? `${b.address || ''}${b.syndic ? ` · syndic ${b.syndic}` : ''}` : undefined}
-    >
+    <PortalShell>
       <Link href="/portail/immeubles" className="p-back">← Tous les immeubles</Link>
       {!b ? <p className="p-note">Chargement…</p> : (
         <>
-          <h2 style={{ marginBottom: '0.9rem' }}>Interventions</h2>
-          <div className="p-list">
-            {b.worksites.map((w) => (
-              <Link key={w.id} href={`/portail/chantier/${w.id}`} className="p-tile">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                  <span className="name">{w.title}</span>
-                  <span className="p-tag">{STATUS[w.status] ?? w.status}</span>
-                </div>
-                <div className="meta">{w.ref}</div>
-              </Link>
-            ))}
-            {b.worksites.length === 0 && <p className="p-note">Aucune intervention.</p>}
+          <div className="p-hero sm">
+            <div className="eyebrow">Immeuble</div>
+            <h1>{b.name}</h1>
+            <div className="sub">{b.address || ''}{b.syndic ? ` · syndic ${b.syndic}` : ''}</div>
+          </div>
+          <h2 style={{ margin: '1.3rem 0 0.9rem' }}>Interventions</h2>
+          <div className="p-panel" style={{ padding: '0.4rem 1rem' }}>
+            <table className="p-tbl">
+              <tbody>
+                {b.worksites.map((w) => (
+                  <tr key={w.id} onClick={() => router.push(`/portail/chantier/${w.id}`)} style={{ cursor: 'pointer' }}>
+                    <td><span className="b-ico">⌂</span>{w.title}</td>
+                    <td className="p-note" style={{ fontFamily: 'IBM Plex Mono, monospace' }}>{w.ref}</td>
+                    <td style={{ textAlign: 'right' }}><span className="p-tag">{STATUS[w.status] ?? w.status}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {b.worksites.length === 0 && <p className="p-note" style={{ padding: '0.8rem 0' }}>Aucune intervention.</p>}
           </div>
         </>
       )}

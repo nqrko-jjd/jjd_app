@@ -37,24 +37,34 @@ export default function PortalDocuments() {
     try { window.open(await portalBlobUrl(`/documents/${id}/pdf`), '_blank'); } catch { /* */ }
   }
 
+  const groups = new Map<string, Doc[]>();
+  for (const doc of items ?? []) {
+    const key = doc.building ?? 'Autres';
+    groups.set(key, [...(groups.get(key) ?? []), doc]);
+  }
+
   return (
     <PortalShell title="Documents" subtitle="Devis, factures et notes de crédit">
-      <div className="p-filters">
+      <div className="p-seg">
         {TABS.map((t) => (
-          <button key={t.k} className={t.k === kind ? 'p-btn-primary' : 'p-btn-line'} onClick={() => setKind(t.k)}>{t.label}</button>
+          <button key={t.k || 'all'} className={t.k === kind ? 'on' : ''} onClick={() => setKind(t.k)}>{t.label}</button>
         ))}
       </div>
       {!items ? <div className="p-empty">Chargement…</div> : items.length === 0 ? <div className="p-empty">Aucun document.</div> : (
-        <div className="p-docs" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
-          {items.map((d) => (
-            <div key={d.id} className="p-doc">
-              <span className="ico">▤</span>
-              <div className="meta">
-                <b>{d.kindLabel} {d.number}</b>
-                <span>{d.building ?? ''} · {fdate(d.issuedOn)} · {eur(d.totalTtc)}</span>
-              </div>
-              {d.worksiteId && <Link href={`/portail/chantier/${d.worksiteId}`} className="p-note" style={{ fontSize: '0.75rem' }}>voir →</Link>}
-              {d.hasPdf && <button onClick={() => openPdf(d.id)} aria-label="Télécharger">⤓</button>}
+        <div style={{ display: 'grid', gap: '1rem' }}>
+          {[...groups.entries()].map(([building, docs]) => (
+            <div key={building} className="p-panel">
+              <h2 style={{ marginBottom: '0.6rem' }}>{building}</h2>
+              {docs.map((doc) => (
+                <div key={doc.id} className="p-doc-row">
+                  <span className="p-tag">{doc.kindLabel}</span>
+                  <span className="n">{doc.number}</span>
+                  <span className="p-note">{fdate(doc.issuedOn)}</span>
+                  <span className="amt">{eur(doc.totalTtc)}</span>
+                  {doc.worksiteId && <Link href={`/portail/chantier/${doc.worksiteId}`} className="p-btn-line" style={{ padding: '0.3rem 0.6rem', fontSize: '0.78rem' }}>Voir</Link>}
+                  {doc.hasPdf && <button className="p-btn-line" style={{ padding: '0.3rem 0.6rem', fontSize: '0.78rem' }} onClick={() => openPdf(doc.id)}>PDF</button>}
+                </div>
+              ))}
             </div>
           ))}
         </div>

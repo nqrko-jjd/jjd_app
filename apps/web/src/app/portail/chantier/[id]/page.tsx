@@ -40,7 +40,7 @@ export default function PortalWorksite({ params }: { params: Promise<{ id: strin
   useEffect(() => { if (me) load(); }, [me, id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading || !me) return null;
-  if (!data) return <PortalShell title="Chantier"><p className="p-note">Chargement…</p></PortalShell>;
+  if (!data) return <PortalShell><p className="p-note">Chargement…</p></PortalShell>;
   const w = data.worksite;
   const stepIdx = STEPS.indexOf(w.status) >= 0 ? STEPS.indexOf(w.status)
     : w.status === 'closed' || w.status === 'paid' ? 3
@@ -63,12 +63,18 @@ export default function PortalWorksite({ params }: { params: Promise<{ id: strin
   }
 
   return (
-    <PortalShell
-      title={w.title}
-      subtitle={`${w.ref}${w.building ? ` · ${w.building.name}` : ''}${w.address ? ` · ${w.address}` : ''}`}
-    >
+    <PortalShell>
       <div>
         <Link href={w.building ? `/portail/immeuble/${w.building.id}` : '/portail/interventions'} className="p-back">← Retour</Link>
+
+        <div className="p-hero sm">
+          <div className="eyebrow">{w.ref}{w.building ? ` · ${w.building.name}` : ''}</div>
+          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'nowrap', gap: '1rem' }}>
+            <h1>{w.title}</h1>
+            <span className="p-pill">{w.statusLabel}</span>
+          </div>
+          {w.address && <div className="sub">{w.address}</div>}
+        </div>
 
         <div className="p-tabs">
           {(['suivi', 'devis', 'factures', 'rapports', 'photos', 'messages'] as const)
@@ -93,8 +99,7 @@ export default function PortalWorksite({ params }: { params: Promise<{ id: strin
                 </div>
               ))}
             </div>
-            <p style={{ marginTop: '1rem' }}><span className="p-pill">{w.statusLabel}</span></p>
-            <p className="p-note" style={{ marginTop: '0.8rem' }}>
+            <p className="p-note" style={{ marginTop: '1rem' }}>
               Début : {d(w.startedOn)} · Fin prévue : {d(w.endedOn)}
             </p>
             {w.description && <p style={{ marginTop: '0.8rem', whiteSpace: 'pre-wrap' }}>{w.description}</p>}

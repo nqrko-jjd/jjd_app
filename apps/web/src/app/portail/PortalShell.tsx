@@ -15,7 +15,7 @@ const NAV = [
 
 export function PortalShell({
   title, subtitle, action, children,
-}: { title: string; subtitle?: string; action?: ReactNode; children: ReactNode }) {
+}: { title?: string; subtitle?: string; action?: ReactNode; children: ReactNode }) {
   const pathname = usePathname();
   const { me, signOut } = usePortal();
   const [collapsed, setCollapsed] = useState(false);
@@ -50,15 +50,21 @@ export function PortalShell({
       <div className="p-content">
         <div className="p-topbar">
           <button className="p-moburger" onClick={() => setMobileOpen(true)}>≡</button>
-          <div className="greet">
-            <h1>{title}</h1>
-            {subtitle && <p>{subtitle}</p>}
-            {me?.access === 'limited' && (
-              <p style={{ fontSize: '0.78rem', color: 'var(--p-gold)', fontWeight: 700 }}>
-                Accès résident{me.scopeLabel ? ` · ${me.scopeLabel}` : ''} — suivi, photos et messages
-              </p>
-            )}
-          </div>
+          {title ? (
+            <div className="greet">
+              <h1>{title}</h1>
+              {subtitle && <p>{subtitle}</p>}
+              {me?.access === 'limited' && (
+                <p style={{ fontSize: '0.78rem', color: 'var(--p-gold)', fontWeight: 700 }}>
+                  Accès résident{me.scopeLabel ? ` · ${me.scopeLabel}` : ''} — suivi, photos et messages
+                </p>
+              )}
+            </div>
+          ) : me?.access === 'limited' ? (
+            <p style={{ fontSize: '0.78rem', color: 'var(--p-gold)', fontWeight: 700 }}>
+              Accès résident{me.scopeLabel ? ` · ${me.scopeLabel}` : ''} — suivi, photos et messages
+            </p>
+          ) : <span />}
           <div className="actions">
             <div className="p-user">
               <span className="av">{initials}</span>

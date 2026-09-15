@@ -18,6 +18,14 @@ const STATUS_DOT: Record<string, string> = {
 const PRIO_DOT: Record<string, string> = { urgent: 'crit', high: 'crit', normal: 'gold', low: 'grey' };
 const fdate = (s: string | null) => (s ? new Date(s).toLocaleDateString('fr-BE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—');
 
+const STATUS_VIEWS: { key: string; label: string }[] = [
+  { key: 'open', label: 'En cours' },
+  { key: '', label: 'Toutes' },
+  { key: 'done', label: 'Terminées' },
+  { key: 'invoiced', label: 'Facturées' },
+  { key: 'lead', label: 'Demandes' },
+];
+
 export default function PortalInterventions() {
   const { me, loading } = usePortalGuard();
   const router = useRouter();
@@ -37,15 +45,13 @@ export default function PortalInterventions() {
 
   return (
     <PortalShell title="Interventions" subtitle="Toutes les interventions de votre portefeuille">
-      <div className="p-filters">
+      <div className="p-filters" style={{ alignItems: 'center' }}>
+        <div className="p-seg">
+          {STATUS_VIEWS.map((v) => (
+            <button key={v.key || 'all'} className={status === v.key ? 'on' : ''} onClick={() => setStatus(v.key)}>{v.label}</button>
+          ))}
+        </div>
         <input className="p-input" placeholder="Réf, objet…" value={q} onChange={(e) => setQ(e.target.value)} />
-        <select className="p-select" value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option value="open">En cours</option>
-          <option value="">Toutes</option>
-          <option value="done">Terminées</option>
-          <option value="invoiced">Facturées</option>
-          <option value="lead">Demandes</option>
-        </select>
       </div>
 
       {!items ? <div className="p-empty">Chargement…</div> : items.length === 0 ? <div className="p-empty">Aucune intervention.</div> : (

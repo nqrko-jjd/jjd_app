@@ -53,21 +53,31 @@ export default function PortalDashboard() {
   const alert = d?.urgentItems[0];
 
   return (
-    <PortalShell
-      title={`Bonjour, ${greetName}`}
-      subtitle={me.isSyndic ? 'Voici l’activité de votre portefeuille' : 'Voici l’activité de vos chantiers'}
-      action={<Link href="/portail/demande" className="p-btn-primary">+ Nouvelle demande</Link>}
-    >
+    <PortalShell>
       {!d ? <div className="p-empty">Chargement…</div> : (
         <>
-          {/* KPIs */}
-          <div className="p-kpis">
-            <div className="p-kpi"><span className="ico">▦</span><div><div className="v">{d.kpis.buildings}</div><div className="l">{me.isSyndic ? 'Immeubles' : 'Dossiers'}</div></div></div>
-            <div className="p-kpi"><span className="ico">⚒</span><div><div className="v">{d.kpis.interventionsActive}</div><div className="l">Interventions en cours</div></div></div>
-            {d.kpis.quotesToValidate != null && (
-              <div className="p-kpi"><span className="ico">▤</span><div><div className="v">{d.kpis.quotesToValidate}</div><div className="l">Devis à valider</div></div></div>
-            )}
-            <div className={`p-kpi${d.kpis.urgent > 0 ? ' alert' : ''}`}><span className="ico">!</span><div><div className="v">{d.kpis.urgent}</div><div className="l">{d.kpis.urgent > 1 ? 'Urgences' : 'Urgence'}</div></div></div>
+          {/* Hero */}
+          <div className="p-hero">
+            <div className="eyebrow">{me.isSyndic ? 'Espace syndic / promoteur' : 'Espace client'}</div>
+            <h1>Bonjour, {greetName}</h1>
+            <div className="sub">{me.isSyndic ? 'Voici l’activité de votre portefeuille.' : 'Voici l’activité de vos chantiers.'}</div>
+            <Link href="/portail/demande" className="p-btn-primary p-btn-gold cta">+ Nouvelle demande</Link>
+            <div className="p-hero-stats">
+              <Link href="/portail/immeubles" className="p-hero-stat link">
+                <div className="v">{String(d.kpis.buildings).padStart(2, '0')}</div>
+                <div className="l">{me.isSyndic ? 'Immeubles' : 'Dossiers'} <span className="chev">→</span></div>
+              </Link>
+              <Link href="/portail/interventions" className="p-hero-stat link">
+                <div className="v">{String(d.kpis.interventionsActive).padStart(2, '0')}</div>
+                <div className="l">Interventions en cours <span className="chev">→</span></div>
+              </Link>
+              {d.kpis.quotesToValidate != null && (
+                <Link href="/portail/devis" className="p-hero-stat link">
+                  <div className="v">{String(d.kpis.quotesToValidate).padStart(2, '0')}</div>
+                  <div className="l">Devis à valider <span className="chev">→</span></div>
+                </Link>
+              )}
+            </div>
           </div>
 
           {/* Alert */}

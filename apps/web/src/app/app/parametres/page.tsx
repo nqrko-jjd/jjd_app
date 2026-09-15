@@ -20,7 +20,7 @@ export default function ParametresPage() {
   const admin = user?.role === 'admin';
   return (
     <>
-      <PageHead title="Paramètres" sub="Société, bibliothèque de prix, dépôt, pointage, utilisateurs" />
+      <PageHead eyebrow="Administration" title="Paramètres" sub="Société, bibliothèque de prix, dépôt, pointage, utilisateurs" />
       <div className="row" style={{ marginBottom: '1rem', gap: '0.4rem' }}>
         <button className={`btn${tab === 'company' ? ' primary' : ''}`} onClick={() => setTab('company')}>Société</button>
         <button className={`btn${tab === 'depot' ? ' primary' : ''}`} onClick={() => setTab('depot')}>Dépôt</button>

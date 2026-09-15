@@ -39,7 +39,7 @@ export default function MesHeuresPage() {
 
   return (
     <>
-      <PageHead title="Mes heures" sub="Historique de pointage" />
+      <PageHead eyebrow="Mon espace ouvrier" title="Mes heures" sub="Historique de pointage" />
 
       <div className="row" style={{ marginBottom: '1.2rem' }}>
         <button className="btn" onClick={() => shift(-1)}>←</button>

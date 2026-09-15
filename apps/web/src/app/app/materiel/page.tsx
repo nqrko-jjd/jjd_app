@@ -356,6 +356,7 @@ export default function MaterielPage() {
   return (
     <>
       <PageHead
+        eyebrow="Ressources"
         title="Matériel"
         sub={
           stock

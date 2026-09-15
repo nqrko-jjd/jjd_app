@@ -31,6 +31,7 @@ export default function ControlePage() {
   return (
     <>
       <PageHead
+        eyebrow="Administration"
         title="File de contrôle"
         sub="Données de l'import qui demandent une vérification manuelle"
       />

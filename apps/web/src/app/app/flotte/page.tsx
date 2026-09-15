@@ -90,6 +90,7 @@ export default function FlottePage() {
         />
       )}
       <PageHead
+        eyebrow="Ressources"
         title="Flotte"
         sub={data ? `${data.items.filter((v) => v.status === 'active').length} véhicules actifs · clic droit sur une ligne pour les actions rapides` : undefined}
         action={

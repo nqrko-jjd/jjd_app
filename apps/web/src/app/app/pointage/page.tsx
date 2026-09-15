@@ -57,6 +57,7 @@ export default function PointagePage() {
     <>
       {adding && <ManualEntryModal onClose={() => setAdding(false)} onDone={() => { setAdding(false); reload(); }} />}
       <PageHead
+        eyebrow="Suivi du temps"
         title="Pointage"
         sub="Heures à valider avant le décompte de paie"
         action={

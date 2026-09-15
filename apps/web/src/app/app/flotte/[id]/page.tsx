@@ -122,16 +122,19 @@ export default function VehicleDetail({ params }: { params: Promise<{ id: string
           onSubmit={async (body) => { await api(`/api/vehicles/${v.id}`, { method: 'PATCH', body }); reload(); }}
         />
       )}
-      <PageHead
-        title={[v.brand, v.model].filter(Boolean).join(' ')}
-        sub={`${v.plate ?? 'sans plaque'} · ${v.code ?? ''} · ${v.type ?? ''}`}
-        action={
-          <div className="row">
-            <button className="btn" onClick={() => setEditing(true)}>Modifier</button>
-            <Link href="/app/flotte" className="btn">← Flotte</Link>
-          </div>
-        }
-      />
+      <div className="row" style={{ justifyContent: 'space-between', marginBottom: '0.9rem', flexWrap: 'wrap' }}>
+        <Link href="/app/flotte" className="btn ghost">← Flotte</Link>
+        <button className="btn" onClick={() => setEditing(true)}>Modifier</button>
+      </div>
+
+      <div className="detail-hero">
+        <div className="eyebrow">Véhicule</div>
+        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'nowrap', gap: '1rem' }}>
+          <h1>{[v.brand, v.model].filter(Boolean).join(' ')}</h1>
+          <VehicleStatusBadge status={v.status} />
+        </div>
+        <div className="sub">{`${v.plate ?? 'sans plaque'} · ${v.code ?? ''} · ${v.type ?? ''}`}</div>
+      </div>
       <PhotoHeader
         basePath={`/api/vehicles/${v.id}`}
         photoUrl={v.photoUrl}
@@ -139,9 +142,6 @@ export default function VehicleDetail({ params }: { params: Promise<{ id: string
         fallback="🚐"
         onChange={reload}
       />
-      <div className="row" style={{ marginBottom: '1rem' }}>
-        <VehicleStatusBadge status={v.status} />
-      </div>
       <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', marginBottom: '1.4rem' }}>
         <Info label="Conducteur" value={v.driver ?? '—'} />
         <Info label="Places" value={v.seats ?? '—'} />

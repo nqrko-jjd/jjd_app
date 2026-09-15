@@ -52,6 +52,7 @@ export default function FinancesPage() {
   return (
     <>
       <PageHead
+        eyebrow="Comptabilité"
         title="Finances"
         sub="Compte de résultat consolidé"
         action={

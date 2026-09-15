@@ -105,6 +105,7 @@ function EquipeInner() {
         />
       )}
       <PageHead
+        eyebrow="Les personnes"
         title="Équipe"
         sub={data ? `${data.items.filter((p) => p.active).length} actifs · clic droit sur une ligne pour les actions rapides` : undefined}
         action={

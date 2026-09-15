@@ -157,19 +157,21 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
           }}
         />
       )}
-      <PageHead
-        title={p.displayName || `${p.firstName} ${p.lastName ?? ''}`.trim()}
-        sub={`${PERSON_ROLE_LABEL[p.role as keyof typeof PERSON_ROLE_LABEL] ?? p.role} · ${WORKER_CONTRACT_LABEL[p.contractType as keyof typeof WORKER_CONTRACT_LABEL]}${p.active ? '' : ' · Ancien (données conservées)'}`}
-        action={
-          <div className="row">
-            <button className="btn" onClick={async () => { await api(`/api/people/${id}`, { method: 'PATCH', body: { active: !p.active } }); reload(); }}>
-              {p.active ? 'Marquer ancien' : 'Réactiver'}
-            </button>
-            <button className="btn" onClick={() => setEditing(true)}>Modifier</button>
-            <Link href="/app/equipe" className="btn">← Équipe</Link>
-          </div>
-        }
-      />
+      <div className="row" style={{ justifyContent: 'space-between', marginBottom: '0.9rem', flexWrap: 'wrap' }}>
+        <Link href="/app/equipe" className="btn ghost">← Équipe</Link>
+        <div className="row">
+          <button className="btn" onClick={async () => { await api(`/api/people/${id}`, { method: 'PATCH', body: { active: !p.active } }); reload(); }}>
+            {p.active ? 'Marquer ancien' : 'Réactiver'}
+          </button>
+          <button className="btn" onClick={() => setEditing(true)}>Modifier</button>
+        </div>
+      </div>
+
+      <div className="detail-hero">
+        <div className="eyebrow">{PERSON_ROLE_LABEL[p.role as keyof typeof PERSON_ROLE_LABEL] ?? p.role}</div>
+        <h1>{p.displayName || `${p.firstName} ${p.lastName ?? ''}`.trim()}</h1>
+        <div className="sub">{WORKER_CONTRACT_LABEL[p.contractType as keyof typeof WORKER_CONTRACT_LABEL]}{p.active ? '' : ' · Ancien (données conservées)'}</div>
+      </div>
 
       <PhotoHeader
         basePath={`/api/people/${p.id}`}

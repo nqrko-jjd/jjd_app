@@ -73,6 +73,7 @@ export default function TachesPage() {
   return (
     <>
       <PageHead
+        eyebrow="Organisation"
         title="Tâches"
         sub="Toutes les tâches, sur chantier ou générales — façon TrustUp"
         action={<button className="btn primary" onClick={() => setCreating(true)}>+ Nouvelle tâche</button>}

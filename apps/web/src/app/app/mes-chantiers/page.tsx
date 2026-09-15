@@ -15,7 +15,7 @@ export default function MesChantiersPage() {
 
   return (
     <>
-      <PageHead title="Mes chantiers" sub="Chantiers où tu es affecté ou as pointé" />
+      <PageHead eyebrow="Mon espace ouvrier" title="Mes chantiers" sub="Chantiers où tu es affecté ou as pointé" />
       <input
         className="input"
         style={{ marginBottom: '1rem', maxWidth: 360 }}

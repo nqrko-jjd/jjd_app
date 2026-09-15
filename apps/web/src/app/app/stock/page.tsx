@@ -74,6 +74,7 @@ export default function StockPage() {
       {history && <HistoryModal item={history} onClose={() => setHistory(null)} />}
 
       <PageHead
+        eyebrow="Ressources"
         title="Stock de matériaux"
         sub={data ? `${data.items.length} article${data.items.length > 1 ? 's' : ''} · clic sur une ligne pour l’historique` : undefined}
         action={<button className="btn primary" onClick={() => setCreating(true)}>+ Nouvel article</button>}

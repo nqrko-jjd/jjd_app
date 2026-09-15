@@ -190,6 +190,7 @@ function DocumentsInner() {
     <>
       {ctx.menu && <ContextMenu x={ctx.menu.x} y={ctx.menu.y} items={rowMenu(ctx.menu.row)} onClose={ctx.close} />}
       <PageHead
+        eyebrow="Facturation"
         title="Devis & factures"
         sub={data ? `${data.totalCount} document${data.totalCount > 1 ? 's' : ''} · page ${data.page}/${data.totalPages} · clic droit pour les actions rapides` : 'Création, émission, suivi des paiements'}
         action={

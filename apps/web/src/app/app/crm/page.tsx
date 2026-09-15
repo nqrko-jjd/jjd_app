@@ -46,6 +46,7 @@ function CrmInner() {
   return (
     <>
       <PageHead
+        eyebrow="Commercial"
         title="CRM / Pipeline"
         sub="Suivi des demandes jusqu'au devis"
         action={<button className="btn primary" onClick={() => setCreating((v) => !v)}>+ Opportunité</button>}

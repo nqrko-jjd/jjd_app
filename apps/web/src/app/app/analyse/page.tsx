@@ -37,6 +37,7 @@ export default function AnalysePage() {
   return (
     <>
       <PageHead
+        eyebrow="Pilotage"
         title="Analyse"
         sub="Chiffres clés, tendances et répartitions"
         action={

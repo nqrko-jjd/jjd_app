@@ -200,7 +200,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
             </div>
           )}
 
-          <div className="chart-2col" style={{ alignItems: 'start' }}>
+          <div className="chart-2col wide-left" style={{ alignItems: 'start' }}>
             <div>
               <div className="card card-pad" style={{ marginBottom: '1rem' }}>
                 <div className="section-title" style={{ marginTop: 0 }}>Informations du chantier</div>
@@ -273,8 +273,9 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
             </div>
           </div>
 
-          <div className="section-title">Localisation <span className="hint">carte &amp; contrôle de pointage</span></div>
-          <LocationSection w={w} onChange={reload} />
+          <CollapsibleSection title="Localisation" hint="carte & contrôle de pointage">
+            <LocationSection w={w} onChange={reload} />
+          </CollapsibleSection>
         </>
       )}
 
@@ -304,7 +305,6 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
                 {data.margin.partnerShare > 0 && <Kpi ic={Percent} label="Part GT (33 %)" value={<Money value={data.margin.partnerShare} />} sub="Apporteur d'affaire" />}
               </div>
               <TransportDetail t={data.margin.transport} />
-              <LabourDetail rows={data.margin.labour} />
               <div className="chart-2col" style={{ marginBottom: '1.5rem' }}>
                 {data.margin.totalCost > 0 && (
                   <div className="card card-pad">
@@ -334,6 +334,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
                   </div>
                 )}
               </div>
+              <LabourDetail rows={data.margin.labour} />
             </>
           )}
 
@@ -568,7 +569,7 @@ function LocationSection({ w, onChange }: { w: Detail['worksite']; onChange: () 
     : null;
 
   return (
-    <div className="card card-pad" style={{ marginBottom: '1.5rem' }}>
+    <div>
       {bbox && (
         <iframe
           title="Carte du chantier"
@@ -660,7 +661,6 @@ function LabourDetail({ rows }: { rows: NonNullable<Detail['margin']>['labour'] 
   const days = new Set(rows.map((r) => r.date)).size;
   return (
     <CollapsibleSection
-      icon="👷"
       title="Détail main-d'œuvre"
       summary={`${days} jour${days > 1 ? 's' : ''} · ${formatHours(totalHours)} · ${new Intl.NumberFormat('fr-BE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(totalAmount)}`}
     >

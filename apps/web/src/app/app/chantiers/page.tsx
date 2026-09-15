@@ -4,11 +4,11 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
-import { PageHead, StatusBadge, PriorityBadge, EntityBadge, ScopeBadge, BillingModeBadge, Money, formatDateBE, ProgressCell } from '@/lib/ui';
+import { PageHead, StatusBadge, Money, ProgressCell } from '@/lib/ui';
 import { FormModal, type FieldDef } from '@/components/FormModal';
 import { ContextMenu, useContextMenu, openActions, type MenuItem } from '@/components/ContextMenu';
 import { PaginationBar } from '@/components/PaginationBar';
-import { useSort, useColumnFilter, SortTh, distinctValues } from '@/lib/sort';
+import { useSort, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
 import { downloadCsv, pickAndImportCsv, summarizeImport } from '@/lib/csvIO';
 import {
@@ -64,28 +64,12 @@ function ChantiersInner() {
   const { data, loading, reload } = useApi<{ items: WS[]; page: number; pageSize: number; totalPages: number; totalCount: number }>(`/api/worksites?${params}`);
   const wsAccessors = {
     ref: (w: WS) => w.ref,
-    title: (w: WS) => w.title,
-    client: (w: WS) => w.client?.name,
     manager: (w: WS) => w.manager?.displayName ?? w.manager?.firstName,
     status: (w: WS) => WORKSITE_STATUS_LABEL[w.status as keyof typeof WORKSITE_STATUS_LABEL] ?? w.status,
-    entity: (w: WS) => ENTITY_LABEL[w.entity as keyof typeof ENTITY_LABEL] ?? w.entity,
-    scope: (w: WS) => (w.scope ? WORKSITE_SCOPE_LABEL[w.scope as keyof typeof WORKSITE_SCOPE_LABEL] ?? w.scope : undefined),
-    billingMode: (w: WS) => (w.billingMode ? WORKSITE_BILLING_MODE_LABEL[w.billingMode as keyof typeof WORKSITE_BILLING_MODE_LABEL] ?? w.billingMode : undefined),
     quotedHt: (w: WS) => w.quotedHt,
-    endedOn: (w: WS) => (w.endedOn ? new Date(w.endedOn) : null),
   };
-  const colFilter = useColumnFilter<WS>(data?.items ?? [], wsAccessors);
-  const sort = useSort<WS>(colFilter.rows, wsAccessors);
+  const sort = useSort<WS>(data?.items ?? [], wsAccessors);
 
-  // Valeurs distinctes pour les filtres à cases à cocher : calculées sur TOUS les chantiers
-  // correspondant à la recherche/statut du haut (pas seulement la page affichée), sinon
-  // le filtre ne proposerait que les valeurs de la page en cours.
-  const filterScopeParams = new URLSearchParams();
-  if (q) filterScopeParams.set('q', q);
-  if (status) filterScopeParams.set('status', status);
-  filterScopeParams.set('kind', kind);
-  const { data: filterScope } = useApi<{ items: WS[] }>(`/api/worksites?${filterScopeParams}`);
-  const filterRows = filterScope?.items ?? [];
   const { data: refs } = useApi<{
     clients: { id: string; name: string }[];
     buildings: { id: string; name: string; syndicId: string | null }[];
@@ -255,15 +239,12 @@ function ChantiersInner() {
                     aria-label="Tout sélectionner"
                   />
                 </th>
-                <SortTh k="ref" sort={sort} filter={colFilter} filterOptions={distinctValues(filterRows, wsAccessors.ref)}>Réf</SortTh>
-                <SortTh k="title" sort={sort} filter={colFilter} filterOptions={distinctValues(filterRows, wsAccessors.title)}>Chantier</SortTh>
-                <SortTh k="client" sort={sort} filter={colFilter} filterOptions={distinctValues(filterRows, wsAccessors.client)}>Client</SortTh>
-                <SortTh k="manager" sort={sort} filter={colFilter} filterOptions={distinctValues(filterRows, wsAccessors.manager)}>Chef</SortTh>
-                <SortTh k="status" sort={sort} filter={colFilter} filterOptions={WORKSITE_STATUSES.map((s) => WORKSITE_STATUS_LABEL[s])}>Statut</SortTh>
+                <SortTh k="ref" sort={sort}>Chantier</SortTh>
+                <SortTh k="manager" sort={sort}>Responsable</SortTh>
+                <SortTh k="status" sort={sort}>Statut</SortTh>
+                <SortTh k="quotedHt" sort={sort} align="right">Devisé HT</SortTh>
                 <th>Avancement</th>
-                <SortTh k="entity" sort={sort} filter={colFilter} filterOptions={ENTITIES.map((e) => ENTITY_LABEL[e])}>Entité</SortTh>
-                <SortTh k="quotedHt" sort={sort} align="right" filter={colFilter} filterOptions={distinctValues(filterRows, wsAccessors.quotedHt)}>Devisé</SortTh>
-                <SortTh k="endedOn" sort={sort} filter={colFilter} filterOptions={distinctValues(filterRows, wsAccessors.endedOn)}>Fin</SortTh>
+                <th />
               </tr>
             </thead>
             <tbody>
@@ -277,15 +258,17 @@ function ChantiersInner() {
                   <td onClick={(e) => e.stopPropagation()}>
                     <input type="checkbox" checked={selected.has(w.id)} onChange={() => toggleSelected(w.id)} aria-label="Sélectionner" />
                   </td>
-                  <td className="mono">{w.ref}</td>
-                  <td><Link href={`/app/chantiers/${w.id}`}>{w.title}</Link></td>
-                  <td>{w.client?.name ?? '—'}</td>
+                  <td>
+                    <Link href={`/app/chantiers/${w.id}`}>{w.title}</Link>
+                    <div className="muted" style={{ fontSize: '0.78rem' }}>
+                      {w.ref}{w.client?.name ? ` · ${w.client.name}` : ''}{w.city ? ` · ${w.city}` : ''}
+                    </div>
+                  </td>
                   <td>{w.manager?.displayName ?? w.manager?.firstName ?? '—'}</td>
-                  <td><span style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap' }}><StatusBadge status={w.status} /><PriorityBadge priority={w.priority} /><ScopeBadge scope={w.scope} /><BillingModeBadge billingMode={w.billingMode} /></span></td>
-                  <td><ProgressCell pct={WORKSITE_PROGRESS_PCT[w.status as WorksiteStatus] ?? 0} /></td>
-                  <td><EntityBadge entity={w.entity} /></td>
+                  <td><StatusBadge status={w.status} /></td>
                   <td style={{ textAlign: 'right' }}><Money value={w.quotedHt} /></td>
-                  <td className="tnum">{w.endedOn ? formatDateBE(w.endedOn) : '—'}</td>
+                  <td><ProgressCell pct={WORKSITE_PROGRESS_PCT[w.status as WorksiteStatus] ?? 0} /></td>
+                  <td className="muted">→</td>
                 </tr>
               ))}
             </tbody>

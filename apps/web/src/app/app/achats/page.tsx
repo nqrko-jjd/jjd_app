@@ -3,7 +3,8 @@ import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
 import { api, apiUpload, apiBlobUrl } from '@/lib/api';
-import { PageHead, Money, formatDateBE } from '@/lib/ui';
+import { PageHead, Money, formatDateBE, Kpi } from '@/lib/ui';
+import { Wallet, AlertTriangle } from 'lucide-react';
 import { useSort, useColumnFilter, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
 import { ContextMenu, useContextMenu, type MenuItem } from '@/components/ContextMenu';
@@ -236,8 +237,20 @@ function AchatsInner() {
       />
 
       <div className="kpis" style={{ marginBottom: '1.2rem' }}>
-        <div className="kpi hero"><span className="ic">Σ</span><div className="label">Total dépenses (TTC)</div><div className="value"><Money value={total} /></div></div>
-        <div className="kpi"><span className="ic">!</span><div className="label">Reste à payer</div><div className="value"><Money value={unpaidTotal} /></div></div>
+        <Kpi
+          ic={Wallet}
+          label="Total dépenses (TTC)"
+          value={<Money value={total} />}
+          sub={data ? `${data.totals.count} facture${data.totals.count > 1 ? 's' : ''} d'achat` : undefined}
+          hero
+        />
+        <Kpi
+          ic={AlertTriangle}
+          label="Reste à payer"
+          value={<Money value={unpaidTotal} />}
+          sub={total > 0 ? `${Math.round((unpaidTotal / total) * 100)} % du total` : 'Rien à payer'}
+          warn={unpaidTotal > 0}
+        />
       </div>
 
       <div className="row" style={{ marginBottom: '1rem', flexWrap: 'wrap', gap: '0.4rem' }}>

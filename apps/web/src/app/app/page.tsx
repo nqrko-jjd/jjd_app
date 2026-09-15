@@ -5,11 +5,11 @@ import { useRouter } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { PageHead, Money, formatDateBE, Avatar, ProgressCell } from '@/lib/ui';
+import { PageHead, Money, formatDateBE, Avatar, ProgressCell, Kpi } from '@/lib/ui';
 import { useSort, useColumnFilter, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
 import { LEGAL_DOC_LABEL, WORKSITE_STATUS_LABEL, WORKSITE_PROGRESS_PCT, type WorksiteStatus } from '@jjd/shared';
-import { BarChart3, Wallet, Building2, Flag, FileText, Clock, type LucideIcon } from 'lucide-react';
+import { BarChart3, Wallet, Building2, Flag, FileText, Clock } from 'lucide-react';
 
 interface TodayEv {
   id: string; startAt: string; endAt: string;
@@ -341,15 +341,3 @@ export default function DashboardPage() {
   );
 }
 
-function Kpi({ ic: Ic, label, value, sub, hero, warn }: { ic: LucideIcon; label: string; value: React.ReactNode; sub?: string; hero?: boolean; warn?: boolean }) {
-  return (
-    <div className={`kpi${hero ? ' hero' : ''}${warn ? ' warn' : ''}`}>
-      <div className="kpi-head">
-        <div className="label">{label}</div>
-        <span className="ic"><Ic size={16} strokeWidth={2} /></span>
-      </div>
-      <div className="value">{value}</div>
-      {sub && <div className="sub">{sub}</div>}
-    </div>
-  );
-}

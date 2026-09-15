@@ -3,7 +3,8 @@ import { Fragment, useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
 import { useAuth } from '@/lib/auth';
-import { PageHead, Money } from '@/lib/ui';
+import { PageHead, Money, Kpi, formatEur } from '@/lib/ui';
+import { TrendingUp, TrendingDown, Scale, Percent } from 'lucide-react';
 import { downloadCsv, pickAndImportCsv, summarizeImport } from '@/lib/csvIO';
 
 interface Pnl {
@@ -88,10 +89,33 @@ export default function FinancesPage() {
             reste à affiner avec le comptable (certaines catégories du grand livre — crédits, notes de crédit — sont à reclasser).
           </div>
           <div className="kpis" style={{ marginBottom: '1.6rem' }}>
-            <div className="kpi"><span className="ic">↑</span><div className="label">Chiffre d'affaires net</div><div className="value"><Money value={data.revenue.net} /></div></div>
-            <div className="kpi"><span className="ic">↓</span><div className="label">Dépenses</div><div className="value"><Money value={data.expenses.total} /></div></div>
-            <div className="kpi hero"><span className="ic">=</span><div className="label">Résultat</div><div className={`value${data.result < 0 ? ' neg' : ''}`}><Money value={data.result} /></div></div>
-            <div className="kpi"><span className="ic">%</span><div className="label">Marge</div><div className={`value${(data.margin ?? 0) < 0 ? ' neg' : ''}`}>{data.margin != null ? `${data.margin} %` : '—'}</div></div>
+            <Kpi
+              ic={TrendingUp}
+              label="Chiffre d'affaires net"
+              value={<Money value={data.revenue.net} />}
+              sub={data.revenue.creditNotes !== 0 ? `dont ${formatEur(data.revenue.creditNotes)} de notes de crédit` : 'Toutes entités confondues'}
+            />
+            <Kpi
+              ic={TrendingDown}
+              label="Dépenses"
+              value={<Money value={data.expenses.total} />}
+              sub={`Réparties sur ${data.expenses.sections.length} poste${data.expenses.sections.length > 1 ? 's' : ''}`}
+            />
+            <Kpi
+              ic={Scale}
+              label="Résultat"
+              value={<Money value={data.result} />}
+              sub={data.margin != null ? `Marge ${data.margin} %` : 'Marge non calculable'}
+              neg={data.result < 0}
+              hero
+            />
+            <Kpi
+              ic={Percent}
+              label="Marge"
+              value={data.margin != null ? `${data.margin} %` : '—'}
+              sub={`Résultat ${formatEur(data.result)}`}
+              neg={(data.margin ?? 0) < 0}
+            />
           </div>
 
           <div className="section-title">Chiffre d'affaires par entité</div>

@@ -2,7 +2,8 @@
 import { useEffect, useState } from 'react';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
-import { PageHead, Money, formatDateBE } from '@/lib/ui';
+import { PageHead, Money, formatDateBE, Kpi } from '@/lib/ui';
+import { Warehouse, AlertTriangle } from 'lucide-react';
 import { useSort, useColumnFilter, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
 import { ComboBox } from '@/components/ComboBox';
@@ -81,8 +82,20 @@ export default function StockPage() {
       />
 
       <div className="kpis" style={{ marginBottom: '1.2rem' }}>
-        <div className="kpi hero"><span className="ic">Σ</span><div className="label">Valeur du stock</div><div className="value"><Money value={totalValue} /></div></div>
-        <div className={`kpi${lowCount ? ' warn' : ''}`}><span className="ic">⚑</span><div className="label">Sous le seuil</div><div className="value">{lowCount}</div></div>
+        <Kpi
+          ic={Warehouse}
+          label="Valeur du stock"
+          value={<Money value={totalValue} />}
+          sub={`${data?.items.length ?? 0} article${(data?.items.length ?? 0) > 1 ? 's' : ''}`}
+          hero
+        />
+        <Kpi
+          ic={AlertTriangle}
+          label="Sous le seuil"
+          value={lowCount}
+          sub={lowCount > 0 ? 'À recompléter rapidement' : 'Tout est au-dessus du seuil'}
+          warn={lowCount > 0}
+        />
       </div>
 
       <div className="row" style={{ marginBottom: '1rem' }}>

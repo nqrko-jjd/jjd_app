@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import type { LucideIcon } from 'lucide-react';
 import {
   WORKSITE_STATUS_LABEL, WORKSITE_PRIORITY_LABEL, WORKSITE_SCOPE_LABEL, WORKSITE_BILLING_MODE_LABEL,
   ENTITY_LABEL, CRM_STAGE_LABEL, formatEur, formatDateBE,
@@ -6,6 +7,21 @@ import {
 } from '@jjd/shared';
 
 export { formatEur, formatDateBE };
+
+/** Tuile KPI standard (grille `.kpis`) — icône à droite du libellé, sous-texte toujours
+ * rempli (fournir un texte de repli plutôt que de laisser `sub` vide), comme la maquette. */
+export function Kpi({ ic: Ic, label, value, sub, hero, warn, neg }: { ic: LucideIcon; label: string; value: ReactNode; sub?: string; hero?: boolean; warn?: boolean; neg?: boolean }) {
+  return (
+    <div className={`kpi${hero ? ' hero' : ''}${warn ? ' warn' : ''}`}>
+      <div className="kpi-head">
+        <div className="label">{label}</div>
+        <span className="ic"><Ic size={16} strokeWidth={2} /></span>
+      </div>
+      <div className={`value${neg ? ' neg' : ''}`}>{value}</div>
+      {sub && <div className="sub">{sub}</div>}
+    </div>
+  );
+}
 
 const STATUS_TONE: Partial<Record<WorksiteStatus, string>> = {
   lead: 'plain',

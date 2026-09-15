@@ -2,7 +2,8 @@
 import { useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { useApi } from '@/lib/use-api';
-import { PageHead, Money, formatDateBE } from '@/lib/ui';
+import { PageHead, Money, formatDateBE, Kpi } from '@/lib/ui';
+import { Sigma, Euro, Clock } from 'lucide-react';
 import { formatHours } from '@jjd/shared';
 
 interface Entry {
@@ -50,10 +51,10 @@ export default function MesHeuresPage() {
 
       {statement && (
         <div className="kpis" style={{ marginBottom: '1.2rem' }}>
-          <div className="kpi hero"><span className="ic">Σ</span><div className="label">Heures</div><div className="value">{formatHours(statement.totalHours)}</div></div>
-          <div className="kpi"><span className="ic">€</span><div className="label">Montant</div><div className="value"><Money value={statement.totalAmount} /></div></div>
+          <Kpi ic={Sigma} label="Heures" value={formatHours(statement.totalHours)} sub={`${MONTHS[m - 1]} ${y}`} hero />
+          <Kpi ic={Euro} label="Montant" value={<Money value={statement.totalAmount} />} sub="Avant retenues" />
           {statement.pendingCount > 0 && (
-            <div className="kpi warn"><span className="ic">⏳</span><div className="label">À valider</div><div className="value">{statement.pendingCount}</div></div>
+            <Kpi ic={Clock} label="À valider" value={statement.pendingCount} sub="En attente du bureau" warn />
           )}
         </div>
       )}

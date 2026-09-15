@@ -3,7 +3,8 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
-import { PageHead, Money, formatDateBE } from '@/lib/ui';
+import { PageHead, Money, formatDateBE, Kpi } from '@/lib/ui';
+import { Clock, Sigma, Euro, AlertTriangle } from 'lucide-react';
 import { ComboBox } from '@/components/ComboBox';
 import { formatHours } from '@jjd/shared';
 import { downloadCsv, pickAndImportCsv, summarizeImport } from '@/lib/csvIO';
@@ -73,10 +74,16 @@ export default function PointagePage() {
 
       {items.length > 0 && (
         <div className="kpis" style={{ marginBottom: '1.4rem' }}>
-          <div className="kpi hero"><span className="ic">◷</span><div className="label">À valider</div><div className="value">{items.length}</div></div>
-          <div className="kpi"><span className="ic">Σ</span><div className="label">Heures</div><div className="value">{formatHours(totalHours)}</div></div>
-          <div className="kpi"><span className="ic">€</span><div className="label">Montant</div><div className="value"><Money value={totalAmount} /></div></div>
-          <div className={`kpi${flagged ? ' warn' : ''}`}><span className="ic">⚑</span><div className="label">Hors zone</div><div className="value">{flagged}</div></div>
+          <Kpi ic={Clock} label="À valider" value={items.length} sub={`${byPerson.size} personne${byPerson.size > 1 ? 's' : ''}`} hero />
+          <Kpi ic={Sigma} label="Heures" value={formatHours(totalHours)} sub="Cumul de la période" />
+          <Kpi ic={Euro} label="Montant" value={<Money value={totalAmount} />} sub="HT, avant validation" />
+          <Kpi
+            ic={AlertTriangle}
+            label="Hors zone"
+            value={flagged}
+            sub={flagged > 0 ? 'À vérifier avant validation' : 'Tous les pointages sont sur site'}
+            warn={flagged > 0}
+          />
         </div>
       )}
 

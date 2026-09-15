@@ -21,6 +21,7 @@
     "report:mailbox-scan-triage": "tsx scripts/triage-mailbox-scan-blanks.ts",
     "delete:blank-mailbox-scan-entries": "tsx scripts/delete-blank-mailbox-scan-entries.ts",
     "report:email-ledger-timeline": "tsx scripts/check-email-ledger-timeline.ts",
+    "delete:retroactive-mailbox-scan-entries": "tsx scripts/delete-retroactive-mailbox-scan-entries.ts",
     "report:contact-documents": "tsx scripts/check-contact-documents.ts",
     "import:trustup": "tsx scripts/import-trustup.ts",
     "import:credit-notes": "tsx scripts/import-credit-notes.ts",

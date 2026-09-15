@@ -56,6 +56,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
   }>('/api/meta/pickers');
   const [editing, setEditing] = useState(false);
   const [invoicing, setInvoicing] = useState<string | null>(null);
+  const [tab, setTab] = useState<'overview' | 'tasks' | 'finances' | 'photos' | 'discussion'>('overview');
 
   if (loading) return <div className="empty">Chargement…</div>;
   if (!data) return <div className="empty">Chantier introuvable.</div>;
@@ -128,198 +129,227 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
           onSubmit={async (v) => { await api(`/api/worksites/${id}`, { method: 'PATCH', body: v }); reload(); }}
         />
       )}
-      <PageHead
-        title={w.title}
-        sub={`${w.ref} · ${[w.address, w.city].filter(Boolean).join(', ') || 'adresse non renseignée'}`}
-        action={
-          <div className="row">
-            {data.margin && (
-              <a href={`/imprimer/chantier/${id}`} target="_blank" rel="noreferrer" className="btn">
-                Résumé facturation →
-              </a>
-            )}
-            <button className="btn" onClick={() => setEditing(true)}>Modifier</button>
-            <Link href="/app/chantiers" className="btn">← Chantiers</Link>
-          </div>
-        }
-      />
-
-      <div className="row" style={{ marginBottom: '1.2rem' }}>
-        <StatusBadge status={w.status} />
-        <PriorityBadge priority={w.priority} />
-        <EntityBadge entity={w.entity} />
-        <ScopeBadge scope={w.scope} />
-        <BillingModeBadge billingMode={w.billingMode} />
-        {w.statusRaw && w.statusRaw !== w.status && <span className="chip">{w.statusRaw}</span>}
-      </div>
-
-      <div className="info-grid" style={{ marginBottom: '1.5rem' }}>
-        <Info label="Client" value={w.client ? <Link href={`/app/contacts/${w.client.id}`}>{w.client.name}</Link> : '—'} />
-        <Info label="Immeuble / ACP" value={w.building ? <Link href={`/app/immeubles/${w.building.id}`}>{w.building.name}{w.building.syndic ? ` · ${w.building.syndic.name}` : ''}</Link> : '—'} />
-        <Info label="Chef de chantier" value={w.manager?.displayName ?? w.manager?.firstName ?? '—'} />
-        <Info label="Facturé à" value={w.billTo ?? '—'} />
-        <Info label="Début" value={formatDateBE(w.startedOn)} />
-        <Info label="Fin" value={formatDateBE(w.endedOn)} />
-      </div>
-
-      {(w.ownerName || w.tenantName) && (
-        <div className="info-grid" style={{ marginBottom: '1.5rem' }}>
-          <Info
-            label="Propriétaire"
-            value={w.ownerName ? `${w.ownerName}${w.ownerPhone ? ` · ${w.ownerPhone}` : ''}${w.ownerEmail ? ` · ${w.ownerEmail}` : ''}` : '—'}
-          />
-          <Info
-            label="Locataire (contact terrain)"
-            value={w.tenantName
-              ? `${w.tenantName}${w.tenantPhone ? ` · ${w.tenantPhone}` : ''}${w.tenantPhone2 ? ` / ${w.tenantPhone2}` : ''}${w.tenantEmail ? ` · ${w.tenantEmail}` : ''}`
-              : '—'}
-          />
+      <div className="row" style={{ justifyContent: 'space-between', marginBottom: '0.9rem', flexWrap: 'wrap' }}>
+        <Link href="/app/chantiers" className="btn ghost">← Tous les chantiers</Link>
+        <div className="row">
+          {data.margin && (
+            <a href={`/imprimer/chantier/${id}`} target="_blank" rel="noreferrer" className="btn">
+              Résumé facturation →
+            </a>
+          )}
+          <button className="btn" onClick={() => setEditing(true)}>Modifier</button>
         </div>
-      )}
+      </div>
 
-      {data.margin && (
+      <div className="detail-hero">
+        <div className="eyebrow">Dossier {w.ref}</div>
+        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'nowrap', gap: '1rem' }}>
+          <h1>{w.title}</h1>
+          <StatusBadge status={w.status} />
+        </div>
+        <div className="sub">{[w.address, w.city].filter(Boolean).join(', ') || 'Adresse non renseignée'}</div>
+        <div className="row" style={{ marginTop: '0.7rem' }}>
+          <PriorityBadge priority={w.priority} />
+          <EntityBadge entity={w.entity} />
+          <ScopeBadge scope={w.scope} />
+          <BillingModeBadge billingMode={w.billingMode} />
+          {w.statusRaw && w.statusRaw !== w.status && <span className="chip">{w.statusRaw}</span>}
+        </div>
+      </div>
+
+      <div className="page-tabs">
+        <button className={`page-tab${tab === 'overview' ? ' active' : ''}`} onClick={() => setTab('overview')}>Vue d’ensemble</button>
+        <button className={`page-tab${tab === 'tasks' ? ' active' : ''}`} onClick={() => setTab('tasks')}>Tâches</button>
+        <button className={`page-tab${tab === 'finances' ? ' active' : ''}`} onClick={() => setTab('finances')}>Finances</button>
+        <button className={`page-tab${tab === 'photos' ? ' active' : ''}`} onClick={() => setTab('photos')}>Photos &amp; rapports <span className="n">{w.reports.length}</span></button>
+        <button className={`page-tab${tab === 'discussion' ? ' active' : ''}`} onClick={() => setTab('discussion')}>Discussion</button>
+      </div>
+
+      {tab === 'overview' && (
         <>
-          <div className="section-title">Rentabilité <span className="hint">temps réel, main-d'œuvre incluse</span></div>
-          <div className="kpis" style={{ marginBottom: '1.5rem' }}>
-            <MiniKpi label="Devisé HT" value={<Money value={data.margin.quotedHt} />} />
-            <MiniKpi label="Facturé HT" value={<Money value={data.margin.invoicedHt} />} />
-            <MiniKpi label="Encaissé HT" value={<Money value={data.margin.paidHt} />} />
-            <MiniKpi label="Coût matériaux" value={<Money value={data.margin.materialCost} />} />
-            <MiniKpi label="Coût main-d'œuvre" value={<Money value={data.margin.labourCost} />} />
-            <MiniKpi
-              label="Coût véhicule"
-              value={<Money value={data.margin.vehicleCost} />}
-              note={data.margin.transport.trips.length
-                ? `${data.margin.transport.trips.length} j · fixe ${data.margin.transport.fixedCost.toFixed(0)} € + route ${data.margin.transport.fuelCost.toFixed(0)} €`
-                : undefined}
-            />
-            <MiniKpi label="Marge réelle" value={<Money value={data.margin.realMargin} sign />} note={data.margin.realMarginPct != null ? `${data.margin.realMarginPct} %` : undefined} />
-            <MiniKpi label="Marge hypothétique" value={<Money value={data.margin.forecastMargin} sign />} note="devisé − coûts engagés" />
-            <MiniKpi label="Reste à facturer" value={<Money value={data.margin.leftToInvoice} />} />
-            {data.margin.partnerShare > 0 && <MiniKpi label="Part GT (33 %)" value={<Money value={data.margin.partnerShare} />} />}
+          <div className="info-grid" style={{ marginBottom: '1.5rem' }}>
+            <Info label="Client" value={w.client ? <Link href={`/app/contacts/${w.client.id}`}>{w.client.name}</Link> : '—'} />
+            <Info label="Immeuble / ACP" value={w.building ? <Link href={`/app/immeubles/${w.building.id}`}>{w.building.name}{w.building.syndic ? ` · ${w.building.syndic.name}` : ''}</Link> : '—'} />
+            <Info label="Chef de chantier" value={w.manager?.displayName ?? w.manager?.firstName ?? '—'} />
+            <Info label="Facturé à" value={w.billTo ?? '—'} />
+            <Info label="Début" value={formatDateBE(w.startedOn)} />
+            <Info label="Fin" value={formatDateBE(w.endedOn)} />
           </div>
-          <TransportDetail t={data.margin.transport} />
-          <LabourDetail rows={data.margin.labour} />
-          <div className="row" style={{ gap: '1.2rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
-            {data.margin.totalCost > 0 && (
-              <div className="card card-pad" style={{ maxWidth: 420 }}>
-                <div className="eyebrow" style={{ marginBottom: '0.6rem' }}>Répartition des coûts</div>
-                <Donut
-                  data={[
-                    { label: 'Matériaux', total: data.margin.materialCost },
-                    { label: "Main-d'œuvre", total: data.margin.labourCost },
-                    { label: 'Véhicule', total: data.margin.vehicleCost },
-                  ].filter((d) => d.total > 0)}
-                />
+
+          {(w.ownerName || w.tenantName) && (
+            <div className="info-grid" style={{ marginBottom: '1.5rem' }}>
+              <Info
+                label="Propriétaire"
+                value={w.ownerName ? `${w.ownerName}${w.ownerPhone ? ` · ${w.ownerPhone}` : ''}${w.ownerEmail ? ` · ${w.ownerEmail}` : ''}` : '—'}
+              />
+              <Info
+                label="Locataire (contact terrain)"
+                value={w.tenantName
+                  ? `${w.tenantName}${w.tenantPhone ? ` · ${w.tenantPhone}` : ''}${w.tenantPhone2 ? ` / ${w.tenantPhone2}` : ''}${w.tenantEmail ? ` · ${w.tenantEmail}` : ''}`
+                  : '—'}
+              />
+            </div>
+          )}
+
+          {data.margin && (
+            <>
+              <div className="section-title">Rentabilité <span className="hint">temps réel, main-d'œuvre incluse — détail dans l'onglet Finances</span></div>
+              <div className="kpis" style={{ marginBottom: '1.5rem' }}>
+                <MiniKpi label="Devisé HT" value={<Money value={data.margin.quotedHt} />} />
+                <MiniKpi label="Facturé HT" value={<Money value={data.margin.invoicedHt} />} />
+                <MiniKpi label="Marge réelle" value={<Money value={data.margin.realMargin} sign />} note={data.margin.realMarginPct != null ? `${data.margin.realMarginPct} %` : undefined} />
+                <MiniKpi label="Reste à facturer" value={<Money value={data.margin.leftToInvoice} />} />
               </div>
-            )}
-            {data.margin.quotedHt > 0 && (
-              <div className="card card-pad" style={{ maxWidth: 420 }}>
-                <div className="eyebrow" style={{ marginBottom: '0.6rem' }}>
-                  Avancement <span className="hint">{Math.round((data.margin.invoicedHt / data.margin.quotedHt) * 100)}% facturé</span>
-                </div>
-                <Donut
-                  data={[
-                    { label: 'Facturé', total: data.margin.invoicedHt },
-                    { label: 'Reste à facturer', total: Math.max(0, data.margin.leftToInvoice) },
-                  ].filter((d) => d.total > 0)}
-                />
-              </div>
-            )}
-          </div>
+            </>
+          )}
+
+          {w.description && (
+            <section className="card card-pad" style={{ marginBottom: '1.5rem' }}>
+              <div className="eyebrow" style={{ marginBottom: '0.4rem' }}>Description</div>
+              <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{w.description}</p>
+            </section>
+          )}
+
+          <div className="section-title">Localisation <span className="hint">carte &amp; contrôle de pointage</span></div>
+          <LocationSection w={w} onChange={reload} />
         </>
       )}
 
-      {w.description && (
-        <section className="card card-pad" style={{ marginBottom: '1.5rem' }}>
-          <div className="eyebrow" style={{ marginBottom: '0.4rem' }}>Description</div>
-          <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{w.description}</p>
-        </section>
-      )}
+      {tab === 'tasks' && <WorksiteTasks worksiteId={w.id} />}
 
-      <div className="section-title">Tâches</div>
-      <div style={{ marginBottom: '1.5rem' }}><WorksiteTasks worksiteId={w.id} /></div>
-
-      <div className="section-title">Localisation <span className="hint">carte &amp; contrôle de pointage</span></div>
-      <LocationSection w={w} onChange={reload} />
-
-      <div className="section-title">Rapports d’intervention <span className="hint">{w.reports.length}</span></div>
-      {w.reports.length === 0 ? (
-        <div className="card card-pad muted" style={{ marginBottom: '1.5rem' }}>Aucun rapport. Les ouvriers les créent depuis l’app mobile.</div>
-      ) : (
-        <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', marginBottom: '1.5rem' }}>
-          {w.reports.map((r) => (
-            <div key={r.id} className="card card-pad">
-              <div className="row" style={{ justifyContent: 'space-between' }}>
-                <strong>{formatDateBE(r.date)}</strong>
-                {r.status === 'signed'
-                  ? <span className="badge ok">Signé{r.clientName ? ` · ${r.clientName}` : ''}</span>
-                  : <span className="badge warn">Brouillon</span>}
+      {tab === 'finances' && (
+        <>
+          {data.margin && (
+            <>
+              <div className="kpis" style={{ marginBottom: '1.5rem' }}>
+                <MiniKpi label="Devisé HT" value={<Money value={data.margin.quotedHt} />} />
+                <MiniKpi label="Facturé HT" value={<Money value={data.margin.invoicedHt} />} />
+                <MiniKpi label="Encaissé HT" value={<Money value={data.margin.paidHt} />} />
+                <MiniKpi label="Coût matériaux" value={<Money value={data.margin.materialCost} />} />
+                <MiniKpi label="Coût main-d'œuvre" value={<Money value={data.margin.labourCost} />} />
+                <MiniKpi
+                  label="Coût véhicule"
+                  value={<Money value={data.margin.vehicleCost} />}
+                  note={data.margin.transport.trips.length
+                    ? `${data.margin.transport.trips.length} j · fixe ${data.margin.transport.fixedCost.toFixed(0)} € + route ${data.margin.transport.fuelCost.toFixed(0)} €`
+                    : undefined}
+                />
+                <MiniKpi label="Marge réelle" value={<Money value={data.margin.realMargin} sign />} note={data.margin.realMarginPct != null ? `${data.margin.realMarginPct} %` : undefined} />
+                <MiniKpi label="Marge hypothétique" value={<Money value={data.margin.forecastMargin} sign />} note="devisé − coûts engagés" />
+                <MiniKpi label="Reste à facturer" value={<Money value={data.margin.leftToInvoice} />} />
+                {data.margin.partnerShare > 0 && <MiniKpi label="Part GT (33 %)" value={<Money value={data.margin.partnerShare} />} />}
               </div>
-              <div className="muted" style={{ fontSize: '0.82rem' }}>par {r.authorName}</div>
-              {r.workDone && <p style={{ fontSize: '0.88rem', margin: '0.4rem 0 0', whiteSpace: 'pre-wrap' }}>{r.workDone.slice(0, 160)}</p>}
-              {r.photos.length > 0 && (
-                <div style={{ display: 'flex', gap: 4, marginTop: '0.5rem', flexWrap: 'wrap' }}>
-                  {r.photos.slice(0, 4).map((p) => (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img key={p.id} src={p.thumbUrl ?? p.url} alt="" style={{ width: 52, height: 52, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--line)' }} />
-                  ))}
-                  {r.photos.length > 4 && <span className="muted" style={{ fontSize: '0.8rem', alignSelf: 'center' }}>+{r.photos.length - 4}</span>}
-                </div>
-              )}
-              <div className="row" style={{ gap: '0.4rem', marginTop: '0.6rem' }}>
-                <a className="btn" style={{ padding: '0.25rem 0.6rem', fontSize: '0.78rem' }} href={`/rapport/${r.id}`} target="_blank" rel="noreferrer">Voir / imprimer →</a>
-                {r.status === 'signed' && (
-                  <button
-                    className="btn primary"
-                    style={{ padding: '0.25rem 0.6rem', fontSize: '0.78rem' }}
-                    disabled={invoicing === r.id}
-                    onClick={() => invoiceFromReport(r)}
-                    title="Ouvre une nouvelle facture pré-remplie (chantier, client) pour ce chantier"
-                  >
-                    {invoicing === r.id ? 'Création…' : 'Facturer →'}
-                  </button>
+              <TransportDetail t={data.margin.transport} />
+              <LabourDetail rows={data.margin.labour} />
+              <div className="row" style={{ gap: '1.2rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
+                {data.margin.totalCost > 0 && (
+                  <div className="card card-pad" style={{ maxWidth: 420 }}>
+                    <div className="eyebrow" style={{ marginBottom: '0.6rem' }}>Répartition des coûts</div>
+                    <Donut
+                      data={[
+                        { label: 'Matériaux', total: data.margin.materialCost },
+                        { label: "Main-d'œuvre", total: data.margin.labourCost },
+                        { label: 'Véhicule', total: data.margin.vehicleCost },
+                      ].filter((d) => d.total > 0)}
+                    />
+                  </div>
+                )}
+                {data.margin.quotedHt > 0 && (
+                  <div className="card card-pad" style={{ maxWidth: 420 }}>
+                    <div className="eyebrow" style={{ marginBottom: '0.6rem' }}>
+                      Avancement <span className="hint">{Math.round((data.margin.invoicedHt / data.margin.quotedHt) * 100)}% facturé</span>
+                    </div>
+                    <Donut
+                      data={[
+                        { label: 'Facturé', total: data.margin.invoicedHt },
+                        { label: 'Reste à facturer', total: Math.max(0, data.margin.leftToInvoice) },
+                      ].filter((d) => d.total > 0)}
+                    />
+                  </div>
                 )}
               </div>
-            </div>
-          ))}
-        </div>
+            </>
+          )}
+
+          <CollapsibleSection
+            title="Devis & factures"
+            summary={w.documents.length ? `${w.documents.length} · ${formatEuro(w.documents.reduce((s, d) => s + d.totalHt, 0))} HT` : 'Aucun'}
+          >
+            {data.margin && data.margin.quotedHt > 0 && (
+              <InvoicedProgress invoicedHt={data.margin.invoicedHt} quotedHt={data.margin.quotedHt} />
+            )}
+            {w.documents.length === 0 ? (
+              <p className="muted" style={{ margin: 0 }}>Aucun devis / facture rattaché.</p>
+            ) : (
+              <div className="tbl-wrap">
+                <table className="tbl">
+                  <thead><tr><th>Type</th><th>Numéro</th><th>Date</th><th style={{ textAlign: 'right' }}>HT</th><th>Statut</th></tr></thead>
+                  <tbody>
+                    {w.documents.map((d) => (
+                      <tr key={d.id}>
+                        <td>{DOC_KIND[d.kind] ?? d.kind}</td>
+                        <td className="mono"><Link href={`/app/documents/${d.id}`}>{d.number ?? d.draftRef ?? '—'}</Link></td>
+                        <td className="tnum">{formatDateBE(d.issuedOn)}</td>
+                        <td style={{ textAlign: 'right' }}><Money value={d.totalHt} /></td>
+                        <td><span className={`badge ${DOC_TONE[d.status] ?? ''}`}>{DOC_STATUS[d.status] ?? d.status}</span></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <Link href="/app/documents" className="btn" style={{ marginTop: '0.7rem', padding: '0.2rem 0.6rem', fontSize: '0.78rem' }}>Tous les documents →</Link>
+          </CollapsibleSection>
+
+          <WorksiteExpenses worksiteId={w.id} />
+        </>
       )}
 
-      <div className="section-title">Fil de chantier</div>
-      <div style={{ marginBottom: '1.5rem' }}><ChantierThread worksiteId={w.id} /></div>
-
-      <CollapsibleSection
-        title="Devis & factures"
-        summary={w.documents.length ? `${w.documents.length} · ${formatEuro(w.documents.reduce((s, d) => s + d.totalHt, 0))} HT` : 'Aucun'}
-      >
-        {data.margin && data.margin.quotedHt > 0 && (
-          <InvoicedProgress invoicedHt={data.margin.invoicedHt} quotedHt={data.margin.quotedHt} />
-        )}
-        {w.documents.length === 0 ? (
-          <p className="muted" style={{ margin: 0 }}>Aucun devis / facture rattaché.</p>
+      {tab === 'photos' && (
+        w.reports.length === 0 ? (
+          <div className="card card-pad muted">Aucun rapport. Les ouvriers les créent depuis l’app mobile.</div>
         ) : (
-          <div className="tbl-wrap">
-            <table className="tbl">
-              <thead><tr><th>Type</th><th>Numéro</th><th>Date</th><th style={{ textAlign: 'right' }}>HT</th><th>Statut</th></tr></thead>
-              <tbody>
-                {w.documents.map((d) => (
-                  <tr key={d.id}>
-                    <td>{DOC_KIND[d.kind] ?? d.kind}</td>
-                    <td className="mono"><Link href={`/app/documents/${d.id}`}>{d.number ?? d.draftRef ?? '—'}</Link></td>
-                    <td className="tnum">{formatDateBE(d.issuedOn)}</td>
-                    <td style={{ textAlign: 'right' }}><Money value={d.totalHt} /></td>
-                    <td><span className={`badge ${DOC_TONE[d.status] ?? ''}`}>{DOC_STATUS[d.status] ?? d.status}</span></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
+            {w.reports.map((r) => (
+              <div key={r.id} className="card card-pad">
+                <div className="row" style={{ justifyContent: 'space-between' }}>
+                  <strong>{formatDateBE(r.date)}</strong>
+                  {r.status === 'signed'
+                    ? <span className="badge ok">Signé{r.clientName ? ` · ${r.clientName}` : ''}</span>
+                    : <span className="badge warn">Brouillon</span>}
+                </div>
+                <div className="muted" style={{ fontSize: '0.82rem' }}>par {r.authorName}</div>
+                {r.workDone && <p style={{ fontSize: '0.88rem', margin: '0.4rem 0 0', whiteSpace: 'pre-wrap' }}>{r.workDone.slice(0, 160)}</p>}
+                {r.photos.length > 0 && (
+                  <div style={{ display: 'flex', gap: 4, marginTop: '0.5rem', flexWrap: 'wrap' }}>
+                    {r.photos.slice(0, 4).map((p) => (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img key={p.id} src={p.thumbUrl ?? p.url} alt="" style={{ width: 52, height: 52, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--line)' }} />
+                    ))}
+                    {r.photos.length > 4 && <span className="muted" style={{ fontSize: '0.8rem', alignSelf: 'center' }}>+{r.photos.length - 4}</span>}
+                  </div>
+                )}
+                <div className="row" style={{ gap: '0.4rem', marginTop: '0.6rem' }}>
+                  <a className="btn" style={{ padding: '0.25rem 0.6rem', fontSize: '0.78rem' }} href={`/rapport/${r.id}`} target="_blank" rel="noreferrer">Voir / imprimer →</a>
+                  {r.status === 'signed' && (
+                    <button
+                      className="btn primary"
+                      style={{ padding: '0.25rem 0.6rem', fontSize: '0.78rem' }}
+                      disabled={invoicing === r.id}
+                      onClick={() => invoiceFromReport(r)}
+                      title="Ouvre une nouvelle facture pré-remplie (chantier, client) pour ce chantier"
+                    >
+                      {invoicing === r.id ? 'Création…' : 'Facturer →'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
-        )}
-        <Link href="/app/documents" className="btn" style={{ marginTop: '0.7rem', padding: '0.2rem 0.6rem', fontSize: '0.78rem' }}>Tous les documents →</Link>
-      </CollapsibleSection>
+        )
+      )}
 
-      <WorksiteExpenses worksiteId={w.id} />
+      {tab === 'discussion' && <ChantierThread worksiteId={w.id} />}
     </>
   );
 }

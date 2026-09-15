@@ -9,6 +9,10 @@ import { AssistantChat } from './AssistantChat';
 type Item = { href: string; label: string; ic: string; roles?: string[]; ext?: boolean };
 type Group = { title: string; items: Item[] };
 
+const ROLE_LABEL: Record<string, string> = {
+  admin: 'Administration', office: 'Bureau', foreman: 'Chef de chantier', worker: 'Ouvrier', client: 'Client',
+};
+
 const WORKER_NAV: Group[] = [
   {
     title: 'Terrain',
@@ -23,13 +27,18 @@ const WORKER_NAV: Group[] = [
 
 const NAV: Group[] = [
   {
-    title: 'Pilotage',
+    title: 'Votre activité',
     items: [
-      { href: '/app', label: 'Tableau de bord', ic: '◧' },
+      { href: '/app', label: 'Vue d’ensemble', ic: '◧' },
       { href: '/app/chantiers', label: 'Chantiers', ic: '▤' },
       { href: '/app/planning', label: 'Planning', ic: '▦' },
       { href: '/app/taches', label: 'Tâches', ic: '☑' },
       { href: '/app/pointage', label: 'Pointage', ic: '◷' },
+    ],
+  },
+  {
+    title: 'Commercial & finances',
+    items: [
       { href: '/app/crm', label: 'Pipeline', ic: '⇗' },
       { href: '/app/documents', label: 'Devis & factures', ic: '▧', roles: ['admin', 'office'] },
       { href: '/app/achats', label: 'Achats / Dépenses', ic: '↧', roles: ['admin', 'office'] },
@@ -83,6 +92,13 @@ export function Shell({ children }: { children: React.ReactNode }) {
       {open && <div className="scrim" onClick={() => setOpen(false)} />}
       <nav className={`sidebar${open ? ' open' : ''}`}>
         <div className="brand"><span className="mark">J</span>JD Consult</div>
+        <div className="org-card">
+          <span className="mark">J</span>
+          <div>
+            <div className="org-name">JJD Consult SRL</div>
+            <div className="org-role">{user ? (ROLE_LABEL[user.role] ?? user.role) : '—'}</div>
+          </div>
+        </div>
         {nav.map((g) => {
           const items = g.items.filter(visible);
           if (!items.length) return null;

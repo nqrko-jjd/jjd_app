@@ -152,6 +152,17 @@ p { margin: 0; }
   display: grid; place-items: center; font-size: 0.9rem; font-weight: 700; font-family: var(--font);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
+/* carte « organisation » — sous le logo, au-dessus de la nav (repère d'espace de travail) */
+.org-card {
+  display: flex; align-items: center; gap: 0.6rem;
+  margin: 0 0.15rem 1rem; padding: 0.55rem 0.65rem;
+  background: rgba(255, 255, 255, 0.05); border: 1px solid var(--nav-line);
+  border-radius: var(--radius-sm);
+}
+.org-card .mark { flex-shrink: 0; }
+.org-name { font-size: 0.83rem; font-weight: 700; color: var(--nav-fg-active); }
+.org-role { font-size: 0.72rem; color: var(--nav-fg); }
+
 .sidebar .sect {
   font-size: 0.62rem; font-weight: 700; letter-spacing: 0.11em; text-transform: uppercase;
   color: var(--ink-3); padding: 0.9rem 0.7rem 0.35rem;
@@ -168,7 +179,11 @@ p { margin: 0; }
   content: ""; position: absolute; left: -0.85rem; top: 50%; transform: translateY(-50%);
   width: 3px; height: 18px; border-radius: 0 3px 3px 0; background: var(--gold);
 }
-.navlink .ic { width: 18px; text-align: center; opacity: 0.9; font-size: 0.95rem; }
+.navlink .ic {
+  width: 22px; height: 22px; text-align: center; line-height: 22px; opacity: 0.9; font-size: 0.95rem;
+  border-radius: 6px; transition: background 0.12s;
+}
+.navlink.active .ic { background: rgba(255, 255, 255, 0.12); opacity: 1; }
 .sidebar .foot {
   margin-top: auto; padding: 0.8rem 0.7rem 0.2rem;
   border-top: 1px solid var(--nav-line); font-size: 0.76rem;
@@ -410,6 +425,25 @@ p { margin: 0; }
   display: flex; align-items: baseline; gap: 0.6rem;
 }
 .section-title .hint { font-size: 0.78rem; color: var(--ink-2); font-weight: 500; }
+
+/* ---------------------------------------------------- bannière d'en-tête de fiche (chantier…) */
+.detail-hero {
+  background: var(--nav-bg-2); color: #fbf8ef; border-radius: var(--radius);
+  padding: 1.3rem 1.5rem; margin-bottom: 1.1rem;
+}
+.detail-hero .eyebrow { color: rgba(251, 248, 239, 0.6); margin-bottom: 0.3rem; }
+.detail-hero h1 { color: #fff; font-size: 1.55rem; margin: 0; }
+.detail-hero .sub { color: rgba(251, 248, 239, 0.78); font-size: 0.88rem; margin-top: 0.3rem; }
+
+/* ---------------------------------------------------- onglets de page (fiche détail) */
+.page-tabs { display: flex; gap: 1.3rem; border-bottom: 1px solid var(--line); margin-bottom: 1.3rem; flex-wrap: wrap; }
+.page-tab {
+  background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; font: inherit;
+  padding: 0.65rem 0.05rem; font-size: 0.88rem; font-weight: 600; color: var(--ink-3);
+}
+.page-tab:hover { color: var(--ink-2); }
+.page-tab.active { color: var(--ink); border-bottom-color: var(--primary); }
+.page-tab .n { color: var(--ink-3); font-weight: 600; }
 
 /* ---------------------------------------------------- section repliable */
 .collapsible-head {

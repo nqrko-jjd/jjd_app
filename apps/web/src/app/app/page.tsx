@@ -128,13 +128,35 @@ interface Dashboard {
   expiringDocs: { id: string; person: string; type: string; label: string | null; expiresOn: string | null }[];
 }
 
+/** Les deux actions les plus fréquentes, mises en avant à côté du titre (comme la maquette). */
+function QuickActionsPrimary() {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  async function newQuote() {
+    setBusy(true);
+    try {
+      const { document } = await api<{ document: { id: string } }>('/api/documents', { method: 'POST', body: { kind: 'quote' } });
+      router.push(`/app/documents/${document.id}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <>
+      <button className="btn primary" disabled={busy} onClick={newQuote}>+ Nouveau devis</button>
+      <Link className="btn" href="/app/chantiers?new=1">+ Nouveau chantier</Link>
+    </>
+  );
+}
+
+/** Les autres raccourcis, en second plan sous le titre. */
 function QuickActions() {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
-  async function newDoc(kind: 'quote' | 'invoice') {
+  async function newInvoice() {
     setBusy(true);
     try {
-      const { document } = await api<{ document: { id: string } }>('/api/documents', { method: 'POST', body: { kind } });
+      const { document } = await api<{ document: { id: string } }>('/api/documents', { method: 'POST', body: { kind: 'invoice' } });
       router.push(`/app/documents/${document.id}`);
     } finally {
       setBusy(false);
@@ -142,9 +164,7 @@ function QuickActions() {
   }
   return (
     <div className="quick-actions">
-      <button className="qa" disabled={busy} onClick={() => newDoc('quote')}><span className="qa-ic">▧</span>Nouveau devis</button>
-      <button className="qa" disabled={busy} onClick={() => newDoc('invoice')}><span className="qa-ic">€</span>Nouvelle facture</button>
-      <Link className="qa" href="/app/chantiers?new=1"><span className="qa-ic">▤</span>Nouveau chantier</Link>
+      <button className="qa" disabled={busy} onClick={newInvoice}><span className="qa-ic">€</span>Nouvelle facture</button>
       <Link className="qa" href="/app/contacts?new=1"><span className="qa-ic">☰</span>Nouveau contact</Link>
       <Link className="qa" href="/app/crm?new=1"><span className="qa-ic">⇗</span>Nouvelle opportunité</Link>
       <Link className="qa" href="/app/planning"><span className="qa-ic">▦</span>Planifier</Link>
@@ -202,15 +222,26 @@ function InProgressTable({ rows }: { rows: InProgressRow[] }) {
 }
 
 export default function DashboardPage() {
-  const { user } = useAuth();
+  const { user, person } = useAuth();
   const { data, loading } = useApi<Dashboard>(user?.role === 'worker' ? null : '/api/dashboard');
-  const now = new Date().toLocaleDateString('fr-BE', { month: 'long', year: 'numeric' });
+  const today = new Date();
+  const eyebrow = today.toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' });
+  const name = person?.displayName || person?.firstName || user?.email?.split('@')[0] || '';
 
   if (user?.role === 'worker') return <WorkerToday />;
 
   return (
     <>
-      <PageHead title="Tableau de bord" sub={`Vue d'ensemble — ${now}`} />
+      <div className="eyebrow" style={{ marginBottom: '0.3rem' }}>{eyebrow}</div>
+      <PageHead
+        title={`Bonjour ${name},`}
+        sub="Voici les priorités de votre journée."
+        action={
+          <div className="row">
+            <QuickActionsPrimary />
+          </div>
+        }
+      />
 
       <QuickActions />
 

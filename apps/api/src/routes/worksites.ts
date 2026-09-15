@@ -275,9 +275,34 @@ worksitesRouter.get(
     // devis/factures ni la rentabilité si jamais ils atterrissent quand même sur cette route.
     const isWorker = req.user!.role === 'worker';
     const margin = isWorker ? null : await worksiteMargin(ws.id);
+
+    // Fil « dernière activité » de la vue d'ensemble — pas un vrai journal d'événements,
+    // juste un condensé des signaux déjà en base (messages de statut du fil, tâches
+    // cochées, rapports signés) trié par date, pour donner un aperçu récent sans avoir
+    // à ouvrir chaque onglet.
+    const [statusMessages, doneTasks] = await Promise.all([
+      prisma.message.findMany({
+        where: { thread: { worksiteId: ws.id }, kind: 'status' },
+        orderBy: { createdAt: 'desc' },
+        take: 6,
+        select: { id: true, body: true, authorName: true, createdAt: true },
+      }),
+      prisma.worksiteTask.findMany({
+        where: { worksiteId: ws.id, status: 'done', doneAt: { not: null } },
+        orderBy: { doneAt: 'desc' },
+        take: 6,
+        select: { id: true, title: true, doneByName: true, doneAt: true },
+      }),
+    ]);
+    const activity = [
+      ...statusMessages.map((m) => ({ id: `msg-${m.id}`, label: m.body ?? 'Mise à jour du chantier', by: m.authorName, at: m.createdAt })),
+      ...doneTasks.map((t) => ({ id: `task-${t.id}`, label: `Tâche terminée · ${t.title}`, by: t.doneByName, at: t.doneAt as Date })),
+      ...ws.reports.filter((r) => r.signedAt).map((r) => ({ id: `report-${r.id}`, label: `Rapport signé${r.clientName ? ` par ${r.clientName}` : ''}`, by: r.authorName, at: r.signedAt as Date })),
+    ].sort((a, b) => b.at.getTime() - a.at.getTime()).slice(0, 6);
+
     const { acp, ...wsRest } = ws;
     const shaped = { ...wsRest, building: acp };
-    res.json({ worksite: isWorker ? { ...shaped, documents: [] } : shaped, margin });
+    res.json({ worksite: isWorker ? { ...shaped, documents: [] } : shaped, margin, activity: isWorker ? [] : activity });
   }),
 );
 

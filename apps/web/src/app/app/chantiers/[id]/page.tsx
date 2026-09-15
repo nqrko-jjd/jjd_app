@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
-import { PageHead, StatusBadge, PriorityBadge, EntityBadge, ScopeBadge, BillingModeBadge, Money, formatDateBE } from '@/lib/ui';
+import { PageHead, StatusBadge, PriorityBadge, EntityBadge, ScopeBadge, BillingModeBadge, Money, formatDateBE, Kpi } from '@/lib/ui';
 import { FormModal, toDateInput, type FieldDef } from '@/components/FormModal';
 import { ChantierThread } from '@/components/ChantierThread';
 import { WorksiteTasks } from '@/components/WorksiteTasks';
@@ -15,6 +15,9 @@ import {
   WORKSITE_SCOPES, WORKSITE_SCOPE_LABEL, WORKSITE_BILLING_MODES, WORKSITE_BILLING_MODE_LABEL,
   ENTITIES, ENTITY_LABEL, formatHours, WORKSITE_PROGRESS_PCT, type WorksiteMargin,
 } from '@jjd/shared';
+import {
+  FileText, Euro, TrendingUp, CheckCircle2, Wallet, Fuel, Percent, MessageSquare,
+} from 'lucide-react';
 
 interface Detail {
   worksite: {
@@ -29,7 +32,7 @@ interface Detail {
     building: { id: string; name: string; syndic: { name: string } | null } | null;
     manager: { id: string; displayName: string | null; firstName: string } | null;
     documents: { id: string; kind: string; number: string | null; draftRef: string | null; totalHt: number; status: string; issuedOn: string | null }[];
-    events: { id: string; startAt: string; endAt: string; vehicle: { plate: string | null } | null; assignments: { person: { displayName: string | null; firstName: string } }[] }[];
+    events: { id: string; startAt: string; endAt: string; note: string | null; vehicle: { plate: string | null } | null; assignments: { person: { displayName: string | null; firstName: string } }[] }[];
     reports: {
       id: string; date: string; authorName: string; workDone: string | null; status: string;
       clientName: string | null; signedAt: string | null;
@@ -43,6 +46,7 @@ interface Detail {
     };
     labour: { date: string; personId: string; personName: string; hours: number; amount: number; pending: boolean }[];
   }) | null;
+  activity: { id: string; label: string; by: string | null; at: string }[];
 }
 
 export default function ChantierDetail({ params }: { params: Promise<{ id: string }> }) {
@@ -57,10 +61,14 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
   const [editing, setEditing] = useState(false);
   const [invoicing, setInvoicing] = useState<string | null>(null);
   const [tab, setTab] = useState<'overview' | 'tasks' | 'finances' | 'photos' | 'discussion'>('overview');
+  const [threadOpen, setThreadOpen] = useState(false);
 
   if (loading) return <div className="empty">Chargement…</div>;
   if (!data) return <div className="empty">Chantier introuvable.</div>;
   const w = data.worksite;
+  // Prochaine étape / équipe affectée : le plus proche créneau à venir, sinon le plus récent passé.
+  const now = new Date();
+  const nextEvent = [...w.events].filter((e) => new Date(e.startAt) >= now).sort((a, b) => +new Date(a.startAt) - +new Date(b.startAt))[0] ?? w.events[0] ?? null;
 
   /** Raccourci « Facturer » depuis un rapport signé : ouvre une facture pré-remplie
    * (chantier, client, texte de départ repris du rapport) — le bureau chiffre les lignes. */
@@ -167,48 +175,103 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
 
       {tab === 'overview' && (
         <>
-          <div className="info-grid" style={{ marginBottom: '1.5rem' }}>
-            <Info label="Client" value={w.client ? <Link href={`/app/contacts/${w.client.id}`}>{w.client.name}</Link> : '—'} />
-            <Info label="Immeuble / ACP" value={w.building ? <Link href={`/app/immeubles/${w.building.id}`}>{w.building.name}{w.building.syndic ? ` · ${w.building.syndic.name}` : ''}</Link> : '—'} />
-            <Info label="Chef de chantier" value={w.manager?.displayName ?? w.manager?.firstName ?? '—'} />
-            <Info label="Facturé à" value={w.billTo ?? '—'} />
-            <Info label="Début" value={formatDateBE(w.startedOn)} />
-            <Info label="Fin" value={formatDateBE(w.endedOn)} />
-          </div>
-
-          {(w.ownerName || w.tenantName) && (
-            <div className="info-grid" style={{ marginBottom: '1.5rem' }}>
-              <Info
-                label="Propriétaire"
-                value={w.ownerName ? `${w.ownerName}${w.ownerPhone ? ` · ${w.ownerPhone}` : ''}${w.ownerEmail ? ` · ${w.ownerEmail}` : ''}` : '—'}
+          {data.margin && (
+            <div className="kpis" style={{ marginBottom: '1.5rem' }}>
+              <Kpi ic={FileText} label="Devisé HT" value={<Money value={data.margin.quotedHt} />} sub="Montant du marché" />
+              <Kpi
+                ic={Euro}
+                label="Facturé HT"
+                value={<Money value={data.margin.invoicedHt} />}
+                sub={data.margin.quotedHt > 0 ? `${Math.round((data.margin.invoicedHt / data.margin.quotedHt) * 100)} % du marché` : 'Rien facturé pour l’instant'}
               />
-              <Info
-                label="Locataire (contact terrain)"
-                value={w.tenantName
-                  ? `${w.tenantName}${w.tenantPhone ? ` · ${w.tenantPhone}` : ''}${w.tenantPhone2 ? ` / ${w.tenantPhone2}` : ''}${w.tenantEmail ? ` · ${w.tenantEmail}` : ''}`
-                  : '—'}
+              <Kpi
+                ic={TrendingUp}
+                label="Marge réelle"
+                value={<Money value={data.margin.realMargin} sign />}
+                sub={data.margin.realMarginPct != null ? `${data.margin.realMarginPct} % du marché` : 'Non calculable'}
+                neg={data.margin.realMargin < 0}
+              />
+              <Kpi
+                ic={CheckCircle2}
+                label="Avancement"
+                value={`${WORKSITE_PROGRESS_PCT[w.status as keyof typeof WORKSITE_PROGRESS_PCT] ?? 0}%`}
+                sub="Travaux réalisés"
               />
             </div>
           )}
 
-          {data.margin && (
-            <>
-              <div className="section-title">Rentabilité <span className="hint">temps réel, main-d'œuvre incluse — détail dans l'onglet Finances</span></div>
-              <div className="kpis" style={{ marginBottom: '1.5rem' }}>
-                <MiniKpi label="Devisé HT" value={<Money value={data.margin.quotedHt} />} />
-                <MiniKpi label="Facturé HT" value={<Money value={data.margin.invoicedHt} />} />
-                <MiniKpi label="Marge réelle" value={<Money value={data.margin.realMargin} sign />} note={data.margin.realMarginPct != null ? `${data.margin.realMarginPct} %` : undefined} />
-                <MiniKpi label="Avancement" value={`${WORKSITE_PROGRESS_PCT[w.status as keyof typeof WORKSITE_PROGRESS_PCT] ?? 0}%`} note="selon le statut du dossier" />
+          <div className="chart-2col" style={{ alignItems: 'start' }}>
+            <div>
+              <div className="card card-pad" style={{ marginBottom: '1rem' }}>
+                <div className="section-title" style={{ marginTop: 0 }}>Informations du chantier</div>
+                <div className="info-grid">
+                  <Info label="Client" value={w.client ? <Link href={`/app/contacts/${w.client.id}`}>{w.client.name}</Link> : '—'} />
+                  {w.building && (
+                    <Info label="Immeuble / ACP" value={<Link href={`/app/immeubles/${w.building.id}`}>{w.building.name}{w.building.syndic ? ` · ${w.building.syndic.name}` : ''}</Link>} />
+                  )}
+                  <Info label="Responsable" value={w.manager?.displayName ?? w.manager?.firstName ?? '—'} />
+                  <Info label="Localisation" value={[w.address, w.city].filter(Boolean).join(', ') || '—'} />
+                  {nextEvent && nextEvent.assignments.length > 0 && (
+                    <Info label="Équipe affectée" value={[...new Set(nextEvent.assignments.map((a) => a.person.displayName || a.person.firstName))].join(', ')} />
+                  )}
+                  <Info label="Début des travaux" value={formatDateBE(w.startedOn)} />
+                  <Info label="Fin prévisionnelle" value={formatDateBE(w.endedOn)} />
+                  {w.billTo && <Info label="Facturé à" value={w.billTo} />}
+                </div>
               </div>
-            </>
-          )}
 
-          {w.description && (
-            <section className="card card-pad" style={{ marginBottom: '1.5rem' }}>
-              <div className="eyebrow" style={{ marginBottom: '0.4rem' }}>Description</div>
-              <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{w.description}</p>
-            </section>
-          )}
+              {(w.ownerName || w.tenantName) && (
+                <div className="card card-pad" style={{ marginBottom: '1rem' }}>
+                  <div className="info-grid">
+                    {w.ownerName && (
+                      <Info label="Propriétaire" value={`${w.ownerName}${w.ownerPhone ? ` · ${w.ownerPhone}` : ''}${w.ownerEmail ? ` · ${w.ownerEmail}` : ''}`} />
+                    )}
+                    {w.tenantName && (
+                      <Info
+                        label="Locataire (contact terrain)"
+                        value={`${w.tenantName}${w.tenantPhone ? ` · ${w.tenantPhone}` : ''}${w.tenantPhone2 ? ` / ${w.tenantPhone2}` : ''}${w.tenantEmail ? ` · ${w.tenantEmail}` : ''}`}
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {w.description && (
+                <section className="card card-pad" style={{ marginBottom: '1rem' }}>
+                  <div className="eyebrow" style={{ marginBottom: '0.4rem' }}>Description</div>
+                  <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{w.description}</p>
+                </section>
+              )}
+
+              {nextEvent && (
+                <div className="card card-pad">
+                  <div className="section-title" style={{ marginTop: 0 }}>Prochaine étape</div>
+                  <div style={{ fontWeight: 600 }}>{nextEvent.note || 'Intervention planifiée'}</div>
+                  <div className="muted" style={{ fontSize: '0.85rem', marginTop: '0.2rem' }}>{formatDateBE(nextEvent.startAt)}</div>
+                  <Link href="/app/planning" className="hint" style={{ display: 'block', marginTop: '0.6rem' }}>Voir l’affectation des équipes →</Link>
+                </div>
+              )}
+            </div>
+
+            <div className="card card-pad">
+              <div className="section-title" style={{ marginTop: 0 }}>Dernière activité</div>
+              {data.activity.length === 0 ? (
+                <p className="muted" style={{ margin: 0 }}>Rien de récent.</p>
+              ) : (
+                <div className="activity-feed">
+                  {data.activity.map((a) => (
+                    <div key={a.id} className="activity-item">
+                      <span className="activity-dot" />
+                      <div>
+                        <div className="activity-label">{a.label}</div>
+                        <div className="activity-meta">{formatDateBE(a.at)}{a.by ? ` · ${a.by}` : ''}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
 
           <div className="section-title">Localisation <span className="hint">carte &amp; contrôle de pointage</span></div>
           <LocationSection w={w} onChange={reload} />
@@ -222,30 +285,32 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
           {data.margin && (
             <>
               <div className="kpis" style={{ marginBottom: '1.5rem' }}>
-                <MiniKpi label="Devisé HT" value={<Money value={data.margin.quotedHt} />} />
-                <MiniKpi label="Facturé HT" value={<Money value={data.margin.invoicedHt} />} />
-                <MiniKpi label="Encaissé HT" value={<Money value={data.margin.paidHt} />} />
-                <MiniKpi label="Coût matériaux" value={<Money value={data.margin.materialCost} />} />
-                <MiniKpi label="Coût main-d'œuvre" value={<Money value={data.margin.labourCost} />} />
-                <MiniKpi
+                <Kpi ic={FileText} label="Devisé HT" value={<Money value={data.margin.quotedHt} />} sub="Montant du marché" hero />
+                <Kpi ic={Euro} label="Facturé HT" value={<Money value={data.margin.invoicedHt} />} sub={data.margin.quotedHt > 0 ? `${Math.round((data.margin.invoicedHt / data.margin.quotedHt) * 100)} % du marché` : 'Rien facturé'} />
+                <Kpi ic={Wallet} label="Encaissé HT" value={<Money value={data.margin.paidHt} />} sub={data.margin.invoicedHt > 0 ? `${Math.round((data.margin.paidHt / data.margin.invoicedHt) * 100)} % du facturé` : 'Rien encaissé'} />
+                <Kpi ic={FileText} label="Coût matériaux" value={<Money value={data.margin.materialCost} />} sub="Achats rattachés" />
+                <Kpi ic={CheckCircle2} label="Coût main-d'œuvre" value={<Money value={data.margin.labourCost} />} sub="Pointages inclus" />
+                <Kpi
+                  ic={Fuel}
                   label="Coût véhicule"
                   value={<Money value={data.margin.vehicleCost} />}
-                  note={data.margin.transport.trips.length
+                  sub={data.margin.transport.trips.length
                     ? `${data.margin.transport.trips.length} j · fixe ${data.margin.transport.fixedCost.toFixed(0)} € + route ${data.margin.transport.fuelCost.toFixed(0)} €`
-                    : undefined}
+                    : 'Aucun trajet imputé'}
                 />
-                <MiniKpi label="Marge réelle" value={<Money value={data.margin.realMargin} sign />} note={data.margin.realMarginPct != null ? `${data.margin.realMarginPct} %` : undefined} />
-                <MiniKpi label="Marge hypothétique" value={<Money value={data.margin.forecastMargin} sign />} note="devisé − coûts engagés" />
-                <MiniKpi label="Reste à facturer" value={<Money value={data.margin.leftToInvoice} />} />
-                {data.margin.partnerShare > 0 && <MiniKpi label="Part GT (33 %)" value={<Money value={data.margin.partnerShare} />} />}
+                <Kpi ic={TrendingUp} label="Marge réelle" value={<Money value={data.margin.realMargin} sign />} sub={data.margin.realMarginPct != null ? `${data.margin.realMarginPct} % du marché` : 'Non calculable'} neg={data.margin.realMargin < 0} />
+                <Kpi ic={TrendingUp} label="Marge hypothétique" value={<Money value={data.margin.forecastMargin} sign />} sub="Devisé − coûts engagés" neg={data.margin.forecastMargin < 0} />
+                <Kpi ic={Percent} label="Reste à facturer" value={<Money value={data.margin.leftToInvoice} />} sub="Sur le devisé HT" />
+                {data.margin.partnerShare > 0 && <Kpi ic={Percent} label="Part GT (33 %)" value={<Money value={data.margin.partnerShare} />} sub="Apporteur d'affaire" />}
               </div>
               <TransportDetail t={data.margin.transport} />
               <LabourDetail rows={data.margin.labour} />
-              <div className="row" style={{ gap: '1.2rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
+              <div className="chart-2col" style={{ marginBottom: '1.5rem' }}>
                 {data.margin.totalCost > 0 && (
-                  <div className="card card-pad" style={{ maxWidth: 420 }}>
+                  <div className="card card-pad">
                     <div className="eyebrow" style={{ marginBottom: '0.6rem' }}>Répartition des coûts</div>
                     <Donut
+                      size={210}
                       data={[
                         { label: 'Matériaux', total: data.margin.materialCost },
                         { label: "Main-d'œuvre", total: data.margin.labourCost },
@@ -255,11 +320,12 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
                   </div>
                 )}
                 {data.margin.quotedHt > 0 && (
-                  <div className="card card-pad" style={{ maxWidth: 420 }}>
+                  <div className="card card-pad">
                     <div className="eyebrow" style={{ marginBottom: '0.6rem' }}>
                       Avancement <span className="hint">{Math.round((data.margin.invoicedHt / data.margin.quotedHt) * 100)}% facturé</span>
                     </div>
                     <Donut
+                      size={210}
                       data={[
                         { label: 'Facturé', total: data.margin.invoicedHt },
                         { label: 'Reste à facturer', total: Math.max(0, data.margin.leftToInvoice) },
@@ -349,7 +415,19 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
         )
       )}
 
-      {tab === 'discussion' && <ChantierThread worksiteId={w.id} />}
+      {tab === 'discussion' && (
+        threadOpen ? <ChantierThread worksiteId={w.id} /> : (
+          <div className="card card-pad thread-teaser">
+            <div className="eyebrow">Équipe interne · {w.ref}</div>
+            <h3>Le fil du chantier</h3>
+            <p>Photos, consignes et nouvelles de l’équipe, regroupées au même endroit.</p>
+            <button className="btn primary" onClick={() => setThreadOpen(true)}>
+              <MessageSquare size={15} strokeWidth={2} /> Ouvrir la discussion →
+            </button>
+            <span className="hint">Échanges clients conservés dans un espace distinct.</span>
+          </div>
+        )
+      )}
     </>
   );
 }
@@ -611,15 +689,6 @@ function Info({ label, value }: { label: string; value: React.ReactNode }) {
     <div className="info-cell">
       <div className="k">{label}</div>
       <div className="v">{value}</div>
-    </div>
-  );
-}
-function MiniKpi({ label, value, note }: { label: string; value: React.ReactNode; note?: string }) {
-  return (
-    <div className="kpi">
-      <div className="label">{label}</div>
-      <div className="value" style={{ fontSize: '1.1rem' }}>{value}</div>
-      {note && <div className="sub">{note}</div>}
     </div>
   );
 }

@@ -13,7 +13,7 @@ interface Task {
 interface Phase { id: string; name: string; position: number }
 
 const NEXT: Record<string, string> = { todo: 'doing', doing: 'done', done: 'todo' };
-const DOT: Record<string, string> = { todo: 'var(--ink-3)', doing: 'var(--warn)', done: 'var(--ok)' };
+const STATUS_LABEL: Record<string, string> = { todo: 'À faire', doing: 'En cours', done: 'Réalisé' };
 
 export function WorksiteTasks({ worksiteId }: { worksiteId: string }) {
   const { data, reload } = useApi<{ items: Task[] }>(`/api/worksites/${worksiteId}/tasks`);
@@ -48,16 +48,12 @@ export function WorksiteTasks({ worksiteId }: { worksiteId: string }) {
   function Row({ t }: { t: Task }) {
     const late = t.dueOn && t.status !== 'done' && new Date(t.dueOn) < new Date();
     return (
-      <div className="row" style={{ gap: '0.7rem', padding: '0.55rem 0', borderTop: '1px solid var(--line)', alignItems: 'flex-start' }}>
-        <button
-          title="Changer l'état"
-          onClick={() => patch(t.id, { status: NEXT[t.status] })}
-          style={{ width: 18, height: 18, borderRadius: 5, border: `2px solid ${DOT[t.status]}`, background: t.status === 'done' ? 'var(--ok)' : t.status === 'doing' ? 'var(--warn)' : 'transparent', cursor: 'pointer', marginTop: 2, flexShrink: 0 }}
-        />
-        <div style={{ flex: 1 }}>
-          <span style={{ textDecoration: t.status === 'done' ? 'line-through' : undefined, color: t.status === 'done' ? 'var(--ink-3)' : undefined }}>{t.title}</span>
+      <div className="task-row" onClick={() => patch(t.id, { status: NEXT[t.status] })} title="Changer l'état">
+        <span className={`task-check${t.status === 'done' ? ' done' : t.status === 'doing' ? ' doing' : ''}`}>{t.status === 'done' ? '✓' : ''}</span>
+        <div className="task-body">
+          <span className="task-title">{t.title}</span>
           {t.description && <div className="muted" style={{ fontSize: '0.8rem', marginTop: 2 }}>{t.description}</div>}
-          <div className="row" style={{ gap: '0.4rem', marginTop: 3, flexWrap: 'wrap' }}>
+          <div className="task-meta">
             {t.assignees.map((a) => <span key={a.id} className="badge plain">{a.name}</span>)}
             {t.dueOn && <span className={`badge ${late ? 'crit' : 'plain'}`}>{formatDateBE(t.dueOn)}</span>}
             {t.source === 'ai-draft' && <span className="badge warn" title="Proposée par l'assistant IA — à valider">✨ Proposé par l&apos;IA</span>}
@@ -65,21 +61,24 @@ export function WorksiteTasks({ worksiteId }: { worksiteId: string }) {
             {t.status === 'done' && t.doneByName && <span className="muted" style={{ fontSize: '0.76rem' }}>fait par {t.doneByName}</span>}
           </div>
         </div>
-        <button className="btn ghost" style={{ padding: '0.1rem 0.4rem', fontSize: '0.72rem' }} onClick={() => { if (confirm('Supprimer ?')) api(`/api/tasks/${t.id}`, { method: 'DELETE' }).then(reload); }}>✕</button>
+        <span className={`task-status${t.status === 'done' ? ' done' : t.status === 'doing' ? ' doing' : ''}`}>{STATUS_LABEL[t.status]}</span>
+        <button
+          className="btn ghost" style={{ padding: '0.1rem 0.4rem', fontSize: '0.72rem' }}
+          onClick={(e) => { e.stopPropagation(); if (confirm('Supprimer ?')) api(`/api/tasks/${t.id}`, { method: 'DELETE' }).then(reload); }}
+        >
+          ✕
+        </button>
       </div>
     );
   }
 
   function Section({ phase, items }: { phase: Phase | null; items: Task[] }) {
-    const open = items.filter((t) => t.status !== 'done');
-    const done = items.filter((t) => t.status === 'done');
     return (
-      <div style={{ marginTop: '1rem' }}>
+      <div className="card card-pad" style={{ marginBottom: '1rem' }}>
         <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-          <div className="muted" style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            {phase ? phase.name : 'Tâches sans phase'}
-          </div>
-          <div className="row" style={{ gap: '0.3rem' }}>
+          <h3 style={{ margin: 0 }}>{phase ? phase.name : 'Tâches sans phase'}</h3>
+          <div className="row" style={{ gap: '0.5rem' }}>
+            <span className="hint">{items.length} tâche{items.length > 1 ? 's' : ''}</span>
             <button className="btn ghost" style={{ padding: '0.1rem 0.4rem', fontSize: '0.72rem' }} onClick={() => setCreatingFor({ phaseId: phase?.id ?? null })}>+ Tâche</button>
             {phase && (
               <>
@@ -89,27 +88,22 @@ export function WorksiteTasks({ worksiteId }: { worksiteId: string }) {
             )}
           </div>
         </div>
-        {open.length === 0 && done.length === 0 && <p className="muted" style={{ margin: '0.4rem 0 0', fontSize: '0.85rem' }}>Aucune tâche.</p>}
-        {open.map((t) => <Row key={t.id} t={t} />)}
-        {done.length > 0 && (
-          <>
-            <div className="muted" style={{ fontSize: '0.72rem', margin: '0.5rem 0 0' }}>Terminées ({done.length})</div>
-            {done.map((t) => <Row key={t.id} t={t} />)}
-          </>
-        )}
+        {items.length === 0
+          ? <p className="muted" style={{ margin: '0.6rem 0 0', fontSize: '0.85rem' }}>Aucune tâche.</p>
+          : items.map((t) => <Row key={t.id} t={t} />)}
       </div>
     );
   }
 
   return (
-    <div className="card card-pad">
-      <div className="row" style={{ justifyContent: 'flex-end' }}>
-        <button className="btn ghost" style={{ fontSize: '0.8rem' }} onClick={addPhase}>+ Phase</button>
-      </div>
+    <>
       {phases.map((phase) => (
         <Section key={phase.id} phase={phase} items={tasks.filter((t) => t.phaseId === phase.id)} />
       ))}
       <Section phase={null} items={tasks.filter((t) => !t.phaseId)} />
+      <div className="row" style={{ justifyContent: 'flex-end', marginBottom: '1rem' }}>
+        <button className="btn ghost" onClick={addPhase}>+ Phase</button>
+      </div>
 
       {creatingFor && (
         <TaskCreateModal
@@ -122,7 +116,7 @@ export function WorksiteTasks({ worksiteId }: { worksiteId: string }) {
           }}
         />
       )}
-    </div>
+    </>
   );
 }
 

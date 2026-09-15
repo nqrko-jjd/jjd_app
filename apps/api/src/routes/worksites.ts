@@ -47,7 +47,9 @@ worksitesRouter.get(
   asyncHandler(async (req, res) => {
     const { status, entity, q, archived, kind, page: pageStr, pageSize: pageSizeStr } = req.query as Record<string, string>;
     const where: Record<string, unknown> = { archived: archived === '1' ? true : false, kind: kind || 'project' };
-    if (status) where.status = status;
+    // le filtre statut du haut de la page Chantiers regroupe plusieurs statuts par onglet
+    // (ex. "À planifier" = to_plan + scheduled) — accepte une liste séparée par des virgules
+    if (status) where.status = status.includes(',') ? { in: status.split(',') } : status;
     if (entity) where.entity = entity;
     if (q) {
       where.OR = [

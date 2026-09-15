@@ -17,6 +17,14 @@ import {
   ENTITIES, ENTITY_LABEL, WORKSITE_PROGRESS_PCT, type WorksiteStatus,
 } from '@jjd/shared';
 
+const STATUS_VIEWS: { key: string; label: string }[] = [
+  { key: '', label: 'Tous' },
+  { key: 'in_progress', label: 'En cours' },
+  { key: 'to_plan,scheduled', label: 'À planifier' },
+  { key: 'to_invoice', label: 'À facturer' },
+  { key: 'done,invoiced,closed', label: 'Terminés' },
+];
+
 interface WS {
   id: string; ref: string; title: string; status: string; priority: string; entity: string;
   scope: string | null; billingMode: string | null;
@@ -215,24 +223,22 @@ function ChantiersInner() {
               <button className="btn" onClick={exportCsv} title="Exporter la liste filtrée en CSV (éditable dans Excel)">⇩ Exporter CSV</button>
               <button className="btn" onClick={importCsv} title="Réimporter un CSV/Excel corrigé (met à jour par id, ne crée pas de nouveau chantier)">⇧ Importer</button>
               <button className="btn primary" onClick={() => setCreating(true)}>+ Nouveau chantier</button>
+              <button className="btn ghost" onClick={() => { setKind('overhead'); setStatus(''); }} title="Frais généraux (postes E-xx), distincts des chantiers clients">Charges →</button>
             </div>
-          ) : undefined
+          ) : (
+            <button className="btn" onClick={() => { setKind('project'); setStatus(''); }}>← Retour aux chantiers</button>
+          )
         }
       />
-      <div className="seg" style={{ marginBottom: '1rem' }}>
-        <button className={kind === 'project' ? 'on' : ''} onClick={() => setKind('project')}>Chantiers</button>
-        <button className={kind === 'overhead' ? 'on' : ''} onClick={() => setKind('overhead')}>Charges</button>
-      </div>
+      {kind === 'project' && (
+        <div className="seg" style={{ marginBottom: '1rem' }}>
+          {STATUS_VIEWS.map((v) => (
+            <button key={v.key || 'all'} className={status === v.key ? 'on' : ''} onClick={() => setStatus(v.key)}>{v.label}</button>
+          ))}
+        </div>
+      )}
       <div className="row" style={{ marginBottom: '1rem' }}>
         <input className="input" style={{ maxWidth: 280 }} placeholder="Rechercher (réf, titre, ville)…" value={q} onChange={(e) => setQ(e.target.value)} />
-        {kind === 'project' && (
-          <select className="select" style={{ maxWidth: 200 }} value={status} onChange={(e) => setStatus(e.target.value)}>
-            <option value="">Tous les statuts</option>
-            {Object.entries(WORKSITE_STATUS_LABEL).map(([k, v]) => (
-              <option key={k} value={k}>{v}</option>
-            ))}
-          </select>
-        )}
       </div>
 
       {loading && <div className="empty">Chargement…</div>}

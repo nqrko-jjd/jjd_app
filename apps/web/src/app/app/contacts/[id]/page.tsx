@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
 import { api, apiBlobUrl } from '@/lib/api';
-import { PageHead, StatusBadge, Money, formatDateBE } from '@/lib/ui';
+import { PageHead, StatusBadge, Money, formatDateBE, Kpi, formatEur } from '@/lib/ui';
+import { Wallet, Euro, Scale, FileText } from 'lucide-react';
 import { FormModal, type FieldDef } from '@/components/FormModal';
 import { CollapsibleSection } from '@/components/CollapsibleSection';
 import { useSort, SortTh } from '@/lib/sort';
@@ -206,14 +207,16 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
         <>
           <div className="section-title">Achats chez ce fournisseur</div>
           <div className="kpis" style={{ marginBottom: '1rem' }}>
-            <div className="kpi"><span className="ic">Σ</span><div className="label">Total HT</div><div className="value"><Money value={c.purchaseSummary.ht} /></div></div>
-            <div className="kpi"><span className="ic">€</span><div className="label">Total TTC</div><div className="value"><Money value={c.purchaseSummary.ttc} /></div></div>
-            <div className={`kpi${c.purchaseSummary.balance > 0 ? ' warn' : ''}`}>
-              <span className="ic">{c.purchaseSummary.balance < 0 ? '+' : '!'}</span>
-              <div className="label">{c.purchaseSummary.balance < 0 ? 'Avoir en votre faveur' : 'Solde du compte'}</div>
-              <div className="value"><Money value={Math.abs(c.purchaseSummary.balance)} /></div>
-            </div>
-            <div className="kpi"><span className="ic">#</span><div className="label">Factures</div><div className="value">{c.purchaseSummary.count}</div></div>
+            <Kpi ic={Wallet} label="Total HT" value={<Money value={c.purchaseSummary.ht} />} sub="Hors TVA" />
+            <Kpi ic={Euro} label="Total TTC" value={<Money value={c.purchaseSummary.ttc} />} sub={`dont ${formatEur(c.purchaseSummary.ttc - c.purchaseSummary.ht)} de TVA`} />
+            <Kpi
+              ic={Scale}
+              label={c.purchaseSummary.balance < 0 ? 'Avoir en votre faveur' : 'Solde du compte'}
+              value={<Money value={Math.abs(c.purchaseSummary.balance)} />}
+              sub={c.purchaseSummary.balance < 0 ? 'Ce fournisseur vous doit' : c.purchaseSummary.balance > 0 ? 'À régler' : 'Compte soldé'}
+              warn={c.purchaseSummary.balance > 0}
+            />
+            <Kpi ic={FileText} label="Factures" value={c.purchaseSummary.count} sub="Achats enregistrés" />
           </div>
           <CollapsibleSection
             title="Historique des achats"

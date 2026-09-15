@@ -3,8 +3,9 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
-import { PageHead, Money } from '@/lib/ui';
+import { PageHead, Money, Kpi, formatEur } from '@/lib/ui';
 import { formatHours, WORKER_CONTRACT_LABEL } from '@jjd/shared';
+import { Wallet, Users, Clock, AlertTriangle } from 'lucide-react';
 
 interface Team {
   year: number; month: number; totalAmount: number; totalNetAmount: number;
@@ -47,6 +48,7 @@ export default function DecomptesPage() {
   return (
     <>
       <PageHead
+        eyebrow="Suivi du temps"
         title="Décomptes du mois"
         sub="Heures validées par personne — base des paiements"
         action={<Link href="/app/pointage" className="btn">← Validation</Link>}
@@ -60,14 +62,16 @@ export default function DecomptesPage() {
 
       {data && rows.length > 0 && (
         <div className="kpis" style={{ marginBottom: '1.4rem' }}>
-          <div className="kpi">
-            <span className="ic">€</span>
-            <div className="label">Total net à payer</div>
-            <div className="value"><Money value={data.totalNetAmount} /></div>
-          </div>
-          <div className="kpi"><span className="ic">☺</span><div className="label">Personnes</div><div className="value">{rows.length}</div></div>
-          <div className="kpi"><span className="ic">◷</span><div className="label">Heures</div><div className="value">{formatHours(totalHours)}</div></div>
-          <div className={`kpi${pending ? ' warn' : ''}`}><span className="ic">!</span><div className="label">À valider</div><div className="value">{pending}</div></div>
+          <Kpi
+            ic={Wallet}
+            label="Total net à payer"
+            value={<Money value={data.totalNetAmount} />}
+            sub={hasWithholding ? `dont ${formatEur(data.totalAmount - data.totalNetAmount)} de retenues` : 'Aucune retenue'}
+            hero
+          />
+          <Kpi ic={Users} label="Personnes" value={rows.length} sub="Ont pointé ce mois-ci" />
+          <Kpi ic={Clock} label="Heures" value={formatHours(totalHours)} sub={`${formatHours(totalHours / rows.length)} / personne`} />
+          <Kpi ic={AlertTriangle} label="À valider" value={pending} sub={pending > 0 ? 'Pointages en attente' : 'Tout est validé'} warn={pending > 0} />
         </div>
       )}
 

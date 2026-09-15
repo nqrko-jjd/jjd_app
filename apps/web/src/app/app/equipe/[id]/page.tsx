@@ -3,7 +3,8 @@ import { use, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
 import { api, apiBlobUrl, apiUpload } from '@/lib/api';
-import { PageHead, Money, formatDateBE } from '@/lib/ui';
+import { PageHead, Money, formatDateBE, Kpi } from '@/lib/ui';
+import { Wallet, Sigma, Building2, CalendarDays } from 'lucide-react';
 import { FormModal, toDateInput, type FieldDef } from '@/components/FormModal';
 import { DocWithFileModal } from '@/components/DocWithFileModal';
 import { PhotoHeader } from '@/components/PhotoHeader';
@@ -243,10 +244,10 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
         <section style={{ marginBottom: '1.4rem' }}>
           <div className="section-title">Revenus — tout l’historique</div>
           <div className="kpis" style={{ marginBottom: '1rem' }}>
-            <div className="kpi"><span className="ic">€</span><div className="label">Total perçu</div><div className="value"><Money value={earnings.total.amount} /></div></div>
-            <div className="kpi"><span className="ic">Σ</span><div className="label">Heures payées</div><div className="value">{formatHours(earnings.total.hours)}</div></div>
-            <div className="kpi"><span className="ic">#</span><div className="label">Chantiers</div><div className="value">{earnings.total.worksites}</div></div>
-            <div className="kpi"><span className="ic">#</span><div className="label">Années</div><div className="value">{earnings.total.years}</div></div>
+            <Kpi ic={Wallet} label="Total perçu" value={<Money value={earnings.total.amount} />} sub={`${formatEur(earnings.total.amount / earnings.total.years)} / an en moyenne`} />
+            <Kpi ic={Sigma} label="Heures payées" value={formatHours(earnings.total.hours)} sub={`${formatHours(earnings.total.hours / earnings.total.worksites)} / chantier`} />
+            <Kpi ic={Building2} label="Chantiers" value={earnings.total.worksites} sub="Sur toute la période" />
+            <Kpi ic={CalendarDays} label="Années" value={earnings.total.years} sub="Historique disponible" />
           </div>
 
           <div className="grid" style={{ gridTemplateColumns: '1fr 1.4fr', gap: '1.2rem', alignItems: 'start' }}>

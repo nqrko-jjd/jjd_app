@@ -181,7 +181,8 @@ p { margin: 0; }
   width: 3px; height: 18px; border-radius: 0 3px 3px 0; background: var(--gold);
 }
 .navlink .ic {
-  width: 22px; height: 22px; text-align: center; line-height: 22px; opacity: 0.9; font-size: 0.95rem;
+  width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center;
+  opacity: 0.85; flex-shrink: 0;
   border-radius: 6px; transition: background 0.12s;
 }
 .navlink.active .ic { background: rgba(255, 255, 255, 0.12); opacity: 1; }
@@ -587,7 +588,7 @@ p { margin: 0; }
     color: var(--nav-fg); font-size: 0.66rem; font-weight: 600;
     padding: 0.35rem 0.4rem; border-radius: var(--radius-sm); flex: 1; text-align: center;
   }
-  .bottom-tab .ic { font-size: 1.2rem; }
+  .bottom-tab .ic { display: flex; }
   .bottom-tab.active { color: var(--nav-fg-active); background: var(--nav-active-bg); }
 }
 @media (max-width: 560px) {

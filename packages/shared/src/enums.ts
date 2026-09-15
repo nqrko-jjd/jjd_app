@@ -101,6 +101,15 @@ export const WORKSITE_STATUS_OPEN: WorksiteStatus[] = [
   'lead', 'quote_needed', 'to_plan', 'scheduled', 'in_progress', 'on_hold', 'done', 'to_invoice',
 ];
 
+/**
+ * Avancement indicatif par statut (pas un suivi précis chantier par chantier — juste un
+ * repère visuel dans les listes, sur le cycle de vie du dossier).
+ */
+export const WORKSITE_PROGRESS_PCT: Record<WorksiteStatus, number> = {
+  lead: 0, quote_needed: 0, to_plan: 5, scheduled: 15, in_progress: 55, on_hold: 40,
+  done: 90, to_invoice: 95, invoiced: 100, closed: 100, refused: 0, cancelled: 0,
+};
+
 export const VEHICLE_STATUSES = [
   'active', // opérationnel
   'repair', // en réparation

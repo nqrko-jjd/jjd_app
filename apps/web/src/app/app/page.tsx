@@ -5,10 +5,10 @@ import { useRouter } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { PageHead, Money, formatDateBE, Avatar } from '@/lib/ui';
+import { PageHead, Money, formatDateBE, Avatar, ProgressCell } from '@/lib/ui';
 import { useSort, useColumnFilter, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
-import { LEGAL_DOC_LABEL, WORKSITE_STATUS_LABEL } from '@jjd/shared';
+import { LEGAL_DOC_LABEL, WORKSITE_STATUS_LABEL, WORKSITE_PROGRESS_PCT, type WorksiteStatus } from '@jjd/shared';
 
 interface TodayEv {
   id: string; startAt: string; endAt: string;
@@ -208,6 +208,7 @@ function InProgressTable({ rows }: { rows: InProgressRow[] }) {
               <SortTh k="client" sort={sort} filter={colFilter}>Client</SortTh>
               <SortTh k="manager" sort={sort} filter={colFilter}>Chef</SortTh>
               <SortTh k="status" sort={sort} filter={colFilter}>Statut</SortTh>
+              <th>Avancement</th>
             </tr>
           </thead>
           <tbody>
@@ -221,6 +222,7 @@ function InProgressTable({ rows }: { rows: InProgressRow[] }) {
                 <td>{w.client ?? '—'}</td>
                 <td>{w.manager ? <><Avatar label={w.manager} size={22} />{w.manager}</> : '—'}</td>
                 <td><span className={`badge ${WS_STATUS_TONE[w.status] ?? ''}`}>{WORKSITE_STATUS_LABEL[w.status as keyof typeof WORKSITE_STATUS_LABEL] ?? w.status}</span></td>
+                <td><ProgressCell pct={WORKSITE_PROGRESS_PCT[w.status as WorksiteStatus] ?? 0} /></td>
               </tr>
             ))}
           </tbody>

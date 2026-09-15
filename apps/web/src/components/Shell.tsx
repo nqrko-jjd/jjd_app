@@ -2,11 +2,16 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import {
+  LayoutGrid, Building2, CalendarDays, ListChecks, Clock, TrendingUp, FileText, Wallet,
+  BarChart3, Euro, Warehouse, Contact, Users, Truck, Wrench, Package, Flag, Settings, ExternalLink,
+  type LucideIcon,
+} from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useApi } from '@/lib/use-api';
 import { AssistantChat } from './AssistantChat';
 
-type Item = { href: string; label: string; ic: string; roles?: string[]; ext?: boolean };
+type Item = { href: string; label: string; ic: LucideIcon; roles?: string[]; ext?: boolean };
 type Group = { title: string; items: Item[] };
 
 const ROLE_LABEL: Record<string, string> = {
@@ -17,10 +22,10 @@ const WORKER_NAV: Group[] = [
   {
     title: 'Terrain',
     items: [
-      { href: '/app', label: 'Aujourd’hui', ic: '◷' },
-      { href: '/app/mes-chantiers', label: 'Mes chantiers', ic: '▤' },
-      { href: '/app/mes-heures', label: 'Mes heures', ic: '☰' },
-      { href: '/app/materiel', label: 'Matériel', ic: '⚒' },
+      { href: '/app', label: 'Aujourd’hui', ic: Clock },
+      { href: '/app/mes-chantiers', label: 'Mes chantiers', ic: Building2 },
+      { href: '/app/mes-heures', label: 'Mes heures', ic: ListChecks },
+      { href: '/app/materiel', label: 'Matériel', ic: Wrench },
     ],
   },
 ];
@@ -29,40 +34,40 @@ const NAV: Group[] = [
   {
     title: 'Votre activité',
     items: [
-      { href: '/app', label: 'Vue d’ensemble', ic: '◧' },
-      { href: '/app/chantiers', label: 'Chantiers', ic: '▤' },
-      { href: '/app/planning', label: 'Planning', ic: '▦' },
-      { href: '/app/taches', label: 'Tâches', ic: '☑' },
-      { href: '/app/pointage', label: 'Pointage', ic: '◷' },
+      { href: '/app', label: 'Vue d’ensemble', ic: LayoutGrid },
+      { href: '/app/chantiers', label: 'Chantiers', ic: Building2 },
+      { href: '/app/planning', label: 'Planning', ic: CalendarDays },
+      { href: '/app/taches', label: 'Tâches', ic: ListChecks },
+      { href: '/app/pointage', label: 'Pointage', ic: Clock },
     ],
   },
   {
     title: 'Commercial & finances',
     items: [
-      { href: '/app/crm', label: 'Pipeline', ic: '⇗' },
-      { href: '/app/documents', label: 'Devis & factures', ic: '▧', roles: ['admin', 'office'] },
-      { href: '/app/achats', label: 'Achats / Dépenses', ic: '↧', roles: ['admin', 'office'] },
-      { href: '/app/analyse', label: 'Analyse', ic: '▨', roles: ['admin', 'office'] },
-      { href: '/app/finances', label: 'Finances', ic: '€', roles: ['admin', 'office'] },
+      { href: '/app/crm', label: 'Pipeline', ic: TrendingUp },
+      { href: '/app/documents', label: 'Devis & factures', ic: FileText, roles: ['admin', 'office'] },
+      { href: '/app/achats', label: 'Achats / Dépenses', ic: Wallet, roles: ['admin', 'office'] },
+      { href: '/app/analyse', label: 'Analyse', ic: BarChart3, roles: ['admin', 'office'] },
+      { href: '/app/finances', label: 'Finances', ic: Euro, roles: ['admin', 'office'] },
     ],
   },
   {
     title: 'Répertoires',
     items: [
-      { href: '/app/immeubles', label: 'Immeubles / Projets', ic: '⌂' },
-      { href: '/app/contacts', label: 'Contacts', ic: '☰' },
-      { href: '/app/equipe', label: 'Équipe', ic: '☺' },
-      { href: '/app/flotte', label: 'Flotte', ic: '⛟' },
-      { href: '/app/materiel', label: 'Matériel', ic: '⚒' },
-      { href: '/app/stock', label: 'Stock matériaux', ic: '▥' },
+      { href: '/app/immeubles', label: 'Immeubles / Projets', ic: Warehouse },
+      { href: '/app/contacts', label: 'Contacts', ic: Contact },
+      { href: '/app/equipe', label: 'Équipe', ic: Users },
+      { href: '/app/flotte', label: 'Flotte', ic: Truck },
+      { href: '/app/materiel', label: 'Matériel', ic: Wrench },
+      { href: '/app/stock', label: 'Stock matériaux', ic: Package },
     ],
   },
   {
     title: 'Administration',
     items: [
-      { href: '/app/controle', label: 'File de contrôle', ic: '⚑', roles: ['admin', 'office'] },
-      { href: '/app/parametres', label: 'Paramètres', ic: '⚙', roles: ['admin', 'office'] },
-      { href: '/portail', label: 'Portail client', ic: '⧉', ext: true },
+      { href: '/app/controle', label: 'File de contrôle', ic: Flag, roles: ['admin', 'office'] },
+      { href: '/app/parametres', label: 'Paramètres', ic: Settings, roles: ['admin', 'office'] },
+      { href: '/portail', label: 'Portail client', ic: ExternalLink, ext: true },
     ],
   },
 ];
@@ -116,9 +121,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
                     className="navlink"
                     onClick={() => setOpen(false)}
                   >
-                    <span className="ic">{i.ic}</span>
+                    <span className="ic"><i.ic size={16} strokeWidth={2} /></span>
                     {i.label}
-                    <span className="ic" style={{ marginLeft: 'auto', opacity: 0.5, fontSize: '0.75rem' }}>↗</span>
+                    <ExternalLink size={13} style={{ marginLeft: 'auto', opacity: 0.5 }} />
                   </a>
                 ) : (
                   <Link
@@ -127,7 +132,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
                     className={`navlink${isActive(i.href) ? ' active' : ''}`}
                     onClick={() => setOpen(false)}
                   >
-                    <span className="ic">{i.ic}</span>
+                    <span className="ic"><i.ic size={16} strokeWidth={2} /></span>
                     {i.label}
                   </Link>
                 )
@@ -147,7 +152,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         <nav className="bottom-tabs worker">
           {WORKER_NAV[0]!.items.map((i) => (
             <Link key={i.href} href={i.href} className={`bottom-tab${isActive(i.href) ? ' active' : ''}`}>
-              <span className="ic">{i.ic}</span>
+              <span className="ic"><i.ic size={20} strokeWidth={2} /></span>
               {i.label}
             </Link>
           ))}

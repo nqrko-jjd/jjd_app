@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
-import { PageHead, StatusBadge, PriorityBadge, EntityBadge, ScopeBadge, BillingModeBadge, Money, formatDateBE } from '@/lib/ui';
+import { PageHead, StatusBadge, PriorityBadge, EntityBadge, ScopeBadge, BillingModeBadge, Money, formatDateBE, ProgressCell } from '@/lib/ui';
 import { FormModal, type FieldDef } from '@/components/FormModal';
 import { ContextMenu, useContextMenu, openActions, type MenuItem } from '@/components/ContextMenu';
 import { PaginationBar } from '@/components/PaginationBar';
@@ -14,7 +14,7 @@ import { downloadCsv, pickAndImportCsv, summarizeImport } from '@/lib/csvIO';
 import {
   WORKSITE_STATUS_LABEL, WORKSITE_STATUSES, WORKSITE_PRIORITIES, WORKSITE_PRIORITY_LABEL,
   WORKSITE_SCOPES, WORKSITE_SCOPE_LABEL, WORKSITE_BILLING_MODES, WORKSITE_BILLING_MODE_LABEL,
-  ENTITIES, ENTITY_LABEL,
+  ENTITIES, ENTITY_LABEL, WORKSITE_PROGRESS_PCT, type WorksiteStatus,
 } from '@jjd/shared';
 
 interface WS {
@@ -254,6 +254,7 @@ function ChantiersInner() {
                 <SortTh k="client" sort={sort} filter={colFilter} filterOptions={distinctValues(filterRows, wsAccessors.client)}>Client</SortTh>
                 <SortTh k="manager" sort={sort} filter={colFilter} filterOptions={distinctValues(filterRows, wsAccessors.manager)}>Chef</SortTh>
                 <SortTh k="status" sort={sort} filter={colFilter} filterOptions={WORKSITE_STATUSES.map((s) => WORKSITE_STATUS_LABEL[s])}>Statut</SortTh>
+                <th>Avancement</th>
                 <SortTh k="entity" sort={sort} filter={colFilter} filterOptions={ENTITIES.map((e) => ENTITY_LABEL[e])}>Entité</SortTh>
                 <SortTh k="quotedHt" sort={sort} align="right" filter={colFilter} filterOptions={distinctValues(filterRows, wsAccessors.quotedHt)}>Devisé</SortTh>
                 <SortTh k="endedOn" sort={sort} filter={colFilter} filterOptions={distinctValues(filterRows, wsAccessors.endedOn)}>Fin</SortTh>
@@ -275,6 +276,7 @@ function ChantiersInner() {
                   <td>{w.client?.name ?? '—'}</td>
                   <td>{w.manager?.displayName ?? w.manager?.firstName ?? '—'}</td>
                   <td><span style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap' }}><StatusBadge status={w.status} /><PriorityBadge priority={w.priority} /><ScopeBadge scope={w.scope} /><BillingModeBadge billingMode={w.billingMode} /></span></td>
+                  <td><ProgressCell pct={WORKSITE_PROGRESS_PCT[w.status as WorksiteStatus] ?? 0} /></td>
                   <td><EntityBadge entity={w.entity} /></td>
                   <td style={{ textAlign: 'right' }}><Money value={w.quotedHt} /></td>
                   <td className="tnum">{w.endedOn ? formatDateBE(w.endedOn) : '—'}</td>

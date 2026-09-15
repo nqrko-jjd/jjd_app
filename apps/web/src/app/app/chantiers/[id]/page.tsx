@@ -13,7 +13,7 @@ import { Donut } from '@/lib/charts';
 import {
   WORKSITE_STATUSES, WORKSITE_STATUS_LABEL, WORKSITE_PRIORITIES, WORKSITE_PRIORITY_LABEL,
   WORKSITE_SCOPES, WORKSITE_SCOPE_LABEL, WORKSITE_BILLING_MODES, WORKSITE_BILLING_MODE_LABEL,
-  ENTITIES, ENTITY_LABEL, formatHours, type WorksiteMargin,
+  ENTITIES, ENTITY_LABEL, formatHours, WORKSITE_PROGRESS_PCT, type WorksiteMargin,
 } from '@jjd/shared';
 
 interface Detail {
@@ -198,7 +198,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
                 <MiniKpi label="Devisé HT" value={<Money value={data.margin.quotedHt} />} />
                 <MiniKpi label="Facturé HT" value={<Money value={data.margin.invoicedHt} />} />
                 <MiniKpi label="Marge réelle" value={<Money value={data.margin.realMargin} sign />} note={data.margin.realMarginPct != null ? `${data.margin.realMarginPct} %` : undefined} />
-                <MiniKpi label="Reste à facturer" value={<Money value={data.margin.leftToInvoice} />} />
+                <MiniKpi label="Avancement" value={`${WORKSITE_PROGRESS_PCT[w.status as keyof typeof WORKSITE_PROGRESS_PCT] ?? 0}%`} note="selon le statut du dossier" />
               </div>
             </>
           )}

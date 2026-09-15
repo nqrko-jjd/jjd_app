@@ -83,6 +83,19 @@ export function PageHead({ eyebrow, title, sub, action }: { eyebrow?: string; ti
   );
 }
 
+/** Barre d'avancement compacte pour une cellule de tableau (liste de chantiers…). */
+export function ProgressCell({ pct }: { pct: number }) {
+  const clamped = Math.max(0, Math.min(100, pct));
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 90 }}>
+      <div className="progress-bar" style={{ flex: 1 }}>
+        <div className="progress-fill" style={{ width: `${clamped}%` }} />
+      </div>
+      <span className="tnum muted" style={{ fontSize: '0.78rem', width: '2.4em', textAlign: 'right' }}>{clamped}%</span>
+    </div>
+  );
+}
+
 export function Empty({ children }: { children: ReactNode }) {
   return <div className="empty">{children}</div>;
 }

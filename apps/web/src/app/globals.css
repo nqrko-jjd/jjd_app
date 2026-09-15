@@ -280,20 +280,22 @@ p { margin: 0; }
 }
 
 /* ---------------------------------------------------- stat cards */
-.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); gap: 1rem; }
+/* 3 par rangée comme la maquette (pas auto-fit — les cartes plus larges évitent le texte
+   trop dominant dans une case étroite) ; repasse en 2 puis 1 sur petit écran, voir media queries plus bas. */
+.kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
 .kpi {
   background: var(--surface); border: 1px solid var(--line); min-width: 0;
   border-radius: var(--radius); padding: 1.1rem 1.2rem; box-shadow: var(--shadow-sm);
   display: flex; flex-direction: column; gap: 0.35rem;
 }
 .kpi .ic {
-  width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center;
-  background: var(--gold-soft); color: var(--gold); font-size: 0.95rem; margin-bottom: 0.15rem;
+  width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center;
+  background: var(--gold-soft); color: var(--gold); margin-bottom: 0.15rem;
 }
 .kpi .label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.09em; color: var(--ink-3); font-weight: 700; }
 .kpi .value {
-  font-family: var(--font-serif); font-size: clamp(1.25rem, 2.3vw, 1.75rem); font-weight: 700;
-  letter-spacing: -0.04em; font-variant-numeric: tabular-nums; line-height: 1.15; overflow-wrap: anywhere;
+  font-family: var(--font-serif); font-size: clamp(1.1rem, 1.6vw, 1.45rem); font-weight: 700;
+  letter-spacing: -0.03em; font-variant-numeric: tabular-nums; line-height: 1.15; overflow-wrap: anywhere;
 }
 .kpi .value.neg { color: var(--crit); }
 .kpi .sub { font-size: 0.76rem; color: var(--ink-2); }

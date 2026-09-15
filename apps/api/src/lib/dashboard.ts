@@ -16,6 +16,7 @@ export interface Alert {
 export async function bureauDashboard() {
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const in30 = new Date(now.getTime() + 30 * DAY);
 
   const ACTIVE_STATUS = ['scheduled', 'in_progress', 'on_hold'];
@@ -24,12 +25,15 @@ export async function bureauDashboard() {
   const todayEnd = new Date(todayStart.getTime() + DAY);
 
   const [
-    invoicedMonth, paidMonth, overdue, receivable, quotesPending, worksitesToInvoice,
+    invoicedMonth, invoicedPrevMonth, paidMonth, overdue, receivable, quotesPending, worksitesToInvoice,
     expiringDocs, ctExpiring, activeCount, activeWorksites,
     crmNextActions, todayEvents,
   ] = await Promise.all([
     prisma.document.aggregate({
       where: { kind: 'invoice', issuedOn: { gte: monthStart }, source: { not: 'demo' } }, _sum: { totalHt: true },
+    }),
+    prisma.document.aggregate({
+      where: { kind: 'invoice', issuedOn: { gte: prevMonthStart, lt: monthStart }, source: { not: 'demo' } }, _sum: { totalHt: true },
     }),
     prisma.document.aggregate({
       where: { kind: 'invoice', status: 'paid', issuedOn: { gte: monthStart }, source: { not: 'demo' } }, _sum: { totalHt: true },
@@ -85,6 +89,7 @@ export async function bureauDashboard() {
   return {
     kpis: {
       invoicedMonth: round2(invoicedMonth._sum.totalHt ?? 0),
+      invoicedPrevMonth: round2(invoicedPrevMonth._sum.totalHt ?? 0),
       paidMonth: round2(paidMonth._sum.totalHt ?? 0),
       overdueAmount,
       overdueCount: overdue.length,

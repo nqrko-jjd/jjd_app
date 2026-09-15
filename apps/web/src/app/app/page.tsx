@@ -9,6 +9,7 @@ import { PageHead, Money, formatDateBE, Avatar, ProgressCell } from '@/lib/ui';
 import { useSort, useColumnFilter, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
 import { LEGAL_DOC_LABEL, WORKSITE_STATUS_LABEL, WORKSITE_PROGRESS_PCT, type WorksiteStatus } from '@jjd/shared';
+import { BarChart3, Wallet, Building2, Flag, FileText, Clock, type LucideIcon } from 'lucide-react';
 
 interface TodayEv {
   id: string; startAt: string; endAt: string;
@@ -124,7 +125,7 @@ function WorkerToday() {
 
 interface Dashboard {
   kpis: {
-    invoicedMonth: number; paidMonth: number; overdueAmount: number;
+    invoicedMonth: number; invoicedPrevMonth: number; paidMonth: number; overdueAmount: number;
     overdueCount: number; openWorksites: number; teamsOnSiteToday: number;
     receivableAmount: number; quotesPendingAmount: number; quotesPendingCount: number;
   };
@@ -232,6 +233,15 @@ function InProgressTable({ rows }: { rows: InProgressRow[] }) {
   );
 }
 
+/** Variation en % vs le mois précédent, masquée si la base précédente est trop faible pour être parlante. */
+function monthTrend(cur: number, prev: number): string | undefined {
+  if (prev < 1000) return undefined;
+  const pct = Math.round(((cur - prev) / prev) * 100);
+  if (Math.abs(pct) > 300) return undefined;
+  const prevMonthLabel = new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toLocaleDateString('fr-BE', { month: 'long' });
+  return `${pct >= 0 ? '↗' : '↘'} ${pct >= 0 ? '+' : ''}${pct} % par rapport à ${prevMonthLabel}`;
+}
+
 export default function DashboardPage() {
   const { user, person } = useAuth();
   const { data, loading } = useApi<Dashboard>(user?.role === 'worker' ? null : '/api/dashboard');
@@ -260,17 +270,22 @@ export default function DashboardPage() {
       {data && (
         <>
           <div className="kpis">
-            <Kpi ic="€" label="Facturé ce mois" value={<Money value={data.kpis.invoicedMonth} />} hero />
-            <Kpi ic="✓" label="Encaissé ce mois" value={<Money value={data.kpis.paidMonth} />} />
+            <Kpi ic={BarChart3} label="Facturé ce mois" value={<Money value={data.kpis.invoicedMonth} />} sub={monthTrend(data.kpis.invoicedMonth, data.kpis.invoicedPrevMonth)} hero />
             <Kpi
-              ic="▤"
+              ic={Wallet}
+              label="Encaissé ce mois"
+              value={<Money value={data.kpis.paidMonth} />}
+              sub={data.kpis.invoicedMonth > 0 ? `${Math.round((data.kpis.paidMonth / data.kpis.invoicedMonth) * 100)} % du montant facturé` : undefined}
+            />
+            <Kpi
+              ic={Building2}
               label="Chantiers en cours"
               value={data.kpis.openWorksites}
               sub={data.kpis.teamsOnSiteToday > 0 ? `${data.kpis.teamsOnSiteToday} équipe${data.kpis.teamsOnSiteToday > 1 ? 's' : ''} sur le terrain aujourd’hui` : undefined}
             />
-            <Kpi ic="!" label="Impayés" value={<Money value={data.kpis.overdueAmount} />} sub={`${data.kpis.overdueCount} facture${data.kpis.overdueCount > 1 ? 's' : ''} en retard`} warn />
-            <Kpi ic="⇗" label="Devis en attente" value={<Money value={data.kpis.quotesPendingAmount} />} sub={`${data.kpis.quotesPendingCount} devis envoyés`} />
-            <Kpi ic="◷" label="À encaisser" value={<Money value={data.kpis.receivableAmount} />} sub="factures émises non payées" />
+            <Kpi ic={Flag} label="Impayés" value={<Money value={data.kpis.overdueAmount} />} sub={`${data.kpis.overdueCount} facture${data.kpis.overdueCount > 1 ? 's' : ''} en retard`} warn />
+            <Kpi ic={FileText} label="Devis en attente" value={<Money value={data.kpis.quotesPendingAmount} />} sub={`${data.kpis.quotesPendingCount} devis envoyés`} />
+            <Kpi ic={Clock} label="À encaisser" value={<Money value={data.kpis.receivableAmount} />} sub="factures émises non payées" />
           </div>
 
           <div className="row" style={{ justifyContent: 'space-between', margin: '1.8rem 0 0.8rem' }}>
@@ -320,10 +335,10 @@ export default function DashboardPage() {
   );
 }
 
-function Kpi({ ic, label, value, sub, hero, warn }: { ic: string; label: string; value: React.ReactNode; sub?: string; hero?: boolean; warn?: boolean }) {
+function Kpi({ ic: Ic, label, value, sub, hero, warn }: { ic: LucideIcon; label: string; value: React.ReactNode; sub?: string; hero?: boolean; warn?: boolean }) {
   return (
     <div className={`kpi${hero ? ' hero' : ''}${warn ? ' warn' : ''}`}>
-      <span className="ic">{ic}</span>
+      <span className="ic"><Ic size={16} strokeWidth={2} /></span>
       <div className="label">{label}</div>
       <div className="value">{value}</div>
       {sub && <div className="sub">{sub}</div>}

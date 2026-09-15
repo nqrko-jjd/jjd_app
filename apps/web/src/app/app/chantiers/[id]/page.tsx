@@ -373,9 +373,15 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
       )}
 
       {tab === 'photos' && (
-        w.reports.length === 0 ? (
-          <div className="card card-pad muted">Aucun rapport. Les ouvriers les créent depuis l’app mobile.</div>
-        ) : (
+        <>
+          <div className="row" style={{ justifyContent: 'flex-end', marginBottom: '1rem' }}>
+            <Link href={`/app/fiche/${w.id}/rapport`} className="btn" title="Texte + photos, comme sur le terrain — la signature n'a de sens que si le client est présent">
+              + Nouveau rapport
+            </Link>
+          </div>
+          {w.reports.length === 0 ? (
+            <div className="card card-pad muted">Aucun rapport pour l’instant. Les ouvriers les créent depuis l’app mobile, ou utilisez le bouton ci-dessus.</div>
+          ) : (
           <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
             {w.reports.map((r) => (
               <div key={r.id} className="card card-pad">
@@ -413,7 +419,8 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
               </div>
             ))}
           </div>
-        )
+          )}
+        </>
       )}
 
       {tab === 'discussion' && (

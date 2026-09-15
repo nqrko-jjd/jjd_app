@@ -81,7 +81,7 @@ export default function StockPage() {
       />
 
       <div className="kpis" style={{ marginBottom: '1.2rem' }}>
-        <div className="kpi"><span className="ic">Σ</span><div className="label">Valeur du stock</div><div className="value"><Money value={totalValue} /></div></div>
+        <div className="kpi hero"><span className="ic">Σ</span><div className="label">Valeur du stock</div><div className="value"><Money value={totalValue} /></div></div>
         <div className={`kpi${lowCount ? ' warn' : ''}`}><span className="ic">⚑</span><div className="label">Sous le seuil</div><div className="value">{lowCount}</div></div>
       </div>
 

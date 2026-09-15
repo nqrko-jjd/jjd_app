@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api, apiBlobUrl } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
-import { PageHead, Money, formatEur } from '@/lib/ui';
+import { Money, formatEur } from '@/lib/ui';
 import { DocStatusBadge, DOC_KIND_LABEL, type DocFull, type DocLine } from '@/lib/doc-ui';
 import { ContactPicker } from '@/components/ContactPicker';
 import { AssigneePicker } from '@/components/AssigneePicker';
@@ -130,11 +130,17 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
 
   return (
     <>
-      <PageHead
-        title={`${DOC_KIND_LABEL[doc.kind]} ${doc.number ?? doc.draftRef ?? ''}`}
-        sub={locked ? `Émis le ${doc.issuedOn?.slice(0, 10)}` : 'Brouillon modifiable'}
-        action={<Link href="/app/documents" className="btn">← Liste</Link>}
-      />
+      <div className="row" style={{ justifyContent: 'flex-end', marginBottom: '0.9rem' }}>
+        <Link href="/app/documents" className="btn">← Liste</Link>
+      </div>
+      <div className="detail-hero">
+        <div className="eyebrow">{DOC_KIND_LABEL[doc.kind]}</div>
+        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'nowrap', gap: '1rem' }}>
+          <h1>{doc.number ?? doc.draftRef ?? ''}</h1>
+          <DocStatusBadge status={doc.status} />
+        </div>
+        <div className="sub">{locked ? `Émis le ${doc.issuedOn?.slice(0, 10)}` : 'Brouillon modifiable'}</div>
+      </div>
 
       {msg && <div className="card card-pad" style={{ marginBottom: '1rem', borderLeft: '3px solid var(--primary)' }}>{msg}</div>}
       {imported && (
@@ -152,8 +158,8 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
         </div>
       )}
 
+      {(doc.parent || doc.children.length > 0) && (
       <div className="row" style={{ marginBottom: '1rem', gap: '0.4rem' }}>
-        <DocStatusBadge status={doc.status} />
         {doc.parent && (
           <Link href={`/app/documents/${doc.parent.id}`} className="chip">
             ← {DOC_KIND_LABEL[doc.parent.kind]} {doc.parent.number ?? doc.parent.draftRef}
@@ -165,6 +171,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
           </Link>
         ))}
       </div>
+      )}
 
       {/* En-tête */}
       <div className="card card-pad" style={{ marginBottom: '1rem' }}>

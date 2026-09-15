@@ -50,7 +50,7 @@ export default function MesHeuresPage() {
 
       {statement && (
         <div className="kpis" style={{ marginBottom: '1.2rem' }}>
-          <div className="kpi"><span className="ic">Σ</span><div className="label">Heures</div><div className="value">{formatHours(statement.totalHours)}</div></div>
+          <div className="kpi hero"><span className="ic">Σ</span><div className="label">Heures</div><div className="value">{formatHours(statement.totalHours)}</div></div>
           <div className="kpi"><span className="ic">€</span><div className="label">Montant</div><div className="value"><Money value={statement.totalAmount} /></div></div>
           {statement.pendingCount > 0 && (
             <div className="kpi warn"><span className="ic">⏳</span><div className="label">À valider</div><div className="value">{statement.pendingCount}</div></div>

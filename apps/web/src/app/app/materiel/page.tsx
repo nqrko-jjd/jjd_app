@@ -344,7 +344,7 @@ export default function MaterielPage() {
   if (status && !status.enabled) {
     return (
       <>
-        <PageHead title="Matériel" />
+        <PageHead eyebrow="Ressources" title="Matériel" />
         <div className="card card-pad">
           Le parc partagé avec Bricoloc n’est pas configuré (<code>BRICOLOC_API_KEY</code> dans{' '}
           <code>apps/api/.env</code>).

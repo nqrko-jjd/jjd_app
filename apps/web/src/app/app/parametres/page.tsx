@@ -21,12 +21,12 @@ export default function ParametresPage() {
   return (
     <>
       <PageHead eyebrow="Administration" title="Paramètres" sub="Société, bibliothèque de prix, dépôt, pointage, utilisateurs" />
-      <div className="row" style={{ marginBottom: '1rem', gap: '0.4rem' }}>
-        <button className={`btn${tab === 'company' ? ' primary' : ''}`} onClick={() => setTab('company')}>Société</button>
-        <button className={`btn${tab === 'depot' ? ' primary' : ''}`} onClick={() => setTab('depot')}>Dépôt</button>
-        <button className={`btn${tab === 'library' ? ' primary' : ''}`} onClick={() => setTab('library')}>Bibliothèque de prix</button>
-        <button className={`btn${tab === 'pointage' ? ' primary' : ''}`} onClick={() => setTab('pointage')}>Pointage</button>
-        {admin && <button className={`btn${tab === 'users' ? ' primary' : ''}`} onClick={() => setTab('users')}>Utilisateurs</button>}
+      <div className="seg" style={{ marginBottom: '1rem' }}>
+        <button className={tab === 'company' ? 'on' : ''} onClick={() => setTab('company')}>Société</button>
+        <button className={tab === 'depot' ? 'on' : ''} onClick={() => setTab('depot')}>Dépôt</button>
+        <button className={tab === 'library' ? 'on' : ''} onClick={() => setTab('library')}>Bibliothèque de prix</button>
+        <button className={tab === 'pointage' ? 'on' : ''} onClick={() => setTab('pointage')}>Pointage</button>
+        {admin && <button className={tab === 'users' ? 'on' : ''} onClick={() => setTab('users')}>Utilisateurs</button>}
       </div>
       {tab === 'company' ? <CompanyForm canEdit={admin} />
         : tab === 'depot' ? <DepotForm canEdit={admin} />

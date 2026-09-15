@@ -100,6 +100,7 @@ function ContactsInner() {
         />
       )}
       <PageHead
+        eyebrow="Gestion"
         title="Contacts"
         sub={data ? `${data.totalCount} contacts · page ${data.page}/${data.totalPages} · clic droit pour les actions rapides` : undefined}
         action={<button className="btn primary" onClick={() => setCreating(true)}>+ Nouveau contact</button>}

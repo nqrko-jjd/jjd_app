@@ -305,21 +305,26 @@ p { margin: 0; }
 .kpi.hero .sub { color: var(--nav-fg); }
 .kpi.hero .value.neg { color: #ffb4a8; }
 
-/* ---------------------------------------------------- alerts */
-.alert-list { display: flex; flex-direction: column; gap: 0.55rem; }
+/* ---------------------------------------------------- alerts : liste "à traiter" en carte */
+.alert-card { border-radius: var(--radius); background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow-sm); overflow: hidden; }
+.alert-list { display: flex; flex-direction: column; }
 .alert {
   display: flex; align-items: center; gap: 0.85rem;
-  padding: 0.8rem 1rem; border-radius: var(--radius);
-  background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow-sm);
-  transition: border-color 0.12s, transform 0.06s;
+  padding: 0.9rem 1.1rem; border-bottom: 1px solid var(--line);
+  transition: background 0.12s;
 }
-.alert:hover { border-color: var(--line-strong); transform: translateX(2px); }
-.alert .sev { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-.alert.critical .sev { background: var(--crit); box-shadow: 0 0 0 4px var(--crit-soft); }
-.alert.warning .sev { background: var(--warn); box-shadow: 0 0 0 4px var(--warn-soft); }
-.alert.info .sev { background: var(--info); box-shadow: 0 0 0 4px var(--info-soft); }
-.alert .label { flex: 1; font-weight: 600; font-size: 0.9rem; }
-.alert .amount { color: var(--ink-2); font-size: 0.84rem; font-variant-numeric: tabular-nums; }
+.alert:last-child { border-bottom: none; }
+.alert:hover { background: var(--surface-2); }
+.alert .sev {
+  width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0;
+  display: grid; place-items: center; font-size: 0.95rem;
+}
+.alert.critical .sev { background: var(--crit-soft); color: var(--crit); }
+.alert.warning .sev { background: var(--warn-soft); color: var(--warn); }
+.alert.info .sev { background: var(--info-soft); color: var(--info); }
+.alert .label { flex: 1; font-weight: 700; font-size: 0.9rem; }
+.alert .label .n { display: block; font-weight: 500; font-size: 0.78rem; color: var(--ink-2); margin-top: 0.1rem; }
+.alert .amount { color: var(--ink); font-weight: 700; font-size: 0.9rem; font-variant-numeric: tabular-nums; text-align: right; }
 .alert .count {
   font-weight: 800; font-variant-numeric: tabular-nums; min-width: 1.6rem; text-align: center;
   background: var(--surface-2); border-radius: 999px; padding: 0.1rem 0.5rem; font-size: 0.85rem;

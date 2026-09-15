@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { PageHead, Money, formatDateBE } from '@/lib/ui';
+import { PageHead, Money, formatDateBE, Avatar } from '@/lib/ui';
 import { useSort, useColumnFilter, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
 import { LEGAL_DOC_LABEL, WORKSITE_STATUS_LABEL } from '@jjd/shared';
@@ -74,7 +74,8 @@ function WorkerToday() {
 
   return (
     <>
-      <PageHead title={`Bonjour ${person?.displayName || person?.firstName || ''}`} sub={now.toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' })} />
+      <div className="eyebrow" style={{ marginBottom: '0.3rem' }}>Mon espace ouvrier</div>
+      <PageHead title={`Bonjour ${person?.displayName || person?.firstName || ''},`} sub="Bonne journée sur le terrain." />
 
       {!linked && (
         <div className="card card-pad" style={{ borderColor: 'var(--warn)', borderWidth: 2 }}>
@@ -83,17 +84,21 @@ function WorkerToday() {
       )}
 
       {linked && (running ? (
-        <div className="card card-pad" style={{ borderColor: 'var(--ok)', borderWidth: 2, marginBottom: '1.2rem' }}>
-          <div className="muted" style={{ textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.05em' }}>Compteur en cours</div>
-          <div style={{ fontWeight: 700, fontSize: '1.1rem', margin: '0.2rem 0' }}>{running.worksite?.ref} — {running.worksite?.title}</div>
-          <div className="mono" style={{ fontSize: '2.2rem', fontWeight: 800, fontVariantNumeric: 'tabular-nums', margin: '0.3rem 0' }}>{elapsed(running.startedAt)}</div>
+        <div className="detail-hero" style={{ marginBottom: '1.2rem' }}>
+          <div className="eyebrow">Compteur en cours</div>
+          <div style={{ fontWeight: 700, fontSize: '1.1rem', margin: '0.2rem 0', color: '#fff' }}>{running.worksite?.ref} — {running.worksite?.title}</div>
+          <div className="mono" style={{ fontSize: '2.6rem', fontWeight: 800, fontVariantNumeric: 'tabular-nums', margin: '0.4rem 0', color: '#fff' }}>{elapsed(running.startedAt)}</div>
           <div className="row" style={{ gap: '0.6rem' }}>
             <button className="btn" style={{ background: 'var(--crit)', color: '#fff', borderColor: 'var(--crit)' }} onClick={stop}>Arrêter</button>
-            <Link href="/app/mes-heures" className="btn">Mon récap →</Link>
+            <Link href="/app/mes-heures" className="btn" style={{ background: 'rgba(255,255,255,0.1)', borderColor: 'rgba(255,255,255,0.25)', color: '#fff' }}>Mon récap →</Link>
           </div>
         </div>
       ) : (
-        <div className="card card-pad muted" style={{ marginBottom: '1.2rem' }}>Aucun compteur actif. Choisis un chantier ci-dessous pour démarrer.</div>
+        <div className="detail-hero" style={{ marginBottom: '1.2rem' }}>
+          <div className="eyebrow">Prêt pour la journée</div>
+          <div className="mono" style={{ fontSize: '2.6rem', fontWeight: 800, fontVariantNumeric: 'tabular-nums', margin: '0.4rem 0', color: '#fff' }}>00:00:00</div>
+          <div className="sub">Aucun compteur actif. Choisis un chantier ci-dessous pour démarrer.</div>
+        </div>
       ))}
 
       <div className="section-title">Mes chantiers du jour</div>
@@ -173,6 +178,7 @@ function QuickActions() {
 }
 
 const WS_STATUS_TONE: Record<string, string> = { scheduled: 'primary', in_progress: 'ok', on_hold: 'warn' };
+const ALERT_ICON: Record<string, string> = { critical: '!', warning: '✎', info: '✓' };
 
 type InProgressRow = Dashboard['inProgress'][number];
 
@@ -189,7 +195,10 @@ function InProgressTable({ rows }: { rows: InProgressRow[] }) {
   const sort = useSort<InProgressRow>(colFilter.rows, wsAccessors);
   return (
     <>
-      <div className="section-title">Chantiers en cours <span className="hint">{rows.length} — clique pour ouvrir le dossier</span></div>
+      <div className="row" style={{ justifyContent: 'space-between', margin: '1.8rem 0 0.8rem' }}>
+        <div className="section-title" style={{ margin: 0 }}>Chantiers en cours <span className="hint">{rows.length}</span></div>
+        <Link href="/app/chantiers" className="hint">Tous les chantiers →</Link>
+      </div>
       <div className="tbl-wrap">
         <table className="tbl">
           <thead>
@@ -210,7 +219,7 @@ function InProgressTable({ rows }: { rows: InProgressRow[] }) {
                   {w.city && <div className="muted" style={{ fontSize: '0.78rem' }}>{w.city}</div>}
                 </td>
                 <td>{w.client ?? '—'}</td>
-                <td>{w.manager ?? '—'}</td>
+                <td>{w.manager ? <><Avatar label={w.manager} size={22} />{w.manager}</> : '—'}</td>
                 <td><span className={`badge ${WS_STATUS_TONE[w.status] ?? ''}`}>{WORKSITE_STATUS_LABEL[w.status as keyof typeof WORKSITE_STATUS_LABEL] ?? w.status}</span></td>
               </tr>
             ))}
@@ -257,19 +266,23 @@ export default function DashboardPage() {
             <Kpi ic="⇗" label="Devis en attente" value={<Money value={data.kpis.quotesPendingAmount} />} sub={`${data.kpis.quotesPendingCount} devis envoyés`} />
           </div>
 
-          <div className="section-title">À traiter <span className="hint">trié par urgence</span></div>
+          <div className="row" style={{ justifyContent: 'space-between', margin: '1.8rem 0 0.8rem' }}>
+            <div className="section-title" style={{ margin: 0 }}>À traiter en priorité <span className="hint">{data.alerts.length}</span></div>
+            <span className="hint">trié par urgence</span>
+          </div>
           {data.alerts.length === 0 ? (
             <div className="card card-pad muted">Rien à signaler. 👍</div>
           ) : (
-            <div className="alert-list">
-              {data.alerts.map((a) => (
-                <Link key={a.kind} href={a.href} className={`alert ${a.severity}`}>
-                  <span className="sev" />
-                  <span className="label">{a.label}</span>
-                  {a.amount != null && <span className="amount"><Money value={a.amount} /></span>}
-                  <span className="count">{a.count}</span>
-                </Link>
-              ))}
+            <div className="alert-card">
+              <div className="alert-list">
+                {data.alerts.map((a) => (
+                  <Link key={a.kind} href={a.href} className={`alert ${a.severity}`}>
+                    <span className="sev">{ALERT_ICON[a.severity] ?? '•'}</span>
+                    <span className="label">{a.label}<span className="n">{a.count} élément{a.count > 1 ? 's' : ''}</span></span>
+                    {a.amount != null && <span className="amount"><Money value={a.amount} /></span>}
+                  </Link>
+                ))}
+              </div>
             </div>
           )}
 

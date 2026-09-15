@@ -195,6 +195,7 @@ function ChantiersInner() {
         <ContextMenu x={ctx.menu.x} y={ctx.menu.y} items={rowMenu(ctx.menu.row)} onClose={ctx.close} />
       )}
       <PageHead
+        eyebrow="Suivi des travaux"
         title={kind === 'project' ? 'Chantiers' : 'Charges'}
         sub={data ? `${data.totalCount} ${kind === 'project' ? 'chantiers' : 'postes de charges'} · page ${data.page}/${data.totalPages} · clic droit pour les actions rapides` : undefined}
         action={

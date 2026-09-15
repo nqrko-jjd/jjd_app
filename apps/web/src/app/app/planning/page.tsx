@@ -146,6 +146,7 @@ export default function PlanningPage() {
   return (
     <>
       <PageHead
+        eyebrow="Organisation du terrain"
         title="Planning"
         sub={data?.googleSync ? 'Synchronisé avec Google Agenda' : 'Google Agenda : non connecté'}
         action={<button className="btn primary" onClick={() => setShowForm({})}>+ Affectation</button>}

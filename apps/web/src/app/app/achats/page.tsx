@@ -213,6 +213,7 @@ function AchatsInner() {
       )}
 
       <PageHead
+        eyebrow="Comptabilité"
         title="Achats / Dépenses"
         sub={data ? `${data.totals.count} factures d'achat · page ${data.page}/${data.totalPages} · clic droit pour les actions rapides` : undefined}
         action={

@@ -70,10 +70,11 @@ export function Money({ value, sign = false }: { value: number | null | undefine
   return <span className={`tnum${neg && sign ? ' neg' : ''}`} style={neg && sign ? { color: 'var(--crit)' } : undefined}>{formatEur(value)}</span>;
 }
 
-export function PageHead({ title, sub, action }: { title: string; sub?: string; action?: ReactNode }) {
+export function PageHead({ eyebrow, title, sub, action }: { eyebrow?: string; title: string; sub?: string; action?: ReactNode }) {
   return (
     <div className="page-head">
       <div>
+        {eyebrow && <div className="eyebrow" style={{ marginBottom: '0.3rem' }}>{eyebrow}</div>}
         <h1>{title}</h1>
         {sub && <div className="sub">{sub}</div>}
       </div>

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api, apiUpload } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { useAuth } from '@/lib/auth';
+import { Avatar } from '@/lib/ui';
 
 interface Msg {
   id: string; kind: string; body: string | null; fileUrl: string | null; thumbUrl: string | null;
@@ -198,32 +199,44 @@ export function ChantierThread({ worksiteId }: { worksiteId: string }) {
           <div ref={clientEndRef} />
         </div>
       ) : (
-      <div style={{ maxHeight: 460, overflowY: 'auto', padding: '1rem 1.15rem', display: 'flex', flexDirection: 'column', gap: '0.7rem' }}>
+      <div style={{ maxHeight: 460, overflowY: 'auto', padding: '1rem 1.15rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
         {data.messages.length === 0 && <div className="muted">Aucun message. Lance la conversation ci-dessous.</div>}
-        {data.messages.map((m) => (
-          <div key={m.id} style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
-            <div style={{ fontSize: '0.72rem', color: 'var(--ink-3)' }}>
-              {m.kind === 'status' ? '●' : m.authorName} · {time(m.createdAt)}
-            </div>
-            {m.kind === 'photo' && m.fileUrl ? (
-              <a href={m.fileUrl} target="_blank" rel="noreferrer">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={m.thumbUrl ?? m.fileUrl} alt="" style={{ maxWidth: 260, borderRadius: 8, border: '1px solid var(--line)' }} />
-              </a>
-            ) : m.kind === 'video' && m.fileUrl ? (
-              <video src={m.fileUrl} controls preload="metadata" style={{ maxWidth: 280, borderRadius: 8, border: '1px solid var(--line)' }} />
-            ) : m.kind === 'file' && m.fileUrl ? (
-              <a href={m.fileUrl} target="_blank" rel="noreferrer" className="badge plain" style={{ fontSize: '0.8rem' }}>📎 {m.body || 'Fichier'}</a>
-            ) : null}
-            {m.body && m.kind !== 'file' && (
-              <div style={m.kind === 'status'
-                ? { fontStyle: 'italic', color: 'var(--ink-2)', fontSize: '0.85rem' }
-                : { background: 'var(--surface-2)', borderRadius: 8, padding: '0.5rem 0.7rem', fontSize: '0.9rem', alignSelf: 'flex-start', maxWidth: '80%' }}>
-                {m.body}
+        {data.messages.map((m) => {
+          if (m.kind === 'status') {
+            return (
+              <div key={m.id} style={{ textAlign: 'center', margin: '0.3rem 0' }}>
+                <span className="chip">● {m.body} · {time(m.createdAt)}</span>
               </div>
-            )}
-          </div>
-        ))}
+            );
+          }
+          const mine = !!m.authorId && m.authorId === user?.id;
+          return (
+            <div key={m.id} style={{ display: 'flex', gap: '0.5rem', flexDirection: mine ? 'row-reverse' : 'row', alignItems: 'flex-end' }}>
+              {!mine && <Avatar label={m.authorName ?? '?'} size={26} />}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', alignItems: mine ? 'flex-end' : 'flex-start', maxWidth: '75%' }}>
+                <div style={{ fontSize: '0.72rem', color: 'var(--ink-3)' }}>{mine ? 'Toi' : m.authorName} · {time(m.createdAt)}</div>
+                {m.kind === 'photo' && m.fileUrl ? (
+                  <a href={m.fileUrl} target="_blank" rel="noreferrer">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={m.thumbUrl ?? m.fileUrl} alt="" style={{ maxWidth: 260, borderRadius: 10, border: '1px solid var(--line)' }} />
+                  </a>
+                ) : m.kind === 'video' && m.fileUrl ? (
+                  <video src={m.fileUrl} controls preload="metadata" style={{ maxWidth: 280, borderRadius: 10, border: '1px solid var(--line)' }} />
+                ) : m.kind === 'file' && m.fileUrl ? (
+                  <a href={m.fileUrl} target="_blank" rel="noreferrer" className="badge plain" style={{ fontSize: '0.8rem' }}>📎 {m.body || 'Fichier'}</a>
+                ) : null}
+                {m.body && m.kind !== 'file' && (
+                  <div style={{
+                    background: mine ? 'var(--primary-soft)' : 'var(--surface-2)',
+                    borderRadius: 14, padding: '0.55rem 0.8rem', fontSize: '0.9rem',
+                  }}>
+                    {m.body}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
         <div ref={endRef} />
       </div>
       )}

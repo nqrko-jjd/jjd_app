@@ -60,19 +60,20 @@ function CrmInner() {
       {loading && <div className="empty">Chargement…</div>}
       {data && (
         <div className="kanban">
-          {data.columns.map((col) => (
+          {data.columns.map((col) => {
+            const total = col.items.reduce((s, o) => s + (o.estimatedValue ?? 0), 0);
+            return (
             <div key={col.stage} className="kanban-col">
               <h3>{stageLabel(col.stage)}<span>{col.items.length}</span></h3>
+              {total > 0 && <div className="total"><Money value={total} /></div>}
               {col.items.map((o) => {
                 const idx = stages.indexOf(col.stage as (typeof stages)[number]);
                 const overdue = o.nextActionOn && new Date(o.nextActionOn).getTime() < Date.now();
                 return (
                   <div key={o.id} className="kanban-card">
+                    {(o.contact?.name ?? o.acp?.name) && <div className="eyebrow-mini">{o.contact?.name ?? o.acp?.name}</div>}
                     <div className="title">{o.title}</div>
-                    <div className="meta">
-                      <span>{o.contact?.name ?? o.acp?.name ?? '—'}</span>
-                      {o.estimatedValue != null && <span><Money value={o.estimatedValue} /></span>}
-                    </div>
+                    {o.estimatedValue != null && <div className="amount"><Money value={o.estimatedValue} /></div>}
                     {o.nextActionOn && (
                       <div className={overdue ? 'badge crit' : 'badge'} style={{ marginTop: '0.4rem', fontSize: '0.7rem' }}>
                         {formatDateBE(o.nextActionOn)}{o.nextActionNote ? ` · ${o.nextActionNote}` : ''}
@@ -88,7 +89,8 @@ function CrmInner() {
                 );
               })}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </>

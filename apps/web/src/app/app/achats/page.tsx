@@ -236,7 +236,7 @@ function AchatsInner() {
       />
 
       <div className="kpis" style={{ marginBottom: '1.2rem' }}>
-        <div className="kpi"><span className="ic">Σ</span><div className="label">Total dépenses (TTC)</div><div className="value"><Money value={total} /></div></div>
+        <div className="kpi hero"><span className="ic">Σ</span><div className="label">Total dépenses (TTC)</div><div className="value"><Money value={total} /></div></div>
         <div className="kpi"><span className="ic">!</span><div className="label">Reste à payer</div><div className="value"><Money value={unpaidTotal} /></div></div>
       </div>
 

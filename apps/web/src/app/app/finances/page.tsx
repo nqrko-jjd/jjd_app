@@ -90,7 +90,7 @@ export default function FinancesPage() {
           <div className="kpis" style={{ marginBottom: '1.6rem' }}>
             <div className="kpi"><span className="ic">↑</span><div className="label">Chiffre d'affaires net</div><div className="value"><Money value={data.revenue.net} /></div></div>
             <div className="kpi"><span className="ic">↓</span><div className="label">Dépenses</div><div className="value"><Money value={data.expenses.total} /></div></div>
-            <div className="kpi"><span className="ic">=</span><div className="label">Résultat</div><div className={`value${data.result < 0 ? ' neg' : ''}`}><Money value={data.result} /></div></div>
+            <div className="kpi hero"><span className="ic">=</span><div className="label">Résultat</div><div className={`value${data.result < 0 ? ' neg' : ''}`}><Money value={data.result} /></div></div>
             <div className="kpi"><span className="ic">%</span><div className="label">Marge</div><div className={`value${(data.margin ?? 0) < 0 ? ' neg' : ''}`}>{data.margin != null ? `${data.margin} %` : '—'}</div></div>
           </div>
 

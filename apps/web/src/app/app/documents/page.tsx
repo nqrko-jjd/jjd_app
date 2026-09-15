@@ -216,12 +216,14 @@ function DocumentsInner() {
         }
       />
 
-      <div className="row" style={{ marginBottom: '1rem', gap: '0.4rem' }}>
-        {TABS.map((t) => (
-          <button key={t.key} className={`btn${tab === t.key ? ' primary' : ''}`} onClick={() => { setTab(t.key); setStatus(''); setSelected(new Set()); }}>
-            {t.label}
-          </button>
-        ))}
+      <div className="row" style={{ marginBottom: '1rem', gap: '0.4rem', flexWrap: 'wrap' }}>
+        <div className="seg">
+          {TABS.map((t) => (
+            <button key={t.key} className={tab === t.key ? 'on' : ''} onClick={() => { setTab(t.key); setStatus(''); setSelected(new Set()); }}>
+              {t.label}
+            </button>
+          ))}
+        </div>
         {statusOptions.length > 0 && (
           <select className="select" style={{ maxWidth: 180 }} value={status} onChange={(e) => setStatus(e.target.value)}>
             <option value="">Tous les statuts</option>

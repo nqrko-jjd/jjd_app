@@ -270,18 +270,24 @@ export default function DashboardPage() {
       {data && (
         <>
           <div className="kpis">
-            <Kpi ic={BarChart3} label="Facturé ce mois" value={<Money value={data.kpis.invoicedMonth} />} sub={monthTrend(data.kpis.invoicedMonth, data.kpis.invoicedPrevMonth)} hero />
+            <Kpi
+              ic={BarChart3}
+              label="Facturé ce mois"
+              value={<Money value={data.kpis.invoicedMonth} />}
+              sub={monthTrend(data.kpis.invoicedMonth, data.kpis.invoicedPrevMonth) ?? 'Pas encore assez d’historique pour comparer'}
+              hero
+            />
             <Kpi
               ic={Wallet}
               label="Encaissé ce mois"
               value={<Money value={data.kpis.paidMonth} />}
-              sub={data.kpis.invoicedMonth > 0 ? `${Math.round((data.kpis.paidMonth / data.kpis.invoicedMonth) * 100)} % du montant facturé` : undefined}
+              sub={data.kpis.invoicedMonth > 0 ? `${Math.round((data.kpis.paidMonth / data.kpis.invoicedMonth) * 100)} % du montant facturé` : 'Aucune facture ce mois-ci'}
             />
             <Kpi
               ic={Building2}
               label="Chantiers en cours"
               value={data.kpis.openWorksites}
-              sub={data.kpis.teamsOnSiteToday > 0 ? `${data.kpis.teamsOnSiteToday} équipe${data.kpis.teamsOnSiteToday > 1 ? 's' : ''} sur le terrain aujourd’hui` : undefined}
+              sub={data.kpis.teamsOnSiteToday > 0 ? `${data.kpis.teamsOnSiteToday} équipe${data.kpis.teamsOnSiteToday > 1 ? 's' : ''} sur le terrain aujourd’hui` : 'Aucune équipe sur le terrain aujourd’hui'}
             />
             <Kpi ic={Flag} label="Impayés" value={<Money value={data.kpis.overdueAmount} />} sub={`${data.kpis.overdueCount} facture${data.kpis.overdueCount > 1 ? 's' : ''} en retard`} warn />
             <Kpi ic={FileText} label="Devis en attente" value={<Money value={data.kpis.quotesPendingAmount} />} sub={`${data.kpis.quotesPendingCount} devis envoyés`} />
@@ -338,8 +344,10 @@ export default function DashboardPage() {
 function Kpi({ ic: Ic, label, value, sub, hero, warn }: { ic: LucideIcon; label: string; value: React.ReactNode; sub?: string; hero?: boolean; warn?: boolean }) {
   return (
     <div className={`kpi${hero ? ' hero' : ''}${warn ? ' warn' : ''}`}>
-      <span className="ic"><Ic size={16} strokeWidth={2} /></span>
-      <div className="label">{label}</div>
+      <div className="kpi-head">
+        <div className="label">{label}</div>
+        <span className="ic"><Ic size={16} strokeWidth={2} /></span>
+      </div>
       <div className="value">{value}</div>
       {sub && <div className="sub">{sub}</div>}
     </div>

@@ -125,7 +125,7 @@ function WorkerToday() {
 interface Dashboard {
   kpis: {
     invoicedMonth: number; paidMonth: number; overdueAmount: number;
-    overdueCount: number; openWorksites: number;
+    overdueCount: number; openWorksites: number; teamsOnSiteToday: number;
     receivableAmount: number; quotesPendingAmount: number; quotesPendingCount: number;
   };
   alerts: { kind: string; severity: string; label: string; count: number; amount?: number; href: string }[];
@@ -262,10 +262,15 @@ export default function DashboardPage() {
           <div className="kpis">
             <Kpi ic="€" label="Facturé ce mois" value={<Money value={data.kpis.invoicedMonth} />} hero />
             <Kpi ic="✓" label="Encaissé ce mois" value={<Money value={data.kpis.paidMonth} />} />
-            <Kpi ic="!" label="Impayés" value={<Money value={data.kpis.overdueAmount} />} sub={`${data.kpis.overdueCount} factures en retard`} />
-            <Kpi ic="◷" label="À encaisser" value={<Money value={data.kpis.receivableAmount} />} sub="factures émises non payées" />
-            <Kpi ic="▤" label="Chantiers en cours" value={data.kpis.openWorksites} />
+            <Kpi
+              ic="▤"
+              label="Chantiers en cours"
+              value={data.kpis.openWorksites}
+              sub={data.kpis.teamsOnSiteToday > 0 ? `${data.kpis.teamsOnSiteToday} équipe${data.kpis.teamsOnSiteToday > 1 ? 's' : ''} sur le terrain aujourd’hui` : undefined}
+            />
+            <Kpi ic="!" label="Impayés" value={<Money value={data.kpis.overdueAmount} />} sub={`${data.kpis.overdueCount} facture${data.kpis.overdueCount > 1 ? 's' : ''} en retard`} warn />
             <Kpi ic="⇗" label="Devis en attente" value={<Money value={data.kpis.quotesPendingAmount} />} sub={`${data.kpis.quotesPendingCount} devis envoyés`} />
+            <Kpi ic="◷" label="À encaisser" value={<Money value={data.kpis.receivableAmount} />} sub="factures émises non payées" />
           </div>
 
           <div className="row" style={{ justifyContent: 'space-between', margin: '1.8rem 0 0.8rem' }}>
@@ -315,9 +320,9 @@ export default function DashboardPage() {
   );
 }
 
-function Kpi({ ic, label, value, sub, hero }: { ic: string; label: string; value: React.ReactNode; sub?: string; hero?: boolean }) {
+function Kpi({ ic, label, value, sub, hero, warn }: { ic: string; label: string; value: React.ReactNode; sub?: string; hero?: boolean; warn?: boolean }) {
   return (
-    <div className={`kpi${hero ? ' hero' : ''}`}>
+    <div className={`kpi${hero ? ' hero' : ''}${warn ? ' warn' : ''}`}>
       <span className="ic">{ic}</span>
       <div className="label">{label}</div>
       <div className="value">{value}</div>

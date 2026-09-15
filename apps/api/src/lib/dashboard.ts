@@ -20,10 +20,13 @@ export async function bureauDashboard() {
 
   const ACTIVE_STATUS = ['scheduled', 'in_progress', 'on_hold'];
 
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const todayEnd = new Date(todayStart.getTime() + DAY);
+
   const [
     invoicedMonth, paidMonth, overdue, receivable, quotesPending, worksitesToInvoice,
     expiringDocs, ctExpiring, activeCount, activeWorksites,
-    crmNextActions,
+    crmNextActions, todayEvents,
   ] = await Promise.all([
     prisma.document.aggregate({
       where: { kind: 'invoice', issuedOn: { gte: monthStart }, source: { not: 'demo' } }, _sum: { totalHt: true },
@@ -50,7 +53,13 @@ export async function bureauDashboard() {
     prisma.crmOpportunity.count({
       where: { stage: { notIn: ['won', 'lost'] }, nextActionOn: { not: null, lte: now } },
     }),
+    prisma.planningEvent.findMany({
+      where: { startAt: { lt: todayEnd }, endAt: { gt: todayStart } },
+      select: { teamId: true },
+    }),
   ]);
+
+  const teamsOnSiteToday = new Set(todayEvents.map((e) => e.teamId).filter((id): id is string => !!id)).size;
 
   const overdueAmount = round2(overdue.reduce((s, d) => s + Math.max(0, (d.totalTtc || 0) - (d.paidAmount || 0)), 0));
   const receivableAmount = round2(receivable.reduce((s, d) => s + Math.max(0, (d.totalTtc || 0) - (d.paidAmount || 0)), 0));
@@ -80,6 +89,7 @@ export async function bureauDashboard() {
       overdueAmount,
       overdueCount: overdue.length,
       openWorksites: activeCount,
+      teamsOnSiteToday,
       receivableAmount,
       quotesPendingAmount,
       quotesPendingCount: quotesPending.length,

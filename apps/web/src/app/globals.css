@@ -469,6 +469,14 @@ p { margin: 0; }
 .page-tab.active { color: var(--ink); border-bottom-color: var(--primary); }
 .page-tab .n { color: var(--ink-3); font-weight: 600; }
 
+/* ---------------------------------------------------- liste de tâches */
+.taskrow { display: flex; align-items: center; gap: 0.8rem; padding: 0.95rem 1.3rem; border-bottom: 1px solid var(--line); }
+.taskrow:last-child { border-bottom: none; }
+.tasktext { flex: 1 1 0%; line-height: 1.5; min-width: 0; }
+.task-title-button { border: 0; background: none; color: inherit; padding: 0; text-align: left; font: inherit; font-weight: 600; cursor: pointer; }
+.task-title-button:hover { text-decoration: underline; }
+.task-tags { display: flex; flex-wrap: wrap; gap: 0.4rem; justify-content: flex-end; flex-shrink: 0; }
+
 /* ---------------------------------------------------- section repliable */
 .collapsible-head {
   display: flex; align-items: center; gap: 0.55rem; width: 100%;

@@ -1038,8 +1038,10 @@ model WorksiteTask {
   phaseId     String? // groupe d'affichage au sein du chantier ; absent = "Tâches sans phase"
   phase       WorksiteTaskPhase? @relation(fields: [phaseId], references: [id], onDelete: SetNull)
   title       String
-  description String?
+  description String? // consignes libres (accès, zone concernée, précautions, résultat attendu…)
   status      String             @default("todo") // todo | doing | done
+  priority    String             @default("normal") // low | normal | high | urgent
+  checklist   Json? // [{ label, done }] — points à vérifier, cochables indépendamment du statut
   assigneeId  String? // legacy — remplacé par `assignees` (multi), retiré une fois le rattrapage fait
   assignee    Person?            @relation("TaskAssignee", fields: [assigneeId], references: [id])
   assignees   TaskAssignment[]

@@ -324,12 +324,19 @@ export const worksiteReportInput = z.object({
   notes: z.string().trim().nullish(),
 });
 
+export const taskChecklistItemInput = z.object({
+  label: nonEmpty,
+  done: z.boolean().default(false),
+});
+
 export const worksiteTaskInput = z.object({
   worksiteId: z.string().nullish(), // absent = tâche générale (pas de chantier)
   phaseId: z.string().nullish(), // groupe d'affichage au sein du chantier ; absent = "sans phase"
   title: nonEmpty,
   description: z.string().trim().nullish(),
   status: z.enum(['todo', 'doing', 'done']).default('todo'),
+  priority: z.enum(WORKSITE_PRIORITIES).default('normal'),
+  checklist: z.array(taskChecklistItemInput).default([]),
   assigneeIds: z.array(z.string()).default([]),
   dueOn: z.coerce.date().nullish(),
 });

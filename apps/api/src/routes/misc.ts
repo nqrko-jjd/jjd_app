@@ -52,7 +52,12 @@ metaRouter.get(
       prisma.contact.findMany({ where: { OR: [{ type: 'client' }, { type: 'both' }] }, orderBy: { name: 'asc' }, select: { id: true, name: true } }),
       prisma.contact.findMany({ where: { kind: { in: ['acp', 'developer'] } }, orderBy: { name: 'asc' }, select: { id: true, name: true, syndicId: true } }),
       prisma.person.findMany({ where: { active: true }, orderBy: { firstName: 'asc' }, select: { id: true, firstName: true, lastName: true, displayName: true } }),
-      prisma.worksite.findMany({ where: { archived: false, kind: 'project', source: { not: 'demo' } }, orderBy: { updatedAt: 'desc' }, take: 5000, select: { id: true, ref: true, title: true, clientId: true } }),
+      prisma.worksite.findMany({
+        where: { archived: false, kind: 'project', source: { not: 'demo' } },
+        orderBy: { updatedAt: 'desc' },
+        take: 5000,
+        select: { id: true, ref: true, title: true, clientId: true, city: true, managerId: true },
+      }),
       prisma.syndic.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }),
     ]);
     res.json({
@@ -60,7 +65,7 @@ metaRouter.get(
       buildings,
       syndics,
       people: people.map((p) => ({ id: p.id, name: p.displayName || `${p.firstName} ${p.lastName ?? ''}`.trim() })),
-      worksites: worksites.map((w) => ({ id: w.id, name: `${w.ref} · ${w.title}`, clientId: w.clientId })),
+      worksites: worksites.map((w) => ({ id: w.id, name: `${w.ref} · ${w.title}`, clientId: w.clientId, city: w.city, managerId: w.managerId })),
     });
   }),
 );

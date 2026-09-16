@@ -471,9 +471,14 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
             <div className="eyebrow">Équipe interne · {w.ref}</div>
             <h3>Le fil du chantier</h3>
             <p>Photos, consignes et nouvelles de l’équipe, regroupées au même endroit.</p>
-            <button className="btn primary" onClick={() => setThreadOpen(true)}>
-              <MessageSquare size={15} strokeWidth={2} /> Ouvrir la discussion →
-            </button>
+            <div className="row" style={{ gap: '0.6rem' }}>
+              <button className="btn primary" onClick={() => setThreadOpen(true)}>
+                <MessageSquare size={15} strokeWidth={2} /> Ouvrir la discussion →
+              </button>
+              <Link href={`/app/messagerie?worksite=${w.id}&audience=internal`} className="btn ghost">
+                Ouvrir dans la messagerie →
+              </Link>
+            </div>
             <span className="hint">Échanges clients conservés dans un espace distinct.</span>
           </div>
         )

@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { PageHead, Money, formatDateBE, Kpi } from '@/lib/ui';
-import { Warehouse, AlertTriangle } from 'lucide-react';
+import { Warehouse, AlertTriangle, Layers } from 'lucide-react';
 import { useSort, useColumnFilter, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
 import { ComboBox } from '@/components/ComboBox';
@@ -31,6 +31,7 @@ const TYPE_TONE: Record<string, string> = { in: 'ok', out: 'warn', adjustment: '
 
 export default function StockPage() {
   const [q, setQ] = useState('');
+  const [stockFilter, setStockFilter] = useState<'all' | 'low' | 'ok'>('all');
   const [creating, setCreating] = useState(false);
   const [moveItem, setMoveItem] = useState<StockItem | null>(null);
   const [history, setHistory] = useState<StockItem | null>(null);
@@ -39,17 +40,20 @@ export default function StockPage() {
   const { data, loading, reload } = ctxItems;
   const { data: meta } = useApi<Meta>('/api/stock/meta');
 
+  const allItems = data?.items ?? [];
+  const filteredItems = stockFilter === 'all' ? allItems : allItems.filter((i) => (stockFilter === 'low' ? i.low : !i.low));
+
   const stockAccessors = {
     name: (i: StockItem) => i.name,
     category: (i: StockItem) => i.category,
     qty: (i: StockItem) => i.qty,
     value: (i: StockItem) => i.value,
   };
-  const colFilter = useColumnFilter<StockItem>(data?.items ?? [], stockAccessors);
+  const colFilter = useColumnFilter<StockItem>(filteredItems, stockAccessors);
   const sort = useSort<StockItem>(colFilter.rows, stockAccessors);
 
-  const totalValue = (data?.items ?? []).reduce((s, i) => s + i.value, 0);
-  const lowCount = (data?.items ?? []).filter((i) => i.low).length;
+  const totalValue = allItems.reduce((s, i) => s + i.value, 0);
+  const lowCount = allItems.filter((i) => i.low).length;
 
   const itemFields: FieldDef[] = [
     { name: 'name', label: 'Nom', required: true, full: true, placeholder: 'Sac de ciment 25kg' },
@@ -77,7 +81,7 @@ export default function StockPage() {
       <PageHead
         eyebrow="Ressources"
         title="Stock de matériaux"
-        sub={data ? `${data.items.length} article${data.items.length > 1 ? 's' : ''} · clic sur une ligne pour l’historique` : undefined}
+        sub={data ? `${allItems.length} article${allItems.length > 1 ? 's' : ''} · clic sur une ligne pour l’historique` : undefined}
         action={<button className="btn primary" onClick={() => setCreating(true)}>+ Nouvel article</button>}
       />
 
@@ -86,9 +90,10 @@ export default function StockPage() {
           ic={Warehouse}
           label="Valeur du stock"
           value={<Money value={totalValue} />}
-          sub={`${data?.items.length ?? 0} article${(data?.items.length ?? 0) > 1 ? 's' : ''}`}
+          sub={`${allItems.length} article${allItems.length > 1 ? 's' : ''}`}
           hero
         />
+        <Kpi ic={Layers} label="Références" value={allItems.length} sub="Articles suivis" />
         <Kpi
           ic={AlertTriangle}
           label="Sous le seuil"
@@ -98,14 +103,20 @@ export default function StockPage() {
         />
       </div>
 
+      <div className="msg-filter-chips" style={{ marginBottom: '1rem' }}>
+        <button className={stockFilter === 'all' ? 'on' : ''} onClick={() => setStockFilter('all')}>Tous</button>
+        <button className={stockFilter === 'low' ? 'on' : ''} onClick={() => setStockFilter('low')}>À réapprovisionner</button>
+        <button className={stockFilter === 'ok' ? 'on' : ''} onClick={() => setStockFilter('ok')}>Disponible</button>
+      </div>
+
       <div className="row" style={{ marginBottom: '1rem' }}>
         <input className="input" style={{ maxWidth: 280 }} placeholder="Nom, catégorie…" value={q} onChange={(e) => setQ(e.target.value)} />
         <ViewToggle mode={mode} onChange={setMode} />
       </div>
 
       {loading && <div className="empty">Chargement…</div>}
-      {data && data.items.length === 0 && <div className="empty">Aucun article. Ajoute le premier matériau du dépôt.</div>}
-      {data && data.items.length > 0 && mode === 'gallery' && (
+      {data && filteredItems.length === 0 && <div className="empty">Aucun article pour ce filtre.</div>}
+      {data && filteredItems.length > 0 && mode === 'gallery' && (
         <div className="gallery-grid">
           {sort.rows.map((it) => (
             <div
@@ -135,7 +146,7 @@ export default function StockPage() {
           ))}
         </div>
       )}
-      {data && data.items.length > 0 && mode === 'list' && (
+      {data && filteredItems.length > 0 && mode === 'list' && (
         <div className="tbl-wrap">
           <table className="tbl">
             <thead>

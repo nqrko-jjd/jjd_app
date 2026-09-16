@@ -8,6 +8,13 @@ import { storeImage } from '../lib/media.js';
 export const messagerieRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 
+/** Mise en service du suivi de lecture : sans ça, le tout premier calcul de non-lus pour
+ *  chaque utilisateur remonterait l'historique complet (des années de chat WhatsApp importé)
+ *  comme "non lu". Tant qu'aucun ThreadRead n'existe pour un fil, on considère lu jusqu'à
+ *  cette date plutôt que depuis l'origine des temps — seuls les messages postés après
+ *  comptent vraiment comme non lus. */
+const READ_TRACKING_LAUNCHED_AT = new Date('2026-09-16T06:10:00.000Z');
+
 async function ensureGeneralThread() {
   const existing = await prisma.thread.findFirst({ where: { kind: 'general' } });
   if (existing) return existing;
@@ -47,7 +54,7 @@ async function listThreads(userId: string, role: string, personId: string | null
       prisma.message.findFirst({ where: { threadId: general.id }, orderBy: { createdAt: 'desc' } }),
       prisma.threadRead.findUnique({ where: { threadId_audience_userId: { threadId: general.id, audience: 'internal', userId } } }),
     ]);
-    const unread = await prisma.message.count({ where: { threadId: general.id, createdAt: { gt: read?.lastReadAt ?? new Date(0) } } });
+    const unread = await prisma.message.count({ where: { threadId: general.id, createdAt: { gt: read?.lastReadAt ?? READ_TRACKING_LAUNCHED_AT } } });
     items.push({
       id: general.id, kind: 'general', title: 'Général JJD', sub: 'Équipe JJD · fil général',
       worksiteId: null, lastMessage: lastMsg ? `${lastMsg.authorName ? lastMsg.authorName + ' : ' : ''}${preview(lastMsg)}` : '',
@@ -59,6 +66,7 @@ async function listThreads(userId: string, role: string, personId: string | null
     where: {
       kind: 'worksite',
       messages: { some: { audience } },
+      worksite: { source: { not: 'demo' }, archived: false },
       ...(isOffice ? {} : { participants: { some: { personId: personId ?? '__none__' } } }),
     },
     include: {
@@ -70,7 +78,7 @@ async function listThreads(userId: string, role: string, personId: string | null
   const reads = await prisma.threadRead.findMany({ where: { userId, audience, threadId: { in: threads.map((t) => t.id) } } });
   const readMap = new Map(reads.map((r) => [r.threadId, r.lastReadAt]));
   const unreadCounts = await Promise.all(
-    threads.map((t) => prisma.message.count({ where: { threadId: t.id, audience, createdAt: { gt: readMap.get(t.id) ?? new Date(0) } } })),
+    threads.map((t) => prisma.message.count({ where: { threadId: t.id, audience, createdAt: { gt: readMap.get(t.id) ?? READ_TRACKING_LAUNCHED_AT } } })),
   );
 
   threads.forEach((t, i) => {

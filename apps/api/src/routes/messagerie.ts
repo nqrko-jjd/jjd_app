@@ -38,8 +38,9 @@ function preview(m: { kind: string; body: string | null } | undefined): string {
 /** Liste les fils (généraux + par chantier) visibles par l'utilisateur, façon messagerie
  *  unifiée : le fil général en tête, puis les chantiers ayant déjà une conversation pour
  *  l'audience demandée — le bureau/admin voit tout, les autres seulement leurs chantiers
- *  (participants du fil). Onglet "client" : réservé au bureau (répond au client depuis l'app). */
-async function listThreads(userId: string, role: string, personId: string | null, audience: 'internal' | 'client') {
+ *  (participants du fil). Onglet "client" : réservé au bureau (répond au client depuis l'app).
+ *  `archived` bascule vers les chantiers clôturés/archivés (le fil général n'y figure jamais). */
+async function listThreads(userId: string, role: string, personId: string | null, audience: 'internal' | 'client', archived = false) {
   const isOffice = role === 'admin' || role === 'office';
   if (audience === 'client' && !isOffice) return [];
 
@@ -48,7 +49,7 @@ async function listThreads(userId: string, role: string, personId: string | null
     lastMessage: string; lastAt: string | null; unread: number; pinned: boolean;
   }[] = [];
 
-  if (audience === 'internal') {
+  if (audience === 'internal' && !archived) {
     const general = await ensureGeneralThread();
     const [lastMsg, read] = await Promise.all([
       prisma.message.findFirst({ where: { threadId: general.id }, orderBy: { createdAt: 'desc' } }),
@@ -66,7 +67,7 @@ async function listThreads(userId: string, role: string, personId: string | null
     where: {
       kind: 'worksite',
       messages: { some: { audience } },
-      worksite: { source: { not: 'demo' }, archived: false },
+      worksite: { source: { not: 'demo' }, archived },
       ...(isOffice ? {} : { participants: { some: { personId: personId ?? '__none__' } } }),
     },
     include: {
@@ -107,7 +108,8 @@ messagerieRouter.get(
   requireAuth(...STAFF),
   asyncHandler(async (req, res) => {
     const audience = req.query.audience === 'client' ? 'client' : 'internal';
-    const items = await listThreads(req.user!.id, req.user!.role, req.user!.personId, audience);
+    const archived = req.query.archived === '1';
+    const items = await listThreads(req.user!.id, req.user!.role, req.user!.personId, audience, archived);
     res.json({ items });
   }),
 );

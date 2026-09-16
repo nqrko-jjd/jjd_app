@@ -968,7 +968,7 @@ body.plan-wide .main { max-width: none; }
 .msg-audience-tabs { display: flex; background: var(--surface-2); border-radius: 10px; padding: 3px; gap: 2px; margin-bottom: 0.8rem; }
 .msg-audience-tabs button { flex: 1; border: 0; background: none; padding: 0.5rem; border-radius: 8px; font-size: 0.82rem; font-weight: 600; color: var(--ink-2); cursor: pointer; }
 .msg-audience-tabs button.active { background: var(--surface); box-shadow: var(--shadow-sm); color: var(--ink); }
-.msg-filter-chips { display: flex; gap: 0.4rem; margin-bottom: 0.8rem; }
+.msg-filter-chips { display: flex; gap: 0.4rem; margin-bottom: 0.8rem; flex-wrap: wrap; }
 .msg-filter-chips button { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 0.35rem 0.7rem; font-size: 0.76rem; color: var(--ink-2); cursor: pointer; }
 .msg-filter-chips button.on { background: var(--primary); border-color: var(--primary); color: #fff; }
 .msg-list-items { flex: 1; overflow-y: auto; margin: 0 -0.4rem; }

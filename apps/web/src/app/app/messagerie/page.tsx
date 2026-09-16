@@ -51,14 +51,16 @@ function MessagerieInner() {
   const sp = useSearchParams();
   const [audience, setAudience] = useState<Audience>('internal');
   const [search, setSearch] = useState('');
-  const [onlyUnread, setOnlyUnread] = useState(false);
+  const [filter, setFilter] = useState<'all' | 'unread' | 'archived'>('all');
   const [selected, setSelected] = useState<Selection | null>(null);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
-  const { data: listData, reload: reloadList } = useApi<{ items: ThreadItem[] }>(`/api/messagerie/threads?audience=${audience}`);
+  const { data: listData, reload: reloadList } = useApi<{ items: ThreadItem[] }>(
+    `/api/messagerie/threads?audience=${audience}${filter === 'archived' ? '&archived=1' : ''}`,
+  );
   const items = listData?.items ?? [];
 
   // deep-link : /app/messagerie?worksite=<id>&audience=internal
@@ -86,7 +88,7 @@ function MessagerieInner() {
     const t = setInterval(() => { reloadList(); if (selected) reloadConvo(); }, 8000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected, audience]);
+  }, [selected, audience, filter]);
 
   useEffect(() => { endRef.current?.scrollIntoView(); }, [messages.length]);
 
@@ -99,7 +101,7 @@ function MessagerieInner() {
 
   const q = search.trim().toLowerCase();
   const filtered = items.filter((it) => {
-    if (onlyUnread && it.unread === 0) return false;
+    if (filter === 'unread' && it.unread === 0) return false;
     if (q && !it.title.toLowerCase().includes(q) && !it.lastMessage.toLowerCase().includes(q)) return false;
     return true;
   });
@@ -158,11 +160,16 @@ function MessagerieInner() {
             <input placeholder="Rechercher une conversation" value={search} onChange={(e) => setSearch(e.target.value)} />
           </label>
           <div className="msg-filter-chips">
-            <button className={!onlyUnread ? 'on' : ''} onClick={() => setOnlyUnread(false)}>Toutes</button>
-            <button className={onlyUnread ? 'on' : ''} onClick={() => setOnlyUnread(true)}>Non lus{totalUnread ? ` · ${totalUnread}` : ''}</button>
+            <button className={filter === 'all' ? 'on' : ''} onClick={() => { setFilter('all'); setSelected(null); }}>Toutes</button>
+            <button className={filter === 'unread' ? 'on' : ''} onClick={() => { setFilter('unread'); setSelected(null); }}>Non lus{totalUnread ? ` · ${totalUnread}` : ''}</button>
+            <button className={filter === 'archived' ? 'on' : ''} onClick={() => { setFilter('archived'); setSelected(null); }}>Archivés</button>
           </div>
           <div className="msg-list-items">
-            {filtered.length === 0 && <p className="muted" style={{ padding: '1rem' }}>Aucune conversation.</p>}
+            {filtered.length === 0 && (
+              <p className="muted" style={{ padding: '1rem' }}>
+                {filter === 'archived' ? 'Aucune conversation archivée.' : 'Aucune conversation.'}
+              </p>
+            )}
             {filtered.map((it) => {
               const active = selectedItem?.id === it.id;
               return (

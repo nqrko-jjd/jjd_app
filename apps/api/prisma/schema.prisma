@@ -125,6 +125,9 @@ model Person {
   assignedTasks        WorksiteTask[]      @relation("TaskAssignee")
   taskAssignments      TaskAssignment[]
   adjustments          PersonAdjustment[]
+  leadEvents           PlanningEvent[]     @relation("EventLead")
+  driverEvents         PlanningEvent[]     @relation("EventDriver")
+  absences             Absence[]
 
   @@index([normalizedName])
   @@index([active])
@@ -719,12 +722,21 @@ model PlanningEvent {
   startAt       DateTime
   endAt         DateTime
   allDay        Boolean  @default(false)
+  status        String   @default("confirmed") // confirmed | tentative — "à confirmer" (créneau pas encore garanti)
   teamId        String?
   team          Team?    @relation(fields: [teamId], references: [id])
   vehicleId     String? // legacy, un seul véhicule — conservé pour ne pas perdre les données déjà en prod, plus utilisé par l'appli (voir EventVehicle)
   vehicle       Vehicle? @relation(fields: [vehicleId], references: [id])
+  leadPersonId  String? // référent de l'intervention (parmi les ouvriers affectés)
+  leadPerson    Person?  @relation("EventLead", fields: [leadPersonId], references: [id])
+  driverPersonId String? // conducteur du véhicule réservé, si applicable
+  driverPerson   Person? @relation("EventDriver", fields: [driverPersonId], references: [id])
+  departureAt   DateTime? // heure de départ (dépôt / point de rendez-vous), distincte du début d'intervention
+  departureFrom String? // lieu de rendez-vous / départ
+  tasksNote     String? // travaux à réaliser sur ce créneau, une tâche par ligne
+  accessNote    String? // accès, livraison, protections & consignes propres à ce créneau
   materialsNote String?
-  note          String?
+  note          String? // contact sur place / coordination + instructions libres pour l'équipe
   googleEventId String?  @unique // UID de l'événement Google Agenda (synchro / import)
   source        String? // "agenda-import" | null (créé dans l'app)
   createdById   String?
@@ -739,6 +751,23 @@ model PlanningEvent {
 
   @@index([startAt])
   @@index([worksiteId])
+}
+
+/// Absence d'un ouvrier (congé, formation…) — bloque son affectation sur la période, distinct
+/// d'une PlanningEvent qui rattache toujours à un chantier.
+model Absence {
+  id        String   @id @default(cuid())
+  personId  String
+  person    Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  kind      String // leave | training | other
+  startsOn  DateTime // jour de début (journée pleine)
+  endsOn    DateTime // jour de fin inclus
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([personId])
+  @@index([startsOn])
 }
 
 model EventAssignment {

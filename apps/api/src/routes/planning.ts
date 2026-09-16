@@ -2,7 +2,7 @@ import { Router } from 'express';
 import path from 'node:path';
 import { createReadStream, existsSync } from 'node:fs';
 import multer from 'multer';
-import { planningEventInput, teamInput, consumableInput, vehicleInput, vehicleDocInput, vehicleCostPerKm } from '@jjd/shared';
+import { planningEventInput, teamInput, consumableInput, vehicleInput, vehicleDocInput, vehicleCostPerKm, absenceInput } from '@jjd/shared';
 import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, STAFF, OFFICE } from '../lib/auth.js';
@@ -79,6 +79,8 @@ planningRouter.get(
         assignments: { include: { person: { select: { id: true, displayName: true, firstName: true, phone: true } } } },
         equipment: { include: { equipment: { select: { id: true, name: true } } } },
         consumables: { include: { consumable: { select: { id: true, name: true, unit: true } } } },
+        leadPerson: { select: { id: true, displayName: true, firstName: true } },
+        driverPerson: { select: { id: true, displayName: true, firstName: true } },
       },
     });
     res.json({ items, googleSync: gcalEnabled() });
@@ -107,7 +109,14 @@ planningRouter.post(
         startAt: d.startAt,
         endAt: d.endAt,
         allDay: d.allDay,
+        status: d.status,
         teamId: d.teamId ?? null,
+        leadPersonId: d.leadPersonId ?? null,
+        driverPersonId: d.driverPersonId ?? null,
+        departureAt: d.departureAt ?? null,
+        departureFrom: d.departureFrom ?? null,
+        tasksNote: d.tasksNote ?? null,
+        accessNote: d.accessNote ?? null,
         materialsNote: d.materialsNote ?? null,
         note: d.note ?? null,
         createdById: req.user!.id,
@@ -135,7 +144,14 @@ planningRouter.patch(
         startAt: d.startAt ?? undefined,
         endAt: d.endAt ?? undefined,
         allDay: d.allDay ?? undefined,
+        status: d.status ?? undefined,
         teamId: d.teamId,
+        leadPersonId: d.leadPersonId,
+        driverPersonId: d.driverPersonId,
+        departureAt: d.departureAt,
+        departureFrom: d.departureFrom,
+        tasksNote: d.tasksNote,
+        accessNote: d.accessNote,
         materialsNote: d.materialsNote,
         note: d.note,
         ...(d.personIds
@@ -259,6 +275,8 @@ async function withIncludes(id: string) {
       assignments: { include: { person: { select: { id: true, displayName: true, firstName: true, phone: true } } } },
       equipment: { include: { equipment: { select: { id: true, name: true } } } },
       consumables: { include: { consumable: { select: { id: true, name: true, unit: true } } } },
+      leadPerson: { select: { id: true, displayName: true, firstName: true } },
+      driverPerson: { select: { id: true, displayName: true, firstName: true } },
     },
   });
 }
@@ -511,5 +529,70 @@ consumablesRouter.post(
     const existing = await prisma.consumable.findFirst({ where: { name: { equals: d.name } } });
     const item = existing ?? await prisma.consumable.create({ data: { name: d.name, unit: d.unit, note: d.note ?? null } });
     res.status(existing ? 200 : 201).json({ item });
+  }),
+);
+
+// ── Absences (congés, formations…) — bloquent l'affectation de la personne sur la période
+
+export const absencesRouter = Router();
+
+absencesRouter.get(
+  '/',
+  requireAuth(...STAFF),
+  asyncHandler(async (req, res) => {
+    const { from, to } = req.query as Record<string, string>;
+    const where: Record<string, unknown> = {};
+    if (from || to) {
+      where.AND = [
+        from ? { endsOn: { gte: new Date(from) } } : {},
+        to ? { startsOn: { lte: new Date(to) } } : {},
+      ];
+    }
+    const items = await prisma.absence.findMany({
+      where,
+      orderBy: { startsOn: 'asc' },
+      include: { person: { select: { id: true, displayName: true, firstName: true } } },
+    });
+    res.json({ items });
+  }),
+);
+
+absencesRouter.post(
+  '/',
+  requireAuth(...STAFF),
+  asyncHandler(async (req, res) => {
+    const d = absenceInput.parse(req.body);
+    const absence = await prisma.absence.create({
+      data: { personId: d.personId, kind: d.kind, startsOn: d.startsOn, endsOn: d.endsOn, note: d.note ?? null },
+    });
+    res.status(201).json({ absence });
+  }),
+);
+
+absencesRouter.patch(
+  '/:id',
+  requireAuth(...STAFF),
+  asyncHandler(async (req, res) => {
+    const d = absenceInput.partial().parse(req.body);
+    const absence = await prisma.absence.update({
+      where: { id: req.params.id },
+      data: {
+        personId: d.personId ?? undefined,
+        kind: d.kind ?? undefined,
+        startsOn: d.startsOn ?? undefined,
+        endsOn: d.endsOn ?? undefined,
+        note: d.note,
+      },
+    });
+    res.json({ absence });
+  }),
+);
+
+absencesRouter.delete(
+  '/:id',
+  requireAuth(...STAFF),
+  asyncHandler(async (req, res) => {
+    await prisma.absence.delete({ where: { id: req.params.id } });
+    res.status(204).end();
   }),
 );

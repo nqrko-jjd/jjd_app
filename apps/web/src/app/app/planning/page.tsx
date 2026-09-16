@@ -1,28 +1,21 @@
 'use client';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
-import { api } from '@/lib/api';
 import { PageHead } from '@/lib/ui';
-import { ComboBox } from '@/components/ComboBox';
+import { PlanningAssignmentModal } from '@/components/PlanningAssignmentModal';
+import { PlanningEventDetail } from '@/components/PlanningEventDetail';
+import { PlanningAbsenceModal } from '@/components/PlanningAbsenceModal';
+import { WORKSITE_STATUS_OPEN, ABSENCE_KIND_LABEL, PERSON_ROLE_LABEL } from '@jjd/shared';
+import { Search, Truck, Wrench } from 'lucide-react';
+import type { PlanningEv, PlanAbsence, PlanVehicleRef } from '@/components/planningTypes';
 
-interface EvVehicle { vehicle: { id: string; plate: string | null; model: string | null; brand: string | null; code: string | null; seats: number | null } }
+interface PersonRow { id: string; displayName: string | null; firstName: string; role: string; specialties?: unknown; active: boolean; phone?: string | null }
+interface WsRow { id: string; ref: string; title: string; city: string | null }
+interface EquipRow { id: string; name: string }
+interface VehicleRow extends PlanVehicleRef { status: string }
 
-interface Ev {
-  id: string; title: string | null; startAt: string; endAt: string; allDay: boolean;
-  materialsNote: string | null; note: string | null;
-  worksite: { id: string; ref: string; title: string; city: string | null; address?: string | null };
-  team: { name: string; color: string | null } | null;
-  vehicles: EvVehicle[];
-  assignments: { person: { id: string; displayName: string | null; firstName: string; phone?: string | null } }[];
-  equipment: { equipment: { id: string; name: string } }[];
-  consumables: { qty: number; consumable: { id: string; name: string; unit: string } }[];
-}
-
-const DAY_START = 6 * 60;
-const DAY_END = 20 * 60;
-const DAY_LABELS = ['lun', 'mar', 'mer', 'jeu', 'ven', 'sam', 'dim'];
-const PALETTE = ['#2563eb', '#0891b2', '#7c3aed', '#c2410c', '#15803d', '#b91c1c', '#a16207', '#be185d', '#4338ca', '#0f766e'];
+const TONE_COUNT = 6;
 
 function mondayOf(d: Date) {
   const x = new Date(d);
@@ -31,480 +24,431 @@ function mondayOf(d: Date) {
   return x;
 }
 const addDays = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
-const minsOfDay = (iso: string) => { const d = new Date(iso); return d.getHours() * 60 + d.getMinutes(); };
-const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
-const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' });
-
-function colorFor(e: Ev) {
-  if (e.team?.color) return e.team.color;
-  let h = 0;
-  for (const c of e.worksite.ref) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-  return PALETTE[h % PALETTE.length];
-}
-
-interface Block {
-  key: string; worksite: Ev['worksite']; title: string | null; startAt: string; endAt: string;
-  team: Ev['team']; vehicles: EvVehicle[]; materialsNote: string | null; note: string | null;
-  people: string[]; equipment: string[]; consumables: { name: string; qty: number; unit: string }[];
-  ids: string[]; color: string;
-}
-
-/** Regroupe les affectations d'un même chantier / même jour en un seul bloc. */
-function mergeByWorksite(evs: Ev[]): Block[] {
-  const map = new Map<string, Block>();
-  for (const e of evs) {
-    const cur = map.get(e.worksite.id);
-    const names = e.assignments.map((a) => a.person.displayName || a.person.firstName);
-    const equip = e.equipment.map((x) => x.equipment.name);
-    const cons = e.consumables.map((x) => ({ name: x.consumable.name, qty: x.qty, unit: x.consumable.unit }));
-    if (!cur) {
-      map.set(e.worksite.id, {
-        key: e.worksite.id, worksite: e.worksite, title: e.title, startAt: e.startAt, endAt: e.endAt,
-        team: e.team, vehicles: [...e.vehicles], materialsNote: e.materialsNote, note: e.note,
-        people: [...names], equipment: [...equip], consumables: [...cons], ids: [e.id], color: colorFor(e),
-      });
-    } else {
-      if (new Date(e.startAt) < new Date(cur.startAt)) cur.startAt = e.startAt;
-      if (new Date(e.endAt) > new Date(cur.endAt)) cur.endAt = e.endAt;
-      cur.ids.push(e.id);
-      for (const n of names) if (!cur.people.includes(n)) cur.people.push(n);
-      for (const n of equip) if (!cur.equipment.includes(n)) cur.equipment.push(n);
-      for (const c of cons) if (!cur.consumables.some((x) => x.name === c.name)) cur.consumables.push(c);
-      for (const v of e.vehicles) if (!cur.vehicles.some((x) => x.vehicle.id === v.vehicle.id)) cur.vehicles.push(v);
-      cur.materialsNote ??= e.materialsNote;
-      if (e.note && !cur.note) cur.note = e.note;
-    }
+/** Clé "YYYY-MM-DD" en heure LOCALE — jamais toISOString() ici : la Belgique est
+ *  toujours en avance sur UTC (UTC+1/+2), donc un minuit local convertirait sur le
+ *  jour précédent et décalerait toute la grille d'une colonne. */
+const toDateInput = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const sameDate = (a: string, b: string) => a === b;
+function businessDays(anchor: Date, count: number): Date[] {
+  const out: Date[] = [];
+  const cur = new Date(anchor);
+  while (out.length < count) {
+    const day = cur.getDay();
+    if (day !== 0 && day !== 6) out.push(new Date(cur));
+    cur.setDate(cur.getDate() + 1);
   }
-  return [...map.values()];
+  return out;
+}
+function personLabel(p: { displayName: string | null; firstName: string }) { return p.displayName || p.firstName; }
+function initials(p: { displayName: string | null; firstName: string }) { return personLabel(p).slice(0, 2).toUpperCase(); }
+function specialtyLabel(p: PersonRow) {
+  const specs = Array.isArray(p.specialties) ? (p.specialties as string[]) : [];
+  return specs[0] || PERSON_ROLE_LABEL[p.role as keyof typeof PERSON_ROLE_LABEL] || p.role;
+}
+function hhmm(iso: string) { return new Date(iso).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' }); }
+function vehicleLabel(v: PlanVehicleRef) {
+  return [v.code, [v.brand, v.model].filter(Boolean).join(' ')].filter(Boolean).join(' · ') || v.plate || '—';
 }
 
-/** Répartit les blocs d'un jour en colonnes qui ne se chevauchent pas. */
-function layout(blocks: Block[]) {
-  const sorted = [...blocks].sort((a, b) => minsOfDay(a.startAt) - minsOfDay(b.startAt));
-  const lanes: number[] = []; // fin (min) de chaque colonne
-  const placed = sorted.map((b) => {
-    const s = minsOfDay(b.startAt);
-    const end = Math.max(minsOfDay(b.endAt), s + 20);
-    let lane = lanes.findIndex((f) => f <= s);
-    if (lane === -1) { lane = lanes.length; lanes.push(end); } else lanes[lane] = end;
-    return { b, s, end, lane };
-  });
-  const laneCount = Math.max(1, lanes.length);
-  return { placed, laneCount };
-}
+type ViewMode = 'workers' | 'worksites' | 'resources';
+type Resource = { kind: 'vehicle' | 'equipment'; id: string; label: string; sub: string };
 
 export default function PlanningPage() {
-  const [view, setView] = useState<'week' | 'day'>('week');
-  const [anchor, setAnchor] = useState(() => new Date());
+  const [view, setView] = useState<ViewMode>('workers');
+  const [periodWeeks, setPeriodWeeks] = useState<1 | 2>(2);
+  const [anchor, setAnchor] = useState(() => mondayOf(new Date()));
+  const [trackedDay, setTrackedDay] = useState(() => toDateInput(new Date()));
+  const [search, setSearch] = useState('');
+  const [specialtyFilter, setSpecialtyFilter] = useState('');
+  const [worksiteFilter, setWorksiteFilter] = useState('');
+  const [onlyFree, setOnlyFree] = useState(false);
+  const [wide, setWide] = useState(false);
 
-  // Sur petit écran, la vue semaine (7 colonnes) est illisible → bascule sur Jour au 1er rendu.
+  const [assignmentModal, setAssignmentModal] = useState<{
+    existing?: PlanningEv | null;
+    prefill?: { worksiteId?: string; date?: string; personId?: string; vehicleId?: string; equipmentId?: string };
+  } | null>(null);
+  const [detailEv, setDetailEv] = useState<PlanningEv | null>(null);
+  const [absenceModal, setAbsenceModal] = useState<{ existing?: PlanAbsence | null; prefill?: { personId?: string; date?: string } } | null>(null);
+
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 760px)').matches) setView('day');
-  }, []);
-  const cols = view === 'week' ? 7 : 1;
-  const start = view === 'week' ? mondayOf(anchor) : new Date(anchor.setHours(0, 0, 0, 0));
-  const days = Array.from({ length: cols }, (_, i) => addDays(start, i));
-  const rangeFrom = days[0].toISOString();
-  const rangeTo = addDays(days[days.length - 1], 1).toISOString();
+    document.body.classList.toggle('plan-wide', wide);
+    return () => { document.body.classList.remove('plan-wide'); };
+  }, [wide]);
 
-  const { data, loading, reload } = useApi<{ items: Ev[]; googleSync: boolean }>(`/api/planning?from=${rangeFrom}&to=${rangeTo}`);
-  const [showForm, setShowForm] = useState<{ date?: string; hour?: number } | null>(null);
-  const [detail, setDetail] = useState<Block | null>(null);
+  const days = useMemo(() => businessDays(anchor, periodWeeks * 5), [anchor, periodWeeks]);
+  const dayStrs = useMemo(() => days.map(toDateInput), [days]);
+  const from = days[0].toISOString();
+  const to = addDays(days[days.length - 1], 1).toISOString();
 
-  const bodyRef = useRef<HTMLDivElement>(null);
-  useEffect(() => { if (bodyRef.current) bodyRef.current.scrollTop = (7 * 60 - DAY_START) / 60 * 46 - 20; }, [view]);
-  const [, force] = useState(0);
-  useEffect(() => { const t = setInterval(() => force((x) => x + 1), 60000); return () => clearInterval(t); }, []);
+  const { data: evData, loading, reload } = useApi<{ items: PlanningEv[] }>(`/api/planning?from=${from}&to=${to}`);
+  const events = evData?.items ?? [];
+  const { data: peopleData, reload: reloadPeople } = useApi<{ items: PersonRow[] }>('/api/people?active=1');
+  const people = useMemo(() => (peopleData?.items ?? []).filter((p) => p.active), [peopleData]);
+  const { data: wsData } = useApi<{ items: WsRow[] }>(`/api/worksites?status=${WORKSITE_STATUS_OPEN.join(',')}`);
+  const worksitesActive = useMemo(() => [...(wsData?.items ?? [])].sort((a, b) => a.ref.localeCompare(b.ref)), [wsData]);
+  const { data: vehData } = useApi<{ items: VehicleRow[] }>('/api/vehicles');
+  const vehicles = useMemo(() => (vehData?.items ?? []).filter((v) => v.status !== 'sold' && v.status !== 'retired'), [vehData]);
+  const { data: equipData } = useApi<{ items: EquipRow[] }>('/api/equipment');
+  const equipmentList = equipData?.items ?? [];
+  const { data: absData, reload: reloadAbsences } = useApi<{ items: PlanAbsence[] }>(`/api/absences?from=${from}&to=${to}`);
+  const absences = absData?.items ?? [];
 
-  const blocksByDay = useMemo(() => {
-    const raw: Ev[][] = days.map(() => []);
-    for (const e of data?.items ?? []) {
-      const idx = days.findIndex((x) => sameDay(x, new Date(e.startAt)));
-      if (idx >= 0) raw[idx].push(e);
+  function reloadAll() { reload(); reloadPeople(); reloadAbsences(); }
+
+  const toneByWorksite = useMemo(() => {
+    const map = new Map<string, number>();
+    worksitesActive.forEach((w, i) => map.set(w.id, i % TONE_COUNT));
+    return map;
+  }, [worksitesActive]);
+  const toneFor = (worksiteId: string) => toneByWorksite.get(worksiteId) ?? 0;
+
+  const peopleIdsByDay = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const d of dayStrs) map.set(d, new Set());
+    for (const e of events) {
+      const key = toDateInput(new Date(e.startAt));
+      const set = map.get(key);
+      if (set) for (const a of e.assignments) set.add(a.person.id);
     }
-    return raw.map((evs) => ({
-      timed: mergeByWorksite(evs.filter((e) => !e.allDay)),
-      allDay: mergeByWorksite(evs.filter((e) => e.allDay)),
-    }));
-  }, [data, days]);
+    return map;
+  }, [events, dayStrs]);
 
-  const maxLanes = useMemo(
-    () => Math.max(1, ...blocksByDay.map((b) => layout(b.timed).laneCount)),
-    [blocksByDay],
-  );
+  const absentIdsByDay = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const d of dayStrs) {
+      const set = new Set<string>();
+      for (const a of absences) {
+        const s = toDateInput(new Date(a.startsOn));
+        const e = toDateInput(new Date(a.endsOn));
+        if (d >= s && d <= e) set.add(a.personId);
+      }
+      map.set(d, set);
+    }
+    return map;
+  }, [absences, dayStrs]);
 
-  const hours = Array.from({ length: (DAY_END - DAY_START) / 60 }, (_, i) => DAY_START / 60 + i);
-  const now = new Date();
-  const nowTop = (now.getHours() * 60 + now.getMinutes() - DAY_START) / 60 * 46;
+  const vehicleIdsByDay = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const d of dayStrs) map.set(d, new Set());
+    for (const e of events) {
+      const key = toDateInput(new Date(e.startAt));
+      const set = map.get(key);
+      if (set) for (const v of e.vehicles) set.add(v.vehicle.id);
+    }
+    return map;
+  }, [events, dayStrs]);
 
-  const label = view === 'week'
-    ? `${days[0].toLocaleDateString('fr-BE', { day: '2-digit', month: 'short' })} – ${days[6].toLocaleDateString('fr-BE', { day: '2-digit', month: 'short', year: 'numeric' })}`
-    : days[0].toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' });
+  function selectTrackedDay(dateStr: string) {
+    setTrackedDay(dateStr);
+    if (!dayStrs.includes(dateStr)) setAnchor(mondayOf(new Date(`${dateStr}T00:00:00`)));
+  }
+  function shiftWeek(n: number) {
+    const na = addDays(anchor, n * 7);
+    setAnchor(na);
+    setTrackedDay(toDateInput(na));
+  }
+  function goToday() {
+    const na = mondayOf(new Date());
+    setAnchor(na);
+    setTrackedDay(toDateInput(new Date()));
+  }
 
-  const step = view === 'week' ? 7 : 1;
+  const totalActive = people.length;
+  const affectedToday = peopleIdsByDay.get(trackedDay)?.size ?? 0;
+  const absentToday = absentIdsByDay.get(trackedDay)?.size ?? 0;
+  const freeToday = Math.max(0, totalActive - affectedToday - absentToday);
+  const vehiclesReservedToday = vehicleIdsByDay.get(trackedDay)?.size ?? 0;
+
+  const specialtyOptions = useMemo(() => Array.from(new Set(people.map(specialtyLabel))).sort(), [people]);
+
+  function eventsFor(day: string, matcher: (e: PlanningEv) => boolean) {
+    return events.filter((e) => toDateInput(new Date(e.startAt)) === day && matcher(e));
+  }
+
+  const resources: Resource[] = useMemo(() => [
+    ...vehicles.map((v) => ({ kind: 'vehicle' as const, id: v.id, label: vehicleLabel(v), sub: v.seats ? `${v.seats} places` : 'Véhicule' })),
+    ...equipmentList.map((e) => ({ kind: 'equipment' as const, id: e.id, label: e.name, sub: 'Matériel' })),
+  ], [vehicles, equipmentList]);
+
+  const q = search.trim().toLowerCase();
+
+  const workerRows = useMemo(() => people.filter((p) => {
+    if (q && !personLabel(p).toLowerCase().includes(q) && !specialtyLabel(p).toLowerCase().includes(q)) return false;
+    if (specialtyFilter && specialtyLabel(p) !== specialtyFilter) return false;
+    if (worksiteFilter && !events.some((e) => e.worksite.id === worksiteFilter && e.assignments.some((a) => a.person.id === p.id))) return false;
+    if (onlyFree) {
+      const affected = peopleIdsByDay.get(trackedDay)?.has(p.id);
+      const absent = absentIdsByDay.get(trackedDay)?.has(p.id);
+      if (affected || absent) return false;
+    }
+    return true;
+  }), [people, q, specialtyFilter, worksiteFilter, events, onlyFree, peopleIdsByDay, absentIdsByDay, trackedDay]);
+
+  const worksiteRows = useMemo(() => worksitesActive.filter((w) => {
+    if (q && !w.ref.toLowerCase().includes(q) && !w.title.toLowerCase().includes(q) && !(w.city ?? '').toLowerCase().includes(q)) return false;
+    if (worksiteFilter && w.id !== worksiteFilter) return false;
+    return true;
+  }), [worksitesActive, q, worksiteFilter]);
+
+  const resourceRows = useMemo(() => resources.filter((r) => {
+    if (q && !r.label.toLowerCase().includes(q)) return false;
+    if (worksiteFilter && !events.some((e) => e.worksite.id === worksiteFilter && (r.kind === 'vehicle' ? e.vehicles.some((v) => v.vehicle.id === r.id) : e.equipment.some((x) => x.equipment.id === r.id)))) return false;
+    return true;
+  }), [resources, q, worksiteFilter, events]);
+
+  function openNew(prefill?: { worksiteId?: string; date?: string; personId?: string; vehicleId?: string; equipmentId?: string }) {
+    setAssignmentModal({ existing: null, prefill });
+  }
+  function openEdit(ev: PlanningEv) {
+    setDetailEv(null);
+    setAssignmentModal({ existing: ev });
+  }
+  function openDuplicate(ev: PlanningEv) {
+    setDetailEv(null);
+    setAssignmentModal({
+      existing: null,
+      prefill: { worksiteId: ev.worksite.id, date: toDateInput(new Date(ev.startAt)) },
+    });
+  }
+
+  function renderChips(dayStr: string, list: PlanningEv[]) {
+    return list.map((e) => (
+      <button
+        key={e.id}
+        type="button"
+        className={`plan-chip tone-${toneFor(e.worksite.id)}${e.status === 'tentative' ? ' tentative' : ''}`}
+        onClick={() => setDetailEv(e)}
+      >
+        <span className="t">{hhmm(e.startAt)}–{hhmm(e.endAt)}{e.status === 'tentative' ? ' · ?' : ''}</span>
+        <span className="r">{e.worksite.ref} · {e.worksite.city ?? e.worksite.title}</span>
+        <span className="n">{e.assignments.length} pers.{e.vehicles[0] ? ` · ${e.vehicles[0].vehicle.code ?? e.vehicles[0].vehicle.plate ?? ''}` : ''}</span>
+      </button>
+    ));
+  }
+
+  const rangeLabel = `${days[0].toLocaleDateString('fr-BE', { day: '2-digit', month: 'short' })} — ${days[days.length - 1].toLocaleDateString('fr-BE', { day: '2-digit', month: 'short', year: 'numeric' })}`;
+  const trackedShort = new Date(`${trackedDay}T00:00:00`).toLocaleDateString('fr-BE', { weekday: 'short', day: '2-digit' });
 
   return (
     <>
       <PageHead
-        eyebrow="Organisation du terrain"
-        title="Planning"
-        sub={data?.googleSync ? 'Synchronisé avec Google Agenda' : 'Google Agenda : non connecté'}
-        action={<button className="btn primary" onClick={() => setShowForm({})}>+ Affectation</button>}
+        eyebrow="Coordination du terrain"
+        title="Planning & affectations"
+        sub="Des équipes composées pour chaque chantier, chaque jour."
+        action={
+          <div className="row">
+            <button className="btn" onClick={() => setAbsenceModal({})}>+ Congé / formation</button>
+            <button className="btn primary" onClick={() => openNew({ date: trackedDay })}>+ Nouvelle affectation</button>
+          </div>
+        }
       />
 
-      <div className="cal">
-        <div className="cal-toolbar">
-          <div className="nav">
-            <button onClick={() => setAnchor(addDays(new Date(days[0]), -step))}>‹</button>
-            <button onClick={() => setAnchor(new Date())}>Aujourd’hui</button>
-            <button onClick={() => setAnchor(addDays(new Date(days[0]), step))}>›</button>
-          </div>
-          <span className="range">{label}</span>
-          <div className="seg" style={{ marginLeft: 'auto' }}>
-            <button className={view === 'week' ? 'on' : ''} onClick={() => setView('week')}>Semaine</button>
-            <button className={view === 'day' ? 'on' : ''} onClick={() => setView('day')}>Jour</button>
-          </div>
+      <div className="plan-kpis">
+        <div><strong>{totalActive}</strong><span>Ouvriers au planning</span></div>
+        <div><strong>{affectedToday}</strong><span>Affectés le {trackedShort}</span></div>
+        <div><strong>{freeToday}</strong><span>Libres toute la journée</span></div>
+        <div><strong>{absentToday}</strong><span>Absences / formations</span></div>
+        <div><strong>{vehiclesReservedToday}<small>/{vehicles.length}</small></strong><span>Véhicules réservés</span></div>
+      </div>
+
+      <div className="plan-topbar">
+        <div className="plan-switch">
+          <button className={view === 'workers' ? 'active' : ''} onClick={() => setView('workers')}>Ouvriers</button>
+          <button className={view === 'worksites' ? 'active' : ''} onClick={() => setView('worksites')}>Chantiers</button>
+          <button className={view === 'resources' ? 'active' : ''} onClick={() => setView('resources')}>Véhicules & matériel</button>
         </div>
+        <div className="plan-period">
+          <button type="button" className="btn plan-expand-toggle" onClick={() => setWide((w) => !w)}>{wide ? 'Réduire' : 'Agrandir le planning'}</button>
+          <button type="button" className="btn" onClick={() => shiftWeek(-1)}>←</button>
+          <button type="button" className="btn" onClick={goToday}>Cette semaine</button>
+          <button type="button" className="btn" onClick={() => shiftWeek(1)}>→</button>
+          <select className="select" value={periodWeeks} onChange={(e) => setPeriodWeeks(Number(e.target.value) as 1 | 2)}>
+            <option value={1}>1 semaine</option>
+            <option value={2}>2 semaines</option>
+          </select>
+        </div>
+      </div>
 
-        {loading && !data ? <div className="empty">Chargement…</div> : (
-          <div className="cal-frame" style={{ ['--cal-cols' as string]: cols, ['--cal-maxlanes' as string]: maxLanes }}>
-           <div className="cal-scroll">
-            <div className="cal-daysrow">
-              <div className="cal-corner" />
-              {days.map((d, i) => (
-                <div key={i} className={`cal-day-h${sameDay(d, now) ? ' today' : ''}`}>
-                  {DAY_LABELS[(d.getDay() + 6) % 7]}<b>{d.getDate()}</b>
-                </div>
-              ))}
-            </div>
-
-            {blocksByDay.some((b) => b.allDay.length > 0) && (
-              <div className="cal-allday">
-                <div className="lbl">jour.</div>
-                {days.map((_, i) => (
-                  <div key={i} className="col">
-                    {blocksByDay[i].allDay.map((b) => (
-                      <span key={b.key} className="chip-ev" style={{ ['--ev' as string]: b.color }} onClick={() => setDetail(b)}>
-                        {b.worksite.ref} · {b.title || b.worksite.title}
-                      </span>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div className="cal-body" ref={bodyRef}>
-              <div className="cal-gutter">
-                {hours.map((h) => <div key={h} className="h">{h}h</div>)}
-              </div>
-              {days.map((d, i) => {
-                const { placed, laneCount } = layout(blocksByDay[i].timed);
-                return (
-                  <div
-                    key={i}
-                    className="cal-col"
-                    onClick={(ev) => {
-                      if (ev.target !== ev.currentTarget) return;
-                      const rect = ev.currentTarget.getBoundingClientRect();
-                      const mins = DAY_START + Math.floor((ev.clientY - rect.top) / 46) * 60;
-                      setShowForm({ date: d.toISOString().slice(0, 10), hour: Math.max(6, Math.min(19, Math.round(mins / 60))) });
-                    }}
-                  >
-                    {hours.map((h) => <div key={h} className="line" />)}
-                    {sameDay(d, now) && nowTop >= 0 && nowTop <= (DAY_END - DAY_START) / 60 * 46 && (
-                      <div className="cal-now" style={{ top: nowTop }} />
-                    )}
-                    {placed.map(({ b, s, end, lane }) => {
-                      const top = Math.max(0, (s - DAY_START) / 60 * 46);
-                      const height = Math.max(18, (Math.min(end, DAY_END) - Math.max(s, DAY_START)) / 60 * 46 - 2);
-                      const w = 100 / laneCount;
-                      return (
-                        <div
-                          key={b.key}
-                          className={`cal-ev${height < 34 ? ' mini' : ''}`}
-                          style={{ top, height, left: `${lane * w}%`, width: `calc(${w}% - 3px)`, ['--ev' as string]: b.color }}
-                          onClick={() => setDetail(b)}
-                        >
-                          <span className="t">{hhmm(b.startAt)} <span className="r">{b.worksite.ref}</span></span>
-                          {height >= 34 && <div>{b.title || b.worksite.title}</div>}
-                          {height >= 52 && b.people.length > 0 && (
-                            <div style={{ opacity: 0.8 }}>{b.people.join(', ')}</div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })}
-            </div>
-           </div>
-          </div>
+      <div className="plan-filters">
+        <label className="plan-search">
+          <Search size={16} strokeWidth={2} />
+          <input placeholder="Rechercher une personne ou une ressource" value={search} onChange={(e) => setSearch(e.target.value)} />
+        </label>
+        {view === 'workers' && (
+          <select className="select" value={specialtyFilter} onChange={(e) => setSpecialtyFilter(e.target.value)}>
+            <option value="">Tous</option>
+            {specialtyOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        )}
+        <select className="select" value={worksiteFilter} onChange={(e) => setWorksiteFilter(e.target.value)}>
+          <option value="">Tous les chantiers</option>
+          {worksitesActive.map((w) => <option key={w.id} value={w.id}>{w.ref} · {w.city}</option>)}
+        </select>
+        {view === 'workers' && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem' }}>
+            <input type="checkbox" checked={onlyFree} onChange={(e) => setOnlyFree(e.target.checked)} />
+            Libres le {trackedShort}
+          </label>
         )}
       </div>
 
-      {detail && <EventDetail b={detail} onClose={() => setDetail(null)} onDeleted={() => { setDetail(null); reload(); }} />}
-      {showForm && <NewEventForm prefill={showForm} onDone={() => { setShowForm(null); reload(); }} onClose={() => setShowForm(null)} />}
-    </>
-  );
-}
-
-function EventDetail({ b, onClose, onDeleted }: { b: Block; onClose: () => void; onDeleted: () => void }) {
-  return (
-    <div className="modal-scrim" onClick={onClose}>
-      <div className="modal" style={{ maxWidth: 420 }} onClick={(ev) => ev.stopPropagation()}>
-        <div className="modal-head">
-          <h2>{b.worksite.ref} — {b.title || b.worksite.title}</h2>
-          <button className="btn ghost" onClick={onClose}>✕</button>
-        </div>
-        <div className="modal-body" style={{ display: 'block' }}>
-          <p style={{ margin: '0 0 0.6rem' }}>
-            {`${hhmm(b.startAt)} – ${hhmm(b.endAt)}`}
-            {b.worksite.city ? ` · ${b.worksite.city}` : ''}
-            {b.ids.length > 1 ? ` · ${b.ids.length} affectations` : ''}
-          </p>
-          {b.people.length > 0 && (
-            <p style={{ margin: '0 0 0.5rem' }}>
-              <span className="muted">Équipe : </span>
-              {b.people.map((n) => <span key={n} className="badge" style={{ marginRight: 4 }}>{n}</span>)}
-            </p>
-          )}
-          {b.vehicles.length > 0 && (
-            <p className="muted" style={{ margin: '0 0 0.3rem' }}>
-              🚐 {b.vehicles.map((v) => v.vehicle.plate || v.vehicle.model).join(', ')}
-            </p>
-          )}
-          {b.equipment.length > 0 && <p className="muted" style={{ margin: '0 0 0.3rem' }}>🔧 {b.equipment.join(', ')}</p>}
-          {b.materialsNote && <p className="muted" style={{ margin: '0 0 0.3rem' }}>{b.materialsNote}</p>}
-          {b.consumables.length > 0 && (
-            <p className="muted" style={{ margin: '0 0 0.3rem' }}>
-              📦 {b.consumables.map((c) => `${c.name} (${c.qty} ${c.unit})`).join(', ')}
-            </p>
-          )}
-          {b.note && <p style={{ margin: '0.4rem 0 0', whiteSpace: 'pre-wrap', fontSize: '0.88rem' }}>{b.note}</p>}
-        </div>
-        <div className="modal-foot">
-          <button className="btn" style={{ color: 'var(--crit)', marginRight: 'auto' }} onClick={async () => {
-            if (!confirm(b.ids.length > 1 ? `Supprimer les ${b.ids.length} affectations de ce chantier ce jour ?` : 'Supprimer cette affectation ?')) return;
-            await Promise.all(b.ids.map((id) => api(`/api/planning/${id}`, { method: 'DELETE' })));
-            onDeleted();
-          }}>Supprimer</button>
-          <a href={`/fiche/${b.ids[0]}`} target="_blank" rel="noreferrer" className="btn">Imprimer la fiche</a>
-          <Link href={`/app/chantiers/${b.worksite.id}`} className="btn primary">Ouvrir le chantier</Link>
-        </div>
+      <div className="plan-datebar">
+        <strong>{rangeLabel}</strong>
+        <label>
+          Journée suivie{' '}
+          <input className="input" type="date" value={trackedDay} onChange={(e) => selectTrackedDay(e.target.value)} />
+        </label>
       </div>
-    </div>
-  );
-}
 
-interface BricoProduct { id: string; name: string; brand: string | null; available: number; total: number }
-interface BricoConsumable { id: string; name: string; stockQty: number | null }
-
-function NewEventForm({ prefill, onDone, onClose }: { prefill: { date?: string; hour?: number }; onDone: () => void; onClose: () => void }) {
-  const { data: ws } = useApi<{ items: { id: string; ref: string; title: string }[] }>('/api/worksites');
-  const { data: people } = useApi<{ items: { id: string; displayName: string | null; firstName: string; role: string }[] }>('/api/people?active=1');
-  const { data: vehicles } = useApi<{ items: { id: string; plate: string | null; model: string | null; brand: string | null; code: string | null; seats: number | null }[] }>('/api/vehicles');
-  const { data: equipmentList, reload: reloadEquipment } = useApi<{ items: { id: string; name: string }[] }>('/api/equipment');
-  const { data: consumableList, reload: reloadConsumables } = useApi<{ items: { id: string; name: string; unit: string }[] }>('/api/consumables');
-  const { data: brico } = useApi<{ enabled: boolean }>('/api/materiel/status');
-  const { data: bStock } = useApi<{ products: BricoProduct[] }>(brico?.enabled ? '/api/materiel/stock' : null);
-  const { data: bCons } = useApi<{ consumables: BricoConsumable[] }>(brico?.enabled ? '/api/materiel/consumables' : null);
-  const h = prefill.hour ?? 8;
-  const [f, setF] = useState({
-    worksiteId: '', date: prefill.date ?? new Date().toISOString().slice(0, 10),
-    start: `${String(h).padStart(2, '0')}:00`, end: `${String(Math.min(h + 8, 20)).padStart(2, '0')}:00`,
-    vehicleIds: [] as string[], materialsNote: '', note: '', personIds: [] as string[],
-    equipmentIds: [] as string[], consumables: [] as { consumableId: string; qty: number }[],
-  });
-  const [newEquipment, setNewEquipment] = useState('');
-  const [newConsumable, setNewConsumable] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  const equipName = (id: string) => (equipmentList?.items ?? []).find((e) => e.id === id)?.name ?? '…';
-
-  async function linkEquipment(name: string, reference?: string) {
-    if (!name.trim()) return;
-    const { item } = await api<{ item: { id: string; name: string } }>('/api/equipment', { method: 'POST', body: { name: name.trim(), reference } });
-    await reloadEquipment();
-    setF((cur) => (cur.equipmentIds.includes(item.id) ? cur : { ...cur, equipmentIds: [...cur.equipmentIds, item.id] }));
-  }
-  async function linkConsumable(name: string) {
-    if (!name.trim()) return;
-    const { item } = await api<{ item: { id: string; name: string; unit: string } }>('/api/consumables', { method: 'POST', body: { name: name.trim() } });
-    await reloadConsumables();
-    setF((cur) => (cur.consumables.some((c) => c.consumableId === item.id) ? cur : { ...cur, consumables: [...cur.consumables, { consumableId: item.id, qty: 1 }] }));
-  }
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!f.worksiteId) return;
-    setBusy(true);
-    await api('/api/planning', {
-      method: 'POST',
-      body: {
-        worksiteId: f.worksiteId,
-        startAt: new Date(`${f.date}T${f.start}`).toISOString(),
-        endAt: new Date(`${f.date}T${f.end}`).toISOString(),
-        vehicleIds: f.vehicleIds,
-        materialsNote: f.materialsNote || null,
-        note: f.note || null,
-        personIds: f.personIds,
-        equipmentIds: f.equipmentIds,
-        consumables: f.consumables,
-      },
-    });
-    onDone();
-  }
-
-  return (
-    <div className="modal-scrim" onClick={onClose}>
-      <form className="modal" style={{ maxWidth: 560 }} onClick={(e) => e.stopPropagation()} onSubmit={submit}>
-        <div className="modal-head"><h2>Nouvelle affectation</h2><button type="button" className="btn ghost" onClick={onClose}>✕</button></div>
-        <div className="modal-body">
-          <div className="field" style={{ gridColumn: '1 / -1' }}>
-            <label>Chantier</label>
-            <ComboBox
-              placeholder="chercher un chantier (réf ou nom)…"
-              value={f.worksiteId}
-              onChange={(v) => setF((cur) => ({ ...cur, worksiteId: v }))}
-              options={(ws?.items ?? []).map((w) => ({ value: w.id, label: `${w.ref} — ${w.title}` }))}
-            />
-          </div>
-          <div className="field"><label>Date</label><input className="input" type="date" value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} /></div>
-          <div className="field" style={{ gridColumn: '1 / -1' }}>
-            <label>Véhicule(s)</label>
-            <div className="row" style={{ flexWrap: 'wrap', gap: 4 }}>
-              {(vehicles?.items ?? []).map((v) => {
-                const name = [v.brand, v.model].filter(Boolean).join(' ') || v.code || v.plate || '—';
-                const on = f.vehicleIds.includes(v.id);
-                return (
-                  <button type="button" key={v.id} className={`badge ${on ? 'primary' : ''}`} style={{ cursor: 'pointer' }}
-                    onClick={() => setF({ ...f, vehicleIds: on ? f.vehicleIds.filter((x) => x !== v.id) : [...f.vehicleIds, v.id] })}>
-                    {name}{v.plate ? ` · ${v.plate}` : ''}{v.seats != null ? ` · ${v.seats} place${v.seats > 1 ? 's' : ''}` : ''}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          <div className="field"><label>Début</label><input className="input" type="time" value={f.start} onChange={(e) => setF({ ...f, start: e.target.value })} /></div>
-          <div className="field"><label>Fin</label><input className="input" type="time" value={f.end} onChange={(e) => setF({ ...f, end: e.target.value })} /></div>
-          <div className="field" style={{ gridColumn: '1 / -1' }}>
-            <label>Ouvriers</label>
-            <div className="row">
-              {(people?.items ?? []).map((p) => {
-                const on = f.personIds.includes(p.id);
-                return (
-                  <button type="button" key={p.id} className={`badge ${on ? 'primary' : ''}`} style={{ cursor: 'pointer' }}
-                    onClick={() => setF({ ...f, personIds: on ? f.personIds.filter((x) => x !== p.id) : [...f.personIds, p.id] })}>
-                    {p.displayName || p.firstName}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          <div className="field" style={{ gridColumn: '1 / -1' }}>
-            <label>Matériel (machine à prendre){brico?.enabled ? ' — parc Bricoloc' : ''}</label>
-            {f.equipmentIds.length > 0 && (
-              <div className="row" style={{ marginBottom: 6, flexWrap: 'wrap', gap: 4 }}>
-                {f.equipmentIds.map((id) => (
-                  <span key={id} className="badge primary" style={{ cursor: 'pointer' }}
-                    onClick={() => setF((cur) => ({ ...cur, equipmentIds: cur.equipmentIds.filter((x) => x !== id) }))}>
-                    {equipName(id)} ✕
-                  </span>
+      {loading && !evData ? <div className="empty">Chargement…</div> : (
+        <section className="plan-board">
+          <div className="plan-grid-scroll">
+            <table className="plan-grid">
+              <thead>
+                <tr>
+                  <th>
+                    {view === 'workers' ? 'Ouvriers' : view === 'worksites' ? 'Chantiers' : 'Véhicules & matériel'}{' '}
+                    {view === 'workers' ? workerRows.length : view === 'worksites' ? worksiteRows.length : resourceRows.length}
+                  </th>
+                  {days.map((d) => {
+                    const ds = toDateInput(d);
+                    const affected = peopleIdsByDay.get(ds)?.size ?? 0;
+                    return (
+                      <th key={ds} className={sameDate(ds, trackedDay) ? 'selected-day' : ''}>
+                        <button type="button" onClick={() => selectTrackedDay(ds)}>
+                          {d.toLocaleDateString('fr-BE', { weekday: 'short', day: '2-digit', month: 'short' })}
+                          <span>{affected}/{totalActive} affectés</span>
+                        </button>
+                      </th>
+                    );
+                  })}
+                </tr>
+              </thead>
+              <tbody>
+                {view === 'workers' && workerRows.map((p) => (
+                  <tr key={p.id}>
+                    <th>
+                      <span className="plan-avatar">{initials(p)}</span>
+                      <div>
+                        <strong>{personLabel(p)}</strong>
+                        <div className="plan-row-sub">{specialtyLabel(p)}</div>
+                      </div>
+                    </th>
+                    {dayStrs.map((ds) => {
+                      const absentKind = absences.find((a) => a.personId === p.id && ds >= toDateInput(new Date(a.startsOn)) && ds <= toDateInput(new Date(a.endsOn)));
+                      const dayEvents = eventsFor(ds, (e) => e.assignments.some((a) => a.person.id === p.id));
+                      return (
+                        <td key={ds} className={sameDate(ds, trackedDay) ? 'selected-day' : ''}>
+                          {absentKind ? (
+                            <span className="plan-absence" onClick={() => setAbsenceModal({ existing: absentKind })} style={{ cursor: 'pointer' }}>
+                              {ABSENCE_KIND_LABEL[absentKind.kind as keyof typeof ABSENCE_KIND_LABEL] ?? absentKind.kind}
+                            </span>
+                          ) : dayEvents.length > 0 ? (
+                            renderChips(ds, dayEvents)
+                          ) : (
+                            <button type="button" className="plan-vacancy" onClick={() => openNew({ personId: p.id, date: ds, worksiteId: worksiteFilter || undefined })}>
+                              ＋ Affecter
+                            </button>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
                 ))}
-              </div>
-            )}
-            {brico?.enabled ? (
-              <ComboBox
-                clearOnSelect
-                placeholder={bStock ? 'chercher une machine…' : 'chargement du parc…'}
-                value=""
-                onChange={(v) => {
-                  const p = (bStock?.products ?? []).find((x) => x.id === v);
-                  if (p) linkEquipment(p.name, p.id);
-                }}
-                options={(bStock?.products ?? []).map((p) => ({
-                  value: p.id,
-                  label: `${p.name}${p.brand ? ` (${p.brand})` : ''} — ${p.available}/${p.total} dispo`,
-                }))}
-              />
-            ) : (
-              <div className="row">
-                {(equipmentList?.items ?? []).map((eq) => {
-                  const on = f.equipmentIds.includes(eq.id);
-                  return (
-                    <button type="button" key={eq.id} className={`badge ${on ? 'primary' : ''}`} style={{ cursor: 'pointer' }}
-                      onClick={() => setF({ ...f, equipmentIds: on ? f.equipmentIds.filter((x) => x !== eq.id) : [...f.equipmentIds, eq.id] })}>
-                      {eq.name}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-            <div className="row" style={{ marginTop: 6 }}>
-              <input className="input" style={{ maxWidth: 240 }} placeholder="+ autre matériel (hors parc)" value={newEquipment}
-                onChange={(e) => setNewEquipment(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); linkEquipment(newEquipment); setNewEquipment(''); } }} />
-              <button type="button" className="btn" onClick={() => { linkEquipment(newEquipment); setNewEquipment(''); }}>Ajouter</button>
-            </div>
+
+                {view === 'worksites' && worksiteRows.map((w) => (
+                  <tr key={w.id}>
+                    <th>
+                      <span className={`plan-avatar tone-${toneFor(w.id)}`}>{w.ref.slice(0, 2)}</span>
+                      <div>
+                        <strong><Link href={`/app/chantiers/${w.id}`}>{w.ref}</Link></strong>
+                        <div className="plan-row-sub">{w.title}{w.city ? ` · ${w.city}` : ''}</div>
+                      </div>
+                    </th>
+                    {dayStrs.map((ds) => {
+                      const dayEvents = eventsFor(ds, (e) => e.worksite.id === w.id);
+                      return (
+                        <td key={ds} className={sameDate(ds, trackedDay) ? 'selected-day' : ''}>
+                          {dayEvents.length > 0 ? renderChips(ds, dayEvents) : (
+                            <button type="button" className="plan-vacancy" onClick={() => openNew({ worksiteId: w.id, date: ds })}>＋ Affecter</button>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+
+                {view === 'resources' && resourceRows.map((r) => (
+                  <tr key={`${r.kind}-${r.id}`}>
+                    <th>
+                      <span className="plan-avatar">{r.kind === 'vehicle' ? <Truck size={15} strokeWidth={2} /> : <Wrench size={15} strokeWidth={2} />}</span>
+                      <div>
+                        <strong>{r.label}</strong>
+                        <div className="plan-row-sub">{r.sub}</div>
+                      </div>
+                    </th>
+                    {dayStrs.map((ds) => {
+                      const dayEvents = eventsFor(ds, (e) => (r.kind === 'vehicle' ? e.vehicles.some((v) => v.vehicle.id === r.id) : e.equipment.some((x) => x.equipment.id === r.id)));
+                      return (
+                        <td key={ds} className={sameDate(ds, trackedDay) ? 'selected-day' : ''}>
+                          {dayEvents.length > 0 ? renderChips(ds, dayEvents) : (
+                            <button
+                              type="button"
+                              className="plan-vacancy"
+                              onClick={() => openNew({ date: ds, worksiteId: worksiteFilter || undefined, vehicleId: r.kind === 'vehicle' ? r.id : undefined, equipmentId: r.kind === 'equipment' ? r.id : undefined })}
+                            >
+                              ＋ Affecter
+                            </button>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-          <div className="field" style={{ gridColumn: '1 / -1' }}>
-            <label>Consommables à prévoir{brico?.enabled ? ' — stock Bricoloc' : ''}</label>
-            {f.consumables.map((c, i) => {
-              const cat = (consumableList?.items ?? []).find((x) => x.id === c.consumableId);
-              return (
-                <div key={c.consumableId} className="row" style={{ alignItems: 'center', marginBottom: 4 }}>
-                  <span className="badge" style={{ flex: 1 }}>{cat?.name ?? '—'}</span>
-                  <input className="input" type="number" min={0} step="any" style={{ width: 80 }} value={c.qty}
-                    onChange={(e) => {
-                      const qty = Number(e.target.value);
-                      setF({ ...f, consumables: f.consumables.map((x, j) => (j === i ? { ...x, qty } : x)) });
-                    }} />
-                  <span className="muted">{cat?.unit}</span>
-                  <button type="button" className="btn ghost" onClick={() => setF({ ...f, consumables: f.consumables.filter((_, j) => j !== i) })}>✕</button>
-                </div>
-              );
-            })}
-            <div className="row" style={{ marginTop: 6 }}>
-              {brico?.enabled ? (
-                <ComboBox
-                  clearOnSelect
-                  placeholder={bCons ? 'chercher un consommable…' : 'chargement du stock…'}
-                  value=""
-                  onChange={(v) => {
-                    const c = (bCons?.consumables ?? []).find((x) => x.id === v);
-                    if (c) linkConsumable(c.name);
-                  }}
-                  options={(bCons?.consumables ?? []).map((c) => ({
-                    value: c.id,
-                    label: `${c.name}${c.stockQty != null ? ` — ${c.stockQty} en stock` : ''}`,
-                  }))}
-                />
-              ) : (
-                <select className="select" style={{ maxWidth: 220 }} value=""
-                  onChange={(e) => {
-                    const id = e.target.value;
-                    if (id && !f.consumables.some((c) => c.consumableId === id)) {
-                      setF({ ...f, consumables: [...f.consumables, { consumableId: id, qty: 1 }] });
-                    }
-                  }}>
-                  <option value="">+ ajouter depuis le catalogue…</option>
-                  {(consumableList?.items ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-              )}
-              <input className="input" style={{ maxWidth: 220 }} placeholder="+ autre consommable" value={newConsumable}
-                onChange={(e) => setNewConsumable(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); linkConsumable(newConsumable); setNewConsumable(''); } }} />
-              <button type="button" className="btn" onClick={() => { linkConsumable(newConsumable); setNewConsumable(''); }}>Ajouter</button>
-            </div>
-          </div>
-          <div className="field" style={{ gridColumn: '1 / -1' }}><label>Autre matériel / précisions</label><input className="input" value={f.materialsNote} onChange={(e) => setF({ ...f, materialsNote: e.target.value })} placeholder="échafaudage, nacelle…" /></div>
-          <div className="field" style={{ gridColumn: '1 / -1' }}><label>Instructions pour l’équipe</label><textarea className="input" rows={3} value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} placeholder="Tâches à faire, consignes particulières…" /></div>
-        </div>
-        <div className="modal-foot">
-          <button type="button" className="btn" onClick={onClose}>Annuler</button>
-          <button className="btn primary" disabled={busy} type="submit">Planifier</button>
-        </div>
-      </form>
-    </div>
+        </section>
+      )}
+
+      <div className="plan-legend">
+        <span>Chaque couleur correspond à un chantier.</span>
+        <span className="plan-dashed-key">À confirmer</span>
+        <span>Congés et formations bloquent l’affectation.</span>
+      </div>
+
+      {assignmentModal && (
+        <PlanningAssignmentModal
+          worksites={worksitesActive}
+          people={people}
+          vehicles={vehicles}
+          equipmentList={equipmentList}
+          events={events}
+          existing={assignmentModal.existing}
+          prefill={assignmentModal.prefill}
+          onClose={() => setAssignmentModal(null)}
+          onSaved={() => { setAssignmentModal(null); reloadAll(); }}
+        />
+      )}
+      {detailEv && (
+        <PlanningEventDetail
+          ev={detailEv}
+          onClose={() => setDetailEv(null)}
+          onEdit={() => openEdit(detailEv)}
+          onDuplicate={() => openDuplicate(detailEv)}
+          onDeleted={() => { setDetailEv(null); reloadAll(); }}
+        />
+      )}
+      {absenceModal && (
+        <PlanningAbsenceModal
+          people={people}
+          existing={absenceModal.existing}
+          prefill={absenceModal.prefill}
+          onClose={() => setAbsenceModal(null)}
+          onSaved={() => { setAbsenceModal(null); reloadAll(); }}
+        />
+      )}
+    </>
   );
 }

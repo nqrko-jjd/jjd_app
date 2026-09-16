@@ -83,6 +83,12 @@
     --shadow-lg: 0 18px 44px rgba(0, 0, 0, 0.45);
     color-scheme: dark;
   }
+  :root:not([data-theme="light"]) .tone-0 { --tone-line: #2c3f2d; --tone-accent: #5f9c5c; --tone-bg: #1c2c1f; --tone-fg: #a9c9a0; }
+  :root:not([data-theme="light"]) .tone-1 { --tone-line: #3b3322; --tone-accent: #c9a25b; --tone-bg: #2b2717; --tone-fg: #d9bd85; }
+  :root:not([data-theme="light"]) .tone-2 { --tone-line: #253748; --tone-accent: #6f9dc4; --tone-bg: #182530; --tone-fg: #a8c3dd; }
+  :root:not([data-theme="light"]) .tone-3 { --tone-line: #362e42; --tone-accent: #9884b8; --tone-bg: #241f2e; --tone-fg: #c4b3d9; }
+  :root:not([data-theme="light"]) .tone-4 { --tone-line: #3d2c26; --tone-accent: #bd8a71; --tone-bg: #2c211d; --tone-fg: #d7ac97; }
+  :root:not([data-theme="light"]) .tone-5 { --tone-line: #253d39; --tone-accent: #63a89a; --tone-bg: #182826; --tone-fg: #9dc9bd; }
 }
 :root[data-theme="dark"] {
   --paper: #10201b; --surface: #16271f; --surface-2: #1d3128; --surface-3: #274035;
@@ -97,6 +103,12 @@
   --shadow-lg: 0 18px 44px rgba(0,0,0,.45);
   color-scheme: dark;
 }
+:root[data-theme="dark"] .tone-0 { --tone-line: #2c3f2d; --tone-accent: #5f9c5c; --tone-bg: #1c2c1f; --tone-fg: #a9c9a0; }
+:root[data-theme="dark"] .tone-1 { --tone-line: #3b3322; --tone-accent: #c9a25b; --tone-bg: #2b2717; --tone-fg: #d9bd85; }
+:root[data-theme="dark"] .tone-2 { --tone-line: #253748; --tone-accent: #6f9dc4; --tone-bg: #182530; --tone-fg: #a8c3dd; }
+:root[data-theme="dark"] .tone-3 { --tone-line: #362e42; --tone-accent: #9884b8; --tone-bg: #241f2e; --tone-fg: #c4b3d9; }
+:root[data-theme="dark"] .tone-4 { --tone-line: #3d2c26; --tone-accent: #bd8a71; --tone-bg: #2c211d; --tone-fg: #d7ac97; }
+:root[data-theme="dark"] .tone-5 { --tone-line: #253d39; --tone-accent: #63a89a; --tone-bg: #182826; --tone-fg: #9dc9bd; }
 
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
@@ -798,65 +810,130 @@ p { margin: 0; }
 :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 3px; }
 ::selection { background: var(--primary-soft); }
 
-/* ---------------------------------------------------- planning calendrier */
-.cal { --cal-hour-h: 46px; --cal-gutter: 54px; }
-.cal-toolbar { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.9rem; }
-.cal-toolbar .nav { display: inline-flex; border: 1px solid var(--line); border-radius: var(--radius-sm); overflow: hidden; }
-.cal-toolbar .nav button { border: 0; background: var(--surface); padding: 0.45rem 0.7rem; cursor: pointer; color: var(--ink-2); font: inherit; }
-.cal-toolbar .nav button:hover { background: var(--surface-2); }
-.cal-toolbar .nav button + button { border-left: 1px solid var(--line); }
-.cal-toolbar .range { font-weight: 700; text-transform: capitalize; }
-/* .cal-toolbar .seg : hérite du style d'onglets soulignés commun (.seg, plus haut) */
+/* ---------------------------------------------------- planning (KPI + grille par ressource) */
+.plan-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border: 1px solid var(--line); background: var(--surface); border-radius: 17px; overflow: hidden; margin-bottom: 1.5rem; }
+.plan-kpis > div { padding: 1.2rem 1.3rem; border-right: 1px solid var(--line); }
+.plan-kpis > div:last-child { border-right: none; }
+.plan-kpis strong { display: block; font-size: 1.8rem; font-weight: 550; color: var(--primary-ink); font-variant-numeric: tabular-nums; }
+.plan-kpis strong small { font-size: 1rem; font-weight: 500; color: var(--ink-3); }
+.plan-kpis span { display: block; font-size: 0.76rem; line-height: 1.5; color: var(--ink-3); margin-top: 0.5rem; }
 
-.cal-frame { border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--surface); }
-.cal-scroll { overflow-x: auto; }
-.cal-daysrow, .cal-allday, .cal-body {
-  display: grid;
-  grid-template-columns: var(--cal-gutter) repeat(var(--cal-cols, 7), minmax(var(--cal-colmin, 0px), 1fr));
-  min-width: min-content;
+.plan-topbar { display: flex; justify-content: space-between; align-items: center; gap: 1.1rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.plan-switch { display: flex; background: var(--surface-2); border-radius: 11px; padding: 4px; gap: 3px; }
+.plan-switch button { border: 0; background: none; padding: 0.7rem 1rem; color: var(--ink-2); border-radius: 8px; font-size: 0.86rem; min-height: 42px; cursor: pointer; font: inherit; }
+.plan-switch button.active { background: var(--primary); color: #fff; box-shadow: 0 3px 5px rgba(36,70,43,0.16); }
+.plan-period { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+
+.plan-filters { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; margin-bottom: 1.1rem; }
+.plan-search { display: flex; align-items: center; gap: 0.55rem; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 0 0.75rem; min-width: 260px; flex: 1 1 0; max-width: 420px; color: var(--ink-3); }
+.plan-search input { border: 0; background: none; padding: 0.6rem 0; flex: 1; font: inherit; color: var(--ink); min-width: 0; }
+.plan-search input:focus { outline: none; }
+
+.plan-datebar { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin: 0.9rem 0; font-size: 0.86rem; color: var(--ink-2); flex-wrap: wrap; }
+.plan-datebar label { display: flex; align-items: center; gap: 0.5rem; }
+
+.plan-board { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.plan-grid-scroll { max-height: calc(100dvh - 310px); min-height: 420px; overflow: auto; scrollbar-color: var(--line-strong) var(--surface-2); scrollbar-width: thin; }
+.plan-grid { border-collapse: separate; border-spacing: 0; table-layout: fixed; width: max-content; min-width: 100%; }
+.plan-grid thead th {
+  position: sticky; top: 0; z-index: 4; width: 155px; min-width: 155px;
+  background: var(--surface-2); border-bottom: 1px solid var(--line); border-right: 1px solid var(--line);
+  padding: 0; text-align: left; color: var(--ink-2); font-weight: 600; font-size: 0.82rem;
 }
-.cal-daysrow { border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 3; background: var(--surface); }
-.cal-corner { border-right: 1px solid var(--line); }
-.cal-day-h { text-align: center; padding: 0.5rem 0.2rem; border-left: 1px solid var(--line); font-size: 0.74rem; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.04em; }
-.cal-day-h b { display: block; font-size: 1.15rem; color: var(--ink); font-weight: 700; margin-top: 1px; }
-.cal-day-h.today b { color: #fff; background: var(--primary); border-radius: 999px; width: 1.7em; height: 1.7em; line-height: 1.7em; margin: 2px auto 0; }
-.cal-day-h.today { color: var(--primary-ink); }
-
-.cal-allday { border-bottom: 1px solid var(--line); min-height: 26px; }
-.cal-allday .lbl { border-right: 1px solid var(--line); font-size: 0.66rem; color: var(--ink-3); text-align: right; padding: 4px 6px 0 0; }
-.cal-allday .col { border-left: 1px solid var(--line); padding: 3px; display: flex; flex-direction: column; gap: 2px; }
-
-.cal-body { max-height: 68vh; overflow-y: auto; position: relative; }
-.cal-gutter { border-right: 1px solid var(--line); }
-.cal-gutter .h { height: var(--cal-hour-h); font-size: 0.68rem; color: var(--ink-3); text-align: right; padding-right: 6px; transform: translateY(-6px); }
-.cal-col { border-left: 1px solid var(--line); position: relative; }
-.cal-col .line { height: var(--cal-hour-h); border-bottom: 1px solid var(--line); box-sizing: border-box; }
-.cal-col .line:nth-child(odd) { background: color-mix(in srgb, var(--surface-2) 40%, transparent); }
-
-.cal-ev {
-  position: absolute; border-radius: var(--radius-sm); padding: 3px 6px; overflow: hidden; cursor: pointer;
-  font-size: 0.72rem; line-height: 1.25; border-left: 3px solid var(--ev, var(--primary));
-  background: color-mix(in srgb, var(--ev, var(--primary)) 14%, var(--surface));
-  color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+.plan-grid thead th:first-child { position: sticky; left: 0; z-index: 5; padding: 0.7rem 0.85rem; }
+.plan-grid thead th button { width: 100%; background: none; border: 0; padding: 0.7rem 0.6rem; text-align: left; font-size: 0.78rem; color: inherit; cursor: pointer; display: block; font: inherit; }
+.plan-grid thead th button span { display: block; font-size: 0.68rem; color: var(--ink-3); margin-top: 0.2rem; font-weight: 400; }
+.plan-grid thead th.selected-day { background: var(--primary-soft); }
+.plan-grid tbody th {
+  position: sticky; left: 0; z-index: 2; background: var(--surface);
+  padding: 0.75rem; border-bottom: 1px solid var(--line); border-right: 1px solid var(--line);
+  text-align: left; font-weight: 400; vertical-align: middle; white-space: nowrap;
 }
-.cal-ev:hover { filter: brightness(0.97); box-shadow: 0 2px 8px rgba(0,0,0,0.12); z-index: 5; }
-.cal-ev .t { font-weight: 700; }
-.cal-ev .r { font-family: var(--font-mono); opacity: 0.75; }
-.cal-ev.mini { padding: 1px 5px; font-size: 0.68rem; }
+.plan-grid tbody th strong a { color: inherit; }
+.plan-grid tbody th > div { display: inline-block; vertical-align: middle; white-space: normal; }
+.plan-row-sub { font-size: 0.72rem; color: var(--ink-3); margin-top: 0.15rem; }
+.plan-avatar {
+  display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px;
+  border-radius: 999px; background: var(--surface-3); color: var(--ink-2); font-size: 0.66rem; font-weight: 700;
+  margin-right: 0.6rem; flex-shrink: 0; vertical-align: middle;
+}
+.plan-avatar[class*="tone-"] { background: var(--tone-bg); color: var(--tone-fg); }
+.plan-grid td {
+  width: 155px; min-width: 155px; vertical-align: top; padding: 6px;
+  border-bottom: 1px solid var(--line); border-right: 1px solid var(--line); height: 91px;
+}
+.plan-grid td.selected-day { background: var(--primary-soft); }
 
-.cal-allday .chip-ev {
-  font-size: 0.68rem; border-radius: 6px; padding: 1px 5px; cursor: pointer;
-  border-left: 3px solid var(--ev, var(--primary));
-  background: color-mix(in srgb, var(--ev, var(--primary)) 15%, var(--surface));
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+.plan-chip {
+  width: 100%; display: block; text-align: left; border: 1px solid var(--tone-line, var(--line));
+  border-left: 3px solid var(--tone-accent, var(--line-strong)); border-radius: 7px;
+  padding: 0.5rem 0.5rem; min-height: 73px; margin-bottom: 5px; cursor: pointer;
+  font: inherit; box-shadow: none; background: var(--tone-bg, var(--surface-2)); color: var(--tone-fg, var(--ink-2));
+}
+.plan-chip.tentative { border-style: dashed; }
+.plan-chip .t { display: block; font-size: 0.7rem; font-weight: 600; }
+.plan-chip .r { display: block; font-size: 0.74rem; margin-top: 0.15rem; }
+.plan-chip .n { display: block; font-size: 0.68rem; opacity: 0.85; margin-top: 0.15rem; }
+
+.tone-0 { --tone-line: #d1e1ce; --tone-accent: #699d63; --tone-bg: #edf5e9; --tone-fg: #45663c; }
+.tone-1 { --tone-line: #e8dcc3; --tone-accent: #bd9650; --tone-bg: #fcf3e0; --tone-fg: #8a703c; }
+.tone-2 { --tone-line: #cddbe9; --tone-accent: #739bc0; --tone-bg: #eaf2fa; --tone-fg: #577b9b; }
+.tone-3 { --tone-line: #ddd3e7; --tone-accent: #a08abb; --tone-bg: #f0ebf8; --tone-fg: #82708a; }
+.tone-4 { --tone-line: #ecd9d1; --tone-accent: #c49883; --tone-bg: #f9ece8; --tone-fg: #9a7664; }
+.tone-5 { --tone-line: #cde3df; --tone-accent: #6bad9f; --tone-bg: #e8f4f2; --tone-fg: #4d8a7f; }
+
+.plan-vacancy {
+  display: flex; align-items: center; justify-content: center; gap: 5px; background: transparent;
+  border: 1px dashed transparent; color: var(--ink-3); width: 100%; height: 75px; border-radius: 7px;
+  font-size: 1.1rem; cursor: pointer; font-family: inherit;
+}
+.plan-vacancy:hover { border-color: var(--line); color: var(--ink-2); }
+.plan-absence {
+  display: grid; place-items: center; width: 100%;
+  background: repeating-linear-gradient(135deg, var(--surface-2), var(--surface-2) 6px, var(--surface-3) 6px, var(--surface-3) 7px);
+  min-height: 75px; border-radius: 7px; color: var(--ink-3); font-size: 0.72rem; border: 0;
 }
 
-.cal-now { position: absolute; left: 0; right: 0; height: 2px; background: var(--crit); z-index: 4; }
-.cal-now::before { content: ""; position: absolute; left: -4px; top: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--crit); }
+.plan-legend { display: flex; flex-wrap: wrap; gap: 1.2rem; padding: 1rem 0; color: var(--ink-3); font-size: 0.72rem; line-height: 1.6; }
+.plan-dashed-key { border-bottom: 1px dashed var(--ink-3); }
 
-@media (max-width: 760px) {
-  .cal { --cal-gutter: 40px; --cal-hour-h: 42px; }
-  .cal-frame { --cal-colmin: calc(var(--cal-maxlanes, 1) * 116px); }
-  .cal-day-h { font-size: 0.62rem; }
-  .cal-day-h b { font-size: 0.95rem; }
+/* détail d'une affectation (popup lecture) */
+.plan-detail-heading { border-bottom: 1px solid var(--line); padding-bottom: 1.1rem; }
+.plan-detail-section { margin-top: 1.3rem; }
+.plan-detail-section h3 { font-size: 0.85rem; margin: 0 0 0.5rem; }
+.plan-detail-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; padding: 1.2rem 0; border-bottom: 1px solid var(--line); }
+.plan-detail-columns h3 { font-size: 0.85rem; margin: 0 0 0.5rem; }
+.plan-crew { display: flex; gap: 0.4rem; flex-wrap: wrap; margin: 0.7rem 0; }
+.plan-crew span { background: var(--surface-2); border: 1px solid var(--line); border-radius: 7px; padding: 0.35rem 0.55rem; font-size: 0.74rem; color: var(--ink-2); }
+
+/* formulaire affectation (fieldsets numérotés, réutilise .modal.wiz / .wiz-body / .wiz-grid) */
+.plan-form-intro { padding: 1.2rem; background: var(--primary-soft); border-radius: 13px; margin-bottom: 1.1rem; color: var(--primary-ink); }
+.plan-form-intro strong { display: block; }
+.plan-form-error { padding: 1rem; border: 1px solid #e2bbae; background: #fff3ed; color: #a06548; border-radius: 12px; margin-bottom: 1rem; font-size: 0.85rem; line-height: 1.6; }
+.wiz-body fieldset { border: 1px solid var(--line); border-radius: 14px; padding: 1.2rem; margin: 0 0 1.4rem; min-width: 0; }
+.wiz-body legend { padding: 0 0.5rem; font-size: 0.9rem; font-weight: 600; color: var(--primary-ink); }
+.plan-worker-picker { max-height: 290px; overflow: auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; scrollbar-width: thin; padding: 2px; }
+.plan-worker-option {
+  display: flex; align-items: flex-start; gap: 0.55rem; border: 1px solid var(--line); border-radius: 9px;
+  padding: 0.7rem; font-size: 0.85rem; cursor: pointer;
+}
+.plan-worker-option.selected { background: var(--primary-soft); border-color: var(--primary-line); }
+.plan-worker-option input { margin-top: 2px; }
+.plan-availability { font-size: 0.72rem; line-height: 1.5; color: var(--ink-3); margin-top: 0.2rem; }
+.plan-selection-count { padding: 0.9rem 0 0; font-size: 0.8rem; color: var(--ink-2); }
+.plan-equipment-picker { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem; margin: 0.9rem 0; }
+.plan-equipment-picker label { display: flex; align-items: flex-start; gap: 0.55rem; background: var(--surface-2); padding: 0.65rem; border-radius: 9px; margin: 0; font-size: 0.82rem; cursor: pointer; }
+
+/* mode "Agrandir le planning" : masque la sidebar pour libérer la largeur */
+/* display:none sortirait la sidebar de la grille et ferait replacer .main dans la 1re
+ * colonne (0 large) au lieu de la 2e — on passe la grille à une seule colonne à la place. */
+body.plan-wide .shell { grid-template-columns: minmax(0, 1fr); }
+body.plan-wide .sidebar { display: none; }
+body.plan-wide .main { max-width: none; }
+
+@media (max-width: 900px) {
+  .plan-kpis { grid-template-columns: repeat(2, 1fr); }
+  .plan-kpis > div:nth-child(2n) { border-right: none; }
+  .plan-detail-columns { grid-template-columns: 1fr; }
+  .plan-worker-picker, .plan-equipment-picker { grid-template-columns: 1fr; }
 }

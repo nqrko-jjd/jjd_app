@@ -5,6 +5,7 @@ import {
   CRM_STAGES, CRM_LOST_REASONS,
   CONTACT_TYPES, CLIENT_KINDS, WORKER_CONTRACT_TYPES, LEGAL_DOC_TYPES, VEHICLE_DOC_TYPES,
   BUILDING_CONTACT_ROLES, OCCUPANT_KINDS, VEHICLE_STATUSES, ADJUSTMENT_TYPES,
+  PLANNING_EVENT_STATUSES, ABSENCE_KINDS,
 } from './enums.js';
 
 const nonEmpty = z.string().trim().min(1);
@@ -188,14 +189,31 @@ export const planningEventInput = z.object({
   startAt: z.coerce.date(),
   endAt: z.coerce.date(),
   allDay: z.boolean().default(false),
+  status: z.enum(PLANNING_EVENT_STATUSES).default('confirmed'),
   teamId: z.string().nullish(),
   vehicleIds: z.array(z.string()).default([]),
   personIds: z.array(z.string()).default([]),
+  leadPersonId: z.string().nullish(),
+  driverPersonId: z.string().nullish(),
+  departureAt: z.coerce.date().nullish(),
+  departureFrom: z.string().trim().nullish(),
+  tasksNote: z.string().trim().nullish(),
+  accessNote: z.string().trim().nullish(),
   equipmentIds: z.array(z.string()).default([]),
   consumables: z.array(z.object({ consumableId: nonEmpty, qty: z.number().positive().default(1) })).default([]),
   materialsNote: z.string().trim().nullish(),
   note: z.string().trim().nullish(),
 });
+
+export const absenceInput = z.object({
+  personId: nonEmpty,
+  kind: z.enum(ABSENCE_KINDS).default('leave'),
+  startsOn: z.coerce.date(),
+  endsOn: z.coerce.date(),
+  note: z.string().trim().nullish(),
+});
+
+export type AbsenceInput = z.infer<typeof absenceInput>;
 
 export const teamInput = z.object({
   name: nonEmpty,

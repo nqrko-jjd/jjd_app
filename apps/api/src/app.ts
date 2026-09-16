@@ -12,7 +12,7 @@ import { buildingsRouter } from './routes/buildings.js';
 import { peopleRouter } from './routes/people.js';
 import { crmRouter } from './routes/crm.js';
 import { dashboardRouter, metaRouter, importsRouter } from './routes/misc.js';
-import { planningRouter, teamsRouter, vehiclesRouter, equipmentRouter, consumablesRouter } from './routes/planning.js';
+import { planningRouter, teamsRouter, vehiclesRouter, equipmentRouter, consumablesRouter, absencesRouter } from './routes/planning.js';
 import { timesheetRouter, statementsRouter } from './routes/timesheet.js';
 import { threadRouter } from './routes/thread.js';
 import { portalRouter } from './routes/portal.js';
@@ -67,6 +67,7 @@ export function createApp() {
   app.use('/api/vehicles', vehiclesRouter);
   app.use('/api/equipment', equipmentRouter);
   app.use('/api/consumables', consumablesRouter);
+  app.use('/api/absences', absencesRouter);
   app.use('/api/timesheet', timesheetRouter);
   app.use('/api/statements', statementsRouter);
   app.use('/api/meta', metaRouter);

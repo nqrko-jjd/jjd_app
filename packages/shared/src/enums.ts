@@ -411,6 +411,28 @@ export const ADJUSTMENT_TYPE_LABEL: Record<AdjustmentType, string> = {
   debt: 'Dette',
 };
 
+/* --------------------------------------------------------------- Planning */
+
+/** Statut d'une affectation planning — informatif : "à confirmer" quand le créneau n'est pas
+ *  encore garanti (rendez-vous à fixer, disponibilité à valider…). */
+export const PLANNING_EVENT_STATUSES = ['confirmed', 'tentative'] as const;
+export type PlanningEventStatus = (typeof PLANNING_EVENT_STATUSES)[number];
+
+export const PLANNING_EVENT_STATUS_LABEL: Record<PlanningEventStatus, string> = {
+  confirmed: 'Confirmée',
+  tentative: 'À confirmer',
+};
+
+/** Nature d'une absence — bloque l'affectation de la personne sur la période. */
+export const ABSENCE_KINDS = ['leave', 'training', 'other'] as const;
+export type AbsenceKind = (typeof ABSENCE_KINDS)[number];
+
+export const ABSENCE_KIND_LABEL: Record<AbsenceKind, string> = {
+  leave: 'Congé',
+  training: 'Formation',
+  other: 'Autre',
+};
+
 /* --------------------------------------------------------- Compta / TVA */
 
 export const CATEGORY_KINDS = ['revenue', 'expense', 'salary', 'vat', 'tax', 'credit_note', 'internal'] as const;

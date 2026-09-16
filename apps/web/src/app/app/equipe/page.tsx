@@ -35,7 +35,6 @@ interface VehicleRow extends PlanVehicleRef { status: string }
 function toDateInput(d: Date) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
 function addDaysStr(dateStr: string, n: number) { const d = new Date(`${dateStr}T00:00:00`); d.setDate(d.getDate() + n); return toDateInput(d); }
 function dayShort(dateStr: string) { return new Date(`${dateStr}T00:00:00`).toLocaleDateString('fr-BE', { weekday: 'short', day: '2-digit', month: 'short' }); }
-function hhmm(iso: string) { return new Date(iso).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' }); }
 function specialtyLabel(p: Person) {
   const specs = Array.isArray(p.specialties) ? p.specialties : [];
   return specs[0] || PERSON_ROLE_LABEL[p.role as keyof typeof PERSON_ROLE_LABEL] || p.role;
@@ -248,22 +247,15 @@ function EquipeInner() {
             const status = info?.status ?? 'available';
             const badgeLabel = status === 'assigned' ? 'Affecté' : status === 'unavailable' ? (ABSENCE_KIND_LABEL[info?.absenceKind as keyof typeof ABSENCE_KIND_LABEL] ?? 'Indisponible') : 'Disponible';
             const badgeTone = status === 'assigned' ? 'primary' : status === 'unavailable' ? 'warn' : 'ok';
-            const next = info?.nextEvent;
             return (
               <div key={p.id} className="avail-card" style={p.active ? undefined : { opacity: 0.6 }}>
                 <div className="avail-card-top">
-                  <Avatar src={p.photoThumbUrl} label={name(p)} size={40} />
+                  <Avatar src={p.photoThumbUrl} label={name(p)} size={56} />
                   <span className={`badge ${badgeTone}`}>{badgeLabel}</span>
                 </div>
                 <div className="avail-card-name">{name(p)}{!p.active && <span className="badge plain" style={{ marginLeft: 6 }}>Ancien</span>}</div>
                 <div className="avail-card-role">{specialtyLabel(p)}</div>
-                <div className="avail-card-next">
-                  {next ? (
-                    <>Prochaine affectation : <strong><span className="mono">{next.worksite.ref}</span> · {toDateInput(new Date(next.startAt)) === day ? 'aujourd’hui' : dayShort(toDateInput(new Date(next.startAt)))} {hhmm(next.startAt)}</strong></>
-                  ) : <span className="muted">Aucune affectation prévue</span>}
-                </div>
                 <div className="avail-card-actions">
-                  <button type="button" className="btn" style={{ flex: 1 }} onClick={() => setAssignmentModal({ prefill: { personId: p.id, date: day } })}>Affecter</button>
                   <button type="button" className="btn" style={{ flex: 1 }} onClick={() => setAbsenceModal({ prefill: { personId: p.id, date: day } })}>Absence</button>
                   <Link href={`/app/equipe/${p.id}`} className="btn ghost">Ouvrir →</Link>
                 </div>

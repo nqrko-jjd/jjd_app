@@ -33,6 +33,7 @@ export default function ImmeublesPage() {
         <FormModal
           title="Nouvel immeuble / projet"
           fields={BUILDING_FIELDS(pick?.syndics ?? [])}
+          initial={{ kind: 'acp' }}
           onClose={() => setCreating(false)}
           onSubmit={async (v) => { await api('/api/buildings', { method: 'POST', body: v }); reload(); }}
         />

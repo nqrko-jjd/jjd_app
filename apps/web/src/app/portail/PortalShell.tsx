@@ -3,14 +3,17 @@ import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { usePortal } from '@/lib/portal';
+import { LayoutGrid, Building2, Wrench, FileText, CalendarDays, FolderOpen, type LucideIcon } from 'lucide-react';
 
-const NAV = [
-  { href: '/portail/accueil', label: 'Vue d’ensemble', ic: '◈' },
-  { href: '/portail/immeubles', label: 'Immeubles', ic: '⌂' },
-  { href: '/portail/interventions', label: 'Interventions', ic: '⚒' },
-  { href: '/portail/devis', label: 'Devis', ic: '▤', full: true },
-  { href: '/portail/planning', label: 'Planning', ic: '▦' },
-  { href: '/portail/documents', label: 'Documents', ic: '🗀', full: true },
+type NavItem = { href: string; label: string; ic: LucideIcon; full?: boolean };
+
+const NAV: NavItem[] = [
+  { href: '/portail/accueil', label: 'Accueil', ic: LayoutGrid },
+  { href: '/portail/immeubles', label: 'Immeubles & projets', ic: Building2 },
+  { href: '/portail/interventions', label: 'Interventions', ic: Wrench },
+  { href: '/portail/devis', label: 'Devis', ic: FileText, full: true },
+  { href: '/portail/planning', label: 'Planning', ic: CalendarDays },
+  { href: '/portail/documents', label: 'Documents', ic: FolderOpen, full: true },
 ];
 
 export function PortalShell({
@@ -28,8 +31,15 @@ export function PortalShell({
       {mobileOpen && <div className="p-scrim" onClick={() => setMobileOpen(false)} />}
       <aside className={`p-side${collapsed ? ' collapsed' : ''}${mobileOpen ? ' open' : ''}`}>
         <Link href="/portail/accueil" className="brand" onClick={() => setMobileOpen(false)}>
-          <span className="mk">JJD</span> <span>Consult</span>
+          <span className="mk">J</span> <span className="lbl">JD Consult</span>
         </Link>
+        <div className="p-org-card">
+          <span className="av">{initials}</span>
+          <div>
+            <div className="nm">{me?.label}</div>
+            <div className="rl">{me?.isSyndic ? 'Syndic / Promoteur' : 'Client'}</div>
+          </div>
+        </div>
         <nav className="p-nav">
           {nav.map((n) => (
             <Link
@@ -38,12 +48,12 @@ export function PortalShell({
               className={pathname.startsWith(n.href) ? 'active' : ''}
               onClick={() => setMobileOpen(false)}
             >
-              <span className="ic">{n.ic}</span> <span>{n.label}</span>
+              <span className="ic"><n.ic size={17} strokeWidth={2} /></span> <span className="lbl">{n.label}</span>
             </Link>
           ))}
         </nav>
         <button className="p-collapse" onClick={() => setCollapsed((v) => !v)}>
-          <span className="ic">{collapsed ? '›' : '‹'}</span> <span>Réduire le menu</span>
+          <span className="ic">{collapsed ? '›' : '‹'}</span> <span className="lbl">Réduire le menu</span>
         </button>
       </aside>
 

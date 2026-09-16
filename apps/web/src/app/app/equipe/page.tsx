@@ -28,7 +28,7 @@ interface Person {
 }
 interface WsRow { id: string; ref: string; title: string; city: string | null }
 interface EquipRow { id: string; name: string }
-interface VehicleRow extends PlanVehicleRef { status: string }
+interface VehicleRow extends PlanVehicleRef { status: string; excludedFromPlanning: boolean }
 
 // Heure LOCALE — jamais toISOString() ici : la Belgique est en avance sur UTC (UTC+1/+2),
 // ça décalerait le jour affiché juste après minuit.
@@ -80,7 +80,7 @@ function EquipeInner() {
   const { data: vehData } = useApi<{ items: VehicleRow[] }>('/api/vehicles');
   const { data: equipData } = useApi<{ items: EquipRow[] }>('/api/equipment');
   const worksitesActive = useMemo(() => [...(wsData?.items ?? [])].sort((a, b) => a.ref.localeCompare(b.ref)), [wsData]);
-  const vehicles = useMemo(() => (vehData?.items ?? []).filter((v) => v.status !== 'sold' && v.status !== 'retired'), [vehData]);
+  const vehicles = useMemo(() => (vehData?.items ?? []).filter((v) => v.status !== 'sold' && v.status !== 'retired' && !v.excludedFromPlanning), [vehData]);
   const equipmentList = equipData?.items ?? [];
   const events = evData?.items ?? [];
   const absences = absData?.items ?? [];

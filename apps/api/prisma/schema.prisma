@@ -854,12 +854,13 @@ model Vehicle {
   financeCompany  String?
   financeContract String?
 
-  active        Boolean  @default(true)
-  note          String?
-  photoUrl      String?
-  photoThumbUrl String?
-  source        String?
-  createdAt     DateTime @default(now())
+  active               Boolean  @default(true)
+  excludedFromPlanning Boolean  @default(false) // véhicule perso, chariot élévateur… : pas proposé dans les affectations planning
+  note                 String?
+  photoUrl             String?
+  photoThumbUrl        String?
+  source               String?
+  createdAt            DateTime @default(now())
 
   insurances Insurance[]
   fines      Fine[]

@@ -14,7 +14,7 @@ interface Detail {
     id: string; code: string | null; brand: string | null; model: string | null; plate: string | null;
     photoUrl: string | null;
     type: string | null; seats: number | null; fuel: string | null; vin: string | null; km: string | null;
-    firstRegistration: string | null; nextInspection: string | null; status: string;
+    firstRegistration: string | null; nextInspection: string | null; status: string; excludedFromPlanning: boolean;
     fuelConsoL100: number | null; fuelPricePerL: number | null; costPerKmExtra: number | null; costPerKm: number | null;
     parkingMonthly: number | null; otherMonthly: number | null;
     costBreakdown: {
@@ -64,6 +64,7 @@ export default function VehicleDetail({ params }: { params: Promise<{ id: string
     { name: 'fuel', label: 'Carburant' },
     { name: 'driver', label: 'Conducteur' },
     { name: 'depot', label: 'Dépôt' },
+    { name: 'excludedFromPlanning', label: 'Hors planning (véhicule personnel, chariot élévateur… pas affecté aux chantiers)', type: 'checkbox' },
     { name: 'km', label: 'Kilométrage' },
     { name: 'vin', label: 'VIN' },
     { name: 'firstRegistration', label: '1re mise en circulation', type: 'date' },
@@ -112,7 +113,7 @@ export default function VehicleDetail({ params }: { params: Promise<{ id: string
           fields={editFields}
           initial={{
             brand: v.brand, model: v.model, plate: v.plate, type: v.type, seats: v.seats, status: v.status,
-            fuel: v.fuel, driver: v.driver, depot: v.depot, km: v.km, vin: v.vin,
+            fuel: v.fuel, driver: v.driver, depot: v.depot, excludedFromPlanning: v.excludedFromPlanning, km: v.km, vin: v.vin,
             firstRegistration: toDateInput(v.firstRegistration), nextInspection: toDateInput(v.nextInspection),
             circulationTax: v.circulationTax, biv: v.biv, equipment: v.equipment, note: v.note,
             fuelConsoL100: v.fuelConsoL100, fuelPricePerL: v.fuelPricePerL, costPerKmExtra: v.costPerKmExtra,
@@ -131,7 +132,10 @@ export default function VehicleDetail({ params }: { params: Promise<{ id: string
         <div className="eyebrow">Véhicule</div>
         <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'nowrap', gap: '1rem' }}>
           <h1>{[v.brand, v.model].filter(Boolean).join(' ')}</h1>
-          <VehicleStatusBadge status={v.status} />
+          <div className="row" style={{ gap: '0.4rem' }}>
+            {v.excludedFromPlanning && <span className="badge plain">Hors planning</span>}
+            <VehicleStatusBadge status={v.status} />
+          </div>
         </div>
         <div className="sub">{`${v.plate ?? 'sans plaque'} · ${v.code ?? ''} · ${v.type ?? ''}`}</div>
       </div>

@@ -383,6 +383,7 @@ export const vehicleInput = z.object({
   equipment: z.string().trim().nullish(),
   depot: z.string().trim().nullish(),
   status: z.enum(VEHICLE_STATUSES).nullish(),
+  excludedFromPlanning: z.boolean().nullish(),
   note: z.string().trim().nullish(),
 }).merge(vehicleCostInput);
 export type VehicleInput = z.infer<typeof vehicleInput>;

@@ -25,11 +25,13 @@ const NEW_VEHICLE_FIELDS: FieldDef[] = [
   { name: 'fuel', label: 'Carburant' },
   { name: 'driver', label: 'Conducteur' },
   { name: 'depot', label: 'Dépôt' },
+  { name: 'excludedFromPlanning', label: 'Hors planning (véhicule personnel, chariot élévateur… pas affecté aux chantiers)', type: 'checkbox' },
 ];
 
 interface Vehicle {
   id: string; code: string | null; brand: string | null; model: string | null; plate: string | null;
   type: string | null; fuel: string | null; status: string; driver: string | null; photoThumbUrl: string | null;
+  excludedFromPlanning: boolean;
   seats: number | null;
   nextInspection: string | null; monthlyPayment: number | null; acquisitionMode: string | null;
   insurances: { provider: string | null; monthlyAmount: number | null; annualAmount: number | null }[];
@@ -73,9 +75,11 @@ export default function FlottePage() {
   const equipmentList = equipData?.items ?? [];
   const events = evData?.items ?? [];
 
+  const assignableFleet = useMemo(() => fleet.filter((v) => !v.excludedFromPlanning), [fleet]);
+
   const availInfo = useMemo(() => {
     const map = new Map<string, { status: DayStatus; nextEvent?: PlanningEv }>();
-    for (const v of fleet) {
+    for (const v of assignableFleet) {
       if (v.status === 'repair' || v.status === 'breakdown') {
         map.set(v.id, { status: 'unavailable' });
         continue;
@@ -88,7 +92,7 @@ export default function FlottePage() {
       map.set(v.id, { status: todayEvent ? 'assigned' : 'available', nextEvent });
     }
     return map;
-  }, [fleet, events, day]);
+  }, [assignableFleet, events, day]);
   const availCounts = useMemo(() => {
     const c = { available: 0, assigned: 0, unavailable: 0 };
     for (const info of availInfo.values()) c[info.status]++;
@@ -140,7 +144,7 @@ export default function FlottePage() {
         <FormModal
           title="Nouveau véhicule"
           fields={NEW_VEHICLE_FIELDS}
-          initial={{ status: 'active' }}
+          initial={{ status: 'active', excludedFromPlanning: false }}
           onClose={() => setCreating(false)}
           onSubmit={async (v) => {
             const { vehicle } = await api<{ vehicle: { id: string } }>('/api/vehicles', { method: 'POST', body: v });
@@ -152,7 +156,7 @@ export default function FlottePage() {
         <PlanningAssignmentModal
           worksites={worksitesActive}
           people={rosterPeople}
-          vehicles={fleet}
+          vehicles={assignableFleet}
           equipmentList={equipmentList}
           events={events}
           prefill={assignmentModal.prefill}
@@ -205,8 +209,8 @@ export default function FlottePage() {
           {filteredFleet.map((v) => {
             const info = availInfo.get(v.id);
             const status = info?.status ?? 'available';
-            const badgeLabel = status === 'assigned' ? 'Affecté' : status === 'unavailable' ? VEHICLE_STATUS_LABEL[v.status as keyof typeof VEHICLE_STATUS_LABEL] : 'Disponible';
-            const badgeTone = status === 'assigned' ? 'primary' : status === 'unavailable' ? 'crit' : 'ok';
+            const badgeLabel = v.excludedFromPlanning ? 'Hors planning' : status === 'assigned' ? 'Affecté' : status === 'unavailable' ? VEHICLE_STATUS_LABEL[v.status as keyof typeof VEHICLE_STATUS_LABEL] : 'Disponible';
+            const badgeTone = v.excludedFromPlanning ? 'plain' : status === 'assigned' ? 'primary' : status === 'unavailable' ? 'crit' : 'ok';
             return (
               <div key={v.id} className="avail-card">
                 {v.photoThumbUrl && (

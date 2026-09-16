@@ -355,7 +355,9 @@ vehiclesRouter.post(
     if (d.code && (await prisma.vehicle.findUnique({ where: { code: d.code } }))) {
       throw new HttpError(409, `Le code "${d.code}" est déjà utilisé par un autre véhicule.`);
     }
-    const vehicle = await prisma.vehicle.create({ data: { ...d, status: d.status ?? 'active', source: 'manual' } });
+    const vehicle = await prisma.vehicle.create({
+      data: { ...d, status: d.status ?? 'active', excludedFromPlanning: !!d.excludedFromPlanning, source: 'manual' },
+    });
     res.status(201).json({ vehicle: await withCost(vehicle.id) });
   }),
 );
@@ -367,13 +369,14 @@ vehiclesRouter.patch(
     const d = vehicleInput.partial().parse(req.body);
     const keys = [
       'code', 'brand', 'model', 'plate', 'type', 'seats', 'fuel', 'vin', 'km', 'firstRegistration', 'nextInspection',
-      'circulationTax', 'biv', 'driver', 'equipment', 'depot', 'status', 'note',
+      'circulationTax', 'biv', 'driver', 'equipment', 'depot', 'status', 'excludedFromPlanning', 'note',
       'fuelConsoL100', 'fuelPricePerL', 'costPerKmExtra', 'parkingMonthly', 'otherMonthly',
     ] as const;
     const data: Record<string, unknown> = {};
     for (const k of keys) {
       if (!(k in d)) continue;
       if (k === 'status') { if (d.status) data.status = d.status; continue; } // colonne non nullable
+      if (k === 'excludedFromPlanning') { data.excludedFromPlanning = !!d.excludedFromPlanning; continue; } // colonne non nullable
       data[k] = d[k] ?? null;
     }
     await prisma.vehicle.update({ where: { id: req.params.id }, data });

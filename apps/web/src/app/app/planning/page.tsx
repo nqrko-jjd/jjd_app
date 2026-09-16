@@ -13,7 +13,7 @@ import type { PlanningEv, PlanAbsence, PlanVehicleRef } from '@/components/plann
 interface PersonRow { id: string; displayName: string | null; firstName: string; role: string; specialties?: unknown; active: boolean; phone?: string | null }
 interface WsRow { id: string; ref: string; title: string; city: string | null }
 interface EquipRow { id: string; name: string }
-interface VehicleRow extends PlanVehicleRef { status: string }
+interface VehicleRow extends PlanVehicleRef { status: string; excludedFromPlanning: boolean }
 
 const TONE_COUNT = 6;
 
@@ -88,7 +88,7 @@ export default function PlanningPage() {
   const { data: wsData } = useApi<{ items: WsRow[] }>(`/api/worksites?status=${WORKSITE_STATUS_OPEN.join(',')}`);
   const worksitesActive = useMemo(() => [...(wsData?.items ?? [])].sort((a, b) => a.ref.localeCompare(b.ref)), [wsData]);
   const { data: vehData } = useApi<{ items: VehicleRow[] }>('/api/vehicles');
-  const vehicles = useMemo(() => (vehData?.items ?? []).filter((v) => v.status !== 'sold' && v.status !== 'retired'), [vehData]);
+  const vehicles = useMemo(() => (vehData?.items ?? []).filter((v) => v.status !== 'sold' && v.status !== 'retired' && !v.excludedFromPlanning), [vehData]);
   const { data: equipData } = useApi<{ items: EquipRow[] }>('/api/equipment');
   const equipmentList = equipData?.items ?? [];
   const { data: absData, reload: reloadAbsences } = useApi<{ items: PlanAbsence[] }>(`/api/absences?from=${from}&to=${to}`);

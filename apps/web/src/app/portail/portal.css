@@ -260,16 +260,11 @@
 
 /* ---------------------------------------------------------------- detail / chantier */
 .p-back { display: inline-flex; align-items: center; gap: 0.35rem; color: var(--p-ink-2); font-weight: 700; font-size: 0.85rem; margin-bottom: 1rem; }
-.p-tabs { display: flex; gap: 1.2rem; border-bottom: 1px solid var(--p-line); margin: 1.2rem 0; overflow-x: auto; }
-.p-tab { padding: 0.6rem 0; font-weight: 700; font-size: 0.88rem; color: var(--p-ink-2); border: 0; background: none; border-bottom: 2px solid transparent; white-space: nowrap; cursor: pointer; }
-.p-tab.active { color: var(--p-green); border-bottom-color: var(--p-green); }
-.p-steps { display: flex; margin: 1.2rem 0; }
-.p-step { flex: 1; text-align: center; font-size: 0.76rem; color: var(--p-ink-2); position: relative; }
-.p-step .bul { width: 22px; height: 22px; border-radius: 50%; background: var(--p-line); color: #fff; margin: 0 auto 0.4rem; display: grid; place-items: center; font-size: 0.68rem; }
-.p-step.done .bul { background: var(--p-ok); } .p-step.now .bul { background: var(--p-green); }
-.p-step::before { content: ""; position: absolute; top: 11px; left: -50%; width: 100%; height: 2px; background: var(--p-line); z-index: -1; }
-.p-step:first-child::before { display: none; }
-.p-step.done::before, .p-step.now::before { background: var(--p-ok); }
+.p-timeline { display: flex; flex-direction: column; gap: 0.9rem; }
+.p-tstep { display: flex; gap: 0.7rem; align-items: flex-start; }
+.p-tstep .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--p-gold); margin-top: 0.4rem; flex-shrink: 0; }
+.p-tstep .label { font-weight: 700; font-size: 0.9rem; }
+.p-tstep .desc { font-size: 0.84rem; color: var(--p-ink-2); margin-top: 0.1rem; }
 .p-doc-row { display: flex; align-items: center; gap: 0.8rem; padding: 0.8rem 0; border-bottom: 1px solid var(--p-line); }
 .p-doc-row:last-child { border-bottom: none; }
 .p-doc-row .n { font-weight: 700; font-family: "IBM Plex Mono", monospace; font-size: 0.85rem; }

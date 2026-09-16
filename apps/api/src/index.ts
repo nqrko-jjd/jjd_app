@@ -34,7 +34,25 @@ async function backfillMessageAudience() {
   }
 }
 
+/**
+ * Un chantier clôturé doit être archivé (sinon il continue d'encombrer les listes —
+ * chantiers, messagerie…) : ce lien n'existait pas avant, rattrape les chantiers déjà
+ * clôturés dans l'historique. Idempotent : plus aucun chantier ne matche une fois
+ * rattrapé, sûr à rejouer à chaque démarrage.
+ */
+async function backfillArchivedClosed() {
+  const r = await prisma.worksite.updateMany({
+    where: { status: 'closed', archived: false },
+    data: { archived: true },
+  });
+  if (r.count) {
+    // eslint-disable-next-line no-console
+    console.log(`[backfill] ${r.count} chantier(s) clôturé(s) archivé(s)`);
+  }
+}
+
 await backfillMessageAudience();
+await backfillArchivedClosed();
 
 createApp().listen(env.port, '0.0.0.0', () => {
   // eslint-disable-next-line no-console

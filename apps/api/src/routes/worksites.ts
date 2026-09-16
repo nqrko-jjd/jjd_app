@@ -426,6 +426,7 @@ worksitesRouter.post(
         billingCadence: data.billingCadence ?? null,
         billingConditions: data.billingConditions ?? null,
         source: 'manual',
+        archived: data.status === 'closed',
         contacts: data.contacts?.length ? { create: data.contacts.map((c, i) => ({ ...c, position: i })) } : undefined,
       },
     });
@@ -496,6 +497,9 @@ worksitesRouter.patch(
         ...data,
         acpId,
         statusTags: data.statusTags ?? undefined,
+        // un chantier clôturé est archivé automatiquement (sinon il continue d'encombrer
+        // les listes — chantiers, messagerie…) ; le désarchivage suit si on rouvre le dossier.
+        ...(data.status ? { archived: data.status === 'closed' } : {}),
         ...(contactsInput !== undefined
           ? { contacts: { deleteMany: {}, create: (contactsInput ?? []).map((c, i) => ({ ...c, position: i })) } }
           : {}),

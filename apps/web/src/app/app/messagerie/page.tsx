@@ -9,8 +9,13 @@ import { PageHead, Avatar } from '@/lib/ui';
 import { Search, Paperclip, Send, Building2, ArrowLeft } from 'lucide-react';
 
 interface ThreadItem {
-  id: string; kind: 'general' | 'worksite'; title: string; sub: string; worksiteId: string | null;
+  id: string; kind: 'general' | 'worksite'; title: string; sub: string; worksiteId: string | null; ref: string | null;
   lastMessage: string; lastAt: string | null; unread: number; pinned: boolean;
+}
+
+/** "R-556" -> "556" : le numéro seul, plus lisible dans le petit cercle de la liste. */
+function refDigits(ref: string | null) {
+  return ref?.replace(/^R-/i, '') ?? '';
 }
 interface Msg {
   id: string; kind: string; body: string | null; fileUrl: string | null; thumbUrl: string | null;
@@ -162,7 +167,7 @@ function MessagerieInner() {
               const active = selectedItem?.id === it.id;
               return (
                 <button key={it.id} type="button" className={`msg-row${active ? ' active' : ''}`} onClick={() => select(it)}>
-                  <Avatar label={it.kind === 'general' ? 'JJD' : it.title} size={38} />
+                  <Avatar label={it.kind === 'general' ? 'JJD' : refDigits(it.ref)} size={38} raw={it.kind === 'worksite'} />
                   <div className="msg-row-body">
                     <div className="msg-row-top">
                       <strong>{it.pinned && '📌 '}{it.title}</strong>
@@ -195,7 +200,7 @@ function MessagerieInner() {
                 <button type="button" className="btn ghost msg-back" onClick={() => setSelected(null)} aria-label="Retour aux conversations">
                   <ArrowLeft size={17} strokeWidth={2} />
                 </button>
-                <Avatar label={selectedItem?.kind === 'general' ? 'JJD' : selectedItem?.title ?? ''} size={36} />
+                <Avatar label={selectedItem?.kind === 'general' ? 'JJD' : refDigits(selectedItem?.ref ?? null)} size={36} raw={selectedItem?.kind === 'worksite'} />
                 <div>
                   <strong>{selectedItem?.title}</strong>
                   <div className="muted" style={{ fontSize: '0.78rem' }}>{selectedItem?.sub}</div>

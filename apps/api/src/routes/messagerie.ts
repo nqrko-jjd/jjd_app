@@ -44,7 +44,7 @@ async function listThreads(userId: string, role: string, personId: string | null
   if (audience === 'client' && !isOffice) return [];
 
   const items: {
-    id: string; kind: string; title: string; sub: string; worksiteId: string | null;
+    id: string; kind: string; title: string; sub: string; worksiteId: string | null; ref: string | null;
     lastMessage: string; lastAt: string | null; unread: number; pinned: boolean;
   }[] = [];
 
@@ -57,7 +57,7 @@ async function listThreads(userId: string, role: string, personId: string | null
     const unread = await prisma.message.count({ where: { threadId: general.id, createdAt: { gt: read?.lastReadAt ?? READ_TRACKING_LAUNCHED_AT } } });
     items.push({
       id: general.id, kind: 'general', title: 'Général JJD', sub: 'Équipe JJD · fil général',
-      worksiteId: null, lastMessage: lastMsg ? `${lastMsg.authorName ? lastMsg.authorName + ' : ' : ''}${preview(lastMsg)}` : '',
+      worksiteId: null, ref: null, lastMessage: lastMsg ? `${lastMsg.authorName ? lastMsg.authorName + ' : ' : ''}${preview(lastMsg)}` : '',
       lastAt: lastMsg?.createdAt.toISOString() ?? null, unread, pinned: true,
     });
   }
@@ -89,7 +89,7 @@ async function listThreads(userId: string, role: string, personId: string | null
       sub: audience === 'client'
         ? `Client${t.worksite.client ? ` · ${t.worksite.client.name}` : ''}`
         : `Équipe interne${t.worksite.city ? ` · ${t.worksite.city}` : ''}`,
-      worksiteId: t.worksite.id,
+      worksiteId: t.worksite.id, ref: t.worksite.ref,
       lastMessage: last ? `${last.authorName ? last.authorName + ' : ' : ''}${preview(last)}` : '',
       lastAt: last?.createdAt.toISOString() ?? null, unread: unreadCounts[i]!, pinned: false,
     });

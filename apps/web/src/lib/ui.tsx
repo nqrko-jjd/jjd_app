@@ -116,22 +116,24 @@ export function Empty({ children }: { children: ReactNode }) {
   return <div className="empty">{children}</div>;
 }
 
-/** Petite vignette ronde (photo ou initiales) pour les listes. */
-export function Avatar({ src, label, size = 26 }: { src?: string | null; label: string; size?: number }) {
+/** Petite vignette ronde (photo, initiales, ou texte court affiché tel quel via `raw` — ex.
+ *  un numéro de chantier "556" que le calcul d'initiales réduirait à "5"). */
+export function Avatar({ src, label, size = 26, raw }: { src?: string | null; label: string; size?: number; raw?: boolean }) {
   const initials = label.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join('');
+  const text = raw ? label.slice(0, 4) : initials;
   return (
     <span
       style={{
         display: 'inline-flex', width: size, height: size, borderRadius: '50%', flexShrink: 0,
         overflow: 'hidden', alignItems: 'center', justifyContent: 'center', verticalAlign: 'middle',
         background: 'var(--surface-2)', border: '1px solid var(--line)', marginRight: 8,
-        fontSize: size * 0.4, fontWeight: 700, color: 'var(--ink-3)',
+        fontSize: raw ? size * 0.32 : size * 0.4, fontWeight: 700, color: 'var(--ink-3)',
       }}
     >
       {src ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-      ) : initials}
+      ) : text}
     </span>
   );
 }

@@ -195,7 +195,10 @@ export default function StockPage() {
   );
 }
 
-/* ------------------------------------------------------------- scan groupé (panier) */
+/* ------------------------------------------------------------- scan groupé (catalogue cliquable + panier) */
+
+const ACTION_LABEL: Record<'in' | 'out' | 'return', string> = { in: 'l’entrée', out: 'la sortie', return: 'le retour' };
+const ACTION_BADGE: Record<'in' | 'out' | 'return', string> = { in: 'Entrée', out: 'Sortie', return: 'Retour' };
 
 function ScanPanel({
   items, meta, onDone,
@@ -210,22 +213,24 @@ function ScanPanel({
   const [err, setErr] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
-  const matches = (() => {
+  const catalog = (() => {
     const q = query.trim().toLowerCase();
-    if (!q) return [];
-    return items.filter((it) => `${it.name} ${it.category ?? ''}`.toLowerCase().includes(q)).slice(0, 8);
+    return items.filter((it) => !q || `${it.name} ${it.category ?? ''}`.toLowerCase().includes(q));
   })();
 
+  // Un clic sur une carte ajoute 1 exemplaire — un 2e clic sur la même carte augmente la
+  // quantité, comme un 2e scan (cf. panier de la maquette).
   function addToCart(it: StockItem) {
     setCart((cur) => {
       const existing = cur.find((l) => l.id === it.id);
       if (existing) return cur.map((l) => (l.id === it.id ? { ...l, qty: l.qty + 1 } : l));
-      return [...cur, { id: it.id, name: it.name, unit: it.unit, qty: 1 }];
+      return [{ id: it.id, name: it.name, unit: it.unit, qty: 1 }, ...cur];
     });
-    setQuery('');
     setToast(null);
+    setErr(null);
   }
-  function updateQty(id: string, qty: number) {
+  function setQty(id: string, qty: number) {
+    if (!Number.isFinite(qty) || qty < 1) return;
     setCart((cur) => cur.map((l) => (l.id === id ? { ...l, qty } : l)));
   }
   function removeLine(id: string) {
@@ -241,7 +246,6 @@ function ScanPanel({
     let done = 0;
     try {
       for (const line of cart) {
-        if (line.qty <= 0) continue;
         await api('/api/stock/movements', {
           method: 'POST',
           body: {
@@ -265,8 +269,8 @@ function ScanPanel({
   }
 
   return (
-    <div className="card card-pad" style={{ marginBottom: '1rem', display: 'grid', gap: 14 }}>
-      <div className="seg">
+    <div style={{ marginBottom: '1rem' }}>
+      <div className="seg" style={{ marginBottom: '0.9rem' }}>
         <button type="button" className={action === 'in' ? 'on' : ''} onClick={() => setAction('in')}>
           <ArrowDownToLine size={15} strokeWidth={2} style={{ verticalAlign: 'middle', marginRight: 4 }} /> Réceptionner
         </button>
@@ -279,65 +283,70 @@ function ScanPanel({
       </div>
 
       {action !== 'in' && (
-        <div className="field" style={{ maxWidth: 360 }}>
+        <div className="field" style={{ maxWidth: 360, marginBottom: '0.9rem' }}>
           <label>Chantier *</label>
           <ComboBox placeholder="chercher un chantier" value={worksiteId} onChange={setWorksiteId} options={meta.worksites.map((w) => ({ value: w.id, label: w.name }))} />
         </div>
       )}
 
-      <div className="field" style={{ maxWidth: 420 }}>
-        <label>Ajouter un article</label>
-        <input className="input" autoFocus placeholder="chercher par nom…" value={query} onChange={(e) => setQuery(e.target.value)} />
-      </div>
-      {query.trim() && (
-        <div style={{ display: 'grid', gap: 4, maxHeight: 220, overflowY: 'auto', maxWidth: 420 }}>
-          {matches.length === 0 && <div className="muted" style={{ fontSize: '0.82rem' }}>Aucun article trouvé.</div>}
-          {matches.map((it) => (
-            <button
-              key={it.id}
-              type="button"
-              className="btn"
-              style={{ textAlign: 'left', justifyContent: 'space-between', display: 'flex' }}
-              onClick={() => addToCart(it)}
-            >
-              <span>{it.name}</span>
-              <span className="muted" style={{ fontSize: '0.78rem' }}>{it.qty} {it.unit} en stock</span>
-            </button>
-          ))}
+      <div className="stock-scan-layout">
+        <div className="stock-catalog">
+          <input className="input" placeholder="Nom, catégorie…" value={query} onChange={(e) => setQuery(e.target.value)} />
+          <div className="stock-catalog-grid">
+            {catalog.length === 0 && <p className="muted" style={{ fontSize: '0.85rem' }}>Aucun article.</p>}
+            {catalog.map((it) => (
+              <button key={it.id} type="button" className="stock-catalog-card" onClick={() => addToCart(it)}>
+                <span className="icon">▥</span>
+                <span className="info">
+                  <span className="name">{it.name}</span>
+                  <span className="sub">{it.qty} {it.unit} en stock{it.category ? ` · ${it.category}` : ''}</span>
+                </span>
+                <b className="plus">＋</b>
+              </button>
+            ))}
+          </div>
         </div>
-      )}
 
-      <div>
-        <div className="eyebrow" style={{ marginBottom: '0.5rem' }}>
-          Panier{cart.length > 0 ? ` · ${cart.length} article${cart.length > 1 ? 's' : ''}` : ''}
-        </div>
-        {cart.length === 0 ? (
-          <p className="muted" style={{ fontSize: '0.85rem', margin: 0 }}>Aucun article ajouté. Cherchez un article ci-dessus pour l’ajouter.</p>
-        ) : (
-          <div style={{ display: 'grid', gap: 8 }}>
-            {cart.map((line) => (
-              <div key={line.id} className="row" style={{ justifyContent: 'space-between', border: '1px solid var(--line)', borderRadius: 8, padding: '0.5rem 0.6rem' }}>
-                <span style={{ flex: 1 }}>{line.name}</span>
-                <input
-                  className="input" type="number" min={0} step="any" style={{ width: 90 }}
-                  value={line.qty}
-                  onChange={(e) => updateQty(line.id, Number(e.target.value))}
-                />
-                <span className="muted" style={{ fontSize: '0.78rem', width: 60 }}>{line.unit}</span>
-                <button type="button" className="btn ghost" onClick={() => removeLine(line.id)} aria-label="Retirer">✕</button>
+        <div className="stock-basket">
+          <div className="stock-basket-head">
+            <div>
+              <div className="eyebrow">À valider</div>
+              <strong>{cart.length} article{cart.length > 1 ? 's' : ''}</strong>
+            </div>
+            <span className="badge plain">{ACTION_BADGE[action]}</span>
+          </div>
+          <div className="stock-basket-lines">
+            {cart.length === 0 ? (
+              <p className="muted" style={{ fontSize: '0.82rem', margin: 0 }}>Cliquez un article dans le catalogue pour l’ajouter.</p>
+            ) : cart.map((line) => (
+              <div key={line.id} className="stock-basket-line">
+                <span className="icon">▥</span>
+                <span className="info">
+                  <span className="name">{line.name}</span>
+                  <span className="sub">{line.unit}</span>
+                </span>
+                <span className="stock-qty-stepper">
+                  <button type="button" onClick={() => setQty(line.id, line.qty - 1)} aria-label={`Diminuer la quantité de ${line.name}`}>−</button>
+                  <input
+                    type="number" min={1} step="any"
+                    value={line.qty}
+                    onChange={(e) => setQty(line.id, Number(e.target.value))}
+                    aria-label={`Quantité de ${line.name}`}
+                  />
+                  <button type="button" onClick={() => setQty(line.id, line.qty + 1)} aria-label={`Augmenter la quantité de ${line.name}`}>＋</button>
+                </span>
+                <button type="button" className="btn ghost" style={{ padding: '0.15rem 0.4rem', fontSize: '0.72rem' }} onClick={() => removeLine(line.id)}>Retirer</button>
               </div>
             ))}
           </div>
-        )}
-      </div>
 
-      {err && <div className="badge crit" style={{ padding: '0.4rem 0.7rem' }}>{err}</div>}
-      {toast && <div className="badge ok" style={{ padding: '0.4rem 0.7rem' }}>{toast}</div>}
+          {err && <div className="badge crit" style={{ padding: '0.4rem 0.7rem' }}>{err}</div>}
+          {toast && <div className="badge ok" style={{ padding: '0.4rem 0.7rem' }}>{toast}</div>}
 
-      <div className="row">
-        <button type="button" className="btn primary" disabled={busy || cart.length === 0 || (action !== 'in' && !worksiteId)} onClick={submit}>
-          {busy ? 'Enregistrement…' : `Confirmer ${cart.length || ''} mouvement${cart.length > 1 ? 's' : ''}`.trim()}
-        </button>
+          <button type="button" className="btn primary" disabled={busy || cart.length === 0 || (action !== 'in' && !worksiteId)} onClick={submit}>
+            {busy ? 'Enregistrement…' : `Confirmer ${ACTION_LABEL[action]} · ${cart.length} article${cart.length > 1 ? 's' : ''}`}
+          </button>
+        </div>
       </div>
     </div>
   );

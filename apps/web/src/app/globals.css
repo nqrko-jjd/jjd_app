@@ -1040,3 +1040,48 @@ body.plan-wide .main { max-width: none; }
 .avail-card-next { font-size: 0.78rem; color: var(--ink-2); margin-top: 0.1rem; }
 .avail-card-next strong { color: var(--ink); font-weight: 600; }
 .avail-card-actions { display: flex; gap: 0.4rem; margin-top: 0.3rem; }
+
+/* ---------------------------------------------------- stock — scan & panier */
+.stock-scan-layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 1.2rem; align-items: start; }
+.stock-catalog { display: flex; flex-direction: column; gap: 0.7rem; min-width: 0; }
+.stock-catalog-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 0.6rem; max-height: 480px; overflow-y: auto; padding: 2px; }
+.stock-catalog-card {
+  display: flex; align-items: center; gap: 0.6rem; text-align: left; padding: 0.55rem 0.65rem; width: 100%;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--surface); cursor: pointer; font: inherit; color: inherit;
+}
+.stock-catalog-card:hover { background: var(--surface-2); border-color: var(--primary-line); }
+.stock-catalog-card .icon {
+  width: 34px; height: 34px; border-radius: 8px; background: var(--surface-2); display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; font-size: 1.1rem; color: var(--ink-3);
+}
+.stock-catalog-card .info { flex: 1; min-width: 0; }
+.stock-catalog-card .name { font-weight: 600; font-size: 0.85rem; line-height: 1.25; }
+.stock-catalog-card .sub { color: var(--ink-3); font-size: 0.74rem; margin-top: 0.1rem; }
+.stock-catalog-card .plus { color: var(--primary); font-weight: 700; font-size: 1.15rem; flex-shrink: 0; }
+
+.stock-basket {
+  position: sticky; top: 1rem; border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--surface); box-shadow: var(--shadow-sm); padding: 1rem; display: flex; flex-direction: column; gap: 0.8rem;
+}
+.stock-basket-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
+.stock-basket-lines { display: flex; flex-direction: column; gap: 0.6rem; max-height: 320px; overflow-y: auto; }
+.stock-basket-line { display: flex; align-items: center; gap: 0.5rem; }
+.stock-basket-line .icon {
+  width: 28px; height: 28px; border-radius: 7px; background: var(--surface-2); display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; font-size: 0.9rem; color: var(--ink-3);
+}
+.stock-basket-line .info { flex: 1; min-width: 0; }
+.stock-basket-line .info .name { font-weight: 600; font-size: 0.83rem; line-height: 1.2; }
+.stock-basket-line .info .sub { color: var(--ink-3); font-size: 0.72rem; }
+.stock-qty-stepper { display: flex; align-items: center; gap: 0.2rem; flex-shrink: 0; }
+.stock-qty-stepper button {
+  width: 22px; height: 22px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface);
+  cursor: pointer; font-weight: 700; line-height: 1; padding: 0; color: var(--ink-2);
+}
+.stock-qty-stepper button:hover { background: var(--surface-2); }
+.stock-qty-stepper input { width: 40px; text-align: center; border: 1px solid var(--line); border-radius: 6px; padding: 0.15rem 0; font: inherit; font-size: 0.82rem; }
+
+@media (max-width: 860px) {
+  .stock-scan-layout { grid-template-columns: 1fr; }
+  .stock-basket { position: static; }
+}

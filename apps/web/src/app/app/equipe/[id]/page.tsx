@@ -1,17 +1,24 @@
 'use client';
-import { use, useRef, useState } from 'react';
+import { use, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
 import { api, apiBlobUrl, apiUpload } from '@/lib/api';
 import { PageHead, Money, formatDateBE, Kpi } from '@/lib/ui';
-import { Wallet, Sigma, Building2, CalendarDays } from 'lucide-react';
+import { Wallet, Sigma, Building2, CalendarDays, CalendarPlus, UserX } from 'lucide-react';
 import { FormModal, toDateInput, type FieldDef } from '@/components/FormModal';
 import { DocWithFileModal } from '@/components/DocWithFileModal';
 import { PhotoHeader } from '@/components/PhotoHeader';
+import { PlanningAssignmentModal } from '@/components/PlanningAssignmentModal';
+import { PlanningAbsenceModal } from '@/components/PlanningAbsenceModal';
 import { MonthBars } from '@/lib/charts';
 import { useSort, SortTh } from '@/lib/sort';
 import { PERSON_FIELDS } from '@/lib/forms';
-import { PERSON_ROLE_LABEL, WORKER_CONTRACT_LABEL, LEGAL_DOC_LABEL, LEGAL_DOC_TYPES, ADJUSTMENT_TYPES, ADJUSTMENT_TYPE_LABEL, formatHours, formatEur } from '@jjd/shared';
+import {
+  PERSON_ROLE_LABEL, WORKER_CONTRACT_LABEL, LEGAL_DOC_LABEL, LEGAL_DOC_TYPES,
+  ADJUSTMENT_TYPES, ADJUSTMENT_TYPE_LABEL, WORKSITE_STATUS_OPEN, ABSENCE_KIND_LABEL,
+  formatHours, formatEur,
+} from '@jjd/shared';
+import type { PlanningEv, PlanAbsence, PlanVehicleRef, PlanPerson } from '@/components/planningTypes';
 
 interface Adjustment { id: string; type: string; amount: number; date: string; note: string | null; settled: boolean; settledOn: string | null }
 interface Detail {
@@ -28,6 +35,10 @@ interface Detail {
   monthStatement: { hours: number; amount: number; worksites: number; guaranteeApplied: boolean; dailyHours: number };
   adjustmentBalance: number;
 }
+interface WsRow { id: string; ref: string; title: string; city: string | null }
+interface EquipRow { id: string; name: string }
+interface VehicleRow extends PlanVehicleRef { status: string }
+interface RosterPerson extends PlanPerson { role: string; specialties?: unknown; active: boolean }
 
 const ADJUSTMENT_FIELDS: FieldDef[] = [
   { name: 'type', label: 'Type', type: 'select', required: true, options: ADJUSTMENT_TYPES.map((t) => ({ value: t, label: ADJUSTMENT_TYPE_LABEL[t] })) },
@@ -41,6 +52,14 @@ interface Earnings {
   byYear: { year: number; hours: number; amount: number; worksites: number }[];
   byWorksite: { id: string; ref: string; title: string; hours: number; amount: number; days: number; marginPct: number | null; margin: number | null }[];
 }
+
+// Heure LOCALE — jamais toISOString() ici : la Belgique est en avance sur UTC (UTC+1/+2),
+// ça décalerait le jour affiché juste après minuit.
+function localToday() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+function addDaysStr(dateStr: string, n: number) { const d = new Date(`${dateStr}T00:00:00`); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+function dayOf(iso: string) { const d = new Date(iso); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+function dayShort(dateStr: string) { return new Date(`${dateStr}T00:00:00`).toLocaleDateString('fr-BE', { weekday: 'short', day: '2-digit', month: 'short' }); }
+function hhmm(iso: string) { return new Date(iso).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' }); }
 
 export default function PersonDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -58,6 +77,35 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
     amount: (w) => w.amount,
     margin: (w) => w.marginPct,
   });
+
+  // ── Situation opérationnelle : statut du jour, prochaines affectations, absences prévues —
+  // et accès rapide à « Nouvelle affectation » / « Absence » (réutilise le Planning).
+  const today = useMemo(() => localToday(), []);
+  const windowTo = useMemo(() => addDaysStr(today, 60), [today]);
+  const [assigning, setAssigning] = useState(false);
+  const [markingAbsence, setMarkingAbsence] = useState(false);
+  const { data: evData, reload: reloadEvents } = useApi<{ items: PlanningEv[] }>(`/api/planning?personId=${id}&from=${today}&to=${windowTo}`);
+  const { data: absAllData, reload: reloadAbsAll } = useApi<{ items: PlanAbsence[] }>(`/api/absences?from=${today}&to=${addDaysStr(today, 90)}`);
+  const { data: wsData } = useApi<{ items: WsRow[] }>(`/api/worksites?status=${WORKSITE_STATUS_OPEN.join(',')}`);
+  const { data: rosterData } = useApi<{ items: RosterPerson[] }>('/api/people?active=1');
+  const { data: vehData } = useApi<{ items: VehicleRow[] }>('/api/vehicles');
+  const { data: equipData } = useApi<{ items: EquipRow[] }>('/api/equipment');
+  const upcomingEvents = useMemo(() => [...(evData?.items ?? [])].sort((a, b) => a.startAt.localeCompare(b.startAt)), [evData]);
+  const upcomingAbsences = useMemo(
+    () => (absAllData?.items ?? []).filter((a) => a.personId === id).sort((a, b) => a.startsOn.localeCompare(b.startsOn)),
+    [absAllData, id],
+  );
+  const todayEvent = upcomingEvents.find((e) => dayOf(e.startAt) === today);
+  const todayAbsence = upcomingAbsences.find((a) => a.startsOn.slice(0, 10) <= today && today <= a.endsOn.slice(0, 10));
+  const todayStatus = todayAbsence ? 'unavailable' : todayEvent ? 'assigned' : 'available';
+  const todayBadgeLabel = todayStatus === 'assigned' ? 'Affecté' : todayStatus === 'unavailable' ? (ABSENCE_KIND_LABEL[todayAbsence?.kind as keyof typeof ABSENCE_KIND_LABEL] ?? 'Indisponible') : 'Disponible';
+  const todayBadgeTone = todayStatus === 'assigned' ? 'primary' : todayStatus === 'unavailable' ? 'warn' : 'ok';
+  const worksitesActive = useMemo(() => [...(wsData?.items ?? [])].sort((a, b) => a.ref.localeCompare(b.ref)), [wsData]);
+  const rosterPeople = rosterData?.items ?? [];
+  const vehicles = useMemo(() => (vehData?.items ?? []).filter((v) => v.status !== 'sold' && v.status !== 'retired'), [vehData]);
+  const equipmentList = equipData?.items ?? [];
+  function reloadAvail() { reloadEvents(); reloadAbsAll(); }
+
   if (loading) return <div className="empty">Chargement…</div>;
   if (!data) return <div className="empty">Fiche introuvable.</div>;
   const p = data.person;
@@ -158,9 +206,32 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
           }}
         />
       )}
+      {assigning && (
+        <PlanningAssignmentModal
+          worksites={worksitesActive}
+          people={rosterPeople}
+          vehicles={vehicles}
+          equipmentList={equipmentList}
+          events={upcomingEvents}
+          prefill={{ personId: id, date: today }}
+          onClose={() => setAssigning(false)}
+          onSaved={() => { setAssigning(false); reloadAvail(); }}
+        />
+      )}
+      {markingAbsence && (
+        <PlanningAbsenceModal
+          people={rosterPeople}
+          prefill={{ personId: id, date: today }}
+          onClose={() => setMarkingAbsence(false)}
+          onSaved={() => { setMarkingAbsence(false); reloadAvail(); }}
+        />
+      )}
+
       <div className="row" style={{ justifyContent: 'space-between', marginBottom: '0.9rem', flexWrap: 'wrap' }}>
         <Link href="/app/equipe" className="btn ghost">← Équipe</Link>
         <div className="row">
+          <button className="btn" onClick={() => setMarkingAbsence(true)}><UserX size={15} strokeWidth={2} /> Absence</button>
+          <button className="btn" onClick={() => setAssigning(true)}><CalendarPlus size={15} strokeWidth={2} /> Nouvelle affectation</button>
           <button className="btn" onClick={async () => { await api(`/api/people/${id}`, { method: 'PATCH', body: { active: !p.active } }); reload(); }}>
             {p.active ? 'Marquer ancien' : 'Réactiver'}
           </button>
@@ -169,9 +240,14 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
       </div>
 
       <div className="detail-hero">
-        <div className="eyebrow">{PERSON_ROLE_LABEL[p.role as keyof typeof PERSON_ROLE_LABEL] ?? p.role}</div>
-        <h1>{p.displayName || `${p.firstName} ${p.lastName ?? ''}`.trim()}</h1>
-        <div className="sub">{WORKER_CONTRACT_LABEL[p.contractType as keyof typeof WORKER_CONTRACT_LABEL]}{p.active ? '' : ' · Ancien (données conservées)'}</div>
+        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <div className="eyebrow">{PERSON_ROLE_LABEL[p.role as keyof typeof PERSON_ROLE_LABEL] ?? p.role}</div>
+            <h1>{p.displayName || `${p.firstName} ${p.lastName ?? ''}`.trim()}</h1>
+            <div className="sub">{WORKER_CONTRACT_LABEL[p.contractType as keyof typeof WORKER_CONTRACT_LABEL]}{p.active ? '' : ' · Ancien (données conservées)'}</div>
+          </div>
+          <span className={`badge ${todayBadgeTone}`}>{todayBadgeLabel} aujourd’hui</span>
+        </div>
       </div>
 
       <PhotoHeader
@@ -183,24 +259,25 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
         onChange={reload}
       />
 
-      <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', marginBottom: '1.4rem' }}>
-        <Info label="Taux horaire" value={p.hourlyRate != null ? <Money value={p.hourlyRate} /> : <span className="badge warn">à définir</span>} />
-        <Info label="Heures payées / jour presté" value={`${p.dailyHours} h`} />
-        <Info label="Spécialités" value={(p.specialties ?? []).join(', ') || '—'} />
-        <Info label="Téléphone" value={p.phone ?? '—'} />
-        <Info label="E-mail" value={p.email ?? '—'} />
-        <Info label="Adresse" value={p.address ?? '—'} />
-        <Info label="Langues" value={(p.languages ?? []).join(', ') || '—'} />
-        <Info label="Contact d'urgence" value={p.emergencyContact ?? '—'} />
-        <div className="card card-pad">
-          <div className="eyebrow">Compte appli</div>
-          {p.user ? (
-            <div style={{ marginTop: '0.3rem' }}><span className="badge ok">Lié</span> <span className="muted" style={{ fontSize: '0.82rem' }}>{p.user.email}</span></div>
-          ) : (
-            <button className="btn" style={{ marginTop: '0.4rem' }} onClick={createAccount}>Créer un compte</button>
-          )}
+      <section className="card card-pad" style={{ marginBottom: '1.4rem' }}>
+        <div className="eyebrow" style={{ marginBottom: '0.8rem' }}>Fiche</div>
+        <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))' }}>
+          <Info label="Taux horaire" value={p.hourlyRate != null ? <Money value={p.hourlyRate} /> : <span className="badge warn">à définir</span>} />
+          <Info label="Heures payées / jour presté" value={`${p.dailyHours} h`} />
+          <Info label="Spécialités" value={(p.specialties ?? []).join(', ') || '—'} />
+          <Info label="Téléphone" value={p.phone ?? '—'} />
+          <Info label="E-mail" value={p.email ?? '—'} />
+          <Info label="Adresse" value={p.address ?? '—'} />
+          <Info label="Langues" value={(p.languages ?? []).join(', ') || '—'} />
+          <Info label="Contact d'urgence" value={p.emergencyContact ?? '—'} />
+          <Info
+            label="Compte appli"
+            value={p.user
+              ? <><span className="badge ok">Lié</span> <span className="muted" style={{ fontSize: '0.82rem' }}>{p.user.email}</span></>
+              : <button className="btn" style={{ padding: '0.2rem 0.6rem', fontSize: '0.8rem' }} onClick={createAccount}>Créer un compte</button>}
+          />
         </div>
-      </div>
+      </section>
 
       {created && (
         <div className="card card-pad" style={{ marginBottom: '1.4rem', borderLeft: '3px solid var(--ok)' }}>
@@ -210,6 +287,42 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
           </p>
         </div>
       )}
+
+      <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '1.2rem', alignItems: 'start', marginBottom: '1.4rem' }}>
+        <section className="card card-pad">
+          <div className="eyebrow" style={{ marginBottom: '0.6rem' }}>Prochaines affectations</div>
+          {upcomingEvents.length === 0 ? (
+            <p className="muted" style={{ margin: 0, fontSize: '0.85rem' }}>Aucune affectation prévue.</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+              {upcomingEvents.slice(0, 6).map((e) => (
+                <div key={e.id} className="row" style={{ justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                  <div>
+                    <strong>{dayOf(e.startAt) === today ? 'Aujourd’hui' : dayShort(dayOf(e.startAt))}</strong> · {hhmm(e.startAt)}–{hhmm(e.endAt)}
+                    <div className="muted" style={{ fontSize: '0.8rem' }}><span className="mono">{e.worksite.ref}</span> · {e.worksite.city ?? e.worksite.title}</div>
+                  </div>
+                  {e.status === 'tentative' && <span className="badge plain">À confirmer</span>}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+        <section className="card card-pad">
+          <div className="eyebrow" style={{ marginBottom: '0.6rem' }}>Absences prévues</div>
+          {upcomingAbsences.length === 0 ? (
+            <p className="muted" style={{ margin: 0, fontSize: '0.85rem' }}>Aucune absence prévue.</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+              {upcomingAbsences.map((a) => (
+                <div key={a.id} className="row" style={{ justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                  <span>{formatDateBE(a.startsOn)}{a.startsOn !== a.endsOn ? ` → ${formatDateBE(a.endsOn)}` : ''}</span>
+                  <span className="badge warn">{ABSENCE_KIND_LABEL[a.kind as keyof typeof ABSENCE_KIND_LABEL] ?? a.kind}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
 
       <section className="card card-pad" style={{ marginBottom: '1.4rem' }}>
         <div className="eyebrow">Décompte — {now}</div>

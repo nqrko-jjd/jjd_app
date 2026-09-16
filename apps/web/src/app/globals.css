@@ -1037,10 +1037,6 @@ body.plan-wide .main { max-width: none; }
 .avail-card-top .badge { margin: 0; }
 .avail-card-name { font-weight: 700; font-size: 0.95rem; }
 .avail-card-role { color: var(--ink-2); font-size: 0.82rem; margin-top: -0.35rem; }
-.avail-card-next {
-  background: var(--surface-2); border-radius: 10px; padding: 0.6rem 0.7rem; font-size: 0.82rem; margin-top: 0.2rem;
-}
-.avail-card-next .label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-3); font-weight: 700; margin-bottom: 0.25rem; }
-.avail-card-next .ws { font-weight: 600; }
-.avail-card-next .when { color: var(--ink-2); margin-top: 0.1rem; }
-.avail-card-actions { display: flex; gap: 0.4rem; margin-top: 0.2rem; }
+.avail-card-next { font-size: 0.78rem; color: var(--ink-2); margin-top: 0.1rem; }
+.avail-card-next strong { color: var(--ink); font-weight: 600; }
+.avail-card-actions { display: flex; gap: 0.4rem; margin-top: 0.3rem; }

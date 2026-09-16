@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { PageHead, Money, formatDateBE, Kpi } from '@/lib/ui';
-import { Warehouse, AlertTriangle, Layers } from 'lucide-react';
+import { Warehouse, AlertTriangle, Layers, ArrowDownToLine, ArrowUpFromLine, Undo2 } from 'lucide-react';
 import { useSort, useColumnFilter, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
 import { ComboBox } from '@/components/ComboBox';
@@ -30,6 +30,7 @@ const TYPE_LABEL: Record<string, string> = { in: 'Entrée', out: 'Sortie', adjus
 const TYPE_TONE: Record<string, string> = { in: 'ok', out: 'warn', adjustment: 'plain' };
 
 export default function StockPage() {
+  const [section, setSection] = useState<'articles' | 'scan'>('articles');
   const [q, setQ] = useState('');
   const [stockFilter, setStockFilter] = useState<'all' | 'low' | 'ok'>('all');
   const [creating, setCreating] = useState(false);
@@ -85,6 +86,15 @@ export default function StockPage() {
         action={<button className="btn primary" onClick={() => setCreating(true)}>+ Nouvel article</button>}
       />
 
+      <div className="seg" style={{ marginBottom: '1.1rem' }}>
+        <button type="button" className={section === 'articles' ? 'on' : ''} onClick={() => setSection('articles')}>Articles</button>
+        <button type="button" className={section === 'scan' ? 'on' : ''} onClick={() => setSection('scan')}>Scan &amp; mouvements</button>
+      </div>
+
+      {section === 'scan' && meta && <ScanPanel items={allItems} meta={meta} onDone={reload} />}
+
+      {section === 'articles' && (
+      <>
       <div className="kpis" style={{ marginBottom: '1.2rem' }}>
         <Kpi
           ic={Warehouse}
@@ -179,7 +189,157 @@ export default function StockPage() {
           </table>
         </div>
       )}
+      </>
+      )}
     </>
+  );
+}
+
+/* ------------------------------------------------------------- scan groupé (panier) */
+
+function ScanPanel({
+  items, meta, onDone,
+}: {
+  items: StockItem[]; meta: Meta; onDone: () => void;
+}) {
+  const [action, setAction] = useState<'in' | 'out' | 'return'>('out');
+  const [worksiteId, setWorksiteId] = useState('');
+  const [query, setQuery] = useState('');
+  const [cart, setCart] = useState<{ id: string; name: string; unit: string; qty: number }[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const matches = (() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    return items.filter((it) => `${it.name} ${it.category ?? ''}`.toLowerCase().includes(q)).slice(0, 8);
+  })();
+
+  function addToCart(it: StockItem) {
+    setCart((cur) => {
+      const existing = cur.find((l) => l.id === it.id);
+      if (existing) return cur.map((l) => (l.id === it.id ? { ...l, qty: l.qty + 1 } : l));
+      return [...cur, { id: it.id, name: it.name, unit: it.unit, qty: 1 }];
+    });
+    setQuery('');
+    setToast(null);
+  }
+  function updateQty(id: string, qty: number) {
+    setCart((cur) => cur.map((l) => (l.id === id ? { ...l, qty } : l)));
+  }
+  function removeLine(id: string) {
+    setCart((cur) => cur.filter((l) => l.id !== id));
+  }
+
+  async function submit() {
+    if (cart.length === 0) return;
+    if (action !== 'in' && !worksiteId) { setErr('Chantier requis.'); return; }
+    setBusy(true);
+    setErr(null);
+    setToast(null);
+    let done = 0;
+    try {
+      for (const line of cart) {
+        if (line.qty <= 0) continue;
+        await api('/api/stock/movements', {
+          method: 'POST',
+          body: {
+            stockItemId: line.id,
+            type: action === 'return' ? 'in' : action,
+            qty: line.qty,
+            worksiteId: action !== 'in' ? worksiteId : null,
+            note: action === 'return' ? 'Retour dépôt' : null,
+          },
+        });
+        done++;
+      }
+      setCart([]);
+      setToast(`${done} mouvement${done > 1 ? 's' : ''} enregistré${done > 1 ? 's' : ''}.`);
+      onDone();
+    } catch (e) {
+      setErr((e as Error).message ?? 'Erreur');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card card-pad" style={{ marginBottom: '1rem', display: 'grid', gap: 14 }}>
+      <div className="seg">
+        <button type="button" className={action === 'in' ? 'on' : ''} onClick={() => setAction('in')}>
+          <ArrowDownToLine size={15} strokeWidth={2} style={{ verticalAlign: 'middle', marginRight: 4 }} /> Réceptionner
+        </button>
+        <button type="button" className={action === 'out' ? 'on' : ''} onClick={() => setAction('out')}>
+          <ArrowUpFromLine size={15} strokeWidth={2} style={{ verticalAlign: 'middle', marginRight: 4 }} /> Sortir / affecter
+        </button>
+        <button type="button" className={action === 'return' ? 'on' : ''} onClick={() => setAction('return')}>
+          <Undo2 size={15} strokeWidth={2} style={{ verticalAlign: 'middle', marginRight: 4 }} /> Retourner
+        </button>
+      </div>
+
+      {action !== 'in' && (
+        <div className="field" style={{ maxWidth: 360 }}>
+          <label>Chantier *</label>
+          <ComboBox placeholder="chercher un chantier" value={worksiteId} onChange={setWorksiteId} options={meta.worksites.map((w) => ({ value: w.id, label: w.name }))} />
+        </div>
+      )}
+
+      <div className="field" style={{ maxWidth: 420 }}>
+        <label>Ajouter un article</label>
+        <input className="input" autoFocus placeholder="chercher par nom…" value={query} onChange={(e) => setQuery(e.target.value)} />
+      </div>
+      {query.trim() && (
+        <div style={{ display: 'grid', gap: 4, maxHeight: 220, overflowY: 'auto', maxWidth: 420 }}>
+          {matches.length === 0 && <div className="muted" style={{ fontSize: '0.82rem' }}>Aucun article trouvé.</div>}
+          {matches.map((it) => (
+            <button
+              key={it.id}
+              type="button"
+              className="btn"
+              style={{ textAlign: 'left', justifyContent: 'space-between', display: 'flex' }}
+              onClick={() => addToCart(it)}
+            >
+              <span>{it.name}</span>
+              <span className="muted" style={{ fontSize: '0.78rem' }}>{it.qty} {it.unit} en stock</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div>
+        <div className="eyebrow" style={{ marginBottom: '0.5rem' }}>
+          Panier{cart.length > 0 ? ` · ${cart.length} article${cart.length > 1 ? 's' : ''}` : ''}
+        </div>
+        {cart.length === 0 ? (
+          <p className="muted" style={{ fontSize: '0.85rem', margin: 0 }}>Aucun article ajouté. Cherchez un article ci-dessus pour l’ajouter.</p>
+        ) : (
+          <div style={{ display: 'grid', gap: 8 }}>
+            {cart.map((line) => (
+              <div key={line.id} className="row" style={{ justifyContent: 'space-between', border: '1px solid var(--line)', borderRadius: 8, padding: '0.5rem 0.6rem' }}>
+                <span style={{ flex: 1 }}>{line.name}</span>
+                <input
+                  className="input" type="number" min={0} step="any" style={{ width: 90 }}
+                  value={line.qty}
+                  onChange={(e) => updateQty(line.id, Number(e.target.value))}
+                />
+                <span className="muted" style={{ fontSize: '0.78rem', width: 60 }}>{line.unit}</span>
+                <button type="button" className="btn ghost" onClick={() => removeLine(line.id)} aria-label="Retirer">✕</button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {err && <div className="badge crit" style={{ padding: '0.4rem 0.7rem' }}>{err}</div>}
+      {toast && <div className="badge ok" style={{ padding: '0.4rem 0.7rem' }}>{toast}</div>}
+
+      <div className="row">
+        <button type="button" className="btn primary" disabled={busy || cart.length === 0 || (action !== 'in' && !worksiteId)} onClick={submit}>
+          {busy ? 'Enregistrement…' : `Confirmer ${cart.length || ''} mouvement${cart.length > 1 ? 's' : ''}`.trim()}
+        </button>
+      </div>
+    </div>
   );
 }
 

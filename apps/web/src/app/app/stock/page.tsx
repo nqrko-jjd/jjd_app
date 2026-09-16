@@ -199,6 +199,9 @@ export default function StockPage() {
 
 const ACTION_LABEL: Record<'in' | 'out' | 'return', string> = { in: 'l’entrée', out: 'la sortie', return: 'le retour' };
 const ACTION_BADGE: Record<'in' | 'out' | 'return', string> = { in: 'Entrée', out: 'Sortie', return: 'Retour' };
+const ACTION_DESC: Record<'in' | 'out' | 'return', string> = {
+  in: 'Ajouter une livraison au stock', out: 'Préparer le départ vers un chantier', return: 'Remettre les articles au dépôt',
+};
 
 function ScanPanel({
   items, meta, onDone,
@@ -270,15 +273,21 @@ function ScanPanel({
 
   return (
     <div style={{ marginBottom: '1rem' }}>
-      <div className="seg" style={{ marginBottom: '0.9rem' }}>
+      <div className="stock-move-actions">
         <button type="button" className={action === 'in' ? 'on' : ''} onClick={() => setAction('in')}>
-          <ArrowDownToLine size={15} strokeWidth={2} style={{ verticalAlign: 'middle', marginRight: 4 }} /> Réceptionner
+          <ArrowDownToLine className="ic" size={24} strokeWidth={1.75} />
+          <strong>Réceptionner</strong>
+          <small>{ACTION_DESC.in}</small>
         </button>
         <button type="button" className={action === 'out' ? 'on' : ''} onClick={() => setAction('out')}>
-          <ArrowUpFromLine size={15} strokeWidth={2} style={{ verticalAlign: 'middle', marginRight: 4 }} /> Sortir / affecter
+          <ArrowUpFromLine className="ic" size={24} strokeWidth={1.75} />
+          <strong>Sortir / affecter</strong>
+          <small>{ACTION_DESC.out}</small>
         </button>
         <button type="button" className={action === 'return' ? 'on' : ''} onClick={() => setAction('return')}>
-          <Undo2 size={15} strokeWidth={2} style={{ verticalAlign: 'middle', marginRight: 4 }} /> Retourner
+          <Undo2 className="ic" size={24} strokeWidth={1.75} />
+          <strong>Retourner</strong>
+          <small>{ACTION_DESC.return}</small>
         </button>
       </div>
 
@@ -291,6 +300,7 @@ function ScanPanel({
 
       <div className="stock-scan-layout">
         <div className="stock-catalog">
+          <div className="eyebrow">Quels articles ?</div>
           <input className="input" placeholder="Nom, catégorie…" value={query} onChange={(e) => setQuery(e.target.value)} />
           <div className="stock-catalog-grid">
             {catalog.length === 0 && <p className="muted" style={{ fontSize: '0.85rem' }}>Aucun article.</p>}
@@ -311,41 +321,42 @@ function ScanPanel({
           <div className="stock-basket-head">
             <div>
               <div className="eyebrow">À valider</div>
-              <strong>{cart.length} article{cart.length > 1 ? 's' : ''}</strong>
+              <h2>{cart.length} article{cart.length > 1 ? 's' : ''}</h2>
             </div>
-            <span className="badge plain">{ACTION_BADGE[action]}</span>
+            <span className="pill">{ACTION_BADGE[action]}</span>
           </div>
           <div className="stock-basket-lines">
             {cart.length === 0 ? (
-              <p className="muted" style={{ fontSize: '0.82rem', margin: 0 }}>Cliquez un article dans le catalogue pour l’ajouter.</p>
+              <p className="stock-basket-empty">Cliquez un article dans le catalogue pour l’ajouter.</p>
             ) : cart.map((line) => (
               <div key={line.id} className="stock-basket-line">
                 <span className="icon">▥</span>
                 <span className="info">
                   <span className="name">{line.name}</span>
                   <span className="sub">{line.unit}</span>
+                  <span className="stock-qty-stepper">
+                    <button type="button" onClick={() => setQty(line.id, line.qty - 1)} aria-label={`Diminuer la quantité de ${line.name}`}>−</button>
+                    <input
+                      type="number" min={1} step="any"
+                      value={line.qty}
+                      onChange={(e) => setQty(line.id, Number(e.target.value))}
+                      aria-label={`Quantité de ${line.name}`}
+                    />
+                    <button type="button" onClick={() => setQty(line.id, line.qty + 1)} aria-label={`Augmenter la quantité de ${line.name}`}>＋</button>
+                    <button type="button" className="remove" onClick={() => removeLine(line.id)}>Retirer</button>
+                  </span>
                 </span>
-                <span className="stock-qty-stepper">
-                  <button type="button" onClick={() => setQty(line.id, line.qty - 1)} aria-label={`Diminuer la quantité de ${line.name}`}>−</button>
-                  <input
-                    type="number" min={1} step="any"
-                    value={line.qty}
-                    onChange={(e) => setQty(line.id, Number(e.target.value))}
-                    aria-label={`Quantité de ${line.name}`}
-                  />
-                  <button type="button" onClick={() => setQty(line.id, line.qty + 1)} aria-label={`Augmenter la quantité de ${line.name}`}>＋</button>
-                </span>
-                <button type="button" className="btn ghost" style={{ padding: '0.15rem 0.4rem', fontSize: '0.72rem' }} onClick={() => removeLine(line.id)}>Retirer</button>
               </div>
             ))}
           </div>
 
-          {err && <div className="badge crit" style={{ padding: '0.4rem 0.7rem' }}>{err}</div>}
-          {toast && <div className="badge ok" style={{ padding: '0.4rem 0.7rem' }}>{toast}</div>}
-
-          <button type="button" className="btn primary" disabled={busy || cart.length === 0 || (action !== 'in' && !worksiteId)} onClick={submit}>
-            {busy ? 'Enregistrement…' : `Confirmer ${ACTION_LABEL[action]} · ${cart.length} article${cart.length > 1 ? 's' : ''}`}
-          </button>
+          <div className="stock-basket-confirm">
+            {err && <div className="badge crit" style={{ padding: '0.4rem 0.7rem', marginBottom: '0.7rem' }}>{err}</div>}
+            {toast && <div className="badge ok" style={{ padding: '0.4rem 0.7rem', marginBottom: '0.7rem' }}>{toast}</div>}
+            <button type="button" className="btn primary" disabled={busy || cart.length === 0 || (action !== 'in' && !worksiteId)} onClick={submit}>
+              {busy ? 'Enregistrement…' : `Confirmer ${ACTION_LABEL[action]} · ${cart.length} article${cart.length > 1 ? 's' : ''}`}
+            </button>
+          </div>
         </div>
       </div>
     </div>

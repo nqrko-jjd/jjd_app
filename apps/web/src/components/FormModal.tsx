@@ -75,6 +75,12 @@ export function FormModal({
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    // Une création rapide de contact (ContactPicker) rend une 2e FormModal dans un portail
+    // vers <body> pour éviter un <form> imbriqué dans le DOM — mais React fait remonter les
+    // événements le long de l'arbre React, pas du DOM : sans stopPropagation, valider CE
+    // formulaire (le contact) déclenche AUSSI le onSubmit du formulaire englobant, qui se
+    // soumet prématurément (ex. une opportunité créée sans le contact qu'on vient de choisir).
+    e.stopPropagation();
     setBusy(true);
     setErr(null);
     try {

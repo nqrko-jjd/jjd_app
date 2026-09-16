@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
@@ -7,10 +7,13 @@ import { api } from '@/lib/api';
 import { ContextMenu, useContextMenu, openActions, type MenuItem } from '@/components/ContextMenu';
 import { ViewToggle, useViewMode } from '@/components/ViewToggle';
 import { FormModal, type FieldDef } from '@/components/FormModal';
+import { PlanningAssignmentModal } from '@/components/PlanningAssignmentModal';
 import { useSort, useColumnFilter, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
-import { PageHead, Money, formatDateBE, Thumb, VehicleStatusBadge } from '@/lib/ui';
-import { VEHICLE_STATUSES, VEHICLE_STATUS_LABEL } from '@jjd/shared';
+import { PageHead, Money, formatDateBE, Thumb, VehicleStatusBadge, Kpi } from '@/lib/ui';
+import { VEHICLE_STATUSES, VEHICLE_STATUS_LABEL, WORKSITE_STATUS_OPEN } from '@jjd/shared';
+import { Truck, CircleCheck, Building2, TriangleAlert, CalendarPlus, ChevronLeft, ChevronRight } from 'lucide-react';
+import type { PlanningEv, PlanPerson } from '@/components/planningTypes';
 
 const NEW_VEHICLE_FIELDS: FieldDef[] = [
   { name: 'code', label: 'Code interne', placeholder: 'V004' },
@@ -27,18 +30,75 @@ const NEW_VEHICLE_FIELDS: FieldDef[] = [
 interface Vehicle {
   id: string; code: string | null; brand: string | null; model: string | null; plate: string | null;
   type: string | null; fuel: string | null; status: string; driver: string | null; photoThumbUrl: string | null;
+  seats: number | null;
   nextInspection: string | null; monthlyPayment: number | null; acquisitionMode: string | null;
   insurances: { provider: string | null; monthlyAmount: number | null; annualAmount: number | null }[];
   _count: { fines: number; payments: number };
 }
+interface WsRow { id: string; ref: string; title: string; city: string | null }
+interface EquipRow { id: string; name: string }
+interface RosterPerson extends PlanPerson { role: string; specialties?: unknown; active: boolean }
+
+// Heure LOCALE — jamais toISOString() ici : la Belgique est en avance sur UTC (UTC+1/+2),
+// ça décalerait le jour affiché juste après minuit.
+function toDateInput(d: Date) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+function addDaysStr(dateStr: string, n: number) { const d = new Date(`${dateStr}T00:00:00`); d.setDate(d.getDate() + n); return toDateInput(d); }
+function dayShort(dateStr: string) { return new Date(`${dateStr}T00:00:00`).toLocaleDateString('fr-BE', { weekday: 'short', day: '2-digit', month: 'short' }); }
+function hhmm(iso: string) { return new Date(iso).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' }); }
+function vehicleLabel(v: Vehicle) { return [v.brand, v.model].filter(Boolean).join(' ') || v.code || v.plate || '—'; }
+function vehicleSub(v: Vehicle) { return [v.code, v.plate].filter(Boolean).join(' · '); }
+
+type DayStatus = 'available' | 'assigned' | 'unavailable';
 
 export default function FlottePage() {
   const router = useRouter();
   const { data, loading, reload } = useApi<{ items: Vehicle[] }>('/api/vehicles');
+  const vehiclesAll = data?.items ?? [];
+  const fleet = useMemo(() => vehiclesAll.filter((v) => v.status !== 'sold' && v.status !== 'retired'), [vehiclesAll]);
   const soon = Date.now() + 30 * 86400000;
   const ctx = useContextMenu<Vehicle>();
   const [mode, setMode] = useViewMode('flotte');
   const [creating, setCreating] = useState(false);
+
+  // ── Disponibilités — quel véhicule est libre / affecté / indisponible à une date donnée.
+  const [day, setDay] = useState(() => toDateInput(new Date()));
+  const [statusFilter, setStatusFilter] = useState<'all' | DayStatus>('all');
+  const [assignmentModal, setAssignmentModal] = useState<{ prefill?: { vehicleId?: string; date?: string } } | null>(null);
+  const windowTo = useMemo(() => addDaysStr(day, 21), [day]);
+  const { data: evData, reload: reloadEvents } = useApi<{ items: PlanningEv[] }>(`/api/planning?from=${day}&to=${windowTo}`);
+  const { data: wsData } = useApi<{ items: WsRow[] }>(`/api/worksites?status=${WORKSITE_STATUS_OPEN.join(',')}`);
+  const { data: peopleData } = useApi<{ items: RosterPerson[] }>('/api/people?active=1');
+  const { data: equipData } = useApi<{ items: EquipRow[] }>('/api/equipment');
+  const worksitesActive = useMemo(() => [...(wsData?.items ?? [])].sort((a, b) => a.ref.localeCompare(b.ref)), [wsData]);
+  const rosterPeople = peopleData?.items ?? [];
+  const equipmentList = equipData?.items ?? [];
+  const events = evData?.items ?? [];
+
+  const availInfo = useMemo(() => {
+    const map = new Map<string, { status: DayStatus; nextEvent?: PlanningEv }>();
+    for (const v of fleet) {
+      if (v.status === 'repair' || v.status === 'breakdown') {
+        map.set(v.id, { status: 'unavailable' });
+        continue;
+      }
+      const vehicleEvents = events
+        .filter((e) => e.vehicles.some((x) => x.vehicle.id === v.id))
+        .sort((a, b) => a.startAt.localeCompare(b.startAt));
+      const todayEvent = vehicleEvents.find((e) => toDateInput(new Date(e.startAt)) === day);
+      const nextEvent = vehicleEvents.find((e) => toDateInput(new Date(e.startAt)) >= day);
+      map.set(v.id, { status: todayEvent ? 'assigned' : 'available', nextEvent });
+    }
+    return map;
+  }, [fleet, events, day]);
+  const availCounts = useMemo(() => {
+    const c = { available: 0, assigned: 0, unavailable: 0 };
+    for (const info of availInfo.values()) c[info.status]++;
+    return c;
+  }, [availInfo]);
+  const filteredFleet = useMemo(
+    () => fleet.filter((v) => statusFilter === 'all' || availInfo.get(v.id)?.status === statusFilter),
+    [fleet, availInfo, statusFilter],
+  );
 
   async function setStatus(id: string, status: string) {
     await api(`/api/vehicles/${id}`, { method: 'PATCH', body: { status } });
@@ -71,7 +131,7 @@ export default function FlottePage() {
     monthlyPayment: (v: Vehicle) => v.monthlyPayment,
     nextInspection: (v: Vehicle) => (v.nextInspection ? new Date(v.nextInspection) : null),
   };
-  const colFilter = useColumnFilter<Vehicle>(data?.items ?? [], vehicleAccessors);
+  const colFilter = useColumnFilter<Vehicle>(mode === 'list' ? vehiclesAll : filteredFleet, vehicleAccessors);
   const sort = useSort<Vehicle>(colFilter.rows, vehicleAccessors);
 
   return (
@@ -89,49 +149,89 @@ export default function FlottePage() {
           }}
         />
       )}
+      {assignmentModal && (
+        <PlanningAssignmentModal
+          worksites={worksitesActive}
+          people={rosterPeople}
+          vehicles={fleet}
+          equipmentList={equipmentList}
+          events={events}
+          prefill={assignmentModal.prefill}
+          onClose={() => setAssignmentModal(null)}
+          onSaved={() => { setAssignmentModal(null); reloadEvents(); }}
+        />
+      )}
       <PageHead
         eyebrow="Ressources"
         title="Flotte"
-        sub={data ? `${data.items.filter((v) => v.status === 'active').length} véhicules actifs · clic droit sur une ligne pour les actions rapides` : undefined}
+        sub={data ? `${vehiclesAll.filter((v) => v.status === 'active').length} véhicules actifs · clic droit pour les actions rapides` : undefined}
         action={
           <div className="row">
-            <button className="btn primary" onClick={() => setCreating(true)}>+ Nouveau véhicule</button>
+            <button className="btn" onClick={() => setAssignmentModal({ prefill: { date: day } })}><CalendarPlus size={15} strokeWidth={2} /> Nouvelle affectation</button>
             <Link href="/app/flotte/pv" className="btn">PV / amendes →</Link>
+            <button className="btn primary" onClick={() => setCreating(true)}>+ Nouveau véhicule</button>
           </div>
         }
       />
-      <div className="row" style={{ marginBottom: '1rem', justifyContent: 'flex-end' }}>
+
+      <div className="row" style={{ marginBottom: '1rem' }}>
+        <div className="row" style={{ gap: '0.3rem' }}>
+          <button type="button" className="btn ghost" onClick={() => setDay((d) => addDaysStr(d, -1))} aria-label="Jour précédent"><ChevronLeft size={16} strokeWidth={2} /></button>
+          <strong style={{ minWidth: 130, textAlign: 'center', textTransform: 'capitalize' }}>{dayShort(day)}</strong>
+          <button type="button" className="btn ghost" onClick={() => setDay((d) => addDaysStr(d, 1))} aria-label="Jour suivant"><ChevronRight size={16} strokeWidth={2} /></button>
+        </div>
+        <button type="button" className="btn" onClick={() => setDay(toDateInput(new Date()))}>Aujourd’hui</button>
         <ViewToggle mode={mode} onChange={setMode} />
       </div>
+
+      <div className="kpis" style={{ marginBottom: '1.4rem' }}>
+        <Kpi ic={Truck} label="Véhicules" value={fleet.length} sub="Flotte active" hero />
+        <Kpi ic={CircleCheck} label="Libres toute la journée" value={availCounts.available} sub="Disponibles ce jour-là" />
+        <Kpi ic={Building2} label="Avec affectation" value={availCounts.assigned} sub="Déjà réservés" />
+        <Kpi ic={TriangleAlert} label="Indisponibles" value={availCounts.unavailable} sub={availCounts.unavailable > 0 ? 'En réparation ou en panne' : 'Aucun souci déclaré'} warn={availCounts.unavailable > 0} />
+      </div>
+
+      <div className="msg-filter-chips" style={{ marginBottom: '1.1rem' }}>
+        <button className={statusFilter === 'all' ? 'on' : ''} onClick={() => setStatusFilter('all')}>Tous</button>
+        <button className={statusFilter === 'available' ? 'on' : ''} onClick={() => setStatusFilter('available')}>Disponible</button>
+        <button className={statusFilter === 'assigned' ? 'on' : ''} onClick={() => setStatusFilter('assigned')}>Affecté</button>
+        <button className={statusFilter === 'unavailable' ? 'on' : ''} onClick={() => setStatusFilter('unavailable')}>Indisponible</button>
+      </div>
+
       {loading && <div className="empty">Chargement…</div>}
-      {data && mode === 'gallery' && (
-        <div className="gallery-grid">
-          {sort.rows.map((v) => {
-            const ct = v.nextInspection ? new Date(v.nextInspection).getTime() : null;
+      {data && mode === 'gallery' && filteredFleet.length === 0 && <div className="card card-pad muted">Aucun véhicule pour ce filtre.</div>}
+
+      {data && mode === 'gallery' && filteredFleet.length > 0 && (
+        <div className="avail-grid">
+          {filteredFleet.map((v) => {
+            const info = availInfo.get(v.id);
+            const status = info?.status ?? 'available';
+            const badgeLabel = status === 'assigned' ? 'Affecté' : status === 'unavailable' ? VEHICLE_STATUS_LABEL[v.status as keyof typeof VEHICLE_STATUS_LABEL] : 'Disponible';
+            const badgeTone = status === 'assigned' ? 'primary' : status === 'unavailable' ? 'crit' : 'ok';
+            const next = info?.nextEvent;
             return (
-              <Link
-                key={v.id}
-                href={`/app/flotte/${v.id}`}
-                className="card gallery-card"
-                style={v.status === 'sold' || v.status === 'retired' ? { opacity: 0.6 } : undefined}
-              >
-                <div className="gallery-thumb">
-                  {v.photoThumbUrl ? <img src={v.photoThumbUrl} alt="" /> : '🚐'}
+              <div key={v.id} className="avail-card">
+                <div className="avail-card-top">
+                  <Thumb src={v.photoThumbUrl} size={40} />
+                  <span className={`badge ${badgeTone}`}>{badgeLabel}</span>
                 </div>
-                <div className="gallery-body">
-                  <div className="gallery-title">{[v.brand, v.model].filter(Boolean).join(' ') || v.code || v.plate}</div>
-                  <div className="gallery-sub">
-                    {v.plate ?? '—'}{v.driver && ` · ${v.driver}`}
-                    {v.nextInspection && (
-                      <><br /><span className={ct && ct < soon ? 'badge crit' : ''}>CT {formatDateBE(v.nextInspection)}</span></>
-                    )}
-                  </div>
+                <div className="avail-card-name">{vehicleLabel(v)}</div>
+                <div className="avail-card-role">{vehicleSub(v) || v.type || '—'}{v.driver && ` · ${v.driver}`}</div>
+                <div className="avail-card-next">
+                  {next ? (
+                    <>Prochaine affectation : <strong><span className="mono">{next.worksite.ref}</span> · {toDateInput(new Date(next.startAt)) === day ? 'aujourd’hui' : dayShort(toDateInput(new Date(next.startAt)))} {hhmm(next.startAt)}</strong></>
+                  ) : <span className="muted">Aucune affectation prévue</span>}
                 </div>
-              </Link>
+                <div className="avail-card-actions">
+                  <button type="button" className="btn" style={{ flex: 1 }} onClick={() => setAssignmentModal({ prefill: { vehicleId: v.id, date: day } })}>Affecter</button>
+                  <Link href={`/app/flotte/${v.id}`} className="btn ghost">Ouvrir →</Link>
+                </div>
+              </div>
             );
           })}
         </div>
       )}
+
       {data && mode === 'list' && (
         <div className="tbl-wrap">
           <table className="tbl">

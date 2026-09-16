@@ -1,10 +1,12 @@
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
-import { PageHead, Thumb, formatDateBE, Kpi } from '@/lib/ui';
+import { PageHead, Thumb, Kpi } from '@/lib/ui';
 import { PaginationBar, PAGE_SIZE_ALL } from '@/components/PaginationBar';
 import { ViewToggle, useViewMode } from '@/components/ViewToggle';
+import { WorksitePicker, LocationPicker, pushRecent } from '@/components/MaterielPickers';
 import { Wrench, CircleCheck, Building2, Truck } from 'lucide-react';
 
 interface Unit {
@@ -42,171 +44,8 @@ interface Consumable {
 }
 type Worksite = { id: string; ref: string; title: string; city: string | null; client: { name: string } | null };
 
-const RECENT_KEY = 'jjd_materiel_recent';
-function loadRecent(): string[] {
-  try {
-    return JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]');
-  } catch {
-    return [];
-  }
-}
-function pushRecent(id: string) {
-  try {
-    const cur = loadRecent().filter((x) => x !== id);
-    localStorage.setItem(RECENT_KEY, JSON.stringify([id, ...cur].slice(0, 5)));
-  } catch {}
-}
-
-/** Étape 2 du parcours : « pour quel chantier ? » — suggestions récentes + recherche, pas de longue liste déroulante. */
-function WorksitePicker({
-  worksites, label, onPick, onCancel,
-}: {
-  worksites: Worksite[]; label: string; onPick: (w: Worksite) => void; onCancel: () => void;
-}) {
-  const [q, setQ] = useState('');
-  const recentIds = useMemo(() => loadRecent(), []);
-  const recent = useMemo(
-    () => recentIds.map((id) => worksites.find((w) => w.id === id)).filter((w): w is Worksite => !!w),
-    [recentIds, worksites],
-  );
-  const matches = useMemo(() => {
-    const s = q.trim().toLowerCase();
-    if (!s) return [];
-    return worksites
-      .filter((w) => `${w.ref} ${w.title} ${w.city ?? ''} ${w.client?.name ?? ''}`.toLowerCase().includes(s))
-      .slice(0, 8);
-  }, [worksites, q]);
-
-  return (
-    <div style={{ display: 'grid', gap: 10, padding: '0.7rem', background: 'var(--surface-2)', borderRadius: 10 }}>
-      <div style={{ fontWeight: 650, fontSize: '0.85rem' }}>{label}</div>
-      {!q && recent.length > 0 && (
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {recent.map((w) => (
-            <button key={w.id} type="button" className="badge primary" style={{ cursor: 'pointer' }} onClick={() => onPick(w)}>
-              {w.ref} — {w.title}
-            </button>
-          ))}
-        </div>
-      )}
-      <input
-        className="input"
-        autoFocus
-        placeholder="Chercher un chantier (réf, client, ville…)"
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-      />
-      {q && (
-        <div style={{ display: 'grid', gap: 4, maxHeight: 220, overflowY: 'auto' }}>
-          {matches.length === 0 && <div className="muted" style={{ fontSize: '0.82rem' }}>Aucun chantier trouvé.</div>}
-          {matches.map((w) => (
-            <button
-              key={w.id}
-              type="button"
-              onClick={() => onPick(w)}
-              className="btn"
-              style={{ textAlign: 'left', justifyContent: 'flex-start' }}
-            >
-              <span className="mono" style={{ marginRight: 6 }}>{w.ref}</span>
-              {w.title}{w.city ? ` (${w.city})` : ''}
-            </button>
-          ))}
-        </div>
-      )}
-      <button type="button" className="btn" onClick={onCancel}>Annuler</button>
-    </div>
-  );
-}
-
-/** Retour au dépôt : on scanne (ou tape) l'étiquette de la zone/étagère où l'outil est physiquement remis. */
-function LocationPicker({
-  suggestions, label, onConfirm, onCancel,
-}: {
-  suggestions: string[]; label: string; onConfirm: (loc: string) => void; onCancel: () => void;
-}) {
-  const [loc, setLoc] = useState('');
-
-  function submit() {
-    const v = loc.trim();
-    if (v) onConfirm(v);
-  }
-
-  return (
-    <div style={{ display: 'grid', gap: 10, padding: '0.7rem', background: 'var(--surface-2)', borderRadius: 10 }}>
-      <div style={{ fontWeight: 650, fontSize: '0.85rem' }}>{label}</div>
-      {suggestions.length > 0 && (
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {suggestions.map((s) => (
-            <button key={s} type="button" className="badge primary" style={{ cursor: 'pointer' }} onClick={() => onConfirm(s)}>
-              {s}
-            </button>
-          ))}
-        </div>
-      )}
-      <input
-        className="input"
-        autoFocus
-        placeholder="Scanner l’étiquette de zone ou taper l’emplacement (ex. Étagère A3)"
-        value={loc}
-        onChange={(e) => setLoc(e.target.value)}
-        onKeyDown={(e) => e.key === 'Enter' && submit()}
-      />
-      <div className="row" style={{ gap: 8 }}>
-        <button type="button" className="btn primary" disabled={!loc.trim()} onClick={submit}>Confirmer le retour</button>
-        <button type="button" className="btn" onClick={onCancel}>Annuler</button>
-      </div>
-    </div>
-  );
-}
-
-const STATE_LABEL: Record<string, string> = {
-  AVAILABLE: 'Au dépôt',
-  ON_SITE: 'Sur chantier',
-  RENTED: 'Loué (client Bricoloc)',
-  MAINTENANCE: 'En entretien',
-  DAMAGED: 'Endommagé',
-  RETIRED: 'Réformé',
-};
-
-function unitLoc(u: Unit): string {
-  if (u.chantier) return `${u.chantier.name} · depuis le ${formatDateBE(u.chantier.since)}`;
-  if (u.state === 'AVAILABLE') return u.storageLocation ? `Dépôt Bricoloc · ${u.storageLocation}` : 'Dépôt Bricoloc';
-  return STATE_LABEL[u.state] ?? u.state;
-}
-
-/** Description, poids/puissance (specs) et fiche technique — quand Bricoloc les a renseignés. */
-function ProductInfo({ p }: { p: Product }) {
-  const specs = Object.entries(p.specs ?? {});
-  const docs = p.documents ?? [];
-  if (!p.description && !p.shortDescription && specs.length === 0 && !p.manualUrl && docs.length === 0) return null;
-  return (
-    <div style={{ display: 'grid', gap: 8, fontSize: '0.85rem' }}>
-      {(p.shortDescription || p.description) && <p style={{ margin: 0 }}>{p.shortDescription || p.description}</p>}
-      {specs.length > 0 && (
-        <table style={{ borderCollapse: 'collapse', width: '100%' }}>
-          <tbody>
-            {specs.map(([k, v]) => (
-              <tr key={k}>
-                <td className="muted" style={{ padding: '2px 8px 2px 0', whiteSpace: 'nowrap' }}>{k}</td>
-                <td style={{ padding: '2px 0' }}>{v}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-      {(p.manualUrl || docs.length > 0) && (
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {p.manualUrl && <a href={p.manualUrl} target="_blank" rel="noreferrer" className="btn" style={{ fontSize: '0.78rem', padding: '0.25rem 0.6rem' }}>📄 Fiche technique</a>}
-          {docs.map((d) => (
-            <a key={d.url} href={d.url} target="_blank" rel="noreferrer" className="btn" style={{ fontSize: '0.78rem', padding: '0.25rem 0.6rem' }}>{d.label}</a>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function MaterielPage() {
+  const router = useRouter();
   const { data: status } = useApi<{ enabled: boolean }>('/api/materiel/status');
   const { data: wsData } = useApi<{ items: Worksite[] }>('/api/materiel/worksites');
   const { data: stock, reload, loading } = useApi<{ products: Product[] }>('/api/materiel/stock');
@@ -217,17 +56,14 @@ export default function MaterielPage() {
   const [search, setSearch] = useState('');
   const [onlyAvailable, setOnlyAvailable] = useState(false);
   const [scan, setScan] = useState('');
-  const [openId, setOpenId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<{ text: string; ok: boolean } | null>(null);
   const scanRef = useRef<HTMLInputElement>(null);
 
-  // Sortie en cours : soit un exemplaire scanné directement, soit un exemplaire choisi dans la fiche produit.
+  // Sortie en cours : exemplaire scanné directement depuis cette page.
   const [scanPending, setScanPending] = useState<{ assetTag: string; productName: string } | null>(null);
-  const [checkoutTarget, setCheckoutTarget] = useState<string | null>(null);
   // Retour en cours : il faut scanner/indiquer la zone où l'outil est remis avant de valider.
   const [scanReturnPending, setScanReturnPending] = useState<{ assetTag: string; productName: string } | null>(null);
-  const [returnTarget, setReturnTarget] = useState<string | null>(null);
   // Retrait de consommable en cours.
   const [consumeTarget, setConsumeTarget] = useState<string | null>(null);
   const [consumeQty, setConsumeQty] = useState(1);
@@ -262,8 +98,6 @@ export default function MaterielPage() {
     return consumables.filter((c) => !q || `${c.name} ${c.shortDescription ?? ''}`.toLowerCase().includes(q));
   }, [consumables, search]);
 
-  const open = products.find((p) => p.id === openId) ?? null;
-
   // Emplacements déjà utilisés au dépôt — proposés en un tap plutôt que de tout retaper.
   const knownLocations = useMemo(() => {
     const set = new Set<string>();
@@ -286,8 +120,7 @@ export default function MaterielPage() {
         // Retour : il faut encore dire dans quelle zone l'outil est remis.
         setScanReturnPending({ assetTag: info.unit.assetTag, productName: info.product.name });
       } else {
-        await reload();
-        setOpenId(info.product.id);
+        router.push(`/app/materiel/${info.product.id}`);
       }
     } catch (e) {
       setToast({ text: e instanceof ApiError ? e.message : 'Outil introuvable', ok: false });
@@ -302,7 +135,6 @@ export default function MaterielPage() {
       pushRecent(w.id);
       setToast({ text: `${assetTag} → ${w.ref}`, ok: true });
       setScanPending(null);
-      setCheckoutTarget(null);
       await reload();
     } catch (e) {
       setToast({ text: e instanceof ApiError ? e.message : 'Échec', ok: false });
@@ -318,7 +150,6 @@ export default function MaterielPage() {
       await api('/api/materiel/returns', { method: 'POST', body: { code: assetTag, storageLocation } });
       setToast({ text: `${assetTag} rentré au dépôt · ${storageLocation}`, ok: true });
       setScanReturnPending(null);
-      setReturnTarget(null);
       await reload();
     } catch (e) {
       setToast({ text: e instanceof ApiError ? e.message : 'Échec', ok: false });
@@ -444,7 +275,7 @@ export default function MaterielPage() {
               {paged.map((p) => (
                 <button
                   key={p.id}
-                  onClick={() => setOpenId(p.id)}
+                  onClick={() => router.push(`/app/materiel/${p.id}`)}
                   className="card"
                   style={{ padding: 0, textAlign: 'left', cursor: 'pointer', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
                 >
@@ -478,7 +309,7 @@ export default function MaterielPage() {
                 </thead>
                 <tbody>
                   {paged.map((p) => (
-                    <tr key={p.id} className="row-link" onClick={() => setOpenId(p.id)}>
+                    <tr key={p.id} className="row-link" onClick={() => router.push(`/app/materiel/${p.id}`)}>
                       <td style={{ width: 48 }}><Thumb src={p.image} /></td>
                       <td>
                         <div style={{ fontWeight: 650 }}>{p.name}</div>
@@ -500,73 +331,6 @@ export default function MaterielPage() {
           {!loading && filtered.length === 0 && <div className="empty">Aucun outil.</div>}
 
           <PaginationBar page={matPage} totalPages={matTotalPages} pageSize={matPageSize} onPage={setMatPage} onPageSize={(s) => { setMatPageSize(s); setMatPage(1); }} sizes={[24, 50, 100, PAGE_SIZE_ALL]} />
-
-          {open && (
-            <div className="modal-scrim" onClick={() => { setOpenId(null); setCheckoutTarget(null); setReturnTarget(null); }}>
-              <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}>
-                <div className="modal-head">
-                  <b>{open.name}</b>
-                  <button className="btn" onClick={() => { setOpenId(null); setCheckoutTarget(null); setReturnTarget(null); }}>Fermer</button>
-                </div>
-                <div className="modal-body" style={{ display: 'grid', gap: 14 }}>
-                  <div style={{ display: 'flex', gap: 14 }}>
-                    {open.image && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={open.image} alt="" style={{ width: 120, height: 90, objectFit: 'contain', background: 'var(--surface-2)', borderRadius: 8, flexShrink: 0 }} />
-                    )}
-                    <div className="muted" style={{ fontSize: '0.85rem' }}>
-                      {open.brand ? `${open.brand}${open.model ? ` ${open.model}` : ''} · ` : ''}
-                      {open.category ?? ''}
-                      <br />
-                      {open.total} exemplaire{open.total > 1 ? 's' : ''} · {open.available} au dépôt
-                    </div>
-                  </div>
-
-                  <ProductInfo p={open} />
-
-                  <div style={{ display: 'grid', gap: 8 }}>
-                    {open.units.map((u) => (
-                      <div key={u.assetTag} style={{ display: 'grid', gap: 8 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0.5rem 0.6rem', border: '1px solid var(--line)', borderRadius: 8 }}>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div className="mono" style={{ fontSize: '0.8rem', fontWeight: 600 }}>{u.assetTag}</div>
-                            <div className="muted" style={{ fontSize: '0.75rem' }}>{unitLoc(u)}</div>
-                          </div>
-                          {u.state === 'AVAILABLE' && (
-                            <button className="btn primary" disabled={busy} onClick={() => setCheckoutTarget(u.assetTag)}>
-                              Sortir…
-                            </button>
-                          )}
-                          {u.state === 'ON_SITE' && (
-                            <button className="btn" disabled={busy} onClick={() => setReturnTarget(u.assetTag)}>Rentrer au dépôt…</button>
-                          )}
-                          {u.state !== 'AVAILABLE' && u.state !== 'ON_SITE' && (
-                            <span className="muted" style={{ fontSize: '0.75rem' }}>{STATE_LABEL[u.state] ?? u.state}</span>
-                          )}
-                        </div>
-                        {checkoutTarget === u.assetTag && (
-                          <WorksitePicker
-                            worksites={worksites}
-                            label={`${u.assetTag} → pour quel chantier ?`}
-                            onPick={(w) => checkout(u.assetTag, w)}
-                            onCancel={() => setCheckoutTarget(null)}
-                          />
-                        )}
-                        {returnTarget === u.assetTag && (
-                          <LocationPicker
-                            suggestions={knownLocations}
-                            label={`${u.assetTag} → dans quelle zone est-il remis ?`}
-                            onConfirm={(loc) => returnUnit(u.assetTag, loc)}
-                            onCancel={() => setReturnTarget(null)}
-                          />
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
         </>
       )}
 

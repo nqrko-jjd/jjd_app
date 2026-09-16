@@ -54,6 +54,25 @@ threadRouter.get(
   }),
 );
 
+/** Marque le fil interne (ou client) comme lu pour l'utilisateur courant — alimente les
+ *  compteurs "non lus" de la messagerie unifiée. */
+threadRouter.post(
+  '/read',
+  requireAuth(...STAFF),
+  asyncHandler(async (req, res) => {
+    const worksiteId = req.params.worksiteId!;
+    const thread = await ensureThread(worksiteId);
+    const audience = req.body?.audience === 'client' ? 'client' : 'internal';
+    if (audience === 'client' && req.user!.role !== 'admin' && req.user!.role !== 'office') throw new HttpError(403, 'Accès refusé');
+    await prisma.threadRead.upsert({
+      where: { threadId_audience_userId: { threadId: thread.id, audience, userId: req.user!.id } },
+      create: { threadId: thread.id, audience, userId: req.user!.id },
+      update: { lastReadAt: new Date() },
+    });
+    res.json({ ok: true });
+  }),
+);
+
 /** Poste un message texte. */
 threadRouter.post(
   '/messages',

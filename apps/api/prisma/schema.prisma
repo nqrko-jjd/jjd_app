@@ -87,6 +87,7 @@ model User {
   createdTasks      WorksiteTask[]     @relation("TaskCreatedBy")
   stockMovements    StockMovement[]    @relation("StockMovementBy")
   personAdjustments PersonAdjustment[] @relation("PersonAdjustmentAuthor")
+  threadReads       ThreadRead[]
 }
 
 /// Fiche personne : ouvrier ou chef de chantier. Toutes les infos utiles.
@@ -942,13 +943,15 @@ model Fine {
 
 model Thread {
   id         String    @id @default(cuid())
-  worksiteId String    @unique
-  worksite   Worksite  @relation(fields: [worksiteId], references: [id], onDelete: Cascade)
+  kind       String    @default("worksite") // worksite | general (fil unique "Général JJD", pas de worksiteId)
+  worksiteId String?   @unique // absent pour le fil général
+  worksite   Worksite? @relation(fields: [worksiteId], references: [id], onDelete: Cascade)
   closedAt   DateTime?
   createdAt  DateTime  @default(now())
 
   messages     Message[]
   participants ThreadParticipant[]
+  reads        ThreadRead[]
 }
 
 model ThreadParticipant {
@@ -958,6 +961,20 @@ model ThreadParticipant {
   person   Person @relation(fields: [personId], references: [id], onDelete: Cascade)
 
   @@id([threadId, personId])
+}
+
+/// Dernière lecture d'un fil par un utilisateur — par audience, puisqu'un même Thread mélange
+/// messages internes et client (cf. Message.audience) : lire la discussion d'équipe ne doit pas
+/// marquer comme lus les messages du client, et inversement.
+model ThreadRead {
+  threadId   String
+  thread     Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  audience   String // internal | client
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastReadAt DateTime @default(now())
+
+  @@id([threadId, audience, userId])
 }
 
 model Message {

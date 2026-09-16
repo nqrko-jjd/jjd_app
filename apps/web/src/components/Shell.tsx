@@ -1,11 +1,11 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutGrid, Building2, CalendarDays, ListChecks, Clock, TrendingUp, FileText, Wallet,
   BarChart3, Euro, Warehouse, Contact, Users, Truck, Wrench, Package, Flag, Settings, ExternalLink,
-  type LucideIcon,
+  MessageSquare, type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useApi } from '@/lib/use-api';
@@ -39,6 +39,7 @@ const NAV: Group[] = [
       { href: '/app/planning', label: 'Planning', ic: CalendarDays },
       { href: '/app/taches', label: 'Tâches', ic: ListChecks },
       { href: '/app/pointage', label: 'Pointage', ic: Clock },
+      { href: '/app/messagerie', label: 'Messagerie', ic: MessageSquare },
     ],
   },
   {
@@ -79,6 +80,14 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [chatOpen, setChatOpen] = useState(false);
   const bureau = user?.role === 'admin' || user?.role === 'office';
   const { data: assistant } = useApi<{ enabled: boolean }>(bureau ? '/api/assistant/status' : null);
+  const isStaff = !!user && user.role !== 'client';
+  const { data: unread, reload: reloadUnread } = useApi<{ internal: number; client: number }>(isStaff ? '/api/messagerie/unread-count' : null);
+  const unreadTotal = (unread?.internal ?? 0) + (unread?.client ?? 0);
+  useEffect(() => {
+    if (!isStaff) return;
+    const t = setInterval(reloadUnread, 20000);
+    return () => clearInterval(t);
+  }, [isStaff, reloadUnread]);
 
   const isActive = (href: string) => (href === '/app' ? pathname === '/app' : pathname.startsWith(href));
   const visible = (i: Item) => !i.roles || (user && i.roles.includes(user.role));
@@ -134,6 +143,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
                   >
                     <span className="ic"><i.ic size={16} strokeWidth={2} /></span>
                     {i.label}
+                    {i.href === '/app/messagerie' && unreadTotal > 0 && <span className="nav-badge">{unreadTotal}</span>}
                   </Link>
                 )
               ))}

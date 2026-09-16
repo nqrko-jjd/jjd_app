@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutGrid, Building2, CalendarDays, ListChecks, Clock, TrendingUp, FileText, Wallet,
-  BarChart3, Euro, Warehouse, Contact, Users, Truck, Wrench, Package, Flag, Settings, ExternalLink,
+  BarChart3, Euro, Warehouse, Contact, Users, Truck, Wrench, Package, ScanLine, Flag, Settings, ExternalLink,
   MessageSquare, type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
@@ -61,6 +61,7 @@ const NAV: Group[] = [
       { href: '/app/flotte', label: 'Flotte', ic: Truck },
       { href: '/app/materiel', label: 'Matériel', ic: Wrench },
       { href: '/app/stock', label: 'Stock matériaux', ic: Package },
+      { href: '/app/stock/scan', label: 'Scan & mouvements', ic: ScanLine },
     ],
   },
   {
@@ -89,10 +90,15 @@ export function Shell({ children }: { children: React.ReactNode }) {
     return () => clearInterval(t);
   }, [isStaff, reloadUnread]);
 
-  const isActive = (href: string) => (href === '/app' ? pathname === '/app' : pathname.startsWith(href));
   const visible = (i: Item) => !i.roles || (user && i.roles.includes(user.role));
   const isWorker = user?.role === 'worker';
   const nav = isWorker ? WORKER_NAV : NAV;
+  const bestMatch = nav
+    .flatMap((g) => g.items)
+    .map((i) => i.href)
+    .filter((href) => (href === '/app' ? pathname === '/app' : pathname === href || pathname.startsWith(`${href}/`)))
+    .sort((a, b) => b.length - a.length)[0];
+  const isActive = (href: string) => href === bestMatch;
   const current =
     nav.flatMap((g) => g.items).find((i) => isActive(i.href))?.label ?? 'JJD App';
 

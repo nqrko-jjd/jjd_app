@@ -249,8 +249,13 @@ function EquipeInner() {
             const badgeTone = status === 'assigned' ? 'primary' : status === 'unavailable' ? 'warn' : 'ok';
             return (
               <div key={p.id} className="avail-card" style={p.active ? undefined : { opacity: 0.6 }}>
+                {p.photoThumbUrl && (
+                  <div className="avail-card-photo">
+                    <img src={p.photoThumbUrl} alt="" />
+                  </div>
+                )}
                 <div className="avail-card-top">
-                  <Avatar src={p.photoThumbUrl} label={name(p)} size={56} />
+                  <Avatar label={name(p)} size={56} />
                   <span className={`badge ${badgeTone}`}>{badgeLabel}</span>
                 </div>
                 <div className="avail-card-name">{name(p)}{!p.active && <span className="badge plain" style={{ marginLeft: 6 }}>Ancien</span>}</div>

@@ -1054,7 +1054,10 @@ body.plan-wide .main { max-width: none; }
 .avail-card {
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
   box-shadow: var(--shadow-sm); padding: 1rem; display: flex; flex-direction: column; gap: 0.5rem;
+  overflow: hidden;
 }
+.avail-card-photo { height: 170px; margin: -1rem -1rem 0; background: var(--surface-2); }
+.avail-card-photo img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 25%; }
 .avail-card-top { display: flex; align-items: center; justify-content: space-between; }
 .avail-card-top .badge { margin: 0; }
 .avail-card-name { font-weight: 700; font-size: 0.95rem; }

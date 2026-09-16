@@ -44,7 +44,6 @@ interface RosterPerson extends PlanPerson { role: string; specialties?: unknown;
 function toDateInput(d: Date) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
 function addDaysStr(dateStr: string, n: number) { const d = new Date(`${dateStr}T00:00:00`); d.setDate(d.getDate() + n); return toDateInput(d); }
 function dayShort(dateStr: string) { return new Date(`${dateStr}T00:00:00`).toLocaleDateString('fr-BE', { weekday: 'short', day: '2-digit', month: 'short' }); }
-function hhmm(iso: string) { return new Date(iso).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' }); }
 function vehicleLabel(v: Vehicle) { return [v.brand, v.model].filter(Boolean).join(' ') || v.code || v.plate || '—'; }
 function vehicleSub(v: Vehicle) { return [v.code, v.plate].filter(Boolean).join(' · '); }
 
@@ -208,23 +207,21 @@ export default function FlottePage() {
             const status = info?.status ?? 'available';
             const badgeLabel = status === 'assigned' ? 'Affecté' : status === 'unavailable' ? VEHICLE_STATUS_LABEL[v.status as keyof typeof VEHICLE_STATUS_LABEL] : 'Disponible';
             const badgeTone = status === 'assigned' ? 'primary' : status === 'unavailable' ? 'crit' : 'ok';
-            const next = info?.nextEvent;
             return (
               <div key={v.id} className="avail-card">
+                {v.photoThumbUrl && (
+                  <div className="avail-card-photo">
+                    <img src={v.photoThumbUrl} alt="" />
+                  </div>
+                )}
                 <div className="avail-card-top">
-                  <Thumb src={v.photoThumbUrl} size={40} />
+                  <Thumb src={v.photoThumbUrl ? null : undefined} size={56} />
                   <span className={`badge ${badgeTone}`}>{badgeLabel}</span>
                 </div>
                 <div className="avail-card-name">{vehicleLabel(v)}</div>
                 <div className="avail-card-role">{vehicleSub(v) || v.type || '—'}{v.driver && ` · ${v.driver}`}</div>
-                <div className="avail-card-next">
-                  {next ? (
-                    <>Prochaine affectation : <strong><span className="mono">{next.worksite.ref}</span> · {toDateInput(new Date(next.startAt)) === day ? 'aujourd’hui' : dayShort(toDateInput(new Date(next.startAt)))} {hhmm(next.startAt)}</strong></>
-                  ) : <span className="muted">Aucune affectation prévue</span>}
-                </div>
                 <div className="avail-card-actions">
-                  <button type="button" className="btn" style={{ flex: 1 }} onClick={() => setAssignmentModal({ prefill: { vehicleId: v.id, date: day } })}>Affecter</button>
-                  <Link href={`/app/flotte/${v.id}`} className="btn ghost">Ouvrir →</Link>
+                  <Link href={`/app/flotte/${v.id}`} className="btn ghost" style={{ flex: 1, justifyContent: 'center' }}>Ouvrir →</Link>
                 </div>
               </div>
             );

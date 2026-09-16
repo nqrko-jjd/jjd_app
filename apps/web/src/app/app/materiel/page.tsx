@@ -2,9 +2,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
-import { PageHead, Thumb, formatDateBE } from '@/lib/ui';
+import { PageHead, Thumb, formatDateBE, Kpi } from '@/lib/ui';
 import { PaginationBar, PAGE_SIZE_ALL } from '@/components/PaginationBar';
 import { ViewToggle, useViewMode } from '@/components/ViewToggle';
+import { Wrench, CircleCheck, Building2, Truck } from 'lucide-react';
 
 interface Unit {
   assetTag: string;
@@ -214,6 +215,7 @@ export default function MaterielPage() {
   const [tab, setTab] = useState<'outils' | 'consommables'>('outils');
   const [mode, setMode] = useViewMode('materiel', 'gallery');
   const [search, setSearch] = useState('');
+  const [onlyAvailable, setOnlyAvailable] = useState(false);
   const [scan, setScan] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -244,13 +246,14 @@ export default function MaterielPage() {
     const q = search.trim().toLowerCase();
     return products
       .filter((p) => p.total > 0)
+      .filter((p) => !onlyAvailable || p.available > 0)
       .filter((p) => !q || `${p.name} ${p.brand ?? ''} ${p.category ?? ''}`.toLowerCase().includes(q));
-  }, [products, search]);
+  }, [products, search, onlyAvailable]);
 
   // pagination côté client : le parc Bricoloc est chargé d'un coup (pas d'API paginée côté partenaire)
   const [matPage, setMatPage] = useState(1);
   const [matPageSize, setMatPageSize] = useState(50);
-  useEffect(() => { setMatPage(1); }, [search]);
+  useEffect(() => { setMatPage(1); }, [search, onlyAvailable]);
   const matTotalPages = Math.max(1, Math.ceil(filtered.length / matPageSize));
   const paged = filtered.slice((matPage - 1) * matPageSize, matPage * matPageSize);
 
@@ -355,20 +358,28 @@ export default function MaterielPage() {
 
   return (
     <>
-      <PageHead
-        eyebrow="Ressources"
-        title="Matériel"
-        sub={
-          stock
-            ? `${products.reduce((a, p) => a + p.available, 0)} au dépôt · ${products.reduce((a, p) => a + p.onSite, 0)} sur chantier`
-            : 'Parc partagé avec Bricoloc'
-        }
-      />
+      <PageHead eyebrow="Ressources" title="Matériel" sub="Parc partagé avec Bricoloc — scan à la sortie et au retour" />
 
       <div className="seg" style={{ marginBottom: '1rem' }}>
         <button className={tab === 'outils' ? 'on' : ''} onClick={() => setTab('outils')}>Outils</button>
         <button className={tab === 'consommables' ? 'on' : ''} onClick={() => setTab('consommables')}>Consommables</button>
       </div>
+
+      {tab === 'outils' && stock && (
+        <div className="kpis" style={{ marginBottom: '1.4rem' }}>
+          <Kpi ic={Wrench} label="Équipements" value={products.length} sub={`${products.reduce((a, p) => a + p.total, 0)} exemplaires`} hero />
+          <Kpi ic={CircleCheck} label="Au dépôt" value={products.reduce((a, p) => a + p.available, 0)} sub="Disponibles maintenant" />
+          <Kpi ic={Building2} label="Sur chantier" value={products.reduce((a, p) => a + p.onSite, 0)} sub="En cours d'utilisation" />
+          <Kpi ic={Truck} label="Loué" value={products.reduce((a, p) => a + p.rented, 0)} sub="Client Bricoloc" />
+        </div>
+      )}
+
+      {tab === 'outils' && (
+        <div className="msg-filter-chips" style={{ marginBottom: '1rem' }}>
+          <button className={!onlyAvailable ? 'on' : ''} onClick={() => setOnlyAvailable(false)}>Tous</button>
+          <button className={onlyAvailable ? 'on' : ''} onClick={() => setOnlyAvailable(true)}>Disponible maintenant</button>
+        </div>
+      )}
 
       {tab === 'outils' && (
         <div className="card card-pad" style={{ marginBottom: '1rem', display: 'grid', gap: 12 }}>

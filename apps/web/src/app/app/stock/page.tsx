@@ -25,6 +25,8 @@ interface Meta {
   worksites: { id: string; name: string }[];
   categories: string[];
 }
+interface MaterielUnit { assetTag: string; state: string; storageLocation: string | null; chantier: { name: string } | null }
+interface MaterielProduct { id: string; name: string; brand: string | null; model: string | null; total: number; available: number; onSite: number; units: MaterielUnit[] }
 
 const TYPE_LABEL: Record<string, string> = { in: 'Entrée', out: 'Sortie', adjustment: 'Inventaire' };
 const TYPE_TONE: Record<string, string> = { in: 'ok', out: 'warn', adjustment: 'plain' };
@@ -203,6 +205,10 @@ const ACTION_DESC: Record<'in' | 'out' | 'return', string> = {
   in: 'Ajouter une livraison au stock', out: 'Préparer le départ vers un chantier', return: 'Remettre les articles au dépôt',
 };
 
+type CartLine =
+  | { kind: 'stock'; key: string; id: string; name: string; unit: string; qty: number }
+  | { kind: 'materiel'; key: string; assetTag: string; name: string; sub: string };
+
 function ScanPanel({
   items, meta, onDone,
 }: {
@@ -210,58 +216,102 @@ function ScanPanel({
 }) {
   const [action, setAction] = useState<'in' | 'out' | 'return'>('out');
   const [worksiteId, setWorksiteId] = useState('');
+  const [storageLocation, setStorageLocation] = useState('');
   const [query, setQuery] = useState('');
-  const [cart, setCart] = useState<{ id: string; name: string; unit: string; qty: number }[]>([]);
+  const [cart, setCart] = useState<CartLine[]>([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+
+  // Le parc d'outillage (Matériel/Bricoloc) partage le même panier pour la sortie et le
+  // retour — on prépare souvent un départ chantier avec du stock ET des outils ensemble.
+  // Pas de « Réceptionner » côté outils : ça se gère par le fournisseur, pas par nous.
+  const { data: materielStatus } = useApi<{ enabled: boolean }>('/api/materiel/status');
+  const { data: materielStock } = useApi<{ products: MaterielProduct[] }>(materielStatus?.enabled ? '/api/materiel/stock' : null);
+  const materielProducts = materielStock?.products ?? [];
+  const showMateriel = materielStatus?.enabled && action !== 'in';
+  const knownLocations = (() => {
+    const set = new Set<string>();
+    for (const p of materielProducts) for (const u of p.units) if (u.storageLocation) set.add(u.storageLocation);
+    return [...set].sort().slice(0, 8);
+  })();
 
   const catalog = (() => {
     const q = query.trim().toLowerCase();
     return items.filter((it) => !q || `${it.name} ${it.category ?? ''}`.toLowerCase().includes(q));
   })();
+  const materielCatalog = (() => {
+    if (!showMateriel) return [];
+    const q = query.trim().toLowerCase();
+    return materielProducts
+      .filter((p) => (action === 'out' ? p.available > 0 : p.onSite > 0))
+      .filter((p) => !q || `${p.name} ${p.brand ?? ''} ${p.model ?? ''}`.toLowerCase().includes(q));
+  })();
 
-  // Un clic sur une carte ajoute 1 exemplaire — un 2e clic sur la même carte augmente la
-  // quantité, comme un 2e scan (cf. panier de la maquette).
-  function addToCart(it: StockItem) {
+  // Un clic sur une carte de stock ajoute 1 exemplaire — un 2e clic augmente la quantité,
+  // comme un 2e scan (cf. panier de la maquette). Un outil est un exemplaire physique précis
+  // (étiqueté) : chaque clic ajoute un exemplaire disponible différent, jamais une quantité.
+  function addStock(it: StockItem) {
+    const key = `stock:${it.id}`;
     setCart((cur) => {
-      const existing = cur.find((l) => l.id === it.id);
-      if (existing) return cur.map((l) => (l.id === it.id ? { ...l, qty: l.qty + 1 } : l));
-      return [{ id: it.id, name: it.name, unit: it.unit, qty: 1 }, ...cur];
+      const existing = cur.find((l) => l.key === key);
+      if (existing && existing.kind === 'stock') return cur.map((l) => (l.key === key && l.kind === 'stock' ? { ...l, qty: l.qty + 1 } : l));
+      return [{ kind: 'stock', key, id: it.id, name: it.name, unit: it.unit, qty: 1 }, ...cur];
     });
     setToast(null);
     setErr(null);
   }
-  function setQty(id: string, qty: number) {
+  function addMateriel(p: MaterielProduct) {
+    const wanted = action === 'out' ? 'AVAILABLE' : 'ON_SITE';
+    const already = new Set(cart.filter((l) => l.kind === 'materiel').map((l) => (l as Extract<CartLine, { kind: 'materiel' }>).assetTag));
+    const unit = p.units.find((u) => u.state === wanted && !already.has(u.assetTag));
+    if (!unit) { setErr(`Plus aucun exemplaire ${action === 'out' ? 'disponible' : 'sur chantier'} pour ${p.name}.`); return; }
+    const sub = [p.brand, p.model].filter(Boolean).join(' ') || unit.assetTag;
+    setCart((cur) => [{ kind: 'materiel', key: `materiel:${unit.assetTag}`, assetTag: unit.assetTag, name: p.name, sub }, ...cur]);
+    setToast(null);
+    setErr(null);
+  }
+  function setQty(key: string, qty: number) {
     if (!Number.isFinite(qty) || qty < 1) return;
-    setCart((cur) => cur.map((l) => (l.id === id ? { ...l, qty } : l)));
+    setCart((cur) => cur.map((l) => (l.key === key && l.kind === 'stock' ? { ...l, qty } : l)));
   }
-  function removeLine(id: string) {
-    setCart((cur) => cur.filter((l) => l.id !== id));
+  function removeLine(key: string) {
+    setCart((cur) => cur.filter((l) => l.key !== key));
   }
+
+  const materielLinesCount = cart.filter((l) => l.kind === 'materiel').length;
+  const needsLocation = action === 'return' && materielLinesCount > 0;
 
   async function submit() {
     if (cart.length === 0) return;
     if (action !== 'in' && !worksiteId) { setErr('Chantier requis.'); return; }
+    if (needsLocation && !storageLocation.trim()) { setErr('Emplacement de rangement requis pour le retour d’outils.'); return; }
     setBusy(true);
     setErr(null);
     setToast(null);
     let done = 0;
     try {
       for (const line of cart) {
-        await api('/api/stock/movements', {
-          method: 'POST',
-          body: {
-            stockItemId: line.id,
-            type: action === 'return' ? 'in' : action,
-            qty: line.qty,
-            worksiteId: action !== 'in' ? worksiteId : null,
-            note: action === 'return' ? 'Retour dépôt' : null,
-          },
-        });
+        if (line.kind === 'stock') {
+          await api('/api/stock/movements', {
+            method: 'POST',
+            body: {
+              stockItemId: line.id,
+              type: action === 'return' ? 'in' : action,
+              qty: line.qty,
+              worksiteId: action !== 'in' ? worksiteId : null,
+              note: action === 'return' ? 'Retour dépôt' : null,
+            },
+          });
+        } else if (action === 'out') {
+          await api('/api/materiel/loans', { method: 'POST', body: { code: line.assetTag, worksiteId } });
+        } else if (action === 'return') {
+          await api('/api/materiel/returns', { method: 'POST', body: { code: line.assetTag, storageLocation: storageLocation.trim() } });
+        }
         done++;
       }
       setCart([]);
+      setStorageLocation('');
       setToast(`${done} mouvement${done > 1 ? 's' : ''} enregistré${done > 1 ? 's' : ''}.`);
       onDone();
     } catch (e) {
@@ -297,19 +347,42 @@ function ScanPanel({
           <ComboBox placeholder="chercher un chantier" value={worksiteId} onChange={setWorksiteId} options={meta.worksites.map((w) => ({ value: w.id, label: w.name }))} />
         </div>
       )}
+      {needsLocation && (
+        <div style={{ display: 'grid', gap: 10, padding: '0.7rem', background: 'var(--surface-2)', borderRadius: 10, marginBottom: '0.9rem', maxWidth: 420 }}>
+          <div style={{ fontWeight: 650, fontSize: '0.85rem' }}>Les outils retournés → dans quelle zone du dépôt ?</div>
+          {knownLocations.length > 0 && (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {knownLocations.map((loc) => (
+                <button key={loc} type="button" className="badge primary" style={{ cursor: 'pointer' }} onClick={() => setStorageLocation(loc)}>{loc}</button>
+              ))}
+            </div>
+          )}
+          <input className="input" placeholder="ex. Étagère A3" value={storageLocation} onChange={(e) => setStorageLocation(e.target.value)} />
+        </div>
+      )}
 
       <div className="stock-scan-layout">
         <div className="stock-catalog">
           <div className="eyebrow">Quels articles ?</div>
           <input className="input" placeholder="Nom, catégorie…" value={query} onChange={(e) => setQuery(e.target.value)} />
           <div className="stock-catalog-grid">
-            {catalog.length === 0 && <p className="muted" style={{ fontSize: '0.85rem' }}>Aucun article.</p>}
+            {catalog.length === 0 && materielCatalog.length === 0 && <p className="muted" style={{ fontSize: '0.85rem' }}>Aucun article.</p>}
             {catalog.map((it) => (
-              <button key={it.id} type="button" className="stock-catalog-card" onClick={() => addToCart(it)}>
+              <button key={`stock-${it.id}`} type="button" className="stock-catalog-card" onClick={() => addStock(it)}>
                 <span className="icon">▥</span>
                 <span className="info">
                   <span className="name">{it.name}</span>
                   <span className="sub">{it.qty} {it.unit} en stock{it.category ? ` · ${it.category}` : ''}</span>
+                </span>
+                <b className="plus">＋</b>
+              </button>
+            ))}
+            {materielCatalog.map((p) => (
+              <button key={`materiel-${p.id}`} type="button" className="stock-catalog-card" onClick={() => addMateriel(p)}>
+                <span className="icon">🔧</span>
+                <span className="info">
+                  <span className="name">{p.name} <span className="badge plain" style={{ fontSize: '0.62rem', verticalAlign: 'middle' }}>Outil</span></span>
+                  <span className="sub">{action === 'out' ? `${p.available} disponible${p.available > 1 ? 's' : ''}` : `${p.onSite} sur chantier`}</span>
                 </span>
                 <b className="plus">＋</b>
               </button>
@@ -329,22 +402,28 @@ function ScanPanel({
             {cart.length === 0 ? (
               <p className="stock-basket-empty">Cliquez un article dans le catalogue pour l’ajouter.</p>
             ) : cart.map((line) => (
-              <div key={line.id} className="stock-basket-line">
-                <span className="icon">▥</span>
+              <div key={line.key} className="stock-basket-line">
+                <span className="icon">{line.kind === 'materiel' ? '🔧' : '▥'}</span>
                 <span className="info">
                   <span className="name">{line.name}</span>
-                  <span className="sub">{line.unit}</span>
-                  <span className="stock-qty-stepper">
-                    <button type="button" onClick={() => setQty(line.id, line.qty - 1)} aria-label={`Diminuer la quantité de ${line.name}`}>−</button>
-                    <input
-                      type="number" min={1} step="any"
-                      value={line.qty}
-                      onChange={(e) => setQty(line.id, Number(e.target.value))}
-                      aria-label={`Quantité de ${line.name}`}
-                    />
-                    <button type="button" onClick={() => setQty(line.id, line.qty + 1)} aria-label={`Augmenter la quantité de ${line.name}`}>＋</button>
-                    <button type="button" className="remove" onClick={() => removeLine(line.id)}>Retirer</button>
-                  </span>
+                  <span className="sub">{line.kind === 'stock' ? line.unit : line.sub}</span>
+                  {line.kind === 'stock' ? (
+                    <span className="stock-qty-stepper">
+                      <button type="button" onClick={() => setQty(line.key, line.qty - 1)} aria-label={`Diminuer la quantité de ${line.name}`}>−</button>
+                      <input
+                        type="number" min={1} step="any"
+                        value={line.qty}
+                        onChange={(e) => setQty(line.key, Number(e.target.value))}
+                        aria-label={`Quantité de ${line.name}`}
+                      />
+                      <button type="button" onClick={() => setQty(line.key, line.qty + 1)} aria-label={`Augmenter la quantité de ${line.name}`}>＋</button>
+                      <button type="button" className="remove" onClick={() => removeLine(line.key)}>Retirer</button>
+                    </span>
+                  ) : (
+                    <span className="stock-qty-stepper">
+                      <button type="button" className="remove" onClick={() => removeLine(line.key)}>Retirer</button>
+                    </span>
+                  )}
                 </span>
               </div>
             ))}
@@ -353,7 +432,7 @@ function ScanPanel({
           <div className="stock-basket-confirm">
             {err && <div className="badge crit" style={{ padding: '0.4rem 0.7rem', marginBottom: '0.7rem' }}>{err}</div>}
             {toast && <div className="badge ok" style={{ padding: '0.4rem 0.7rem', marginBottom: '0.7rem' }}>{toast}</div>}
-            <button type="button" className="btn primary" disabled={busy || cart.length === 0 || (action !== 'in' && !worksiteId)} onClick={submit}>
+            <button type="button" className="btn primary" disabled={busy || cart.length === 0 || (action !== 'in' && !worksiteId) || (needsLocation && !storageLocation.trim())} onClick={submit}>
               {busy ? 'Enregistrement…' : `Confirmer ${ACTION_LABEL[action]} · ${cart.length} article${cart.length > 1 ? 's' : ''}`}
             </button>
           </div>

@@ -15,7 +15,6 @@ const STATUS_DOT: Record<string, string> = {
   scheduled: 'gold', in_progress: 'ok', on_hold: 'blue', done: 'ok', to_invoice: 'gold',
   invoiced: 'grey', closed: 'grey', lead: 'grey', to_plan: 'grey', cancelled: 'crit',
 };
-const PRIO_DOT: Record<string, string> = { urgent: 'crit', high: 'crit', normal: 'gold', low: 'grey' };
 const fdate = (s: string | null) => (s ? new Date(s).toLocaleDateString('fr-BE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—');
 
 const STATUS_VIEWS: { key: string; label: string }[] = [
@@ -55,22 +54,23 @@ export default function PortalInterventions() {
       </div>
 
       {!items ? <div className="p-empty">Chargement…</div> : items.length === 0 ? <div className="p-empty">Aucune intervention.</div> : (
-        <div className="p-panel" style={{ padding: '0.4rem 1rem' }}>
-          <table className="p-tbl">
-            <thead><tr><th>Réf</th><th>{me.isSyndic ? 'Immeuble' : 'Objet'}</th><th>Statut</th><th>Priorité</th><th>Technicien</th><th>Maj</th></tr></thead>
-            <tbody>
-              {items.map((w) => (
-                <tr key={w.id} onClick={() => router.push(`/portail/chantier/${w.id}`)} style={{ cursor: 'pointer' }}>
-                  <td className="p-note" style={{ fontFamily: 'IBM Plex Mono, monospace' }}>{w.ref}</td>
-                  <td>{w.building?.name ?? w.title}</td>
-                  <td><span className={`p-dot ${STATUS_DOT[w.status] ?? 'grey'}`}>{w.statusLabel}</span></td>
-                  <td>{w.priority === 'normal' || w.priority === 'low' ? <span className="p-note">—</span> : <span className={`p-dot ${PRIO_DOT[w.priority] ?? 'gold'}`}>{w.priorityLabel}</span>}</td>
-                  <td>{w.manager ?? '—'}</td>
-                  <td className="p-note">{fdate(w.updatedAt)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="p-panel" style={{ padding: '0.4rem 0.5rem' }}>
+          <div className="p-ilist">
+            {items.map((w) => (
+              <div key={w.id} className="p-irow" onClick={() => router.push(`/portail/chantier/${w.id}`)}>
+                <span className="ico">⌂</span>
+                <div className="body">
+                  <div className="t">{w.title}</div>
+                  <div className="s">{w.building?.name ?? ''}{w.building?.name ? ` · ${w.ref}` : w.ref}</div>
+                </div>
+                <div className="right">
+                  <span className={`p-dot ${STATUS_DOT[w.status] ?? 'grey'}`}>{w.statusLabel}</span>
+                  <div className="d">{fdate(w.updatedAt)}</div>
+                </div>
+                <span className="chev">→</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </PortalShell>

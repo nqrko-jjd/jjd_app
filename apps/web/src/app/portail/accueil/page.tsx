@@ -22,8 +22,6 @@ const STATUS_DOT: Record<string, string> = {
   scheduled: 'gold', in_progress: 'ok', on_hold: 'blue', done: 'ok', to_invoice: 'gold',
   invoiced: 'grey', closed: 'grey', lead: 'grey', to_plan: 'grey', cancelled: 'crit',
 };
-const PRIO_DOT: Record<string, string> = { urgent: 'crit', high: 'crit', normal: 'gold', low: 'grey' };
-
 function fdate(s: string | null) {
   if (!s) return '—';
   return new Date(s).toLocaleDateString('fr-BE', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -100,20 +98,22 @@ export default function PortalDashboard() {
                 <h2>Interventions récentes</h2>
               </div>
               {d.recentInterventions.length === 0 ? <p className="p-note">Aucune intervention.</p> : (
-                <table className="p-tbl">
-                  <thead><tr><th>{me.isSyndic ? 'Immeuble' : 'Chantier'}</th><th>Statut</th><th>Priorité</th><th>Technicien</th><th>Maj</th></tr></thead>
-                  <tbody>
-                    {d.recentInterventions.map((w) => (
-                      <tr key={w.id} onClick={() => router.push(`/portail/chantier/${w.id}`)} style={{ cursor: 'pointer' }}>
-                        <td><span className="b-ico">⌂</span>{w.building ?? w.title}</td>
-                        <td><span className={`p-dot ${STATUS_DOT[w.status] ?? 'grey'}`}>{w.statusLabel}</span></td>
-                        <td>{w.priority === 'normal' || w.priority === 'low' ? <span className="p-note">—</span> : <span className={`p-dot ${PRIO_DOT[w.priority] ?? 'gold'}`}>{w.priorityLabel}</span>}</td>
-                        <td>{w.manager ?? '—'}</td>
-                        <td className="p-note">{fdate(w.updatedAt)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <div className="p-ilist">
+                  {d.recentInterventions.map((w) => (
+                    <div key={w.id} className="p-irow" onClick={() => router.push(`/portail/chantier/${w.id}`)}>
+                      <span className="ico">⌂</span>
+                      <div className="body">
+                        <div className="t">{w.building ?? w.title}</div>
+                        <div className="s">{w.ref}</div>
+                      </div>
+                      <div className="right">
+                        <span className={`p-dot ${STATUS_DOT[w.status] ?? 'grey'}`}>{w.statusLabel}</span>
+                        <div className="d">{fdate(w.updatedAt)}</div>
+                      </div>
+                      <span className="chev">→</span>
+                    </div>
+                  ))}
+                </div>
               )}
               <Link href="/portail/interventions" className="p-more">Voir toutes les interventions ›</Link>
             </div>

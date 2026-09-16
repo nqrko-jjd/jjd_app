@@ -81,7 +81,7 @@ function ContactQuickCreate({
     <FormModal
       title="Nouveau contact"
       fields={CONTACT_FIELDS(typeFilter, pick?.syndics ?? [])}
-      initial={{ name: initialName, ...splitContactName(initialName), type: typeFilter, ...(defaultKind ? { kind: defaultKind } : {}) }}
+      initial={{ name: initialName, ...splitContactName(initialName), type: typeFilter, kind: defaultKind ?? 'individual' }}
       onClose={onCancel}
       onSubmit={async (v) => {
         const { contact } = await api<{ contact: { id: string; name: string } }>('/api/contacts', { method: 'POST', body: composeContactPayload(v) });

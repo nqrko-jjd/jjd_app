@@ -74,18 +74,27 @@ export default function ImmeublesPage() {
         </div>
       )}
       {data && data.items.length > 0 && mode === 'gallery' && (
-        <div className="gallery-grid">
+        <div className="building-grid">
           {data.items.map((b) => (
-            <Link key={b.id} href={`/app/immeubles/${b.id}`} className="card gallery-card">
-              <div className="gallery-thumb">
-                {b.photoThumbUrl ? <img src={b.photoThumbUrl} alt="" /> : '⌂'}
+            <Link key={b.id} href={`/app/immeubles/${b.id}`} className="building-card">
+              <div className="building-media">
+                {b.photoThumbUrl ? <img src={b.photoThumbUrl} alt="" /> : <span className="fallback">⌂</span>}
               </div>
-              <div className="gallery-body">
-                <div className="gallery-title">{b.name}</div>
-                <div className="gallery-sub">
-                  {[b.city, b.syndic?.name].filter(Boolean).join(' · ') || '—'}
-                  {b._count.worksites > 0 && ` · ${b._count.worksites} chantier${b._count.worksites > 1 ? 's' : ''}`}
+              <div className="building-body">
+                {b.city && <div className="eyebrow">{b.city}</div>}
+                <h2>{b.name}</h2>
+                <p className="building-sub">{b.syndic?.name ?? 'Gestion privée'}</p>
+                <div className="building-foot">
+                  <span>
+                    {b._count.worksites > 0
+                      ? `Chantiers : ${b._count.worksites} intervention${b._count.worksites > 1 ? 's' : ''}`
+                      : 'Aucun chantier'}
+                  </span>
+                  <span className={`badge ${b._count.worksites > 0 ? 'ok' : 'plain'}`}>
+                    {b._count.worksites > 0 ? 'Avec chantiers' : 'Aucun chantier'}
+                  </span>
                 </div>
+                <span className="building-link">Ouvrir le dossier →</span>
               </div>
             </Link>
           ))}

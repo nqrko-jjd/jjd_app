@@ -958,7 +958,10 @@ body.plan-wide .main { max-width: none; }
   border-radius: var(--radius); background: var(--surface); overflow: hidden;
   height: calc(100dvh - 220px); min-height: 480px;
 }
-.msg-list { display: flex; flex-direction: column; border-right: 1px solid var(--line); padding: 1rem; min-width: 0; }
+/* min-height: 0 est nécessaire : sans ça, un enfant de grid/flex refuse de rétrécir sous la
+ * hauteur de son contenu — la colonne grandirait indéfiniment au lieu de laisser
+ * .msg-list-items défiler tout seul dans la hauteur disponible. */
+.msg-list { display: flex; flex-direction: column; border-right: 1px solid var(--line); padding: 1rem; min-width: 0; min-height: 0; }
 /* .plan-search a `flex: 1 1 0` pensé pour une rangée horizontale (barre d'outils du planning) —
  * ici .msg-list est une colonne, donc ce même flex grandirait en HAUTEUR au lieu de largeur. */
 .msg-list .plan-search { flex: 0 0 auto; width: 100%; }
@@ -986,7 +989,7 @@ body.plan-wide .main { max-width: none; }
   min-width: 1.15rem; height: 1.15rem; padding: 0 0.3rem; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
 }
 
-.msg-pane { display: flex; flex-direction: column; min-width: 0; background: var(--paper); }
+.msg-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--paper); }
 .msg-pane-head { display: flex; align-items: center; gap: 0.6rem; padding: 0.9rem 1.2rem; border-bottom: 1px solid var(--line); background: var(--surface); }
 .msg-pane-head strong { font-size: 0.92rem; }
 

@@ -959,6 +959,9 @@ body.plan-wide .main { max-width: none; }
   height: calc(100dvh - 220px); min-height: 480px;
 }
 .msg-list { display: flex; flex-direction: column; border-right: 1px solid var(--line); padding: 1rem; min-width: 0; }
+/* .plan-search a `flex: 1 1 0` pensé pour une rangée horizontale (barre d'outils du planning) —
+ * ici .msg-list est une colonne, donc ce même flex grandirait en HAUTEUR au lieu de largeur. */
+.msg-list .plan-search { flex: 0 0 auto; width: 100%; }
 .msg-audience-tabs { display: flex; background: var(--surface-2); border-radius: 10px; padding: 3px; gap: 2px; margin-bottom: 0.8rem; }
 .msg-audience-tabs button { flex: 1; border: 0; background: none; padding: 0.5rem; border-radius: 8px; font-size: 0.82rem; font-weight: 600; color: var(--ink-2); cursor: pointer; }
 .msg-audience-tabs button.active { background: var(--surface); box-shadow: var(--shadow-sm); color: var(--ink); }

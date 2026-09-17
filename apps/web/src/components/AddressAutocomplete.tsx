@@ -125,9 +125,16 @@ export function AddressAutocomplete({
               style={{
                 padding: '0.4rem 0.55rem', borderRadius: '6px', cursor: 'pointer', fontSize: '0.87rem',
                 color: 'var(--ink)', background: i === active ? 'var(--surface-2)' : 'transparent',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }}
+              title={it.label}
             >
-              {it.label}
+              {it.street ? <span>{it.street}</span> : <span>{it.label}</span>}
+              {(it.postalCode || it.city) && (
+                <span style={{ color: 'var(--ink-3)' }}>
+                  {it.street ? ' — ' : ''}{[it.postalCode, it.city].filter(Boolean).join(' ')}
+                </span>
+              )}
             </li>
           ))}
         </ul>

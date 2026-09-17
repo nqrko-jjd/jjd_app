@@ -16,8 +16,12 @@ async function throttledFetch(url: string): Promise<Response> {
   return run;
 }
 
+// Nominatim renvoie les noms de lieux belges en double FR/NL par défaut ("Bruxelles / Brussel") —
+// forcer le français évite cette duplication dans les labels et les champs address.*.
+const ACCEPT_LANGUAGE = 'accept-language=fr';
+
 export async function geocode(query: string): Promise<{ lat: number; lng: number; label: string } | null> {
-  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`;
+  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&${ACCEPT_LANGUAGE}&q=${encodeURIComponent(query)}`;
   const r = await throttledFetch(url);
   if (!r.ok) return null;
   const hits = (await r.json()) as { lat: string; lon: string; display_name: string }[];
@@ -55,14 +59,20 @@ export function mapNominatimHit(h: NominatimSearchHit): AddressHit {
   const a = h.address ?? {};
   const street = [a.road, a.house_number].filter(Boolean).join(' ') || (h.display_name.split(',')[0] ?? '').trim();
   const city = a.city || a.town || a.village || a.municipality || '';
-  return { label: h.display_name, street, postalCode: a.postcode ?? '', city, lat: Number(h.lat), lng: Number(h.lon) };
+  // Label court "rue, code postal ville" pour la liste de suggestions — le display_name brut de
+  // Nominatim enchaîne toute la hiérarchie administrative (souvent en double FR/NL en Belgique),
+  // ce qui le rend illisible et masque la commune ; repli sur display_name seulement si on n'a
+  // pas pu extraire de rue/ville structurées.
+  const short = [street, [a.postcode, city].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+  const label = short || h.display_name;
+  return { label, street, postalCode: a.postcode ?? '', city, lat: Number(h.lat), lng: Number(h.lon) };
 }
 
 /** Suggestions d'adresse au fil de la frappe (type-ahead), biaisées Belgique. */
 export async function searchAddresses(query: string, limit = 6): Promise<AddressHit[]> {
   const q = query.trim();
   if (q.length < 3) return [];
-  const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&countrycodes=be&limit=${limit}&q=${encodeURIComponent(q)}`;
+  const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&countrycodes=be&limit=${limit}&${ACCEPT_LANGUAGE}&q=${encodeURIComponent(q)}`;
   const r = await throttledFetch(url);
   if (!r.ok) return [];
   const hits = (await r.json()) as NominatimSearchHit[];

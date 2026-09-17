@@ -30,3 +30,17 @@ test('mapNominatimHit : ville via town/village/municipality quand city absente',
   });
   assert.equal(hit.city, 'Waterloo');
 });
+
+test('mapNominatimHit : label court "rue, code postal ville" plutôt que le display_name complet (souvent en double FR/NL)', () => {
+  const hit = mapNominatimHit({
+    lat: '50.85', lon: '4.35',
+    display_name: 'Rue de Lombardie, Saint-Gilles - Sint-Gillis, Bruxelles-Capitale - Brussels Hoofdstedelijk Gewest, 1060, België / Belgique / Belgien',
+    address: { road: 'Rue de Lombardie', house_number: '20', postcode: '1060', city: 'Saint-Gilles' },
+  });
+  assert.equal(hit.label, 'Rue de Lombardie 20, 1060 Saint-Gilles');
+});
+
+test('mapNominatimHit : sans rue/ville structurées, repli sur display_name pour le label', () => {
+  const hit = mapNominatimHit({ lat: '50.1', lon: '4.2', display_name: 'Belgique' });
+  assert.equal(hit.label, 'Belgique');
+});

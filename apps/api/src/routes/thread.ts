@@ -33,6 +33,27 @@ async function authorName(userId: string): Promise<string> {
   return u?.person?.displayName || u?.person?.firstName || u?.email || 'Inconnu';
 }
 
+/** Qui peut lire le fil interne de ce chantier : le bureau (admin/office) toujours, plus les
+ *  autres membres de l'équipe qui "sont sur ce chantier" (même règle que la liste Messagerie
+ *  et que "Mes chantiers" — pointage ou affectation planning). */
+async function readableByFor(worksiteId: string): Promise<{ id: string; name: string }[]> {
+  const users = await prisma.user.findMany({
+    where: {
+      active: true,
+      role: { in: STAFF },
+      OR: [
+        { role: { in: OFFICE } },
+        { person: { timeEntries: { some: { worksiteId } } } },
+        { person: { eventAssignments: { some: { event: { worksiteId } } } } },
+      ],
+    },
+    include: { person: { select: { firstName: true, lastName: true, displayName: true } } },
+  });
+  return users
+    .map((u) => ({ id: u.id, name: u.person?.displayName || `${u.person?.firstName ?? ''} ${u.person?.lastName ?? ''}`.trim() || u.email }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+}
+
 /** Le fil complet d'un chantier. */
 threadRouter.get(
   '/',
@@ -40,7 +61,7 @@ threadRouter.get(
   asyncHandler(async (req, res) => {
     const worksiteId = req.params.worksiteId!;
     const thread = await ensureThread(worksiteId);
-    const [messages, participants] = await Promise.all([
+    const [messages, participants, readableBy] = await Promise.all([
       prisma.message.findMany({
         where: { threadId: thread.id, audience: 'internal' },
         orderBy: { createdAt: 'asc' },
@@ -50,12 +71,14 @@ threadRouter.get(
         where: { threadId: thread.id },
         include: { person: { select: { id: true, displayName: true, firstName: true } } },
       }),
+      readableByFor(worksiteId),
     ]);
     const mentionNames = await mentionNamesFor(messages);
     res.json({
       thread,
       messages: messages.map((m) => ({ ...m, mentions: undefined, mentionedNames: mentionNames.get(m.id) ?? [] })),
       participants: participants.map((p) => p.person),
+      readableBy,
     });
   }),
 );

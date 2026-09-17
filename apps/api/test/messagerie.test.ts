@@ -113,3 +113,24 @@ test('inbox Messagerie : un ouvrier ne voit que les chantiers où il a du pointa
   const officeView = await (await fetch(`${base}/api/messagerie/threads?audience=internal`, { headers: authOf(davidToken) })).json();
   assert.ok(officeView.items.some((it: { worksiteId: string | null }) => it.worksiteId === worksiteId));
 });
+
+test('readableBy : liste qui peut lire le fil — le bureau toujours, "Zephyrine" une fois pointée sur ce chantier', async () => {
+  // chantier dédié (pas worksiteId, déjà utilisé par un test précédent qui y pointe Zephyrine)
+  const ws2 = await prisma.worksite.create({ data: { ref: 'R-MSGTEST-2', title: 'Messagerie test readableBy', source: 'test' } });
+  try {
+    const before1 = await (await fetch(`${base}/api/worksites/${ws2.id}/thread`, { headers: authOf(davidToken) })).json();
+    const namesBefore = before1.readableBy.map((p: { name: string }) => p.name);
+    assert.ok(namesBefore.includes('David'), 'le bureau (admin/office) est toujours listé');
+    assert.ok(!namesBefore.includes('Zephyrine Mentionnable'), 'pas encore pointée sur ce chantier');
+
+    await prisma.timeEntry.create({ data: { personId: testPersonId, worksiteId: ws2.id, date: new Date(), hours: 2, source: 'test' } });
+
+    const after1 = await (await fetch(`${base}/api/worksites/${ws2.id}/thread`, { headers: authOf(davidToken) })).json();
+    const namesAfter = after1.readableBy.map((p: { name: string }) => p.name);
+    assert.ok(namesAfter.includes('Zephyrine Mentionnable'), 'ajoutée à la liste une fois pointée');
+  } finally {
+    await prisma.timeEntry.deleteMany({ where: { worksiteId: ws2.id } });
+    await prisma.thread.deleteMany({ where: { worksiteId: ws2.id } });
+    await prisma.worksite.deleteMany({ where: { id: ws2.id } });
+  }
+});

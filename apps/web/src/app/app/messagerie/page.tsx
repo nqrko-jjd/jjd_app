@@ -86,7 +86,7 @@ function MessagerieInner() {
     ? (audience === 'client' ? `/api/worksites/${selected.worksiteId}/thread/client` : `/api/worksites/${selected.worksiteId}/thread`)
     : null;
   const { data: genData, reload: reloadGen } = useApi<{ thread: { id: string }; messages: Msg[] }>(generalPath);
-  const { data: wsData, reload: reloadWs } = useApi<{ thread: { id: string }; messages: Msg[] }>(worksitePath);
+  const { data: wsData, reload: reloadWs } = useApi<{ thread: { id: string }; messages: Msg[]; readableBy?: { id: string; name: string }[] }>(worksitePath);
   const convo = selected?.kind === 'general' ? genData : wsData;
   const reloadConvo = selected?.kind === 'general' ? reloadGen : reloadWs;
   const messages = convo?.messages ?? [];
@@ -173,6 +173,11 @@ function MessagerieInner() {
   });
 
   const selectedItem = items.find((it) => (selected?.kind === 'general' ? it.kind === 'general' : it.worksiteId === (selected as { worksiteId?: string })?.worksiteId));
+  // qui peut lire ce fil, à la place du générique "Équipe interne" — n'a de sens que pour un
+  // chantier en interne (le fil général et l'onglet Client gardent leur sous-titre habituel)
+  const readableByLabel = selected?.kind === 'worksite' && audience === 'internal' && wsData?.readableBy
+    ? wsData.readableBy.map((p) => p.name).join(', ')
+    : null;
 
   return (
     <>
@@ -254,9 +259,11 @@ function MessagerieInner() {
                   <ArrowLeft size={17} strokeWidth={2} />
                 </button>
                 <Avatar label={selectedItem?.kind === 'general' ? 'JJD' : refDigits(selectedItem?.ref ?? null)} size={36} raw={selectedItem?.kind === 'worksite'} />
-                <div>
+                <div style={{ minWidth: 0 }}>
                   <strong>{selectedItem?.title}</strong>
-                  <div className="muted" style={{ fontSize: '0.78rem' }}>{selectedItem?.sub}</div>
+                  <div className="muted" style={{ fontSize: '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={readableByLabel ?? undefined}>
+                    {readableByLabel ?? selectedItem?.sub}
+                  </div>
                 </div>
                 {selected.kind === 'worksite' && (
                   <Link href={`/app/chantiers/${selected.worksiteId}`} className="btn ghost" style={{ marginLeft: 'auto' }} title="Ouvrir le chantier">

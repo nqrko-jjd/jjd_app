@@ -4,6 +4,7 @@ import { api, apiUpload } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { useAuth } from '@/lib/auth';
 import { Avatar } from '@/lib/ui';
+import { useVoiceRecorder } from '@/lib/useVoiceRecorder';
 
 interface Msg {
   id: string; kind: string; body: string | null; fileUrl: string | null; thumbUrl: string | null;
@@ -77,6 +78,17 @@ export function ChantierThread({ worksiteId }: { worksiteId: string }) {
     setBusy(false);
     reload();
   }
+  const voice = useVoiceRecorder(async (blob) => {
+    setBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', blob, `note-vocale.${blob.type.includes('ogg') ? 'ogg' : 'webm'}`);
+      await apiUpload(`/api/worksites/${worksiteId}/thread/voice`, fd);
+      reload();
+    } finally {
+      setBusy(false);
+    }
+  });
   async function toggleClose() {
     const reopen = !!data?.thread.closedAt;
     if (!reopen && !confirm('Signaler le chantier comme terminé ?')) return;
@@ -95,12 +107,12 @@ export function ChantierThread({ worksiteId }: { worksiteId: string }) {
     try {
       const fd = new FormData();
       fd.append('zip', zip);
-      const r = await apiUpload<{ imported: { texts: number; photos: number; videos: number; files: number; skipped: number }; warnings: string[] }>(
+      const r = await apiUpload<{ imported: { texts: number; photos: number; videos: number; audios: number; files: number; skipped: number }; warnings: string[] }>(
         `/api/worksites/${worksiteId}/thread/import-whatsapp`, fd,
       );
       const { imported: im, warnings } = r;
       setImportMsg(
-        `Importé : ${im.texts} message(s), ${im.photos} photo(s), ${im.videos} vidéo(s), ${im.files} fichier(s)`
+        `Importé : ${im.texts} message(s), ${im.photos} photo(s), ${im.videos} vidéo(s), ${im.audios} note(s) vocale(s), ${im.files} fichier(s)`
         + (im.skipped ? ` · ${im.skipped} média(s) introuvable(s)` : '')
         + (warnings.length ? ` — ${warnings.slice(0, 3).join(' ; ')}${warnings.length > 3 ? '…' : ''}` : ''),
       );
@@ -222,6 +234,8 @@ export function ChantierThread({ worksiteId }: { worksiteId: string }) {
                   </a>
                 ) : m.kind === 'video' && m.fileUrl ? (
                   <video src={m.fileUrl} controls preload="metadata" style={{ maxWidth: 280, borderRadius: 10, border: '1px solid var(--line)' }} />
+                ) : m.kind === 'audio' && m.fileUrl ? (
+                  <audio src={m.fileUrl} controls preload="metadata" style={{ maxWidth: 260 }} />
                 ) : m.kind === 'file' && m.fileUrl ? (
                   <a href={m.fileUrl} target="_blank" rel="noreferrer" className="badge plain" style={{ fontSize: '0.8rem' }}>📎 {m.body || 'Fichier'}</a>
                 ) : null}
@@ -267,6 +281,15 @@ export function ChantierThread({ worksiteId }: { worksiteId: string }) {
           />
           <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => upload(e.target.files)} />
           <button className="btn" onClick={() => fileRef.current?.click()} disabled={busy}>📷</button>
+          <button
+            type="button"
+            className={`btn ${voice.recording ? 'primary' : ''}`}
+            onClick={() => (voice.recording ? voice.stop() : voice.start())}
+            disabled={busy && !voice.recording}
+            title={voice.recording ? 'Arrêter et envoyer' : 'Enregistrer une note vocale'}
+          >
+            {voice.recording ? '⏹️' : '🎤'}
+          </button>
           <button className="btn primary" onClick={send} disabled={busy || !text.trim()}>Envoyer</button>
         </div>
       )}

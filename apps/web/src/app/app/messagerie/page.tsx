@@ -6,7 +6,8 @@ import { useApi } from '@/lib/use-api';
 import { api, apiUpload } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { PageHead, Avatar } from '@/lib/ui';
-import { Search, Paperclip, Send, Building2, ArrowLeft } from 'lucide-react';
+import { Search, Paperclip, Send, Building2, ArrowLeft, Mic, Square } from 'lucide-react';
+import { useVoiceRecorder } from '@/lib/useVoiceRecorder';
 
 interface ThreadItem {
   id: string; kind: 'general' | 'worksite'; title: string; sub: string; worksiteId: string | null; ref: string | null;
@@ -150,6 +151,21 @@ function MessagerieInner() {
     }
   }
 
+  const voice = useVoiceRecorder(async (blob) => {
+    if (!selected || audience === 'client') return;
+    setBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', blob, `note-vocale.${blob.type.includes('ogg') ? 'ogg' : 'webm'}`);
+      const path = selected.kind === 'general' ? '/api/messagerie/general/voice' : `/api/worksites/${selected.worksiteId}/thread/voice`;
+      await apiUpload(path, fd);
+      reloadConvo();
+      reloadList();
+    } finally {
+      setBusy(false);
+    }
+  });
+
   const selectedItem = items.find((it) => (selected?.kind === 'general' ? it.kind === 'general' : it.worksiteId === (selected as { worksiteId?: string })?.worksiteId));
 
   return (
@@ -284,8 +300,14 @@ function MessagerieInner() {
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img src={m.thumbUrl ?? m.fileUrl} alt="" className="msg-bubble-img" />
                           </a>
+                        ) : m.kind === 'video' && m.fileUrl ? (
+                          <video src={m.fileUrl} controls preload="metadata" className="msg-bubble-img" />
+                        ) : m.kind === 'audio' && m.fileUrl ? (
+                          <audio src={m.fileUrl} controls preload="metadata" style={{ maxWidth: 260 }} />
+                        ) : m.kind === 'file' && m.fileUrl ? (
+                          <a href={m.fileUrl} target="_blank" rel="noreferrer" className="badge plain" style={{ fontSize: '0.8rem' }}>📎 {m.body || 'Fichier'}</a>
                         ) : null}
-                        {m.body && <div className={`msg-bubble${mine ? ' mine' : ''}`}>{m.body}</div>}
+                        {m.body && m.kind !== 'file' && <div className={`msg-bubble${mine ? ' mine' : ''}`}>{m.body}</div>}
                       </div>
                     </div>
                   );
@@ -299,6 +321,15 @@ function MessagerieInner() {
                     <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => uploadPhoto(e.target.files)} />
                     <button type="button" className="btn ghost" onClick={() => fileRef.current?.click()} disabled={busy} title="Joindre une photo">
                       <Paperclip size={17} strokeWidth={2} />
+                    </button>
+                    <button
+                      type="button"
+                      className={`btn ${voice.recording ? 'primary' : 'ghost'}`}
+                      onClick={() => (voice.recording ? voice.stop() : voice.start())}
+                      disabled={busy && !voice.recording}
+                      title={voice.recording ? 'Arrêter et envoyer' : 'Enregistrer une note vocale'}
+                    >
+                      {voice.recording ? <Square size={17} strokeWidth={2} /> : <Mic size={17} strokeWidth={2} />}
                     </button>
                   </>
                 )}

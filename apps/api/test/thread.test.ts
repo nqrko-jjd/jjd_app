@@ -71,3 +71,17 @@ test('message vide -> 422', async () => {
   });
   assert.equal(r.status, 422);
 });
+
+test('note vocale (multipart) -> message kind "audio" avec fileUrl', async () => {
+  const form = new FormData();
+  form.append('file', new Blob([Buffer.from([0, 1, 2, 3])], { type: 'audio/webm' }), 'note-vocale.webm');
+  const r = await fetch(`${base}/api/worksites/${wsId}/thread/voice`, { method: 'POST', headers: auth(), body: form });
+  assert.equal(r.status, 201);
+  const { message } = await r.json();
+  assert.equal(message.kind, 'audio');
+  assert.ok(message.fileUrl);
+  assert.equal(message.audience, 'internal');
+
+  const g = await (await fetch(`${base}/api/worksites/${wsId}/thread`, { headers: auth() })).json();
+  assert.ok(g.messages.some((m: { id: string; kind: string }) => m.id === message.id && m.kind === 'audio'));
+});

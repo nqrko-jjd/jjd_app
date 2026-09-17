@@ -107,7 +107,7 @@ async function main() {
   await prisma.importBatch.deleteMany({ where: { source: 'whatsapp' } });
   const batch = await prisma.importBatch.create({ data: { source: 'whatsapp', label: `${dirs.length + zips.length} groupes` } });
 
-  let groups = 0, texts = 0, photos = 0, videos = 0, files = 0, skipped = 0;
+  let groups = 0, texts = 0, photos = 0, videos = 0, audios = 0, files = 0, skipped = 0;
   const issues: { rowRef: string; message: string }[] = [];
 
   const sources = [
@@ -156,6 +156,10 @@ async function main() {
           const url = storeFile(buf, msg.attach, `whatsapp/${ref}`);
           await prisma.message.create({ data: { threadId: thread.id, authorName: who.label, kind: 'video', fileUrl: url, body: null, source: 'whatsapp', createdAt: msg.at } });
           videos++;
+        } else if (['opus', 'ogg', 'm4a', 'mp3', 'wav', 'aac', 'amr'].includes(ext)) {
+          const url = storeFile(buf, msg.attach, `whatsapp/${ref}`);
+          await prisma.message.create({ data: { threadId: thread.id, authorName: who.label, kind: 'audio', fileUrl: url, body: null, source: 'whatsapp', createdAt: msg.at } });
+          audios++;
         } else {
           const url = storeFile(buf, msg.attach, `whatsapp/${ref}`);
           await prisma.message.create({ data: { threadId: thread.id, authorName: who.label, kind: 'file', fileUrl: url, body: msg.attach, source: 'whatsapp', createdAt: msg.at } });
@@ -174,7 +178,7 @@ async function main() {
       data: issues.slice(0, 2000).map((i) => ({ batchId: batch.id, entity: 'message', sheet: 'whatsapp', rowRef: i.rowRef, severity: 'warning', message: i.message })),
     });
   }
-  const stats = { groups, texts, photos, videos, files, skipped, issues: issues.length };
+  const stats = { groups, texts, photos, videos, audios, files, skipped, issues: issues.length };
   await prisma.importBatch.update({ where: { id: batch.id }, data: { finishedAt: new Date(), stats } });
   console.log('WhatsApp importé :', JSON.stringify(stats, null, 1));
 }

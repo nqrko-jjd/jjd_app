@@ -116,6 +116,26 @@ threadRouter.post(
   }),
 );
 
+/** Poste une note vocale (multipart : champ « file », enregistrée depuis le navigateur). */
+threadRouter.post(
+  '/voice',
+  requireAuth(...STAFF),
+  upload.single('file'),
+  asyncHandler(async (req, res) => {
+    const worksiteId = req.params.worksiteId!;
+    if (!req.file) throw new HttpError(422, 'Aucun fichier');
+    const thread = await ensureThread(worksiteId);
+    const url = storeFile(req.file.buffer, req.file.originalname || 'note-vocale.webm', 'voice');
+    const msg = await prisma.message.create({
+      data: {
+        threadId: thread.id, authorId: req.user!.id, authorName: await authorName(req.user!.id),
+        kind: 'audio', fileUrl: url, audience: 'internal',
+      },
+    });
+    res.status(201).json({ message: msg });
+  }),
+);
+
 /**
  * Importe un export WhatsApp (zip contenant le .txt de discussion + les
  * médias) directement dans le fil de ce chantier : les messages vont dans
@@ -158,7 +178,7 @@ threadRouter.post(
     // idempotent : un nouvel import remplace le précédent pour ce fil
     await prisma.message.deleteMany({ where: { threadId: thread.id, source: 'whatsapp' } });
 
-    let texts = 0, photos = 0, videos = 0, files = 0, skipped = 0;
+    let texts = 0, photos = 0, videos = 0, audios = 0, files = 0, skipped = 0;
     const warnings: string[] = [];
     let lastAt = 0; // garantit un ordre chronologique strict même en cas de rafale à la même minute
 
@@ -188,6 +208,10 @@ threadRouter.post(
           const url = storeFile(Buffer.from(buf), msg.attach, 'whatsapp');
           await prisma.message.create({ data: { threadId: thread.id, authorName: who.label, kind: 'video', fileUrl: url, source: 'whatsapp', audience: 'internal', createdAt } });
           videos++;
+        } else if (['opus', 'ogg', 'm4a', 'mp3', 'wav', 'aac', 'amr'].includes(ext)) {
+          const url = storeFile(Buffer.from(buf), msg.attach, 'whatsapp');
+          await prisma.message.create({ data: { threadId: thread.id, authorName: who.label, kind: 'audio', fileUrl: url, source: 'whatsapp', audience: 'internal', createdAt } });
+          audios++;
         } else {
           const url = storeFile(Buffer.from(buf), msg.attach, 'whatsapp');
           await prisma.message.create({ data: { threadId: thread.id, authorName: who.label, kind: 'file', fileUrl: url, body: msg.attach, source: 'whatsapp', audience: 'internal', createdAt } });
@@ -199,7 +223,7 @@ threadRouter.post(
       }
     }
 
-    res.status(201).json({ imported: { texts, photos, videos, files, skipped }, warnings: warnings.slice(0, 30) });
+    res.status(201).json({ imported: { texts, photos, videos, audios, files, skipped }, warnings: warnings.slice(0, 30) });
   }),
 );
 

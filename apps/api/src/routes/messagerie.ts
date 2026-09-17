@@ -3,7 +3,7 @@ import multer from 'multer';
 import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, STAFF, OFFICE } from '../lib/auth.js';
-import { storeImage } from '../lib/media.js';
+import { storeImage, storeFile } from '../lib/media.js';
 
 export const messagerieRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
@@ -30,6 +30,7 @@ function preview(m: { kind: string; body: string | null } | undefined): string {
   if (!m) return '';
   if (m.kind === 'photo') return m.body ? `📷 ${m.body}` : '📷 Photo';
   if (m.kind === 'video') return '🎥 Vidéo';
+  if (m.kind === 'audio') return '🎤 Note vocale';
   if (m.kind === 'file') return `📎 ${m.body || 'Fichier'}`;
   if (m.kind === 'status') return `● ${m.body ?? ''}`;
   return m.body ?? '';
@@ -166,6 +167,25 @@ messagerieRouter.post(
       data: {
         threadId: thread.id, authorId: req.user!.id, authorName: await authorName(req.user!.id),
         kind: 'photo', body: String(req.body.caption ?? '').trim() || null, fileUrl: img.url, thumbUrl: img.thumbUrl, audience: 'internal',
+      },
+    });
+    res.status(201).json({ message: msg });
+  }),
+);
+
+/** Poste une note vocale (multipart : champ « file », enregistrée depuis le navigateur). */
+messagerieRouter.post(
+  '/general/voice',
+  requireAuth(...STAFF),
+  upload.single('file'),
+  asyncHandler(async (req, res) => {
+    if (!req.file) throw new HttpError(422, 'Aucun fichier');
+    const thread = await ensureGeneralThread();
+    const url = storeFile(req.file.buffer, req.file.originalname || 'note-vocale.webm', 'voice');
+    const msg = await prisma.message.create({
+      data: {
+        threadId: thread.id, authorId: req.user!.id, authorName: await authorName(req.user!.id),
+        kind: 'audio', fileUrl: url, audience: 'internal',
       },
     });
     res.status(201).json({ message: msg });

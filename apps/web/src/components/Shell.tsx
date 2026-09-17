@@ -32,6 +32,22 @@ const WORKER_NAV: Group[] = [
   },
 ];
 
+// Espace filtré (comme la maquette) : coordonner sa propre équipe/ses propres chantiers,
+// pas gérer l'administratif de toute l'entreprise (devis, finances, achats…).
+const FOREMAN_NAV: Group[] = [
+  {
+    title: 'Sur le terrain',
+    items: [
+      { href: '/app', label: 'Vue d’ensemble', ic: LayoutGrid },
+      { href: '/app/mon-equipe', label: 'Mon équipe', ic: Users },
+      { href: '/app/planning', label: 'Planning', ic: CalendarDays },
+      { href: '/app/chantiers', label: 'Mes chantiers', ic: Building2 },
+      { href: '/app/pointage', label: 'Pointages à valider', ic: Clock },
+      { href: '/app/messagerie', label: 'Messagerie', ic: MessageSquare },
+    ],
+  },
+];
+
 const NAV: Group[] = [
   {
     title: 'Votre activité',
@@ -94,7 +110,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
   const visible = (i: Item) => !i.roles || (user && i.roles.includes(user.role));
   const isWorker = user?.role === 'worker';
-  const nav = isWorker ? WORKER_NAV : NAV;
+  const isForeman = user?.role === 'foreman';
+  const nav = isWorker ? WORKER_NAV : isForeman ? FOREMAN_NAV : NAV;
   const bestMatch = nav
     .flatMap((g) => g.items)
     .map((i) => i.href)

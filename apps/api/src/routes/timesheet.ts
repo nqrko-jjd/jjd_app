@@ -301,9 +301,15 @@ timesheetRouter.post(
 timesheetRouter.get(
   '/pending',
   requireAuth('admin', 'office', 'foreman'),
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
+    const where: Record<string, unknown> = { status: 'submitted' };
+    // le chef de chantier ne valide que les pointages de ses propres chantiers
+    if (req.user!.role === 'foreman') {
+      if (!req.user!.personId) return res.json({ items: [] });
+      where.worksite = { managerId: req.user!.personId };
+    }
     const items = await prisma.timeEntry.findMany({
-      where: { status: 'submitted' },
+      where,
       orderBy: { date: 'asc' },
       include: {
         person: { select: { displayName: true, firstName: true } },
@@ -315,10 +321,18 @@ timesheetRouter.get(
   }),
 );
 
+/** Un chef de chantier ne peut agir que sur les pointages de ses propres chantiers. */
+async function assertForemanOwnsEntry(req: import('express').Request, entryId: string) {
+  if (req.user!.role !== 'foreman') return;
+  const entry = await prisma.timeEntry.findUnique({ where: { id: entryId }, select: { worksite: { select: { managerId: true } } } });
+  if (!entry || entry.worksite?.managerId !== req.user!.personId) throw new HttpError(403, 'Ce pointage ne concerne pas vos chantiers');
+}
+
 timesheetRouter.post(
   '/entries/:id/approve',
   requireAuth('admin', 'office', 'foreman'),
   asyncHandler(async (req, res) => {
+    await assertForemanOwnsEntry(req, req.params.id!);
     const entry = await prisma.timeEntry.update({
       where: { id: req.params.id },
       data: { status: 'approved', approvedById: req.user!.id },
@@ -331,6 +345,7 @@ timesheetRouter.post(
   '/entries/:id/reject',
   requireAuth('admin', 'office', 'foreman'),
   asyncHandler(async (req, res) => {
+    await assertForemanOwnsEntry(req, req.params.id!);
     const entry = await prisma.timeEntry.update({
       where: { id: req.params.id },
       data: { status: 'rejected', approvedById: req.user!.id, note: req.body.note ?? undefined },
@@ -345,10 +360,12 @@ timesheetRouter.post(
   requireAuth('admin', 'office', 'foreman'),
   asyncHandler(async (req, res) => {
     const includeFlagged = req.body?.includeFlagged === true;
-    const r = await prisma.timeEntry.updateMany({
-      where: { status: 'submitted', ...(includeFlagged ? {} : { geoFlag: false }) },
-      data: { status: 'approved', approvedById: req.user!.id },
-    });
+    const where: Record<string, unknown> = { status: 'submitted', ...(includeFlagged ? {} : { geoFlag: false }) };
+    if (req.user!.role === 'foreman') {
+      if (!req.user!.personId) return res.json({ approved: 0 });
+      where.worksite = { managerId: req.user!.personId };
+    }
+    const r = await prisma.timeEntry.updateMany({ where, data: { status: 'approved', approvedById: req.user!.id } });
     res.json({ approved: r.count });
   }),
 );

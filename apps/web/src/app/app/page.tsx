@@ -9,7 +9,7 @@ import { PageHead, Money, formatDateBE, Avatar, ProgressCell, Kpi } from '@/lib/
 import { useSort, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
 import { LEGAL_DOC_LABEL, WORKSITE_STATUS_LABEL, WORKSITE_PROGRESS_PCT, type WorksiteStatus } from '@jjd/shared';
-import { BarChart3, Wallet, Building2, Flag, FileText, Clock, MessageSquare } from 'lucide-react';
+import { BarChart3, Wallet, Building2, Flag, FileText, Clock, MessageSquare, Users } from 'lucide-react';
 
 interface TodayEv {
   id: string; startAt: string; endAt: string;
@@ -201,6 +201,92 @@ function WorkerToday() {
   );
 }
 
+interface ForemanWorksite {
+  id: string; ref: string; title: string; city: string | null; status: string;
+  building: { name: string } | null;
+}
+interface TeamMember { id: string; name: string; worksite: { id: string; ref: string; title: string } }
+
+function ForemanToday() {
+  const router = useRouter();
+  const { person } = useAuth();
+  const { data: ws } = useApi<{ items: ForemanWorksite[] }>('/api/worksites?status=to_plan,scheduled,in_progress&pageSize=100');
+  const { data: team } = useApi<{ items: TeamMember[] }>('/api/people/team');
+  const { data: pending } = useApi<{ items: unknown[] }>('/api/timesheet/pending');
+  const worksites = ws?.items ?? [];
+  const teamItems = team?.items ?? [];
+  const chantiersAujourdhui = new Set(teamItems.map((t) => t.worksite.id)).size;
+  const pendingCount = pending?.items.length ?? 0;
+
+  return (
+    <>
+      <div className="eyebrow" style={{ marginBottom: '0.3rem' }}>Espace chef de chantier</div>
+      <PageHead title={`Bonjour ${person?.displayName || person?.firstName || ''},`} sub="L’essentiel pour coordonner votre équipe." />
+
+      <div className="kpis">
+        <Kpi
+          ic={Users}
+          label="Sur le terrain"
+          value={`${teamItems.length} personne${teamItems.length > 1 ? 's' : ''}`}
+          sub={chantiersAujourdhui > 0 ? `${chantiersAujourdhui} chantier${chantiersAujourdhui > 1 ? 's' : ''} aujourd’hui` : 'Rien de planifié aujourd’hui'}
+          hero
+        />
+        <Kpi ic={Building2} label="Mes chantiers" value={worksites.length} sub="en cours ou planifiés" />
+        <Kpi ic={Clock} label="Pointages à valider" value={pendingCount} sub="heures de l’équipe" warn={pendingCount > 0} />
+      </div>
+
+      <div className="quick-actions">
+        <Link href="/app/mon-equipe" className="quick-action">
+          <span className="ic"><Users size={20} strokeWidth={2} /></span>
+          <span><strong>Mon équipe</strong><small>Affectations du jour</small></span>
+        </Link>
+        <Link href="/app/pointage" className="quick-action">
+          <span className="ic"><Clock size={20} strokeWidth={2} /></span>
+          <span><strong>Vérifier les heures</strong><small>Relevé des collaborateurs</small></span>
+        </Link>
+        <Link href="/app/messagerie" className="quick-action">
+          <span className="ic"><MessageSquare size={20} strokeWidth={2} /></span>
+          <span><strong>Messagerie</strong><small>Échanger avec l’équipe</small></span>
+        </Link>
+      </div>
+
+      <div className="row" style={{ justifyContent: 'space-between', margin: '1.8rem 0 0.8rem' }}>
+        <div className="section-title" style={{ margin: 0 }}>Mes chantiers <span className="hint">{worksites.length}</span></div>
+        <Link href="/app/planning" className="hint">Voir le planning →</Link>
+      </div>
+      {worksites.length === 0 ? (
+        <div className="card card-pad muted">Aucun chantier ne vous est assigné pour le moment.</div>
+      ) : (
+        <div className="tbl-wrap">
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th>Chantier</th>
+                <th>Statut</th>
+                <th>Avancement</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {worksites.map((w) => (
+                <tr key={w.id} className="row-link" onClick={rowNav(`/app/chantiers/${w.id}`, (h) => router.push(h))}>
+                  <td>
+                    <Link href={`/app/chantiers/${w.id}`}>{w.title}</Link>
+                    <div className="muted" style={{ fontSize: '0.78rem' }}>{w.ref}{w.city ? ` · ${w.city}` : ''}{w.building ? ` · ${w.building.name}` : ''}</div>
+                  </td>
+                  <td><span className={`badge ${WS_STATUS_TONE[w.status] ?? ''}`}>{WORKSITE_STATUS_LABEL[w.status as keyof typeof WORKSITE_STATUS_LABEL] ?? w.status}</span></td>
+                  <td><ProgressCell pct={WORKSITE_PROGRESS_PCT[w.status as WorksiteStatus] ?? 0} /></td>
+                  <td className="muted">→</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
+  );
+}
+
 interface Dashboard {
   kpis: {
     invoicedMonth: number; invoicedPrevMonth: number; paidMonth: number; overdueAmount: number;
@@ -294,12 +380,13 @@ function monthTrend(cur: number, prev: number): string | undefined {
 
 export default function DashboardPage() {
   const { user, person } = useAuth();
-  const { data, loading } = useApi<Dashboard>(user?.role === 'worker' ? null : '/api/dashboard');
+  const { data, loading } = useApi<Dashboard>(user?.role === 'worker' || user?.role === 'foreman' ? null : '/api/dashboard');
   const today = new Date();
   const eyebrow = today.toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' });
   const name = person?.displayName || person?.firstName || user?.email?.split('@')[0] || '';
 
   if (user?.role === 'worker') return <WorkerToday />;
+  if (user?.role === 'foreman') return <ForemanToday />;
 
   return (
     <>

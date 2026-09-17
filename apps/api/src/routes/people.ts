@@ -48,6 +48,46 @@ peopleRouter.get(
   }),
 );
 
+/** Équipe du jour du chef de chantier connecté : personnes affectées aujourd'hui sur ses chantiers. */
+peopleRouter.get(
+  '/team',
+  requireAuth('foreman'),
+  asyncHandler(async (req, res) => {
+    const personId = req.user!.personId;
+    if (!personId) return res.json({ items: [] });
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+    const events = await prisma.planningEvent.findMany({
+      where: {
+        worksite: { managerId: personId, archived: false },
+        startAt: { lt: end },
+        endAt: { gt: start },
+      },
+      include: {
+        worksite: { select: { id: true, ref: true, title: true, status: true } },
+        assignments: { include: { person: { select: { id: true, firstName: true, lastName: true, displayName: true, role: true, photoUrl: true, phone: true } } } },
+      },
+    });
+    const byPerson = new Map<string, { person: (typeof events)[number]['assignments'][number]['person']; worksite: { id: string; ref: string; title: string; status: string } }>();
+    for (const ev of events) {
+      for (const a of ev.assignments) {
+        if (!byPerson.has(a.personId)) byPerson.set(a.personId, { person: a.person, worksite: ev.worksite });
+      }
+    }
+    const items = [...byPerson.values()].map(({ person, worksite }) => ({
+      id: person.id,
+      name: person.displayName || `${person.firstName} ${person.lastName ?? ''}`.trim(),
+      role: person.role,
+      photoUrl: person.photoUrl,
+      phone: person.phone,
+      worksite,
+    }));
+    res.json({ items });
+  }),
+);
+
 const PEOPLE_CSV_COLUMNS = [
   { key: 'id', label: 'id' },
   { key: 'firstName', label: 'Prénom' },

@@ -47,6 +47,11 @@ worksitesRouter.get(
   asyncHandler(async (req, res) => {
     const { status, entity, q, archived, kind, page: pageStr, pageSize: pageSizeStr } = req.query as Record<string, string>;
     const where: Record<string, unknown> = { archived: archived === '1' ? true : false, kind: kind || 'project' };
+    // le chef de chantier ne voit que les chantiers dont il est responsable
+    if (req.user!.role === 'foreman') {
+      if (!req.user!.personId) return res.json({ items: [], page: 1, pageSize: 0, totalCount: 0, totalPages: 1 });
+      where.managerId = req.user!.personId;
+    }
     // le filtre statut du haut de la page Chantiers regroupe plusieurs statuts par onglet
     // (ex. "À planifier" = to_plan + scheduled) — accepte une liste séparée par des virgules
     if (status) where.status = status.includes(',') ? { in: status.split(',') } : status;

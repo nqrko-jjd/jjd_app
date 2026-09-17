@@ -9,9 +9,11 @@
  * fichiers sans couche texte (photo/scan) ne sont pas traités ici (pas de
  * lecture visuelle branchée pour l'instant).
  */
+import Anthropic from '@anthropic-ai/sdk';
 import { pdftotextAvailable, pdfToRawText } from './bank-pdf.js';
 import { parseAmount } from '@jjd/shared';
 import { prisma } from '../db.js';
+import { env } from '../env.js';
 
 export interface DocumentExtraction {
   kind: 'quote' | 'invoice' | 'credit_note' | 'deposit_invoice' | null;
@@ -266,6 +268,81 @@ export function parseDocumentText(text: string): ParsedDocumentText {
   };
 }
 
+/* --------------------------------------------------------- repli IA (mises en page difficiles) */
+
+const AI_MODEL = 'claude-sonnet-5';
+const aiClient = env.anthropicApiKey ? new Anthropic({ apiKey: env.anthropicApiKey }) : null;
+
+const AI_EXTRACTION_PROMPT = `Tu es un extracteur de données de documents commerciaux belges (facture, devis ou note de crédit fournisseur — en français ou en néerlandais). Le destinataire est toujours "JJD Consult" : ignore-le, seul l'ÉMETTEUR du document t'intéresse.
+
+Réponds UNIQUEMENT avec un objet JSON valide (aucun texte avant/après, aucun bloc markdown), avec exactement ces clés :
+{
+  "kind": "invoice" | "quote" | "credit_note" | "deposit_invoice" | null,
+  "issuedOn": "YYYY-MM-DD" | null,
+  "dueOn": "YYYY-MM-DD" | null,
+  "docNumber": string | null,
+  "totalHt": number | null,
+  "totalVat": number | null,
+  "totalTtc": number | null,
+  "vatRate": number | null,
+  "supplierName": string | null,
+  "supplierVat": string | null
+}
+
+- "totalHt"/"totalVat"/"totalTtc" : montants en euros (nombre, pas de texte, séparateur décimal ".").
+- "vatRate" : taux principal en fraction (0.21 pour 21 %, 0 pour une facture en autoliquidation/exonérée).
+- "supplierName" : le nom de la société qui émet le document (jamais "JJD Consult").
+- "supplierVat" : n° de TVA du fournisseur, normalisé "BE" suivi de 10 chiffres sans espace ni point.
+- Mets null pour toute valeur introuvable — n'invente jamais un montant à 0 ou une date par défaut.`;
+
+interface AiExtraction {
+  kind?: string | null;
+  issuedOn?: string | null;
+  dueOn?: string | null;
+  docNumber?: string | null;
+  totalHt?: number | null;
+  totalVat?: number | null;
+  totalTtc?: number | null;
+  vatRate?: number | null;
+  supplierName?: string | null;
+  supplierVat?: string | null;
+}
+
+const AI_KINDS = new Set(['quote', 'invoice', 'credit_note', 'deposit_invoice']);
+
+/**
+ * Repli IA (Claude) quand l'extraction par règles ne trouve rien d'exploitable — mise en page
+ * inhabituelle, facture en néerlandais avec libellés/valeurs disjoints, PDF mal décodé par
+ * `pdftotext`… Lit directement le PDF (support natif des documents de l'API), donc insensible
+ * aux soucis d'encodage rencontrés par `pdftotext`. Dégradation silencieuse : sans clé
+ * Anthropic configurée, ou en cas d'erreur/réponse illisible, renvoie simplement `null` — le
+ * best-effort par règles reste le résultat final dans ce cas.
+ */
+async function extractWithAi(buf: Buffer): Promise<AiExtraction | null> {
+  if (!aiClient) return null;
+  try {
+    const response = await aiClient.messages.create({
+      model: AI_MODEL,
+      max_tokens: 2048, // marge au-delà du JSON attendu : le thinking adaptatif partage le même budget
+      thinking: { type: 'adaptive' },
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: buf.toString('base64') } },
+          { type: 'text', text: AI_EXTRACTION_PROMPT },
+        ],
+      }],
+    });
+    const textBlock = response.content.find((b): b is Anthropic.TextBlock => b.type === 'text');
+    const raw = textBlock?.text.match(/\{[\s\S]*\}/)?.[0];
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as AiExtraction;
+    return parsed;
+  } catch {
+    return null; // clé absente, quota, JSON illisible… le best-effort par règles reste le résultat
+  }
+}
+
 /**
  * @param contactTypes types de `Contact` à considérer pour le repli "nom trouvé dans le texte"
  *   (le n° de TVA, lui, est cherché sur tous les contacts quel que soit le type). Devis/factures
@@ -281,7 +358,32 @@ export async function extractDocumentInfo(
   const text = await pdfToRawText(buf);
   if (!text.trim()) return EMPTY;
 
-  const { kind, issuedOn, dueOn, docNumber, totalHt, totalVat, totalTtc, vatRate, vatNumbersFound } = parseDocumentText(text);
+  let { kind, issuedOn, dueOn, docNumber, totalHt, totalVat, totalTtc, vatRate, vatNumbersFound } = parseDocumentText(text);
+  let aiSupplierName: string | null = null;
+
+  // Repli IA : rien d'exploitable trouvé par les règles (ni montant ni n° de document) -> on
+  // retente en lisant le PDF directement avec Claude, qui gère bien mieux les mises en page
+  // atypiques et le néerlandais — ne comble que ce qui manque, ne tourne que pour les cas
+  // vraiment bloqués (coût maîtrisé : pas un appel par facture, seulement pour celles où les
+  // règles échouent complètement).
+  if (totalHt == null && totalTtc == null && docNumber == null) {
+    const ai = await extractWithAi(buf);
+    if (ai) {
+      if (kind == null && ai.kind && AI_KINDS.has(ai.kind)) kind = ai.kind as DocumentExtraction['kind'];
+      if (issuedOn == null && ai.issuedOn) issuedOn = ai.issuedOn;
+      if (dueOn == null && ai.dueOn) dueOn = ai.dueOn;
+      if (docNumber == null && ai.docNumber) docNumber = ai.docNumber;
+      if (totalHt == null && typeof ai.totalHt === 'number') totalHt = ai.totalHt;
+      if (totalVat == null && typeof ai.totalVat === 'number') totalVat = ai.totalVat;
+      if (totalTtc == null && typeof ai.totalTtc === 'number') totalTtc = ai.totalTtc;
+      if (vatRate == null && typeof ai.vatRate === 'number') vatRate = ai.vatRate;
+      if (ai.supplierVat) {
+        const v = normVat(ai.supplierVat);
+        if (!vatNumbersFound.includes(v)) vatNumbersFound = [...vatNumbersFound, v];
+      }
+      aiSupplierName = ai.supplierName ?? null;
+    }
+  }
 
   // contact : n° de TVA d'abord (fiable, tous types confondus), sinon un nom retrouvé tel quel
   // dans le texte parmi les contacts du type attendu (client pour un devis/facture émis par
@@ -308,6 +410,9 @@ export async function extractDocumentInfo(
     }
     if (best) { contactId = best.id; contactName = best.name; contactConfidence = 'name'; }
   }
+  // ni TVA ni nom connu -> à défaut, le nom que Claude a lu sur le document (fournisseur
+  // probablement pas encore dans les contacts JJD) : mieux qu'un champ vide à remplir à la main
+  if (!contactName && aiSupplierName) contactName = aiSupplierName;
 
   // chantier : référence JJD (R-xxx / E-xx) citée dans le document — pas toujours telle
   // quelle : un fournisseur la reprend souvent sans tiret ni zéros de tête dans son propre

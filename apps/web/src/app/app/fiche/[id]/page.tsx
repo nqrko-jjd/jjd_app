@@ -5,7 +5,7 @@ import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { ChantierThread } from '@/components/ChantierThread';
 
-interface Task { id: string; title: string; status: string; assignee: { displayName: string | null; firstName: string } | null }
+interface Task { id: string; title: string; status: string; assignees: { id: string; name: string }[] }
 
 const CONTACT_ROLE: Record<string, string> = {
   concierge: 'Concierge', president: 'Président', council: 'Conseil', syndic_manager: 'Gestionnaire syndic',
@@ -118,7 +118,7 @@ export default function WorkerFichePage({ params }: { params: Promise<{ id: stri
                 {t.status === 'done' ? '✓' : ''}
               </span>
               <span style={{ textDecoration: t.status === 'done' ? 'line-through' : 'none', color: t.status === 'done' ? 'var(--ink-3)' : 'var(--ink)' }}>
-                {t.title}{t.assignee ? ` · ${t.assignee.displayName || t.assignee.firstName}` : ''}
+                {t.title}{t.assignees.length > 0 ? ` · ${t.assignees.map((a) => a.name).join(', ')}` : ''}
               </span>
             </div>
           ))}

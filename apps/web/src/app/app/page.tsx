@@ -206,6 +206,7 @@ interface ForemanWorksite {
   building: { name: string } | null;
 }
 interface TeamMember { id: string; name: string; worksite: { id: string; ref: string; title: string } }
+interface ReviewReport { id: string; reviewStatus: string }
 
 function ForemanToday() {
   const router = useRouter();
@@ -213,10 +214,12 @@ function ForemanToday() {
   const { data: ws } = useApi<{ items: ForemanWorksite[] }>('/api/worksites?status=to_plan,scheduled,in_progress&pageSize=100');
   const { data: team } = useApi<{ items: TeamMember[] }>('/api/people/team');
   const { data: pending } = useApi<{ items: unknown[] }>('/api/timesheet/pending');
+  const { data: reports } = useApi<{ items: ReviewReport[] }>('/api/reports/review-queue');
   const worksites = ws?.items ?? [];
   const teamItems = team?.items ?? [];
   const chantiersAujourdhui = new Set(teamItems.map((t) => t.worksite.id)).size;
   const pendingCount = pending?.items.length ?? 0;
+  const reportsToReview = (reports?.items ?? []).filter((r) => r.reviewStatus !== 'approved').length;
 
   return (
     <>
@@ -231,8 +234,8 @@ function ForemanToday() {
           sub={chantiersAujourdhui > 0 ? `${chantiersAujourdhui} chantier${chantiersAujourdhui > 1 ? 's' : ''} aujourd’hui` : 'Rien de planifié aujourd’hui'}
           hero
         />
-        <Kpi ic={Building2} label="Mes chantiers" value={worksites.length} sub="en cours ou planifiés" />
-        <Kpi ic={Clock} label="Pointages à valider" value={pendingCount} sub="heures de l’équipe" warn={pendingCount > 0} />
+        <Kpi ic={FileText} label="Rapports à valider" value={reportsToReview} sub="Retours des ouvriers" warn={reportsToReview > 0} />
+        <Kpi ic={Clock} label="Pointages à valider" value={pendingCount} sub="Heures de la semaine" warn={pendingCount > 0} />
       </div>
 
       <div className="quick-actions">
@@ -240,13 +243,13 @@ function ForemanToday() {
           <span className="ic"><Users size={20} strokeWidth={2} /></span>
           <span><strong>Mon équipe</strong><small>Affectations du jour</small></span>
         </Link>
+        <Link href="/app/rapports" className="quick-action">
+          <span className="ic"><FileText size={20} strokeWidth={2} /></span>
+          <span><strong>Valider les rapports</strong><small>Suivi du terrain</small></span>
+        </Link>
         <Link href="/app/pointage" className="quick-action">
           <span className="ic"><Clock size={20} strokeWidth={2} /></span>
           <span><strong>Vérifier les heures</strong><small>Relevé des collaborateurs</small></span>
-        </Link>
-        <Link href="/app/messagerie" className="quick-action">
-          <span className="ic"><MessageSquare size={20} strokeWidth={2} /></span>
-          <span><strong>Messagerie</strong><small>Échanger avec l’équipe</small></span>
         </Link>
       </div>
 

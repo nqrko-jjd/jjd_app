@@ -84,6 +84,7 @@ model User {
   createdDocuments  Document[]         @relation("DocumentAuthor")
   createdLedger     LedgerEntry[]      @relation("LedgerEntryAuthor")
   reports           WorksiteReport[]   @relation("ReportAuthor")
+  reviewedReports   WorksiteReport[]   @relation("ReportReviewer")
   createdTasks      WorksiteTask[]     @relation("TaskCreatedBy")
   stockMovements    StockMovement[]    @relation("StockMovementBy")
   personAdjustments PersonAdjustment[] @relation("PersonAdjustmentAuthor")
@@ -1010,10 +1011,18 @@ model WorksiteReport {
   date         DateTime  @default(now())
   workDone     String? // travaux réalisés
   notes        String? // remarques, réserves
-  status       String    @default("draft") // draft | signed
+  status       String    @default("draft") // draft | signed — signature client, ne change pas après coup
   clientName   String? // nom de la personne qui a signé
   signatureUrl String? // PNG de la signature (uploads/…)
   signedAt     DateTime?
+  // Relecture interne (bureau/chef de chantier) une fois le rapport signé — indépendante de la
+  // signature client : le client a déjà vu/signé sur place, ceci ne fait que tracer le contrôle
+  // qualité côté JJD (complétude, photos, formulation) et ne rouvre jamais le rapport au client.
+  reviewStatus String    @default("pending") // pending | approved | needs_info
+  reviewNote   String? // motif si "à compléter"
+  reviewedAt   DateTime?
+  reviewedById String?
+  reviewedBy   User?     @relation("ReportReviewer", fields: [reviewedById], references: [id])
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 

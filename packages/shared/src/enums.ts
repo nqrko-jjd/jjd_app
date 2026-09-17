@@ -110,6 +110,20 @@ export const WORKSITE_PROGRESS_PCT: Record<WorksiteStatus, number> = {
   done: 90, to_invoice: 95, invoiced: 100, closed: 100, refused: 0, cancelled: 0,
 };
 
+/**
+ * Relecture interne d'un rapport de chantier signé (bureau/chef de chantier) — distincte du
+ * statut de signature (draft/signed) : le client a déjà signé sur place, cette relecture est
+ * un contrôle qualité côté JJD qui ne rouvre jamais le rapport au client.
+ */
+export const REPORT_REVIEW_STATUSES = ['pending', 'approved', 'needs_info'] as const;
+export type ReportReviewStatus = (typeof REPORT_REVIEW_STATUSES)[number];
+
+export const REPORT_REVIEW_STATUS_LABEL: Record<ReportReviewStatus, string> = {
+  pending: 'À valider',
+  approved: 'Validé',
+  needs_info: 'À compléter',
+};
+
 export const VEHICLE_STATUSES = [
   'active', // opérationnel
   'repair', // en réparation

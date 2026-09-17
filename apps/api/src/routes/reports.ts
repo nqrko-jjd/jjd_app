@@ -1,9 +1,9 @@
 import { Router } from 'express';
 import multer from 'multer';
-import { worksiteReportInput, reportSignInput } from '@jjd/shared';
+import { worksiteReportInput, reportSignInput, reportReviewInput } from '@jjd/shared';
 import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
-import { requireAuth, STAFF } from '../lib/auth.js';
+import { requireAuth, STAFF, FIELD_OFFICE } from '../lib/auth.js';
 import { storeImage } from '../lib/media.js';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
@@ -70,6 +70,26 @@ worksiteReportsRouter.post(
 /* ------------------------------------------------------ sous /api/reports/:id */
 
 export const reportsRouter = Router();
+
+/** File de relecture des rapports signés (bureau/chef de chantier) — tous statuts, filtrables côté client (onglets). */
+reportsRouter.get(
+  '/review-queue',
+  requireAuth(...FIELD_OFFICE),
+  asyncHandler(async (req, res) => {
+    const where: Record<string, unknown> = { status: 'signed' };
+    if (req.user!.role === 'foreman') {
+      if (!req.user!.personId) return res.json({ items: [] });
+      where.worksite = { managerId: req.user!.personId };
+    }
+    const items = await prisma.worksiteReport.findMany({
+      where,
+      orderBy: { signedAt: 'desc' },
+      include: reportInclude,
+      take: 200,
+    });
+    res.json({ items: items.map(shapeReport) });
+  }),
+);
 
 reportsRouter.get(
   '/:id',
@@ -160,6 +180,37 @@ reportsRouter.post(
     await prisma.message.create({
       data: { threadId: thread.id, authorName: updated.authorName, kind: 'status', body: `Rapport d'intervention signé par ${clientName}` },
     });
+
+    res.json({ report: shapeReport(updated) });
+  }),
+);
+
+/** Relecture interne (valider / demander un complément) — jamais visible du client, ne touche pas à la signature. */
+reportsRouter.post(
+  '/:id/review',
+  requireAuth(...FIELD_OFFICE),
+  asyncHandler(async (req, res) => {
+    const report = await prisma.worksiteReport.findUnique({ where: { id: req.params.id }, select: { id: true, status: true, worksiteId: true, worksite: { select: { managerId: true } } } });
+    if (!report) throw new HttpError(404, 'Rapport introuvable');
+    if (report.status !== 'signed') throw new HttpError(409, 'Le rapport doit être signé avant relecture');
+    if (req.user!.role === 'foreman' && report.worksite.managerId !== req.user!.personId) {
+      throw new HttpError(403, 'Ce rapport ne concerne pas vos chantiers');
+    }
+    const { decision, note } = reportReviewInput.parse(req.body);
+    if (decision === 'needs_info' && !note?.trim()) throw new HttpError(422, 'Précise ce qui manque.');
+
+    const updated = await prisma.worksiteReport.update({
+      where: { id: report.id },
+      data: { reviewStatus: decision, reviewNote: note?.trim() || null, reviewedAt: new Date(), reviewedById: req.user!.id },
+      include: reportInclude,
+    });
+
+    if (decision === 'needs_info') {
+      const thread = await prisma.thread.upsert({ where: { worksiteId: report.worksiteId }, create: { worksiteId: report.worksiteId }, update: {} });
+      await prisma.message.create({
+        data: { threadId: thread.id, authorName: await authorName(req.user!.id), kind: 'status', body: `Rapport à compléter : ${note!.trim()}` },
+      });
+    }
 
     res.json({ report: shapeReport(updated) });
   }),

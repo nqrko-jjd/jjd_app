@@ -352,6 +352,12 @@ export const reportSignInput = z.object({
   signature: z.string().min(20), // data URL PNG
 });
 
+/** Relecture interne d'un rapport déjà signé (bureau/chef de chantier) — ne rouvre jamais le rapport au client. */
+export const reportReviewInput = z.object({
+  decision: z.enum(['approved', 'needs_info']),
+  note: z.string().trim().nullish(),
+});
+
 export type WorksiteReportInput = z.infer<typeof worksiteReportInput>;
 
 /** Coût de revient d'un véhicule (imputation aux chantiers). */

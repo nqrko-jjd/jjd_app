@@ -120,7 +120,13 @@ portalRouter.get(
       prisma.worksite.findMany({
         where: scope,
         orderBy: { updatedAt: 'desc' },
-        include: { acp: { select: { id: true, name: true, photoThumbUrl: true, address: true, city: true } }, manager: mSel },
+        include: {
+          acp: { select: { id: true, name: true, photoThumbUrl: true, address: true, city: true } },
+          manager: mSel,
+          // dernière facture émise : sert à afficher payé/impayé à côté du statut chantier
+          // ("Facturé" ou "Clôturé" ne dit pas au syndic si l'argent est vraiment arrivé)
+          documents: { where: { kind: 'invoice', number: { not: null } }, orderBy: { issuedOn: 'desc' }, take: 1, select: { status: true } },
+        },
       }),
       prisma.document.findMany({
         where: { kind: 'quote', status: 'sent', number: { not: null }, worksite: scope },
@@ -187,6 +193,7 @@ portalRouter.get(
         status: w.status, statusLabel: wsLabel(w.status),
         priority: w.priority, priorityLabel: prioLabel(w.priority),
         manager: managerName(w.manager), updatedAt: w.updatedAt,
+        invoiceStatus: w.documents[0]?.status ?? null,
       })),
       weekPlanning: groupWeek(events),
       quotesToValidate: full ? quotes.slice(0, 4).map((d) => ({
@@ -197,6 +204,7 @@ portalRouter.get(
       recentDocuments: full ? docs.map((d) => ({
         id: d.id, kind: d.kind, kindLabel: DOC_KIND_LABEL[d.kind] ?? d.kind, number: d.number,
         title: d.title, building: d.worksite?.acp?.name ?? null, issuedOn: d.issuedOn, hasPdf: !!d.originalPdf,
+        status: d.status,
       })) : [],
     });
   }),
@@ -327,9 +335,13 @@ portalRouter.get(
   asyncHandler(async (req, res) => {
     const u = req.portalUser!;
     const from = startOfWeek(new Date());
+    // 2 semaines plutôt que 6 (avant) : sur un gros portefeuille (plusieurs immeubles), 6
+    // semaines d'interventions à plat rendait la page interminable, impossible à faire défiler
+    // jusqu'en bas — voir aussi le plafond de hauteur par jour côté page (portal.css).
     const events = await prisma.planningEvent.findMany({
-      where: { worksite: worksiteScope(u), endAt: { gte: from }, startAt: { lt: addDays(from, 42) } },
+      where: { worksite: worksiteScope(u), endAt: { gte: from }, startAt: { lt: addDays(from, 14) } },
       orderBy: { startAt: 'asc' },
+      take: 500,
       include: {
         worksite: { select: { id: true, ref: true, title: true, acp: { select: { name: true } } } },
         team: { select: { name: true } },

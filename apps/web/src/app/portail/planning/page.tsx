@@ -37,23 +37,26 @@ export default function PortalPlanning() {
             <div key={day} className="p-panel">
               <h3 style={{ marginBottom: '0.7rem', textTransform: 'capitalize' }}>
                 {new Date(day).toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' })}
+                {evts.length > 6 && <span className="p-note" style={{ fontWeight: 400, marginLeft: '0.5rem' }}>({evts.length})</span>}
               </h3>
-              {evts.map((e) => (
-                <div key={e.id} className="p-doc-row">
-                  <span className="p-note" style={{ width: 52, fontVariantNumeric: 'tabular-nums' }}>
-                    {e.allDay ? 'Jour.' : new Date(e.startAt).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 600 }}>
-                      {e.building ?? e.worksiteRef}{e.title ? ` — ${e.title}` : e.worksiteTitle ? ` — ${e.worksiteTitle}` : ''}
+              <div className="plan-day-events">
+                {evts.map((e) => (
+                  <div key={e.id} className="p-doc-row">
+                    <span className="p-note" style={{ width: 52, fontVariantNumeric: 'tabular-nums' }}>
+                      {e.allDay ? 'Jour.' : new Date(e.startAt).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 600 }}>
+                        {e.building ?? e.worksiteRef}{e.title ? ` — ${e.title}` : e.worksiteTitle ? ` — ${e.worksiteTitle}` : ''}
+                      </div>
+                      <div className="p-note">
+                        {[e.team, e.people.slice(0, 3).join(', ')].filter(Boolean).join(' · ') || 'Équipe JJD'}
+                      </div>
                     </div>
-                    <div className="p-note">
-                      {[e.team, e.people.slice(0, 3).join(', ')].filter(Boolean).join(' · ') || 'Équipe JJD'}
-                    </div>
+                    {e.worksiteId && <Link href={`/portail/chantier/${e.worksiteId}`} className="p-note" style={{ fontSize: '0.78rem' }}>voir →</Link>}
                   </div>
-                  {e.worksiteId && <Link href={`/portail/chantier/${e.worksiteId}`} className="p-note" style={{ fontSize: '0.78rem' }}>voir →</Link>}
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           ))}
         </div>

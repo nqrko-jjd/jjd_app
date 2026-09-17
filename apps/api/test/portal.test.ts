@@ -56,6 +56,24 @@ test('portail : dashboard renvoie KPIs + sections pour un syndic', async () => {
   assert.ok('interventionsActive' in d.kpis && 'quotesToValidate' in d.kpis && 'urgent' in d.kpis);
   assert.equal(d.weekPlanning.days.length, 7);
   assert.ok(Array.isArray(d.recentInterventions));
+  // payé/impayé doit être exposé à côté du statut chantier (et des documents récents),
+  // même quand aucune facture n'existe encore (invoiceStatus/status alors null/vide)
+  for (const w of d.recentInterventions) assert.ok('invoiceStatus' in w);
+  for (const doc of d.recentDocuments) assert.ok('status' in doc);
+});
+
+test('portail : planning limité à 2 semaines (pas 6) et plafonné en nombre', async () => {
+  const r = await fetch(`${base}/api/portal/planning`, { headers: auth() });
+  assert.equal(r.status, 200);
+  const { items } = await r.json();
+  const from = new Date();
+  from.setHours(0, 0, 0, 0);
+  from.setDate(from.getDate() - ((from.getDay() + 6) % 7)); // lundi de cette semaine
+  const maxDate = new Date(from);
+  maxDate.setDate(maxDate.getDate() + 14);
+  for (const e of items as { startAt: string }[]) {
+    assert.ok(new Date(e.startAt) < maxDate, `événement au-delà de la fenêtre de 14 jours : ${e.startAt}`);
+  }
 });
 
 test('portail : liste interventions scoping syndic', async () => {

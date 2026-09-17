@@ -17,11 +17,21 @@ interface Dash {
   urgentItems: { id: string; ref: string; title: string; building: string | null; statusLabel: string; priority: string }[];
   recentInterventions: {
     id: string; ref: string; title: string; building: string | null; status: string; statusLabel: string;
-    priority: string; priorityLabel: string; manager: string | null; updatedAt: string;
+    priority: string; priorityLabel: string; manager: string | null; updatedAt: string; invoiceStatus: string | null;
   }[];
   weekPlanning: { days: { label: string; date: string; items: { time: string; label: string; worksiteId: string | null }[] }[] };
   quotesToValidate: { id: string; number: string; title: string | null; totalHt: number; building: string | null; worksiteId: string | null; worksiteRef: string | null; issuedOn: string | null }[];
-  recentDocuments: { id: string; kind: string; kindLabel: string; number: string; title: string | null; building: string | null; issuedOn: string | null; hasPdf: boolean }[];
+  recentDocuments: { id: string; kind: string; kindLabel: string; number: string; title: string | null; building: string | null; issuedOn: string | null; hasPdf: boolean; status: string }[];
+}
+
+/** Étiquette payé/impayé (mêmes valeurs que Document.status pour kind "invoice"). */
+function invoiceTag(status: string | null) {
+  if (!status) return null;
+  return (
+    <span className={`p-tag ${status === 'paid' ? 'ok' : status === 'overdue' ? 'crit' : 'gold'}`}>
+      {status === 'paid' ? 'Payée' : status === 'overdue' ? 'En retard' : 'À payer'}
+    </span>
+  );
 }
 
 const STATUS_DOT: Record<string, string> = {
@@ -188,6 +198,7 @@ export default function PortalDashboard() {
                       </div>
                       <div className="right">
                         <span className={`p-dot ${STATUS_DOT[w.status] ?? 'grey'}`}>{w.statusLabel}</span>
+                        {invoiceTag(w.invoiceStatus)}
                         <div className="d">{fdate(w.updatedAt)}</div>
                       </div>
                       <span className="chev">→</span>
@@ -250,6 +261,7 @@ export default function PortalDashboard() {
                       <b>{doc.kindLabel} {doc.number}</b>
                       <span>{doc.building ?? ''} · {fdate(doc.issuedOn)}</span>
                     </div>
+                    {doc.kind === 'invoice' && invoiceTag(doc.status)}
                     {doc.hasPdf && <button onClick={() => openPdf(doc.id)} aria-label="Télécharger">⤓</button>}
                   </div>
                 ))}

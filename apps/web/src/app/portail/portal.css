@@ -298,6 +298,10 @@
 .p-doc-row:last-child { border-bottom: none; }
 .p-doc-row .n { font-weight: 700; font-family: "IBM Plex Mono", monospace; font-size: 0.85rem; }
 .p-doc-row .amt { margin-left: auto; font-weight: 700; }
+/* page Planning : un jour très chargé (beaucoup d'interventions) défile dans sa propre
+ * hauteur plutôt que d'allonger indéfiniment la page — sinon, sur un gros portefeuille, la
+ * page devient trop longue pour arriver jusqu'en bas. */
+.plan-day-events { max-height: 340px; overflow-y: auto; }
 .p-photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.6rem; }
 .p-photos img { width: 100%; aspect-ratio: 4/3; object-fit: cover; border-radius: 10px; border: 1px solid var(--p-line); }
 .p-thread { display: flex; flex-direction: column; gap: 0.7rem; max-height: 420px; overflow-y: auto; }

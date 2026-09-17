@@ -4,7 +4,7 @@ import { createReadStream, existsSync } from 'node:fs';
 import { nanoid } from 'nanoid';
 import { z } from 'zod';
 import {
-  WORKSITE_STATUS_LABEL, WORKSITE_PRIORITY_LABEL, DOC_KIND_LABEL,
+  WORKSITE_STATUS_LABEL, WORKSITE_PRIORITY_LABEL, DOC_KIND_LABEL, WORKSITE_PROGRESS_PCT,
   type WorksiteStatus, type WorksitePriority,
 } from '@jjd/shared';
 import { prisma } from '../db.js';
@@ -83,6 +83,8 @@ portalRouter.get(
         isSyndic: !!u.syndicId,
         access: u.access,
         scopeLabel: u.buildingName ?? (u.syndicId ? 'Portefeuille' : null),
+        // syndic : portefeuille d'immeubles — building : résident d'un immeuble — client : particulier, projet(s) en direct
+        scope: u.syndicId ? 'syndic' : u.buildingId ? 'building' : 'client',
       },
     });
   }),
@@ -103,7 +105,7 @@ portalRouter.get(
       prisma.worksite.findMany({
         where: scope,
         orderBy: { updatedAt: 'desc' },
-        include: { acp: { select: { id: true, name: true } }, manager: mSel },
+        include: { acp: { select: { id: true, name: true, photoThumbUrl: true, address: true, city: true } }, manager: mSel },
       }),
       prisma.document.findMany({
         where: { kind: 'quote', status: 'sent', number: { not: null }, worksite: scope },
@@ -126,9 +128,22 @@ portalRouter.get(
     const open = worksites.filter((w) => OPEN_STATUSES.includes(w.status as WorksiteStatus));
     const urgent = open.filter((w) => w.priority === 'high' || w.priority === 'urgent');
     const full = portalFull(u);
+    // Client particulier (pas syndic, pas résident d'un immeuble) avec un seul chantier ouvert :
+    // on met en avant sa progression, comme la maquette ("Avancement des travaux").
+    const scopeKind = u.syndicId ? 'syndic' : u.buildingId ? 'building' : 'client';
+    const single = scopeKind === 'client' && open.length === 1 ? open[0]! : null;
+    const singleProject = single ? {
+      id: single.id, ref: single.ref, title: single.title,
+      building: single.acp?.name ?? null,
+      address: [single.acp?.address, single.acp?.city].filter(Boolean).join(', ') || null,
+      photoThumbUrl: single.acp?.photoThumbUrl ?? null,
+      status: single.status, statusLabel: wsLabel(single.status),
+      progressPct: WORKSITE_PROGRESS_PCT[single.status as WorksiteStatus] ?? 0,
+    } : null;
 
     return res.json({
       greeting: { name: u.label, isSyndic: !!u.syndicId, access: u.access, scopeLabel: u.buildingName },
+      singleProject,
       kpis: {
         buildings: buildingCount,
         interventionsActive: open.length,

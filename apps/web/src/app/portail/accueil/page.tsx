@@ -7,6 +7,10 @@ import { PortalShell } from '../PortalShell';
 
 interface Dash {
   greeting: { name: string; isSyndic: boolean; access: 'full' | 'limited' };
+  singleProject: {
+    id: string; ref: string; title: string; building: string | null; address: string | null;
+    photoThumbUrl: string | null; status: string; statusLabel: string; progressPct: number;
+  } | null;
   kpis: { buildings: number; interventionsActive: number; quotesToValidate: number | null; urgent: number };
   urgentItems: { id: string; ref: string; title: string; building: string | null; statusLabel: string; priority: string }[];
   recentInterventions: {
@@ -77,6 +81,35 @@ export default function PortalDashboard() {
               )}
             </div>
           </div>
+
+          {/* Projet unique (client particulier) — avancement des travaux, comme la maquette */}
+          {d.singleProject && (
+            <Link href={`/portail/chantier/${d.singleProject.id}`} className="p-card" style={{ display: 'block', overflow: 'hidden' }}>
+              {d.singleProject.photoThumbUrl && (
+                <div style={{ height: 200 }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={d.singleProject.photoThumbUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+              )}
+              <div className="p-card-pad">
+                <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div>
+                    {d.singleProject.building && <div className="eyebrow">{d.singleProject.building}</div>}
+                    <h2>{d.singleProject.title}</h2>
+                    {d.singleProject.address && <p className="p-note" style={{ marginTop: '0.2rem' }}>{d.singleProject.address}</p>}
+                  </div>
+                  <span className="p-tag">{d.singleProject.statusLabel}</span>
+                </div>
+                <div style={{ marginTop: '1rem' }}>
+                  <div className="row" style={{ justifyContent: 'space-between', marginBottom: '0.4rem' }}>
+                    <span style={{ fontWeight: 700, fontSize: '0.88rem' }}>Avancement des travaux</span>
+                    <span style={{ fontWeight: 700 }}>{d.singleProject.progressPct}%</span>
+                  </div>
+                  <div className="p-progress-track"><div className="p-progress-fill" style={{ width: `${d.singleProject.progressPct}%` }} /></div>
+                </div>
+              </div>
+            </Link>
+          )}
 
           {/* Alert */}
           {alert && (

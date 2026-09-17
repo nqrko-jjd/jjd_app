@@ -5,14 +5,16 @@ import { usePathname } from 'next/navigation';
 import { usePortal } from '@/lib/portal';
 import { LayoutGrid, Building2, Wrench, FileText, CalendarDays, FolderOpen, type LucideIcon } from 'lucide-react';
 
-type NavItem = { href: string; label: string; ic: LucideIcon; full?: boolean };
+type NavItem = { href: string; label: string; ic: LucideIcon; full?: boolean; portfolio?: boolean };
 
 const NAV: NavItem[] = [
   { href: '/portail/accueil', label: 'Accueil', ic: LayoutGrid },
-  { href: '/portail/immeubles', label: 'Immeubles & projets', ic: Building2 },
+  // portfolio : n'a de sens que pour qui gère plusieurs immeubles (syndic) — un client
+  // particulier avec son propre projet en direct n'en a pas besoin (comme la maquette).
+  { href: '/portail/immeubles', label: 'Immeubles & projets', ic: Building2, portfolio: true },
   { href: '/portail/interventions', label: 'Interventions', ic: Wrench },
   { href: '/portail/devis', label: 'Devis', ic: FileText, full: true },
-  { href: '/portail/planning', label: 'Planning', ic: CalendarDays },
+  { href: '/portail/planning', label: 'Planning', ic: CalendarDays, portfolio: true },
   { href: '/portail/documents', label: 'Documents', ic: FolderOpen, full: true },
 ];
 
@@ -24,7 +26,7 @@ export function PortalShell({
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const initials = (me?.label ?? '?').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join('');
-  const nav = NAV.filter((n) => !n.full || me?.access !== 'limited');
+  const nav = NAV.filter((n) => (!n.full || me?.access !== 'limited') && (!n.portfolio || me?.scope !== 'client'));
 
   return (
     <div className="p-shell">

@@ -237,6 +237,9 @@
 .p-day .ev .empty { color: var(--p-ink-3); font-size: 0.82rem; }
 
 /* devis card */
+.p-progress-track { height: 8px; border-radius: 999px; background: var(--p-line); overflow: hidden; }
+.p-progress-fill { height: 100%; border-radius: 999px; background: var(--p-green); transition: width 0.2s ease; }
+
 .p-quote { display: flex; align-items: center; gap: 1rem; }
 .p-quote .ico { width: 40px; height: 40px; border-radius: 10px; background: var(--p-gold-soft); color: var(--p-gold); display: grid; place-items: center; flex-shrink: 0; }
 .p-quote .amt { font-weight: 800; }

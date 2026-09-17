@@ -11,6 +11,7 @@ interface Dash {
     id: string; ref: string; title: string; building: string | null; address: string | null;
     photoThumbUrl: string | null; status: string; statusLabel: string; progressPct: number;
   } | null;
+  portfolio: { id: string; name: string; city: string | null; lotCount: number | null; photoThumbUrl: string | null; open: number }[];
   kpis: { buildings: number; interventionsActive: number; quotesToValidate: number | null; urgent: number };
   urgentItems: { id: string; ref: string; title: string; building: string | null; statusLabel: string; priority: string }[];
   recentInterventions: {
@@ -81,6 +82,36 @@ export default function PortalDashboard() {
               )}
             </div>
           </div>
+
+          {/* Portefeuille (syndic) — photos des immeubles en avant sur l'accueil, comme la maquette */}
+          {d.portfolio.length > 0 && (
+            <>
+              <div className="row" style={{ justifyContent: 'space-between', alignItems: 'baseline', margin: '1.6rem 0 0.9rem' }}>
+                <h2 style={{ margin: 0 }}>Votre portefeuille</h2>
+                <Link href="/portail/immeubles" className="p-more" style={{ margin: 0 }}>Tout voir ›</Link>
+              </div>
+              <div className="p-bgrid">
+                {d.portfolio.map((b) => (
+                  <Link key={b.id} href={`/portail/immeuble/${b.id}`} className="p-bcard">
+                    {b.photoThumbUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <div className="photo"><img src={b.photoThumbUrl} alt="" /></div>
+                    ) : (
+                      <div className="photo" style={{ display: 'grid', placeItems: 'center', fontSize: '1.6rem', color: 'var(--p-green-600)' }}>⌂</div>
+                    )}
+                    <div className="body">
+                      {b.city && <div className="eyebrow">{b.city}</div>}
+                      <div className="name">{b.name}</div>
+                      <div className="meta">{b.lotCount ? `Copropriété · ${b.lotCount} lots` : '—'}</div>
+                      <div className="foot">
+                        <span className="meta">{b.open > 0 ? `${b.open} intervention${b.open > 1 ? 's' : ''} ouverte${b.open > 1 ? 's' : ''}` : 'Dossiers à jour'}</span>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </>
+          )}
 
           {/* Projet unique (client particulier) — avancement des travaux, comme la maquette */}
           {d.singleProject && (

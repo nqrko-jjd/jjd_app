@@ -29,6 +29,7 @@ const wsLabel = (s: string) => WORKSITE_STATUS_LABEL[s as WorksiteStatus] ?? s;
 const prioLabel = (p: string) => WORKSITE_PRIORITY_LABEL[p as WorksitePriority] ?? p;
 const managerName = (m: { displayName: string | null; firstName: string } | null) =>
   m ? (m.displayName || m.firstName) : null;
+const mSel = { select: { displayName: true, firstName: true } } as const;
 
 /* ---------------------------------------------------- connexion (lien magique) */
 
@@ -98,9 +99,9 @@ portalRouter.get(
   asyncHandler(async (req, res) => {
     const u = req.portalUser!;
     const scope = worksiteScope(u);
-    const mSel = { select: { displayName: true, firstName: true } } as const;
 
-    const [buildingCount, worksites, quotes, events, docs] = await Promise.all([
+    const scopeKind = u.syndicId ? 'syndic' : u.buildingId ? 'building' : 'client';
+    const [buildingCount, worksites, quotes, events, docs, portfolioBuildings] = await Promise.all([
       prisma.contact.count({ where: buildingScope(u) }),
       prisma.worksite.findMany({
         where: scope,
@@ -123,6 +124,14 @@ portalRouter.get(
         take: 6,
         include: { worksite: { select: { acp: { select: { name: true } } } } },
       }),
+      // portefeuille avec photos, en avant sur l'accueil comme la maquette — n'a de sens
+      // que pour un syndic gérant plusieurs immeubles (cf. nav portfolio: true).
+      scopeKind === 'syndic' ? prisma.contact.findMany({
+        where: buildingScope(u),
+        orderBy: { name: 'asc' },
+        take: 4,
+        include: { acpWorksites: { where: scope, select: { id: true, status: true } } },
+      }) : Promise.resolve([]),
     ]);
 
     const open = worksites.filter((w) => OPEN_STATUSES.includes(w.status as WorksiteStatus));
@@ -130,7 +139,6 @@ portalRouter.get(
     const full = portalFull(u);
     // Client particulier (pas syndic, pas résident d'un immeuble) avec un seul chantier ouvert :
     // on met en avant sa progression, comme la maquette ("Avancement des travaux").
-    const scopeKind = u.syndicId ? 'syndic' : u.buildingId ? 'building' : 'client';
     const single = scopeKind === 'client' && open.length === 1 ? open[0]! : null;
     const singleProject = single ? {
       id: single.id, ref: single.ref, title: single.title,
@@ -144,6 +152,10 @@ portalRouter.get(
     return res.json({
       greeting: { name: u.label, isSyndic: !!u.syndicId, access: u.access, scopeLabel: u.buildingName },
       singleProject,
+      portfolio: portfolioBuildings.map((b) => ({
+        id: b.id, name: b.name, city: b.city, lotCount: b.lotCount, photoThumbUrl: b.photoThumbUrl,
+        open: b.acpWorksites.filter((w) => OPEN_STATUSES.includes(w.status as WorksiteStatus)).length,
+      })),
       kpis: {
         buildings: buildingCount,
         interventionsActive: open.length,
@@ -334,7 +346,7 @@ portalRouter.get(
         syndic: { select: { name: true } },
         acpWorksites: {
           where: worksiteScope(u),
-          select: { id: true, ref: true, title: true, status: true, endedOn: true, updatedAt: true },
+          select: { id: true, ref: true, title: true, status: true, endedOn: true, updatedAt: true, manager: mSel },
           orderBy: { updatedAt: 'desc' },
         },
       },
@@ -348,6 +360,10 @@ portalRouter.get(
         syndic: b.syndic?.name ?? null,
         lotCount: b.lotCount,
         photoThumbUrl: b.photoThumbUrl,
+        // « Interlocuteur JJD » façon maquette : le chef de chantier du dossier le plus
+        // récent (acpWorksites déjà trié par updatedAt desc) — un immeuble n'a pas un seul
+        // responsable fixe, mais on montre le contact le plus pertinent du moment.
+        manager: managerName(b.acpWorksites.find((w) => w.manager)?.manager ?? null),
         open: b.acpWorksites.filter((w) => OPEN_STATUSES.includes(w.status as WorksiteStatus)).length,
         worksites: b.acpWorksites,
       })),
@@ -443,6 +459,7 @@ portalRouter.get(
         fromClient: !m.authorId,
       })),
       threadClosed: !!w.thread?.closedAt,
+      threadId: w.thread?.id ?? null,
     });
   }),
 );
@@ -460,6 +477,74 @@ portalRouter.post(
       data: { threadId: thread.id, authorName: u.label, kind: 'text', body, audience: 'client' },
     });
     res.status(201).json({ message: { id: msg.id, body: msg.body, createdAt: msg.createdAt } });
+  }),
+);
+
+/* -------------------------------------------------------------------- messagerie */
+
+// Avant cette date, pas de suivi de lecture : on ne remonte pas des années d'historique
+// importé comme "non lu" au premier chargement (même logique que messagerie.ts côté staff).
+const PORTAL_READ_TRACKING_LAUNCHED_AT = new Date('2026-09-17T00:00:00.000Z');
+
+/** Toutes les conversations visibles par ce client, tous chantiers confondus — vue "boîte de
+ *  réception" absente jusqu'ici (les messages n'étaient consultables que fiche par fiche). */
+portalRouter.get(
+  '/messages',
+  requirePortal,
+  asyncHandler(async (req, res) => {
+    const u = req.portalUser!;
+    const msgFilter = { OR: [{ audience: 'client' }, { sharedWithClient: true }] };
+    const threads = await prisma.thread.findMany({
+      where: { kind: 'worksite', worksite: worksiteScope(u), messages: { some: msgFilter } },
+      include: {
+        worksite: { select: { id: true, ref: true, title: true, acp: { select: { name: true } } } },
+        messages: { where: msgFilter, orderBy: { createdAt: 'desc' }, take: 1 },
+      },
+    });
+    const reads = await prisma.threadRead.findMany({
+      where: { userId: u.id, audience: 'client', threadId: { in: threads.map((t) => t.id) } },
+    });
+    const readMap = new Map(reads.map((r) => [r.threadId, r.lastReadAt]));
+    const unreadCounts = await Promise.all(threads.map((t) => prisma.message.count({
+      where: {
+        threadId: t.id, ...msgFilter,
+        authorId: { not: null }, // seuls les messages de JJD comptent comme non lus, jamais les siens
+        createdAt: { gt: readMap.get(t.id) ?? PORTAL_READ_TRACKING_LAUNCHED_AT },
+      },
+    })));
+    const items = threads
+      .filter((t) => t.worksite)
+      .map((t, i) => {
+        const last = t.messages[0];
+        return {
+          threadId: t.id,
+          worksiteId: t.worksite!.id,
+          ref: t.worksite!.ref,
+          title: t.worksite!.acp?.name ?? t.worksite!.title,
+          lastMessage: last?.body ?? (last ? '📷 Photo' : ''),
+          lastAt: last?.createdAt.toISOString() ?? null,
+          unread: unreadCounts[i]!,
+        };
+      })
+      .sort((a, b) => (b.lastAt ?? '').localeCompare(a.lastAt ?? ''));
+    res.json({ items });
+  }),
+);
+
+/** Marque un fil comme lu pour ce client (badge non-lu de la messagerie portail). */
+portalRouter.post(
+  '/messages/:threadId/read',
+  requirePortal,
+  asyncHandler(async (req, res) => {
+    const u = req.portalUser!;
+    const thread = await prisma.thread.findFirst({ where: { id: req.params.threadId!, worksite: worksiteScope(u) } });
+    if (!thread) throw new HttpError(404, 'Conversation introuvable');
+    await prisma.threadRead.upsert({
+      where: { threadId_audience_userId: { threadId: thread.id, audience: 'client', userId: u.id } },
+      create: { threadId: thread.id, audience: 'client', userId: u.id },
+      update: { lastReadAt: new Date() },
+    });
+    res.json({ ok: true });
   }),
 );
 

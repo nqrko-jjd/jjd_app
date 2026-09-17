@@ -1,6 +1,7 @@
 'use client';
-import { use, useEffect, useState } from 'react';
+import { Suspense, use, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { portalApi, portalBlobUrl, usePortalGuard } from '@/lib/portal';
 import { PortalShell } from '../../PortalShell';
 
@@ -20,6 +21,7 @@ interface Data {
     photos: { id: string; url: string; thumbUrl: string | null; caption: string | null }[];
   }[];
   threadClosed: boolean;
+  threadId: string | null;
   access: 'full' | 'limited';
 }
 
@@ -35,16 +37,28 @@ const STEP_DEFS = [
 function eur(n: number) { return `${n.toLocaleString('fr-BE', { maximumFractionDigits: 2 })} €`; }
 function d(s: string | null) { return s ? new Date(s).toLocaleDateString('fr-BE') : '—'; }
 
-export default function PortalWorksite({ params }: { params: Promise<{ id: string }> }) {
+export default function PortalWorksite(props: { params: Promise<{ id: string }> }) {
+  return (
+    <Suspense fallback={null}>
+      <PortalWorksiteInner {...props} />
+    </Suspense>
+  );
+}
+
+function PortalWorksiteInner({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { me, loading } = usePortalGuard();
+  const sp = useSearchParams();
   const [data, setData] = useState<Data | null>(null);
-  const [msgOpen, setMsgOpen] = useState(false);
+  const [msgOpen, setMsgOpen] = useState(sp.get('discussion') === '1');
   const full = data?.access !== 'limited';
   const [msg, setMsg] = useState('');
 
   const load = () => portalApi<Data>(`/worksites/${id}`).then(setData).catch(() => {});
   useEffect(() => { if (me) load(); }, [me, id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (msgOpen && data?.threadId) portalApi(`/messages/${data.threadId}/read`, { method: 'POST' }).catch(() => {});
+  }, [msgOpen, data?.threadId]);
 
   if (loading || !me) return null;
   if (!data) return <PortalShell><p className="p-note">Chargement…</p></PortalShell>;

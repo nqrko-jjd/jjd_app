@@ -1,9 +1,9 @@
 'use client';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { usePortal } from '@/lib/portal';
-import { LayoutGrid, Building2, Wrench, FileText, CalendarDays, FolderOpen, type LucideIcon } from 'lucide-react';
+import { portalApi, usePortal } from '@/lib/portal';
+import { LayoutGrid, Building2, Wrench, FileText, CalendarDays, FolderOpen, MessageSquare, type LucideIcon } from 'lucide-react';
 
 type NavItem = { href: string; label: string; ic: LucideIcon; full?: boolean; portfolio?: boolean };
 
@@ -16,6 +16,7 @@ const NAV: NavItem[] = [
   { href: '/portail/devis', label: 'Devis', ic: FileText, full: true },
   { href: '/portail/planning', label: 'Planning', ic: CalendarDays, portfolio: true },
   { href: '/portail/documents', label: 'Documents', ic: FolderOpen, full: true },
+  { href: '/portail/messages', label: 'Messages', ic: MessageSquare },
 ];
 
 export function PortalShell({
@@ -27,6 +28,14 @@ export function PortalShell({
   const [mobileOpen, setMobileOpen] = useState(false);
   const initials = (me?.label ?? '?').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join('');
   const nav = NAV.filter((n) => (!n.full || me?.access !== 'limited') && (!n.portfolio || me?.scope !== 'client'));
+  const [unread, setUnread] = useState(0);
+  useEffect(() => {
+    if (!me) return;
+    const check = () => portalApi<{ items: { unread: number }[] }>('/messages').then((r) => setUnread(r.items.reduce((s, t) => s + t.unread, 0))).catch(() => {});
+    check();
+    const t = setInterval(check, 20000);
+    return () => clearInterval(t);
+  }, [me]);
 
   return (
     <div className="p-shell">
@@ -51,6 +60,7 @@ export function PortalShell({
               onClick={() => setMobileOpen(false)}
             >
               <span className="ic"><n.ic size={17} strokeWidth={2} /></span> <span className="lbl">{n.label}</span>
+              {n.href === '/portail/messages' && unread > 0 && <span className="p-nav-badge">{unread}</span>}
             </Link>
           ))}
         </nav>

@@ -6,7 +6,7 @@ import { portalApi, usePortalGuard } from '@/lib/portal';
 import { PortalShell } from '../../PortalShell';
 
 interface Building {
-  id: string; name: string; address: string; syndic: string | null;
+  id: string; name: string; address: string; syndic: string | null; manager: string | null;
   lotCount: number | null; photoThumbUrl: string | null;
   worksites: { id: string; ref: string; title: string; status: string; updatedAt: string }[];
 }
@@ -47,12 +47,21 @@ export default function BuildingPage({ params }: { params: Promise<{ id: string 
               <img src={b.photoThumbUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             </div>
           )}
-          {b.lotCount != null && (
+          {(b.lotCount != null || b.manager) && (
             <div className="p-card p-card-pad" style={{ background: 'var(--p-green-soft)', display: 'flex', alignItems: 'center', gap: '0.5rem', border: 'none' }}>
-              <span>Copropriété · {b.lotCount} lots</span>
+              <span>
+                {b.lotCount != null ? `Copropriété · ${b.lotCount} lots` : ''}
+                {b.lotCount != null && b.manager ? ' · ' : ''}
+                {b.manager ? `Interlocuteur JJD : ${b.manager}` : ''}
+              </span>
             </div>
           )}
-          <h2 style={{ margin: '1.3rem 0 0.9rem' }}>Interventions</h2>
+          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'baseline', margin: '1.3rem 0 0.9rem' }}>
+            <h2 style={{ margin: 0 }}>Interventions</h2>
+            <Link href={`/portail/demande?building=${b.id}`} className="p-btn-primary p-btn-gold" style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}>
+              + Nouvelle intervention
+            </Link>
+          </div>
           <div className="p-panel" style={{ padding: '0.4rem 0.5rem' }}>
             <div className="p-ilist">
               {b.worksites.map((w) => (

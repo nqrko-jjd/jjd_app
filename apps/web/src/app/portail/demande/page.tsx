@@ -1,15 +1,24 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { portalApi, usePortalGuard } from '@/lib/portal';
 import { PortalShell } from '../PortalShell';
 
 export default function DemandePage() {
+  return (
+    <Suspense fallback={null}>
+      <DemandeInner />
+    </Suspense>
+  );
+}
+
+function DemandeInner() {
   const { me, loading } = usePortalGuard();
   const router = useRouter();
+  const sp = useSearchParams();
   const [buildings, setBuildings] = useState<{ id: string; name: string }[]>([]);
-  const [f, setF] = useState({ title: '', buildingId: '', details: '', urgent: false });
+  const [f, setF] = useState({ title: '', buildingId: sp.get('building') ?? '', details: '', urgent: false });
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
 

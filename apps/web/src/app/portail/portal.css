@@ -69,6 +69,11 @@
 .p-nav a .ic { display: inline-flex; align-items: center; justify-content: center; width: 18px; flex-shrink: 0; opacity: 0.9; }
 .p-nav a:hover { background: rgba(255,255,255,0.07); color: #fff; }
 .p-nav a.active { background: rgba(255,255,255,0.13); color: #fff; }
+.p-nav-badge {
+  margin-left: auto; background: var(--p-gold); color: #2a2010; font-size: 0.68rem; font-weight: 700;
+  border-radius: 999px; min-width: 1.2rem; height: 1.2rem; padding: 0 0.35rem;
+  display: inline-flex; align-items: center; justify-content: center;
+}
 .p-collapse {
   display: flex; align-items: center; gap: 0.7rem; margin: 0.8rem 0.7rem 1rem; padding: 0.6rem 0.75rem;
   border: 0; background: none; color: rgba(232,240,236,0.7); border-radius: 9px; cursor: pointer; font-size: 0.85rem; font-weight: 600;

@@ -112,7 +112,7 @@ worksitesRouter.get(
       take: 200,
       include: {
         client: { select: { name: true } },
-        acp: { select: { name: true } },
+        acp: { select: { name: true, photoThumbUrl: true } },
       },
     });
     res.json({ items: items.map(({ acp, ...w }) => ({ ...w, building: acp })) });

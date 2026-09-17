@@ -24,6 +24,18 @@ function mondayOf(d: Date) {
   return x;
 }
 const addDays = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+const startOfMonth = (d: Date) => new Date(d.getFullYear(), d.getMonth(), 1);
+/** Grille façon Google Agenda : semaines complètes (lundi-dimanche) couvrant le mois, avec les
+ *  jours des mois voisins pour compléter la 1ère/dernière semaine — jamais une semaine coupée
+ *  en plein milieu. La dernière rangée est retirée si elle ne contient que des jours hors mois
+ *  (mois qui tient dans 5 semaines, cas le plus fréquent). */
+function monthGridDays(monthAnchor: Date): Date[] {
+  const gridStart = mondayOf(startOfMonth(monthAnchor));
+  const days = Array.from({ length: 42 }, (_, i) => addDays(gridStart, i));
+  const lastWeek = days.slice(35);
+  if (lastWeek.every((d) => d.getMonth() !== monthAnchor.getMonth())) return days.slice(0, 35);
+  return days;
+}
 /** Clé "YYYY-MM-DD" en heure LOCALE — jamais toISOString() ici : la Belgique est
  *  toujours en avance sur UTC (UTC+1/+2), donc un minuit local convertirait sur le
  *  jour précédent et décalerait toute la grille d'une colonne. */
@@ -50,14 +62,16 @@ function vehicleLabel(v: PlanVehicleRef) {
   return [v.code, [v.brand, v.model].filter(Boolean).join(' ')].filter(Boolean).join(' · ') || v.plate || '—';
 }
 
-type ViewMode = 'workers' | 'worksites' | 'resources';
+type ViewMode = 'workers' | 'worksites' | 'resources' | 'month';
 type Resource = { kind: 'vehicle' | 'equipment'; id: string; label: string; sub: string };
 
 export default function PlanningPage() {
   const [view, setView] = useState<ViewMode>('workers');
   const [periodWeeks, setPeriodWeeks] = useState<1 | 2>(2);
   const [anchor, setAnchor] = useState(() => mondayOf(new Date()));
+  const [monthAnchor, setMonthAnchor] = useState(() => startOfMonth(new Date()));
   const [trackedDay, setTrackedDay] = useState(() => toDateInput(new Date()));
+  const [dayAgenda, setDayAgenda] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [specialtyFilter, setSpecialtyFilter] = useState('');
   const [worksiteFilter, setWorksiteFilter] = useState('');
@@ -76,10 +90,12 @@ export default function PlanningPage() {
     return () => { document.body.classList.remove('plan-wide'); };
   }, [wide]);
 
-  const days = useMemo(() => businessDays(anchor, periodWeeks * 5), [anchor, periodWeeks]);
+  const weekDays = useMemo(() => businessDays(anchor, periodWeeks * 5), [anchor, periodWeeks]);
+  const monthDays = useMemo(() => monthGridDays(monthAnchor), [monthAnchor]);
+  const days = view === 'month' ? monthDays : weekDays;
   const dayStrs = useMemo(() => days.map(toDateInput), [days]);
-  const from = days[0].toISOString();
-  const to = addDays(days[days.length - 1], 1).toISOString();
+  const from = days[0]!.toISOString();
+  const to = addDays(days[days.length - 1]!, 1).toISOString();
 
   const { data: evData, loading, reload } = useApi<{ items: PlanningEv[] }>(`/api/planning?from=${from}&to=${to}`);
   const events = evData?.items ?? [];
@@ -141,7 +157,10 @@ export default function PlanningPage() {
 
   function selectTrackedDay(dateStr: string) {
     setTrackedDay(dateStr);
-    if (!dayStrs.includes(dateStr)) setAnchor(mondayOf(new Date(`${dateStr}T00:00:00`)));
+    if (dayStrs.includes(dateStr)) return;
+    const d = new Date(`${dateStr}T00:00:00`);
+    if (view === 'month') setMonthAnchor(startOfMonth(d));
+    else setAnchor(mondayOf(d));
   }
   function shiftWeek(n: number) {
     const na = addDays(anchor, n * 7);
@@ -151,6 +170,13 @@ export default function PlanningPage() {
   function goToday() {
     const na = mondayOf(new Date());
     setAnchor(na);
+    setTrackedDay(toDateInput(new Date()));
+  }
+  function shiftMonth(n: number) {
+    setMonthAnchor((m) => new Date(m.getFullYear(), m.getMonth() + n, 1));
+  }
+  function goTodayMonth() {
+    setMonthAnchor(startOfMonth(new Date()));
     setTrackedDay(toDateInput(new Date()));
   }
 
@@ -227,7 +253,10 @@ export default function PlanningPage() {
     ));
   }
 
-  const rangeLabel = `${days[0].toLocaleDateString('fr-BE', { day: '2-digit', month: 'short' })} — ${days[days.length - 1].toLocaleDateString('fr-BE', { day: '2-digit', month: 'short', year: 'numeric' })}`;
+  const monthLabel = monthAnchor.toLocaleDateString('fr-BE', { month: 'long', year: 'numeric' });
+  const rangeLabel = view === 'month'
+    ? monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1)
+    : `${days[0]!.toLocaleDateString('fr-BE', { day: '2-digit', month: 'short' })} — ${days[days.length - 1]!.toLocaleDateString('fr-BE', { day: '2-digit', month: 'short', year: 'numeric' })}`;
   const trackedShort = new Date(`${trackedDay}T00:00:00`).toLocaleDateString('fr-BE', { weekday: 'short', day: '2-digit' });
 
   return (
@@ -257,24 +286,29 @@ export default function PlanningPage() {
           <button className={view === 'workers' ? 'active' : ''} onClick={() => setView('workers')}>Ouvriers</button>
           <button className={view === 'worksites' ? 'active' : ''} onClick={() => setView('worksites')}>Chantiers</button>
           <button className={view === 'resources' ? 'active' : ''} onClick={() => setView('resources')}>Véhicules & matériel</button>
+          <button className={view === 'month' ? 'active' : ''} onClick={() => setView('month')}>Vue mensuelle</button>
         </div>
         <div className="plan-period">
-          <button type="button" className="btn plan-expand-toggle" onClick={() => setWide((w) => !w)}>{wide ? 'Réduire' : 'Agrandir le planning'}</button>
-          <button type="button" className="btn" onClick={() => shiftWeek(-1)}>←</button>
-          <button type="button" className="btn" onClick={goToday}>Cette semaine</button>
-          <button type="button" className="btn" onClick={() => shiftWeek(1)}>→</button>
-          <select className="select" value={periodWeeks} onChange={(e) => setPeriodWeeks(Number(e.target.value) as 1 | 2)}>
-            <option value={1}>1 semaine</option>
-            <option value={2}>2 semaines</option>
-          </select>
+          {view !== 'month' && <button type="button" className="btn plan-expand-toggle" onClick={() => setWide((w) => !w)}>{wide ? 'Réduire' : 'Agrandir le planning'}</button>}
+          <button type="button" className="btn" onClick={() => (view === 'month' ? shiftMonth(-1) : shiftWeek(-1))}>←</button>
+          <button type="button" className="btn" onClick={() => (view === 'month' ? goTodayMonth() : goToday())}>{view === 'month' ? "Aujourd'hui" : 'Cette semaine'}</button>
+          <button type="button" className="btn" onClick={() => (view === 'month' ? shiftMonth(1) : shiftWeek(1))}>→</button>
+          {view !== 'month' && (
+            <select className="select" value={periodWeeks} onChange={(e) => setPeriodWeeks(Number(e.target.value) as 1 | 2)}>
+              <option value={1}>1 semaine</option>
+              <option value={2}>2 semaines</option>
+            </select>
+          )}
         </div>
       </div>
 
       <div className="plan-filters">
-        <label className="plan-search">
-          <Search size={16} strokeWidth={2} />
-          <input placeholder="Rechercher une personne ou une ressource" value={search} onChange={(e) => setSearch(e.target.value)} />
-        </label>
+        {view !== 'month' && (
+          <label className="plan-search">
+            <Search size={16} strokeWidth={2} />
+            <input placeholder="Rechercher une personne ou une ressource" value={search} onChange={(e) => setSearch(e.target.value)} />
+          </label>
+        )}
         {view === 'workers' && (
           <select className="select" value={specialtyFilter} onChange={(e) => setSpecialtyFilter(e.target.value)}>
             <option value="">Tous</option>
@@ -301,7 +335,50 @@ export default function PlanningPage() {
         </label>
       </div>
 
-      {loading && !evData ? <div className="empty">Chargement…</div> : (
+      {loading && !evData ? <div className="empty">Chargement…</div> : view === 'month' ? (
+        <section className="plan-board plan-month-board">
+          <div className="plan-month-weekdays">
+            {['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map((d) => <div key={d}>{d}</div>)}
+          </div>
+          <div className="plan-month-grid">
+            {monthDays.map((d) => {
+              const ds = toDateInput(d);
+              const outside = d.getMonth() !== monthAnchor.getMonth();
+              const isToday = sameDate(ds, toDateInput(new Date()));
+              const dayEvents = eventsFor(ds, (e) => !worksiteFilter || e.worksite.id === worksiteFilter)
+                .sort((a, b) => a.startAt.localeCompare(b.startAt));
+              const shown = dayEvents.slice(0, 3);
+              const extra = dayEvents.length - shown.length;
+              return (
+                <div
+                  key={ds}
+                  className={`plan-month-day${outside ? ' outside' : ''}${sameDate(ds, trackedDay) ? ' selected-day' : ''}${isToday ? ' today' : ''}`}
+                  onClick={() => selectTrackedDay(ds)}
+                >
+                  <div className="plan-month-daynum">{isToday ? <span className="plan-month-today-dot">{d.getDate()}</span> : d.getDate()}</div>
+                  <div className="plan-month-events">
+                    {shown.map((e) => (
+                      <button
+                        key={e.id}
+                        type="button"
+                        className={`plan-month-chip tone-${toneFor(e.worksite.id)}${e.status === 'tentative' ? ' tentative' : ''}`}
+                        onClick={(ev) => { ev.stopPropagation(); setDetailEv(e); }}
+                      >
+                        <span className="tm">{hhmm(e.startAt)}</span> {e.worksite.ref}
+                      </button>
+                    ))}
+                    {extra > 0 && (
+                      <button type="button" className="plan-month-more" onClick={(ev) => { ev.stopPropagation(); setDayAgenda(ds); }}>
+                        +{extra} de plus
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ) : (
         <section className="plan-board">
           <div className="plan-grid-scroll">
             <table className="plan-grid">
@@ -448,6 +525,19 @@ export default function PlanningPage() {
           onClose={() => setAbsenceModal(null)}
           onSaved={() => { setAbsenceModal(null); reloadAll(); }}
         />
+      )}
+      {dayAgenda && (
+        <div className="modal-scrim" onClick={() => setDayAgenda(null)}>
+          <div className="modal" style={{ maxWidth: 420 }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <h2>{new Date(`${dayAgenda}T00:00:00`).toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' })}</h2>
+              <button className="btn ghost" onClick={() => setDayAgenda(null)} aria-label="Fermer">✕</button>
+            </div>
+            <div className="modal-body" style={{ display: 'block', maxHeight: '72vh', overflowY: 'auto' }}>
+              {renderChips(dayAgenda, eventsFor(dayAgenda, (e) => !worksiteFilter || e.worksite.id === worksiteFilter).sort((a, b) => a.startAt.localeCompare(b.startAt)))}
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

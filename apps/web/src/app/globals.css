@@ -933,6 +933,50 @@ p { margin: 0; }
 .plan-legend { display: flex; flex-wrap: wrap; gap: 1.2rem; padding: 1rem 0; color: var(--ink-3); font-size: 0.72rem; line-height: 1.6; }
 .plan-dashed-key { border-bottom: 1px dashed var(--ink-3); }
 
+/* -------------------------------------------------------- planning — vue mensuelle (agenda) */
+.plan-month-board { padding: 0; overflow: hidden; }
+.plan-month-weekdays {
+  display: grid; grid-template-columns: repeat(7, 1fr); border-bottom: 1px solid var(--line);
+  background: var(--surface-2);
+}
+.plan-month-weekdays div {
+  padding: 0.6rem 0.7rem; font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.04em; color: var(--ink-3);
+}
+.plan-month-grid { display: grid; grid-template-columns: repeat(7, 1fr); }
+.plan-month-day {
+  min-height: 118px; padding: 0.4rem; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line);
+  cursor: pointer; display: flex; flex-direction: column; gap: 0.25rem;
+}
+.plan-month-grid .plan-month-day:nth-child(7n) { border-right: 0; }
+.plan-month-day.outside { background: var(--surface-2); }
+.plan-month-day.outside .plan-month-daynum { color: var(--ink-3); }
+.plan-month-day.selected-day { background: var(--primary-soft); }
+.plan-month-daynum { font-size: 0.82rem; font-weight: 600; color: var(--ink-2); }
+.plan-month-today-dot {
+  display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px;
+  border-radius: 999px; background: var(--primary); color: #fff;
+}
+.plan-month-events { display: flex; flex-direction: column; gap: 3px; min-height: 0; }
+.plan-month-chip {
+  width: 100%; display: block; text-align: left; border: 0; border-left: 3px solid var(--tone-accent, var(--line-strong));
+  border-radius: 4px; padding: 0.2rem 0.4rem; cursor: pointer; font: inherit; font-size: 0.72rem;
+  background: var(--tone-bg, var(--surface-2)); color: var(--tone-fg, var(--ink-2));
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.plan-month-chip.tentative { border-left-style: dashed; }
+.plan-month-chip .tm { font-weight: 700; margin-right: 0.3rem; }
+.plan-month-more {
+  border: 0; background: none; color: var(--ink-3); font-size: 0.7rem; text-align: left; padding: 0.1rem 0.4rem;
+  cursor: pointer; font: inherit;
+}
+.plan-month-more:hover { color: var(--primary); }
+@media (max-width: 900px) {
+  .plan-month-weekdays div { font-size: 0.62rem; padding: 0.4rem 0.3rem; }
+  .plan-month-day { min-height: 84px; padding: 0.25rem; }
+  .plan-month-chip { font-size: 0.62rem; }
+}
+
 /* détail d'une affectation (popup lecture) */
 .plan-detail-heading { border-bottom: 1px solid var(--line); padding-bottom: 1.1rem; }
 .plan-detail-section { margin-top: 1.3rem; }

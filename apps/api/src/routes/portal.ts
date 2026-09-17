@@ -3,8 +3,10 @@ import path from 'node:path';
 import { createReadStream, existsSync } from 'node:fs';
 import { nanoid } from 'nanoid';
 import { z } from 'zod';
+import multer from 'multer';
 import {
   WORKSITE_STATUS_LABEL, WORKSITE_PRIORITY_LABEL, DOC_KIND_LABEL, WORKSITE_PROGRESS_PCT,
+  INTERVENTION_PROBLEM_TYPES, INTERVENTION_PROBLEM_TYPE_LABEL,
   type WorksiteStatus, type WorksitePriority,
 } from '@jjd/shared';
 import { prisma } from '../db.js';
@@ -12,7 +14,9 @@ import { env } from '../env.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { sendMail } from '../lib/mail.js';
 import { attachPortalUser, requirePortal, signPortalToken, worksiteScope, buildingScope, portalFull, type PortalUser } from '../lib/portal.js';
-import { UPLOADS_DIR } from '../lib/media.js';
+import { UPLOADS_DIR, storeImage } from '../lib/media.js';
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 
 export const portalRouter = Router();
 portalRouter.use(attachPortalUser);
@@ -640,6 +644,20 @@ portalRouter.post('/quotes/:id/decline', requirePortal, asyncHandler((req, res) 
 
 /* ----------------------------------------------- demande de nouvelle intervention */
 
+/** Upload d'une photo pendant le parcours "Nouvelle demande" (étape Problème) — l'opportunité
+ *  n'existe pas encore à ce stade, donc pas d'attache immédiate : le client reçoit juste
+ *  l'URL, à renvoyer dans la liste `photos` du POST /requests final. */
+portalRouter.post(
+  '/requests/photos',
+  requirePortal,
+  upload.single('file'),
+  asyncHandler(async (req, res) => {
+    if (!req.file) throw new HttpError(422, 'Aucun fichier');
+    const img = await storeImage(req.file.buffer);
+    res.status(201).json({ url: img.url, thumbUrl: img.thumbUrl });
+  }),
+);
+
 portalRouter.post(
   '/requests',
   requirePortal,
@@ -648,8 +666,15 @@ portalRouter.post(
     const input = z.object({
       title: z.string().trim().min(3),
       buildingId: z.string().nullish(),
+      unitLabel: z.string().trim().nullish(),
       details: z.string().trim().nullish(),
       urgent: z.boolean().default(false),
+      problemType: z.enum(INTERVENTION_PROBLEM_TYPES).nullish(),
+      onSiteContactName: z.string().trim().nullish(),
+      onSiteContactPhone: z.string().trim().nullish(),
+      accessNotes: z.string().trim().nullish(),
+      visitPreference: z.string().trim().nullish(),
+      photos: z.array(z.object({ url: z.string(), thumbUrl: z.string().nullish() })).default([]),
     }).parse(req.body);
 
     const opp = await prisma.crmOpportunity.create({
@@ -662,12 +687,32 @@ portalRouter.post(
         nextActionOn: new Date(),
         nextActionNote: input.urgent ? 'Demande client — URGENT' : 'Demande client (portail)',
         note: input.details ?? null,
+        problemType: input.problemType ?? null,
+        unitLabel: input.unitLabel ?? null,
+        urgent: input.urgent,
+        onSiteContactName: input.onSiteContactName ?? null,
+        onSiteContactPhone: input.onSiteContactPhone ?? null,
+        accessNotes: input.accessNotes ?? null,
+        visitPreference: input.visitPreference ?? null,
+        photos: { create: input.photos.map((p) => ({ url: p.url, thumbUrl: p.thumbUrl ?? null })) },
       },
     });
     await sendMail(
       'info@jjd-consult.be',
       `Nouvelle demande — ${u.label}`,
-      `${u.label} a déposé une demande via le portail :\n\n${input.title}\n${input.details ?? ''}\n${input.urgent ? '\n⚠️ URGENT' : ''}`,
+      [
+        `${u.label} a déposé une demande via le portail :`,
+        '',
+        input.title,
+        input.problemType ? `Type : ${INTERVENTION_PROBLEM_TYPE_LABEL[input.problemType]}` : null,
+        input.unitLabel ? `Lot / zone : ${input.unitLabel}` : null,
+        input.details ?? null,
+        input.onSiteContactName ? `Contact sur place : ${input.onSiteContactName}${input.onSiteContactPhone ? ` (${input.onSiteContactPhone})` : ''}` : null,
+        input.accessNotes ? `Accès : ${input.accessNotes}` : null,
+        input.visitPreference ? `Préférence de passage : ${input.visitPreference}` : null,
+        input.photos.length ? `${input.photos.length} photo(s) jointe(s)` : null,
+        input.urgent ? '\n⚠️ URGENT' : null,
+      ].filter(Boolean).join('\n'),
     );
     res.status(201).json({ id: opp.id });
   }),

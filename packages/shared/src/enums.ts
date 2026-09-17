@@ -225,6 +225,22 @@ export const CRM_LOST_REASON_LABEL: Record<CrmLostReason, string> = {
   autre: 'Autre',
 };
 
+/** Type de problème d'une demande d'intervention (portail, étape 2 du parcours). */
+export const INTERVENTION_PROBLEM_TYPES = [
+  'fuite', 'electricite', 'chauffage', 'porte', 'peinture', 'toiture', 'autre',
+] as const;
+export type InterventionProblemType = (typeof INTERVENTION_PROBLEM_TYPES)[number];
+
+export const INTERVENTION_PROBLEM_TYPE_LABEL: Record<InterventionProblemType, string> = {
+  fuite: 'Fuite',
+  electricite: 'Électricité',
+  chauffage: 'Chauffage',
+  porte: 'Porte',
+  peinture: 'Peinture',
+  toiture: 'Toiture',
+  autre: 'Autre',
+};
+
 /* ---------------------------------------------------- Contacts & fournisseurs */
 
 export const CONTACT_TYPES = ['client', 'supplier', 'both'] as const;

@@ -18,6 +18,7 @@ crmRouter.get(
         contact: { select: { id: true, name: true } },
         acp: { select: { id: true, name: true } },
         owner: { select: { id: true, email: true } },
+        photos: { select: { id: true, url: true, thumbUrl: true }, orderBy: { createdAt: 'asc' } },
       },
     });
     const columns = CRM_STAGES.filter((s) => s !== 'won' && s !== 'lost').map((stage) => ({
@@ -47,7 +48,9 @@ crmRouter.post(
   '/',
   requireAuth(...STAFF),
   asyncHandler(async (req, res) => {
-    const data = crmOpportunityInput.parse(req.body);
+    // les photos d'une demande se déposent uniquement via le parcours portail
+    // (POST /api/portal/requests) — jamais recréées/écrasées depuis cette route bureau
+    const { photos: _photos, ...data } = crmOpportunityInput.parse(req.body);
     const opp = await prisma.crmOpportunity.create({
       data: { ...data, ownerId: req.user!.id },
     });
@@ -59,7 +62,7 @@ crmRouter.patch(
   '/:id',
   requireAuth(...STAFF),
   asyncHandler(async (req, res) => {
-    const data = crmOpportunityInput.partial().parse(req.body);
+    const { photos: _photos, ...data } = crmOpportunityInput.partial().parse(req.body);
     const opp = await prisma.crmOpportunity.update({ where: { id: req.params.id }, data });
     res.json({ opportunity: opp });
   }),

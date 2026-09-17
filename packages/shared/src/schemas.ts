@@ -2,7 +2,7 @@ import { z } from 'zod';
 import {
   PERSON_ROLES, ENTITIES, WORKSITE_STATUSES, WORKSITE_PRIORITIES, WORKSITE_SCOPES, WORKSITE_BILLING_MODES,
   WORKSITE_REQUEST_KINDS, WORKSITE_BILLING_CADENCES, WORKSITE_CONTACT_ROLES, WORKSITE_CONTACT_FOR,
-  CRM_STAGES, CRM_LOST_REASONS,
+  CRM_STAGES, CRM_LOST_REASONS, INTERVENTION_PROBLEM_TYPES,
   CONTACT_TYPES, CLIENT_KINDS, WORKER_CONTRACT_TYPES, LEGAL_DOC_TYPES, VEHICLE_DOC_TYPES,
   BUILDING_CONTACT_ROLES, OCCUPANT_KINDS, VEHICLE_STATUSES, ADJUSTMENT_TYPES,
   PLANNING_EVENT_STATUSES, ABSENCE_KINDS,
@@ -181,6 +181,14 @@ export const crmOpportunityInput = z.object({
   nextActionNote: z.string().trim().nullish(),
   lostReason: z.enum(CRM_LOST_REASONS).nullish(),
   note: z.string().nullish(),
+  problemType: z.enum(INTERVENTION_PROBLEM_TYPES).nullish(),
+  unitLabel: z.string().trim().nullish(),
+  urgent: z.boolean().default(false),
+  onSiteContactName: z.string().trim().nullish(),
+  onSiteContactPhone: z.string().trim().nullish(),
+  accessNotes: z.string().trim().nullish(),
+  visitPreference: z.string().trim().nullish(),
+  photos: z.array(z.object({ url: z.string(), thumbUrl: z.string().nullish() })).default([]),
 });
 
 export const planningEventInput = z.object({

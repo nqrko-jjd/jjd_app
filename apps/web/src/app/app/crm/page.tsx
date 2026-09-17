@@ -5,7 +5,7 @@ import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { PageHead, Money, formatDateBE, stageLabel } from '@/lib/ui';
 import { FormModal, type FieldDef } from '@/components/FormModal';
-import { CRM_STAGES } from '@jjd/shared';
+import { CRM_STAGES, INTERVENTION_PROBLEM_TYPES, INTERVENTION_PROBLEM_TYPE_LABEL } from '@jjd/shared';
 import { Plus } from 'lucide-react';
 
 const CRM_SOURCE_OPTIONS = [
@@ -21,6 +21,11 @@ interface Opp {
   source: string | null; nextActionOn: string | null; nextActionNote: string | null;
   contact: { name: string } | null;
   acp: { name: string } | null;
+  problemType: string | null; unitLabel: string | null; urgent: boolean;
+  onSiteContactName: string | null; onSiteContactPhone: string | null;
+  accessNotes: string | null; visitPreference: string | null;
+  note: string | null;
+  photos: { id: string; url: string; thumbUrl: string | null }[];
 }
 
 export default function CrmPage() {
@@ -35,6 +40,7 @@ function CrmInner() {
   const sp = useSearchParams();
   const { data, loading, reload } = useApi<{ columns: { stage: string; items: Opp[] }[] }>('/api/crm');
   const [creating, setCreating] = useState(sp.get('new') === '1');
+  const [editing, setEditing] = useState<Opp | null>(null);
 
   async function move(id: string, stage: string) {
     await api(`/api/crm/${id}`, { method: 'PATCH', body: { stage } });
@@ -53,6 +59,13 @@ function CrmInner() {
     { name: 'nextActionOn', label: 'Date de prochaine action', type: 'date' },
     { name: 'nextActionNote', label: 'Prochaine action', placeholder: 'ex. Rappeler pour confirmer le rendez-vous' },
     { name: 'note', label: 'Besoin et points à clarifier', type: 'textarea', full: true },
+    { name: 'problemType', label: 'Type de problème', type: 'select', options: INTERVENTION_PROBLEM_TYPES.map((t) => ({ value: t, label: INTERVENTION_PROBLEM_TYPE_LABEL[t] })) },
+    { name: 'unitLabel', label: 'Lot / appartement / zone' },
+    { name: 'urgent', label: 'Urgent', type: 'checkbox' },
+    { name: 'onSiteContactName', label: 'Contact sur place' },
+    { name: 'onSiteContactPhone', label: 'Téléphone sur place' },
+    { name: 'accessNotes', label: 'Consignes d’accès', type: 'textarea' },
+    { name: 'visitPreference', label: 'Préférence de passage' },
   ];
 
   return (
@@ -75,6 +88,18 @@ function CrmInner() {
           }}
         />
       )}
+      {editing && (
+        <FormModal
+          title={editing.title}
+          fields={oppFields}
+          initial={editing as unknown as Record<string, unknown>}
+          onClose={() => setEditing(null)}
+          onSubmit={async (v) => {
+            await api(`/api/crm/${editing.id}`, { method: 'PATCH', body: v });
+            reload();
+          }}
+        />
+      )}
       {loading && <div className="empty">Chargement…</div>}
       {data && (
         <div className="kanban">
@@ -88,20 +113,40 @@ function CrmInner() {
                 const idx = stages.indexOf(col.stage as (typeof stages)[number]);
                 const overdue = o.nextActionOn && new Date(o.nextActionOn).getTime() < Date.now();
                 return (
-                  <div key={o.id} className="kanban-card">
+                  <div key={o.id} className="kanban-card" style={{ cursor: 'pointer' }} onClick={() => setEditing(o)}>
                     {(o.contact?.name ?? o.acp?.name) && <div className="eyebrow-mini">{o.contact?.name ?? o.acp?.name}</div>}
                     <div className="title">{o.title}</div>
+                    {(o.urgent || o.problemType || o.unitLabel) && (
+                      <div className="row" style={{ gap: '0.3rem', flexWrap: 'wrap', marginTop: '0.3rem' }}>
+                        {o.urgent && <span className="badge crit" style={{ fontSize: '0.68rem' }}>Urgent</span>}
+                        {o.problemType && (
+                          <span className="badge" style={{ fontSize: '0.68rem' }}>
+                            {INTERVENTION_PROBLEM_TYPE_LABEL[o.problemType as keyof typeof INTERVENTION_PROBLEM_TYPE_LABEL] ?? o.problemType}
+                          </span>
+                        )}
+                        {o.unitLabel && <span className="badge" style={{ fontSize: '0.68rem' }}>{o.unitLabel}</span>}
+                      </div>
+                    )}
                     {o.estimatedValue != null && <div className="amount"><Money value={o.estimatedValue} /></div>}
                     {o.nextActionOn && (
                       <div className={overdue ? 'badge crit' : 'badge'} style={{ marginTop: '0.4rem', fontSize: '0.7rem' }}>
                         {formatDateBE(o.nextActionOn)}{o.nextActionNote ? ` · ${o.nextActionNote}` : ''}
                       </div>
                     )}
+                    {o.photos.length > 0 && (
+                      <div className="row" style={{ gap: '0.3rem', marginTop: '0.4rem' }}>
+                        {o.photos.slice(0, 3).map((p) => (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img key={p.id} src={p.thumbUrl ?? p.url} alt="" style={{ width: 30, height: 30, borderRadius: 6, objectFit: 'cover', border: '1px solid var(--line)' }} />
+                        ))}
+                        {o.photos.length > 3 && <span className="muted" style={{ fontSize: '0.72rem', alignSelf: 'center' }}>+{o.photos.length - 3}</span>}
+                      </div>
+                    )}
                     <div className="row" style={{ marginTop: '0.5rem', gap: '0.3rem' }}>
-                      {idx > 0 && <button className="btn" style={{ padding: '0.2rem 0.4rem', fontSize: '0.75rem' }} onClick={() => move(o.id, stages[idx - 1]!)}>←</button>}
-                      {idx < stages.length - 1 && <button className="btn" style={{ padding: '0.2rem 0.4rem', fontSize: '0.75rem' }} onClick={() => move(o.id, stages[idx + 1]!)}>→</button>}
-                      <button className="btn" style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }} onClick={() => move(o.id, 'won')}>Gagné</button>
-                      <button className="btn" style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }} onClick={() => move(o.id, 'lost')}>Perdu</button>
+                      {idx > 0 && <button className="btn" style={{ padding: '0.2rem 0.4rem', fontSize: '0.75rem' }} onClick={(e) => { e.stopPropagation(); move(o.id, stages[idx - 1]!); }}>←</button>}
+                      {idx < stages.length - 1 && <button className="btn" style={{ padding: '0.2rem 0.4rem', fontSize: '0.75rem' }} onClick={(e) => { e.stopPropagation(); move(o.id, stages[idx + 1]!); }}>→</button>}
+                      <button className="btn" style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }} onClick={(e) => { e.stopPropagation(); move(o.id, 'won'); }}>Gagné</button>
+                      <button className="btn" style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }} onClick={(e) => { e.stopPropagation(); move(o.id, 'lost'); }}>Perdu</button>
                     </div>
                   </div>
                 );

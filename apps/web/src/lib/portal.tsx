@@ -28,6 +28,16 @@ export async function portalApi<T = unknown>(path: string, opts: { method?: stri
   return data as T;
 }
 
+/** Upload multipart (ex. photo jointe à une demande d'intervention). */
+export async function portalUpload<T = unknown>(path: string, form: FormData): Promise<T> {
+  const t = tok();
+  const res = await fetch(`${BASE}${path}`, { method: 'POST', headers: t ? { authorization: `Bearer ${t}` } : {}, body: form });
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : null;
+  if (!res.ok) throw new Error(data?.error ?? `Erreur ${res.status}`);
+  return data as T;
+}
+
 /** PDF authentifié -> URL blob (à ouvrir dans un nouvel onglet). */
 export async function portalBlobUrl(path: string): Promise<string> {
   const t = tok();

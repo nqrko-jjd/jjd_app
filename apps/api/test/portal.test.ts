@@ -115,6 +115,66 @@ test('portail : planning limité à 2 semaines (pas 6) et plafonné en nombre', 
   }
 });
 
+test('portail : nouvelle demande d’intervention (parcours 4 étapes) — photo puis création complète', async () => {
+  const PNG = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+    'base64',
+  );
+  const form = new FormData();
+  form.append('file', new Blob([PNG], { type: 'image/png' }), 'p.png');
+  const up = await fetch(`${base}/api/portal/requests/photos`, { method: 'POST', headers: auth(), body: form });
+  assert.equal(up.status, 201);
+  const photo = await up.json() as { url: string; thumbUrl: string | null };
+  assert.ok(photo.url);
+
+  const r = await fetch(`${base}/api/portal/requests`, {
+    method: 'POST',
+    headers: { ...auth(), 'content-type': 'application/json' },
+    body: JSON.stringify({
+      title: 'Fuite test portail',
+      problemType: 'fuite',
+      unitLabel: 'Lot 4B',
+      details: 'Ça coule sous l’évier',
+      urgent: true,
+      onSiteContactName: 'Mme Test',
+      onSiteContactPhone: '0470000000',
+      accessNotes: 'Code 1234',
+      visitPreference: 'Matinée',
+      photos: [photo],
+    }),
+  });
+  assert.equal(r.status, 201);
+  const { id } = await r.json();
+
+  const opp = await prisma.crmOpportunity.findUnique({ where: { id }, include: { photos: true } });
+  assert.equal(opp?.problemType, 'fuite');
+  assert.equal(opp?.unitLabel, 'Lot 4B');
+  assert.equal(opp?.urgent, true);
+  assert.equal(opp?.onSiteContactName, 'Mme Test');
+  assert.equal(opp?.accessNotes, 'Code 1234');
+  assert.equal(opp?.visitPreference, 'Matinée');
+  assert.equal(opp?.photos.length, 1);
+  assert.equal(opp?.photos[0]?.url, photo.url);
+
+  // le bureau peut ensuite éditer/déplacer l'opportunité (PATCH /api/crm/:id) sans que ça
+  // supprime les photos déposées par le client (photos exclue du spread vers Prisma)
+  const staffLogin = await fetch(`${base}/api/auth/login`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email: 'david@jjd-consult.be', password: 'jjd' }),
+  });
+  const staffToken = (await staffLogin.json()).token as string;
+  const patch = await fetch(`${base}/api/crm/${id}`, {
+    method: 'PATCH',
+    headers: { authorization: `Bearer ${staffToken}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ stage: 'to_qualify' }),
+  });
+  assert.equal(patch.status, 200);
+  const afterPatch = await prisma.crmOpportunity.findUnique({ where: { id }, include: { photos: true } });
+  assert.equal(afterPatch?.photos.length, 1, 'la photo doit survivre à un PATCH bureau');
+
+  await prisma.crmOpportunity.deleteMany({ where: { id } });
+});
+
 test('portail : liste interventions scoping syndic', async () => {
   const r = await fetch(`${base}/api/portal/interventions?status=open`, { headers: auth() });
   assert.equal(r.status, 200);

@@ -476,11 +476,34 @@ model CrmOpportunity {
   nextActionNote String?
   lostReason     String?
   note           String?
+  // Détails structurés d'une demande d'intervention déposée via le portail (parcours en 4
+  // étapes) — nullable : une opportunité créée manuellement par le bureau n'en a pas besoin.
+  problemType        String? // fuite | electricite | chauffage | porte | peinture | toiture | autre
+  unitLabel          String? // lot / appartement / zone précise
+  urgent             Boolean  @default(false)
+  onSiteContactName  String?
+  onSiteContactPhone String?
+  accessNotes        String?
+  visitPreference    String?
+  photos             OpportunityPhoto[]
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
   @@index([stage])
   @@index([nextActionOn])
+}
+
+/// Photo jointe à une demande d'intervention (déposée via le portail avant même la création
+/// du chantier) — même schéma que ReportPhoto.
+model OpportunityPhoto {
+  id            String         @id @default(cuid())
+  opportunityId String
+  opportunity   CrmOpportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  url           String
+  thumbUrl      String?
+  createdAt     DateTime       @default(now())
+
+  @@index([opportunityId])
 }
 
 // ─────────────────────────────────────────────────────────── Facturation & compta

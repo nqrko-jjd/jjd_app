@@ -213,6 +213,28 @@ test('parseDocumentText : "N°" mal décodé en U+FFFD par pdftotext (vu sur de 
   assert.equal(r.docNumber, '23380717');
 });
 
+test('parseDocumentText : facture Teknocom — "Montant hors taxes" (sans le mot "total") et "Facture INV/2026/0015" (sans "n°")', () => {
+  // reproduit un vrai cas remonté (import boîte mail) : rien n'était détecté à part le
+  // fournisseur (retrouvé via le n° de TVA) — ni le montant ni le n° de facture
+  const text = [
+    'Montant hors taxes 500,00',
+    'TVA 0% 0,00',
+    'Total 500,00',
+    'JJD Consult',
+    'Date de facturation',
+    '16/09/2026',
+    "Autoliquidation à art. 20 §2 Code TVA",
+    'Facture INV/2026/0015',
+    'TEKNOCOM',
+    'TVA: BE0762793548',
+  ].join('\n');
+  const r = parseDocumentText(text);
+  assert.equal(r.docNumber, 'INV/2026/0015');
+  assert.equal(r.totalHt, 500);
+  assert.equal(r.totalTtc, 500);
+  assert.equal(r.vatRate, 0);
+});
+
 test('parseDocumentText : "Numéro de facture :" (ordre inversé, vu chez ENGIE) — numéro groupé par espaces', () => {
   const text = 'Numéro de client: 2 210 930 194\nNuméro de facture: 709 934 470 024';
   const r = parseDocumentText(text);

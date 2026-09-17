@@ -122,6 +122,10 @@ function findDocNumber(text: string): string | null {
     // ordre inversé "Numéro de facture : …" (vu chez ENGIE) — le numéro peut être groupé par
     // espaces ("709 934 470 024"), tolérés tant qu'ils séparent deux blocs alphanumériques.
     ?? text.match(/num[eé]ro\s*de\s*(?:facture|devis|commande)\s*:?\s*([A-Z0-9](?:[A-Z0-9\-/.]|\s(?=[A-Z0-9]))*[A-Z0-9])/i)
+    // "Facture INV/2026/0015" (outils de facturation SaaS type Teknocom) : pas de "n°" du tout,
+    // juste la référence — repère PREFIXE/ANNÉE/NUMÉRO pour éviter d'attraper une phrase banale
+    // ("Facture jointe", "Facture ci-dessous"…) qui suit aussi le mot "facture".
+    ?? text.match(/\bfacture\s+([A-Z]{2,8}\/\d{4}\/\d{1,6})\b/i)
     // repli le plus permissif (pas de mot-clé "facture/devis" devant) : la seule contrainte
     // (lookahead, ne consomme rien) est qu'il y ait au moins un chiffre dans le jeton — sinon
     // "novembre", "notre", "nombre"… matchent "n[o]" et capturent la suite du mot comme si
@@ -180,6 +184,9 @@ function findTotals(text: string): { ht: number | null; vat: number | null; ttc:
   const htM = text.match(new RegExp(`total${S}h\\.?t\\.?v\\.?a\\.?[^\\d\\n]{0,15}${AMOUNT}`, 'i'))
     ?? text.match(new RegExp(`total${S}\\(?${S}hors${S}tva${S}\\)?[^\\d\\n]{0,15}${AMOUNT}`, 'i'))
     ?? text.match(new RegExp(`total${S}sans${S}tva[^\\d\\n]{0,15}${AMOUNT}`, 'i'))
+    // "Montant hors taxes 500,00" (Teknocom et d'autres outils SaaS de facturation) — variante
+    // sans le mot "total" du tout
+    ?? text.match(new RegExp(`montant${S}hors${S}taxes?[^\\d\\n]{0,15}${AMOUNT}`, 'i'))
     ?? text.match(new RegExp(`totaal${S}excl\\.?${S}btw[^\\d\\n]{0,15}${AMOUNT}`, 'i'));
   // \b après "tva" pour ne pas matcher dans "TVAC" (Total TVAC = le TTC, pas la TVA)
   const vatAmtM = text.match(new RegExp(`total${S}(?:montant${S})?tva\\b[^\\d\\n]{0,15}${AMOUNT}`, 'i'))

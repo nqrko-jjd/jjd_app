@@ -129,6 +129,11 @@ test('une photo interne reste privée tant qu’elle n’est pas partagée', asy
 
   const after1 = await (await fetch(`${base}/api/portal/worksites/${wsId}`, { headers: portalAuth() })).json();
   assert.equal(after1.photos.length, 1);
+
+  // l'onglet "Client" du bureau (Galerie de la Messagerie) doit montrer la même chose
+  // que le portail — une photo interne partagée, même si elle n'a pas audience: 'client'
+  const clientView = await (await fetch(`${base}/api/worksites/${wsId}/thread/client`, { headers: staffAuth() })).json();
+  assert.ok(clientView.messages.some((m: { id: string }) => m.id === msgId));
 });
 
 test('POST /invoice : crée une dépense brouillon "chat" liée au chantier', async () => {

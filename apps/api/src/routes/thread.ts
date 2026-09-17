@@ -257,7 +257,9 @@ threadRouter.get(
     const worksiteId = req.params.worksiteId!;
     const thread = await ensureThread(worksiteId);
     const messages = await prisma.message.findMany({
-      where: { threadId: thread.id, audience: 'client' },
+      // ce que le client voit vraiment dans son portail : les messages qui lui sont
+      // destinés + les photos/vidéos internes explicitement partagées (voir portal.ts)
+      where: { threadId: thread.id, OR: [{ audience: 'client' }, { sharedWithClient: true }] },
       orderBy: { createdAt: 'asc' },
     });
     res.json({ thread, messages });

@@ -1075,6 +1075,13 @@ body.plan-wide .main { max-width: none; }
 .msg-empty p { margin: 0.3rem 0; font-size: 0.88rem; line-height: 1.5; color: var(--ink-2); }
 
 .msg-body { flex: 1; overflow-y: auto; padding: 1.2rem; display: flex; flex-direction: column; gap: 0.65rem; }
+.msg-gallery {
+  flex: 1; overflow-y: auto; padding: 1.2rem; align-content: flex-start;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 0.6rem;
+}
+.msg-gallery img, .msg-gallery video {
+  width: 100%; aspect-ratio: 1 / 1; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); display: block;
+}
 .msg-status { text-align: center; margin: 0.3rem 0; }
 .msg-status span { background: var(--surface-2); border-radius: 999px; padding: 0.25rem 0.7rem; font-size: 0.74rem; color: var(--ink-3); }
 .msg-bubble-row { display: flex; gap: 0.5rem; align-items: flex-end; }

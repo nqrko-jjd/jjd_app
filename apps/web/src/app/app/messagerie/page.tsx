@@ -19,7 +19,7 @@ function refDigits(ref: string | null) {
 }
 interface Msg {
   id: string; kind: string; body: string | null; fileUrl: string | null; thumbUrl: string | null;
-  authorName: string | null; authorId?: string | null; createdAt: string;
+  authorName: string | null; authorId?: string | null; createdAt: string; sharedWithClient?: boolean;
 }
 
 type Audience = 'internal' | 'client';
@@ -53,6 +53,7 @@ function MessagerieInner() {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'all' | 'unread' | 'archived'>('all');
   const [selected, setSelected] = useState<Selection | null>(null);
+  const [tab, setTab] = useState<'chat' | 'gallery'>('chat');
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -82,6 +83,7 @@ function MessagerieInner() {
   const convo = selected?.kind === 'general' ? genData : wsData;
   const reloadConvo = selected?.kind === 'general' ? reloadGen : reloadWs;
   const messages = convo?.messages ?? [];
+  const media = messages.filter((m) => (m.kind === 'photo' || m.kind === 'video') && m.fileUrl);
 
   // rafraîchissement léger — pas de push temps réel, on repasse régulièrement
   useEffect(() => {
@@ -109,6 +111,13 @@ function MessagerieInner() {
 
   function select(it: ThreadItem) {
     setSelected(it.kind === 'general' ? { kind: 'general' } : { kind: 'worksite', worksiteId: it.worksiteId!, threadId: it.id });
+    setTab('chat');
+  }
+
+  async function toggleShare(m: Msg) {
+    if (selected?.kind !== 'worksite') return;
+    await api(`/api/worksites/${selected.worksiteId}/thread/messages/${m.id}/share`, { method: 'PATCH', body: { shared: !m.sharedWithClient } });
+    reloadConvo();
   }
 
   async function send() {
@@ -219,6 +228,45 @@ function MessagerieInner() {
                 )}
               </div>
 
+              <div className="thread-tabs">
+                <button type="button" className={`thread-tab${tab === 'chat' ? ' active' : ''}`} onClick={() => setTab('chat')}>💬 Discussion</button>
+                <button type="button" className={`thread-tab${tab === 'gallery' ? ' active' : ''}`} onClick={() => setTab('gallery')}>
+                  🖼️ Galerie{media.length ? ` (${media.length})` : ''}
+                </button>
+              </div>
+
+              {tab === 'gallery' ? (
+                media.length === 0 ? (
+                  <div className="msg-gallery"><p className="muted">Aucune photo ni vidéo pour l’instant.</p></div>
+                ) : (
+                  <div className="msg-gallery">
+                    {media.map((m) => (
+                      <div key={m.id} style={{ position: 'relative' }}>
+                        <a href={m.fileUrl!} target="_blank" rel="noreferrer" title={`${m.authorName ?? ''} · ${timeFull(m.createdAt)}${m.body ? ` · ${m.body}` : ''}`}>
+                          {m.kind === 'photo' ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={m.thumbUrl ?? m.fileUrl!} alt="" />
+                          ) : (
+                            <video src={m.fileUrl!} preload="metadata" muted />
+                          )}
+                        </a>
+                        {isOffice && audience === 'internal' && (
+                          <button
+                            type="button"
+                            className={`badge ${m.sharedWithClient ? 'ok' : 'plain'}`}
+                            style={{ position: 'absolute', bottom: 4, left: 4, right: 4, fontSize: '0.68rem', cursor: 'pointer' }}
+                            title={m.sharedWithClient ? 'Visible du client — cliquer pour retirer' : 'Partager cette photo avec le client'}
+                            onClick={() => toggleShare(m)}
+                          >
+                            {m.sharedWithClient ? '👤 Partagée' : '👤 Partager'}
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )
+              ) : (
+              <>
               <div className="msg-body">
                 {messages.length === 0 && <p className="muted" style={{ margin: 'auto' }}>Aucun message. Lancez la conversation ci-dessous.</p>}
                 {messages.map((m) => {
@@ -266,6 +314,8 @@ function MessagerieInner() {
                   <Send size={16} strokeWidth={2} />
                 </button>
               </div>
+              </>
+              )}
             </>
           )}
         </section>

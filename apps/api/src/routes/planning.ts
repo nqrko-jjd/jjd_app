@@ -73,7 +73,7 @@ planningRouter.get(
       where,
       orderBy: { startAt: 'asc' },
       include: {
-        worksite: { select: { id: true, ref: true, title: true, city: true, address: true } },
+        worksite: { select: { id: true, ref: true, title: true, city: true, address: true, acp: { select: { photoThumbUrl: true } } } },
         team: { select: { id: true, name: true, color: true } },
         vehicles: { include: { vehicle: { select: { id: true, plate: true, model: true, brand: true, code: true, seats: true } } } },
         assignments: { include: { person: { select: { id: true, displayName: true, firstName: true, phone: true } } } },

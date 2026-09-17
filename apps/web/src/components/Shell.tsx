@@ -26,6 +26,7 @@ const WORKER_NAV: Group[] = [
       { href: '/app/mes-chantiers', label: 'Mes chantiers', ic: Building2 },
       { href: '/app/mes-heures', label: 'Mes heures', ic: ListChecks },
       { href: '/app/materiel', label: 'Matériel', ic: Wrench },
+      { href: '/app/messagerie', label: 'Messagerie', ic: MessageSquare },
     ],
   },
 ];
@@ -168,7 +169,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
         <nav className="bottom-tabs worker">
           {WORKER_NAV[0]!.items.map((i) => (
             <Link key={i.href} href={i.href} className={`bottom-tab${isActive(i.href) ? ' active' : ''}`}>
-              <span className="ic"><i.ic size={20} strokeWidth={2} /></span>
+              <span className="ic">
+                <i.ic size={20} strokeWidth={2} />
+                {i.href === '/app/messagerie' && unreadTotal > 0 && <span className="nav-badge">{unreadTotal}</span>}
+              </span>
               {i.label}
             </Link>
           ))}

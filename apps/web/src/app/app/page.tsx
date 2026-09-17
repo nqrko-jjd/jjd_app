@@ -13,7 +13,7 @@ import { BarChart3, Wallet, Building2, Flag, FileText, Clock } from 'lucide-reac
 
 interface TodayEv {
   id: string; startAt: string; endAt: string;
-  worksite: { id: string; ref: string; title: string; city: string | null };
+  worksite: { id: string; ref: string; title: string; city: string | null; acp: { photoThumbUrl: string | null } | null };
 }
 interface Running { id: string; startedAt: string; worksite: { ref: string; title: string } | null }
 interface TimerResp { running: Running | null; linked?: boolean }
@@ -105,17 +105,25 @@ function WorkerToday() {
       <div className="section-title">Mes chantiers du jour</div>
       {(plan?.items.length ?? 0) === 0 && <div className="card card-pad muted">Rien de planifié aujourd’hui.</div>}
       {plan?.items.map((e) => (
-        <div key={e.id} className="card card-pad" style={{ marginBottom: '0.7rem' }}>
-          <div style={{ fontWeight: 700 }}>{e.worksite.ref} — {e.worksite.title}</div>
-          {e.worksite.city && <div className="muted">{e.worksite.city}</div>}
-          <div className="muted">
-            {new Date(e.startAt).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' })} – {new Date(e.endAt).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' })}
-          </div>
-          <div className="row" style={{ gap: '0.5rem', marginTop: '0.6rem' }}>
-            {linked && !running && (
-              <button className="btn primary" style={{ flex: 1 }} onClick={() => start(e.worksite.id)}>Démarrer le compteur</button>
-            )}
-            <Link href={`/app/fiche/${e.worksite.id}`} className="btn" style={{ flex: 1, textAlign: 'center' }}>Fiche du jour ›</Link>
+        <div key={e.id} className="card" style={{ marginBottom: '0.7rem', overflow: 'hidden' }}>
+          {e.worksite.acp?.photoThumbUrl && (
+            <div style={{ height: 160 }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={e.worksite.acp.photoThumbUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            </div>
+          )}
+          <div className="card-pad">
+            <div style={{ fontWeight: 700 }}>{e.worksite.ref} — {e.worksite.title}</div>
+            {e.worksite.city && <div className="muted">{e.worksite.city}</div>}
+            <div className="muted">
+              {new Date(e.startAt).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' })} – {new Date(e.endAt).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' })}
+            </div>
+            <div className="row" style={{ gap: '0.5rem', marginTop: '0.6rem' }}>
+              {linked && !running && (
+                <button className="btn primary" style={{ flex: 1 }} onClick={() => start(e.worksite.id)}>Démarrer le compteur</button>
+              )}
+              <Link href={`/app/fiche/${e.worksite.id}`} className="btn" style={{ flex: 1, textAlign: 'center' }}>Fiche du jour ›</Link>
+            </div>
           </div>
         </div>
       ))}

@@ -76,7 +76,7 @@ worksitesRouter.get(
         take: pageSize,
         include: {
           client: { select: { id: true, name: true } },
-          acp: { select: { id: true, name: true } },
+          acp: { select: { id: true, name: true, photoThumbUrl: true } },
           manager: { select: { id: true, displayName: true, firstName: true } },
         },
       }),

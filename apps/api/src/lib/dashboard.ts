@@ -52,7 +52,11 @@ export async function bureauDashboard() {
       where: { archived: false, kind: 'project', status: { in: ACTIVE_STATUS }, source: { not: 'demo' } },
       orderBy: { updatedAt: 'desc' },
       take: 12,
-      include: { client: { select: { name: true } }, manager: { select: { displayName: true, firstName: true } } },
+      include: {
+        client: { select: { name: true } },
+        manager: { select: { displayName: true, firstName: true } },
+        acp: { select: { photoThumbUrl: true } },
+      },
     }),
     prisma.crmOpportunity.count({
       where: { stage: { notIn: ['won', 'lost'] }, nextActionOn: { not: null, lte: now } },
@@ -108,6 +112,7 @@ export async function bureauDashboard() {
       status: w.status,
       client: w.client?.name ?? null,
       manager: w.manager?.displayName || w.manager?.firstName || null,
+      photoThumbUrl: w.acp?.photoThumbUrl ?? null,
     })),
     expiringDocs: expiringDocs.map((d) => ({
       id: d.id,

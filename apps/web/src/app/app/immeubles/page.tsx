@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
-import { PageHead } from '@/lib/ui';
+import { PageHead, Avatar } from '@/lib/ui';
 import { FormModal } from '@/components/FormModal';
 import { ViewToggle, useViewMode } from '@/components/ViewToggle';
 import { rowNav } from '@/lib/rowNav';
@@ -61,7 +61,7 @@ export default function ImmeublesPage() {
             <tbody>
               {data.items.map((b) => (
                 <tr key={b.id} className="row-link" onClick={rowNav(`/app/immeubles/${b.id}`, (h) => router.push(h))}>
-                  <td><Link href={`/app/immeubles/${b.id}`}>{b.name}</Link></td>
+                  <td><Avatar src={b.photoThumbUrl} label={b.name} /><Link href={`/app/immeubles/${b.id}`}>{b.name}</Link></td>
                   <td>{b.city ?? '—'}</td>
                   <td>{b.syndic?.name ?? '—'}</td>
                   <td style={{ textAlign: 'right' }} className="tnum">{b._count.worksites || ''}</td>

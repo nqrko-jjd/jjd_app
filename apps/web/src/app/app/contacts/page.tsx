@@ -19,6 +19,7 @@ const CONTACT_TYPE_LABEL: Record<string, string> = { client: 'Client', supplier:
 interface Contact {
   id: string; name: string; type: string; kind: string | null;
   email: string | null; phone: string | null; vat: string | null; city: string | null;
+  photoThumbUrl: string | null;
   syndic: { name: string } | null;
   building: { id: string; name: string } | null;
   _count: { worksites: number };
@@ -157,6 +158,7 @@ function ContactsInner() {
                   onContextMenu={(e) => ctx.open(e, c)}
                 >
                   <td>
+                    <Avatar src={c.photoThumbUrl} label={c.name} />
                     <Link href={`/app/contacts/${c.id}`}>{c.name}</Link>
                     {c.syndic && <div className="muted" style={{ fontSize: '0.78rem' }}>c/o {c.syndic.name}</div>}
                     {c.building && <div className="muted" style={{ fontSize: '0.78rem' }}>ACP : {c.building.name}</div>}

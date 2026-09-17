@@ -317,7 +317,7 @@ interface Dashboard {
     receivableAmount: number; quotesPendingAmount: number; quotesPendingCount: number;
   };
   alerts: { kind: string; severity: string; label: string; count: number; amount?: number; href: string }[];
-  inProgress: { id: string; ref: string; title: string; city: string | null; status: string; client: string | null; manager: string | null }[];
+  inProgress: { id: string; ref: string; title: string; city: string | null; status: string; client: string | null; manager: string | null; photoThumbUrl: string | null }[];
   expiringDocs: { id: string; person: string; type: string; label: string | null; expiresOn: string | null }[];
 }
 
@@ -376,6 +376,7 @@ function InProgressTable({ rows }: { rows: InProgressRow[] }) {
             {sort.rows.map((w) => (
               <tr key={w.id} className="row-link" onClick={rowNav(`/app/chantiers/${w.id}`, (h) => router.push(h))}>
                 <td>
+                  <Avatar src={w.photoThumbUrl} label={w.title} />
                   <Link href={`/app/chantiers/${w.id}`}>{w.title}</Link>
                   <div className="muted" style={{ fontSize: '0.78rem' }}>{w.ref}{w.city ? ` · ${w.city}` : ''}</div>
                 </td>

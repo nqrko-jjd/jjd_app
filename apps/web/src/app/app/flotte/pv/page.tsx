@@ -2,13 +2,13 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
-import { PageHead, Money, formatDateBE } from '@/lib/ui';
+import { PageHead, Money, formatDateBE, Thumb } from '@/lib/ui';
 
 interface Fine {
   id: string; date: string | null; time: string | null; reference: string | null;
   payTo: string | null; type: string | null; amount: number | null; status: string | null;
   plateRaw: string | null;
-  vehicle: { id: string; brand: string | null; model: string | null } | null;
+  vehicle: { id: string; brand: string | null; model: string | null; photoThumbUrl: string | null } | null;
 }
 
 export default function PvPage() {
@@ -40,7 +40,14 @@ export default function PvPage() {
               {data.items.map((f) => (
                 <tr key={f.id}>
                   <td className="tnum">{formatDateBE(f.date)}{f.time ? ` ${f.time}` : ''}</td>
-                  <td>{f.vehicle ? <Link href={`/app/flotte/${f.vehicle.id}`}>{[f.vehicle.brand, f.vehicle.model].filter(Boolean).join(' ')}</Link> : (f.plateRaw ?? '—')}</td>
+                  <td>
+                    {f.vehicle ? (
+                      <>
+                        <Thumb src={f.vehicle.photoThumbUrl} size={28} />
+                        <Link href={`/app/flotte/${f.vehicle.id}`}>{[f.vehicle.brand, f.vehicle.model].filter(Boolean).join(' ')}</Link>
+                      </>
+                    ) : (f.plateRaw ?? '—')}
+                  </td>
                   <td>{f.type ?? '—'}</td>
                   <td>{f.payTo ?? '—'}</td>
                   <td className="mono" style={{ fontSize: '0.78rem' }}>{f.reference ?? '—'}</td>

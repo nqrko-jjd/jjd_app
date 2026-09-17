@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
-import { PageHead, StatusBadge, Money, ProgressCell } from '@/lib/ui';
+import { PageHead, StatusBadge, Money, ProgressCell, Avatar } from '@/lib/ui';
 import { NewWorksiteWizard } from '@/components/NewWorksiteWizard';
 import { ContextMenu, useContextMenu, openActions, type MenuItem } from '@/components/ContextMenu';
 import { PaginationBar } from '@/components/PaginationBar';
@@ -31,6 +31,7 @@ interface WS {
   city: string | null; quotedHt: number | null; endedOn: string | null;
   client: { name: string } | null;
   manager: { displayName: string | null; firstName: string } | null;
+  building: { photoThumbUrl: string | null } | null;
 }
 
 export default function ChantiersPage() {
@@ -239,6 +240,7 @@ function ChantiersInner() {
                     <input type="checkbox" checked={selected.has(w.id)} onChange={() => toggleSelected(w.id)} aria-label="Sélectionner" />
                   </td>
                   <td>
+                    <Avatar src={w.building?.photoThumbUrl} label={w.title} />
                     <Link href={`/app/chantiers/${w.id}`}>{w.title}</Link>
                     <div className="muted" style={{ fontSize: '0.78rem' }}>
                       {w.ref}{w.client?.name ? ` · ${w.client.name}` : ''}{w.city ? ` · ${w.city}` : ''}

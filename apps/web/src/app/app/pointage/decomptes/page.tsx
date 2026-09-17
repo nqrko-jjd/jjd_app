@@ -3,13 +3,13 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
-import { PageHead, Money, Kpi, formatEur } from '@/lib/ui';
+import { PageHead, Money, Kpi, formatEur, Avatar } from '@/lib/ui';
 import { formatHours, WORKER_CONTRACT_LABEL } from '@jjd/shared';
 import { Wallet, Users, Clock, AlertTriangle } from 'lucide-react';
 
 interface Team {
   year: number; month: number; totalAmount: number; totalNetAmount: number;
-  rows: { personId: string; name: string; contractType: string; hourlyRate: number | null; hours: number; amount: number; toWithhold: number; netAmount: number; pending: number }[];
+  rows: { personId: string; name: string; photoThumbUrl: string | null; contractType: string; hourlyRate: number | null; hours: number; amount: number; toWithhold: number; netAmount: number; pending: number }[];
 }
 interface Detail {
   totalHours: number; totalAmount: number;
@@ -120,7 +120,7 @@ function FragmentRow({
     <>
       <tr onClick={onToggle} style={{ cursor: 'pointer' }}>
         <td style={{ width: 24, color: 'var(--ink-3)' }}>{open ? '▾' : '▸'}</td>
-        <td><Link href={`/app/equipe/${r.personId}`} onClick={(e) => e.stopPropagation()}>{r.name}</Link></td>
+        <td><Avatar src={r.photoThumbUrl} label={r.name} /><Link href={`/app/equipe/${r.personId}`} onClick={(e) => e.stopPropagation()}>{r.name}</Link></td>
         <td>{WORKER_CONTRACT_LABEL[r.contractType as keyof typeof WORKER_CONTRACT_LABEL] ?? r.contractType}</td>
         <td style={{ textAlign: 'right' }}>{r.hourlyRate != null ? <Money value={r.hourlyRate} /> : '—'}</td>
         <td style={{ textAlign: 'right' }} className="tnum">{formatHours(r.hours)}</td>

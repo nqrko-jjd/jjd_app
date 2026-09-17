@@ -312,7 +312,7 @@ timesheetRouter.get(
       where,
       orderBy: { date: 'asc' },
       include: {
-        person: { select: { displayName: true, firstName: true } },
+        person: { select: { displayName: true, firstName: true, photoThumbUrl: true } },
         worksite: { select: { ref: true, title: true } },
       },
       take: 300,

@@ -98,6 +98,7 @@ export async function teamMonthlyStatement(year: number, month: number) {
     rows.push({
       personId: p.id,
       name: p.displayName || `${p.firstName} ${p.lastName ?? ''}`.trim(),
+      photoThumbUrl: p.photoThumbUrl,
       contractType: p.contractType,
       hourlyRate: p.hourlyRate,
       hours: s.totalHours,

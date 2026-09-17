@@ -393,7 +393,7 @@ vehiclesRouter.get(
       where: unpaidOnly ? { OR: [{ status: null }, { status: { not: 'Payé' } }] } : {},
       orderBy: { date: 'desc' },
       take: 500,
-      include: { vehicle: { select: { id: true, brand: true, model: true, plate: true } } },
+      include: { vehicle: { select: { id: true, brand: true, model: true, plate: true, photoThumbUrl: true } } },
     });
     res.json({ items });
   }),

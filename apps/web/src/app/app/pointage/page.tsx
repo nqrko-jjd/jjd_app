@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
-import { PageHead, Money, formatDateBE, Kpi } from '@/lib/ui';
+import { PageHead, Money, formatDateBE, Kpi, Avatar } from '@/lib/ui';
 import { Clock, ClipboardCheck, Building2, Euro, AlertTriangle } from 'lucide-react';
 import { ComboBox } from '@/components/ComboBox';
 import { formatHours } from '@jjd/shared';
@@ -18,7 +18,7 @@ function toDateInput(d: Date) { return `${d.getFullYear()}-${String(d.getMonth()
 interface Pending {
   id: string; date: string | null; hours: number | null; amount: number | null; task: string | null;
   geoFlag: boolean; geoDistance: number | null; startLat: number | null; startLng: number | null;
-  person: { displayName: string | null; firstName: string };
+  person: { displayName: string | null; firstName: string; photoThumbUrl: string | null };
   worksite: { ref: string; title: string } | null;
 }
 
@@ -100,7 +100,8 @@ export default function PointagePage() {
 
       {[...byPerson.entries()].map(([name, entries]) => (
         <div key={name} style={{ marginBottom: '1.3rem' }}>
-          <div className="section-title">
+          <div className="section-title" style={{ display: 'flex', alignItems: 'center' }}>
+            <Avatar src={entries[0]!.person.photoThumbUrl} label={name} />
             {name} <span className="hint">{entries.length} · {formatHours(entries.reduce((a, e) => a + (e.hours ?? 0), 0))} · <Money value={entries.reduce((a, e) => a + (e.amount ?? 0), 0)} /></span>
           </div>
           <div className="tbl-wrap">

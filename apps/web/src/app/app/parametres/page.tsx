@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { PageHead, Money, formatDateBE } from '@/lib/ui';
+import { PageHead, Money, formatDateBE, Avatar } from '@/lib/ui';
 import type { Company } from '@/lib/doc-ui';
 import { VAT_RATES, ROLES, ROLE_LABEL, INTERNAL_ROLES } from '@jjd/shared';
 import { AddressAutocomplete } from '@/components/AddressAutocomplete';
@@ -40,6 +40,7 @@ export default function ParametresPage() {
 interface UserRow {
   id: string; email: string; role: string; active: boolean; portalAccess: string;
   lastLoginAt: string | null; label: string; link: string | null; personId: string | null;
+  photoThumbUrl: string | null;
 }
 
 function UsersTab() {
@@ -120,7 +121,10 @@ function UsersTab() {
           <tbody>
             {data.items.map((u) => (
               <tr key={u.id}>
-                <td>{u.link ? <a href={u.link}>{u.label}</a> : u.label}</td>
+                <td>
+                  <Avatar src={u.photoThumbUrl} label={u.label} />
+                  {u.link ? <a href={u.link}>{u.label}</a> : u.label}
+                </td>
                 <td className="muted" style={{ fontSize: '0.85rem' }}>{u.email}</td>
                 <td>
                   <select className="select" value={u.role} onChange={(e) => setRole(u.id, e.target.value)}>

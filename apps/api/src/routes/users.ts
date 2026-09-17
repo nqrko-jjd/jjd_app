@@ -28,8 +28,8 @@ usersRouter.get(
     const users = await prisma.user.findMany({
       orderBy: { createdAt: 'desc' },
       include: {
-        person: { select: { id: true, firstName: true, lastName: true, displayName: true } },
-        contact: { select: { id: true, name: true } },
+        person: { select: { id: true, firstName: true, lastName: true, displayName: true, photoThumbUrl: true } },
+        contact: { select: { id: true, name: true, photoThumbUrl: true } },
         syndic: { select: { id: true, name: true } },
         residentOf: { select: { id: true, name: true } },
       },
@@ -44,6 +44,7 @@ usersRouter.get(
         lastLoginAt: u.lastLoginAt,
         createdAt: u.createdAt,
         label: label(u),
+        photoThumbUrl: u.person?.photoThumbUrl ?? u.contact?.photoThumbUrl ?? null,
         personId: u.person?.id ?? null,
         link: u.person ? `/app/equipe/${u.person.id}` : u.contact ? `/app/contacts/${u.contact.id}` : u.residentOf ? `/app/immeubles/${u.residentOf.id}` : null,
       })),

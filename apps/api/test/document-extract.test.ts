@@ -163,6 +163,56 @@ test('parseDocumentText : facture Apok — "Montant de vente(À payer)" prime su
   assert.equal(r.vatRate, 0.21, 'taux avec décimales ("21,00%") reconnu');
 });
 
+test('parseDocumentText : facture Cebeo — pas de libellé "Total TTC/HTVA", juste un récap "% NET TAXABLE TVA" en fin de document', () => {
+  // reproduit un vrai cas remonté (import boîte mail) : ni le HT ni le TTC n'étaient détectés,
+  // faute de libellé classique — seul un tableau récapitulatif sans en-tête "Total" donne les
+  // montants, suivi du grand total seul sur sa ligne ("107,73 EUR")
+  const text = [
+    'CEBEO N.V. / S.A.',
+    'FACTURE N° 23380717 DATE FA 3/09/25 ECHEANCE DU 3/09/25',
+    '001 595 MN24018WSCCT UNI-BRIGHT MOON CCT + SENSOR 18W 240mm WHI Pc 1 89,0239 89,02 21,00',
+    '% NET TAXABLE TVA',
+    '21,00% 89,03 89,03 18,70',
+    '89,03 89,03 18,70',
+    '107,73 EUR',
+  ].join('\n');
+  const r = parseDocumentText(text);
+  assert.equal(r.totalHt, 89.03);
+  assert.equal(r.totalVat, 18.70);
+  assert.equal(r.totalTtc, 107.73);
+  assert.equal(r.vatRate, 0.21);
+});
+
+test('parseDocumentText : facture ENGIE — libellés FR entre parenthèses ("Total (hors TVA)", "Total (TVA comprise)")', () => {
+  // reproduit un vrai cas remonté : les libellés classiques ("Total HTVA"/"Total TTC") ne
+  // matchaient pas car la parenthèse entre "Total" et le mot-clé cassait le \s* de la regex
+  const text = [
+    "Facture d'acompte",
+    'Total (hors TVA) 142,00',
+    'Total montant TVA 27,75',
+    'Total (TVA comprise)  169,75',
+  ].join('\n');
+  const r = parseDocumentText(text);
+  assert.equal(r.totalHt, 142.00);
+  assert.equal(r.totalVat, 27.75);
+  assert.equal(r.totalTtc, 169.75);
+});
+
+test('parseDocumentText : facture néerlandaise (fournisseur belge NL) — "Totaal incl./excl. BTW"', () => {
+  const text = 'FACTUUR\nTotaal excl. BTW 100,00\nBTW 21% 21,00\nTotaal incl. BTW 121,00';
+  const r = parseDocumentText(text);
+  assert.equal(r.kind, 'invoice');
+  assert.equal(r.totalHt, 100.00);
+  assert.equal(r.totalTtc, 121.00);
+  assert.equal(r.vatRate, 0.21);
+});
+
+test('parseDocumentText : "N°" mal décodé en U+FFFD par pdftotext (vu sur de vraies factures Cebeo)', () => {
+  const text = 'FACTURE N� 23380717 DATE FA 3/09/25';
+  const r = parseDocumentText(text);
+  assert.equal(r.docNumber, '23380717');
+});
+
 test('findWorksiteRefCandidates : plusieurs chantiers cités (facture qui couvre plusieurs chantiers)', () => {
   const refs = findWorksiteRefCandidates('Livraison pour R-69 et complément pour R123 (bon E07 joint)');
   assert.deepEqual(refs, ['R-69', 'R-123', 'E-7']);

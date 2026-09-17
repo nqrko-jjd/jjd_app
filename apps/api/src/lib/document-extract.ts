@@ -46,10 +46,12 @@ const VAT_RE = /\bBE\s?\d{4}[.\s]?\d{3}[.\s]?\d{3}\b/gi;
 const normVat = (v: string) => v.replace(/[^0-9A-Z]/gi, '').toUpperCase();
 
 function detectKind(text: string): DocumentExtraction['kind'] {
-  if (/note\s+de\s+cr[ée]dit|\bavoir\s+n[°o]/i.test(text)) return 'credit_note';
-  if (/facture\s+d.?acompte|acompte\s+n[°o]/i.test(text)) return 'deposit_invoice';
-  if (/\bfacture\b/i.test(text)) return 'invoice';
-  if (/\bdevis\b|\boffre\s+de\s+prix\b/i.test(text)) return 'quote';
+  // FR d'abord (contexte majoritaire JJD), puis équivalents NL — beaucoup de fournisseurs
+  // belges (Cebeo, Sixt…) facturent en néerlandais, jusqu'ici jamais reconnu.
+  if (/note\s+de\s+cr[ée]dit|\bavoir\s+n[°o]|creditnota/i.test(text)) return 'credit_note';
+  if (/facture\s+d.?acompte|acompte\s+n[°o]|voorschotfactuur/i.test(text)) return 'deposit_invoice';
+  if (/\bfacture\b|\bfactuur\b/i.test(text)) return 'invoice';
+  if (/\bdevis\b|\boffre\s+de\s+prix\b|\bofferte\b/i.test(text)) return 'quote';
   return null;
 }
 
@@ -105,14 +107,17 @@ function findDate(text: string): string | null {
   return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
 }
 
-/** Date d'échéance : proche du mot "échéance" (accents variables selon l'encodage du PDF). */
+/** Date d'échéance : proche du mot "échéance" (accents variables selon l'encodage du PDF), ou
+ *  de son équivalent néerlandais "vervaldatum". */
 function findDueDate(text: string): string | null {
-  return findDateNear(text, /[ée]ch[ée]ance/i, 40);
+  return findDateNear(text, /[ée]ch[ée]ance/i, 40) ?? findDateNear(text, /vervaldatum/i, 40);
 }
 
-/** N° de document (facture/devis/avoir) — best-effort, juste après un mot-clé. */
+/** N° de document (facture/devis/avoir) — best-effort, juste après un mot-clé. Le "°" de "N°"
+ *  ressort parfois en U+FFFD (caractère de remplacement Unicode) quand `pdftotext` ne sait pas
+ *  décoder le glyphe d'origine (vu sur de vraies factures Cebeo) — toléré au même titre que "°"/"o". */
 function findDocNumber(text: string): string | null {
-  const m = text.match(/(?:facture|devis|note\s+de\s+cr[ée]dit|avoir|offre)\s*n[°o]\.?\s*:?\s*([A-Z0-9][A-Z0-9\-/.]{1,24})/i)
+  const m = text.match(/(?:facture|devis|note\s+de\s+cr[ée]dit|avoir|offre)\s*n[°o�]\.?\s*:?\s*([A-Z0-9][A-Z0-9\-/.]{1,24})/i)
     ?? text.match(/num[eé]ro\s*(?:\/\s*date)?\s*du\s*document\s*:?\s*([A-Z0-9][A-Z0-9\-/.]{1,24})/i)
     ?? text.match(/\bn[°o]\.?\s*:?\s*([A-Z0-9][A-Z0-9\-/.]{2,24})\b/i);
   if (m) return m[1]!.replace(/[.\-/]+$/, '');
@@ -149,24 +154,53 @@ const AMOUNT = '([\\d]+(?:[.,\\s\\u00A0][\\d]+)*)';
 const AMOUNT_STRICT_G = /(\d+[.,]\d{2})/g;
 
 function findTotals(text: string): { ht: number | null; vat: number | null; ttc: number | null; vatRate: number | null } {
-  const ttcM = text.match(new RegExp(`total\\s*(?:ttc|tvac)[^\\d]{0,15}${AMOUNT}`, 'i'))
+  // libellés FR tolérant une parenthèse ("Total (TVA comprise)", "Total (hors TVA)" — ENGIE
+  // et d'autres facturiers ERP), puis équivalents NL ("Totaal incl./excl. BTW" — Sixt et
+  // autres fournisseurs facturant en néerlandais, jamais reconnus jusqu'ici.
+  // `S` = espace/tab MAIS PAS retour à la ligne (contrairement à \s, qui inclut \n — un piège
+  // ici : "Total (TVA comprise)" en fin de ligne d'en-tête, suivi de "21%..." sur la ligne
+  // suivante, ferait sinon "sauter" le \s* du libellé par-dessus le saut de ligne jusqu'à ce
+  // taux de TVA). Utilisée pour CHAQUE espace interne au libellé, pas seulement la fin.
+  const S = '[^\\S\\n]*';
+  const ttcM = text.match(new RegExp(`total${S}\\(?${S}(?:ttc|tvac|tva${S}comprise)${S}\\)?[^\\d\\n]{0,15}${AMOUNT}`, 'i'))
+    ?? text.match(new RegExp(`totaal${S}incl\\.?${S}btw[^\\d\\n]{0,15}${AMOUNT}`, 'i'))
     // "Montant de la facture 24,99" / "Montant de vente(À payer) 411,98" — cherché AVANT le
     // "à payer" générique ci-dessous : un document déjà réglé a souvent, plus loin, un
     // second repère "(Total) à payer 0,00" qui désigne le RESTE à payer, pas le montant total
-    ?? text.match(new RegExp(`montant\\s*de\\s*(?:la\\s*facture|vente)[^\\d]{0,25}${AMOUNT}`, 'i'))
-    ?? text.match(new RegExp(`(?:net\\s*[àa]\\s*payer|montant\\s*total|total\\s*[àa]\\s*payer)[^\\d]{0,15}${AMOUNT}`, 'i'));
-  const htM = text.match(new RegExp(`total\\s*h\\.?t\\.?v\\.?a\\.?[^\\d]{0,15}${AMOUNT}`, 'i'))
-    ?? text.match(new RegExp(`total\\s*hors\\s*tva[^\\d]{0,15}${AMOUNT}`, 'i'))
-    ?? text.match(new RegExp(`total\\s*sans\\s*tva[^\\d]{0,15}${AMOUNT}`, 'i'));
+    ?? text.match(new RegExp(`montant${S}de${S}(?:la${S}facture|vente)[^\\d\\n]{0,25}${AMOUNT}`, 'i'))
+    ?? text.match(new RegExp(`(?:net${S}[àa]${S}payer|montant${S}total|total${S}[àa]${S}payer|te${S}betalen)[^\\d\\n]{0,15}${AMOUNT}`, 'i'));
+  const htM = text.match(new RegExp(`total${S}h\\.?t\\.?v\\.?a\\.?[^\\d\\n]{0,15}${AMOUNT}`, 'i'))
+    ?? text.match(new RegExp(`total${S}\\(?${S}hors${S}tva${S}\\)?[^\\d\\n]{0,15}${AMOUNT}`, 'i'))
+    ?? text.match(new RegExp(`total${S}sans${S}tva[^\\d\\n]{0,15}${AMOUNT}`, 'i'))
+    ?? text.match(new RegExp(`totaal${S}excl\\.?${S}btw[^\\d\\n]{0,15}${AMOUNT}`, 'i'));
   // \b après "tva" pour ne pas matcher dans "TVAC" (Total TVAC = le TTC, pas la TVA)
-  const vatAmtM = text.match(new RegExp(`total\\s*tva\\b[^\\d]{0,15}${AMOUNT}`, 'i'))
-    ?? text.match(new RegExp(`\\btva\\s*\\d{1,2}(?:[,.]\\d+)?\\s*%[^\\d]{0,15}${AMOUNT}`, 'i'));
+  const vatAmtM = text.match(new RegExp(`total${S}(?:montant${S})?tva\\b[^\\d\\n]{0,15}${AMOUNT}`, 'i'))
+    ?? text.match(new RegExp(`\\btva${S}\\d{1,2}(?:[,.]\\d+)?${S}%[^\\d\\n]{0,15}${AMOUNT}`, 'i'));
   // taux en %, décimales tolérées ("21,00%" et pas seulement "21%")
-  const vatRateM = text.match(/tva\s*(\d{1,2})(?:[,.]\d+)?\s*%/i);
-  const vatRate = vatRateM ? Number(vatRateM[1]) / 100 : null;
-  const ht = htM ? parseAmount(htM[1]) : null;
-
+  const vatRateM = text.match(/tva\s*(\d{1,2})(?:[,.]\d+)?\s*%/i) ?? text.match(/btw\s*(\d{1,2})(?:[,.]\d+)?\s*%/i);
+  let vatRate = vatRateM ? Number(vatRateM[1]) / 100 : null;
+  let ht = htM ? parseAmount(htM[1]) : null;
+  let vat = vatAmtM ? parseAmount(vatAmtM[1]) : null;
   let ttc = ttcM ? parseAmount(ttcM[1]) : null;
+
+  // Repli "récap TVA" fréquent chez les grossistes (Cebeo…) : pas de libellé "Total TTC/HTVA"
+  // du tout, juste un bloc en fin de facture "% NET TAXABLE TVA" puis "<taux>% <net> <net>
+  // <tva>" (le net répété deux fois — colonnes "Net" et "Taxable" identiques quand une seule
+  // ligne de TVA). Rétro-référence \2 sur ce doublon pour ne PAS confondre avec d'autres
+  // tableaux à 3 montants dont les valeurs diffèrent (ex. "<taux>% <ht> <tva> <ttc>", où les
+  // 3 nombres sont différents) — ne comble que ce qui manque encore, les libellés priment.
+  if (ht == null || ttc == null || vat == null) {
+    const m = text.match(/(\d{1,2}(?:[,.]\d+)?)\s*%\s+(\d+[.,]\d{2})\s+\2\s+(\d+[.,]\d{2})\b/);
+    if (m) {
+      const net = parseAmount(m[2]);
+      const vatVal = parseAmount(m[3]);
+      if (ht == null) ht = net;
+      if (vat == null) vat = vatVal;
+      if (vatRate == null) vatRate = Number(m[1]!.replace(',', '.')) / 100;
+      if (ttc == null && net != null && vatVal != null) ttc = Math.round((net + vatVal) * 100) / 100;
+    }
+  }
+
   if (ttc == null && ht != null) {
     // le HT est connu (repère fiable) mais pas le TTC -> déduit du taux de TVA (par défaut
     // 21 % BE) plutôt que de risquer le repli "à payer" ci-dessous, qui peut tomber sur un
@@ -185,12 +219,7 @@ function findTotals(text: string): { ht: number | null; vat: number | null; ttc:
     }
   }
 
-  return {
-    ht,
-    vat: vatAmtM ? parseAmount(vatAmtM[1]) : null,
-    ttc,
-    vatRate,
-  };
+  return { ht, vat, ttc, vatRate };
 }
 
 export interface ParsedDocumentText {

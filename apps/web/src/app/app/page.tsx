@@ -56,7 +56,10 @@ function WorkerToday() {
   const singleWs = plan?.items.length === 1 ? plan.items[0]!.worksite : null;
   const { data: taskData, reload: reloadTasks } = useApi<{ items: WorkerTask[] }>(singleWs ? `/api/worksites/${singleWs.id}/tasks` : null);
   const [taskBusy, setTaskBusy] = useState<string | null>(null);
+  const [taskFilter, setTaskFilter] = useState<'all' | 'todo' | 'done'>('all');
   const tasks = taskData?.items ?? [];
+  const tasksDone = tasks.filter((t) => t.status === 'done').length;
+  const visibleTasks = tasks.filter((t) => taskFilter === 'all' || (taskFilter === 'done' ? t.status === 'done' : t.status !== 'done'));
 
   async function toggleTask(t: WorkerTask) {
     setTaskBusy(t.id);
@@ -174,9 +177,26 @@ function WorkerToday() {
 
       {singleWs && tasks.length > 0 && (
         <>
-          <div className="section-title">Mes tâches du jour</div>
+          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
+            <div className="section-title" style={{ marginBottom: 0 }}>Mes tâches du jour</div>
+            <span className="muted" style={{ fontSize: '0.82rem' }}>{tasksDone} / {tasks.length} terminées</span>
+          </div>
+          <div className="row" style={{ gap: '0.4rem', margin: '0.5rem 0 0.7rem' }}>
+            {([['all', 'Toutes'], ['todo', 'À faire'], ['done', 'Terminées']] as const).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                className={`btn${taskFilter === key ? ' primary' : ''}`}
+                style={{ borderRadius: 999, padding: '0.3rem 0.8rem', fontSize: '0.82rem' }}
+                onClick={() => setTaskFilter(key)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <div className="card card-pad" style={{ marginBottom: '1.2rem' }}>
-            {tasks.map((t) => (
+            {visibleTasks.length === 0 && <div className="muted" style={{ padding: '0.4rem 0' }}>Rien ici.</div>}
+            {visibleTasks.map((t) => (
               <div
                 key={t.id}
                 onClick={() => taskBusy !== t.id && toggleTask(t)}

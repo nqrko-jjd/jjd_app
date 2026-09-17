@@ -10,6 +10,7 @@ interface Dash {
   singleProject: {
     id: string; ref: string; title: string; building: string | null; address: string | null;
     photoThumbUrl: string | null; status: string; statusLabel: string; progressPct: number;
+    nextStep: string | null; manager: string | null;
   } | null;
   portfolio: { id: string; name: string; city: string | null; lotCount: number | null; photoThumbUrl: string | null; open: number }[];
   kpis: { buildings: number; interventionsActive: number; quotesToValidate: number | null; urgent: number };
@@ -137,9 +138,24 @@ export default function PortalDashboard() {
                     <span style={{ fontWeight: 700 }}>{d.singleProject.progressPct}%</span>
                   </div>
                   <div className="p-progress-track"><div className="p-progress-fill" style={{ width: `${d.singleProject.progressPct}%` }} /></div>
+                  {d.singleProject.nextStep && <p className="p-note" style={{ marginTop: '0.5rem' }}>Prochaine étape : {d.singleProject.nextStep}</p>}
                 </div>
               </div>
             </Link>
+          )}
+
+          {/* Interlocuteur JJD (client particulier) — contact humain direct, comme la maquette */}
+          {d.singleProject?.manager && (
+            <div className="p-card p-card-pad" style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+              <span className="p-avatar">{d.singleProject.manager.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join('')}</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700 }}>{d.singleProject.manager}</div>
+                <div className="p-note">Votre interlocuteur · Chef de chantier</div>
+              </div>
+              <Link href={`/portail/chantier/${d.singleProject.id}?discussion=1`} className="p-btn-primary" style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}>
+                Écrire
+              </Link>
+            </div>
           )}
 
           {/* Alert */}

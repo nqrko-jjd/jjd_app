@@ -31,6 +31,20 @@ const managerName = (m: { displayName: string | null; firstName: string } | null
   m ? (m.displayName || m.firstName) : null;
 const mSel = { select: { displayName: true, firstName: true } } as const;
 
+// Court repère "et maintenant ?" affiché sous l'avancement, comme la maquette
+// ("Prochaine étape : contrôle des finitions") — dérivé du statut, pas d'un
+// champ dédié (on n'a pas d'étapes datées en base pour l'instant).
+const NEXT_STEP_LABEL: Partial<Record<WorksiteStatus, string>> = {
+  lead: 'Étude de votre demande',
+  quote_needed: 'Envoi du devis',
+  to_plan: 'Planification de l’intervention',
+  scheduled: 'Début des travaux',
+  in_progress: 'Poursuite des travaux',
+  on_hold: 'Reprise des travaux',
+  done: 'Contrôle des finitions',
+  to_invoice: 'Facturation',
+};
+
 /* ---------------------------------------------------- connexion (lien magique) */
 
 portalRouter.post(
@@ -147,6 +161,8 @@ portalRouter.get(
       photoThumbUrl: single.acp?.photoThumbUrl ?? null,
       status: single.status, statusLabel: wsLabel(single.status),
       progressPct: WORKSITE_PROGRESS_PCT[single.status as WorksiteStatus] ?? 0,
+      nextStep: NEXT_STEP_LABEL[single.status as WorksiteStatus] ?? null,
+      manager: managerName(single.manager),
     } : null;
 
     return res.json({
@@ -378,6 +394,7 @@ async function loadWorksite(u: PortalUser, id: string) {
     where: { id, ...worksiteScope(u) },
     include: {
       acp: { select: { id: true, name: true } },
+      manager: { select: { displayName: true, firstName: true, phone: true } },
       documents: { orderBy: { issuedOn: 'desc' } },
       reports: { where: { status: 'signed' }, orderBy: { date: 'desc' }, include: { photos: true } },
       thread: {
@@ -433,7 +450,9 @@ portalRouter.get(
         address: [w.address, w.city].filter(Boolean).join(', '),
         building: w.acp, startedOn: w.startedOn, endedOn: w.endedOn,
         description: w.description,
+        nextStep: NEXT_STEP_LABEL[w.status as WorksiteStatus] ?? null,
       },
+      manager: w.manager ? { name: managerName(w.manager), phone: w.manager.phone } : null,
       access: u.access,
       quotes: !full ? [] : w.documents.filter((d) => d.kind === 'quote' && d.number).map((d) => ({
         id: d.id, number: d.number, title: d.title, status: d.status, hasPdf: !!d.originalPdf,

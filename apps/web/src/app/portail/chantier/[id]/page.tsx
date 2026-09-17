@@ -10,7 +10,9 @@ interface Data {
     id: string; ref: string; title: string; status: string; statusLabel: string;
     address: string; building: { id: string; name: string } | null;
     startedOn: string | null; endedOn: string | null; description: string | null;
+    nextStep: string | null;
   };
+  manager: { name: string | null; phone: string | null } | null;
   quotes: { id: string; number: string; title: string | null; status: string; hasPdf: boolean; totalHt: number; totalTtc: number; issuedOn: string | null }[];
   invoices: { id: string; number: string; status: string; hasPdf: boolean; totalTtc: number; paidAmount: number; issuedOn: string | null; dueOn: string | null }[];
   photos: { id: string; url: string; thumbUrl: string | null; caption: string | null; createdAt: string; video?: boolean }[];
@@ -122,6 +124,7 @@ function PortalWorksiteInner({ params }: { params: Promise<{ id: string }> }) {
                   </div>
                 ))}
               </div>
+              {w.nextStep && <p className="p-note" style={{ marginTop: '0.8rem' }}>Prochaine étape : {w.nextStep}</p>}
             </div>
 
             {(data.reports.length > 0 || data.photos.length > 0) && (
@@ -165,6 +168,22 @@ function PortalWorksiteInner({ params }: { params: Promise<{ id: string }> }) {
           </div>
 
           <div style={{ display: 'grid', gap: '1.3rem', alignContent: 'start' }}>
+            {data.manager?.name && (
+              <div className="p-panel">
+                <div className="p-panel-h"><h2>Votre interlocuteur</h2></div>
+                <div className="row" style={{ gap: '0.7rem', alignItems: 'center' }}>
+                  <span className="p-avatar">{data.manager.name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join('')}</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700 }}>{data.manager.name}</div>
+                    <div className="p-note">Chef de chantier</div>
+                  </div>
+                  <button className="p-btn-primary" style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }} onClick={() => setMsgOpen(true)}>
+                    Écrire
+                  </button>
+                </div>
+              </div>
+            )}
+
             {full && (
               <div className="p-panel">
                 <div className="p-panel-h"><h2>Documents</h2></div>

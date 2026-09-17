@@ -47,6 +47,9 @@ COPY --from=build /repo/node_modules/.prisma /repo/node_modules/.prisma
 COPY apps/api/package.json ./package.json
 COPY apps/api/prisma ./prisma
 COPY apps/api/scripts ./scripts
+# les scripts d'import/maintenance (lancés via `docker compose run` + tsx, pas au démarrage
+# normal de l'API) importent depuis ../src/... — le serveur, lui, tourne sur dist/ compilé.
+COPY apps/api/src ./src
 
 RUN mkdir -p uploads && chown -R node:node /repo
 USER node

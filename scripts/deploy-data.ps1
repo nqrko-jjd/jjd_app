@@ -58,7 +58,7 @@ if ($Whatsapp) {
   Invoke-Scp @("-r", "data-import/whatsapp", "${target}:$VpsPath/data-import/")
 
   Write-Host "-> Import des fils de discussion dans le conteneur..." -ForegroundColor Cyan
-  $inner = 'cd /repo/apps/api && tsx scripts/import-whatsapp.ts'
+  $inner = 'cd /repo/apps/api && npx tsx scripts/import-whatsapp.ts'
   $dockerRun = "cd $VpsPath && docker compose -f docker-compose.prod.yml --env-file .env.production run --rm -v $VpsPath/data-import:/repo/data-import:ro api sh -c '$inner'"
   Invoke-Ssh $dockerRun
 
@@ -86,9 +86,9 @@ if (-not $XlsxOnly) {
 
 Write-Host "-> Import dans le conteneur (peut prendre 1-2 min)..." -ForegroundColor Cyan
 if ($XlsxOnly) {
-  $inner = 'cd /repo/apps/api && tsx scripts/import-xlsx.ts'
+  $inner = 'cd /repo/apps/api && npx tsx scripts/import-xlsx.ts'
 } else {
-  $inner = 'cd /repo/apps/api && tsx scripts/import-xlsx.ts && tsx scripts/import-vehicles.ts && tsx scripts/import-trustup.ts && tsx scripts/import-agenda.ts'
+  $inner = 'cd /repo/apps/api && npx tsx scripts/import-xlsx.ts && npx tsx scripts/import-vehicles.ts && npx tsx scripts/import-trustup.ts && npx tsx scripts/import-agenda.ts'
 }
 $dockerRun = "cd $VpsPath && docker compose -f docker-compose.prod.yml --env-file .env.production run --rm -v $VpsPath/data-import:/repo/data-import:ro api sh -c '$inner'"
 Invoke-Ssh $dockerRun

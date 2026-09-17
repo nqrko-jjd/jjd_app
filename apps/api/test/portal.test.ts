@@ -7,6 +7,7 @@ import { prisma } from '../src/db.js';
 let server: Server;
 let base = '';
 let token = '';
+let syndicId = '';
 
 before(async () => {
   server = createApp().listen(0);
@@ -17,6 +18,7 @@ before(async () => {
   // le compte syndic de démo est recréé par import:trustup ; on s'assure qu'il existe
   const syndic = await prisma.syndic.findFirst({ orderBy: { contacts: { _count: 'desc' } } });
   if (!syndic) return;
+  syndicId = syndic.id;
   await prisma.user.upsert({
     where: { email: 'test-syndic@portal.test' },
     create: { email: 'test-syndic@portal.test', passwordHash: 'x', role: 'client', syndicId: syndic.id },
@@ -60,6 +62,43 @@ test('portail : dashboard renvoie KPIs + sections pour un syndic', async () => {
   // même quand aucune facture n'existe encore (invoiceStatus/status alors null/vide)
   for (const w of d.recentInterventions) assert.ok('invoiceStatus' in w);
   for (const doc of d.recentDocuments) assert.ok('status' in doc);
+});
+
+test('portail : refuser un devis (avec note) -> status "declined", note dans le fil interne', async () => {
+  await prisma.contact.deleteMany({ where: { name: 'ACP Portail Devis — test' } });
+  const acp = await prisma.contact.create({
+    data: { name: 'ACP Portail Devis — test', normalizedName: 'acp portail devis test', type: 'client', kind: 'acp', syndicId, source: 'test' },
+  });
+  const ws = await prisma.worksite.create({ data: { ref: 'R-PORTALQUOTE', title: 'Devis portail test', acpId: acp.id, source: 'test' } });
+  const quote = await prisma.document.create({
+    data: { kind: 'quote', direction: 'sale', number: 'DEV-TEST-1', worksiteId: ws.id, status: 'sent' },
+  });
+
+  const r = await fetch(`${base}/api/portal/quotes/${quote.id}/decline`, {
+    method: 'POST',
+    headers: { ...auth(), 'content-type': 'application/json' },
+    body: JSON.stringify({ note: 'Trop cher, on attend le prochain AG' }),
+  });
+  assert.equal(r.status, 200);
+
+  const updated = await prisma.document.findUnique({ where: { id: quote.id } });
+  assert.equal(updated?.status, 'declined');
+
+  const thread = await prisma.thread.findUnique({ where: { worksiteId: ws.id } });
+  const statusMsg = await prisma.message.findFirst({ where: { threadId: thread!.id, kind: 'status' }, orderBy: { createdAt: 'desc' } });
+  assert.ok(statusMsg?.body?.includes('décliné'));
+  assert.ok(statusMsg?.body?.includes('Trop cher, on attend le prochain AG'));
+
+  // idempotent : rappeler decline ne recrée pas de message
+  const again = await fetch(`${base}/api/portal/quotes/${quote.id}/decline`, { method: 'POST', headers: auth() });
+  assert.equal(again.status, 200);
+  const count = await prisma.message.count({ where: { threadId: thread!.id, kind: 'status' } });
+  assert.equal(count, 1);
+
+  await prisma.document.deleteMany({ where: { id: quote.id } });
+  await prisma.thread.deleteMany({ where: { worksiteId: ws.id } });
+  await prisma.worksite.deleteMany({ where: { id: ws.id } });
+  await prisma.contact.deleteMany({ where: { id: acp.id } });
 });
 
 test('portail : planning limité à 2 semaines (pas 6) et plafonné en nombre', async () => {

@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
 import path from 'node:path';
 import { createReadStream, existsSync } from 'node:fs';
 import { nanoid } from 'nanoid';
@@ -601,35 +601,42 @@ portalRouter.get(
   }),
 );
 
-portalRouter.post(
-  '/quotes/:id/accept',
-  requirePortal,
-  asyncHandler(async (req, res) => {
-    const u = req.portalUser!;
-    if (!portalFull(u)) throw new HttpError(403, 'Seul le syndic peut accepter un devis');
-    const doc = await prisma.document.findFirst({
-      where: { id: req.params.id!, kind: 'quote', worksite: worksiteScope(u) },
-      include: { worksite: { select: { id: true, ref: true } } },
+/** Accepte ou décline un devis depuis le portail — la note du client (facultative) est
+ *  postée dans le fil interne du chantier, là où le bureau la verra, plutôt que stockée
+ *  dans un champ à part (le document n'a pas de champ "note client" dédié). */
+async function respondToQuote(req: Request, res: Response, decision: 'accepted' | 'declined') {
+  const u = req.portalUser!;
+  if (!portalFull(u)) throw new HttpError(403, 'Seul le syndic peut répondre à un devis');
+  const doc = await prisma.document.findFirst({
+    where: { id: req.params.id!, kind: 'quote', worksite: worksiteScope(u) },
+    include: { worksite: { select: { id: true, ref: true } } },
+  });
+  if (!doc) throw new HttpError(404, 'Devis introuvable');
+  if (doc.status === decision) return res.json({ ok: true });
+  const note = String(req.body?.note ?? '').trim().slice(0, 1000);
+  await prisma.document.update({ where: { id: doc.id }, data: { status: decision } });
+  if (doc.worksite) {
+    const thread = await prisma.thread.upsert({
+      where: { worksiteId: doc.worksite.id },
+      create: { worksiteId: doc.worksite.id },
+      update: {},
     });
-    if (!doc) throw new HttpError(404, 'Devis introuvable');
-    if (doc.status === 'accepted') return res.json({ ok: true });
-    await prisma.document.update({ where: { id: doc.id }, data: { status: 'accepted' } });
-    if (doc.worksite) {
-      const thread = await prisma.thread.upsert({
-        where: { worksiteId: doc.worksite.id },
-        create: { worksiteId: doc.worksite.id },
-        update: {},
-      });
-      await prisma.message.create({
-        data: { threadId: thread.id, authorName: u.label, kind: 'status', body: `Devis ${doc.number} accepté en ligne par le client` },
-      });
-      await prisma.auditLog.create({
-        data: { action: 'quote_accepted_portal', entity: 'document', entityId: doc.id, meta: { by: u.label } },
-      });
-    }
-    res.json({ ok: true });
-  }),
-);
+    const verb = decision === 'accepted' ? 'accepté' : 'décliné';
+    await prisma.message.create({
+      data: {
+        threadId: thread.id, authorName: u.label, kind: 'status',
+        body: `Devis ${doc.number} ${verb} en ligne par le client${note ? ` — note : ${note}` : ''}`,
+      },
+    });
+    await prisma.auditLog.create({
+      data: { action: `quote_${decision}_portal`, entity: 'document', entityId: doc.id, meta: { by: u.label, note: note || null } },
+    });
+  }
+  res.json({ ok: true });
+}
+
+portalRouter.post('/quotes/:id/accept', requirePortal, asyncHandler((req, res) => respondToQuote(req, res, 'accepted')));
+portalRouter.post('/quotes/:id/decline', requirePortal, asyncHandler((req, res) => respondToQuote(req, res, 'declined')));
 
 /* ----------------------------------------------- demande de nouvelle intervention */
 

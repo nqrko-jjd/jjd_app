@@ -55,6 +55,7 @@ function PortalWorksiteInner({ params }: { params: Promise<{ id: string }> }) {
   const [msgOpen, setMsgOpen] = useState(sp.get('discussion') === '1');
   const full = data?.access !== 'limited';
   const [msg, setMsg] = useState('');
+  const [quoteNotes, setQuoteNotes] = useState<Record<string, string>>({});
 
   const load = () => portalApi<Data>(`/worksites/${id}`).then(setData).catch(() => {});
   useEffect(() => { if (me) load(); }, [me, id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -79,7 +80,12 @@ function PortalWorksiteInner({ params }: { params: Promise<{ id: string }> }) {
   }
   async function acceptQuote(qid: string) {
     if (!confirm('Confirmer l’acceptation de ce devis ?')) return;
-    await portalApi(`/quotes/${qid}/accept`, { method: 'POST' });
+    await portalApi(`/quotes/${qid}/accept`, { method: 'POST', body: { note: quoteNotes[qid]?.trim() || undefined } });
+    load();
+  }
+  async function declineQuote(qid: string) {
+    if (!confirm('Confirmer le refus de ce devis ?')) return;
+    await portalApi(`/quotes/${qid}/decline`, { method: 'POST', body: { note: quoteNotes[qid]?.trim() || undefined } });
     load();
   }
   async function openPdf(docId: string) {
@@ -188,23 +194,48 @@ function PortalWorksiteInner({ params }: { params: Promise<{ id: string }> }) {
               <div className="p-panel">
                 <div className="p-panel-h"><h2>Documents</h2></div>
                 {data.quotes.length === 0 && data.invoices.length === 0 && <p className="p-note">Aucun document.</p>}
-                {data.quotes.map((q) => (
-                  <div key={q.id} className="p-doc-row" style={{ cursor: q.hasPdf ? 'pointer' : 'default' }} onClick={() => q.hasPdf && openPdf(q.id)}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 700, fontSize: '0.88rem' }}>Devis {q.number}</div>
-                      <div className="p-note">{eur(q.totalTtc)} · {d(q.issuedOn)}</div>
+                {data.quotes.map((q) => {
+                  const pending = q.status !== 'accepted' && q.status !== 'declined';
+                  return (
+                    <div key={q.id} className="p-doc-row" style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: pending ? '0.6rem' : 0 }}>
+                      <div
+                        style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', cursor: !pending && q.hasPdf ? 'pointer' : 'default' }}
+                        onClick={() => !pending && q.hasPdf && openPdf(q.id)}
+                      >
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 700, fontSize: '0.88rem' }}>Devis {q.number}</div>
+                          <div className="p-note">{eur(q.totalTtc)} · {d(q.issuedOn)}</div>
+                        </div>
+                        {q.status === 'accepted' ? (
+                          <span className="p-tag ok">Accepté</span>
+                        ) : q.status === 'declined' ? (
+                          <span className="p-tag crit">Décliné</span>
+                        ) : q.hasPdf ? (
+                          <button className="p-btn-line" style={{ padding: '0.3rem 0.6rem', fontSize: '0.78rem' }} onClick={(e) => { e.stopPropagation(); openPdf(q.id); }}>
+                            PDF
+                          </button>
+                        ) : null}
+                      </div>
+                      {pending && (
+                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                          <input
+                            className="p-input"
+                            style={{ flex: 1, minWidth: 160 }}
+                            placeholder="Note pour JJD (facultatif)"
+                            value={quoteNotes[q.id] ?? ''}
+                            onChange={(e) => setQuoteNotes((s) => ({ ...s, [q.id]: e.target.value }))}
+                          />
+                          <button className="p-btn-primary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.78rem' }} onClick={() => acceptQuote(q.id)}>
+                            Accepter
+                          </button>
+                          <button className="p-btn-line" style={{ padding: '0.4rem 0.8rem', fontSize: '0.78rem' }} onClick={() => declineQuote(q.id)}>
+                            Refuser
+                          </button>
+                        </div>
+                      )}
                     </div>
-                    {q.status === 'accepted' ? (
-                      <span className="p-tag ok">Accepté</span>
-                    ) : q.status === 'declined' ? (
-                      <span className="p-tag crit">Décliné</span>
-                    ) : (
-                      <button className="p-btn-primary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.78rem' }} onClick={(e) => { e.stopPropagation(); acceptQuote(q.id); }}>
-                        Accepter
-                      </button>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
                 {data.invoices.map((f) => (
                   <div key={f.id} className="p-doc-row" style={{ cursor: f.hasPdf ? 'pointer' : 'default' }} onClick={() => f.hasPdf && openPdf(f.id)}>
                     <div style={{ flex: 1, minWidth: 0 }}>

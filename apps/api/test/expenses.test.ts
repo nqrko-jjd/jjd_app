@@ -105,12 +105,21 @@ test('modification puis suppression (manuel uniquement)', async () => {
   assert.equal(del.status, 200);
 });
 
-test('suppression refusée sur une écriture importée', async () => {
+test('suppression refusée sur une écriture de l\'import historique Excel', async () => {
   const imported = await prisma.ledgerEntry.create({
     data: { direction: 'purchase', worksiteId, ht: 50, date: new Date('2026-08-01'), source: 'xlsx' },
   });
   const del = await jf(`/api/finance/expenses/${imported.id}`, { method: 'DELETE' });
   assert.equal(del.status, 409);
+});
+
+test('suppression autorisée sur un doublon importé par mail (pas xlsx)', async () => {
+  const imported = await prisma.ledgerEntry.create({
+    data: { direction: 'purchase', worksiteId, ht: 50, date: new Date('2026-08-01'), source: 'email' },
+  });
+  const del = await jf<{ ok: boolean }>(`/api/finance/expenses/${imported.id}`, { method: 'DELETE' });
+  assert.equal(del.status, 200);
+  assert.equal(del.body.ok, true);
 });
 
 test('rapprochement bancaire -> facture d\'achat passe « payé », défaire la repasse « non payé »', async () => {

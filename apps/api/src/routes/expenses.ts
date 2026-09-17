@@ -125,7 +125,7 @@ expensesRouter.get(
         categoryLabel: e.category?.label ?? e.categoryRaw ?? null,
         paid: isPaidStr(e.paymentStatus),
         hasPdf: !!e.pdfPath,
-        editable: e.source === 'manual',
+        editable: e.source !== 'xlsx',
       })),
       totals: {
         count: totals.count,
@@ -380,7 +380,7 @@ expensesRouter.get(
       where: { matchedLedgerId: e.id },
       select: { id: true, bookingDate: true, amount: true, bank: true, counterpartyName: true, communication: true },
     });
-    res.json({ expense: { ...e, hasPdf: !!e.pdfPath, editable: e.source === 'manual', bankMatch } });
+    res.json({ expense: { ...e, hasPdf: !!e.pdfPath, editable: e.source !== 'xlsx', bankMatch } });
   }),
 );
 
@@ -569,7 +569,7 @@ expensesRouter.delete(
   asyncHandler(async (req, res) => {
     const e = await prisma.ledgerEntry.findUnique({ where: { id: req.params.id }, select: { source: true } });
     if (!e) throw new HttpError(404, 'Dépense introuvable');
-    if (e.source !== 'manual') throw new HttpError(409, "Écriture importée : suppression impossible (elle vient du fichier Excel).");
+    if (e.source === 'xlsx') throw new HttpError(409, "Écriture de l'import historique Excel : suppression impossible.");
     await prisma.bankTransaction.updateMany({ where: { matchedLedgerId: req.params.id }, data: { matchedLedgerId: null, matchConfidence: null, matchedAt: null } });
     await prisma.ledgerEntry.delete({ where: { id: req.params.id } });
     res.json({ ok: true });

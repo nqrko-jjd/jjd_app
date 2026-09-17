@@ -9,7 +9,7 @@ import { PageHead, Money, formatDateBE, Avatar, ProgressCell, Kpi } from '@/lib/
 import { useSort, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
 import { LEGAL_DOC_LABEL, WORKSITE_STATUS_LABEL, WORKSITE_PROGRESS_PCT, type WorksiteStatus } from '@jjd/shared';
-import { BarChart3, Wallet, Building2, Flag, FileText, Clock } from 'lucide-react';
+import { BarChart3, Wallet, Building2, Flag, FileText, Clock, MessageSquare } from 'lucide-react';
 
 interface TodayEv {
   id: string; startAt: string; endAt: string;
@@ -17,6 +17,7 @@ interface TodayEv {
 }
 interface Running { id: string; startedAt: string; worksite: { ref: string; title: string } | null }
 interface TimerResp { running: Running | null; linked?: boolean }
+interface WorkerTask { id: string; title: string; status: string; assignees: { id: string; name: string }[] }
 
 function elapsed(fromIso: string): string {
   const ms = Math.max(0, Date.now() - new Date(fromIso).getTime());
@@ -48,6 +49,21 @@ function WorkerToday() {
   const { data: timer, reload: reloadTimer } = useApi<TimerResp>('/api/timesheet/timer');
   const [, force] = useState(0);
   useEffect(() => { const t = setInterval(() => force((x) => x + 1), 1000); return () => clearInterval(t); }, []);
+
+  // Un seul chantier aujourd'hui : on peut mettre en avant ses raccourcis (rapport, équipe,
+  // tâches) directement ici, comme la maquette — avec plusieurs chantiers, ambigu, on laisse
+  // l'ouvrier ouvrir la fiche du chantier concerné.
+  const singleWs = plan?.items.length === 1 ? plan.items[0]!.worksite : null;
+  const { data: taskData, reload: reloadTasks } = useApi<{ items: WorkerTask[] }>(singleWs ? `/api/worksites/${singleWs.id}/tasks` : null);
+  const [taskBusy, setTaskBusy] = useState<string | null>(null);
+  const tasks = taskData?.items ?? [];
+
+  async function toggleTask(t: WorkerTask) {
+    setTaskBusy(t.id);
+    await api(`/api/tasks/${t.id}`, { method: 'PATCH', body: { status: t.status === 'done' ? 'todo' : 'done' } });
+    await reloadTasks();
+    setTaskBusy(null);
+  }
 
   async function start(worksiteId: string) {
     const pos = await currentPosition();
@@ -98,10 +114,10 @@ function WorkerToday() {
         <div className="detail-hero" style={{ marginBottom: '1.2rem' }}>
           <div className="eyebrow">Prêt pour la journée</div>
           <div className="mono" style={{ fontSize: '2.6rem', fontWeight: 800, fontVariantNumeric: 'tabular-nums', margin: '0.4rem 0', color: '#fff' }}>00:00:00</div>
-          {linked && plan?.items.length === 1 ? (
+          {linked && singleWs ? (
             <>
-              <div className="sub">{plan.items[0]!.worksite.ref} · {plan.items[0]!.worksite.title}</div>
-              <button className="btn gold" style={{ marginTop: '0.8rem' }} onClick={() => start(plan.items[0]!.worksite.id)}>
+              <div className="sub">{singleWs.ref} · {singleWs.title}</div>
+              <button className="btn gold" style={{ marginTop: '0.8rem' }} onClick={() => start(singleWs.id)}>
                 Commencer le pointage
               </button>
             </>
@@ -136,6 +152,51 @@ function WorkerToday() {
           </div>
         </div>
       ))}
+
+      {singleWs && (
+        <div className="quick-actions">
+          <Link href={`/app/fiche/${singleWs.id}/rapport`} className="quick-action">
+            <span className="ic"><FileText size={20} strokeWidth={2} /></span>
+            <span>
+              <strong>Faire mon rapport</strong>
+              <small>Travaux, photos et remarques</small>
+            </span>
+          </Link>
+          <Link href={`/app/fiche/${singleWs.id}#fil-chantier`} className="quick-action">
+            <span className="ic"><MessageSquare size={20} strokeWidth={2} /></span>
+            <span>
+              <strong>Contacter l’équipe</strong>
+              <small>Échanger sur ce chantier</small>
+            </span>
+          </Link>
+        </div>
+      )}
+
+      {singleWs && tasks.length > 0 && (
+        <>
+          <div className="section-title">Mes tâches du jour</div>
+          <div className="card card-pad" style={{ marginBottom: '1.2rem' }}>
+            {tasks.map((t) => (
+              <div
+                key={t.id}
+                onClick={() => taskBusy !== t.id && toggleTask(t)}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.45rem 0', cursor: 'pointer', opacity: taskBusy === t.id ? 0.5 : 1 }}
+              >
+                <span style={{
+                  width: 20, height: 20, borderRadius: 5, border: `2px solid ${t.status === 'done' ? 'var(--ok)' : 'var(--line)'}`,
+                  background: t.status === 'done' ? 'var(--ok)' : 'transparent', color: '#fff', display: 'flex',
+                  alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: 800, flexShrink: 0,
+                }}>
+                  {t.status === 'done' ? '✓' : ''}
+                </span>
+                <span style={{ textDecoration: t.status === 'done' ? 'line-through' : 'none', color: t.status === 'done' ? 'var(--ink-3)' : 'var(--ink)' }}>
+                  {t.title}{t.assignees.length > 0 ? ` · ${t.assignees.map((a) => a.name).join(', ')}` : ''}
+                </span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </>
   );
 }

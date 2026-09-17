@@ -147,7 +147,7 @@ p { margin: 0; }
 .bottom-tabs { display: none; }
 
 .sidebar {
-  background: var(--nav-bg);
+  background: linear-gradient(155deg, var(--nav-bg-2) 0%, var(--nav-bg) 65%);
   color: var(--nav-fg);
   padding: 1.1rem 0.85rem 1rem;
   display: flex; flex-direction: column; gap: 2px;
@@ -344,7 +344,7 @@ p { margin: 0; }
    Fond = celui de la sidebar (--nav-bg-2), volontairement PAS --primary : --primary
    s'inverse en clair en mode sombre (couleur de texte/accent, pas de fond), alors que
    --nav-bg-2 reste un vert profond dans les deux thèmes (la sidebar est toujours sombre). */
-.kpi.hero { background: var(--nav-bg-2); border-color: var(--nav-bg-2); color: var(--nav-fg-active); }
+.kpi.hero { background: linear-gradient(130deg, var(--nav-bg-2), var(--nav-bg)); border-color: var(--nav-bg-2); color: var(--nav-fg-active); }
 .kpi.hero .ic { background: rgba(255, 255, 255, 0.14); color: var(--nav-fg-active); }
 .kpi.hero .label { color: var(--nav-fg); }
 .kpi.hero .sub { color: var(--nav-fg); }
@@ -476,7 +476,7 @@ p { margin: 0; }
 
 /* ---------------------------------------------------- bannière d'en-tête de fiche (chantier…) */
 .detail-hero {
-  background: var(--nav-bg-2); color: #fbf8ef; border-radius: var(--radius);
+  background: linear-gradient(115deg, var(--nav-bg-2), var(--nav-bg)); color: #fbf8ef; border-radius: var(--radius);
   padding: 1.3rem 1.5rem; margin-bottom: 1.1rem;
 }
 .detail-hero .eyebrow { color: rgba(251, 248, 239, 0.6); margin-bottom: 0.3rem; }
@@ -1071,6 +1071,20 @@ body.plan-wide .main { max-width: none; }
 .avail-card-next { font-size: 0.78rem; color: var(--ink-2); margin-top: 0.1rem; }
 .avail-card-next strong { color: var(--ink); font-weight: 600; }
 .avail-card-actions { display: flex; gap: 0.4rem; margin-top: 0.3rem; }
+
+/* ---------------------------------------------------- raccourcis rapides (espace ouvrier) */
+.quick-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.8rem; margin-bottom: 1.2rem; }
+.quick-action {
+  display: flex; align-items: center; gap: 0.7rem; padding: 1rem; border-radius: 14px;
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink); transition: border-color 0.12s;
+}
+.quick-action:hover { border-color: var(--gold); }
+.quick-action .ic {
+  width: 42px; height: 42px; border-radius: 10px; background: var(--primary-soft); color: var(--primary);
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.quick-action strong { display: block; font-size: 0.9rem; }
+.quick-action small { color: var(--ink-3); font-size: 0.78rem; }
 
 /* ---------------------------------------------------- stock — scan & panier */
 .stock-move-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.9rem; margin-bottom: 1.3rem; }

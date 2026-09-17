@@ -144,7 +144,7 @@ export default function WorkerFichePage({ params }: { params: Promise<{ id: stri
         Faire le rapport de chantier
       </Link>
 
-      <div className="section-title" style={{ marginTop: 0 }}>Fil de chantier</div>
+      <div id="fil-chantier" className="section-title" style={{ marginTop: 0 }}>Fil de chantier</div>
       <ChantierThread worksiteId={w.id} />
     </>
   );

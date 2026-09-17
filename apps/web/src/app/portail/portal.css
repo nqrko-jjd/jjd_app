@@ -34,7 +34,7 @@
 /* ---------------------------------------------------------------- layout */
 .p-shell { display: flex; min-height: 100vh; }
 .p-side {
-  width: var(--p-sidebar); flex-shrink: 0; background: var(--p-green); color: #e8f0ec;
+  width: var(--p-sidebar); flex-shrink: 0; background: linear-gradient(155deg, var(--p-green-600) 0%, var(--p-green-900) 70%); color: #e8f0ec;
   display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh;
   transition: width 0.18s ease;
 }
@@ -121,7 +121,7 @@
 .p-scrim { position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 35; }
 
 /* ---------------------------------------------------------------- hero (accueil) */
-.p-hero { background: var(--p-green); color: #fff; border-radius: 20px; padding: 1.7rem 1.9rem; }
+.p-hero { background: linear-gradient(115deg, var(--p-green-600), var(--p-green-900)); color: #fff; border-radius: 20px; padding: 1.7rem 1.9rem; }
 .p-hero .eyebrow { color: var(--p-gold); text-transform: uppercase; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.12em; margin-bottom: 0.5rem; }
 .p-hero h1 { color: #fff; font-size: 1.6rem; }
 .p-hero .sub { color: rgba(255,255,255,0.78); margin-top: 0.45rem; font-size: 0.92rem; max-width: 46ch; }

@@ -86,4 +86,15 @@ export const env = {
     user: process.env.INVOICES_IMAP_USER ?? '',
     password: process.env.INVOICES_IMAP_PASSWORD ?? '',
   },
+
+  /**
+   * Notifications Web Push (navigateur) — ex. "tu es mentionné dans le fil de chantier X".
+   * Paire de clés VAPID générée une fois (web-push generateVAPIDKeys()), jamais rotée sans
+   * désabonner tout le monde. Sans clés = fonctionnalité désactivée (pas de notification).
+   */
+  webPush: {
+    publicKey: process.env.VAPID_PUBLIC_KEY ?? '',
+    privateKey: process.env.VAPID_PRIVATE_KEY ?? '',
+    subject: process.env.VAPID_SUBJECT ?? 'mailto:david@jjd-consult.be',
+  },
 };

@@ -1093,7 +1093,19 @@ body.plan-wide .main { max-width: none; }
 .msg-bubble.mine { background: var(--primary); color: #fff; border-color: var(--primary); }
 .msg-bubble-img { max-width: 260px; border-radius: 10px; border: 1px solid var(--line); display: block; }
 
-.msg-composer { display: flex; align-items: center; gap: 0.5rem; padding: 0.8rem 1.2rem; border-top: 1px solid var(--line); background: var(--surface); }
+.msg-composer { display: flex; align-items: center; gap: 0.5rem; padding: 0.8rem 1.2rem; border-top: 1px solid var(--line); background: var(--surface); position: relative; }
+.mention-menu {
+  position: absolute; bottom: 100%; left: 1.2rem; margin-bottom: 0.4rem; z-index: 20;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm);
+  box-shadow: var(--shadow); min-width: 180px; max-width: 260px; overflow: hidden;
+}
+.mention-menu button {
+  display: block; width: 100%; text-align: left; padding: 0.5rem 0.8rem; border: 0; background: none;
+  font: inherit; font-size: 0.85rem; cursor: pointer; color: var(--ink);
+}
+.mention-menu button:hover, .mention-menu button:focus-visible { background: var(--surface-2); }
+.mention-tag { color: var(--primary); font-weight: 700; }
+.msg-bubble.mine .mention-tag { color: var(--gold); }
 .msg-send { border-radius: 999px; width: 2.4rem; height: 2.4rem; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
 
 .msg-back { display: none; }

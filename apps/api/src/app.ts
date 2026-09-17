@@ -30,6 +30,7 @@ import { stockRouter } from './routes/stock.js';
 import { assistantRouter } from './routes/assistant.js';
 import { geocodeRouter } from './routes/geocode.js';
 import { usersRouter } from './routes/users.js';
+import { pushRouter } from './routes/push.js';
 
 export function createApp() {
   const app = express();
@@ -46,6 +47,7 @@ export function createApp() {
   app.use('/api/portal', portalRouter);
   app.use('/api/worksites/:worksiteId/thread', threadRouter);
   app.use('/api/messagerie', messagerieRouter);
+  app.use('/api/push', pushRouter);
   app.use('/api/worksites/:worksiteId/reports', worksiteReportsRouter);
   app.use('/api/reports', reportsRouter);
   app.use('/api/worksites/:worksiteId/phases', worksitePhasesRouter);

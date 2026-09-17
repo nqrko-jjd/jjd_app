@@ -89,6 +89,8 @@ model User {
   stockMovements    StockMovement[]    @relation("StockMovementBy")
   personAdjustments PersonAdjustment[] @relation("PersonAdjustmentAuthor")
   threadReads       ThreadRead[]
+  mentions          MessageMention[]
+  pushSubscriptions PushSubscription[]
 }
 
 /// Fiche personne : ouvrier ou chef de chantier. Toutes les infos utiles.
@@ -995,7 +997,37 @@ model Message {
   sharedWithClient Boolean  @default(false) // photo/vidéo interne explicitement partagée avec le client
   createdAt        DateTime @default(now())
 
+  mentions MessageMention[]
+
   @@index([threadId, createdAt])
+}
+
+/// "@Nom" dans un message — un utilisateur interne mentionné, pour le mettre en avant dans
+/// le fil et déclencher une notification push ciblée (voir PushSubscription).
+model MessageMention {
+  id        String   @id @default(cuid())
+  messageId String
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([messageId])
+}
+
+/// Abonnement Web Push (navigateur) d'un utilisateur — un même compte peut être abonné
+/// depuis plusieurs appareils/navigateurs (endpoint = identifiant unique par abonnement).
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 /// Rapport d'intervention rempli sur le terrain par l'ouvrier / le chef,

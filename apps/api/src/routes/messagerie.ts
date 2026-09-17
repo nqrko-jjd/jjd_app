@@ -4,6 +4,7 @@ import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, STAFF, OFFICE } from '../lib/auth.js';
 import { storeImage, storeFile } from '../lib/media.js';
+import { processMentions, mentionNamesFor } from '../lib/mentions.js';
 
 export const messagerieRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
@@ -68,8 +69,19 @@ async function listThreads(userId: string, role: string, personId: string | null
     where: {
       kind: 'worksite',
       messages: { some: { audience } },
-      worksite: { source: { not: 'demo' }, archived },
-      ...(isOffice ? {} : { participants: { some: { personId: personId ?? '__none__' } } }),
+      worksite: {
+        source: { not: 'demo' },
+        archived,
+        // même règle que "Mes chantiers" (GET /worksites/mine) : un chantier "me concerne"
+        // si j'y ai du pointage ou une affectation planning — pas la table ThreadParticipant,
+        // qui n'a jamais été câblée à une UI et reste donc toujours vide en pratique.
+        ...(isOffice ? {} : {
+          OR: [
+            { timeEntries: { some: { personId: personId ?? '__none__' } } },
+            { events: { some: { assignments: { some: { personId: personId ?? '__none__' } } } } },
+          ],
+        }),
+      },
     },
     include: {
       worksite: { select: { id: true, ref: true, title: true, city: true, client: { select: { name: true } } } },
@@ -136,8 +148,16 @@ messagerieRouter.get(
   requireAuth(...STAFF),
   asyncHandler(async (req, res) => {
     const thread = await ensureGeneralThread();
-    const messages = await prisma.message.findMany({ where: { threadId: thread.id }, orderBy: { createdAt: 'asc' } });
-    res.json({ thread, messages });
+    const messages = await prisma.message.findMany({
+      where: { threadId: thread.id },
+      orderBy: { createdAt: 'asc' },
+      include: { mentions: { select: { userId: true } } },
+    });
+    const mentionNames = await mentionNamesFor(messages);
+    res.json({
+      thread,
+      messages: messages.map((m) => ({ ...m, mentions: undefined, mentionedNames: mentionNames.get(m.id) ?? [] })),
+    });
   }),
 );
 
@@ -148,9 +168,11 @@ messagerieRouter.post(
     const thread = await ensureGeneralThread();
     const body = String(req.body.body ?? '').trim();
     if (!body) throw new HttpError(422, 'Message vide');
+    const author = await authorName(req.user!.id);
     const msg = await prisma.message.create({
-      data: { threadId: thread.id, authorId: req.user!.id, authorName: await authorName(req.user!.id), kind: 'text', body, audience: 'internal' },
+      data: { threadId: thread.id, authorId: req.user!.id, authorName: author, kind: 'text', body, audience: 'internal' },
     });
+    await processMentions(msg.id, body, req.user!.id, author, '/app/messagerie').catch(() => {});
     res.status(201).json({ message: msg });
   }),
 );

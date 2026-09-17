@@ -7,6 +7,7 @@ import { requireAuth, STAFF, FIELD_OFFICE, OFFICE } from '../lib/auth.js';
 import { storeImage, storeFile } from '../lib/media.js';
 import { parseWhatsAppChat, buildWhatsAppAuthorMatcher, WHATSAPP_SKIP_BODY } from '../lib/whatsapp-import.js';
 import { extractDocumentInfo } from '../lib/document-extract.js';
+import { processMentions, mentionNamesFor } from '../lib/mentions.js';
 
 export const threadRouter = Router({ mergeParams: true });
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
@@ -43,14 +44,19 @@ threadRouter.get(
       prisma.message.findMany({
         where: { threadId: thread.id, audience: 'internal' },
         orderBy: { createdAt: 'asc' },
-        include: { author: { select: { id: true } } },
+        include: { author: { select: { id: true } }, mentions: { select: { userId: true } } },
       }),
       prisma.threadParticipant.findMany({
         where: { threadId: thread.id },
         include: { person: { select: { id: true, displayName: true, firstName: true } } },
       }),
     ]);
-    res.json({ thread, messages, participants: participants.map((p) => p.person) });
+    const mentionNames = await mentionNamesFor(messages);
+    res.json({
+      thread,
+      messages: messages.map((m) => ({ ...m, mentions: undefined, mentionedNames: mentionNames.get(m.id) ?? [] })),
+      participants: participants.map((p) => p.person),
+    });
   }),
 );
 
@@ -83,9 +89,11 @@ threadRouter.post(
     const body = String(req.body.body ?? '').trim();
     const kind = req.body.kind === 'status' ? 'status' : 'text';
     if (!body) throw new HttpError(422, 'Message vide');
+    const author = await authorName(req.user!.id);
     const msg = await prisma.message.create({
-      data: { threadId: thread.id, authorId: req.user!.id, authorName: await authorName(req.user!.id), kind, body, audience: 'internal' },
+      data: { threadId: thread.id, authorId: req.user!.id, authorName: author, kind, body, audience: 'internal' },
     });
+    if (kind === 'text') await processMentions(msg.id, body, req.user!.id, author, `/app/messagerie?worksite=${worksiteId}`).catch(() => {});
     res.status(201).json({ message: msg });
   }),
 );

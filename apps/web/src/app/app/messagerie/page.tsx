@@ -8,6 +8,9 @@ import { useAuth } from '@/lib/auth';
 import { PageHead, Avatar } from '@/lib/ui';
 import { Search, Paperclip, Send, Building2, ArrowLeft, Mic, Square } from 'lucide-react';
 import { useVoiceRecorder } from '@/lib/useVoiceRecorder';
+import { useMentionInput, splitMentions } from '@/lib/useMentionInput';
+import { usePushNotifications } from '@/lib/usePushNotifications';
+import { Bell, BellOff } from 'lucide-react';
 
 interface ThreadItem {
   id: string; kind: 'general' | 'worksite'; title: string; sub: string; worksiteId: string | null; ref: string | null;
@@ -21,6 +24,7 @@ function refDigits(ref: string | null) {
 interface Msg {
   id: string; kind: string; body: string | null; fileUrl: string | null; thumbUrl: string | null;
   authorName: string | null; authorId?: string | null; createdAt: string; sharedWithClient?: boolean;
+  mentionedNames?: string[];
 }
 
 type Audience = 'internal' | 'client';
@@ -57,6 +61,8 @@ function MessagerieInner() {
   const [tab, setTab] = useState<'chat' | 'gallery'>('chat');
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
+  const mention = useMentionInput(text, setText);
+  const push = usePushNotifications();
   const fileRef = useRef<HTMLInputElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -170,7 +176,22 @@ function MessagerieInner() {
 
   return (
     <>
-      <PageHead eyebrow="Rester en lien" title="Messagerie" sub="Toute l’équipe. Chaque chantier. Un même endroit." />
+      <PageHead
+        eyebrow="Rester en lien"
+        title="Messagerie"
+        sub="Toute l’équipe. Chaque chantier. Un même endroit."
+        action={push.supported && (
+          <button
+            type="button"
+            className="btn ghost"
+            disabled={push.busy}
+            onClick={() => (push.enabled ? push.disable() : push.enable())}
+            title={push.enabled ? 'Désactiver les notifications' : 'Activer les notifications (être prévenu quand on te mentionne)'}
+          >
+            {push.enabled ? <Bell size={17} strokeWidth={2} /> : <BellOff size={17} strokeWidth={2} />}
+          </button>
+        )}
+      />
 
       <div className={`msg-layout${selected ? ' has-selection' : ''}`}>
         <aside className="msg-list">
@@ -307,7 +328,13 @@ function MessagerieInner() {
                         ) : m.kind === 'file' && m.fileUrl ? (
                           <a href={m.fileUrl} target="_blank" rel="noreferrer" className="badge plain" style={{ fontSize: '0.8rem' }}>📎 {m.body || 'Fichier'}</a>
                         ) : null}
-                        {m.body && m.kind !== 'file' && <div className={`msg-bubble${mine ? ' mine' : ''}`}>{m.body}</div>}
+                        {m.body && m.kind !== 'file' && (
+                          <div className={`msg-bubble${mine ? ' mine' : ''}`}>
+                            {splitMentions(m.body, m.mentionedNames ?? []).map((seg, i) => (
+                              seg.mention ? <span key={i} className="mention-tag">{seg.text}</span> : <span key={i}>{seg.text}</span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
@@ -333,13 +360,27 @@ function MessagerieInner() {
                     </button>
                   </>
                 )}
+                {mention.open && (
+                  <div className="mention-menu">
+                    {mention.options.map((c) => (
+                      <button key={c.id} type="button" onClick={() => mention.pick(c)}>@{c.name}</button>
+                    ))}
+                  </div>
+                )}
                 <input
                   className="input"
                   style={{ flex: 1 }}
-                  placeholder="Écrire un message…"
+                  placeholder="Écrire un message… (@ pour mentionner)"
                   value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), send())}
+                  onChange={(e) => mention.onChange(e.target.value, e.target.selectionStart ?? e.target.value.length)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape' && mention.open) { mention.close(); return; }
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      if (mention.open) mention.pick(mention.options[0]!);
+                      else send();
+                    }
+                  }}
                 />
                 <button type="button" className="btn primary msg-send" onClick={send} disabled={busy || !text.trim()}>
                   <Send size={16} strokeWidth={2} />

@@ -5,10 +5,12 @@ import { useApi } from '@/lib/use-api';
 import { useAuth } from '@/lib/auth';
 import { Avatar } from '@/lib/ui';
 import { useVoiceRecorder } from '@/lib/useVoiceRecorder';
+import { useMentionInput, splitMentions } from '@/lib/useMentionInput';
 
 interface Msg {
   id: string; kind: string; body: string | null; fileUrl: string | null; thumbUrl: string | null;
   authorName: string | null; authorId?: string | null; createdAt: string; sharedWithClient?: boolean;
+  mentionedNames?: string[];
 }
 interface ThreadData {
   thread: { id: string; closedAt: string | null };
@@ -32,6 +34,7 @@ export function ChantierThread({ worksiteId }: { worksiteId: string }) {
   const [text, setText] = useState('');
   const [clientText, setClientText] = useState('');
   const [busy, setBusy] = useState(false);
+  const mention = useMentionInput(text, setText);
   const [importMsg, setImportMsg] = useState<string | null>(null);
   const [tab, setTab] = useState<'chat' | 'client' | 'gallery'>('chat');
   const fileRef = useRef<HTMLInputElement>(null);
@@ -244,7 +247,9 @@ export function ChantierThread({ worksiteId }: { worksiteId: string }) {
                     background: mine ? 'var(--primary-soft)' : 'var(--surface-2)',
                     borderRadius: 14, padding: '0.55rem 0.8rem', fontSize: '0.9rem',
                   }}>
-                    {m.body}
+                    {splitMentions(m.body, m.mentionedNames ?? []).map((seg, i) => (
+                      seg.mention ? <span key={i} className="mention-tag">{seg.text}</span> : <span key={i}>{seg.text}</span>
+                    ))}
                   </div>
                 )}
               </div>
@@ -270,13 +275,27 @@ export function ChantierThread({ worksiteId }: { worksiteId: string }) {
       )}
 
       {tab === 'chat' && (
-        <div className="row" style={{ padding: '0.8rem 1.15rem', borderTop: '1px solid var(--line)', gap: '0.5rem' }}>
+        <div className="row" style={{ padding: '0.8rem 1.15rem', borderTop: '1px solid var(--line)', gap: '0.5rem', position: 'relative' }}>
+          {mention.open && (
+            <div className="mention-menu" style={{ bottom: '100%', left: '1.15rem' }}>
+              {mention.options.map((c) => (
+                <button key={c.id} type="button" onClick={() => mention.pick(c)}>@{c.name}</button>
+              ))}
+            </div>
+          )}
           <input
             className="input"
-            placeholder="Écrire un message…"
+            placeholder="Écrire un message… (@ pour mentionner)"
             value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), send())}
+            onChange={(e) => mention.onChange(e.target.value, e.target.selectionStart ?? e.target.value.length)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape' && mention.open) { mention.close(); return; }
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (mention.open) mention.pick(mention.options[0]!);
+                else send();
+              }
+            }}
             style={{ flex: 1 }}
           />
           <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => upload(e.target.files)} />

@@ -10,6 +10,20 @@ const isPaidStr = (s: string | null) =>
 
 export const contactsRouter = Router();
 
+/** Un contact de catégorie "Syndic" doit être relié à une fiche `Syndic` — la table à part
+ *  qui alimente le sélecteur de syndic d'une ACP (`/api/meta/syndics`) et l'accès portail
+ *  syndic (`syndicId` sur `User`). Sans ce lien, un syndic fraîchement créé reste invisible
+ *  partout où on choisit un syndic, même s'il apparaît bien dans la liste des contacts.
+ *  Retrouve une fiche `Syndic` existante du même nom (pour ne pas dupliquer un syndic déjà
+ *  connu, p.ex. importé du fichier Excel) ou en crée une. */
+async function linkSyndic(name: string): Promise<string> {
+  const normalized = normalizeName(name);
+  const existing = await prisma.syndic.findFirst({ where: { normalizedName: normalized } });
+  if (existing) return existing.id;
+  const created = await prisma.syndic.create({ data: { name: name.trim(), normalizedName: normalized } });
+  return created.id;
+}
+
 /** L'API expose l'auto-référence `linkedAcpId`/`linkedAcp` (l'ACP à laquelle CE contact est
  *  rattaché) sous le nom `buildingId`/`building`, conservé pour la compatibilité avec les
  *  clients existants (web/mobile). */
@@ -140,12 +154,13 @@ contactsRouter.post(
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
     const { buildingId, ...data } = contactInput.parse(req.body);
+    const syndicId = data.kind === 'syndic' && !data.syndicId ? await linkSyndic(data.name) : data.syndicId ?? null;
     const contact = await prisma.contact.create({
       data: {
         ...data,
         email: data.email || null,
         normalizedName: normalizeName(data.name),
-        syndicId: data.syndicId ?? null,
+        syndicId,
         linkedAcpId: buildingId ?? null,
         source: 'manual',
       },
@@ -190,6 +205,19 @@ contactsRouter.patch(
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
     const { buildingId, ...data } = contactInput.partial().parse(req.body);
+    const existing = await prisma.contact.findUnique({ where: { id: req.params.id }, select: { kind: true, syndicId: true, name: true } });
+    if (!existing) throw new HttpError(404, 'Contact introuvable');
+    const kind = data.kind ?? existing.kind;
+    let syndicId = data.syndicId;
+    if (kind === 'syndic' && !existing.syndicId && syndicId === undefined) {
+      syndicId = await linkSyndic(data.name ?? existing.name);
+    }
+    // garde le nom de la fiche Syndic à jour (c'est lui qui s'affiche dans le sélecteur de
+    // syndic d'une ACP), sans jamais créer de lien qui n'existait pas déjà
+    const linkedSyndicId = syndicId ?? existing.syndicId;
+    if (kind === 'syndic' && linkedSyndicId && data.name) {
+      await prisma.syndic.update({ where: { id: linkedSyndicId }, data: { name: data.name.trim(), normalizedName: normalizeName(data.name) } });
+    }
     const contact = await prisma.contact.update({
       where: { id: req.params.id },
       data: {
@@ -197,6 +225,7 @@ contactsRouter.patch(
         email: data.email === '' ? null : data.email,
         ...(data.name ? { normalizedName: normalizeName(data.name) } : {}),
         ...(buildingId !== undefined ? { linkedAcpId: buildingId } : {}),
+        ...(syndicId !== undefined ? { syndicId } : {}),
       },
     });
     res.json({ contact: shapeContact(contact) });

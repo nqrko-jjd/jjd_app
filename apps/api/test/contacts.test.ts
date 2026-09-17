@@ -141,3 +141,52 @@ test('immeuble/projet créé "à la volée" puis lié à un contact ACP (flux ch
   await prisma.contact.deleteMany({ where: { id: contact.body.contact.id } });
   await prisma.contact.deleteMany({ where: { id: building.body.building.id } });
 });
+
+test('un contact de catégorie "Syndic" est relié à une fiche Syndic (visible dans le sélecteur ACP)', async () => {
+  await prisma.contact.deleteMany({ where: { name: 'ADAL Immo — test' } });
+  await prisma.syndic.deleteMany({ where: { normalizedName: 'adal immo test' } });
+
+  const r = await jf<{ contact: { id: string; kind: string; syndicId: string | null } }>('/api/contacts', {
+    method: 'POST',
+    body: JSON.stringify({ name: 'ADAL Immo — test', type: 'client', kind: 'syndic' }),
+  });
+  assert.equal(r.status, 201);
+  assert.equal(r.body.contact.kind, 'syndic');
+  assert.ok(r.body.contact.syndicId, 'le contact syndic doit être relié à une fiche Syndic');
+
+  const syndic = await prisma.syndic.findUnique({ where: { id: r.body.contact.syndicId! } });
+  assert.equal(syndic?.name, 'ADAL Immo — test');
+
+  // apparaît bien dans la liste qui alimente le sélecteur de syndic d'une ACP
+  const pickers = await jf<{ syndics: { id: string; name: string }[] }>('/api/meta/pickers');
+  assert.ok(pickers.body.syndics.some((s) => s.id === r.body.contact.syndicId));
+
+  // renommer le contact garde la fiche Syndic (donc le sélecteur) à jour
+  const patched = await jf<{ contact: { syndicId: string | null } }>(`/api/contacts/${r.body.contact.id}`, {
+    method: 'PATCH', body: JSON.stringify({ name: 'ADAL Immo renommé — test' }),
+  });
+  assert.equal(patched.status, 200);
+  assert.equal(patched.body.contact.syndicId, r.body.contact.syndicId, 'ne doit pas créer un second lien');
+  const renamed = await prisma.syndic.findUnique({ where: { id: r.body.contact.syndicId! } });
+  assert.equal(renamed?.name, 'ADAL Immo renommé — test');
+
+  await prisma.contact.deleteMany({ where: { id: r.body.contact.id } });
+  await prisma.syndic.deleteMany({ where: { id: r.body.contact.syndicId! } });
+});
+
+test('un contact "Syndic" du même nom qu\'un syndic déjà connu (import) se relie à lui, pas de doublon', async () => {
+  await prisma.contact.deleteMany({ where: { name: 'Syndic Préexistant — test' } });
+  await prisma.syndic.deleteMany({ where: { normalizedName: 'syndic preexistant test' } });
+  const pre = await prisma.syndic.create({ data: { name: 'Syndic Préexistant — test', normalizedName: 'syndic preexistant test' } });
+
+  const r = await jf<{ contact: { syndicId: string | null } }>('/api/contacts', {
+    method: 'POST',
+    body: JSON.stringify({ name: 'Syndic Préexistant — test', type: 'client', kind: 'syndic' }),
+  });
+  assert.equal(r.status, 201);
+  assert.equal(r.body.contact.syndicId, pre.id);
+  assert.equal(await prisma.syndic.count({ where: { normalizedName: 'syndic preexistant test' } }), 1);
+
+  await prisma.contact.deleteMany({ where: { name: 'Syndic Préexistant — test' } });
+  await prisma.syndic.deleteMany({ where: { id: pre.id } });
+});

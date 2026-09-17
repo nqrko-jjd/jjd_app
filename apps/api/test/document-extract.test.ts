@@ -213,6 +213,20 @@ test('parseDocumentText : "N°" mal décodé en U+FFFD par pdftotext (vu sur de 
   assert.equal(r.docNumber, '23380717');
 });
 
+test('parseDocumentText : "Numéro de facture :" (ordre inversé, vu chez ENGIE) — numéro groupé par espaces', () => {
+  const text = 'Numéro de client: 2 210 930 194\nNuméro de facture: 709 934 470 024';
+  const r = parseDocumentText(text);
+  assert.equal(r.docNumber, '709 934 470 024');
+});
+
+test('parseDocumentText : repli "n°" générique sans chiffre -> ignoré ("novembre" ne doit pas être pris pour un numéro)', () => {
+  // reproduit un vrai cas remonté : une facture ENGIE sans libellé "Facture n°" du tout, dont
+  // le seul texte "no..." du document est "5 novembre 2025" -> capturait "vembre" comme docNumber
+  const text = 'Le paiement sera demandé le 5 novembre 2025.\nTotal (TVA comprise) 169,75';
+  const r = parseDocumentText(text);
+  assert.equal(r.docNumber, null);
+});
+
 test('findWorksiteRefCandidates : plusieurs chantiers cités (facture qui couvre plusieurs chantiers)', () => {
   const refs = findWorksiteRefCandidates('Livraison pour R-69 et complément pour R123 (bon E07 joint)');
   assert.deepEqual(refs, ['R-69', 'R-123', 'E-7']);

@@ -105,6 +105,7 @@ function AchatsInner() {
   const { data: meta } = useApi<Meta>('/api/finance/expenses/meta');
   const { data: mailbox } = useApi<{ configured: boolean }>('/api/finance/expenses/mailbox-status');
   const [syncingMailbox, setSyncingMailbox] = useState(false);
+  const [reprocessing, setReprocessing] = useState(false);
 
   const expenseAccessors = {
     date: (e: Expense) => (e.date ? new Date(e.date) : null),
@@ -176,6 +177,19 @@ function AchatsInner() {
     }
   }
 
+  async function reprocessMailbox() {
+    setReprocessing(true);
+    try {
+      const r = await api<{ scanned: number; updated: number; unchanged: number; errors: string[] }>('/api/finance/expenses/reprocess-email', { method: 'POST' });
+      alert(`${r.updated} facture(s) corrigée(s) sur ${r.scanned} vérifiée(s).${r.errors.length ? `\n${r.errors.length} erreur(s).` : ''}`);
+      reload();
+    } catch (e) {
+      alert(`Échec du retraitement : ${(e as Error).message}`);
+    } finally {
+      setReprocessing(false);
+    }
+  }
+
   function exportCsv() {
     downloadCsv(`/api/finance/expenses/export.csv?${params}`, `achats-${new Date().toISOString().slice(0, 10)}.csv`);
   }
@@ -229,6 +243,9 @@ function AchatsInner() {
                 {syncingMailbox ? 'Synchronisation…' : '✉️ Synchroniser la boîte mail'}
               </button>
             )}
+            <button className="btn" disabled={reprocessing} onClick={reprocessMailbox} title="Relit les factures boîte mail déjà importées dont le montant, le n° ou le fournisseur n'avaient pas été trouvés">
+              {reprocessing ? 'Retraitement…' : '🔄 Retraiter les imports mail'}
+            </button>
             <button className="btn" onClick={exportCsv} title="Exporter la liste filtrée en CSV (éditable dans Excel)">⇩ Exporter CSV</button>
             <button className="btn" onClick={importCsv} title="Réimporter un CSV/Excel corrigé (met à jour par id, crée les nouvelles lignes)">⇧ Importer</button>
             <button className="btn primary" onClick={() => setEdit('new')}>+ Nouvelle dépense</button>

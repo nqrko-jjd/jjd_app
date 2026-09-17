@@ -119,7 +119,15 @@ function findDueDate(text: string): string | null {
 function findDocNumber(text: string): string | null {
   const m = text.match(/(?:facture|devis|note\s+de\s+cr[ée]dit|avoir|offre)\s*n[°o�]\.?\s*:?\s*([A-Z0-9][A-Z0-9\-/.]{1,24})/i)
     ?? text.match(/num[eé]ro\s*(?:\/\s*date)?\s*du\s*document\s*:?\s*([A-Z0-9][A-Z0-9\-/.]{1,24})/i)
-    ?? text.match(/\bn[°o]\.?\s*:?\s*([A-Z0-9][A-Z0-9\-/.]{2,24})\b/i);
+    // ordre inversé "Numéro de facture : …" (vu chez ENGIE) — le numéro peut être groupé par
+    // espaces ("709 934 470 024"), tolérés tant qu'ils séparent deux blocs alphanumériques.
+    ?? text.match(/num[eé]ro\s*de\s*(?:facture|devis|commande)\s*:?\s*([A-Z0-9](?:[A-Z0-9\-/.]|\s(?=[A-Z0-9]))*[A-Z0-9])/i)
+    // repli le plus permissif (pas de mot-clé "facture/devis" devant) : la seule contrainte
+    // (lookahead, ne consomme rien) est qu'il y ait au moins un chiffre dans le jeton — sinon
+    // "novembre", "notre", "nombre"… matchent "n[o]" et capturent la suite du mot comme si
+    // c'était un n° de document (vu en prod : "vembre").
+    ?? text.match(/\bn[°o]\.?\s*:?\s*(?=[A-Z0-9\-/.]*\d)([A-Z0-9][A-Z0-9\-/.]{2,24})\b/i);
+
   if (m) return m[1]!.replace(/[.\-/]+$/, '');
 
   // repli mise en page en tableau : en-tête "No-Doc." (ou variantes, y compris avec un tiret

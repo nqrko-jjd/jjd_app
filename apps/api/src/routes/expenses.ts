@@ -17,7 +17,7 @@ import { storeFile, UPLOADS_DIR } from '../lib/media.js';
 import { nameOverlap } from '../lib/bank-match.js';
 import { extractDocumentInfo } from '../lib/document-extract.js';
 import { toCsv, readTableBuffer, pick } from '../lib/table-io.js';
-import { invoiceMailboxConfigured, syncInvoiceMailbox } from '../lib/invoice-mailbox.js';
+import { invoiceMailboxConfigured, syncInvoiceMailbox, reprocessEmailEntries } from '../lib/invoice-mailbox.js';
 
 export const expensesRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
@@ -454,6 +454,18 @@ expensesRouter.post(
   asyncHandler(async (_req, res) => {
     if (!invoiceMailboxConfigured()) throw new HttpError(409, 'Boîte mail non configurée');
     const stats = await syncInvoiceMailbox();
+    res.json(stats);
+  }),
+);
+
+/** Repasse les dépenses "Boîte mail" déjà importées mais mal extraites (montant/n°/fournisseur
+ *  manquants) dans l'extracteur — utile après une amélioration de document-extract.ts pour
+ *  corriger les PDF déjà en base, pas seulement les prochains reçus. */
+expensesRouter.post(
+  '/reprocess-email',
+  requireAuth(...OFFICE),
+  asyncHandler(async (_req, res) => {
+    const stats = await reprocessEmailEntries();
     res.json(stats);
   }),
 );

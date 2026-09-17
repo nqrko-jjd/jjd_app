@@ -10,11 +10,15 @@
  * Dégradation silencieuse : sans configuration, `invoiceMailboxConfigured()` renvoie false
  * et le sync ne se lance jamais (voir index.ts) — l'app fonctionne normalement sans.
  */
+import { readFileSync, existsSync } from 'node:fs';
+// alias distinct de la variable locale "path" (nom de dossier mail) utilisée plus bas dans ce
+// fichier, pour ne laisser planer aucune ambiguïté entre les deux.
+import nodePath from 'node:path';
 import { ImapFlow, type FetchMessageObject } from 'imapflow';
 import { simpleParser } from 'mailparser';
 import { env } from '../env.js';
 import { prisma } from '../db.js';
-import { storeFile } from './media.js';
+import { storeFile, UPLOADS_DIR } from './media.js';
 import { extractDocumentInfo } from './document-extract.js';
 
 const PROCESSED_MAILBOX = 'Traité par JJD App';
@@ -250,6 +254,61 @@ export async function scanInvoiceMailboxHistory(folders?: string[]): Promise<Sca
     }
   } finally {
     await client.logout().catch(() => client.close());
+  }
+  return stats;
+}
+
+export interface ReprocessStats {
+  scanned: number;
+  updated: number;
+  unchanged: number;
+  errors: string[];
+}
+
+/**
+ * Reprend les dépenses `source: 'email'` déjà créées avec une extraction incomplète (montant à
+ * 0, fournisseur ou n° de document absents) et les repasse dans `extractDocumentInfo` — utile
+ * après une amélioration de l'extracteur (voir document-extract.ts) : corriger les PDF déjà
+ * importés, pas seulement les futurs. Ne touche jamais un champ déjà rempli (une correction
+ * manuelle faite entre-temps par le bureau n'est jamais écrasée).
+ */
+export async function reprocessEmailEntries(): Promise<ReprocessStats> {
+  const stats: ReprocessStats = { scanned: 0, updated: 0, unchanged: 0, errors: [] };
+  const candidates = await prisma.ledgerEntry.findMany({
+    where: {
+      source: 'email',
+      pdfPath: { not: null },
+      OR: [{ supplierName: null }, { ht: 0 }, { docNumber: null }, { ttc: null }],
+    },
+  });
+  stats.scanned = candidates.length;
+
+  for (const entry of candidates) {
+    try {
+      const rel = entry.pdfPath!.replace(/^\/?uploads\//, '');
+      const filePath = nodePath.join(UPLOADS_DIR, rel);
+      if (!existsSync(filePath)) { stats.errors.push(`${entry.id} : pièce jointe introuvable`); continue; }
+      const buffer = readFileSync(filePath);
+      const extraction = await extractDocumentInfo(buffer, 'application/pdf', ['supplier', 'both']);
+
+      const ht = extraction.totalHt
+        ?? (extraction.totalTtc != null ? Math.round((extraction.totalTtc / (1 + (extraction.vatRate ?? 0.21))) * 100) / 100 : null);
+
+      const data: Record<string, unknown> = {};
+      if (!entry.docNumber && extraction.docNumber) data.docNumber = extraction.docNumber;
+      if (!entry.supplierName && extraction.contactName) data.supplierName = extraction.contactName;
+      if (!entry.contactId && extraction.contactId) data.contactId = extraction.contactId;
+      if (!entry.worksiteId && extraction.worksiteId) { data.worksiteId = extraction.worksiteId; data.worksiteRef = extraction.worksiteRef; }
+      if (!entry.ht && ht) data.ht = ht;
+      if (entry.ttc == null && extraction.totalTtc != null) data.ttc = extraction.totalTtc;
+      if (entry.vatRate == null && extraction.vatRate != null) data.vatRate = extraction.vatRate;
+
+      if (Object.keys(data).length === 0) { stats.unchanged++; continue; }
+      await prisma.ledgerEntry.update({ where: { id: entry.id }, data });
+      stats.updated++;
+    } catch (e) {
+      stats.errors.push(`${entry.id} : ${(e as Error).message}`);
+    }
   }
   return stats;
 }

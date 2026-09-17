@@ -35,26 +35,28 @@ export default function PortalQuotes() {
   return (
     <PortalShell title="Devis" subtitle={toValidate > 0 ? `${toValidate} en attente de votre validation` : 'Tous vos devis'}>
       {!items ? <div className="p-empty">Chargement…</div> : items.length === 0 ? <div className="p-empty">Aucun devis.</div> : (
-        <div className="p-panel" style={{ padding: '0.4rem 1rem' }}>
-          <table className="p-tbl">
-            <thead><tr><th>N°</th><th>Objet</th><th>Immeuble</th><th>Reçu</th><th style={{ textAlign: 'right' }}>Montant HT</th><th>Statut</th><th></th></tr></thead>
-            <tbody>
-              {items.map((q) => (
-                <tr key={q.id}>
-                  <td className="p-note" style={{ fontFamily: 'IBM Plex Mono, monospace' }}>{q.number}</td>
-                  <td>{q.worksiteId ? <Link href={`/portail/chantier/${q.worksiteId}`} style={{ fontWeight: 600 }}>{q.title ?? 'Devis'}</Link> : (q.title ?? 'Devis')}</td>
-                  <td className="p-note">{q.building ?? q.worksiteRef ?? '—'}</td>
-                  <td className="p-note">{fdate(q.issuedOn)}</td>
-                  <td style={{ textAlign: 'right', fontWeight: 700 }}>{eur(q.totalHt)}</td>
-                  <td><span className={`p-tag ${TONE[q.status] ?? 'grey'}`}>{LABEL[q.status] ?? q.status}</span></td>
-                  <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                    {q.hasPdf && <button className="p-btn-line" style={{ padding: '0.3rem 0.6rem', fontSize: '0.78rem' }} onClick={() => openPdf(q.id)}>PDF</button>}
-                    {q.status === 'sent' && q.worksiteId && <Link href={`/portail/chantier/${q.worksiteId}`} className="p-btn-primary p-btn-gold" style={{ padding: '0.3rem 0.7rem', fontSize: '0.78rem', marginLeft: 6 }}>Valider</Link>}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div style={{ display: 'grid', gap: '0.8rem' }}>
+          {items.map((q) => (
+            <div key={q.id} className="p-card p-card-pad">
+              <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.6rem' }}>
+                <span className="p-note" style={{ fontFamily: 'IBM Plex Mono, monospace' }}>{q.number}</span>
+                <span className={`p-tag ${TONE[q.status] ?? 'grey'}`}>{LABEL[q.status] ?? q.status}</span>
+              </div>
+              <div style={{ marginTop: '0.35rem', fontWeight: 700 }}>
+                {q.worksiteId ? <Link href={`/portail/chantier/${q.worksiteId}`}>{q.title ?? 'Devis'}</Link> : (q.title ?? 'Devis')}
+              </div>
+              <div className="p-note" style={{ marginTop: '0.2rem' }}>
+                {q.building ?? q.worksiteRef ?? '—'} · reçu le {fdate(q.issuedOn)}
+              </div>
+              <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginTop: '0.7rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <strong>{eur(q.totalHt)} HT</strong>
+                <div className="row" style={{ gap: '0.5rem' }}>
+                  {q.hasPdf && <button className="p-btn-line" style={{ padding: '0.3rem 0.6rem', fontSize: '0.78rem' }} onClick={() => openPdf(q.id)}>PDF</button>}
+                  {q.status === 'sent' && q.worksiteId && <Link href={`/portail/chantier/${q.worksiteId}`} className="p-btn-primary p-btn-gold" style={{ padding: '0.3rem 0.7rem', fontSize: '0.78rem' }}>Valider</Link>}
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </PortalShell>

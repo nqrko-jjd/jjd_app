@@ -98,7 +98,16 @@ function WorkerToday() {
         <div className="detail-hero" style={{ marginBottom: '1.2rem' }}>
           <div className="eyebrow">Prêt pour la journée</div>
           <div className="mono" style={{ fontSize: '2.6rem', fontWeight: 800, fontVariantNumeric: 'tabular-nums', margin: '0.4rem 0', color: '#fff' }}>00:00:00</div>
-          <div className="sub">Aucun compteur actif. Choisis un chantier ci-dessous pour démarrer.</div>
+          {linked && plan?.items.length === 1 ? (
+            <>
+              <div className="sub">{plan.items[0]!.worksite.ref} · {plan.items[0]!.worksite.title}</div>
+              <button className="btn gold" style={{ marginTop: '0.8rem' }} onClick={() => start(plan.items[0]!.worksite.id)}>
+                Commencer le pointage
+              </button>
+            </>
+          ) : (
+            <div className="sub">Aucun compteur actif. Choisis un chantier ci-dessous pour démarrer.</div>
+          )}
         </div>
       ))}
 

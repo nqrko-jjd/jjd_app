@@ -11,7 +11,7 @@ import { useAuth } from '@/lib/auth';
 import { useApi } from '@/lib/use-api';
 import { AssistantChat } from './AssistantChat';
 
-type Item = { href: string; label: string; ic: LucideIcon; roles?: string[]; ext?: boolean };
+type Item = { href: string; label: string; ic: LucideIcon; roles?: string[]; ext?: boolean; noBottomTab?: boolean };
 type Group = { title: string; items: Item[] };
 
 const ROLE_LABEL: Record<string, string> = {
@@ -26,6 +26,7 @@ const WORKER_NAV: Group[] = [
       { href: '/app/mes-chantiers', label: 'Mes chantiers', ic: Building2 },
       { href: '/app/mes-heures', label: 'Mes heures', ic: ListChecks },
       { href: '/app/materiel', label: 'Matériel', ic: Wrench },
+      { href: '/app/stock', label: 'Stock matériaux', ic: Package, noBottomTab: true },
       { href: '/app/messagerie', label: 'Messagerie', ic: MessageSquare },
     ],
   },
@@ -167,7 +168,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
       {isWorker && (
         <nav className="bottom-tabs worker">
-          {WORKER_NAV[0]!.items.map((i) => (
+          {WORKER_NAV[0]!.items.filter((i) => !i.noBottomTab).map((i) => (
             <Link key={i.href} href={i.href} className={`bottom-tab${isActive(i.href) ? ' active' : ''}`}>
               <span className="ic">
                 <i.ic size={20} strokeWidth={2} />

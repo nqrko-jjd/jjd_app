@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 import { PageHead, Money, formatDateBE, Kpi } from '@/lib/ui';
 import { Warehouse, AlertTriangle, Layers, ScanLine } from 'lucide-react';
 import { useSort, useColumnFilter, SortTh } from '@/lib/sort';
@@ -31,6 +32,8 @@ const TYPE_LABEL: Record<string, string> = { in: 'Entrée', out: 'Sortie', adjus
 const TYPE_TONE: Record<string, string> = { in: 'ok', out: 'warn', adjustment: 'plain' };
 
 export default function StockPage() {
+  const { user } = useAuth();
+  const canManage = user?.role !== 'worker'; // un ouvrier consulte le stock, il ne le gère pas
   const [q, setQ] = useState('');
   const [stockFilter, setStockFilter] = useState<'all' | 'low' | 'ok'>('all');
   const [creating, setCreating] = useState(false);
@@ -84,10 +87,12 @@ export default function StockPage() {
         title="Stock de matériaux"
         sub={data ? `${allItems.length} article${allItems.length > 1 ? 's' : ''} · clic sur une ligne pour l’historique` : undefined}
         action={
-          <div className="row">
-            <Link href="/app/stock/scan" className="btn"><ScanLine size={15} strokeWidth={2} /> Scan &amp; mouvements →</Link>
-            <button className="btn primary" onClick={() => setCreating(true)}>+ Nouvel article</button>
-          </div>
+          canManage ? (
+            <div className="row">
+              <Link href="/app/stock/scan" className="btn"><ScanLine size={15} strokeWidth={2} /> Scan &amp; mouvements →</Link>
+              <button className="btn primary" onClick={() => setCreating(true)}>+ Nouvel article</button>
+            </div>
+          ) : undefined
         }
       />
 
@@ -146,7 +151,9 @@ export default function StockPage() {
               </div>
               <div className="row" style={{ padding: '0 0.85rem 0.7rem', justifyContent: 'space-between' }}>
                 <Money value={it.value} />
-                <button type="button" className="btn" style={{ padding: '0.15rem 0.5rem', fontSize: '0.72rem' }} onClick={(e) => { e.stopPropagation(); setMoveItem(it); }}>Mouvement</button>
+                {canManage && (
+                  <button type="button" className="btn" style={{ padding: '0.15rem 0.5rem', fontSize: '0.72rem' }} onClick={(e) => { e.stopPropagation(); setMoveItem(it); }}>Mouvement</button>
+                )}
               </div>
             </div>
           ))}
@@ -175,9 +182,11 @@ export default function StockPage() {
                   <td className="tnum">{it.qty} {it.unit}</td>
                   <td style={{ textAlign: 'right' }}><Money value={it.value} /></td>
                   <td onClick={(e) => e.stopPropagation()}>
-                    <div className="row" style={{ gap: '0.3rem', justifyContent: 'flex-end' }}>
-                      <button className="btn" style={{ padding: '0.2rem 0.5rem', fontSize: '0.78rem' }} onClick={() => setMoveItem(it)}>Mouvement</button>
-                    </div>
+                    {canManage && (
+                      <div className="row" style={{ gap: '0.3rem', justifyContent: 'flex-end' }}>
+                        <button className="btn" style={{ padding: '0.2rem 0.5rem', fontSize: '0.78rem' }} onClick={() => setMoveItem(it)}>Mouvement</button>
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))}

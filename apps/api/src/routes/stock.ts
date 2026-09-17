@@ -8,7 +8,7 @@ import { Router } from 'express';
 import { stockItemInput, stockMovementInput, round2 } from '@jjd/shared';
 import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
-import { requireAuth, OFFICE, FIELD_OFFICE } from '../lib/auth.js';
+import { requireAuth, OFFICE, FIELD_OFFICE, STAFF } from '../lib/auth.js';
 
 export const stockRouter = Router();
 
@@ -16,7 +16,7 @@ export const stockRouter = Router();
 
 stockRouter.get(
   '/items',
-  requireAuth(...FIELD_OFFICE),
+  requireAuth(...STAFF),
   asyncHandler(async (req, res) => {
     const { q, active } = req.query as Record<string, string>;
     const where: Record<string, unknown> = {};
@@ -77,7 +77,7 @@ stockRouter.delete(
 
 stockRouter.get(
   '/movements',
-  requireAuth(...FIELD_OFFICE),
+  requireAuth(...STAFF),
   asyncHandler(async (req, res) => {
     const { stockItemId, worksiteId, type, page: pageStr, pageSize: pageSizeStr } = req.query as Record<string, string>;
     const where: Record<string, unknown> = {};
@@ -165,7 +165,7 @@ stockRouter.post(
 
 stockRouter.get(
   '/meta',
-  requireAuth(...FIELD_OFFICE),
+  requireAuth(...STAFF),
   asyncHandler(async (_req, res) => {
     const worksites = await prisma.worksite.findMany({
       where: { archived: false, kind: 'project' },

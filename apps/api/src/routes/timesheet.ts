@@ -354,13 +354,22 @@ timesheetRouter.post(
   }),
 );
 
-/** Valide en masse les pointages soumis (sauf ceux signalés « hors zone »). */
+/**
+ * Valide en masse les pointages soumis (sauf ceux signalés « hors zone »).
+ * `before`/`after` (optionnels) bornent par date — utile après un ré-import CSV qui repasse
+ * tout en "à valider" (comportement voulu, cf. /entries/import) quand seule une partie
+ * (ex. le mois en cours) doit rester en attente.
+ */
 timesheetRouter.post(
   '/entries/approve-all',
   requireAuth('admin', 'office', 'foreman'),
   asyncHandler(async (req, res) => {
     const includeFlagged = req.body?.includeFlagged === true;
+    const { before, after } = req.body ?? {};
     const where: Record<string, unknown> = { status: 'submitted', ...(includeFlagged ? {} : { geoFlag: false }) };
+    if (before || after) {
+      where.date = { ...(after ? { gte: new Date(after) } : {}), ...(before ? { lt: new Date(before) } : {}) };
+    }
     if (req.user!.role === 'foreman') {
       if (!req.user!.personId) return res.json({ approved: 0 });
       where.worksite = { managerId: req.user!.personId };

@@ -324,6 +324,24 @@ export const expenseInput = z.object({
 });
 export type ExpenseInput = z.infer<typeof expenseInput>;
 
+/**
+ * Écriture "Facture de vente" du grand livre saisie/rattrapée à la main (ex. import xlsx pas
+ * encore à jour) — distincte de expenseInput qui ne couvre que achats/dépenses.
+ */
+export const saleEntryBackfillInput = z.object({
+  date: z.coerce.date(),
+  docNumber: z.string().trim().nullish(),
+  worksiteId: z.string().nullish(),
+  contactId: z.string().nullish(),
+  clientName: z.string().trim().nullish(),
+  categoryRaw: z.string().trim().nullish(),
+  ht: z.coerce.number(),
+  vatDue: z.coerce.number().nullish(),
+  ttc: z.coerce.number().nullish(),
+  paymentStatus: z.enum(['Non payé', 'Payé']).default('Non payé'),
+});
+export type SaleEntryBackfillInput = z.infer<typeof saleEntryBackfillInput>;
+
 export const stockItemInput = z.object({
   name: z.string().trim().min(1),
   unit: z.string().trim().min(1),

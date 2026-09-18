@@ -9,7 +9,7 @@ import path from 'node:path';
 import { createReadStream, existsSync, readFileSync } from 'node:fs';
 import multer from 'multer';
 import { zipSync } from 'fflate';
-import { expenseInput, parseAmount, parseLooseDate } from '@jjd/shared';
+import { expenseInput, saleEntryBackfillInput, parseAmount, parseLooseDate } from '@jjd/shared';
 import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, OFFICE, FIELD_OFFICE } from '../lib/auth.js';
@@ -502,6 +502,47 @@ expensesRouter.post(
         ttc: d.ttc ?? null,
         vatRate: d.vatRate ?? null,
         notes: d.notes ?? null,
+        paymentStatus: d.paymentStatus,
+        paidOn: d.paymentStatus === 'Payé' ? d.date : null,
+        source: 'manual',
+        createdById: req.user!.id,
+      },
+      include: inc,
+    });
+    res.status(201).json({ expense: e });
+  }),
+);
+
+/**
+ * Écriture "Facture de vente" du grand livre saisie/rattrapée à la main — pour compléter le
+ * CA (utilisé par "Facturé HT" sur la liste Chantiers) quand le dernier import xlsx n'est
+ * pas à jour. Distinct de POST / (achats/dépenses uniquement) : direction toujours 'sale',
+ * le contact est le client facturé, jamais un fournisseur.
+ */
+expensesRouter.post(
+  '/sale-backfill',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const d = saleEntryBackfillInput.parse(req.body);
+    let clientName = d.clientName ?? null;
+    if (d.contactId) {
+      const c = await prisma.contact.findUnique({ where: { id: d.contactId }, select: { name: true } });
+      if (c) clientName = c.name;
+    }
+    const e = await prisma.ledgerEntry.create({
+      data: {
+        ...derive(d.date),
+        date: d.date,
+        direction: 'sale',
+        docType: 'Facture de vente',
+        docNumber: d.docNumber ?? null,
+        supplierName: clientName,
+        contactId: d.contactId ?? null,
+        categoryRaw: d.categoryRaw ?? null,
+        worksiteId: d.worksiteId ?? null,
+        ht: d.ht,
+        vatDue: d.vatDue ?? null,
+        ttc: d.ttc ?? null,
         paymentStatus: d.paymentStatus,
         paidOn: d.paymentStatus === 'Payé' ? d.date : null,
         source: 'manual',

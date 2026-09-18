@@ -17,12 +17,18 @@ import {
   WORKSITE_PROGRESS_PCT, type WorksiteStatus,
 } from '@jjd/shared';
 
-const STATUS_VIEWS: { key: string; label: string }[] = [
+/**
+ * Un chantier clôturé est auto-archivé (cf. PATCH /worksites — sinon il encombre les listes),
+ * donc invisible tant qu'on ne demande pas explicitement archived=1 : onglet dédié plutôt que
+ * regroupé avec "Terminés" (qui ne montre que des chantiers encore actifs/non archivés).
+ */
+const STATUS_VIEWS: { key: string; label: string; archived?: boolean }[] = [
   { key: '', label: 'Tous' },
   { key: 'in_progress', label: 'En cours' },
   { key: 'to_plan,scheduled', label: 'À planifier' },
   { key: 'to_invoice', label: 'À facturer' },
-  { key: 'done,invoiced,closed', label: 'Terminés' },
+  { key: 'done,invoiced', label: 'Terminés' },
+  { key: 'closed', label: 'Clôturé', archived: true },
 ];
 
 interface WS {
@@ -56,9 +62,11 @@ function ChantiersInner() {
 
   useEffect(() => { setPage(1); setSelected(new Set()); }, [q, status, kind]);
 
+  const activeView = STATUS_VIEWS.find((v) => v.key === status);
   const params = new URLSearchParams();
   if (q) params.set('q', q);
   if (status) params.set('status', status);
+  if (activeView?.archived) params.set('archived', '1');
   params.set('kind', kind);
   params.set('page', String(page));
   params.set('pageSize', String(pageSize));

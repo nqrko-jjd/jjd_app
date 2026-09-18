@@ -43,6 +43,9 @@ test('guessWorksiteStatus lit le texte libre', () => {
   assert.equal(guessWorksiteStatus('En cours'), 'in_progress');
   assert.equal(guessWorksiteStatus('Devis Envoyé'), 'lead');
   assert.equal(guessWorksiteStatus('/'), 'to_plan');
+  // « Clôturé » seul (sans les mots facturé/payé) doit résoudre en statut terminal 'closed',
+  // pas 'done' — ex-bug quand le libellé de la feuille est passé de « Terminé, Facturé » à « Clôturé ».
+  assert.equal(guessWorksiteStatus('Clôturé'), 'closed');
 });
 
 test('marge chantier : réel = payé - matériaux - main d’œuvre', () => {

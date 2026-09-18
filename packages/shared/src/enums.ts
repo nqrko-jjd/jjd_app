@@ -157,9 +157,13 @@ export function guessWorksiteStatus(raw: string | null | undefined): WorksiteSta
   // Perdu : devis refusé / chantier abandonné / annulé
   if (s.includes('abandon') || s.includes('refus') || s.includes('annul') || s.includes('perdu')) return 'cancelled';
 
+  // Clôturé = statut terminal explicite (facturé + payé), qu'il soit ou non
+  // accompagné des mots « facturé »/« payé » dans le texte (ex. juste « Clôturé »).
+  if (s.includes('clotur')) return 'closed';
+
   const aFacturer = s.includes('a factur') || s.includes('non factur') || s.includes('pas factur') || s.includes('decompte');
   const facture = s.includes('factur') && !aFacturer;
-  const termine = s.includes('termin') || s.includes('fini') || s.includes('clotur');
+  const termine = s.includes('termin') || s.includes('fini');
   const paye = s.includes('paye') || s.includes('encaiss') || s.includes('solde');
 
   if (facture && paye) return 'closed';

@@ -287,6 +287,24 @@ export const documentInput = z.object({
   lines: z.array(documentLineInput).default([]),
 });
 
+/**
+ * Facture/devis historique dont le numéro est déjà connu (papier, ancien système avant
+ * TrustUp…) et pour lequel il n'y a pas de PDF à importer — saisie directe avec le numéro
+ * d'origine, jamais via le compteur auto (qui ne s'applique qu'aux documents réellement émis
+ * depuis l'appli).
+ */
+export const documentBackfillInput = z.object({
+  number: z.string().trim().min(1),
+  kind: z.enum(['quote', 'invoice', 'credit_note', 'deposit_invoice']).default('invoice'),
+  worksiteId: z.string().nullish(),
+  contactId: z.string().nullish(),
+  title: z.string().trim().nullish(),
+  issuedOn: z.coerce.date(),
+  ht: z.number(),
+  vatRate: z.number().min(0).max(1).default(0),
+  paid: z.boolean().default(false),
+});
+
 /** Facture d'achat / dépense — une ligne du grand livre saisie à la main. */
 export const expenseInput = z.object({
   date: z.coerce.date(),
@@ -428,6 +446,7 @@ export const priceItemInput = z.object({
 
 export type DocumentLineInput = z.infer<typeof documentLineInput>;
 export type DocumentInput = z.infer<typeof documentInput>;
+export type DocumentBackfillInput = z.infer<typeof documentBackfillInput>;
 export type PriceItemInput = z.infer<typeof priceItemInput>;
 
 export type ContactInput = z.infer<typeof contactInput>;

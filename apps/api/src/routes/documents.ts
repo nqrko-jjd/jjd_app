@@ -4,7 +4,7 @@ import { createReadStream, existsSync, readFileSync, mkdirSync, writeFileSync } 
 import { zipSync } from 'fflate';
 import multer from 'multer';
 import { nanoid } from 'nanoid';
-import { documentInput, priceItemInput, DOC_KIND_LABEL } from '@jjd/shared';
+import { documentInput, documentBackfillInput, priceItemInput, DOC_KIND_LABEL } from '@jjd/shared';
 import { prisma, nextCounter } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, OFFICE } from '../lib/auth.js';
@@ -118,6 +118,53 @@ documentsRouter.post(
 
     const full = await prisma.document.findUnique({ where: { id: doc.id }, include: docInclude });
     res.status(201).json({ document: full, extraction });
+  }),
+);
+
+/**
+ * Facture/devis historique déjà connu (numéro papier, ancien système avant TrustUp…), sans
+ * PDF à joindre — saisie directe avec le numéro d'origine. Distinct de /import (PDF) et de
+ * la création normale (POST /, numéro auto via /issue) : ici le numéro est imposé, jamais
+ * généré, donc jamais utilisé pour un document réellement émis depuis l'appli.
+ */
+documentsRouter.post(
+  '/backfill',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const data = documentBackfillInput.parse(req.body);
+    const clash = await prisma.document.findFirst({ where: { kind: data.kind, number: data.number } });
+    if (clash) throw new HttpError(409, `Le numéro ${data.number} existe déjà (${DOC_KIND_LABEL[data.kind]}).`);
+
+    const doc = await prisma.document.create({
+      data: {
+        kind: data.kind,
+        direction: data.kind === 'credit_note' ? 'credit_note' : 'sale',
+        number: data.number,
+        status: data.paid ? 'paid' : 'sent',
+        worksiteId: data.worksiteId ?? null,
+        contactId: data.contactId ?? null,
+        title: data.title ?? null,
+        issuedOn: data.issuedOn,
+        lockedAt: data.issuedOn,
+        source: 'legacy',
+        createdById: req.user!.id,
+      },
+    });
+    await prisma.documentLine.createMany({
+      data: buildLineRows(doc.id, [{
+        kind: 'item', label: data.title || 'Facture historique', description: null,
+        qty: 1, unit: 'forfait', unitPriceHt: data.ht, discountPct: 0, vatRate: data.vatRate, priceItemId: null,
+      }]),
+    });
+    const totals = await refreshDocTotals(doc.id);
+    if (data.paid) {
+      await prisma.document.update({ where: { id: doc.id }, data: { paidAmount: totals.totalTtc, paidOn: data.issuedOn } });
+    }
+    await prisma.auditLog.create({
+      data: { actorId: req.user!.id, action: 'backfill', entity: 'document', entityId: doc.id, meta: { number: doc.number } },
+    });
+    const full = await prisma.document.findUnique({ where: { id: doc.id }, include: docInclude });
+    res.status(201).json({ document: full });
   }),
 );
 

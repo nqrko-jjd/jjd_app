@@ -217,6 +217,14 @@ async function insertChunked<T>(model: { createMany: (a: { data: T[] }) => Promi
 /** Codes de pointage volontaires (pas des chantiers) — jamais un "réf non standard". */
 const ABSENCE_CODES = new Set(['A', 'C', 'CP']);
 
+/** Le mois en cours au moment de l'import n'est jamais "clos" côté pointage (David valide
+ *  encore au fur et à mesure) — ces lignes-là arrivent "à valider" (submitted), pas déjà
+ *  approuvées comme le reste de l'historique. */
+const now = new Date();
+function isCurrentMonth(d: Date | null): boolean {
+  return !!d && d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+}
+
 async function importTime(sh: SheetData) {
   const batchRows: Prisma.TimeEntryCreateManyInput[] = [];
   for (const row of sh.rows) {
@@ -264,7 +272,7 @@ async function importTime(sh: SheetData) {
       amount,
       rateUsed: hours && amount ? Number((amount / hours).toFixed(2)) : null,
       task,
-      status: 'approved',
+      status: isCurrentMonth(date) ? 'submitted' : 'approved',
       subcontractor: sub,
       source: 'xlsx',
     });

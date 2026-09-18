@@ -46,7 +46,12 @@ worksitesRouter.get(
   requireAuth(...STAFF),
   asyncHandler(async (req, res) => {
     const { status, entity, q, archived, kind, page: pageStr, pageSize: pageSizeStr } = req.query as Record<string, string>;
-    const where: Record<string, unknown> = { archived: archived === '1' ? true : false, kind: kind || 'project' };
+    // "Clôturé" est un statut comme un autre pour la page Chantiers (onglet "Tous" =
+    // archived=all, montre tout) ; archived reste par ailleurs le filtre "actif ?" utilisé
+    // par le tableau de bord, le picker planning/stock, la messagerie et la synchro Bricoloc.
+    const where: Record<string, unknown> = { kind: kind || 'project' };
+    if (archived === '1') where.archived = true;
+    else if (archived !== 'all') where.archived = false;
     // le chef de chantier ne voit que les chantiers dont il est responsable
     if (req.user!.role === 'foreman') {
       if (!req.user!.personId) return res.json({ items: [], page: 1, pageSize: 0, totalCount: 0, totalPages: 1 });

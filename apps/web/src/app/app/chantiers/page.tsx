@@ -18,17 +18,18 @@ import {
 } from '@jjd/shared';
 
 /**
- * Un chantier clôturé est auto-archivé (cf. PATCH /worksites — sinon il encombre les listes),
- * donc invisible tant qu'on ne demande pas explicitement archived=1 : onglet dédié plutôt que
- * regroupé avec "Terminés" (qui ne montre que des chantiers encore actifs/non archivés).
+ * "Clôturé" est un statut comme un autre ici (au même titre que "Terminé"/"En cours") — même si,
+ * côté backend, un chantier clôturé est aussi marqué archived=true pour ne pas encombrer le
+ * tableau de bord/la messagerie/le picker planning-stock. L'onglet "Tous" doit donc explicitement
+ * demander archived=all (sinon le filtre par défaut du backend masquerait les clôturés).
  */
-const STATUS_VIEWS: { key: string; label: string; archived?: boolean }[] = [
-  { key: '', label: 'Tous' },
+const STATUS_VIEWS: { key: string; label: string; archived?: '1' | 'all' }[] = [
+  { key: '', label: 'Tous', archived: 'all' },
   { key: 'in_progress', label: 'En cours' },
   { key: 'to_plan,scheduled', label: 'À planifier' },
   { key: 'to_invoice', label: 'À facturer' },
   { key: 'done,invoiced', label: 'Terminés' },
-  { key: 'closed', label: 'Clôturé', archived: true },
+  { key: 'closed', label: 'Clôturé', archived: '1' },
 ];
 
 interface WS {
@@ -65,7 +66,7 @@ function ChantiersInner() {
   const params = new URLSearchParams();
   if (q) params.set('q', q);
   if (status) params.set('status', status);
-  if (activeView?.archived) params.set('archived', '1');
+  if (activeView?.archived) params.set('archived', activeView.archived);
   params.set('kind', kind);
   params.set('page', String(page));
   params.set('pageSize', String(pageSize));

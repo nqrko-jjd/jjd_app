@@ -51,6 +51,7 @@ export async function monthlyStatement(personId: string, year: number, month: nu
   }
 
   const byWorksite = new Map<string, { ref: string; title: string; hours: number; amount: number; days: number }>();
+  const workedDays = new Set<string>();
   let totalHours = 0;
   let totalAmount = 0;
   let pending = 0;
@@ -58,6 +59,7 @@ export async function monthlyStatement(personId: string, year: number, month: nu
     totalHours += e.hours ?? 0;
     totalAmount += e.amount ?? 0;
     if (e.status === 'submitted') pending++;
+    if (e.date) workedDays.add(dayKey(e.date));
     const key = e.worksite?.ref ?? '—';
     const row = byWorksite.get(key) ?? { ref: key, title: e.worksite?.title ?? 'Sans chantier', hours: 0, amount: 0, days: 0 };
     row.hours += e.hours ?? 0;
@@ -74,12 +76,26 @@ export async function monthlyStatement(personId: string, year: number, month: nu
     month,
     totalHours: round2(totalHours),
     totalAmount: round2(totalAmount),
+    totalDays: workedDays.size,
     dailyHoursGuarantee: dailyHours,
     guaranteeApplied: floorAmountAdded > 0.01,
     pendingCount: pending,
     entryCount: entries.length,
     worksiteCount: byWorksite.size,
     byWorksite: [...byWorksite.values()].map((r) => ({ ...r, hours: round2(r.hours), amount: round2(r.amount) })),
+    // détail ligne par ligne — permet de corriger/supprimer un pointage précis depuis le décompte,
+    // plutôt que seulement voir le total agrégé par chantier.
+    entries: entries.map((e) => ({
+      id: e.id,
+      date: e.date,
+      worksiteId: e.worksiteId,
+      worksiteRef: e.worksite?.ref ?? null,
+      worksiteTitle: e.worksite?.title ?? null,
+      hours: e.hours,
+      amount: e.amount,
+      task: e.task,
+      status: e.status,
+    })),
   };
 }
 
@@ -102,6 +118,7 @@ export async function teamMonthlyStatement(year: number, month: number) {
       contractType: p.contractType,
       hourlyRate: p.hourlyRate,
       hours: s.totalHours,
+      days: s.totalDays,
       amount: s.totalAmount,
       // avances/dettes non réglées -> à déduire de ce paiement (simple repère, pas soustrait
       // automatiquement des rapports de marge/consolidé, qui restent basés sur le pointage réel)

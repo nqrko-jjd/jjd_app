@@ -377,9 +377,25 @@ timesheetRouter.patch(
     const d = timeEntryInput.partial().parse(req.body);
     const entry = await prisma.timeEntry.update({
       where: { id: req.params.id },
-      data: { hours: d.hours ?? undefined, amount: d.amount ?? undefined, task: d.task, note: d.note, worksiteId: d.worksiteId },
+      data: {
+        date: d.date ?? undefined,
+        hours: d.hours ?? undefined,
+        amount: d.amount ?? undefined,
+        task: d.task,
+        note: d.note,
+        worksiteId: d.worksiteId,
+      },
     });
     res.json({ entry });
+  }),
+);
+
+timesheetRouter.delete(
+  '/entries/:id',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    await prisma.timeEntry.delete({ where: { id: req.params.id } });
+    res.status(204).end();
   }),
 );
 

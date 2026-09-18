@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
-import { PageHead, StatusBadge, Money, ProgressCell, Avatar } from '@/lib/ui';
+import { PageHead, StatusBadge, Money, ProgressCell } from '@/lib/ui';
 import { NewWorksiteWizard } from '@/components/NewWorksiteWizard';
 import { ContextMenu, useContextMenu, openActions, type MenuItem } from '@/components/ContextMenu';
 import { PaginationBar } from '@/components/PaginationBar';
@@ -34,10 +34,9 @@ const STATUS_VIEWS: { key: string; label: string; archived?: boolean }[] = [
 interface WS {
   id: string; ref: string; title: string; status: string; priority: string; entity: string;
   scope: string | null; billingMode: string | null;
-  city: string | null; quotedHt: number | null; endedOn: string | null;
+  city: string | null; quotedHt: number | null; invoicedHt: number; endedOn: string | null;
   client: { name: string } | null;
   manager: { displayName: string | null; firstName: string } | null;
-  building: { photoThumbUrl: string | null } | null;
 }
 
 export default function ChantiersPage() {
@@ -75,7 +74,7 @@ function ChantiersInner() {
     ref: (w: WS) => w.ref,
     manager: (w: WS) => w.manager?.displayName ?? w.manager?.firstName,
     status: (w: WS) => WORKSITE_STATUS_LABEL[w.status as keyof typeof WORKSITE_STATUS_LABEL] ?? w.status,
-    quotedHt: (w: WS) => w.quotedHt,
+    invoicedHt: (w: WS) => w.invoicedHt,
   };
   const sort = useSort<WS>(data?.items ?? [], wsAccessors);
 
@@ -231,7 +230,7 @@ function ChantiersInner() {
                 <SortTh k="ref" sort={sort}>Chantier</SortTh>
                 <SortTh k="manager" sort={sort}>Responsable</SortTh>
                 <SortTh k="status" sort={sort}>Statut</SortTh>
-                <SortTh k="quotedHt" sort={sort} align="right">Devisé HT</SortTh>
+                <SortTh k="invoicedHt" sort={sort} align="right">Facturé HT</SortTh>
                 <th>Avancement</th>
                 <th />
               </tr>
@@ -248,7 +247,6 @@ function ChantiersInner() {
                     <input type="checkbox" checked={selected.has(w.id)} onChange={() => toggleSelected(w.id)} aria-label="Sélectionner" />
                   </td>
                   <td>
-                    <Avatar src={w.building?.photoThumbUrl} label={w.title} />
                     <Link href={`/app/chantiers/${w.id}`}>{w.title}</Link>
                     <div className="muted" style={{ fontSize: '0.78rem' }}>
                       {w.ref}{w.client?.name ? ` · ${w.client.name}` : ''}{w.city ? ` · ${w.city}` : ''}
@@ -256,7 +254,7 @@ function ChantiersInner() {
                   </td>
                   <td>{w.manager?.displayName ?? w.manager?.firstName ?? '—'}</td>
                   <td><StatusBadge status={w.status} /></td>
-                  <td style={{ textAlign: 'right' }}><Money value={w.quotedHt} /></td>
+                  <td style={{ textAlign: 'right' }}><Money value={w.invoicedHt} /></td>
                   <td><ProgressCell pct={WORKSITE_PROGRESS_PCT[w.status as WorksiteStatus] ?? 0} /></td>
                   <td className="muted">→</td>
                 </tr>

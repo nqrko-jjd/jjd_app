@@ -4,6 +4,27 @@ import { worksiteTransport, type WorksiteTransport } from './vehicle-cost.js';
 import { isOuvrierRemuneration, isCreditNoteSale, isPaid, isVehicleFinancing } from './consolidated.js';
 
 /**
+ * Facturé HT par chantier — juste la partie "CA vente" de worksiteMargin(), en un seul aller-
+ * retour DB pour toute une liste (page Chantiers) plutôt qu'un worksiteMargin() complet par ligne
+ * (qui ferait 4+ requêtes par chantier, bien trop coûteux sur une liste).
+ */
+export async function worksiteInvoicedHtBatch(worksiteIds: string[]): Promise<Map<string, number>> {
+  const totals = new Map<string, number>();
+  if (worksiteIds.length === 0) return totals;
+  const ledger = await prisma.ledgerEntry.findMany({
+    where: { worksiteId: { in: worksiteIds }, direction: { in: ['sale', 'credit_note'] } },
+    select: { worksiteId: true, ht: true, direction: true, categoryRaw: true },
+  });
+  for (const e of ledger) {
+    if (!e.worksiteId) continue;
+    if (e.direction === 'sale' || (e.direction === 'credit_note' && isCreditNoteSale(e.categoryRaw))) {
+      totals.set(e.worksiteId, (totals.get(e.worksiteId) ?? 0) + e.ht);
+    }
+  }
+  return totals;
+}
+
+/**
  * Marge réelle d'un chantier, calculée à partir des lignes du grand livre
  * (CA vente / coût achat) et du pointage validé (coût main-d'œuvre).
  */

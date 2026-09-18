@@ -7,7 +7,7 @@ import {
 import { prisma, nextWorksiteRef } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, STAFF, OFFICE } from '../lib/auth.js';
-import { worksiteMargin } from '../lib/worksite-margin.js';
+import { worksiteMargin, worksiteInvoicedHtBatch } from '../lib/worksite-margin.js';
 import { geocode } from '../lib/geocode.js';
 import { syncChantierSafe } from '../lib/bricoloc.js';
 import { toCsv, readTableBuffer, pick } from '../lib/table-io.js';
@@ -82,8 +82,9 @@ worksitesRouter.get(
       }),
       prisma.worksite.count({ where }),
     ]);
+    const invoicedById = await worksiteInvoicedHtBatch(items.map((w) => w.id));
     res.json({
-      items: items.map(({ acp, ...w }) => ({ ...w, building: acp })),
+      items: items.map(({ acp, ...w }) => ({ ...w, building: acp, invoicedHt: invoicedById.get(w.id) ?? 0 })),
       page, pageSize, totalCount, totalPages: Math.max(1, Math.ceil(totalCount / pageSize)),
     });
   }),

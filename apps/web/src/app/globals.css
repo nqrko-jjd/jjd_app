@@ -713,9 +713,15 @@ p { margin: 0; }
   padding: 0.9rem 1rem; box-shadow: var(--shadow-sm);
 }
 .chart-tile-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-3); font-weight: 700; }
-.chart-tile-value { font-family: var(--font-serif); font-size: clamp(1.15rem, 2.4vw, 1.7rem); font-weight: 700; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; margin: 0.1rem 0 0.25rem; overflow-wrap: anywhere; }
+.chart-tile-value { font-family: var(--font-serif); font-size: clamp(1.05rem, 1.7vw, 1.5rem); font-weight: 700; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; margin: 0.1rem 0 0.25rem; overflow-wrap: anywhere; }
 .chart-tile-foot { display: flex; gap: 0.5rem; align-items: baseline; flex-wrap: wrap; min-height: 1rem; }
-.chart-delta { font-size: 0.8rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.chart-delta {
+  display: inline-flex; align-items: center; gap: 0.2rem; padding: 0.1rem 0.5rem; border-radius: 999px;
+  font-size: 0.76rem; font-weight: 700; font-variant-numeric: tabular-nums;
+  background: var(--surface-3); color: var(--ink-3);
+}
+.chart-delta.ok { background: var(--ok-soft); color: var(--ok); }
+.chart-delta.crit { background: var(--crit-soft); color: var(--crit); }
 .chart-tile-sub { font-size: 0.74rem; color: var(--ink-3); }
 
 .chart-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 1.4rem; }
@@ -1206,7 +1212,7 @@ body.plan-wide .main { max-width: none; }
 }
 
 .msg-layout {
-  display: grid; grid-template-columns: 300px 1fr; gap: 0; border: 1px solid var(--line);
+  display: grid; grid-template-columns: 320px 1fr; gap: 0; border: 1px solid var(--line);
   border-radius: var(--radius); background: var(--surface); overflow: hidden;
   height: calc(100dvh - 220px); min-height: 480px;
 }
@@ -1237,7 +1243,7 @@ body.plan-wide .main { max-width: none; }
 .msg-row-bottom { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-top: 0.15rem; }
 .msg-row-preview { font-size: 0.78rem; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .msg-unread-dot {
-  background: var(--ok); color: #fff; font-size: 0.68rem; font-weight: 700; border-radius: 999px;
+  background: var(--gold); color: #241c05; font-size: 0.68rem; font-weight: 700; border-radius: 999px;
   min-width: 1.15rem; height: 1.15rem; padding: 0 0.3rem; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
 }
 
@@ -1263,13 +1269,13 @@ body.plan-wide .main { max-width: none; }
   width: 100%; aspect-ratio: 1 / 1; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); display: block;
 }
 .msg-status { text-align: center; margin: 0.3rem 0; }
-.msg-status span { background: var(--surface-2); border-radius: 999px; padding: 0.25rem 0.7rem; font-size: 0.74rem; color: var(--ink-3); }
+.msg-status span { background: var(--surface-2); border-radius: 999px; padding: 0.25rem 0.7rem; font-size: 0.74rem; color: var(--ink-3); font-style: italic; }
 .msg-bubble-row { display: flex; gap: 0.5rem; align-items: flex-end; }
 .msg-bubble-row.mine { flex-direction: row-reverse; }
 .msg-bubble-col { display: flex; flex-direction: column; gap: 0.2rem; max-width: 75%; }
 .msg-bubble-row.mine .msg-bubble-col { align-items: flex-end; }
 .msg-bubble-meta { font-size: 0.7rem; color: var(--ink-3); }
-.msg-bubble { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 0.55rem 0.8rem; font-size: 0.9rem; line-height: 1.45; }
+.msg-bubble { background: var(--primary-soft); border: 1px solid var(--primary-line); border-radius: 14px; padding: 0.55rem 0.8rem; font-size: 0.9rem; line-height: 1.45; }
 .msg-bubble.mine { background: var(--primary); color: #fff; border-color: var(--primary); }
 .msg-bubble-img { max-width: 260px; border-radius: 10px; border: 1px solid var(--line); display: block; }
 
@@ -1286,7 +1292,7 @@ body.plan-wide .main { max-width: none; }
 .mention-menu button:hover, .mention-menu button:focus-visible { background: var(--surface-2); }
 .mention-tag { color: var(--primary); font-weight: 700; }
 .msg-bubble.mine .mention-tag { color: var(--gold); }
-.msg-send { border-radius: 999px; width: 2.4rem; height: 2.4rem; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+.msg-send { border-radius: 999px; width: 42px; height: 42px; min-height: 42px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
 
 .msg-back { display: none; }
 

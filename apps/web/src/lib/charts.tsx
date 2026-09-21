@@ -1,14 +1,12 @@
 'use client';
-import { useId } from 'react';
 import { formatEur } from '@jjd/shared';
 
 /* Graphiques SVG légers, sans dépendance. Couleurs = variables du thème. */
 
 const C = {
   ink: 'var(--ink)', ink2: 'var(--ink-2)', ink3: 'var(--ink-3)',
-  line: 'var(--line)', primary: 'var(--gold)', ok: 'var(--ok)', crit: 'var(--crit)',
+  line: 'var(--line)', primary: 'var(--primary)', gold: 'var(--gold)', strong: 'var(--line-strong)', ok: 'var(--ok)', crit: 'var(--crit)',
 };
-const DONUT_PALETTE = ['#1d4235', '#c1922a', '#2f6bd0', '#4a9d78', '#a8611f', '#7c5cbf', '#c6463a', '#8a938c'];
 
 const eurShort = (n: number) => {
   const a = Math.abs(n);
@@ -37,7 +35,7 @@ export function TrendTile({
       <div className="chart-tile-value">{value}</div>
       <div className="chart-tile-foot">
         {delta != null && Number.isFinite(delta) && (
-          <span className="chart-delta" style={{ color: `var(--${tone})` }}>
+          <span className={`chart-delta ${tone}`}>
             {up ? '▲' : delta < 0 ? '▼' : '·'} {Math.abs(delta).toLocaleString('fr-BE', { maximumFractionDigits: 1 })}{deltaSuffix}
           </span>
         )}
@@ -65,16 +63,16 @@ export function RevenueChart({
   const n = Math.max(data.length, 1);
   const slot = innerW / n;
 
-  const max = Math.max(1, ...data.map((d) => Math.max(d.revenue, d.expenses)));
-  const minR = Math.min(0, ...data.map((d) => d.result));
-  const maxR = Math.max(0, ...data.map((d) => d.result));
-  const y = (v: number) => padT + innerH - (v / max) * innerH;
-  const yR = (v: number) => padT + innerH - ((v - minR) / (maxR - minR || 1)) * innerH;
+  // échelle commune aux trois séries, ligne de base à 0 (le résultat peut être négatif)
+  const vals = data.flatMap((d) => [d.revenue, d.expenses, d.result]);
+  const top = Math.max(1, ...vals);
+  const bottom = Math.min(0, ...vals);
+  const range = top - bottom || 1;
+  const y = (v: number) => padT + innerH - ((v - bottom) / range) * innerH;
+  const y0 = y(0);
 
-  const bw = Math.min(slot * 0.34, 26);
-  const ticks = [0, 0.5, 1].map((f) => f * max);
-
-  const resultPts = data.map((d, i) => `${padL + slot * (i + 0.5)},${yR(d.result)}`).join(' ');
+  const bw = Math.min(slot * 0.26, 18);
+  const ticks = [bottom, 0, top].filter((t, i, a) => a.indexOf(t) === i);
 
   return (
     <div className="chart-scroll">
@@ -87,23 +85,23 @@ export function RevenueChart({
         ))}
         {data.map((d, i) => {
           const cx = padL + slot * (i + 0.5);
+          const bar = (v: number, x: number, fill: string) => (
+            <rect x={x} y={Math.min(y(v), y0)} width={bw} height={Math.abs(y(v) - y0)} rx="2" fill={fill} />
+          );
           return (
             <g key={d.month}>
-              <rect x={cx - bw - 1} y={y(d.revenue)} width={bw} height={Math.max(0, padT + innerH - y(d.revenue))} rx="2" fill={C.primary} />
-              <rect x={cx + 1} y={y(d.expenses)} width={bw} height={Math.max(0, padT + innerH - y(d.expenses))} rx="2" fill="var(--ink-3)" opacity="0.55" />
+              {bar(d.revenue, cx - bw * 1.5 - 1, C.primary)}
+              {bar(d.expenses, cx - bw * 0.5, C.strong)}
+              {bar(d.result, cx + bw * 0.5 + 1, C.gold)}
               <text x={cx} y={H - 8} textAnchor="middle" fontSize="10" fill={C.ink3}>{monthShort(d.month)}</text>
             </g>
           );
         })}
-        <polyline points={resultPts} fill="none" stroke={C.ok} strokeWidth="2" />
-        {data.map((d, i) => (
-          <circle key={d.month} cx={padL + slot * (i + 0.5)} cy={yR(d.result)} r="2.5" fill={C.ok} />
-        ))}
       </svg>
       <div className="chart-legend">
-        <span><i style={{ background: 'var(--primary)' }} />CA</span>
-        <span><i style={{ background: 'var(--ink-3)', opacity: 0.55 }} />Dépenses</span>
-        <span><i style={{ background: 'var(--ok)' }} />Résultat</span>
+        <span><i style={{ background: C.primary }} />CA</span>
+        <span><i style={{ background: C.strong }} />Dépenses</span>
+        <span><i style={{ background: C.gold }} />Résultat</span>
       </div>
     </div>
   );
@@ -146,54 +144,6 @@ export function MonthBars({
           );
         })}
       </svg>
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------ donut */
-
-export function Donut({
-  data, size = 190,
-}: {
-  data: { label: string; total: number }[]; size?: number;
-}) {
-  const id = useId();
-  const total = data.reduce((s, d) => s + Math.abs(d.total), 0) || 1;
-  const r = size / 2;
-  const stroke = size * 0.16;
-  const rr = r - stroke / 2;
-  const circ = 2 * Math.PI * rr;
-  let acc = 0;
-  return (
-    <div className="chart-donut">
-      <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size}>
-        <circle cx={r} cy={r} r={rr} fill="none" stroke="var(--surface-2)" strokeWidth={stroke} />
-        {data.map((d, i) => {
-          const frac = Math.abs(d.total) / total;
-          const seg = (
-            <circle
-              key={`${id}-${i}`}
-              cx={r} cy={r} r={rr} fill="none"
-              stroke={DONUT_PALETTE[i % DONUT_PALETTE.length]}
-              strokeWidth={stroke}
-              strokeDasharray={`${frac * circ} ${circ}`}
-              strokeDashoffset={-acc * circ}
-              transform={`rotate(-90 ${r} ${r})`}
-            />
-          );
-          acc += frac;
-          return seg;
-        })}
-      </svg>
-      <ul className="chart-donut-legend">
-        {data.map((d, i) => (
-          <li key={d.label}>
-            <i style={{ background: DONUT_PALETTE[i % DONUT_PALETTE.length] }} />
-            <span className="l">{d.label}</span>
-            <span className="v">{formatEur(d.total)}</span>
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }

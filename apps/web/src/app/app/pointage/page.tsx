@@ -37,6 +37,17 @@ export default function PointagePage() {
     setFlash({ tone: 'success', text: `${r.approved} pointage(s) validé(s).` });
     reload();
   }
+  async function approvePerson(name: string, entries: Pending[]) {
+    // les lignes « hors zone » restent à contrôler une par une, comme pour « Tout valider »
+    const ids = entries.filter((e) => !e.geoFlag).map((e) => e.id);
+    const skipped = entries.length - ids.length;
+    await Promise.all(ids.map((id) => api(`/api/timesheet/entries/${id}/approve`, { method: 'POST' })));
+    setFlash({
+      tone: 'success',
+      text: `${name} : ${ids.length} pointage(s) validé(s)${skipped ? ` — ${skipped} hors zone laissé(s) à contrôler` : ''}.`,
+    });
+    reload();
+  }
   function exportCsv() {
     downloadCsv('/api/timesheet/entries/export.csv', `horaires-${toDateInput(new Date())}.csv`);
   }
@@ -124,6 +135,15 @@ export default function PointagePage() {
           <div className="section-title" style={{ display: 'flex', alignItems: 'center' }}>
             <Avatar src={entries[0]!.person.photoThumbUrl} label={name} />
             {name} <span className="hint">{entries.length} · {formatHours(entries.reduce((a, e) => a + (e.hours ?? 0), 0))} · <Money value={entries.reduce((a, e) => a + (e.amount ?? 0), 0)} /></span>
+            <button
+              className="btn primary"
+              style={{ marginLeft: 'auto' }}
+              disabled={entries.every((e) => e.geoFlag)}
+              onClick={() => approvePerson(name, entries)}
+              title={entries.some((e) => e.geoFlag) ? 'Valide toutes les lignes sauf celles pointées hors zone' : 'Valide tous les pointages de cette personne'}
+            >
+              Valider la personne
+            </button>
           </div>
           <div className="tbl-wrap">
             <table className="tbl">
@@ -164,6 +184,13 @@ export default function PointagePage() {
           </div>
         </div>
       ))}
+
+      {flagged > 0 && (
+        <Banner tone="warn" title={`${flagged} ligne${flagged > 1 ? 's' : ''} hors zone`}>
+          Les lignes surlignées ont été pointées loin du chantier de référence. « Tout valider » et « Valider la personne » les
+          laissent de côté : vérifiez le lieu (📍 voir) puis validez-les une par une, ou refusez-les.
+        </Banner>
+      )}
     </>
   );
 }

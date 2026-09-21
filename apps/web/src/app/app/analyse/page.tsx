@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
 import { useAuth } from '@/lib/auth';
 import { PageHead, Money, formatEur } from '@/lib/ui';
-import { TrendTile, RevenueChart, MonthBars, Donut, HBars } from '@/lib/charts';
+import { TrendTile, RevenueChart, MonthBars, HBars } from '@/lib/charts';
 import { ENTITY_LABEL } from '@jjd/shared';
 
 interface Analytics {
@@ -87,7 +87,7 @@ export default function AnalysePage() {
             <div className="card card-pad">
               <div className="eyebrow" style={{ marginBottom: '0.8rem' }}>Répartition des dépenses</div>
               {data.expenseSections.length === 0 ? <div className="muted">Aucune dépense sur la période.</div>
-                : <Donut data={data.expenseSections.map((s) => ({ label: s.label, total: s.total }))} />}
+                : <HBars rows={data.expenseSections.map((s) => ({ label: s.label, value: s.total }))} />}
             </div>
             <div className="card card-pad">
               <div className="eyebrow" style={{ marginBottom: '0.8rem' }}>Top chantiers · marge réelle</div>

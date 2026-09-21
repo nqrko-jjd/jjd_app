@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { portalApi, portalBlobUrl, usePortalGuard } from '@/lib/portal';
 import { PortalShell } from '../../PortalShell';
+import { EmptyState, ErrorState, SkeletonRows } from '@/components/States';
 
 interface Data {
   worksite: {
@@ -52,19 +53,27 @@ function PortalWorksiteInner({ params }: { params: Promise<{ id: string }> }) {
   const { me, loading } = usePortalGuard();
   const sp = useSearchParams();
   const [data, setData] = useState<Data | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [msgOpen, setMsgOpen] = useState(sp.get('discussion') === '1');
   const full = data?.access !== 'limited';
   const [msg, setMsg] = useState('');
   const [quoteNotes, setQuoteNotes] = useState<Record<string, string>>({});
 
-  const load = () => portalApi<Data>(`/worksites/${id}`).then(setData).catch(() => {});
+  const load = () => portalApi<Data>(`/worksites/${id}`).then((d) => { setData(d); setLoadError(null); }).catch((e) => setLoadError(e instanceof Error ? e.message : 'Erreur'));
   useEffect(() => { if (me) load(); }, [me, id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (msgOpen && data?.threadId) portalApi(`/messages/${data.threadId}/read`, { method: 'POST' }).catch(() => {});
   }, [msgOpen, data?.threadId]);
 
   if (loading || !me) return null;
-  if (!data) return <PortalShell><p className="p-note">Chargement…</p></PortalShell>;
+  if (!data) {
+    return (
+      <PortalShell>
+        <Link href="/portail/interventions" className="p-back">← Interventions</Link>
+        {loadError ? <ErrorState message={loadError} onRetry={load} /> : <SkeletonRows rows={5} height={90} />}
+      </PortalShell>
+    );
+  }
   const w = data.worksite;
   const stepIdx = w.status === 'scheduled' ? 1
     : w.status === 'in_progress' ? 2
@@ -193,7 +202,7 @@ function PortalWorksiteInner({ params }: { params: Promise<{ id: string }> }) {
             {full && (
               <div className="p-panel">
                 <div className="p-panel-h"><h2>Documents</h2></div>
-                {data.quotes.length === 0 && data.invoices.length === 0 && <p className="p-note">Aucun document.</p>}
+                {data.quotes.length === 0 && data.invoices.length === 0 && <p className="p-note">Aucun devis ni facture pour cette intervention pour l’instant — ils apparaissent ici dès leur émission.</p>}
                 {data.quotes.map((q) => {
                   const pending = q.status !== 'accepted' && q.status !== 'declined';
                   return (
@@ -261,7 +270,7 @@ function PortalWorksiteInner({ params }: { params: Promise<{ id: string }> }) {
             {msgOpen && (
               <div className="p-panel">
                 <div className="p-thread">
-                  {data.messages.length === 0 && <p className="p-note">Aucun message. Écrivez à l’équipe ci-dessous.</p>}
+                  {data.messages.length === 0 && <p className="p-note">Aucun message pour l’instant. Écrivez à l’équipe ci-dessous : nous répondons ici.</p>}
                   {data.messages.map((m) => (
                     <div key={m.id} className={`p-msg ${m.fromClient ? 'mine' : ''} ${m.kind === 'status' ? 'status' : ''}`}>
                       {m.kind !== 'status' && <div className="who">{m.authorName} · {new Date(m.createdAt).toLocaleString('fr-BE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</div>}

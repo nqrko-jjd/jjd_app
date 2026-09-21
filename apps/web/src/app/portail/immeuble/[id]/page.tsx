@@ -1,8 +1,10 @@
 'use client';
-import { use, useEffect, useState } from 'react';
+import { use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { portalApi, usePortalGuard } from '@/lib/portal';
+import { Building2 } from 'lucide-react';
+import { usePortalApi, usePortalGuard } from '@/lib/portal';
+import { EmptyState, ErrorState, SkeletonRows } from '@/components/States';
 import { PortalShell } from '../../PortalShell';
 
 interface Building {
@@ -20,21 +22,17 @@ export default function BuildingPage({ params }: { params: Promise<{ id: string 
   const { id } = use(params);
   const { me, loading } = usePortalGuard();
   const router = useRouter();
-  const [b, setB] = useState<Building | null>(null);
-
-  useEffect(() => {
-    if (!me) return;
-    portalApi<{ buildings: Building[] }>('/buildings')
-      .then((r) => setB(r.buildings.find((x) => x.id === id) ?? null))
-      .catch(() => {});
-  }, [me, id]);
+  const { data, error, reload } = usePortalApi<{ buildings: Building[] }>(me ? '/buildings' : null);
+  const b = data?.buildings.find((x) => x.id === id) ?? null;
 
   if (loading || !me) return null;
 
   return (
     <PortalShell>
       <Link href="/portail/immeubles" className="p-back">← Tous les immeubles</Link>
-      {!b ? <p className="p-note">Chargement…</p> : (
+      {error ? <ErrorState message={error} onRetry={reload} /> : !data ? <SkeletonRows rows={4} height={90} /> : !b ? (
+        <EmptyState icon={Building2} title="Immeuble introuvable" text="Cet immeuble n’existe pas ou n’est pas rattaché à votre compte." action={<Link href="/portail/immeubles" className="btn primary">Tous les immeubles</Link>} />
+      ) : (
         <>
           <div className="p-hero sm">
             <div className="eyebrow">Immeuble</div>
@@ -79,7 +77,7 @@ export default function BuildingPage({ params }: { params: Promise<{ id: string 
                 </div>
               ))}
             </div>
-            {b.worksites.length === 0 && <p className="p-note" style={{ padding: '0.8rem 0' }}>Aucune intervention.</p>}
+            {b.worksites.length === 0 && <p className="p-note" style={{ padding: '0.8rem 0' }}>Aucune intervention sur cet immeuble pour l’instant. <Link href={`/portail/demande?building=${b.id}`} style={{ color: 'var(--p-green-600)', fontWeight: 700 }}>Faire une demande →</Link></p>}
           </div>
         </>
       )}

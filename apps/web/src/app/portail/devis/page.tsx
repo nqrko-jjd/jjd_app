@@ -1,7 +1,8 @@
 'use client';
-import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { portalApi, portalBlobUrl, usePortalGuard } from '@/lib/portal';
+import { FileText } from 'lucide-react';
+import { portalBlobUrl, usePortalApi, usePortalGuard } from '@/lib/portal';
+import { EmptyState, ErrorState, SkeletonRows } from '@/components/States';
 import { PortalShell } from '../PortalShell';
 
 interface Quote {
@@ -16,15 +17,12 @@ const LABEL: Record<string, string> = { sent: 'À valider', accepted: 'Accepté'
 
 export default function PortalQuotes() {
   const { me, loading } = usePortalGuard();
-  const [items, setItems] = useState<Quote[] | null>(null);
-
-  useEffect(() => {
-    if (me) portalApi<{ items: Quote[] }>('/quotes').then((r) => setItems(r.items)).catch(() => {});
-  }, [me]);
+  const { data, error, reload } = usePortalApi<{ items: Quote[] }>(me && me.access !== 'limited' ? '/quotes' : null);
+  const items = data?.items ?? null;
 
   if (loading || !me) return null;
   if (me.access === 'limited') {
-    return <PortalShell title="Devis"><div className="p-empty">Les devis sont gérés par le syndic de votre immeuble.</div></PortalShell>;
+    return <PortalShell title="Devis"><EmptyState icon={FileText} title="Devis gérés par votre syndic" text="Les devis de votre immeuble sont validés par le syndic. Vous suivez l’avancement des interventions depuis « Interventions »." action={<Link href="/portail/interventions" className="btn primary">Voir les interventions</Link>} /></PortalShell>;
   }
   const toValidate = (items ?? []).filter((q) => q.status === 'sent').length;
 
@@ -34,7 +32,7 @@ export default function PortalQuotes() {
 
   return (
     <PortalShell title="Devis" subtitle={toValidate > 0 ? `${toValidate} en attente de votre validation` : 'Tous vos devis'}>
-      {!items ? <div className="p-empty">Chargement…</div> : items.length === 0 ? <div className="p-empty">Aucun devis.</div> : (
+      {error ? <ErrorState message={error} onRetry={reload} /> : !items ? <SkeletonRows rows={4} height={96} /> : items.length === 0 ? <EmptyState icon={FileText} title="Aucun devis pour l’instant" text="Dès que JJD Consult vous envoie un devis, il apparaît ici et vous pouvez le valider ou le décliner." action={<Link href="/portail/demande" className="btn primary">Nouvelle demande</Link>} secondary={<Link href="/portail/interventions" className="btn">Voir les interventions</Link>} /> : (
         <div style={{ display: 'grid', gap: '0.8rem' }}>
           {items.map((q) => (
             <div key={q.id} className="p-card p-card-pad">

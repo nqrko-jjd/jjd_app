@@ -1,7 +1,9 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
-import { portalApi, portalBlobUrl, usePortalGuard } from '@/lib/portal';
+import { FileText } from 'lucide-react';
+import { portalBlobUrl, usePortalApi, usePortalGuard } from '@/lib/portal';
+import { EmptyState, ErrorState, SkeletonRows } from '@/components/States';
 import { PortalShell } from '../PortalShell';
 
 interface Doc {
@@ -39,13 +41,10 @@ function statusTag(doc: Doc) {
 
 export default function PortalDocuments() {
   const { me, loading } = usePortalGuard();
-  const [items, setItems] = useState<Doc[] | null>(null);
   const [kind, setKind] = useState('');
   const [paidFilter, setPaidFilter] = useState<'' | 'paid' | 'unpaid'>('');
-
-  useEffect(() => {
-    if (me) portalApi<{ items: Doc[] }>(`/documents?${kind ? `kind=${kind}` : ''}`).then((r) => setItems(r.items)).catch(() => {});
-  }, [me, kind]);
+  const { data, error, reload } = usePortalApi<{ items: Doc[] }>(me && me.access !== 'limited' ? `/documents?${kind ? `kind=${kind}` : ''}` : null);
+  const items = data?.items ?? null;
 
   const visible = (items ?? []).filter((doc) => {
     if (!paidFilter) return true;
@@ -55,7 +54,7 @@ export default function PortalDocuments() {
 
   if (loading || !me) return null;
   if (me.access === 'limited') {
-    return <PortalShell title="Documents"><div className="p-empty">Les devis et factures sont gérés par le syndic de votre immeuble.</div></PortalShell>;
+    return <PortalShell title="Documents"><EmptyState icon={FileText} title="Documents gérés par votre syndic" text="Les devis et factures de votre immeuble sont adressés au syndic. Vous suivez l’avancement des interventions depuis « Interventions »." action={<Link href="/portail/interventions" className="btn primary">Voir les interventions</Link>} /></PortalShell>;
   }
 
   async function openPdf(id: string) {
@@ -84,7 +83,7 @@ export default function PortalDocuments() {
           <button className={paidFilter === 'paid' ? 'on' : ''} onClick={() => setPaidFilter('paid')}>Payées</button>
         </div>
       )}
-      {!items ? <div className="p-empty">Chargement…</div> : visible.length === 0 ? <div className="p-empty">Aucun document.</div> : (
+      {error ? <ErrorState message={error} onRetry={reload} /> : !items ? <SkeletonRows rows={5} height={72} /> : visible.length === 0 ? <EmptyState icon={FileText} title="Aucun document" text={paidFilter || kind ? 'Aucun document ne correspond à ce filtre. Élargissez la sélection pour retrouver vos devis et factures.' : 'Vos devis, factures et notes de crédit apparaissent ici dès qu’ils sont émis.'} action={paidFilter || kind ? <button type="button" className="btn primary" onClick={() => { setKind(''); setPaidFilter(''); }}>Afficher tous les documents</button> : <Link href="/portail/interventions" className="btn primary">Voir les interventions</Link>} /> : (
         <div style={{ display: 'grid', gap: '1rem' }}>
           {[...groups.entries()].map(([building, docs]) => (
             <div key={building} className="p-panel">

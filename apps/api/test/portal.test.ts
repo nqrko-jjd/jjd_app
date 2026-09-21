@@ -135,7 +135,7 @@ test('portail : nouvelle demande d’intervention (parcours 4 étapes) — photo
       problemType: 'fuite',
       unitLabel: 'Lot 4B',
       details: 'Ça coule sous l’évier',
-      urgent: true,
+      urgency: 'urgent',
       onSiteContactName: 'Mme Test',
       onSiteContactPhone: '0470000000',
       accessNotes: 'Code 1234',
@@ -144,12 +144,14 @@ test('portail : nouvelle demande d’intervention (parcours 4 étapes) — photo
     }),
   });
   assert.equal(r.status, 201);
-  const { id } = await r.json();
+  const { id, reference } = await r.json() as { id: string; reference: string };
+  assert.match(reference, /^INT-[0-9]{4}-[A-Z0-9]{5}$/);
 
   const opp = await prisma.crmOpportunity.findUnique({ where: { id }, include: { photos: true } });
   assert.equal(opp?.problemType, 'fuite');
   assert.equal(opp?.unitLabel, 'Lot 4B');
   assert.equal(opp?.urgent, true);
+  assert.equal(opp?.urgency, 'urgent');
   assert.equal(opp?.onSiteContactName, 'Mme Test');
   assert.equal(opp?.accessNotes, 'Code 1234');
   assert.equal(opp?.visitPreference, 'Matinée');
@@ -226,4 +228,24 @@ test('portail : accès résident limité — scoping immeuble + pas de devis/fac
 
   await prisma.user.deleteMany({ where: { email: 'test-resident@portal.test' } });
   await prisma.loginToken.deleteMany({ where: { email: 'test-resident@portal.test' } });
+});
+
+test('portail : urgence à 3 niveaux — « soon » n’est pas urgent, l’ancien booléen `urgent` reste accepté', async () => {
+  const post = async (extra: Record<string, unknown>) => {
+    const r = await fetch(`${base}/api/portal/requests`, {
+      method: 'POST', headers: { ...auth(), 'content-type': 'application/json' },
+      body: JSON.stringify({ title: 'Test urgence portail', ...extra }),
+    });
+    assert.equal(r.status, 201);
+    return (await r.json() as { id: string }).id;
+  };
+  const soon = await post({ urgency: 'soon' });
+  const legacy = await post({ urgent: true });
+  const plain = await post({});
+  const rows = await prisma.crmOpportunity.findMany({ where: { id: { in: [soon, legacy, plain] } } });
+  const by = (id: string) => rows.find((x) => x.id === id)!;
+  assert.deepEqual([by(soon).urgency, by(soon).urgent], ['soon', false]);
+  assert.deepEqual([by(legacy).urgency, by(legacy).urgent], ['urgent', true]);
+  assert.deepEqual([by(plain).urgency, by(plain).urgent], ['normal', false]);
+  await prisma.crmOpportunity.deleteMany({ where: { id: { in: [soon, legacy, plain] } } });
 });

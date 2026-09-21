@@ -1,7 +1,10 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { portalApi, usePortalGuard } from '@/lib/portal';
+import Link from 'next/link';
+import { ClipboardList } from 'lucide-react';
+import { usePortalApi, usePortalGuard } from '@/lib/portal';
+import { EmptyState, ErrorState, SkeletonRows } from '@/components/States';
 import { PortalShell } from '../PortalShell';
 
 interface WS {
@@ -28,17 +31,13 @@ const STATUS_VIEWS: { key: string; label: string }[] = [
 export default function PortalInterventions() {
   const { me, loading } = usePortalGuard();
   const router = useRouter();
-  const [items, setItems] = useState<WS[] | null>(null);
   const [status, setStatus] = useState('open');
   const [q, setQ] = useState('');
-
-  useEffect(() => {
-    if (!me) return;
-    const p = new URLSearchParams();
-    if (status) p.set('status', status);
-    if (q) p.set('q', q);
-    portalApi<{ items: WS[] }>(`/interventions?${p}`).then((r) => setItems(r.items)).catch(() => {});
-  }, [me, status, q]);
+  const params = new URLSearchParams();
+  if (status) params.set('status', status);
+  if (q) params.set('q', q);
+  const { data, error, reload } = usePortalApi<{ items: WS[] }>(me ? `/interventions?${params}` : null);
+  const items = data?.items ?? null;
 
   if (loading || !me) return null;
 
@@ -53,7 +52,7 @@ export default function PortalInterventions() {
         <input className="p-input" placeholder="Réf, objet…" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
 
-      {!items ? <div className="p-empty">Chargement…</div> : items.length === 0 ? <div className="p-empty">Aucune intervention.</div> : (
+      {error ? <ErrorState message={error} onRetry={reload} /> : !items ? <SkeletonRows rows={6} height={64} /> : items.length === 0 ? <EmptyState icon={ClipboardList} title={q || status !== 'open' ? 'Aucune intervention ne correspond' : 'Aucune intervention en cours'} text={q || status !== 'open' ? 'Modifiez le filtre ou la recherche pour élargir la liste.' : 'Vous n’avez pas d’intervention en cours. Signalez un besoin et JJD Consult revient vers vous.'} action={<Link href="/portail/demande" className="btn primary">Nouvelle demande</Link>} secondary={q || status !== 'open' ? <button type="button" className="btn" onClick={() => { setStatus(''); setQ(''); }}>Toutes les interventions</button> : undefined} /> : (
         <div className="p-panel" style={{ padding: '0.4rem 0.5rem' }}>
           <div className="p-ilist">
             {items.map((w) => (

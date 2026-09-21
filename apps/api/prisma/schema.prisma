@@ -481,6 +481,7 @@ model CrmOpportunity {
   problemType        String? // fuite | electricite | chauffage | porte | peinture | toiture | autre
   unitLabel          String? // lot / appartement / zone précise
   urgent             Boolean  @default(false)
+  urgency            String? // normal | soon | urgent — niveau choisi dans le parcours (urgent = booléen ci-dessus)
   onSiteContactName  String?
   onSiteContactPhone String?
   accessNotes        String?

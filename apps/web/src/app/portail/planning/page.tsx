@@ -1,7 +1,9 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import Link from 'next/link';
-import { portalApi, usePortalGuard } from '@/lib/portal';
+import { CalendarDays } from 'lucide-react';
+import { usePortalApi, usePortalGuard } from '@/lib/portal';
+import { EmptyState, ErrorState, SkeletonRows } from '@/components/States';
 import { PortalShell } from '../PortalShell';
 
 interface Evt {
@@ -12,11 +14,8 @@ interface Evt {
 
 export default function PortalPlanning() {
   const { me, loading } = usePortalGuard();
-  const [items, setItems] = useState<Evt[] | null>(null);
-
-  useEffect(() => {
-    if (me) portalApi<{ items: Evt[] }>('/planning').then((r) => setItems(r.items)).catch(() => {});
-  }, [me]);
+  const { data, error, reload } = usePortalApi<{ items: Evt[] }>(me ? '/planning' : null);
+  const items = data?.items ?? null;
 
   const byDay = useMemo(() => {
     const m = new Map<string, Evt[]>();
@@ -31,7 +30,7 @@ export default function PortalPlanning() {
 
   return (
     <PortalShell title="Planning" subtitle="Les interventions programmées sur votre portefeuille">
-      {!items ? <div className="p-empty">Chargement…</div> : byDay.length === 0 ? <div className="p-empty">Aucune intervention programmée.</div> : (
+      {error ? <ErrorState message={error} onRetry={reload} /> : !items ? <SkeletonRows rows={4} height={110} /> : byDay.length === 0 ? <EmptyState icon={CalendarDays} title="Rien de programmé ces deux prochaines semaines" text="Dès qu’une intervention est planifiée sur votre portefeuille, elle apparaît ici jour par jour." action={<Link href="/portail/demande" className="btn primary">Nouvelle demande</Link>} secondary={<Link href="/portail/interventions" className="btn">Voir les interventions</Link>} /> : (
         <div className="p-list">
           {byDay.map(([day, evts]) => (
             <div key={day} className="p-panel">

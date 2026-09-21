@@ -1,5 +1,5 @@
 'use client';
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 
 const BASE = '/jjd-api/api/portal';
@@ -87,4 +87,24 @@ export function usePortalGuard() {
     }
   }, [loading, me, pathname, router]);
   return { me, loading };
+}
+
+/** Lecture portail avec état (data/error/reload) — même contrat que `useApi` côté bureau. `null` = ne rien charger. */
+export function usePortalApi<T>(path: string | null) {
+  const [data, setData] = useState<T | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(!!path);
+
+  const reload = useCallback(() => {
+    if (!path) return;
+    setLoading(true);
+    portalApi<T>(path)
+      .then((d) => { setData(d); setError(null); })
+      .catch((e) => { setData(null); setError(e instanceof Error ? e.message : 'Erreur'); })
+      .finally(() => setLoading(false));
+  }, [path]);
+
+  useEffect(() => { reload(); }, [reload]);
+
+  return { data, error, loading, reload };
 }

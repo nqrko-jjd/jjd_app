@@ -669,6 +669,8 @@ portalRouter.post(
       unitLabel: z.string().trim().nullish(),
       details: z.string().trim().nullish(),
       urgent: z.boolean().default(false),
+      // niveau d'urgence à 3 choix (parcours §4) ; `urgent` reste accepté pour les anciens clients
+      urgency: z.enum(['normal', 'soon', 'urgent']).nullish(),
       problemType: z.enum(INTERVENTION_PROBLEM_TYPES).nullish(),
       onSiteContactName: z.string().trim().nullish(),
       onSiteContactPhone: z.string().trim().nullish(),
@@ -676,6 +678,8 @@ portalRouter.post(
       visitPreference: z.string().trim().nullish(),
       photos: z.array(z.object({ url: z.string(), thumbUrl: z.string().nullish() })).default([]),
     }).parse(req.body);
+    const urgency = input.urgency ?? (input.urgent ? 'urgent' : 'normal');
+    const isUrgent = urgency === 'urgent';
 
     const opp = await prisma.crmOpportunity.create({
       data: {
@@ -685,11 +689,12 @@ portalRouter.post(
         acpId: input.buildingId ?? null,
         source: 'portail',
         nextActionOn: new Date(),
-        nextActionNote: input.urgent ? 'Demande client — URGENT' : 'Demande client (portail)',
+        nextActionNote: isUrgent ? 'Demande client — URGENT' : urgency === 'soon' ? 'Demande client — à traiter cette semaine' : 'Demande client (portail)',
         note: input.details ?? null,
         problemType: input.problemType ?? null,
         unitLabel: input.unitLabel ?? null,
-        urgent: input.urgent,
+        urgent: isUrgent,
+        urgency,
         onSiteContactName: input.onSiteContactName ?? null,
         onSiteContactPhone: input.onSiteContactPhone ?? null,
         accessNotes: input.accessNotes ?? null,
@@ -711,9 +716,12 @@ portalRouter.post(
         input.accessNotes ? `Accès : ${input.accessNotes}` : null,
         input.visitPreference ? `Préférence de passage : ${input.visitPreference}` : null,
         input.photos.length ? `${input.photos.length} photo(s) jointe(s)` : null,
-        input.urgent ? '\n⚠️ URGENT' : null,
+        urgency === 'soon' ? '\nÀ traiter cette semaine' : null,
+        isUrgent ? '\n⚠️ URGENT' : null,
       ].filter(Boolean).join('\n'),
     );
-    res.status(201).json({ id: opp.id });
+    // référence lisible, dérivée de l'id (stable, rien à stocker) : INT-2026-AB12C
+    const reference = `INT-${opp.createdAt.getFullYear()}-${opp.id.slice(-5).toUpperCase()}`;
+    res.status(201).json({ id: opp.id, reference });
   }),
 );

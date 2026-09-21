@@ -1,7 +1,9 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
-import { portalApi, usePortalGuard } from '@/lib/portal';
+import { Building2 } from 'lucide-react';
+import { usePortalApi, usePortalGuard } from '@/lib/portal';
+import { EmptyState, ErrorState, SkeletonRows } from '@/components/States';
 import { PortalShell } from '../PortalShell';
 
 interface Building {
@@ -12,12 +14,9 @@ interface Building {
 
 export default function PortalBuildings() {
   const { me, loading } = usePortalGuard();
-  const [items, setItems] = useState<Building[] | null>(null);
   const [q, setQ] = useState('');
-
-  useEffect(() => {
-    if (me) portalApi<{ buildings: Building[] }>('/buildings').then((r) => setItems(r.buildings)).catch(() => {});
-  }, [me]);
+  const { data, error, reload } = usePortalApi<{ buildings: Building[] }>(me ? '/buildings' : null);
+  const items = data?.buildings ?? null;
 
   if (loading || !me) return null;
   const filtered = (items ?? []).filter((b) => b.name.toLowerCase().includes(q.toLowerCase()) || b.address.toLowerCase().includes(q.toLowerCase()));
@@ -25,7 +24,7 @@ export default function PortalBuildings() {
   return (
     <PortalShell title={me.isSyndic ? 'Immeubles / ACP' : 'Mes dossiers'} subtitle={`${items?.length ?? 0} au total`}>
       <input className="p-input" style={{ maxWidth: 280 }} placeholder="Rechercher un immeuble…" value={q} onChange={(e) => setQ(e.target.value)} />
-      {!items ? <div className="p-empty">Chargement…</div> : filtered.length === 0 ? <div className="p-empty">Aucun immeuble.</div> : (
+      {error ? <ErrorState message={error} onRetry={reload} /> : !items ? <SkeletonRows rows={4} height={150} /> : filtered.length === 0 ? <EmptyState icon={Building2} title={q ? 'Aucun immeuble ne correspond' : 'Aucun immeuble pour l’instant'} text={q ? `Rien ne correspond à « ${q} ». Vérifiez l’orthographe ou effacez la recherche.` : 'Les immeubles rattachés à votre compte apparaîtront ici. Contactez JJD Consult s’il en manque.'} action={q ? <button type="button" className="btn primary" onClick={() => setQ('')}>Effacer la recherche</button> : <Link href="/portail/demande" className="btn primary">Nouvelle demande</Link>} /> : (
         <div className="p-bgrid">
           {filtered.map((b) => (
             <Link key={b.id} href={`/portail/immeuble/${b.id}`} className="p-bcard">

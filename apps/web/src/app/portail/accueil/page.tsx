@@ -1,8 +1,9 @@
 'use client';
-import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { portalApi, portalBlobUrl, usePortalGuard } from '@/lib/portal';
+import { ClipboardList } from 'lucide-react';
+import { portalBlobUrl, usePortalApi, usePortalGuard } from '@/lib/portal';
+import { EmptyState, ErrorState, SkeletonRows } from '@/components/States';
 import { PortalShell } from '../PortalShell';
 
 interface Dash {
@@ -49,11 +50,7 @@ function eur(n: number) {
 export default function PortalDashboard() {
   const { me, loading } = usePortalGuard();
   const router = useRouter();
-  const [d, setD] = useState<Dash | null>(null);
-
-  useEffect(() => {
-    if (me) portalApi<Dash>('/dashboard').then(setD).catch(() => {});
-  }, [me]);
+  const { data: d, error, reload } = usePortalApi<Dash>(me ? '/dashboard' : null);
 
   if (loading || !me) return null;
 
@@ -68,7 +65,7 @@ export default function PortalDashboard() {
 
   return (
     <PortalShell>
-      {!d ? <div className="p-empty">Chargement…</div> : (
+      {error ? <ErrorState message={error} onRetry={reload} /> : !d ? <SkeletonRows rows={5} height={90} /> : (
         <>
           {/* Hero */}
           <div className="p-hero">
@@ -187,7 +184,7 @@ export default function PortalDashboard() {
               <div className="p-panel-h">
                 <h2>Interventions récentes</h2>
               </div>
-              {d.recentInterventions.length === 0 ? <p className="p-note">Aucune intervention.</p> : (
+              {d.recentInterventions.length === 0 ? <EmptyState icon={ClipboardList} title="Aucune intervention pour l’instant" text="Signalez un besoin : JJD Consult revient vers vous et l’intervention apparaît ici dès qu’elle est créée." action={<Link href="/portail/demande" className="btn primary">Nouvelle demande</Link>} /> : (
                 <div className="p-ilist">
                   {d.recentInterventions.map((w) => (
                     <div key={w.id} className="p-irow" onClick={() => router.push(`/portail/chantier/${w.id}`)}>

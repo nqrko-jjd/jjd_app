@@ -1,7 +1,9 @@
 'use client';
-import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { portalApi, usePortalGuard } from '@/lib/portal';
+import Link from 'next/link';
+import { MessageSquare } from 'lucide-react';
+import { portalApi, usePortalApi, usePortalGuard } from '@/lib/portal';
+import { EmptyState, ErrorState, SkeletonRows } from '@/components/States';
 import { PortalShell } from '../PortalShell';
 
 interface Thread {
@@ -20,11 +22,8 @@ function fdate(s: string | null) {
 export default function PortalMessagesPage() {
   const { me, loading } = usePortalGuard();
   const router = useRouter();
-  const [items, setItems] = useState<Thread[] | null>(null);
-
-  useEffect(() => {
-    if (me) portalApi<{ items: Thread[] }>('/messages').then((r) => setItems(r.items)).catch(() => {});
-  }, [me]);
+  const { data, error, reload } = usePortalApi<{ items: Thread[] }>(me ? '/messages' : null);
+  const items = data?.items ?? null;
 
   if (loading || !me) return null;
 
@@ -35,10 +34,12 @@ export default function PortalMessagesPage() {
 
   return (
     <PortalShell title="Messagerie" subtitle="Votre échange privé avec JJD.">
-      {!items ? (
-        <div className="p-empty">Chargement…</div>
+      {error ? (
+        <ErrorState message={error} onRetry={reload} />
+      ) : !items ? (
+        <SkeletonRows rows={5} height={64} />
       ) : items.length === 0 ? (
-        <div className="p-empty">Aucune conversation pour l’instant.</div>
+        <EmptyState icon={MessageSquare} title="Aucune conversation pour l’instant" text="Les échanges avec JJD Consult sont rattachés à chaque intervention. Ouvrez une intervention pour écrire à l’équipe." action={<Link href="/portail/interventions" className="btn primary">Voir les interventions</Link>} secondary={<Link href="/portail/demande" className="btn">Nouvelle demande</Link>} />
       ) : (
         <div className="p-panel" style={{ padding: '0.4rem 0.5rem' }}>
           <div className="p-ilist">

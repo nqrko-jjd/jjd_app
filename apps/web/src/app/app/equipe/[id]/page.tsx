@@ -1,5 +1,5 @@
 'use client';
-import { SkeletonRows } from '@/components/States';
+import { SkeletonRows, EmptyState, ErrorState } from '@/components/States';
 import { use, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
@@ -64,7 +64,7 @@ function hhmm(iso: string) { return new Date(iso).toLocaleTimeString('fr-BE', { 
 
 export default function PersonDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { data, loading, reload } = useApi<Detail>(`/api/people/${id}`);
+  const { data, loading, error, reload } = useApi<Detail>(`/api/people/${id}`);
   const { data: stats } = useApi<{ months: { month: string; amount: number; hours: number; worksites: number }[] }>(`/api/people/${id}/stats`);
   const { data: earnings } = useApi<Earnings>(`/api/people/${id}/earnings`);
   const [created, setCreated] = useState<{ email: string; password: string } | null>(null);
@@ -108,7 +108,11 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
   function reloadAvail() { reloadEvents(); reloadAbsAll(); }
 
   if (loading) return <SkeletonRows />;
-  if (!data) return <div className="empty">Fiche introuvable.</div>;
+  if (!data) {
+    return error
+      ? <ErrorState message={error} onRetry={reload} />
+      : <EmptyState icon={UserX} title="Fiche introuvable" text="Cette personne n’existe plus ou a été supprimée. Retournez à la liste de l’équipe." action={<Link href="/app/equipe" className="btn primary">Retour à l’équipe</Link>} />;
+  }
   const p = data.person;
   const now = new Date().toLocaleDateString('fr-BE', { month: 'long', year: 'numeric' });
 

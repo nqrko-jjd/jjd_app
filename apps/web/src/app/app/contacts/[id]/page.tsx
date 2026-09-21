@@ -1,12 +1,12 @@
 'use client';
-import { SkeletonRows } from '@/components/States';
+import { SkeletonRows, EmptyState, ErrorState } from '@/components/States';
 import { use, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
 import { api, apiBlobUrl } from '@/lib/api';
 import { PageHead, StatusBadge, Money, formatDateBE, Kpi, formatEur } from '@/lib/ui';
-import { Wallet, Euro, Scale, FileText } from 'lucide-react';
+import { Wallet, Euro, Scale, FileText, Users } from 'lucide-react';
 import { FormModal, type FieldDef } from '@/components/FormModal';
 import { CollapsibleSection } from '@/components/CollapsibleSection';
 import { useSort, SortTh } from '@/lib/sort';
@@ -48,7 +48,7 @@ const PERSON_FIELDS: FieldDef[] = [
 export default function ContactDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
-  const { data, loading, reload } = useApi<Detail>(`/api/contacts/${id}`);
+  const { data, loading, error, reload } = useApi<Detail>(`/api/contacts/${id}`);
   const { data: pick } = useApi<{ buildings: { id: string; name: string }[]; syndics: { id: string; name: string }[] }>('/api/meta/pickers');
   const [editing, setEditing] = useState(false);
   const [personModal, setPersonModal] = useState<'new' | ContactPerson | null>(null);
@@ -72,7 +72,11 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
     balance: (b) => b.balance,
   });
   if (loading) return <SkeletonRows />;
-  if (!data) return <div className="empty">Contact introuvable.</div>;
+  if (!data) {
+    return error
+      ? <ErrorState message={error} onRetry={reload} />
+      : <EmptyState icon={Users} title="Contact introuvable" text="Ce contact n’existe plus ou a été fusionné. Retournez à la liste des contacts." action={<Link href="/app/contacts" className="btn primary">Retour aux contacts</Link>} />;
+  }
   const c = data.contact;
   const isSupplier = c.type === 'supplier' || c.type === 'both';
   const isClientLike = c.type === 'client' || c.type === 'both';

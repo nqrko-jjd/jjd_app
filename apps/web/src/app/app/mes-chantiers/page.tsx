@@ -1,6 +1,8 @@
 'use client';
 import { useState } from 'react';
 import Link from 'next/link';
+import { HardHat } from 'lucide-react';
+import { EmptyState, ErrorState, SkeletonRows } from '@/components/States';
 import { useApi } from '@/lib/use-api';
 import { PageHead, StatusBadge } from '@/lib/ui';
 
@@ -12,7 +14,7 @@ interface WS {
 
 export default function MesChantiersPage() {
   const [q, setQ] = useState('');
-  const { data } = useApi<{ items: WS[] }>(`/api/worksites/mine${q ? `?q=${encodeURIComponent(q)}` : ''}`);
+  const { data, loading, error, reload } = useApi<{ items: WS[] }>(`/api/worksites/mine${q ? `?q=${encodeURIComponent(q)}` : ''}`);
 
   return (
     <>
@@ -24,7 +26,11 @@ export default function MesChantiersPage() {
         value={q}
         onChange={(e) => setQ(e.target.value)}
       />
-      {(data?.items.length ?? 0) === 0 && <div className="card card-pad muted">Aucun chantier pour l’instant.</div>}
+      {loading && !data && <SkeletonRows rows={4} height={88} />}
+      {error && !loading && <ErrorState message={error} onRetry={reload} />}
+      {data && data.items.length === 0 && (
+        <EmptyState icon={HardHat} title={q ? 'Aucun chantier ne correspond' : 'Aucun chantier pour l’instant'} text={q ? `Rien ne correspond à « ${q} ». Vérifiez l’orthographe ou effacez la recherche.` : 'Les chantiers qui vous sont assignés apparaissent ici. Contactez le bureau s’il en manque.'} action={q ? <button type="button" className="btn primary" onClick={() => setQ('')}>Effacer la recherche</button> : undefined} />
+      )}
       {data?.items.map((w) => (
         <Link key={w.id} href={`/app/fiche/${w.id}`} className="card" style={{ display: 'block', marginBottom: '0.7rem', overflow: 'hidden' }}>
           {w.building?.photoThumbUrl && (

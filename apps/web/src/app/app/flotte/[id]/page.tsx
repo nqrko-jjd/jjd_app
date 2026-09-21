@@ -1,5 +1,6 @@
 'use client';
-import { SkeletonRows } from '@/components/States';
+import { Truck } from 'lucide-react';
+import { SkeletonRows, EmptyState, ErrorState } from '@/components/States';
 import { use, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
@@ -36,11 +37,15 @@ interface Detail {
 
 export default function VehicleDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { data, loading, reload } = useApi<Detail>(`/api/vehicles/${id}`);
+  const { data, loading, error, reload } = useApi<Detail>(`/api/vehicles/${id}`);
   const [editing, setEditing] = useState(false);
   const [addingDoc, setAddingDoc] = useState(false);
   if (loading) return <SkeletonRows />;
-  if (!data) return <div className="empty">Véhicule introuvable.</div>;
+  if (!data) {
+    return error
+      ? <ErrorState message={error} onRetry={reload} />
+      : <EmptyState icon={Truck} title="Véhicule introuvable" text="Ce véhicule n’existe plus ou a été supprimé. Retournez à la flotte." action={<Link href="/app/flotte" className="btn primary">Retour à la flotte</Link>} />;
+  }
   const v = data.vehicle;
   const ins = v.insurances[0];
   const nextPay = v.payments.find((p) => p.dueOn && new Date(p.dueOn).getTime() >= Date.now());

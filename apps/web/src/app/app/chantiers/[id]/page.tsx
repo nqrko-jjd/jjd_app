@@ -1,5 +1,6 @@
 'use client';
-import { SkeletonRows } from '@/components/States';
+import { HardHat } from 'lucide-react';
+import { SkeletonRows, EmptyState, ErrorState } from '@/components/States';
 import { use, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -60,7 +61,7 @@ interface Detail {
 export default function ChantierDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
-  const { data, loading, reload } = useApi<Detail>(`/api/worksites/${id}`);
+  const { data, loading, error, reload } = useApi<Detail>(`/api/worksites/${id}`);
   const { data: pick } = useApi<{
     clients: { id: string; name: string }[];
     buildings: { id: string; name: string }[];
@@ -72,7 +73,11 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
   const [threadOpen, setThreadOpen] = useState(false);
 
   if (loading) return <SkeletonRows />;
-  if (!data) return <div className="empty">Chantier introuvable.</div>;
+  if (!data) {
+    return error
+      ? <ErrorState message={error} onRetry={reload} />
+      : <EmptyState icon={HardHat} title="Chantier introuvable" text="Ce chantier n’existe plus ou a été supprimé. Retournez à la liste des chantiers." action={<Link href="/app/chantiers" className="btn primary">Retour aux chantiers</Link>} />;
+  }
   const w = data.worksite;
   // Prochaine étape / équipe affectée : le plus proche créneau à venir, sinon le plus récent passé.
   const now = new Date();

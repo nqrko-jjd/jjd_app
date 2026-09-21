@@ -1,5 +1,5 @@
 'use client';
-import { SkeletonRows, ErrorState } from '@/components/States';
+import { SkeletonRows, ErrorState, EmptyState } from '@/components/States';
 import { Suspense, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -241,7 +241,9 @@ function EquipeInner() {
       {loading && <SkeletonRows />}
 
       {error && !loading && <ErrorState message={error} onRetry={reload} />}
-      {data && filteredRows.length === 0 && <div className="card card-pad muted">Aucune personne pour ce filtre.</div>}
+      {data && filteredRows.length === 0 && (
+        <EmptyState icon={Users} title="Aucune personne ne correspond" text="Aucun membre de l’équipe ne correspond à cette recherche ou à ce filtre. Élargissez la sélection pour retrouver tout le monde." action={<button type="button" className="btn primary" onClick={() => { setQ(''); setRole(''); setStatusFilter('all'); }}>Réinitialiser les filtres</button>} />
+      )}
 
       {data && filteredRows.length > 0 && mode === 'gallery' && (
         <div className="avail-grid">

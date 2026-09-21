@@ -1,5 +1,6 @@
 'use client';
-import { SkeletonRows } from '@/components/States';
+import { Wrench } from 'lucide-react';
+import { SkeletonRows, EmptyState, ErrorState } from '@/components/States';
 import { use, useState } from 'react';
 import Link from 'next/link';
 import { api, ApiError } from '@/lib/api';
@@ -41,7 +42,7 @@ function Info({ label, value }: { label: string; value: React.ReactNode }) {
 
 export default function MaterielDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { data: stock, reload, loading } = useApi<{ products: Product[] }>('/api/materiel/stock');
+  const { data: stock, reload, loading, error } = useApi<{ products: Product[] }>('/api/materiel/stock');
   const { data: wsData } = useApi<{ items: Worksite[] }>('/api/materiel/worksites');
   const worksites = wsData?.items ?? [];
   const p = stock?.products.find((x) => x.id === id) ?? null;
@@ -87,7 +88,11 @@ export default function MaterielDetail({ params }: { params: Promise<{ id: strin
   }
 
   if (loading && !stock) return <SkeletonRows />;
-  if (!p) return <div className="empty">Outil introuvable.</div>;
+  if (!p) {
+    return error
+      ? <ErrorState message={error} onRetry={reload} />
+      : <EmptyState icon={Wrench} title="Outil introuvable" text="Cet outil n’existe plus ou a été retiré du parc. Retournez au matériel." action={<Link href="/app/materiel" className="btn primary">Retour au matériel</Link>} />;
+  }
 
   const specs = Object.entries(p.specs ?? {});
   const docs = p.documents ?? [];

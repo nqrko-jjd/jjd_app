@@ -1,5 +1,6 @@
 'use client';
-import { SkeletonRows } from '@/components/States';
+import { Building2 } from 'lucide-react';
+import { SkeletonRows, EmptyState, ErrorState } from '@/components/States';
 import { use, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -60,12 +61,16 @@ const UNIT_FIELDS: FieldDef[] = [
 export default function ImmeubleDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
-  const { data, loading, reload } = useApi<Detail>(`/api/buildings/${id}`);
+  const { data, loading, error, reload } = useApi<Detail>(`/api/buildings/${id}`);
   const { data: pick } = useApi<{ syndics: { id: string; name: string }[] }>('/api/meta/pickers');
   const [modal, setModal] = useState<null | { kind: 'building' | 'contact' | 'unit'; row?: BContact | BUnit }>(null);
 
   if (loading) return <SkeletonRows />;
-  if (!data) return <div className="empty">Immeuble introuvable.</div>;
+  if (!data) {
+    return error
+      ? <ErrorState message={error} onRetry={reload} />
+      : <EmptyState icon={Building2} title="Immeuble introuvable" text="Cet immeuble n’existe plus ou a été supprimé. Retournez à la liste des immeubles." action={<Link href="/app/immeubles" className="btn primary">Retour aux immeubles</Link>} />;
+  }
   const b = data.building;
 
   const closeAndReload = () => { setModal(null); reload(); };

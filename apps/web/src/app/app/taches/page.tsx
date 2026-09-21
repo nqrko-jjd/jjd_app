@@ -1,6 +1,8 @@
 'use client';
 import { useState } from 'react';
 import Link from 'next/link';
+import { ListChecks } from 'lucide-react';
+import { EmptyState, ErrorState, SkeletonRows } from '@/components/States';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { PageHead } from '@/lib/ui';
@@ -73,7 +75,7 @@ function dueLabel(dueOn: string | null, status: string): { text: string; tone: '
 
 export default function TachesPage() {
   const [view, setView] = useState<View>('all');
-  const { data, reload } = useApi<{ items: Task[] }>(`/api/tasks${queryFor(view)}`);
+  const { data, loading, error, reload } = useApi<{ items: Task[] }>(`/api/tasks${queryFor(view)}`);
   const { data: pick } = useApi<{
     people: { id: string; name: string }[];
     worksites: { id: string; name: string; city: string | null; managerId: string | null }[];
@@ -129,8 +131,12 @@ export default function TachesPage() {
         ))}
       </div>
 
-      <div className="card">
-        {open.length === 0 && done.length === 0 && <p className="muted" style={{ margin: 0, padding: '1rem 1.3rem' }}>Aucune tâche.</p>}
+      {loading && !data && <SkeletonRows rows={5} height={52} />}
+      {error && !loading && <ErrorState message={error} onRetry={reload} />}
+      {data && open.length === 0 && done.length === 0 && (
+        <EmptyState icon={ListChecks} title={view === 'all' ? 'Aucune tâche pour l’instant' : 'Aucune tâche dans cette vue'} text={view === 'all' ? 'Créez une tâche pour ne rien oublier : rappel client, commande à passer, document à envoyer…' : 'Aucune tâche ne correspond à cette vue. Revenez à toutes les tâches pour les retrouver.'} action={view === 'all' ? <button type="button" className="btn primary" onClick={() => setCreating(true)}>Nouvelle tâche</button> : <button type="button" className="btn primary" onClick={() => setView('all')}>Toutes les tâches</button>} />
+      )}
+      {data && (open.length > 0 || done.length > 0) && <div className="card">
         {open.map((t) => <Row key={t.id} t={t} />)}
         {done.length > 0 && (
           <>
@@ -138,7 +144,7 @@ export default function TachesPage() {
             {done.map((t) => <Row key={t.id} t={t} />)}
           </>
         )}
-      </div>
+      </div>}
 
       {detail && (
         <TaskDetailModal

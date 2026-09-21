@@ -1,5 +1,5 @@
 'use client';
-import { SkeletonRows, ErrorState } from '@/components/States';
+import { SkeletonRows, ErrorState, EmptyState } from '@/components/States';
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -205,7 +205,9 @@ export default function FlottePage() {
       {loading && <SkeletonRows />}
 
       {error && !loading && <ErrorState message={error} onRetry={reload} />}
-      {data && mode === 'gallery' && filteredFleet.length === 0 && <div className="card card-pad muted">Aucun véhicule pour ce filtre.</div>}
+      {data && mode === 'gallery' && filteredFleet.length === 0 && (
+        <EmptyState icon={Truck} title={fleet.length === 0 ? 'Aucun véhicule dans la flotte' : 'Aucun véhicule pour ce filtre'} text={fleet.length === 0 ? 'Ajoutez vos véhicules pour suivre leurs assurances, contrôles techniques et affectations.' : 'Aucun véhicule n’a ce statut à la date choisie. Affichez tous les véhicules pour les retrouver.'} action={fleet.length === 0 ? <button type="button" className="btn primary" onClick={() => setCreating(true)}>Ajouter un véhicule</button> : <button type="button" className="btn primary" onClick={() => setStatusFilter('all')}>Afficher tous les véhicules</button>} />
+      )}
 
       {data && mode === 'gallery' && filteredFleet.length > 0 && (
         <div className="avail-grid">

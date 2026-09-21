@@ -95,6 +95,32 @@ worksitesRouter.get(
   }),
 );
 
+/**
+ * Compteurs par statut pour les onglets de la page Chantiers (« Tous » = tout, archivés compris,
+ * comme archived=all sur la liste). Mêmes règles de visibilité que la liste : un chef de
+ * chantier ne compte que ses chantiers.
+ */
+worksitesRouter.get(
+  '/counts',
+  requireAuth(...STAFF),
+  asyncHandler(async (req, res) => {
+    const kind = (req.query.kind as string) || 'project';
+    const where: Record<string, unknown> = { kind };
+    if (req.user!.role === 'foreman') {
+      if (!req.user!.personId) return res.json({ total: 0, byStatus: {} });
+      where.managerId = req.user!.personId;
+    }
+    const groups = await prisma.worksite.groupBy({ by: ['status'], where, _count: { _all: true } });
+    const byStatus: Record<string, number> = {};
+    let total = 0;
+    for (const g of groups) {
+      byStatus[g.status] = g._count._all;
+      total += g._count._all;
+    }
+    res.json({ total, byStatus });
+  }),
+);
+
 /** Chantiers où la personne connectée a travaillé (pointage ou affectation planning). */
 worksitesRouter.get(
   '/mine',

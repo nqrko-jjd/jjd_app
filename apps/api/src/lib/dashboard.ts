@@ -12,6 +12,51 @@ export interface Alert {
   href: string;
 }
 
+/**
+ * « Sur le terrain aujourd'hui » : les affectations du planning du jour, avec pour chaque
+ * ouvrier son état de pointage (compteur en cours / heures déjà pointées sur ce chantier / rien).
+ * Lecture seule, composée à partir du planning et du pointage existants.
+ */
+async function fieldTodayList(todayStart: Date, todayEnd: Date) {
+  const events = await prisma.planningEvent.findMany({
+    where: { startAt: { lt: todayEnd }, endAt: { gt: todayStart } },
+    orderBy: { startAt: 'asc' },
+    include: {
+      worksite: { select: { id: true, ref: true, title: true, city: true } },
+      team: { select: { name: true } },
+      assignments: { include: { person: { select: { id: true, displayName: true, firstName: true } } } },
+    },
+  });
+  const personIds = [...new Set(events.flatMap((e) => e.assignments.map((a) => a.personId)))];
+  const entries = personIds.length
+    ? await prisma.timeEntry.findMany({
+        where: {
+          personId: { in: personIds },
+          OR: [{ status: 'running' }, { date: { gte: todayStart, lt: todayEnd } }],
+        },
+        select: { personId: true, worksiteId: true, status: true },
+      })
+    : [];
+  return events.map((e) => ({
+    id: e.id,
+    startAt: e.startAt,
+    endAt: e.endAt,
+    allDay: e.allDay,
+    tentative: e.status === 'tentative',
+    worksite: e.worksite,
+    team: e.team?.name ?? null,
+    people: e.assignments.map((a) => {
+      const mine = entries.filter((t) => t.personId === a.personId);
+      const state: 'running' | 'done' | 'none' = mine.some((t) => t.status === 'running')
+        ? 'running'
+        : mine.some((t) => t.worksiteId === e.worksiteId && t.status !== 'rejected')
+          ? 'done'
+          : 'none';
+      return { id: a.personId, name: a.person.displayName || a.person.firstName, state };
+    }),
+  }));
+}
+
 /** Le dashboard bureau : KPI du mois + file d'alertes triée par urgence. */
 export async function bureauDashboard() {
   const now = new Date();
@@ -68,6 +113,7 @@ export async function bureauDashboard() {
   ]);
 
   const teamsOnSiteToday = new Set(todayEvents.map((e) => e.teamId).filter((id): id is string => !!id)).size;
+  const fieldToday = await fieldTodayList(todayStart, todayEnd);
 
   const overdueAmount = round2(overdue.reduce((s, d) => s + Math.max(0, (d.totalTtc || 0) - (d.paidAmount || 0)), 0));
   const receivableAmount = round2(receivable.reduce((s, d) => s + Math.max(0, (d.totalTtc || 0) - (d.paidAmount || 0)), 0));
@@ -104,6 +150,7 @@ export async function bureauDashboard() {
       quotesPendingCount: quotesPending.length,
     },
     alerts,
+    fieldToday,
     inProgress: activeWorksites.map((w) => ({
       id: w.id,
       ref: w.ref,

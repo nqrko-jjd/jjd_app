@@ -14,6 +14,7 @@ export function PaginationBar({
   onPage,
   onPageSize,
   sizes = [50, 100, 200, 500, PAGE_SIZE_ALL],
+  inCard = false,
 }: {
   page: number;
   totalPages: number;
@@ -21,9 +22,11 @@ export function PaginationBar({
   onPage: (p: number) => void;
   onPageSize: (s: number) => void;
   sizes?: number[];
+  /** Barre intégrée au bas d'une carte de liste (`.list-card`) plutôt que posée sous la table. */
+  inCard?: boolean;
 }) {
   return (
-    <div className="row" style={{ marginTop: '0.8rem', gap: '0.5rem', alignItems: 'center' }}>
+    <div className={`row${inCard ? ' pager-in-card' : ''}`} style={inCard ? { gap: '0.5rem', alignItems: 'center' } : { marginTop: '0.8rem', gap: '0.5rem', alignItems: 'center' }}>
       {totalPages > 1 && (
         <>
           <button className="btn" disabled={page <= 1} onClick={() => onPage(page - 1)}>← Précédent</button>

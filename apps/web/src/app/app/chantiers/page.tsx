@@ -80,6 +80,12 @@ function ChantiersInner() {
   };
   const sort = useSort<WS>(data?.items ?? [], wsAccessors);
 
+  const { data: counts, reload: reloadCounts } = useApi<{ total: number; byStatus: Record<string, number> }>(
+    kind === 'project' ? '/api/worksites/counts' : null,
+  );
+  const reloadAll = () => { reload(); reloadCounts(); };
+  const countOf = (key: string) => (key === '' ? counts?.total : key.split(',').reduce((a, s) => a + (counts?.byStatus[s] ?? 0), 0));
+
   const { data: refs } = useApi<{
     clients: { id: string; name: string }[];
     buildings: { id: string; name: string; syndicId: string | null }[];
@@ -88,7 +94,7 @@ function ChantiersInner() {
 
   async function patchWs(id: string, body: Record<string, unknown>) {
     await api(`/api/worksites/${id}`, { method: 'PATCH', body });
-    reload();
+    reloadAll();
   }
 
   function toggleSelected(id: string) {
@@ -106,7 +112,7 @@ function ChantiersInner() {
     if (!ids.length) return;
     await Promise.all(ids.map((id) => api(`/api/worksites/${id}`, { method: 'PATCH', body: { status: newStatus } })));
     setSelected(new Set());
-    reload();
+    reloadAll();
   }
 
   function exportCsv() {
@@ -116,7 +122,7 @@ function ChantiersInner() {
   function importCsv() {
     pickAndImportCsv(
       '/api/worksites/import',
-      (r) => { alert(summarizeImport(r)); reload(); },
+      (r) => { alert(summarizeImport(r)); reloadAll(); },
       (msg) => alert(`Échec de l’import : ${msg}`),
     );
   }
@@ -170,7 +176,7 @@ function ChantiersInner() {
         <NewWorksiteWizard
           people={refs?.people ?? []}
           onClose={() => setCreating(false)}
-          onCreated={() => { setCreating(false); reload(); }}
+          onCreated={() => { setCreating(false); reloadAll(); }}
         />
       )}
       {ctx.menu && (
@@ -183,17 +189,6 @@ function ChantiersInner() {
         action={
           kind === 'project' ? (
             <div className="row">
-              {selected.size > 0 && (
-                <select
-                  className="select"
-                  value=""
-                  onChange={(e) => { if (e.target.value) bulkSetStatus(e.target.value); }}
-                  title={`Changer le statut des ${selected.size} chantier(s) sélectionné(s)`}
-                >
-                  <option value="">Statut → {selected.size} sélectionné{selected.size > 1 ? 's' : ''}…</option>
-                  {WORKSITE_STATUSES.map((s) => <option key={s} value={s}>{WORKSITE_STATUS_LABEL[s]}</option>)}
-                </select>
-              )}
               <button className="btn" onClick={exportCsv} title="Exporter la liste filtrée en CSV (éditable dans Excel)">⇩ Exporter CSV</button>
               <button className="btn" onClick={importCsv} title="Réimporter un CSV/Excel corrigé (met à jour par id, ne crée pas de nouveau chantier)">⇧ Importer</button>
               <button className="btn primary" onClick={() => setCreating(true)}>+ Nouveau chantier</button>
@@ -207,20 +202,43 @@ function ChantiersInner() {
       {kind === 'project' && (
         <div className="seg" style={{ marginBottom: '1rem' }}>
           {STATUS_VIEWS.map((v) => (
-            <button key={v.key || 'all'} className={status === v.key ? 'on' : ''} onClick={() => setStatus(v.key)}>{v.label}</button>
+            <button key={v.key || 'all'} className={status === v.key ? 'on' : ''} onClick={() => setStatus(v.key)}>
+              {v.label}
+              {countOf(v.key) != null && <span className="cnt">{countOf(v.key)}</span>}
+            </button>
           ))}
         </div>
       )}
-      <div className="row" style={{ marginBottom: '1rem' }}>
-        <input className="input" style={{ maxWidth: 280 }} placeholder="Rechercher (réf, titre, ville)…" value={q} onChange={(e) => setQ(e.target.value)} />
+      <div className="filter-bar">
+        <input className="input" style={{ maxWidth: 300 }} placeholder="Rechercher (réf, titre, ville)…" value={q} onChange={(e) => setQ(e.target.value)} />
+        {q && <button className="btn ghost" onClick={() => setQ('')}>Effacer la recherche</button>}
+        {kind === 'project' && (
+          <div className="bulk">
+            <span className={`bulk-count${selected.size ? ' on' : ''}`}>
+              {selected.size ? `${selected.size} sélectionné${selected.size > 1 ? 's' : ''}` : 'Aucune sélection'}
+            </span>
+            <select
+              className="select"
+              value=""
+              disabled={selected.size === 0}
+              onChange={(e) => { if (e.target.value) bulkSetStatus(e.target.value); }}
+              title="Cochez des chantiers dans la liste pour changer leur statut en une fois"
+              aria-label="Action groupée : changer le statut"
+            >
+              <option value="">Changer le statut…</option>
+              {WORKSITE_STATUSES.map((s) => <option key={s} value={s}>{WORKSITE_STATUS_LABEL[s]}</option>)}
+            </select>
+          </div>
+        )}
       </div>
 
       {loading && <SkeletonRows />}
 
       {error && !loading && <ErrorState message={error} onRetry={reload} />}
       {data && (
+        <div className="list-card">
         <div className="tbl-wrap">
-          <table className="tbl">
+          <table className="tbl tbl-compact">
             <thead>
               <tr>
                 <th style={{ width: 28 }}>
@@ -266,10 +284,8 @@ function ChantiersInner() {
             </tbody>
           </table>
         </div>
-      )}
-
-      {data && (
-        <PaginationBar page={data.page} totalPages={data.totalPages} pageSize={pageSize} onPage={setPage} onPageSize={(s) => { setPageSize(s); setPage(1); }} />
+        <PaginationBar inCard page={data.page} totalPages={data.totalPages} pageSize={pageSize} onPage={setPage} onPageSize={(s) => { setPageSize(s); setPage(1); }} />
+        </div>
       )}
     </>
   );

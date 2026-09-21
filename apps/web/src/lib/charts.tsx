@@ -198,6 +198,57 @@ export function Donut({
   );
 }
 
+/* ------------------------------------------------------------ barre empilée (remplace le donut) */
+
+/** Palette sobre de la charte : vert / or / gris-vert (pas de bleu). */
+const STACK_PALETTE = ['var(--primary)', 'var(--gold)', 'var(--line-strong)'];
+
+/** Répartition en une seule barre 100 % + légende (libellé, montant, part). */
+export function StackedBar({ data }: { data: { label: string; total: number }[] }) {
+  const total = data.reduce((s, d) => s + Math.abs(d.total), 0) || 1;
+  return (
+    <div className="stackbar">
+      <div className="stackbar-track" role="img" aria-label={data.map((d) => `${d.label} ${Math.round((Math.abs(d.total) / total) * 100)} %`).join(', ')}>
+        {data.map((d, i) => (
+          <span
+            key={d.label}
+            style={{ width: `${(Math.abs(d.total) / total) * 100}%`, background: STACK_PALETTE[i % STACK_PALETTE.length] }}
+            title={`${d.label} · ${formatEur(d.total)}`}
+          />
+        ))}
+      </div>
+      <ul className="stackbar-legend">
+        {data.map((d, i) => (
+          <li key={d.label}>
+            <i style={{ background: STACK_PALETTE[i % STACK_PALETTE.length] }} />
+            <span className="l">{d.label}</span>
+            <span className="v">{formatEur(d.total)}</span>
+            <span className="p">{Math.round((Math.abs(d.total) / total) * 100)} %</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** Blocs de progression à plusieurs barres (ex. Avancement : facturé / encaissé / coûts engagés). */
+export function ProgressBars({ rows }: { rows: { label: string; value: number; of: number; tone?: 'primary' | 'gold' | 'muted'; note?: string }[] }) {
+  return (
+    <div className="progbars">
+      {rows.map((r) => {
+        const pct = r.of > 0 ? Math.max(0, Math.round((r.value / r.of) * 100)) : 0;
+        return (
+          <div key={r.label} className="progbar">
+            <div className="hd"><span>{r.label}</span><strong>{pct} %</strong></div>
+            <div className="track"><span className={r.tone ?? 'primary'} style={{ width: `${Math.min(100, pct)}%` }} /></div>
+            <div className="ft">{r.note ?? `${formatEur(r.value)} sur ${formatEur(r.of)}`}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------ barres horizontales */
 
 export function HBars({

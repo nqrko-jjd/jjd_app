@@ -10,7 +10,7 @@ import { FormModal, toDateInput, type FieldDef } from '@/components/FormModal';
 import { ChantierThread } from '@/components/ChantierThread';
 import { WorksiteTasks } from '@/components/WorksiteTasks';
 import { CollapsibleSection } from '@/components/CollapsibleSection';
-import { Donut } from '@/lib/charts';
+import { StackedBar, ProgressBars } from '@/lib/charts';
 import {
   WORKSITE_STATUSES, WORKSITE_STATUS_LABEL, WORKSITE_PRIORITIES, WORKSITE_PRIORITY_LABEL,
   WORKSITE_SCOPES, WORKSITE_SCOPE_LABEL, WORKSITE_BILLING_MODES, WORKSITE_BILLING_MODE_LABEL,
@@ -328,10 +328,14 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
         <>
           {data.margin && (
             <>
-              <div className="kpis" style={{ marginBottom: '1.5rem' }}>
+              <div className="kpi-group" style={{ marginTop: 0 }}>Marché &amp; encaissements</div>
+              <div className="kpis">
                 <Kpi ic={FileText} label="Devisé HT" value={<Money value={data.margin.quotedHt} />} sub="Montant du marché" hero />
                 <Kpi ic={Euro} label="Facturé HT" value={<Money value={data.margin.invoicedHt} />} sub={data.margin.quotedHt > 0 ? `${Math.round((data.margin.invoicedHt / data.margin.quotedHt) * 100)} % du marché` : 'Rien facturé'} />
                 <Kpi ic={Wallet} label="Encaissé HT" value={<Money value={data.margin.paidHt} />} sub={data.margin.invoicedHt > 0 ? `${Math.round((data.margin.paidHt / data.margin.invoicedHt) * 100)} % du facturé` : 'Rien encaissé'} />
+              </div>
+              <div className="kpi-group">Coûts</div>
+              <div className="kpis">
                 <Kpi ic={FileText} label="Coût matériaux" value={<Money value={data.margin.materialCost} />} sub="Achats rattachés" />
                 <Kpi ic={CheckCircle2} label="Coût main-d'œuvre" value={<Money value={data.margin.labourCost} />} sub="Pointages inclus" />
                 <Kpi
@@ -342,6 +346,9 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
                     ? `${data.margin.transport.trips.length} j · fixe ${data.margin.transport.fixedCost.toFixed(0)} € + route ${data.margin.transport.fuelCost.toFixed(0)} €`
                     : 'Aucun trajet imputé'}
                 />
+              </div>
+              <div className="kpi-group">Résultat</div>
+              <div className="kpis" style={{ marginBottom: '1.5rem' }}>
                 <Kpi ic={TrendingUp} label="Marge réelle" value={<Money value={data.margin.realMargin} sign />} sub={data.margin.realMarginPct != null ? `${data.margin.realMarginPct} % du marché` : 'Non calculable'} neg={data.margin.realMargin < 0} />
                 <Kpi ic={TrendingUp} label="Marge hypothétique" value={<Money value={data.margin.forecastMargin} sign />} sub="Devisé − coûts engagés" neg={data.margin.forecastMargin < 0} />
                 <Kpi ic={Percent} label="Reste à facturer" value={<Money value={data.margin.leftToInvoice} />} sub="Sur le devisé HT" />
@@ -352,8 +359,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
                 {data.margin.totalCost > 0 && (
                   <div className="card card-pad">
                     <div className="eyebrow" style={{ marginBottom: '0.6rem' }}>Répartition des coûts</div>
-                    <Donut
-                      size={210}
+                    <StackedBar
                       data={[
                         { label: 'Matériaux', total: data.margin.materialCost },
                         { label: "Main-d'œuvre", total: data.margin.labourCost },
@@ -364,15 +370,15 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
                 )}
                 {data.margin.quotedHt > 0 && (
                   <div className="card card-pad">
-                    <div className="eyebrow" style={{ marginBottom: '0.6rem' }}>
-                      Avancement <span className="hint">{Math.round((data.margin.invoicedHt / data.margin.quotedHt) * 100)}% facturé</span>
+                    <div className="eyebrow" style={{ marginBottom: '0.9rem' }}>
+                      Avancement <span className="hint">sur le devisé HT</span>
                     </div>
-                    <Donut
-                      size={210}
-                      data={[
-                        { label: 'Facturé', total: data.margin.invoicedHt },
-                        { label: 'Reste à facturer', total: Math.max(0, data.margin.leftToInvoice) },
-                      ].filter((d) => d.total > 0)}
+                    <ProgressBars
+                      rows={[
+                        { label: 'Facturé', value: data.margin.invoicedHt, of: data.margin.quotedHt, tone: 'primary' },
+                        { label: 'Encaissé', value: data.margin.paidHt, of: data.margin.quotedHt, tone: 'gold' },
+                        { label: 'Coûts engagés', value: data.margin.totalCost, of: data.margin.quotedHt, tone: 'muted' },
+                      ]}
                     />
                   </div>
                 )}
@@ -383,6 +389,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
 
           <CollapsibleSection
             title="Devis & factures"
+            defaultOpen
             summary={w.documents.length ? `${w.documents.length} · ${formatEuro(w.documents.reduce((s, d) => s + d.totalHt, 0))} HT` : 'Aucun'}
           >
             {data.margin && data.margin.quotedHt > 0 && (

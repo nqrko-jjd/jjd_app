@@ -1,4 +1,5 @@
 'use client';
+import { SkeletonRows, ErrorState } from '@/components/States';
 import { Fragment, Suspense, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
@@ -29,7 +30,7 @@ const CONF_LABEL: Record<string, string> = { strong: 'auto ✓✓', good: 'auto 
 
 export default function BanquePage() {
   return (
-    <Suspense fallback={<div className="empty">Chargement…</div>}>
+    <Suspense fallback={<SkeletonRows />}>
       <BanqueInner />
     </Suspense>
   );
@@ -51,7 +52,7 @@ function BanqueInner() {
   const qs = new URLSearchParams({ matched, page: String(page), pageSize: String(pageSize) });
   if (q) qs.set('q', q);
   if (bank) qs.set('bank', bank);
-  const { data, loading, reload } = useApi<{
+  const { data, loading, error, reload } = useApi<{
     items: Tx[]; matched: number; total: number; byBank: { bank: string | null; _count: number }[];
     page: number; totalPages: number; totalCount: number;
   }>(`/api/finance/bank?${qs}`);
@@ -184,7 +185,9 @@ function BanqueInner() {
         </select>
       </div>
 
-      {loading && <div className="empty">Chargement…</div>}
+      {loading && <SkeletonRows />}
+
+      {error && !loading && <ErrorState message={error} onRetry={reload} />}
       {data && (
         <div className="tbl-wrap">
           <table className="tbl">

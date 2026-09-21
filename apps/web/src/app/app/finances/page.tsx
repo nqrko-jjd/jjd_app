@@ -1,4 +1,5 @@
 'use client';
+import { SkeletonRows } from '@/components/States';
 import { Fragment, useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
@@ -82,7 +83,7 @@ export default function FinancesPage() {
         </select>
       </div>
 
-      {!data ? <div className="empty">Chargement…</div> : (
+      {!data ? <SkeletonRows /> : (
         <>
           <div className="card card-pad muted" style={{ marginBottom: '1.3rem', fontSize: '0.85rem', borderLeft: '3px solid var(--warn)' }}>
             Le chiffre d'affaires par entité correspond exactement au fichier Excel. La <strong>ventilation des dépenses</strong>

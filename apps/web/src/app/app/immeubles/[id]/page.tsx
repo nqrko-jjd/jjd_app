@@ -1,4 +1,5 @@
 'use client';
+import { SkeletonRows } from '@/components/States';
 import { use, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -63,7 +64,7 @@ export default function ImmeubleDetail({ params }: { params: Promise<{ id: strin
   const { data: pick } = useApi<{ syndics: { id: string; name: string }[] }>('/api/meta/pickers');
   const [modal, setModal] = useState<null | { kind: 'building' | 'contact' | 'unit'; row?: BContact | BUnit }>(null);
 
-  if (loading) return <div className="empty">Chargement…</div>;
+  if (loading) return <SkeletonRows />;
   if (!data) return <div className="empty">Immeuble introuvable.</div>;
   const b = data.building;
 

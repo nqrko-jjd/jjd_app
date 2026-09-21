@@ -1,4 +1,5 @@
 'use client';
+import { SkeletonRows } from '@/components/States';
 import { useEffect, useState } from 'react';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
@@ -87,7 +88,7 @@ function UsersTab() {
     }
   }
 
-  if (!data) return <div className="empty">Chargement…</div>;
+  if (!data) return <SkeletonRows />;
   return (
     <>
       {creating && (
@@ -162,7 +163,7 @@ function DepotForm({ canEdit }: { canEdit: boolean }) {
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => { if (data) setF(data.depot); }, [data]);
-  if (!f) return <div className="empty">Chargement…</div>;
+  if (!f) return <SkeletonRows />;
 
   const save = async () => {
     setBusy(true); setMsg(null);
@@ -276,7 +277,7 @@ function CompanyForm({ canEdit }: { canEdit: boolean }) {
   const [form, setForm] = useState<Company | null>(null);
   const [saved, setSaved] = useState(false);
   useEffect(() => { if (data) setForm(data.company); }, [data]);
-  if (!form) return <div className="empty">Chargement…</div>;
+  if (!form) return <SkeletonRows />;
 
   return (
     <div className="card card-pad" style={{ maxWidth: 720 }}>
@@ -342,7 +343,7 @@ function PriceLibrary() {
       </div>
 
       <input className="input" style={{ maxWidth: 260, marginBottom: '1rem' }} placeholder="Rechercher…" value={q} onChange={(e) => setQ(e.target.value)} />
-      {!data ? <div className="empty">Chargement…</div> : data.items.length === 0 ? (
+      {!data ? <SkeletonRows /> : data.items.length === 0 ? (
         <div className="empty">Bibliothèque vide.</div>
       ) : (
         <div className="tbl-wrap">

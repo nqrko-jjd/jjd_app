@@ -15,7 +15,11 @@ export function useApi<T>(path: string | null) {
         setData(d);
         setError(null);
       })
-      .catch((e) => setError(e.message ?? 'Erreur'))
+      .catch((e) => {
+        // pas de données périmées sous l'état d'erreur (sinon « vide » + « erreur » s'affichent ensemble)
+        setData(null);
+        setError(e.message ?? 'Erreur');
+      })
       .finally(() => setLoading(false));
   }, [path]);
 

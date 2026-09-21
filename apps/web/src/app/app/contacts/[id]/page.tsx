@@ -1,4 +1,5 @@
 'use client';
+import { SkeletonRows } from '@/components/States';
 import { use, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -70,7 +71,7 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
     credit: (b) => (b.ttc < 0 ? -b.ttc : null),
     balance: (b) => b.balance,
   });
-  if (loading) return <div className="empty">Chargement…</div>;
+  if (loading) return <SkeletonRows />;
   if (!data) return <div className="empty">Contact introuvable.</div>;
   const c = data.contact;
   const isSupplier = c.type === 'supplier' || c.type === 'both';

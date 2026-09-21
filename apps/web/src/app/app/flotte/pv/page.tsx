@@ -1,4 +1,5 @@
 'use client';
+import { SkeletonRows, ErrorState } from '@/components/States';
 import { useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
@@ -13,7 +14,7 @@ interface Fine {
 
 export default function PvPage() {
   const [unpaid, setUnpaid] = useState(true);
-  const { data, loading } = useApi<{ items: Fine[] }>(`/api/vehicles/fines${unpaid ? '?unpaid=1' : ''}`);
+  const { data, loading, error, reload } = useApi<{ items: Fine[] }>(`/api/vehicles/fines${unpaid ? '?unpaid=1' : ''}`);
   const total = (data?.items ?? []).reduce((s, f) => s + (f.amount ?? 0), 0);
 
   return (
@@ -29,7 +30,8 @@ export default function PvPage() {
           Impayés uniquement
         </label>
       </div>
-      {loading && <div className="empty">Chargement…</div>}
+      {loading && <SkeletonRows />}
+      {error && !loading && <ErrorState message={error} onRetry={reload} />}
       {data && (
         <div className="tbl-wrap">
           <table className="tbl">

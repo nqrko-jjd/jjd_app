@@ -1,4 +1,5 @@
 'use client';
+import { SkeletonRows } from '@/components/States';
 import { use, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -50,7 +51,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
   const imported = !!doc?.source && doc.source !== 'manual';
   const totals = useMemo(() => computeDocTotals(lines), [lines]);
 
-  if (!doc) return <div className="empty">Chargement…</div>;
+  if (!doc) return <SkeletonRows />;
 
   const patch = (p: Partial<DocFull>) => { setDoc({ ...doc, ...p }); setDirty(true); };
   const setLine = (i: number, p: Partial<DocLine>) => {

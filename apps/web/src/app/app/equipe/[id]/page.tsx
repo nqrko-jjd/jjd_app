@@ -1,4 +1,5 @@
 'use client';
+import { SkeletonRows } from '@/components/States';
 import { use, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
@@ -106,7 +107,7 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
   const equipmentList = equipData?.items ?? [];
   function reloadAvail() { reloadEvents(); reloadAbsAll(); }
 
-  if (loading) return <div className="empty">Chargement…</div>;
+  if (loading) return <SkeletonRows />;
   if (!data) return <div className="empty">Fiche introuvable.</div>;
   const p = data.person;
   const now = new Date().toLocaleDateString('fr-BE', { month: 'long', year: 'numeric' });

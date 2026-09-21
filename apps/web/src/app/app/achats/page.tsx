@@ -1,10 +1,11 @@
 'use client';
+import { SkeletonRows, ErrorState, EmptyState } from '@/components/States';
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
 import { api, apiUpload, apiBlobUrl } from '@/lib/api';
 import { PageHead, Money, formatDateBE, Kpi } from '@/lib/ui';
-import { Wallet, AlertTriangle } from 'lucide-react';
+import { Wallet, AlertTriangle, Receipt } from 'lucide-react';
 import { useSort, useColumnFilter, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
 import { ContextMenu, useContextMenu, type MenuItem } from '@/components/ContextMenu';
@@ -61,7 +62,7 @@ function toDateInput(iso: string | null): string {
 
 export default function AchatsPage() {
   return (
-    <Suspense fallback={<div className="empty">Chargement…</div>}>
+    <Suspense fallback={<SkeletonRows />}>
       <AchatsInner />
     </Suspense>
   );
@@ -95,7 +96,7 @@ function AchatsInner() {
   if (year) params.set('year', year);
   params.set('page', String(page));
   params.set('pageSize', String(pageSize));
-  const { data, loading, reload } = useApi<{
+  const { data, loading, error, reload } = useApi<{
     items: Expense[];
     totals: { count: number; ht: number; ttc: number; unpaidTtc: number };
     page: number;
@@ -301,8 +302,17 @@ function AchatsInner() {
         </select>
       </div>
 
-      {loading && <div className="empty">Chargement…</div>}
-      {data && data.items.length === 0 && <div className="empty">Aucune dépense.</div>}
+      {loading && <SkeletonRows />}
+
+      {error && !loading && <ErrorState message={error} onRetry={reload} />}
+      {data && data.items.length === 0 && (
+        <EmptyState
+          icon={Receipt}
+          title="Aucune dépense"
+          text="Aucune facture d’achat ne correspond à ces filtres. Élargissez la recherche ou enregistrez une nouvelle dépense."
+          action={<button className="btn primary" onClick={() => setEdit('new')}>+ Nouvelle dépense</button>}
+        />
+      )}
       {data && data.items.length > 0 && (
         <div className="tbl-wrap">
           <table className="tbl">

@@ -1,4 +1,5 @@
 'use client';
+import { SkeletonRows, ErrorState } from '@/components/States';
 import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -27,7 +28,7 @@ interface Contact {
 
 export default function ContactsPage() {
   return (
-    <Suspense fallback={<div className="empty">Chargement…</div>}>
+    <Suspense fallback={<SkeletonRows />}>
       <ContactsInner />
     </Suspense>
   );
@@ -50,7 +51,7 @@ function ContactsInner() {
   if (q) params.set('q', q);
   params.set('page', String(page));
   params.set('pageSize', String(pageSize));
-  const { data, loading, reload } = useApi<{ items: Contact[]; page: number; pageSize: number; totalPages: number; totalCount: number }>(`/api/contacts?${params}`);
+  const { data, loading, error, reload } = useApi<{ items: Contact[]; page: number; pageSize: number; totalPages: number; totalCount: number }>(`/api/contacts?${params}`);
   const { data: pick } = useApi<{ buildings: { id: string; name: string }[]; syndics: { id: string; name: string }[] }>('/api/meta/pickers');
 
   async function patch(id: string, body: Record<string, unknown>) {
@@ -115,7 +116,8 @@ function ContactsInner() {
         </select>
         <ViewToggle mode={mode} onChange={setMode} />
       </div>
-      {loading && <div className="empty">Chargement…</div>}
+      {loading && <SkeletonRows />}
+      {error && !loading && <ErrorState message={error} onRetry={reload} />}
       {data && mode === 'gallery' && (
         <div className="gallery-grid">
           {sort.rows.map((c) => (

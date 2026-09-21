@@ -473,6 +473,50 @@ p { margin: 0; }
 
 .empty { padding: 3.5rem 1rem; text-align: center; color: var(--ink-2); }
 
+/* ---------------------------------------------------- états (vide / erreur / chargement / bandeaux) */
+.state {
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  gap: 0.4rem; padding: 3rem 1.2rem;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+}
+.state .ic {
+  width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--primary-soft); color: var(--primary); margin-bottom: 0.3rem;
+}
+.state h3 { margin: 0; font-size: 1.05rem; }
+.state p { margin: 0; color: var(--ink-2); max-width: 46ch; line-height: 1.55; font-size: 0.9rem; }
+.state .acts { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.6rem; margin-top: 0.8rem; }
+.state.error { background: var(--crit-soft); border-color: var(--crit); }
+.state.error .ic { background: rgba(173, 74, 65, 0.14); color: var(--crit); }
+.state .tech {
+  margin: 0.8rem 0 0; padding: 0.7rem 0.9rem; max-width: 100%; overflow-x: auto; text-align: left;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm);
+  font-family: var(--font-mono); font-size: 0.78rem; color: var(--ink-2); white-space: pre-wrap;
+}
+
+.skel-list { display: flex; flex-direction: column; gap: 0.5rem; }
+.skeleton {
+  border-radius: var(--radius-sm); border: 1px solid var(--line);
+  background: linear-gradient(90deg, var(--surface-3) 25%, var(--surface-2) 50%, var(--surface-3) 75%);
+  background-size: 200% 100%; animation: skel-shimmer 1.4s ease-in-out infinite;
+}
+@keyframes skel-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
+
+.banner {
+  display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap;
+  padding: 0.75rem 1rem; margin-bottom: 1rem; border-radius: var(--radius-sm);
+  border: 1px solid var(--line); font-size: 0.88rem;
+}
+.banner .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.1rem; }
+.banner.success { background: var(--ok-soft); border-color: var(--primary-line); color: var(--primary); }
+.banner.warn { background: var(--warn-soft); border-color: var(--warn); color: var(--warn); }
+.banner.crit { background: var(--crit-soft); border-color: var(--crit); color: var(--crit); }
+.banner .txt span { color: var(--ink); }
+.banner a { font-weight: 600; text-decoration: underline; color: inherit; }
+.banner-x { background: none; border: 0; color: inherit; cursor: pointer; font-size: 0.9rem; padding: 0.2rem 0.4rem; }
+.field-error { color: var(--crit); font-size: 0.78rem; margin-top: 0.15rem; }
+
 /* Grille de paires libellé/valeur — texte simple, sans carte imbriquée (chaque champ n'est
    pas sa propre petite carte à bordure, contrairement à l'ancien style : la maquette n'a
    qu'une grille de texte nue à l'intérieur de la carte englobante). */

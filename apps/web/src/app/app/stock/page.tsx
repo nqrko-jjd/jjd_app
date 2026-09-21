@@ -1,4 +1,5 @@
 'use client';
+import { SkeletonRows, EmptyState } from '@/components/States';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
@@ -125,8 +126,13 @@ export default function StockPage() {
         <ViewToggle mode={mode} onChange={setMode} />
       </div>
 
-      {loading && <div className="empty">Chargement…</div>}
-      {data && filteredItems.length === 0 && <div className="empty">Aucun article pour ce filtre.</div>}
+      {loading && <SkeletonRows />}
+      {data && filteredItems.length === 0 && <EmptyState
+          icon={Warehouse}
+          title="Aucun article"
+          text="Aucun article de stock ne correspond à cette recherche ou à ce filtre. Ajoutez un article pour suivre ses entrées et sorties."
+          action={<button className="btn primary" onClick={() => setCreating(true)}>+ Nouvel article</button>}
+        />}
       {data && filteredItems.length > 0 && mode === 'gallery' && (
         <div className="gallery-grid">
           {sort.rows.map((it) => (
@@ -324,7 +330,7 @@ function HistoryModal({ item, onClose }: { item: StockItem; onClose: () => void 
           <button type="button" className="btn ghost" onClick={onClose} aria-label="Fermer">✕</button>
         </div>
         <div className="modal-body">
-          {!data && <div className="empty">Chargement…</div>}
+          {!data && <SkeletonRows />}
           {data && data.items.length === 0 && <div className="muted">Aucun mouvement.</div>}
           {data && data.items.length > 0 && (
             <div className="tbl-wrap">

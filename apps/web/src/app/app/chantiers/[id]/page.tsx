@@ -1,4 +1,5 @@
 'use client';
+import { SkeletonRows } from '@/components/States';
 import { use, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -70,7 +71,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
   const [tab, setTab] = useState<'overview' | 'tasks' | 'finances' | 'photos' | 'discussion'>('overview');
   const [threadOpen, setThreadOpen] = useState(false);
 
-  if (loading) return <div className="empty">Chargement…</div>;
+  if (loading) return <SkeletonRows />;
   if (!data) return <div className="empty">Chantier introuvable.</div>;
   const w = data.worksite;
   // Prochaine étape / équipe affectée : le plus proche créneau à venir, sinon le plus récent passé.

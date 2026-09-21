@@ -1,4 +1,5 @@
 'use client';
+import { SkeletonRows } from '@/components/States';
 import { use, useState } from 'react';
 import Link from 'next/link';
 import { api, ApiError } from '@/lib/api';
@@ -85,7 +86,7 @@ export default function MaterielDetail({ params }: { params: Promise<{ id: strin
     }
   }
 
-  if (loading && !stock) return <div className="empty">Chargement…</div>;
+  if (loading && !stock) return <SkeletonRows />;
   if (!p) return <div className="empty">Outil introuvable.</div>;
 
   const specs = Object.entries(p.specs ?? {});

@@ -1,4 +1,5 @@
 'use client';
+import { SkeletonRows, ErrorState } from '@/components/States';
 import { useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
@@ -21,7 +22,7 @@ export default function ControlePage() {
   const [entity, setEntity] = useState('');
   const params = new URLSearchParams({ resolved });
   if (entity) params.set('entity', entity);
-  const { data, loading, reload } = useApi<{ items: Issue[]; openBySeverity: Record<string, number> }>(`/api/imports/issues?${params}`);
+  const { data, loading, error, reload } = useApi<{ items: Issue[]; openBySeverity: Record<string, number> }>(`/api/imports/issues?${params}`);
 
   async function resolve(id: string) {
     await api(`/api/imports/issues/${id}`, { method: 'PATCH', body: { resolved: true } });
@@ -57,7 +58,8 @@ export default function ControlePage() {
           </select>
         </div>
       )}
-      {loading && <div className="empty">Chargement…</div>}
+      {loading && <SkeletonRows />}
+      {error && !loading && <ErrorState message={error} onRetry={reload} />}
       {data && data.items.length === 0 && <div className="card card-pad muted">Rien à traiter ici.</div>}
       {data && data.items.length > 0 && (
         <div className="tbl-wrap">

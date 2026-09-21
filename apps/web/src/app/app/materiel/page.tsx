@@ -1,4 +1,5 @@
 'use client';
+import { SkeletonRows, EmptyState } from '@/components/States';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
@@ -268,7 +269,7 @@ export default function MaterielPage() {
 
       {tab === 'outils' && (
         <>
-          {loading && !stock && <div className="empty">Chargement du parc…</div>}
+          {loading && !stock && <SkeletonRows />}
 
           {mode === 'gallery' && (
             <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
@@ -328,7 +329,12 @@ export default function MaterielPage() {
             </div>
           )}
 
-          {!loading && filtered.length === 0 && <div className="empty">Aucun outil.</div>}
+          {!loading && filtered.length === 0 && <EmptyState
+            icon={Wrench}
+            title="Aucun outil"
+            text="Aucun outil ne correspond à cette recherche ou à ce filtre. Réinitialisez-les pour revoir tout le parc."
+            action={<button className="btn primary" onClick={() => { setSearch(''); setOnlyAvailable(false); }}>Réinitialiser les filtres</button>}
+          />}
 
           <PaginationBar page={matPage} totalPages={matTotalPages} pageSize={matPageSize} onPage={setMatPage} onPageSize={(s) => { setMatPageSize(s); setMatPage(1); }} sizes={[24, 50, 100, PAGE_SIZE_ALL]} />
         </>
@@ -336,7 +342,12 @@ export default function MaterielPage() {
 
       {tab === 'consommables' && (
         <div style={{ display: 'grid', gap: 8 }}>
-          {filteredCons.length === 0 && <div className="empty">Aucun consommable.</div>}
+          {filteredCons.length === 0 && <EmptyState
+            icon={Wrench}
+            title="Aucun consommable"
+            text="Aucun consommable ne correspond à cette recherche. Effacez-la pour revoir toute la liste."
+            action={<button className="btn primary" onClick={() => setSearch('')}>Effacer la recherche</button>}
+          />}
           {filteredCons.map((c) => (
             <div key={c.id} className="card card-pad" style={{ display: 'grid', gap: 8 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>

@@ -1,4 +1,5 @@
 'use client';
+import { SkeletonRows } from '@/components/States';
 import { use, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
@@ -38,7 +39,7 @@ export default function VehicleDetail({ params }: { params: Promise<{ id: string
   const { data, loading, reload } = useApi<Detail>(`/api/vehicles/${id}`);
   const [editing, setEditing] = useState(false);
   const [addingDoc, setAddingDoc] = useState(false);
-  if (loading) return <div className="empty">Chargement…</div>;
+  if (loading) return <SkeletonRows />;
   if (!data) return <div className="empty">Véhicule introuvable.</div>;
   const v = data.vehicle;
   const ins = v.insurances[0];

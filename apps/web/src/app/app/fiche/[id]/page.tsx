@@ -1,4 +1,5 @@
 'use client';
+import { SkeletonRows } from '@/components/States';
 import { use, useCallback, useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
@@ -48,7 +49,7 @@ export default function WorkerFichePage({ params }: { params: Promise<{ id: stri
     setBusy(null);
   }, [reloadTasks]);
 
-  if (!d) return <div className="empty">Chargement…</div>;
+  if (!d) return <SkeletonRows />;
   const w = d.worksite;
   const tasks = taskData?.items ?? [];
   const openTasks = tasks.filter((t) => t.status !== 'done');

@@ -1,4 +1,5 @@
 'use client';
+import { SkeletonRows } from '@/components/States';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
@@ -335,7 +336,7 @@ export default function PlanningPage() {
         </label>
       </div>
 
-      {loading && !evData ? <div className="empty">Chargement…</div> : view === 'month' ? (
+      {loading && !evData ? <SkeletonRows /> : view === 'month' ? (
         <section className="plan-board plan-month-board">
           <div className="plan-month-weekdays">
             {['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map((d) => <div key={d}>{d}</div>)}

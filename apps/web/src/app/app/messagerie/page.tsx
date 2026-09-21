@@ -1,4 +1,5 @@
 'use client';
+import { SkeletonRows } from '@/components/States';
 import { Suspense, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
@@ -44,7 +45,7 @@ function timeFull(iso: string) {
 
 export default function MessageriePage() {
   return (
-    <Suspense fallback={<div className="empty">Chargement…</div>}>
+    <Suspense fallback={<SkeletonRows />}>
       <MessagerieInner />
     </Suspense>
   );

@@ -1,4 +1,5 @@
 'use client';
+import { SkeletonRows, ErrorState } from '@/components/States';
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -53,7 +54,7 @@ type DayStatus = 'available' | 'assigned' | 'unavailable';
 
 export default function FlottePage() {
   const router = useRouter();
-  const { data, loading, reload } = useApi<{ items: Vehicle[] }>('/api/vehicles');
+  const { data, loading, error, reload } = useApi<{ items: Vehicle[] }>('/api/vehicles');
   const vehiclesAll = data?.items ?? [];
   const fleet = useMemo(() => vehiclesAll.filter((v) => v.status !== 'sold' && v.status !== 'retired'), [vehiclesAll]);
   const soon = Date.now() + 30 * 86400000;
@@ -201,7 +202,9 @@ export default function FlottePage() {
         <button className={statusFilter === 'unavailable' ? 'on' : ''} onClick={() => setStatusFilter('unavailable')}>Indisponible</button>
       </div>
 
-      {loading && <div className="empty">Chargement…</div>}
+      {loading && <SkeletonRows />}
+
+      {error && !loading && <ErrorState message={error} onRetry={reload} />}
       {data && mode === 'gallery' && filteredFleet.length === 0 && <div className="card card-pad muted">Aucun véhicule pour ce filtre.</div>}
 
       {data && mode === 'gallery' && filteredFleet.length > 0 && (

@@ -1,4 +1,5 @@
 'use client';
+import { SkeletonRows } from '@/components/States';
 import { use, useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { api, apiUpload } from '@/lib/api';
@@ -80,7 +81,7 @@ export default function RapportChantierPage({ params }: { params: Promise<{ id: 
   }
 
   if (err && !report) return <div className="empty">{err}</div>;
-  if (!report) return <div className="empty">Chargement…</div>;
+  if (!report) return <SkeletonRows />;
 
   if (mode === 'done') {
     return (

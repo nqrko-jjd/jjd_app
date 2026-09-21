@@ -1,4 +1,5 @@
 'use client';
+import { SkeletonRows, ErrorState } from '@/components/States';
 import { Suspense, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
@@ -30,7 +31,7 @@ interface Opp {
 
 export default function CrmPage() {
   return (
-    <Suspense fallback={<div className="empty">Chargement…</div>}>
+    <Suspense fallback={<SkeletonRows />}>
       <CrmInner />
     </Suspense>
   );
@@ -38,7 +39,7 @@ export default function CrmPage() {
 
 function CrmInner() {
   const sp = useSearchParams();
-  const { data, loading, reload } = useApi<{ columns: { stage: string; items: Opp[] }[] }>('/api/crm');
+  const { data, loading, error, reload } = useApi<{ columns: { stage: string; items: Opp[] }[] }>('/api/crm');
   const [creating, setCreating] = useState(sp.get('new') === '1');
   const [editing, setEditing] = useState<Opp | null>(null);
 
@@ -100,7 +101,8 @@ function CrmInner() {
           }}
         />
       )}
-      {loading && <div className="empty">Chargement…</div>}
+      {loading && <SkeletonRows />}
+      {error && !loading && <ErrorState message={error} onRetry={reload} />}
       {data && (
         <div className="kanban">
           {data.columns.map((col) => {

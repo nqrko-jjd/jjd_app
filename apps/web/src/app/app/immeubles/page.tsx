@@ -1,4 +1,5 @@
 'use client';
+import { SkeletonRows, ErrorState } from '@/components/States';
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -24,7 +25,7 @@ export default function ImmeublesPage() {
   const [mode, setMode] = useViewMode('immeubles');
   const params = new URLSearchParams();
   if (q) params.set('q', q);
-  const { data, loading, reload } = useApi<{ items: Building[] }>(`/api/buildings?${params}`);
+  const { data, loading, error, reload } = useApi<{ items: Building[] }>(`/api/buildings?${params}`);
   const { data: pick } = useApi<{ syndics: { id: string; name: string }[] }>(creating ? '/api/meta/pickers' : null);
 
   return (
@@ -48,7 +49,8 @@ export default function ImmeublesPage() {
         <input className="input" style={{ maxWidth: 300 }} placeholder="Nom, ville…" value={q} onChange={(e) => setQ(e.target.value)} />
         <ViewToggle mode={mode} onChange={setMode} />
       </div>
-      {loading && <div className="empty">Chargement…</div>}
+      {loading && <SkeletonRows />}
+      {error && !loading && <ErrorState message={error} onRetry={reload} />}
       {data && data.items.length === 0 && (
         <div className="card card-pad muted">
           Peu d'immeubles pour l'instant — ils se remplissent avec l'import des contacts TrustUp (les ACP « c/o Syndic »).

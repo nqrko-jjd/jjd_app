@@ -1,4 +1,5 @@
 'use client';
+import { SkeletonRows, ErrorState } from '@/components/States';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -404,7 +405,7 @@ function monthTrend(cur: number, prev: number): string | undefined {
 
 export default function DashboardPage() {
   const { user, person } = useAuth();
-  const { data, loading } = useApi<Dashboard>(user?.role === 'worker' || user?.role === 'foreman' ? null : '/api/dashboard');
+  const { data, loading, error, reload } = useApi<Dashboard>(user?.role === 'worker' || user?.role === 'foreman' ? null : '/api/dashboard');
   const today = new Date();
   const eyebrow = today.toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' });
   const name = person?.displayName || person?.firstName || user?.email?.split('@')[0] || '';
@@ -425,7 +426,9 @@ export default function DashboardPage() {
         }
       />
 
-      {loading && <div className="empty">Chargement…</div>}
+      {loading && <SkeletonRows />}
+
+      {error && !loading && <ErrorState message={error} onRetry={reload} />}
       {data && (
         <>
           <div className="kpis">

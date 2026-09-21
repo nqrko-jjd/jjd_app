@@ -1,4 +1,5 @@
 'use client';
+import { SkeletonRows, ErrorState, EmptyState } from '@/components/States';
 import { useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
@@ -28,7 +29,7 @@ export default function DecomptesPage() {
   const now = new Date();
   const [y, setY] = useState(now.getFullYear());
   const [m, setM] = useState(now.getMonth() + 1);
-  const { data, loading, reload } = useApi<Team>(`/api/statements?year=${y}&month=${m}`);
+  const { data, loading, error, reload } = useApi<Team>(`/api/statements?year=${y}&month=${m}`);
   const [open, setOpen] = useState<string | null>(null);
   const [detail, setDetail] = useState<Record<string, Detail>>({});
   const [editing, setEditing] = useState<{ personId: string; entry: DetailEntry } | null>(null);
@@ -99,8 +100,16 @@ export default function DecomptesPage() {
         </div>
       )}
 
-      {loading && <div className="empty">Chargement…</div>}
-      {data && rows.length === 0 && <div className="card card-pad muted">Aucune heure pour ce mois.</div>}
+      {loading && <SkeletonRows />}
+
+      {error && !loading && <ErrorState message={error} onRetry={reload} />}
+      {data && rows.length === 0 && <EmptyState
+          icon={Clock}
+          title="Aucune heure ce mois-ci"
+          text="Aucun pointage validé ou en attente sur ce mois. Changez de mois avec les flèches ou saisissez des heures depuis la page Pointage."
+          action={<Link href="/app/pointage" className="btn primary">Aller au pointage</Link>}
+          secondary={<button className="btn" onClick={() => shift(-1)}>← Mois précédent</button>}
+        />}
       {data && rows.length > 0 && (
         <div className="tbl-wrap">
           <table className="tbl">

@@ -1,4 +1,5 @@
 'use client';
+import { SkeletonRows, ErrorState } from '@/components/States';
 import { useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
@@ -32,7 +33,7 @@ export default function AnalysePage() {
   const [entity, setEntity] = useState('');
   const qs = new URLSearchParams({ months: String(months) });
   if (entity) qs.set('entity', entity);
-  const { data, loading } = useApi<Analytics>(`/api/finance/analytics?${qs}`);
+  const { data, loading, error, reload } = useApi<Analytics>(`/api/finance/analytics?${qs}`);
 
   return (
     <>
@@ -56,7 +57,9 @@ export default function AnalysePage() {
         }
       />
 
-      {loading && <div className="empty">Chargement…</div>}
+      {loading && <SkeletonRows />}
+
+      {error && !loading && <ErrorState message={error} onRetry={reload} />}
       {data && (
         <>
           <div className="chart-tiles">

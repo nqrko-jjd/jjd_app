@@ -1,4 +1,5 @@
 'use client';
+import { SkeletonRows, ErrorState } from '@/components/States';
 import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -42,7 +43,7 @@ interface WS {
 
 export default function ChantiersPage() {
   return (
-    <Suspense fallback={<div className="empty">Chargement…</div>}>
+    <Suspense fallback={<SkeletonRows />}>
       <ChantiersInner />
     </Suspense>
   );
@@ -70,7 +71,7 @@ function ChantiersInner() {
   params.set('kind', kind);
   params.set('page', String(page));
   params.set('pageSize', String(pageSize));
-  const { data, loading, reload } = useApi<{ items: WS[]; page: number; pageSize: number; totalPages: number; totalCount: number }>(`/api/worksites?${params}`);
+  const { data, loading, error, reload } = useApi<{ items: WS[]; page: number; pageSize: number; totalPages: number; totalCount: number }>(`/api/worksites?${params}`);
   const wsAccessors = {
     ref: (w: WS) => w.ref,
     manager: (w: WS) => w.manager?.displayName ?? w.manager?.firstName,
@@ -214,7 +215,9 @@ function ChantiersInner() {
         <input className="input" style={{ maxWidth: 280 }} placeholder="Rechercher (réf, titre, ville)…" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
 
-      {loading && <div className="empty">Chargement…</div>}
+      {loading && <SkeletonRows />}
+
+      {error && !loading && <ErrorState message={error} onRetry={reload} />}
       {data && (
         <div className="tbl-wrap">
           <table className="tbl">

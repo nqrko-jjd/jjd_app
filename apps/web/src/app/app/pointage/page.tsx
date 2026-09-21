@@ -1,4 +1,5 @@
 'use client';
+import { SkeletonRows, ErrorState, EmptyState, Banner } from '@/components/States';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
@@ -23,8 +24,9 @@ interface Pending {
 }
 
 export default function PointagePage() {
-  const { data, loading, reload } = useApi<{ items: Pending[] }>('/api/timesheet/pending');
+  const { data, loading, error, reload } = useApi<{ items: Pending[] }>('/api/timesheet/pending');
   const [adding, setAdding] = useState(false);
+  const [flash, setFlash] = useState<{ tone: 'success' | 'crit'; text: string } | null>(null);
 
   async function act(id: string, action: 'approve' | 'reject') {
     await api(`/api/timesheet/entries/${id}/${action}`, { method: 'POST' });
@@ -32,7 +34,7 @@ export default function PointagePage() {
   }
   async function approveAll() {
     const r = await api<{ approved: number }>('/api/timesheet/entries/approve-all', { method: 'POST' });
-    alert(`${r.approved} pointage(s) validé(s).`);
+    setFlash({ tone: 'success', text: `${r.approved} pointage(s) validé(s).` });
     reload();
   }
   function exportCsv() {
@@ -41,8 +43,8 @@ export default function PointagePage() {
   function importCsv() {
     pickAndImportCsv(
       '/api/timesheet/entries/import',
-      (r) => { alert(summarizeImport(r)); reload(); },
-      (msg) => alert(`Échec de l’import : ${msg}`),
+      (r) => { setFlash({ tone: 'success', text: summarizeImport(r) }); reload(); },
+      (msg) => setFlash({ tone: 'crit', text: `Échec de l’import : ${msg}` }),
     );
   }
 
@@ -77,6 +79,17 @@ export default function PointagePage() {
         }
       />
 
+      {flash && (
+        <Banner
+          tone={flash.tone}
+          title={flash.tone === 'success' ? 'Terminé' : 'Import impossible'}
+          onClose={() => setFlash(null)}
+          action={flash.tone === 'success' ? <Link href="/app/pointage/decomptes">Voir le décompte</Link> : undefined}
+        >
+          {flash.text}
+        </Banner>
+      )}
+
       {items.length > 0 && (
         <div className="kpis" style={{ marginBottom: '1.4rem' }}>
           <Kpi ic={Clock} label="Heures" value={formatHours(totalHours)} sub={`${byPerson.size} collaborateur${byPerson.size > 1 ? 's' : ''}`} hero />
@@ -93,9 +106,17 @@ export default function PointagePage() {
         </div>
       )}
 
-      {loading && <div className="empty">Chargement…</div>}
+      {loading && <SkeletonRows />}
+
+      {error && !loading && <ErrorState message={error} onRetry={reload} />}
       {data && items.length === 0 && (
-        <div className="card card-pad muted">Rien à valider. Le compteur des ouvriers alimente cette file.</div>
+        <EmptyState
+          icon={ClipboardCheck}
+          title="Rien à valider"
+          text="Tous les pointages sont validés. Cette file se remplit dès qu’un ouvrier arrête son compteur, ou quand vous saisissez des heures."
+          action={<button className="btn primary" onClick={() => setAdding(true)}>Saisir des heures</button>}
+          secondary={<Link href="/app/pointage/decomptes" className="btn">Voir les décomptes du mois</Link>}
+        />
       )}
 
       {[...byPerson.entries()].map(([name, entries]) => (

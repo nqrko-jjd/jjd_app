@@ -1,4 +1,5 @@
 'use client';
+import { SkeletonRows, ErrorState } from '@/components/States';
 import { Suspense, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -44,7 +45,7 @@ type DayStatus = 'available' | 'assigned' | 'unavailable';
 
 export default function EquipePage() {
   return (
-    <Suspense fallback={<div className="empty">Chargement…</div>}>
+    <Suspense fallback={<SkeletonRows />}>
       <EquipeInner />
     </Suspense>
   );
@@ -63,7 +64,7 @@ function EquipeInner() {
   if (q) params.set('q', q);
   if (role) params.set('role', role);
   if (active) params.set('active', active);
-  const { data, loading, reload } = useApi<{ items: Person[] }>(`/api/people?${params}`);
+  const { data, loading, error, reload } = useApi<{ items: Person[] }>(`/api/people?${params}`);
   const name = (p: Person) => p.displayName || `${p.firstName} ${p.lastName ?? ''}`.trim();
   const people = data?.items ?? [];
 
@@ -237,7 +238,9 @@ function EquipeInner() {
         <button className={statusFilter === 'unavailable' ? 'on' : ''} onClick={() => setStatusFilter('unavailable')}>Indisponible</button>
       </div>
 
-      {loading && <div className="empty">Chargement…</div>}
+      {loading && <SkeletonRows />}
+
+      {error && !loading && <ErrorState message={error} onRetry={reload} />}
       {data && filteredRows.length === 0 && <div className="card card-pad muted">Aucune personne pour ce filtre.</div>}
 
       {data && filteredRows.length > 0 && mode === 'gallery' && (

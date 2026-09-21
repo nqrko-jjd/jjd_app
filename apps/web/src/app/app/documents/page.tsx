@@ -1,4 +1,6 @@
 'use client';
+import { SkeletonRows, ErrorState, EmptyState } from '@/components/States';
+import { FileText } from 'lucide-react';
 import { Suspense, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -28,7 +30,7 @@ const TABS: { key: string; label: string; kind?: string; scope?: string }[] = [
 
 export default function DocumentsPage() {
   return (
-    <Suspense fallback={<div className="empty">Chargement…</div>}>
+    <Suspense fallback={<SkeletonRows />}>
       <DocumentsInner />
     </Suspense>
   );
@@ -66,7 +68,7 @@ function DocumentsInner() {
   if (q) params.set('q', q);
   params.set('page', String(page));
   params.set('pageSize', String(pageSize));
-  const { data, loading, reload } = useApi<{ items: Row[]; page: number; pageSize: number; totalPages: number; totalCount: number }>(`/api/documents?${params}`);
+  const { data, loading, error, reload } = useApi<{ items: Row[]; page: number; pageSize: number; totalPages: number; totalCount: number }>(`/api/documents?${params}`);
   const ctx = useContextMenu<Row>();
   const statusOptions = active.kind ? (STATUS_BY_KIND[active.kind] ?? []) : [];
 
@@ -241,8 +243,16 @@ function DocumentsInner() {
         />
       </div>
 
-      {loading && <div className="empty">Chargement…</div>}
-      {data && data.items.length === 0 && <div className="empty">Aucun document.</div>}
+      {loading && <SkeletonRows />}
+
+      {error && !loading && <ErrorState message={error} onRetry={reload} />}
+      {data && data.items.length === 0 && <EmptyState
+          icon={FileText}
+          title="Aucun document"
+          text="Aucun devis ni facture ne correspond à ce filtre. Créez-en un, ou importez un PDF existant : client, chantier et montant sont pré-remplis quand c’est possible."
+          action={<button className="btn primary" disabled={busy} onClick={() => create('invoice')}>+ Facture</button>}
+          secondary={<button className="btn" disabled={busy} onClick={() => create('quote')}>+ Devis</button>}
+        />}
       {data && data.items.length > 0 && (
         <div className="tbl-wrap">
           <table className="tbl">

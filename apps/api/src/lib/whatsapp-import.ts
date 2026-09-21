@@ -7,7 +7,12 @@ import { normalizeName } from '@jjd/shared';
 
 export interface WhatsAppMsg { at: Date; author: string | null; body: string; attach: string | null }
 
+// Android : « 8/09/26, 10:31 - Nom: message » — iPhone : « [8/09/26 10:31:29] Nom: message »
+// (marque gauche-droite éventuelle en tête de ligne, année sur 2 ou 4 chiffres, secondes en option).
 const LINE_RE = /^(\d{1,2})\/(\d{1,2})\/(\d{2}),\s(\d{1,2}):(\d{2})\s[-–]\s(.*)$/;
+const IOS_LINE_RE = /^[‎‏]?\[(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4}),?\s(\d{1,2}):(\d{2})(?::(\d{2}))?\]\s(.*)$/;
+// « < pièce jointe : fichier.jpg > » en fin de message, avec ou sans légende avant.
+const IOS_ATTACH_RE = /<\s*(?:pièce jointe|piece jointe|attached)\s*:\s*(.+?)\s*>\s*$/i;
 const ATTACH_RE = /^‎?(.+?\.(jpe?g|png|webp|mp4|mov|3gp|opus|m4a|aac|pdf|vcf|docx?|xlsx?))\s*\((fichier joint|file attached)\)$/i;
 const MARKS_RE = /[‎‏⁦-⁩]/g;
 
@@ -24,21 +29,33 @@ const SYSTEM_RE = /^(Les messages et les appels|Vous avez (créé|ajouté|retir�
 export function parseWhatsAppChat(text: string): WhatsAppMsg[] {
   const out: WhatsAppMsg[] = [];
   for (const raw of text.replace(/\r/g, '').split('\n')) {
-    const m = LINE_RE.exec(raw);
+    const ios = IOS_LINE_RE.exec(raw);
+    const m = ios ?? LINE_RE.exec(raw);
     if (!m) {
       if (out.length) out[out.length - 1]!.body += `\n${raw}`;
       continue;
     }
-    const [, d, mo, y, hh, mm, restRaw] = m;
-    const rest = restRaw!.replace(MARKS_RE, '');
-    const at = new Date(Date.UTC(2000 + Number(y), Number(mo) - 1, Number(d), Number(hh), Number(mm)));
+    const [, d, mo, y, hh, mm] = m;
+    const secs = ios ? Number(m[6] ?? 0) : 0;
+    const restRaw = ios ? m[7]! : m[6]!;
+    const year = y!.length === 4 ? Number(y) : 2000 + Number(y);
+    const rest = restRaw.replace(MARKS_RE, '');
+    const at = new Date(Date.UTC(year, Number(mo) - 1, Number(d), Number(hh), Number(mm), secs));
     if (SYSTEM_RE.test(rest)) { out.push({ at, author: null, body: '', attach: null }); continue; }
     const colon = rest.indexOf(': ');
     let author: string | null = null;
     let body = rest;
     if (colon > 0 && colon < 42) { author = rest.slice(0, colon).trim(); body = rest.slice(colon + 2); }
-    const a = ATTACH_RE.exec(body.trim());
-    out.push({ at, author, body: a ? '' : body, attach: a ? a[1]! : null });
+    // iPhone : les lignes système (création du groupe, chiffrement…) portent le nom du groupe comme
+    // « auteur » — on les reconnaît sur le corps du message, pas seulement sur la ligne entière.
+    if (author && SYSTEM_RE.test(body.trim())) { out.push({ at, author: null, body: '', attach: null }); continue; }
+    const trimmed = body.trim();
+    const a = ATTACH_RE.exec(trimmed);
+    const ia = a ? null : IOS_ATTACH_RE.exec(trimmed);
+    const attach = a ? a[1]! : ia ? ia[1]! : null;
+    // légende iPhone (« texte < pièce jointe : … > ») : le texte reste dans `body`
+    const caption = ia ? trimmed.slice(0, ia.index).trim() : '';
+    out.push({ at, author, body: attach ? caption : body, attach });
   }
   return out;
 }
@@ -49,7 +66,8 @@ export function cleanWhatsAppName(n: string): string {
     .replace(/[‎‏⁦-⁩]/g, '')
     .replace(/[\u{1F000}-\u{1FAFF}☀-➿️]/gu, '')
     .replace(/\s+/g, ' ')
-    .trim();
+    .trim()
+    .replace(/^~\s*/, ''); // iPhone : « ~ Nom » pour un contact absent du carnet d'adresses
 }
 
 interface PersonLike { id: string; firstName: string; lastName?: string | null; displayName: string | null }

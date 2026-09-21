@@ -220,7 +220,7 @@ threadRouter.post(
       const who = matchAuthor(msg.author);
       const at = Math.max(msg.at.getTime(), lastAt + 1);
       lastAt = at;
-      const createdAt = new Date(at);
+      let createdAt = new Date(at);
 
       if (!msg.attach) {
         await prisma.message.create({ data: { threadId: thread.id, authorName: who.label, kind: 'text', body, source: 'whatsapp', audience: 'internal', createdAt } });
@@ -229,6 +229,13 @@ threadRouter.post(
       }
       const buf = byBasename.get(msg.attach.toLowerCase());
       if (!buf) { skipped++; warnings.push(`${msg.attach} — média absent du zip`); continue; }
+      // légende d'une photo/vidéo (export iPhone) : message texte juste avant le média
+      if (body) {
+        await prisma.message.create({ data: { threadId: thread.id, authorName: who.label, kind: 'text', body, source: 'whatsapp', audience: 'internal', createdAt } });
+        texts++;
+        lastAt = at + 1;
+        createdAt = new Date(lastAt);
+      }
       const ext = msg.attach.toLowerCase().split('.').pop() ?? '';
       try {
         if (['jpg', 'jpeg', 'png', 'webp'].includes(ext)) {

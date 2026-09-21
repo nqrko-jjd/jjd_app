@@ -52,7 +52,7 @@ export default function ChantiersPage() {
 function ChantiersInner() {
   const sp = useSearchParams();
   const router = useRouter();
-  const [q, setQ] = useState('');
+  const [q, setQ] = useState(sp.get('q') ?? '');
   const [status, setStatus] = useState(sp.get('statut') ?? '');
   const [kind, setKind] = useState<'project' | 'overhead'>('project');
   const [creating, setCreating] = useState(sp.get('new') === '1');

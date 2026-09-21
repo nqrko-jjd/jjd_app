@@ -10,7 +10,12 @@ export { formatEur, formatDateBE };
 
 /** Tuile KPI standard (grille `.kpis`) — icône à droite du libellé, sous-texte toujours
  * rempli (fournir un texte de repli plutôt que de laisser `sub` vide), comme la maquette. */
-export function Kpi({ ic: Ic, label, value, sub, hero, warn, neg }: { ic: LucideIcon; label: string; value: ReactNode; sub?: string; hero?: boolean; warn?: boolean; neg?: boolean }) {
+export function Kpi({ ic: Ic, label, value, sub, hero, warn, neg, history }: {
+  ic: LucideIcon; label: string; value: ReactNode; sub?: string; hero?: boolean; warn?: boolean; neg?: boolean;
+  /** Petit historique en barres (ex. 6 derniers mois) affiché dans la tuile ; la dernière barre = période en cours. */
+  history?: { label: string; value: number }[];
+}) {
+  const max = history ? Math.max(1, ...history.map((h) => Math.abs(h.value))) : 1;
   return (
     <div className={`kpi${hero ? ' hero' : ''}${warn ? ' warn' : ''}`}>
       <div className="kpi-head">
@@ -19,6 +24,16 @@ export function Kpi({ ic: Ic, label, value, sub, hero, warn, neg }: { ic: Lucide
       </div>
       <div className={`value${neg ? ' neg' : ''}`}>{value}</div>
       {sub && <div className="sub">{sub}</div>}
+      {history && history.length > 1 && (
+        <div className="kpi-history" aria-label="Historique des 6 derniers mois">
+          {history.map((h, i) => (
+            <div key={h.label} className={`bar${i === history.length - 1 ? ' cur' : ''}`} title={`${h.label} · ${Math.round(h.value).toLocaleString('fr-BE')} €`}>
+              <span style={{ height: `${Math.max(6, (Math.abs(h.value) / max) * 100)}%` }} />
+              <em>{h.label}</em>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

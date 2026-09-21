@@ -1,5 +1,5 @@
 'use client';
-import { SkeletonRows, ErrorState } from '@/components/States';
+import { SkeletonRows, ErrorState, EmptyState } from '@/components/States';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -7,10 +7,12 @@ import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { PageHead, Money, formatDateBE, Avatar, ProgressCell, Kpi } from '@/lib/ui';
-import { useSort, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
 import { LEGAL_DOC_LABEL, WORKSITE_STATUS_LABEL, WORKSITE_PROGRESS_PCT, type WorksiteStatus } from '@jjd/shared';
-import { BarChart3, Wallet, Building2, Flag, FileText, Clock, MessageSquare, Users } from 'lucide-react';
+import {
+  BarChart3, Wallet, Building2, Flag, FileText, Clock, MessageSquare, Users,
+  Search, Bell, ChevronRight, AlertTriangle, Receipt, Mail, Phone, ShieldAlert, ShieldCheck, Truck, HardHat, type LucideIcon,
+} from 'lucide-react';
 
 interface TodayEv {
   id: string; startAt: string; endAt: string;
@@ -320,6 +322,133 @@ interface Dashboard {
   alerts: { kind: string; severity: string; label: string; count: number; amount?: number; href: string }[];
   inProgress: { id: string; ref: string; title: string; city: string | null; status: string; client: string | null; manager: string | null; photoThumbUrl: string | null }[];
   expiringDocs: { id: string; person: string; type: string; label: string | null; expiresOn: string | null }[];
+  fieldToday: FieldEvent[];
+}
+
+interface FieldEvent {
+  id: string; startAt: string; endAt: string; allDay: boolean; tentative: boolean;
+  worksite: { id: string; ref: string; title: string; city: string | null };
+  team: string | null;
+  people: { id: string; name: string; state: 'running' | 'done' | 'none' }[];
+}
+
+const ALERT_KIND_ICON: Record<string, LucideIcon> = {
+  overdue_invoices: AlertTriangle, to_invoice: Receipt, quotes_follow: Mail,
+  crm_due: Phone, expiring_docs: ShieldAlert, ct_expiring: Truck,
+};
+
+const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' });
+
+/** Barre d'en-tête 76px du tableau de bord bureau : recherche, notifications, compte. */
+function DashBar() {
+  const router = useRouter();
+  const { user, person } = useAuth();
+  const [q, setQ] = useState('');
+  const { data: unread } = useApi<{ internal: number; client: number }>('/api/messagerie/unread-count');
+  const unreadTotal = (unread?.internal ?? 0) + (unread?.client ?? 0);
+  const name = person?.displayName || person?.firstName || user?.email?.split('@')[0] || '';
+  const role = user?.role === 'admin' ? 'Administration' : 'Bureau';
+  return (
+    <div className="dash-bar">
+      <form
+        className="dash-search"
+        role="search"
+        onSubmit={(e) => { e.preventDefault(); const t = q.trim(); if (t) router.push(`/app/chantiers?q=${encodeURIComponent(t)}`); }}
+      >
+        <Search size={17} strokeWidth={2} />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher un chantier (réf, titre, ville)…" aria-label="Rechercher un chantier" />
+      </form>
+      <span className="spacer" />
+      <Link href="/app/messagerie" className="dash-bell" aria-label={unreadTotal > 0 ? `${unreadTotal} message(s) non lu(s)` : 'Messagerie'} title="Messagerie">
+        <Bell size={18} strokeWidth={2} />
+        {unreadTotal > 0 && <span className="dot">{unreadTotal}</span>}
+      </Link>
+      <div className="dash-account">
+        <span className="av">{(name[0] ?? '?').toUpperCase()}</span>
+        <span className="who"><strong>{name}</strong><span>{role}</span></span>
+      </div>
+    </div>
+  );
+}
+
+/** État de pointage résumé d'une affectation du jour. */
+function fieldStateBadge(ev: FieldEvent): { tone: string; label: string } {
+  const running = ev.people.filter((p) => p.state === 'running').length;
+  const done = ev.people.filter((p) => p.state === 'done').length;
+  if (ev.people.length === 0) return { tone: 'plain', label: 'Aucun ouvrier affecté' };
+  if (running > 0) return { tone: 'ok', label: `${running}/${ev.people.length} en cours` };
+  if (done === ev.people.length) return { tone: 'ok', label: 'Pointé' };
+  if (new Date(ev.startAt).getTime() > Date.now()) return { tone: 'plain', label: 'À venir' };
+  return { tone: 'warn', label: done > 0 ? `${done}/${ev.people.length} pointé` : 'Pas encore pointé' };
+}
+
+/** « Sur le terrain aujourd'hui » : horaire, chantier, équipe, état de pointage. */
+function FieldToday({ items }: { items: FieldEvent[] }) {
+  return (
+    <>
+      <div className="row" style={{ justifyContent: 'space-between', margin: '1.8rem 0 0.8rem' }}>
+        <div className="section-title" style={{ margin: 0 }}>Sur le terrain aujourd’hui <span className="hint">{items.length}</span></div>
+        <Link href="/app/planning" className="hint">Ouvrir le planning →</Link>
+      </div>
+      {items.length === 0 ? (
+        <EmptyState
+          icon={HardHat}
+          title="Personne sur le terrain aujourd’hui"
+          text="Aucune affectation n’est planifiée pour aujourd’hui. Planifiez une équipe sur un chantier pour la voir apparaître ici, avec son état de pointage."
+          action={<Link href="/app/planning" className="btn primary">Ouvrir le planning</Link>}
+          secondary={<Link href="/app/chantiers" className="btn">Voir les chantiers</Link>}
+        />
+      ) : (
+        <div className="field-list">
+          {items.map((ev) => {
+            const st = fieldStateBadge(ev);
+            return (
+              <div key={ev.id} className="field-row">
+                <div className="when">
+                  {ev.allDay ? 'Journée' : `${hhmm(ev.startAt)} – ${hhmm(ev.endAt)}`}
+                  {ev.tentative && <small>À confirmer</small>}
+                </div>
+                <div className="ws">
+                  <Link href={`/app/chantiers/${ev.worksite.id}`}>{ev.worksite.title}</Link>
+                  <div className="sub">{ev.worksite.ref}{ev.worksite.city ? ` · ${ev.worksite.city}` : ''}</div>
+                </div>
+                <div className="crew">
+                  {ev.team && <span className="badge plain">{ev.team}</span>}
+                  {ev.people.map((p) => (
+                    <span key={p.id} className="who" title={p.state === 'running' ? 'Compteur en cours' : p.state === 'done' ? 'A pointé sur ce chantier' : 'Pas encore pointé'}>
+                      {p.state === 'running' ? '● ' : p.state === 'done' ? '✓ ' : '○ '}{p.name}
+                    </span>
+                  ))}
+                </div>
+                <div className="field-state"><span className={`badge ${st.tone}`}>{st.label}</span></div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </>
+  );
+}
+
+/** Chantiers en cours : bandeau de pastilles cliquables. */
+function InProgressBand({ rows }: { rows: InProgressRow[] }) {
+  return (
+    <>
+      <div className="row" style={{ justifyContent: 'space-between', margin: '1.8rem 0 0.8rem' }}>
+        <div className="section-title" style={{ margin: 0 }}>Chantiers en cours <span className="hint">{rows.length}</span></div>
+        <Link href="/app/chantiers?statut=in_progress" className="hint">Tous les chantiers →</Link>
+      </div>
+      <div className="pill-band">
+        {rows.map((w) => (
+          <Link key={w.id} href={`/app/chantiers/${w.id}`} className="pill" title={`${w.title}${w.manager ? ` · ${w.manager}` : ''}`}>
+            <Avatar src={w.photoThumbUrl} label={w.title} size={24} />
+            <span className="t">{w.title}</span>
+            <span className="ref">{w.ref}</span>
+          </Link>
+        ))}
+      </div>
+    </>
+  );
 }
 
 /** Les deux actions les plus fréquentes, mises en avant à côté du titre (comme la maquette). */
@@ -344,55 +473,8 @@ function QuickActionsPrimary() {
 }
 
 const WS_STATUS_TONE: Record<string, string> = { scheduled: 'primary', in_progress: 'ok', on_hold: 'warn' };
-const ALERT_ICON: Record<string, string> = { critical: '!', warning: '✎', info: '✓' };
 
 type InProgressRow = Dashboard['inProgress'][number];
-
-function InProgressTable({ rows }: { rows: InProgressRow[] }) {
-  const router = useRouter();
-  const wsAccessors = {
-    title: (w: InProgressRow) => w.title,
-    manager: (w: InProgressRow) => w.manager,
-    status: (w: InProgressRow) => WORKSITE_STATUS_LABEL[w.status as keyof typeof WORKSITE_STATUS_LABEL] ?? w.status,
-  };
-  const sort = useSort<InProgressRow>(rows, wsAccessors);
-  return (
-    <>
-      <div className="row" style={{ justifyContent: 'space-between', margin: '1.8rem 0 0.8rem' }}>
-        <div className="section-title" style={{ margin: 0 }}>Chantiers en cours <span className="hint">{rows.length}</span></div>
-        <Link href="/app/chantiers" className="hint">Tous les chantiers →</Link>
-      </div>
-      <div className="tbl-wrap">
-        <table className="tbl">
-          <thead>
-            <tr>
-              <SortTh k="title" sort={sort}>Chantier</SortTh>
-              <SortTh k="manager" sort={sort}>Responsable</SortTh>
-              <SortTh k="status" sort={sort}>Statut</SortTh>
-              <th>Avancement</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {sort.rows.map((w) => (
-              <tr key={w.id} className="row-link" onClick={rowNav(`/app/chantiers/${w.id}`, (h) => router.push(h))}>
-                <td>
-                  <Avatar src={w.photoThumbUrl} label={w.title} />
-                  <Link href={`/app/chantiers/${w.id}`}>{w.title}</Link>
-                  <div className="muted" style={{ fontSize: '0.78rem' }}>{w.ref}{w.city ? ` · ${w.city}` : ''}</div>
-                </td>
-                <td>{w.manager ? <><Avatar label={w.manager} size={22} />{w.manager}</> : '—'}</td>
-                <td><span className={`badge ${WS_STATUS_TONE[w.status] ?? ''}`}>{WORKSITE_STATUS_LABEL[w.status as keyof typeof WORKSITE_STATUS_LABEL] ?? w.status}</span></td>
-                <td><ProgressCell pct={WORKSITE_PROGRESS_PCT[w.status as WorksiteStatus] ?? 0} /></td>
-                <td className="muted">→</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </>
-  );
-}
 
 /** Variation en % vs le mois précédent, masquée si la base précédente est trop faible pour être parlante. */
 function monthTrend(cur: number, prev: number): string | undefined {
@@ -406,6 +488,16 @@ function monthTrend(cur: number, prev: number): string | undefined {
 export default function DashboardPage() {
   const { user, person } = useAuth();
   const { data, loading, error, reload } = useApi<Dashboard>(user?.role === 'worker' || user?.role === 'foreman' ? null : '/api/dashboard');
+  // historique du CA facturé sur 6 mois pour la tuile hero (facultatif : la tuile reste correcte sans)
+  const { data: trend } = useApi<{ monthly: { month: string; invoiced: number }[] }>(
+    user?.role === 'worker' || user?.role === 'foreman' ? null : '/api/finance/analytics?months=6',
+  );
+  const history = trend?.monthly.map((m) => ({
+    label: /^\d{4}-\d{2}$/.test(m.month)
+      ? new Date(Number(m.month.slice(0, 4)), Number(m.month.slice(5, 7)) - 1, 1).toLocaleDateString('fr-BE', { month: 'short' }).replace('.', '')
+      : m.month,
+    value: m.invoiced,
+  }));
   const today = new Date();
   const eyebrow = today.toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' });
   const name = person?.displayName || person?.firstName || user?.email?.split('@')[0] || '';
@@ -415,16 +507,19 @@ export default function DashboardPage() {
 
   return (
     <>
-      <div className="eyebrow" style={{ marginBottom: '0.3rem' }}>{eyebrow}</div>
-      <PageHead
-        title={`Bonjour ${name},`}
-        sub="Voici les priorités de votre journée."
-        action={
-          <div className="row">
-            <QuickActionsPrimary />
-          </div>
-        }
-      />
+      <DashBar />
+      <div className="dash-title">
+        <div className="eyebrow" style={{ marginBottom: '0.3rem' }}>{eyebrow}</div>
+        <PageHead
+          title={`Bonjour ${name},`}
+          sub="Voici les priorités de votre journée."
+          action={
+            <div className="row">
+              <QuickActionsPrimary />
+            </div>
+          }
+        />
+      </div>
 
       {loading && <SkeletonRows />}
 
@@ -438,6 +533,7 @@ export default function DashboardPage() {
               value={<Money value={data.kpis.invoicedMonth} />}
               sub={monthTrend(data.kpis.invoicedMonth, data.kpis.invoicedPrevMonth) ?? 'Pas encore assez d’historique pour comparer'}
               hero
+              history={history}
             />
             <Kpi
               ic={Wallet}
@@ -461,26 +557,46 @@ export default function DashboardPage() {
             <span className="hint">trié par urgence</span>
           </div>
           {data.alerts.length === 0 ? (
-            <div className="card card-pad muted">Rien à signaler. 👍</div>
+            <EmptyState
+              icon={ShieldCheck}
+              title="Rien à traiter en priorité"
+              text="Aucune facture échue, relance ou échéance à surveiller pour l’instant. Le prochain point apparaîtra ici dès qu’il devient urgent."
+              action={<Link href="/app/documents" className="btn primary">Voir les devis &amp; factures</Link>}
+              secondary={<Link href="/app/planning" className="btn">Ouvrir le planning</Link>}
+            />
           ) : (
             <div className="alert-card">
               <div className="alert-list">
-                {data.alerts.map((a) => (
-                  <Link key={a.kind} href={a.href} className={`alert ${a.severity}`}>
-                    <span className="sev">{ALERT_ICON[a.severity] ?? '•'}</span>
-                    <span className="label">{a.label}<span className="n">{a.count} élément{a.count > 1 ? 's' : ''}</span></span>
-                    {a.amount != null && <span className="amount"><Money value={a.amount} /></span>}
-                  </Link>
-                ))}
+                {data.alerts.map((a) => {
+                  const AlertIc = ALERT_KIND_ICON[a.kind] ?? AlertTriangle;
+                  return (
+                    <Link key={a.kind} href={a.href} className={`alert ${a.severity}`}>
+                      <span className="sev"><AlertIc size={17} strokeWidth={2} /></span>
+                      <span className="label">{a.label}<span className="n">{a.count} élément{a.count > 1 ? 's' : ''}</span></span>
+                      {a.amount != null && <span className="amount"><Money value={a.amount} /></span>}
+                      <ChevronRight size={18} strokeWidth={2} className="chev" />
+                    </Link>
+                  );
+                })}
               </div>
             </div>
           )}
 
-          {data.inProgress.length > 0 && <InProgressTable rows={data.inProgress} />}
+          <FieldToday items={data.fieldToday ?? []} />
 
+          {data.inProgress.length > 0 && <InProgressBand rows={data.inProgress} />}
+
+          <div className="section-title" style={{ marginTop: '1.8rem' }}>Documents légaux qui expirent</div>
+          {data.expiringDocs.length === 0 && (
+            <EmptyState
+              icon={ShieldCheck}
+              title="Aucun document n’expire dans les 30 jours"
+              text="Cartes d’identité, permis de travail, Limosa, VCA… : tous les documents suivis sont à jour. Ajoutez-en depuis la fiche d’une personne pour être alerté avant l’échéance."
+              action={<Link href="/app/equipe" className="btn primary">Ouvrir l’équipe</Link>}
+            />
+          )}
           {data.expiringDocs.length > 0 && (
             <>
-              <div className="section-title">Documents légaux qui expirent</div>
               <div className="tbl-wrap">
                 <table className="tbl">
                   <thead><tr><th>Personne</th><th>Document</th><th>Échéance</th></tr></thead>

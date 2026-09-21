@@ -365,15 +365,18 @@ p { margin: 0; }
 .kpi.hero .value.neg { color: #ffb4a8; }
 
 /* ---------------------------------------------------- alerts : liste "à traiter" en carte */
-.alert-card { border-radius: var(--radius); background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow-sm); overflow: hidden; }
-.alert-list { display: flex; flex-direction: column; }
+.alert-card { background: transparent; border: 0; box-shadow: none; }
+.alert-list { display: flex; flex-direction: column; gap: 0.6rem; }
 .alert {
   display: flex; align-items: center; gap: 0.85rem;
-  padding: 0.9rem 1.1rem; border-bottom: 1px solid var(--line);
-  transition: background 0.12s;
+  padding: 0.85rem 1rem; background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius); box-shadow: var(--shadow-sm);
+  transition: border-color 0.12s, transform 0.12s, box-shadow 0.12s;
 }
-.alert:last-child { border-bottom: none; }
-.alert:hover { background: var(--surface-2); }
+.alert:hover { border-color: var(--primary-line); transform: translateY(-1px); box-shadow: var(--shadow); }
+.alert:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--primary-soft); }
+.alert .chev { color: var(--ink-3); flex-shrink: 0; }
+.alert:hover .chev { color: var(--primary); }
 .alert .sev {
   width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0;
   display: grid; place-items: center; font-size: 0.95rem;
@@ -388,6 +391,78 @@ p { margin: 0; }
   font-weight: 800; font-variant-numeric: tabular-nums; min-width: 1.6rem; text-align: center;
   background: var(--surface-2); border-radius: 999px; padding: 0.1rem 0.5rem; font-size: 0.85rem;
 }
+
+/* ---------------------------------------------------- tableau de bord bureau */
+/* barre d'en-tête 76px : recherche + notifications + compte (desktop ; le mobile a déjà .topbar) */
+.dash-bar {
+  display: flex; align-items: center; gap: 1rem; height: 76px; margin-bottom: 0.4rem;
+}
+.dash-search { position: relative; flex: 1; max-width: 460px; }
+.dash-search svg { position: absolute; left: 0.85rem; top: 50%; transform: translateY(-50%); color: var(--ink-3); pointer-events: none; }
+.dash-search input {
+  width: 100%; height: 44px; padding: 0 0.9rem 0 2.5rem; border-radius: 8px;
+  border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); font: inherit;
+}
+.dash-search input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+.dash-bar .spacer { flex: 1; }
+.dash-bell {
+  position: relative; width: 44px; height: 44px; border-radius: 8px; display: grid; place-items: center;
+  background: var(--surface); border: 1px solid var(--line-strong); color: var(--primary);
+}
+.dash-bell:hover { background: var(--surface-2); }
+.dash-bell:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--primary-soft); }
+.dash-bell .dot {
+  position: absolute; top: -5px; right: -5px; min-width: 1.1rem; height: 1.1rem; padding: 0 0.3rem;
+  border-radius: 999px; background: var(--gold); color: #241c05; font-size: 0.66rem; font-weight: 800;
+  display: grid; place-items: center;
+}
+.dash-account { display: flex; align-items: center; gap: 0.6rem; padding: 0.3rem 0.7rem 0.3rem 0.35rem; border-radius: 999px; background: var(--surface); border: 1px solid var(--line-strong); }
+.dash-account .av { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--primary); color: #fff; font-weight: 700; font-size: 0.82rem; }
+.dash-account .who { display: flex; flex-direction: column; line-height: 1.15; }
+.dash-account .who strong { font-size: 0.84rem; }
+.dash-account .who span { font-size: 0.72rem; color: var(--ink-2); }
+.dash-title h1 { font-size: 2.3rem; letter-spacing: -0.03em; }
+@media (max-width: 900px) { .dash-bar { display: none; } .dash-title h1 { font-size: 1.6rem; } }
+
+/* historique 6 mois dans la tuile hero */
+.kpi-history { display: flex; align-items: flex-end; gap: 0.4rem; height: 64px; margin-top: 0.55rem; }
+.kpi-history .bar { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 0.2rem; min-width: 0; }
+.kpi-history .bar span { display: block; width: 100%; border-radius: 4px 4px 0 0; background: rgba(255, 255, 255, 0.28); }
+.kpi-history .bar.cur span { background: var(--gold); }
+.kpi-history .bar em { font-style: normal; font-size: 0.62rem; color: var(--nav-fg); text-transform: capitalize; }
+
+/* sur le terrain aujourd'hui */
+.field-list { display: flex; flex-direction: column; gap: 0.6rem; }
+.field-row {
+  display: grid; grid-template-columns: 110px minmax(0, 1.6fr) minmax(0, 1.2fr) auto; gap: 1rem; align-items: center;
+  padding: 0.85rem 1rem; background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius); box-shadow: var(--shadow-sm);
+}
+.field-row:hover { border-color: var(--primary-line); }
+.field-row .when { font-weight: 700; font-variant-numeric: tabular-nums; font-size: 0.9rem; }
+.field-row .when small { display: block; font-weight: 500; color: var(--ink-2); font-size: 0.74rem; }
+.field-row .ws { min-width: 0; }
+.field-row .ws a { font-weight: 700; font-size: 0.9rem; }
+.field-row .ws .sub { color: var(--ink-2); font-size: 0.78rem; }
+.field-row .crew { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.field-row .crew .who { font-size: 0.78rem; color: var(--ink-2); }
+.field-state { text-align: right; }
+.field-state .badge { white-space: nowrap; }
+@media (max-width: 760px) {
+  .field-row { grid-template-columns: 1fr; gap: 0.4rem; }
+  .field-state { text-align: left; }
+}
+
+/* chantiers en cours : bandeau de pastilles */
+.pill-band { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.pill {
+  display: inline-flex; align-items: center; gap: 0.45rem; max-width: 100%;
+  padding: 0.4rem 0.85rem 0.4rem 0.4rem; border-radius: 999px;
+  background: var(--surface); border: 1px solid var(--line); font-size: 0.82rem; font-weight: 600;
+}
+.pill:hover { border-color: var(--primary-line); background: var(--surface-2); }
+.pill .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 260px; }
+.pill .ref { color: var(--ink-3); font-weight: 500; font-size: 0.74rem; white-space: nowrap; flex-shrink: 0; }
 
 /* ---------------------------------------------------- onglets de filtre (Tous/En cours/…) — soulignement, comme .page-tabs */
 .seg { display: inline-flex; gap: 1.3rem; flex-wrap: wrap; border-bottom: 1px solid var(--line); }

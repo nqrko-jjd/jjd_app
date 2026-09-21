@@ -96,7 +96,7 @@ export default function AnalysePage() {
           <div className="chart-2col" style={{ marginTop: '1.4rem' }}>
             <div className="card card-pad">
               <div className="eyebrow" style={{ marginBottom: '0.8rem' }}>Heures pointées <span className="muted">/ mois</span></div>
-              <MonthBars data={data.monthly.map((m) => ({ month: m.month, value: m.hours }))} color="var(--info)" unit="h" />
+              <MonthBars data={data.monthly.map((m) => ({ month: m.month, value: m.hours }))} color="var(--primary)" unit="h" />
             </div>
             <div className="card card-pad">
               <div className="eyebrow" style={{ marginBottom: '0.8rem' }}>Top clients · CA</div>

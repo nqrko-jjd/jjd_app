@@ -4,47 +4,47 @@
    ============================================================ */
 
 :root {
-  /* neutres — crème plus frais (moins jaune que l'ancienne charte) */
-  --paper: #f2f4ef;
-  --surface: #fdfefb;
-  --surface-2: #eef1ea;
-  --surface-3: #e3e8de;
-  --ink: #1c2924;
-  --ink-2: #45544d;
-  --ink-3: #77837c;
-  --line: #dbe0d6;
-  --line-strong: #c7cec1;
+  /* neutres — cartes en blanc pur sur fond crème */
+  --paper: #f5f5ef;
+  --surface: #ffffff;
+  --surface-2: #fafbf7;
+  --surface-3: #f0f1ea;
+  --ink: #26372f;
+  --ink-2: #788078;
+  --ink-3: #9aa79e;
+  --line: #e5e7df;
+  --line-strong: #d7e1d8;
 
   /* marque — vert (actions) + or (accent) */
-  --primary: #1d4235;
-  --primary-ink: #12362a;
-  --primary-soft: #e7efe9;
-  --primary-line: #caddcf;
-  --gold: #c1922a;
-  --gold-soft: #f6ecd4;
+  --primary: #173f34;
+  --primary-ink: #102f27;
+  --primary-soft: #e9efe9;
+  --primary-line: #d7e1d8;
+  --gold: #c5a35d;
+  --gold-soft: #e8dfc8;
 
   /* sidebar — vert profond */
-  --nav-bg: #0c2a22;
-  --nav-bg-2: #123c31;
-  --nav-fg: #9db4ab;
-  --nav-fg-active: #fbf8ef;
-  --nav-active-bg: rgba(255, 255, 255, 0.06);
-  --nav-line: rgba(255, 255, 255, 0.09);
+  --nav-bg: #102f27;
+  --nav-bg-2: #173f34;
+  --nav-fg: rgba(255, 255, 255, 0.78);
+  --nav-fg-active: #ffffff;
+  --nav-active-bg: rgba(255, 255, 255, 0.12);
+  --nav-line: rgba(255, 255, 255, 0.14);
 
-  /* sémantique */
-  --ok: #1f9d63;
-  --ok-soft: #e2f2e9;
-  --warn: #bd7f1c;
-  --warn-soft: #f7ecd6;
-  --crit: #c6463a;
-  --crit-soft: #f7e4e1;
-  --info: #2f6bd0;
-  --info-soft: #e6eefb;
+  /* sémantique — plus de bleu : --info retombe sur la marque */
+  --ok: #173f34;
+  --ok-soft: #e9efe9;
+  --warn: #a87529;
+  --warn-soft: #f3ead8;
+  --crit: #ad4a41;
+  --crit-soft: #f5e4e1;
+  --info: var(--primary);
+  --info-soft: var(--primary-soft);
 
-  --radius: 16px;
-  --radius-sm: 10px;
-  --shadow-sm: 0 1px 2px rgba(28, 41, 36, 0.05);
-  --shadow: 0 2px 6px rgba(28, 41, 36, 0.05), 0 10px 26px rgba(28, 41, 36, 0.055);
+  --radius: 14px;
+  --radius-sm: 8px;
+  --shadow-sm: 0 8px 28px rgba(16, 47, 39, 0.04);
+  --shadow: 0 8px 28px rgba(16, 47, 39, 0.06);
   --shadow-lg: 0 16px 42px rgba(28, 41, 36, 0.12);
 
   --font: "DM Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; /* corps de texte */
@@ -77,7 +77,7 @@
     --ok: #43b881; --ok-soft: #16281f;
     --warn: #d6a34e; --warn-soft: #2a2313;
     --crit: #df6a5d; --crit-soft: #2a1917;
-    --info: #6a9bea; --info-soft: #14202c;
+    --info: var(--primary); --info-soft: var(--primary-soft);
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
     --shadow: 0 2px 6px rgba(0, 0, 0, 0.32), 0 10px 26px rgba(0, 0, 0, 0.3);
     --shadow-lg: 0 18px 44px rgba(0, 0, 0, 0.45);
@@ -97,7 +97,7 @@
   --gold: #dcb04b; --gold-soft: #2a2213;
   --nav-bg: #0a221b; --nav-bg-2: #103228;
   --ok: #43b881; --ok-soft: #16281f; --warn: #d6a34e; --warn-soft: #2a2313;
-  --crit: #df6a5d; --crit-soft: #2a1917; --info: #6a9bea; --info-soft: #14202c;
+  --crit: #df6a5d; --crit-soft: #2a1917; --info: var(--primary); --info-soft: var(--primary-soft);
   --shadow-sm: 0 1px 2px rgba(0,0,0,.35);
   --shadow: 0 2px 6px rgba(0,0,0,.32), 0 10px 26px rgba(0,0,0,.3);
   --shadow-lg: 0 18px 44px rgba(0,0,0,.45);
@@ -142,12 +142,13 @@ p { margin: 0; }
 }
 
 /* ---------------------------------------------------- shell */
-.shell { display: grid; grid-template-columns: 244px minmax(0, 1fr); min-height: 100vh; }
+.shell { display: grid; grid-template-columns: 242px minmax(0, 1fr); min-height: 100vh; }
 .topbar { display: none; }
 .bottom-tabs { display: none; }
 
 .sidebar {
-  background: linear-gradient(155deg, var(--nav-bg-2) 0%, var(--nav-bg) 65%);
+  /* #173f34 -> #102f27 en clair ; les variables suivent le thème sombre */
+  background: linear-gradient(180deg, var(--nav-bg-2), var(--nav-bg));
   color: var(--nav-fg);
   padding: 1.1rem 0.85rem 1rem;
   display: flex; flex-direction: column; gap: 2px;
@@ -268,19 +269,25 @@ p { margin: 0; }
 .row { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
 
 .btn {
-  display: inline-flex; align-items: center; gap: 0.4rem;
-  padding: 0.5rem 0.9rem; border-radius: var(--radius-sm);
-  border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink);
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem;
+  min-height: 42px; padding: 11px 16px; border-radius: 8px;
+  border: 1px solid var(--line-strong); background: var(--surface); color: var(--primary);
   font-weight: 600; font-size: 0.86rem; white-space: nowrap;
   transition: border-color 0.12s, background 0.12s, transform 0.12s, box-shadow 0.12s;
 }
 .btn:hover { border-color: var(--ink-3); background: var(--surface-2); transform: translateY(-1px); box-shadow: 0 3px 12px rgba(28,41,36,0.09); }
 .btn:active { transform: translateY(0.5px); box-shadow: none; }
+.btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--primary-soft); }
 .btn.primary {
-  background: var(--primary); border-color: var(--primary); color: #fbf8ef;
-  box-shadow: 0 1px 2px rgba(28,41,36,0.28);
+  background: var(--primary); border-color: var(--primary); color: #fff;
+  box-shadow: 0 2px 8px rgba(16,47,39,0.16);
 }
 .btn.primary:hover { background: var(--primary-ink); border-color: var(--primary-ink); box-shadow: 0 6px 16px rgba(18,54,42,0.28); }
+.btn.primary:focus-visible { box-shadow: 0 2px 8px rgba(16,47,39,0.16), 0 0 0 3px var(--primary-line); }
+/* compact : boutons de ligne de tableau et boutons déjà dimensionnés en ligne (padding inline) —
+   sans ça le min-height 42px les gonflerait dans les listes et barres d'outils denses. */
+.tbl .btn { min-height: 34px; padding: 6px 12px; }
+.btn[style*="padding"] { min-height: 0; }
 .btn.gold { background: var(--gold); border-color: var(--gold); color: #241c05; box-shadow: 0 1px 2px rgba(28,41,36,0.28); }
 .btn.gold:hover { background: #b3781f; border-color: #b3781f; box-shadow: 0 6px 16px rgba(28,41,36,0.28); }
 .btn.ghost { border-color: transparent; background: var(--surface-2); }
@@ -292,9 +299,16 @@ p { margin: 0; }
   transition: border-color 0.12s, box-shadow 0.12s;
 }
 .input::placeholder { color: var(--ink-3); }
-.input:focus, .select:focus {
+.input:focus, .select:focus, textarea:focus-visible {
   outline: none; border-color: var(--primary);
   box-shadow: 0 0 0 3px var(--primary-soft);
+}
+/* erreur de champ : bordure critique + halo rouge léger */
+.input.error, .select.error, .field.error .input, .field.error .select {
+  border-color: var(--crit);
+}
+.input.error:focus, .select.error:focus, .field.error .input:focus, .field.error .select:focus {
+  border-color: var(--crit); box-shadow: 0 0 0 3px rgba(173, 74, 65, 0.12);
 }
 .field { display: flex; flex-direction: column; gap: 0.3rem; }
 .field label, .field > span { font-size: 0.78rem; font-weight: 600; color: var(--ink-2); }
@@ -366,7 +380,7 @@ p { margin: 0; }
 }
 .alert.critical .sev { background: var(--crit-soft); color: var(--crit); }
 .alert.warning .sev { background: var(--warn-soft); color: var(--warn); }
-.alert.info .sev { background: var(--info-soft); color: var(--info); }
+.alert.info .sev { background: var(--primary-soft); color: var(--primary); }
 .alert .label { flex: 1; font-weight: 700; font-size: 0.9rem; }
 .alert .label .n { display: block; font-weight: 500; font-size: 0.78rem; color: var(--ink-2); margin-top: 0.1rem; }
 .alert .amount { color: var(--ink); font-weight: 700; font-size: 0.9rem; font-variant-numeric: tabular-nums; text-align: right; }
@@ -695,6 +709,14 @@ p { margin: 0; }
   .page-head { flex-direction: column; align-items: stretch; }
   .page-head .btn, .page-head .row { width: 100%; }
   .main > .row { flex-wrap: wrap; }
+}
+/* mobile : action principale plus haute (cible tactile 48px), pleine largeur dans les en-têtes/pieds de modale */
+@media (max-width: 759px) {
+  .btn.primary { min-height: 48px; }
+  .btn.primary[style*="padding"] { min-height: 0; }
+  .page-head .btn.primary, .modal-foot .btn.primary { width: 100%; }
+}
+@media (max-width: 560px) {
   .main > .row .input, .main > .row .select { max-width: none !important; flex: 1 1 100%; }
   .kanban-col { min-width: 80vw; }
 }

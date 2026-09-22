@@ -5,19 +5,22 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api, apiBlobUrl } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
-import { Money, formatEur } from '@/lib/ui';
+import { formatEur } from '@/lib/ui';
 import { DocStatusBadge, DOC_KIND_LABEL, type DocFull, type DocLine } from '@/lib/doc-ui';
 import { ContactPicker } from '@/components/ContactPicker';
 import { AssigneePicker } from '@/components/AssigneePicker';
+import { WorksitePicker, type WsPickerOption } from '@/components/WorksitePicker';
 import { computeDocTotals, VAT_RATES } from '@jjd/shared';
 
 type Picker = {
   clients: { id: string; name: string }[];
-  worksites: { id: string; name: string; clientId: string | null }[];
+  worksites: { id: string; name: string; clientId: string | null; city?: string | null }[];
   people: { id: string; name: string }[];
 };
 
 const emptyLine = (): DocLine => ({ kind: 'item', label: '', qty: 1, unit: '', unitPriceHt: 0, discountPct: 0, vatRate: 0.21 });
+/** « R-047 · Toiture » -> { ref: "R-047", title: "R-047 · Toiture" } — même découpage que côté API (worksiteRef). */
+const wsToPicker = (w: { id: string; name: string; city?: string | null }): WsPickerOption => ({ id: w.id, ref: w.name.split(' · ')[0]!, title: w.name, city: w.city ?? null });
 
 export default function DocumentEditor({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -32,6 +35,9 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
   const [msg, setMsg] = useState<string | null>(null);
   const [libQ, setLibQ] = useState('');
   const [tasksModal, setTasksModal] = useState(false);
+  const [billingOpen, setBillingOpen] = useState(false);
+  const [showDiscount, setShowDiscount] = useState(false);
+  const [openDesc, setOpenDesc] = useState<Set<number>>(new Set());
   const { data: lib } = useApi<{ items: { id: string; label: string; unit: string | null; unitPriceHt: number; vatRate: number }[] }>(
     libQ.length >= 2 ? `/api/price-items?q=${encodeURIComponent(libQ)}` : null,
   );
@@ -39,8 +45,12 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
   useEffect(() => {
     if (data?.document) {
       setDoc(data.document);
-      setLines(data.document.lines.length ? data.document.lines : [emptyLine()]);
+      const initLines = data.document.lines.length ? data.document.lines : [emptyLine()];
+      setLines(initLines);
       setDirty(false);
+      setBillingOpen(!!(data.document.billingName || data.document.billingVat || data.document.billingAddress || data.document.billingEmail));
+      setShowDiscount(initLines.some((l) => l.discountPct > 0));
+      setOpenDesc(new Set(initLines.map((l, i) => (l.description ? i : -1)).filter((i) => i >= 0)));
     }
   }, [data]);
 
@@ -59,7 +69,15 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
     setDirty(true);
   };
   const addLine = (kind: DocLine['kind']) => { setLines([...lines, { ...emptyLine(), kind }]); setDirty(true); };
-  const removeLine = (i: number) => { setLines(lines.filter((_, j) => j !== i)); setDirty(true); };
+  const removeLine = (i: number) => {
+    setLines(lines.filter((_, j) => j !== i));
+    setOpenDesc((s) => new Set([...s].filter((j) => j !== i).map((j) => (j > i ? j - 1 : j))));
+    setDirty(true);
+  };
+  const duplicateLine = (i: number) => {
+    setLines([...lines.slice(0, i + 1), { ...lines[i]!, id: undefined }, ...lines.slice(i + 1)]);
+    setDirty(true);
+  };
   const moveLine = (i: number, dir: -1 | 1) => {
     const j = i + dir;
     if (j < 0 || j >= lines.length) return;
@@ -68,6 +86,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
     setLines(next);
     setDirty(true);
   };
+  const toggleDesc = (i: number) => setOpenDesc((s) => { const next = new Set(s); if (next.has(i)) next.delete(i); else next.add(i); return next; });
 
   async function save() {
     setBusy('save');
@@ -84,6 +103,12 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
           issuedOn: doc!.issuedOn,
           dueOn: doc!.dueOn,
           validUntil: doc!.validUntil,
+          billingName: doc!.billingName,
+          billingVat: doc!.billingVat,
+          billingAddress: doc!.billingAddress,
+          billingEmail: doc!.billingEmail,
+          customerRef: doc!.customerRef,
+          paidAmount: doc!.paidAmount,
           lines: lines.filter((l) => l.label.trim()),
         },
       });
@@ -125,22 +150,24 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
     router.push('/app/documents');
   }
 
-  const worksiteOpts = pick?.worksites ?? [];
+  const worksiteOpts: WsPickerOption[] = (pick?.worksites ?? []).map(wsToPicker);
   const isQuote = doc.kind === 'quote';
   const isInvoiceLike = doc.kind === 'invoice' || doc.kind === 'deposit_invoice';
+  const remaining = Math.max(0, totals.totalTtc - doc.paidAmount);
+  const colspan = showDiscount ? 6 : 5;
 
   return (
     <>
-      <div className="row" style={{ justifyContent: 'flex-end', marginBottom: '0.9rem' }}>
-        <Link href="/app/documents" className="btn">← Liste</Link>
+      <div className="row" style={{ justifyContent: 'space-between', marginBottom: '0.9rem' }}>
+        <Link href="/app/documents" className="btn ghost">← Devis & factures</Link>
       </div>
       <div className="detail-hero">
         <div className="eyebrow">{DOC_KIND_LABEL[doc.kind]}</div>
         <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'nowrap', gap: '1rem' }}>
-          <h1>{doc.number ?? doc.draftRef ?? ''}</h1>
+          <h1>{doc.number ?? doc.draftRef ?? `Nouveau·elle ${DOC_KIND_LABEL[doc.kind].toLowerCase()}`}</h1>
           <DocStatusBadge status={doc.status} />
         </div>
-        <div className="sub">{locked ? `Émis le ${doc.issuedOn?.slice(0, 10)}` : 'Brouillon modifiable'}</div>
+        <div className="sub">{locked ? `Émis le ${doc.issuedOn?.slice(0, 10)}` : 'Brouillon modifiable — du travail réalisé à un document clair.'}</div>
       </div>
 
       {msg && <div className="card card-pad" style={{ marginBottom: '1rem', borderLeft: '3px solid var(--primary)' }}>{msg}</div>}
@@ -174,232 +201,319 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
       </div>
       )}
 
-      {/* En-tête */}
-      <div className="card card-pad" style={{ marginBottom: '1rem' }}>
-        <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
-          <label className="field">
-            <span>Client</span>
-            <ContactPicker
-              value={doc.contact?.id ?? ''}
-              onChange={(cid, name) => {
-                patch({ contact: cid ? { id: cid, name, vat: null, address: null, postalCode: null, city: null, email: null } : null });
-              }}
-            />
-          </label>
-          <label className="field">
-            <span>Chantier</span>
-            <select
-              className="select"
-              value={doc.worksite?.id ?? ''}
-              onChange={(e) => {
-                const w = worksiteOpts.find((x) => x.id === e.target.value);
-                patch({ worksite: w ? { id: w.id, ref: w.name.split(' · ')[0], title: w.name } : null });
-              }}
-            >
-              <option value="">—</option>
-              {worksiteOpts.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-            </select>
-          </label>
-          <label className="field">
-            <span>Objet</span>
-            <input className="input" value={doc.title ?? ''} onChange={(e) => patch({ title: e.target.value })} placeholder="Rénovation salle de bain" />
-          </label>
-          {isQuote && (
-            <label className="field">
-              <span>Validité</span>
-              <input className="input" type="date" value={doc.validUntil?.slice(0, 10) ?? ''} onChange={(e) => patch({ validUntil: e.target.value })} />
-            </label>
-          )}
-          {isInvoiceLike && (
-            <label className="field">
-              <span>Échéance</span>
-              <input className="input" type="date" value={doc.dueOn?.slice(0, 10) ?? ''} onChange={(e) => patch({ dueOn: e.target.value })} />
-            </label>
-          )}
-        </div>
-        {isQuote && (
-          <label className="field" style={{ marginTop: '0.7rem' }}>
-            <span>Texte d’introduction</span>
-            <textarea className="input" rows={2} value={doc.intro ?? ''} onChange={(e) => patch({ intro: e.target.value })} />
-          </label>
-        )}
-      </div>
+      <div className="doc-layout">
+        <div className="doc-main">
+          {/* 01 · Client & chantier */}
+          <section className="doc-card">
+            <div className="doc-card-head"><span className="doc-card-num">01</span><h2>Client & chantier</h2></div>
+            <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+              <label className="field">
+                <span>Client</span>
+                <ContactPicker
+                  value={doc.contact?.id ?? ''}
+                  onChange={(cid, name) => {
+                    patch({ contact: cid ? { id: cid, name, vat: null, address: null, postalCode: null, city: null, email: null } : null });
+                  }}
+                />
+              </label>
+              <label className="field">
+                <span>Chantier lié</span>
+                <WorksitePicker
+                  value={doc.worksite?.id ?? ''}
+                  onChange={(wid) => {
+                    const w = worksiteOpts.find((x) => x.id === wid);
+                    patch({ worksite: w ? { id: w.id, ref: w.ref, title: w.title } : null });
+                  }}
+                  options={worksiteOpts}
+                  placeholder="Sans chantier lié"
+                />
+              </label>
+              <label className="field" style={{ gridColumn: '1 / -1' }}>
+                <span>Objet {isInvoiceLike ? 'de la facture' : 'du devis'}</span>
+                <input className="input" value={doc.title ?? ''} onChange={(e) => patch({ title: e.target.value })} placeholder="Rénovation salle de bain" />
+              </label>
+            </div>
+            {isQuote && (
+              <label className="field" style={{ marginTop: '0.7rem' }}>
+                <span>Texte d’introduction</span>
+                <textarea className="input" rows={2} value={doc.intro ?? ''} onChange={(e) => patch({ intro: e.target.value })} />
+              </label>
+            )}
 
-      {/* Lignes */}
-      <div className="tbl-wrap" style={{ marginBottom: '1rem' }}>
-        <table className="tbl">
-          <thead>
-            <tr>
-              <th style={{ width: 28 }}></th>
-              <th>Désignation</th>
-              <th style={{ width: 70, textAlign: 'right' }}>Qté</th>
-              <th style={{ width: 60 }}>Unité</th>
-              <th style={{ width: 100, textAlign: 'right' }}>P.U. HT</th>
-              <th style={{ width: 60, textAlign: 'right' }}>Rem.%</th>
-              <th style={{ width: 70 }}>TVA</th>
-              <th style={{ width: 110, textAlign: 'right' }}>Total HT</th>
-              <th style={{ width: 60 }}></th>
-            </tr>
-          </thead>
-          <tbody>
-            {lines.map((l, i) => (
-              <tr key={i}>
-                <td style={{ padding: '0.3rem', whiteSpace: 'nowrap' }}>
-                  <button className="btn ghost" style={btnMini} onClick={() => moveLine(i, -1)}>↑</button>
-                  <button className="btn ghost" style={btnMini} onClick={() => moveLine(i, 1)}>↓</button>
-                </td>
-                <td>
-                  <input
-                    className="input"
-                    style={l.kind === 'section' ? { fontWeight: 700 } : undefined}
-                    placeholder={l.kind === 'section' ? 'Titre de section' : l.kind === 'text' ? 'Texte libre' : 'Désignation'}
-                    value={l.label}
-                    onChange={(e) => setLine(i, { label: e.target.value })}
-                  />
-                  {l.kind === 'item' && (
-                    <input
-                      className="input"
-                      style={{ marginTop: 4, fontSize: '0.8rem' }}
-                      placeholder="Détail (optionnel)"
-                      value={l.description ?? ''}
-                      onChange={(e) => setLine(i, { description: e.target.value })}
-                    />
-                  )}
-                </td>
-                {l.kind === 'item' ? (
-                  <>
-                    <td><input className="input" type="number" style={{ textAlign: 'right' }} value={l.qty} onChange={(e) => setLine(i, { qty: Number(e.target.value) })} /></td>
-                    <td><input className="input" value={l.unit ?? ''} onChange={(e) => setLine(i, { unit: e.target.value })} /></td>
-                    <td><input className="input" type="number" style={{ textAlign: 'right' }} value={l.unitPriceHt} onChange={(e) => setLine(i, { unitPriceHt: Number(e.target.value) })} /></td>
-                    <td><input className="input" type="number" style={{ textAlign: 'right' }} value={l.discountPct} onChange={(e) => setLine(i, { discountPct: Number(e.target.value) })} /></td>
-                    <td>
-                      <select className="select" value={l.vatRate} onChange={(e) => setLine(i, { vatRate: Number(e.target.value) })}>
-                        {VAT_RATES.map((r) => <option key={r} value={r}>{Math.round(r * 100)}%</option>)}
-                      </select>
-                    </td>
-                    <td style={{ textAlign: 'right' }} className="tnum">
-                      {formatEur(l.qty * l.unitPriceHt * (1 - l.discountPct / 100))}
-                    </td>
-                  </>
-                ) : (
-                  <td colSpan={6}></td>
-                )}
-                <td style={{ textAlign: 'right' }}>
-                  <button className="btn ghost" style={btnMini} onClick={() => removeLine(i)}>✕</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            <button type="button" className="doc-billing-toggle" onClick={() => setBillingOpen((o) => !o)}>
+              {billingOpen ? '▾' : '▸'} Coordonnées de facturation
+              <span className="doc-billing-note">indépendantes de l’adresse du chantier</span>
+            </button>
+            {billingOpen && (
+              <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', marginTop: '0.7rem' }}>
+                <label className="field">
+                  <span>Nom / raison sociale à facturer</span>
+                  <input className="input" value={doc.billingName ?? ''} onChange={(e) => patch({ billingName: e.target.value || null })} placeholder={doc.contact?.name ?? 'Nom du client'} />
+                </label>
+                <label className="field">
+                  <span>TVA à facturer</span>
+                  <input className="input" value={doc.billingVat ?? ''} onChange={(e) => patch({ billingVat: e.target.value || null })} placeholder={doc.contact?.vat ?? 'BE0…'} />
+                </label>
+                <label className="field" style={{ gridColumn: '1 / -1' }}>
+                  <span>Adresse de facturation</span>
+                  <textarea className="input" rows={2} value={doc.billingAddress ?? ''} onChange={(e) => patch({ billingAddress: e.target.value || null })} placeholder={doc.contact?.address ?? ''} />
+                </label>
+                <label className="field">
+                  <span>Contact / e-mail de facturation</span>
+                  <input className="input" type="email" value={doc.billingEmail ?? ''} onChange={(e) => patch({ billingEmail: e.target.value || null })} placeholder={doc.contact?.email ?? ''} />
+                </label>
+                <label className="field">
+                  <span>Référence client / bon de commande</span>
+                  <input className="input" value={doc.customerRef ?? ''} onChange={(e) => patch({ customerRef: e.target.value || null })} />
+                </label>
+              </div>
+            )}
+          </section>
 
-      <div style={{ marginBottom: '1rem' }}>
-          <div className="row" style={{ gap: '0.4rem' }}>
-            <button className="btn" onClick={() => addLine('item')}>+ Ligne</button>
-            <button className="btn" onClick={() => addLine('section')}>+ Section</button>
-            <button className="btn" onClick={() => addLine('text')}>+ Texte</button>
-            <input
-              className="input"
-              style={{ maxWidth: 220, marginLeft: 'auto' }}
-              placeholder="Chercher dans la bibliothèque…"
-              value={libQ}
-              onChange={(e) => setLibQ(e.target.value)}
-            />
-          </div>
-          {lib && lib.items.length > 0 && (
-            <div className="card" style={{ marginTop: 6, padding: 6 }}>
-              {lib.items.slice(0, 8).map((it) => (
+          {/* 02 · Prestations & fournitures */}
+          <section className="doc-card">
+            <div className="doc-card-head">
+              <span className="doc-card-num">02</span><h2>Prestations & fournitures</h2>
+              <label className="row" style={{ marginLeft: 'auto', gap: '0.4rem', fontSize: '0.82rem', fontWeight: 600, color: 'var(--ink-2)' }}>
+                <input type="checkbox" checked={showDiscount} onChange={(e) => setShowDiscount(e.target.checked)} /> Remises
+              </label>
+            </div>
+            <div className="tbl-wrap">
+              <table className="tbl">
+                <thead>
+                  <tr>
+                    <th style={{ width: 44 }}></th>
+                    <th>Désignation</th>
+                    <th style={{ width: 64, textAlign: 'right' }}>Qté</th>
+                    <th style={{ width: 60 }}>Unité</th>
+                    <th style={{ width: 95, textAlign: 'right' }}>Prix HT</th>
+                    {showDiscount && <th style={{ width: 60, textAlign: 'right' }}>Rem.%</th>}
+                    <th style={{ width: 68 }}>TVA %</th>
+                    <th style={{ width: 105, textAlign: 'right' }}>Total HT</th>
+                    <th style={{ width: 44 }}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lines.map((l, i) => (
+                    <tr key={i}>
+                      <td style={{ padding: '0.3rem', whiteSpace: 'nowrap' }}>
+                        <button className="btn ghost" style={btnMini} onClick={() => moveLine(i, -1)} aria-label="Monter">↑</button>
+                        <button className="btn ghost" style={btnMini} onClick={() => moveLine(i, 1)} aria-label="Descendre">↓</button>
+                      </td>
+                      <td>
+                        <input
+                          className="input"
+                          style={l.kind === 'section' ? { fontWeight: 700 } : undefined}
+                          placeholder={l.kind === 'section' ? 'Titre de section' : l.kind === 'text' ? 'Texte libre' : 'Désignation'}
+                          value={l.label}
+                          onChange={(e) => setLine(i, { label: e.target.value })}
+                        />
+                        {l.kind === 'item' && (
+                          openDesc.has(i) ? (
+                            <input
+                              className="input"
+                              style={{ marginTop: 4, fontSize: '0.8rem' }}
+                              placeholder="Description détaillée (optionnel)"
+                              value={l.description ?? ''}
+                              onChange={(e) => setLine(i, { description: e.target.value })}
+                              onBlur={() => { if (!l.description?.trim()) toggleDesc(i); }}
+                              autoFocus
+                            />
+                          ) : (
+                            <button type="button" className="btn ghost" style={{ ...btnMini, marginTop: 4 }} onClick={() => toggleDesc(i)}>
+                              + Description détaillée
+                            </button>
+                          )
+                        )}
+                      </td>
+                      {l.kind === 'item' ? (
+                        <>
+                          <td><input className="input" type="number" style={{ textAlign: 'right' }} value={l.qty} onChange={(e) => setLine(i, { qty: Number(e.target.value) })} /></td>
+                          <td><input className="input" value={l.unit ?? ''} onChange={(e) => setLine(i, { unit: e.target.value })} /></td>
+                          <td><input className="input" type="number" style={{ textAlign: 'right' }} value={l.unitPriceHt} onChange={(e) => setLine(i, { unitPriceHt: Number(e.target.value) })} /></td>
+                          {showDiscount && (
+                            <td><input className="input" type="number" style={{ textAlign: 'right' }} value={l.discountPct} onChange={(e) => setLine(i, { discountPct: Number(e.target.value) })} /></td>
+                          )}
+                          <td>
+                            <select className="select" value={l.vatRate} onChange={(e) => setLine(i, { vatRate: Number(e.target.value) })}>
+                              {VAT_RATES.map((r) => <option key={r} value={r}>{Math.round(r * 100)}%</option>)}
+                            </select>
+                          </td>
+                          <td style={{ textAlign: 'right' }} className="tnum">
+                            {formatEur(l.qty * l.unitPriceHt * (1 - l.discountPct / 100))}
+                          </td>
+                        </>
+                      ) : (
+                        <td colSpan={colspan}></td>
+                      )}
+                      <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                        <button className="btn ghost" style={btnMini} onClick={() => duplicateLine(i)} aria-label="Dupliquer" title="Dupliquer">⧉</button>
+                        <button className="btn ghost" style={btnMini} onClick={() => removeLine(i)} aria-label="Supprimer">✕</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="row" style={{ gap: '0.4rem', marginTop: '0.7rem', flexWrap: 'wrap' }}>
+              <button className="btn" onClick={() => addLine('item')}>+ Ligne</button>
+              <button className="btn" onClick={() => addLine('section')}>+ Section</button>
+              <button className="btn" onClick={() => addLine('text')}>+ Texte</button>
+              <input
+                className="input"
+                style={{ maxWidth: 220, marginLeft: 'auto' }}
+                placeholder="⌕ Bibliothèque de postes"
+                value={libQ}
+                onChange={(e) => setLibQ(e.target.value)}
+              />
+            </div>
+            {lib && lib.items.length > 0 && (
+              <div className="card" style={{ marginTop: 6, padding: 6 }}>
+                {lib.items.slice(0, 8).map((it) => (
+                  <button
+                    key={it.id}
+                    className="btn ghost"
+                    style={{ display: 'block', width: '100%', textAlign: 'left', marginBottom: 2 }}
+                    onClick={() => {
+                      setLines([...lines, { kind: 'item', label: it.label, qty: 1, unit: it.unit ?? '', unitPriceHt: it.unitPriceHt, discountPct: 0, vatRate: it.vatRate, priceItemId: it.id }]);
+                      setDirty(true);
+                      setLibQ('');
+                    }}
+                  >
+                    {it.label} — {formatEur(it.unitPriceHt)}{it.unit ? ` / ${it.unit}` : ''}
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* 03 · Règlement */}
+          <section className="doc-card">
+            <div className="doc-card-head"><span className="doc-card-num">03</span><h2>Règlement</h2></div>
+            <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+              <label className="field">
+                <span>Date {isInvoiceLike ? 'de facture' : 'du devis'}</span>
+                <input className="input" type="date" value={doc.issuedOn?.slice(0, 10) ?? ''} onChange={(e) => patch({ issuedOn: e.target.value || null })} />
+              </label>
+              {isQuote && (
+                <label className="field">
+                  <span>Validité</span>
+                  <input className="input" type="date" value={doc.validUntil?.slice(0, 10) ?? ''} onChange={(e) => patch({ validUntil: e.target.value || null })} />
+                </label>
+              )}
+              {isInvoiceLike && (
+                <>
+                  <label className="field">
+                    <span>Échéance</span>
+                    <input className="input" type="date" value={doc.dueOn?.slice(0, 10) ?? ''} onChange={(e) => patch({ dueOn: e.target.value || null })} />
+                  </label>
+                  <label className="field">
+                    <span>Acompte déjà réglé (€ TTC)</span>
+                    <input className="input" type="number" min={0} step="0.01" value={doc.paidAmount} onChange={(e) => patch({ paidAmount: Number(e.target.value) })} />
+                  </label>
+                </>
+              )}
+            </div>
+          </section>
+
+          {/* Actions secondaires */}
+          <section className="doc-card">
+            <div className="section-title">Autres actions</div>
+            <div className="row" style={{ gap: '0.5rem', flexWrap: 'wrap' }}>
+              {locked && isInvoiceLike && doc.status !== 'paid' && (
+                <button className="btn" disabled={!!busy} onClick={() => act('/mark-paid', {})}>Marquer payée</button>
+              )}
+              {locked && (
+                <button className="btn" disabled={!!busy} onClick={() => act('/send', { peppol: isInvoiceLike })}>
+                  {isInvoiceLike ? 'Envoyer (Peppol)' : 'Marquer envoyé'}
+                </button>
+              )}
+              {isQuote && (
+                <button className="btn" disabled={!!busy} onClick={() => act('/convert', {})}>Convertir en facture</button>
+              )}
+              {isQuote && doc.worksite && (
+                <button className="btn" disabled={!!busy} onClick={() => setTasksModal(true)}>Créer des tâches depuis ce devis</button>
+              )}
+              {isQuote && locked && (
+                <>
+                  <button className="btn" disabled={!!busy} onClick={() => act('/status', { status: 'accepted' })}>Accepté</button>
+                  <button className="btn" disabled={!!busy} onClick={() => act('/status', { status: 'declined' })}>Refusé</button>
+                </>
+              )}
+              {isInvoiceLike && locked && (
+                <button className="btn" disabled={!!busy} onClick={() => act('/credit-note', {})}>Note de crédit</button>
+              )}
+              <button className="btn" disabled={!!busy} onClick={() => act('/duplicate', {})}>Dupliquer</button>
+              <button
+                className="btn"
+                onClick={async () => {
+                  try { window.open(await apiBlobUrl(`/api/documents/${id}/pdf`), '_blank'); }
+                  catch (e) { setMsg((e as Error).message); }
+                }}
+              >
+                Télécharger le PDF
+              </button>
+              {doc.originalPdf && (
                 <button
-                  key={it.id}
-                  className="btn ghost"
-                  style={{ display: 'block', width: '100%', textAlign: 'left', marginBottom: 2 }}
-                  onClick={() => {
-                    setLines([...lines, { kind: 'item', label: it.label, qty: 1, unit: it.unit ?? '', unitPriceHt: it.unitPriceHt, discountPct: 0, vatRate: it.vatRate, priceItemId: it.id }]);
-                    setDirty(true);
-                    setLibQ('');
+                  className="btn"
+                  onClick={async () => {
+                    try { window.open(await apiBlobUrl(`/api/documents/${id}/original.pdf`), '_blank'); }
+                    catch (e) { setMsg((e as Error).message); }
                   }}
                 >
-                  {it.label} — {formatEur(it.unitPriceHt)}{it.unit ? ` / ${it.unit}` : ''}
+                  PDF d’origine (TrustUp)
                 </button>
-              ))}
+              )}
+              {!locked && <button className="btn" style={{ marginLeft: 'auto', color: 'var(--crit)' }} onClick={del}>Supprimer</button>}
             </div>
-          )}
-      </div>
-
-      {/* Totaux */}
-      <div className="card card-pad" style={{ marginBottom: '1rem', maxWidth: 360, marginLeft: 'auto' }}>
-        <Row2 label="Total HT" value={formatEur(totals.totalHt)} />
-        {Object.entries(totals.vatBreakdown).map(([rate, b]) => (
-          <Row2 key={rate} label={`TVA ${Math.round(Number(rate) * 100)}%`} value={formatEur(b.vat)} muted />
-        ))}
-        <Row2 label="Total TTC" value={formatEur(totals.totalTtc)} strong />
-        {doc.paidAmount > 0 && <Row2 label="Payé" value={formatEur(doc.paidAmount)} muted />}
-        {doc.structuredComm && <Row2 label="Communication" value={doc.structuredComm} muted />}
-      </div>
-
-      {/* Actions */}
-      <div className="card card-pad">
-        <div className="section-title">Actions</div>
-        <div className="row" style={{ gap: '0.5rem' }}>
-          <button className="btn primary" disabled={busy === 'save'} onClick={save}>Enregistrer</button>
-          {!locked && (
-            <button className="btn" disabled={!!busy} onClick={() => act('/issue', {}, 'Émettre : un numéro définitif sera attribué et les lignes verrouillées. Continuer ?')}>
-              Émettre {isQuote ? 'le devis' : 'la facture'}
-            </button>
-          )}
-          {locked && isInvoiceLike && doc.status !== 'paid' && (
-            <button className="btn" disabled={!!busy} onClick={() => act('/mark-paid', {})}>Marquer payée</button>
-          )}
-          {locked && (
-            <button className="btn" disabled={!!busy} onClick={() => act('/send', { peppol: isInvoiceLike })}>
-              {isInvoiceLike ? 'Envoyer (Peppol)' : 'Marquer envoyé'}
-            </button>
-          )}
-          {isQuote && (
-            <button className="btn" disabled={!!busy} onClick={() => act('/convert', {})}>Convertir en facture</button>
-          )}
-          {isQuote && doc.worksite && (
-            <button className="btn" disabled={!!busy} onClick={() => setTasksModal(true)}>Créer des tâches depuis ce devis</button>
-          )}
-          {isQuote && locked && (
-            <>
-              <button className="btn" disabled={!!busy} onClick={() => act('/status', { status: 'accepted' })}>Accepté</button>
-              <button className="btn" disabled={!!busy} onClick={() => act('/status', { status: 'declined' })}>Refusé</button>
-            </>
-          )}
-          {isInvoiceLike && locked && (
-            <button className="btn" disabled={!!busy} onClick={() => act('/credit-note', {})}>Note de crédit</button>
-          )}
-          <button className="btn" disabled={!!busy} onClick={() => act('/duplicate', {})}>Dupliquer</button>
-          <button
-            className="btn"
-            onClick={async () => {
-              try { window.open(await apiBlobUrl(`/api/documents/${id}/pdf`), '_blank'); }
-              catch (e) { setMsg((e as Error).message); }
-            }}
-          >
-            Télécharger le PDF
-          </button>
-          {doc.originalPdf && (
-            <button
-              className="btn"
-              onClick={async () => {
-                try { window.open(await apiBlobUrl(`/api/documents/${id}/original.pdf`), '_blank'); }
-                catch (e) { setMsg((e as Error).message); }
-              }}
-            >
-              PDF d’origine (TrustUp)
-            </button>
-          )}
-          <a className="btn" href={`/imprimer/${id}`} target="_blank" rel="noreferrer">Imprimer (aperçu navigateur)</a>
-          {!locked && <button className="btn" style={{ marginLeft: 'auto', color: 'var(--crit)' }} onClick={del}>Supprimer</button>}
+            {isInvoiceLike && (
+              <p className="hint" style={{ marginTop: '0.7rem' }}>
+                La transmission Peppol réelle n’est pas encore active — TrustUp reste l’émetteur officiel tant que la conformité
+                e-facturation n’est pas validée. « Envoyer » met le document en file et le marque envoyé.
+              </p>
+            )}
+          </section>
         </div>
-        {isInvoiceLike && (
-          <p className="hint" style={{ marginTop: '0.7rem' }}>
-            La transmission Peppol réelle n’est pas encore active — TrustUp reste l’émetteur officiel tant que la conformité
-            e-facturation n’est pas validée. « Envoyer » met le document en file et le marque envoyé.
-          </p>
-        )}
+
+        {/* Récapitulatif — sticky */}
+        <aside className="doc-recap">
+          <div className="doc-card">
+            <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.9rem' }}>
+              <span className="eyebrow" style={{ margin: 0 }}>Récapitulatif</span>
+              <DocStatusBadge status={doc.status} />
+            </div>
+            <div className="kpi hero" style={{ marginBottom: '0.9rem' }}>
+              <div className="kpi-head"><span className="label">Total TTC</span></div>
+              <div className="value">{formatEur(totals.totalTtc)}</div>
+            </div>
+            <div className="doc-recap-rows">
+              <div className="doc-recap-row"><span>Total HT</span><span>{formatEur(totals.totalHt)}</span></div>
+              {Object.entries(totals.vatBreakdown).map(([rate, b]) => (
+                <div className="doc-recap-row" key={rate}><span>TVA {Math.round(Number(rate) * 100)}%</span><span>{formatEur(b.vat)}</span></div>
+              ))}
+              {isInvoiceLike && doc.paidAmount > 0 && (
+                <div className="doc-recap-row"><span>Acompte déjà réglé</span><span>− {formatEur(doc.paidAmount)}</span></div>
+              )}
+              {isInvoiceLike && (
+                <div className="doc-recap-row strong"><span>Reste à payer</span><span>{formatEur(remaining)}</span></div>
+              )}
+              {doc.structuredComm && <div className="doc-recap-row" style={{ marginTop: '0.3rem' }}><span>Communication</span><span className="mono" style={{ fontSize: '0.78rem' }}>{doc.structuredComm}</span></div>}
+            </div>
+
+            {dirty && <div className="doc-recap-dirty">Modifications non enregistrées</div>}
+
+            <div className="doc-recap-actions">
+              <button className="btn primary" disabled={busy === 'save'} onClick={save}>{busy === 'save' ? 'Enregistrement…' : 'Enregistrer le brouillon'}</button>
+              {!locked && (
+                <button className="btn" disabled={!!busy} onClick={() => act('/issue', {}, 'Émettre : un numéro définitif sera attribué et les lignes verrouillées. Continuer ?')}>
+                  Émettre {isQuote ? 'le devis' : 'la facture'} →
+                </button>
+              )}
+              <a className="btn" href={`/imprimer/${id}`} target="_blank" rel="noreferrer">Aperçu du document</a>
+            </div>
+          </div>
+        </aside>
       </div>
 
       {tasksModal && (
@@ -493,15 +607,6 @@ function TasksFromLinesModal({
           </button>
         </div>
       </div>
-    </div>
-  );
-}
-
-function Row2({ label, value, strong, muted }: { label: string; value: string; strong?: boolean; muted?: boolean }) {
-  return (
-    <div className="row" style={{ justifyContent: 'space-between', padding: '0.15rem 0' }}>
-      <span className={muted ? 'muted' : undefined} style={strong ? { fontWeight: 800 } : undefined}>{label}</span>
-      <span className="tnum" style={strong ? { fontWeight: 800 } : undefined}>{value}</span>
     </div>
   );
 }

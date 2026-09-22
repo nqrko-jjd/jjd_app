@@ -63,6 +63,7 @@ export default function PrintDocument({ params }: { params: Promise<{ id: string
               {d.kind === 'quote' && d.validUntil && <div className="date-line"><span>Valable jusqu’au</span><strong>{formatDateBE(d.validUntil)}</strong></div>}
               {d.dueOn && <div className="date-line"><span>Date d’échéance</span><strong>{formatDateBE(d.dueOn)}</strong></div>}
               {d.worksite && <div className="date-line"><span>Chantier</span><strong>{d.worksite.ref}</strong></div>}
+              {d.customerRef && <div className="date-line"><span>Réf. client</span><strong>{d.customerRef}</strong></div>}
             </div>
           </div>
         </header>
@@ -81,6 +82,7 @@ export default function PrintDocument({ params }: { params: Promise<{ id: string
             <div className="party-name">{clientName || '—'}</div>
             {clientAddr && <div>{clientAddr}</div>}
             {clientVat && <div>TVA {clientVat}</div>}
+            {d.billingEmail && <div>{d.billingEmail}</div>}
           </div>
         </section>
 

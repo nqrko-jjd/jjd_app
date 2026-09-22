@@ -547,10 +547,14 @@ model Document {
   paidAmount     Float             @default(0)
   paidOn         DateTime?
   note           String?
-  // instantané client au moment de l'émission (le contact peut changer ensuite)
+  // coordonnées de facturation, éditables indépendamment de la fiche contact/chantier (ex.
+  // adresse de facturation différente de l'adresse d'intervention) — servent aussi d'instantané
+  // au moment de l'émission, le contact pouvant changer ensuite
   billingName    String?
   billingVat     String?
   billingAddress String?
+  billingEmail   String?
+  customerRef    String? // référence client / bon de commande, affichée sur le document
   structuredComm String? // communication structurée belge +++xxx/xxxx/xxxxx+++
   peppolStatus   String? // null | queued | sent | delivered | error
   originalPdf    String? // nom de fichier du PDF TrustUp d'origine (uploads/documents/…)

@@ -1433,3 +1433,34 @@ body.plan-wide .main { max-width: none; }
   .page-head > .row .btn:not(.primary) { min-height: 44px; padding-left: 0.6rem; padding-right: 0.6rem; font-size: 0.84rem; }
   .page-head > .row .btn.primary:not(:only-child) { grid-column: 1 / -1; order: -1; }
 }
+
+/* ---------------------------------------------------- éditeur devis/factures */
+.doc-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 340px); gap: 1.4rem; align-items: start; }
+@media (max-width: 980px) { .doc-layout { grid-template-columns: minmax(0, 1fr); } }
+.doc-main { min-width: 0; }
+.doc-card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: var(--shadow-sm); padding: 1.3rem; margin-bottom: 1.1rem;
+}
+.doc-card-head { display: flex; align-items: center; gap: 0.7rem; margin-bottom: 1.1rem; flex-wrap: wrap; }
+.doc-card-num {
+  width: 26px; height: 26px; border-radius: 8px; background: var(--primary-soft); color: var(--primary);
+  display: flex; align-items: center; justify-content: center; font-size: 0.76rem; font-weight: 800; flex-shrink: 0;
+}
+.doc-card-head h2 { font-size: 1rem; margin: 0; }
+.doc-billing-toggle {
+  background: none; border: 0; color: var(--primary); font-weight: 700; font-size: 0.82rem; cursor: pointer;
+  padding: 0.9rem 0 0; display: flex; align-items: center; gap: 0.4rem;
+}
+.doc-billing-note { color: var(--ink-3); font-weight: 500; }
+
+.doc-recap { position: sticky; top: 1rem; }
+.doc-recap .doc-card { margin-bottom: 0; }
+.doc-recap-rows { display: flex; flex-direction: column; gap: 0.4rem; }
+.doc-recap-row { display: flex; justify-content: space-between; gap: 0.6rem; font-size: 0.86rem; color: var(--ink-2); }
+.doc-recap-row span:last-child { font-variant-numeric: tabular-nums; color: var(--ink); }
+.doc-recap-row.strong { font-weight: 800; padding-top: 0.55rem; margin-top: 0.2rem; border-top: 1px solid var(--line); color: var(--ink); }
+.doc-recap-row.strong span:last-child { color: var(--ink); }
+.doc-recap-actions { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 1.1rem; }
+.doc-recap-actions .btn { width: 100%; justify-content: center; }
+.doc-recap-dirty { font-size: 0.76rem; color: var(--warn); margin-top: 0.7rem; text-align: center; font-weight: 600; }

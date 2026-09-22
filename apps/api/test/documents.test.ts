@@ -198,3 +198,38 @@ test('émission : sans syndic lié, adresse de facturation = adresse du contact 
     await prisma.contact.deleteMany({ where: { id: client.id } });
   }
 });
+
+test('brouillon : coordonnées de facturation, réf. client et acompte réglés directement — respectés à l’émission', async () => {
+  const created = await (
+    await fetch(`${base}/api/documents`, { method: 'POST', headers: auth(), body: JSON.stringify({ kind: 'invoice', worksiteId: wsId, lines: [{ label: 'Poste', qty: 1, unitPriceHt: 1000, vatRate: 0.21 }] }) })
+  ).json();
+  const id = created.document.id;
+
+  const patched = await (
+    await fetch(`${base}/api/documents/${id}`, {
+      method: 'PATCH', headers: auth(),
+      body: JSON.stringify({
+        billingName: 'Facturation SA', billingVat: 'BE0123456789', billingAddress: 'Rue Facturée 3, 1000 Bruxelles',
+        billingEmail: 'compta@exemple.be', customerRef: 'BC-2026-042', paidAmount: 250,
+      }),
+    })
+  ).json();
+  assert.equal(patched.document.billingName, 'Facturation SA');
+  assert.equal(patched.document.billingVat, 'BE0123456789');
+  assert.equal(patched.document.billingEmail, 'compta@exemple.be');
+  assert.equal(patched.document.customerRef, 'BC-2026-042');
+  assert.equal(patched.document.paidAmount, 250);
+
+  // effacer une coordonnée (null explicite) doit bien la vider, pas juste ignorer
+  const cleared = await (
+    await fetch(`${base}/api/documents/${id}`, { method: 'PATCH', headers: auth(), body: JSON.stringify({ billingEmail: null }) })
+  ).json();
+  assert.equal(cleared.document.billingEmail, null);
+  assert.equal(cleared.document.billingName, 'Facturation SA', 'les autres champs ne doivent pas être touchés');
+
+  // l'émission ne doit pas écraser une coordonnée déjà saisie manuellement (cf. issueDocument : `doc.billingName ?? …`)
+  const issued = await (await fetch(`${base}/api/documents/${id}/issue`, { method: 'POST', headers: auth(), body: '{}' })).json();
+  assert.equal(issued.document.billingName, 'Facturation SA');
+  assert.equal(issued.document.customerRef, 'BC-2026-042');
+  assert.equal(issued.document.paidAmount, 250);
+});

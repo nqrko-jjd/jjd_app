@@ -296,6 +296,15 @@ export const documentInput = z.object({
   note: z.string().trim().nullish(),
   parentId: z.string().nullish(),
   lines: z.array(documentLineInput).default([]),
+  // coordonnées de facturation (éditables, indépendantes de la fiche contact/chantier)
+  billingName: z.string().trim().nullish(),
+  billingVat: z.string().trim().nullish(),
+  billingAddress: z.string().trim().nullish(),
+  billingEmail: z.string().trim().nullish(),
+  customerRef: z.string().trim().nullish(),
+  // acompte déjà réglé, saisi directement pendant la rédaction (distinct de /mark-paid, qui
+  // ajoute un règlement a posteriori sur un document déjà émis)
+  paidAmount: z.coerce.number().nonnegative().nullish(),
 });
 
 /**

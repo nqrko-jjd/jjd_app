@@ -32,6 +32,8 @@ export interface PdfDoc {
   billingName: string | null;
   billingAddress: string | null;
   billingVat: string | null;
+  billingEmail: string | null;
+  customerRef: string | null;
   worksite: { ref: string } | null;
   contact: { name: string; vat: string | null; address: string | null; postalCode: string | null; city: string | null } | null;
   lines: PdfDocLine[];
@@ -85,6 +87,7 @@ async function buildHtml(d: PdfDoc, co: Company): Promise<string> {
     d.kind === 'quote' && d.validUntil ? `<div class="date-line"><span>Valable jusqu’au</span><strong>${formatDateBE(d.validUntil)}</strong></div>` : '',
     d.dueOn ? `<div class="date-line"><span>Date d’échéance</span><strong>${formatDateBE(d.dueOn)}</strong></div>` : '',
     d.worksite ? `<div class="date-line"><span>Chantier</span><strong>${esc(d.worksite.ref)}</strong></div>` : '',
+    d.customerRef ? `<div class="date-line"><span>Réf. client</span><strong>${esc(d.customerRef)}</strong></div>` : '',
   ].join('');
 
   const isInvoiceLike = d.kind === 'invoice' || d.kind === 'deposit_invoice';
@@ -133,6 +136,7 @@ async function buildHtml(d: PdfDoc, co: Company): Promise<string> {
           <div class="party-name">${esc(clientName) || '—'}</div>
           ${clientAddr ? `<div>${esc(clientAddr)}</div>` : ''}
           ${clientVat ? `<div>TVA ${esc(clientVat)}</div>` : ''}
+          ${d.billingEmail ? `<div>${esc(d.billingEmail)}</div>` : ''}
         </div>
       </section>
       ${d.title ? `<div class="object">${esc(d.title)}</div>` : ''}

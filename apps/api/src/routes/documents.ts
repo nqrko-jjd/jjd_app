@@ -325,6 +325,12 @@ documentsRouter.patch(
         issuedOn: data.issuedOn ?? undefined,
         dueOn: data.dueOn ?? undefined,
         validUntil: data.validUntil ?? undefined,
+        billingName: data.billingName === undefined ? undefined : data.billingName,
+        billingVat: data.billingVat === undefined ? undefined : data.billingVat,
+        billingAddress: data.billingAddress === undefined ? undefined : data.billingAddress,
+        billingEmail: data.billingEmail === undefined ? undefined : data.billingEmail,
+        customerRef: data.customerRef === undefined ? undefined : data.customerRef,
+        paidAmount: data.paidAmount ?? undefined,
       },
     });
 

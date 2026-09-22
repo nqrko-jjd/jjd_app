@@ -385,19 +385,21 @@ function fieldStateBadge(ev: FieldEvent): { tone: string; label: string } {
 /** « Sur le terrain aujourd'hui » : horaire, chantier, équipe, état de pointage. */
 function FieldToday({ items }: { items: FieldEvent[] }) {
   return (
-    <>
-      <div className="row" style={{ justifyContent: 'space-between', margin: '1.8rem 0 0.8rem' }}>
-        <div className="section-title" style={{ margin: 0 }}>Sur le terrain aujourd’hui <span className="hint">{items.length}</span></div>
+    <section className="panel">
+      <div className="panelhead">
+        <h2>Sur le terrain aujourd’hui <span className="hint">{items.length}</span></h2>
         <Link href="/app/planning" className="hint">Ouvrir le planning →</Link>
       </div>
       {items.length === 0 ? (
-        <EmptyState
-          icon={HardHat}
-          title="Personne sur le terrain aujourd’hui"
-          text="Aucune affectation n’est planifiée pour aujourd’hui. Planifiez une équipe sur un chantier pour la voir apparaître ici, avec son état de pointage."
-          action={<Link href="/app/planning" className="btn primary">Ouvrir le planning</Link>}
-          secondary={<Link href="/app/chantiers" className="btn">Voir les chantiers</Link>}
-        />
+        <div className="panel-empty">
+          <EmptyState
+            icon={HardHat}
+            title="Personne sur le terrain aujourd’hui"
+            text="Aucune affectation n’est planifiée pour aujourd’hui. Planifiez une équipe sur un chantier pour la voir apparaître ici, avec son état de pointage."
+            action={<Link href="/app/planning" className="btn primary">Ouvrir le planning</Link>}
+            secondary={<Link href="/app/chantiers" className="btn">Voir les chantiers</Link>}
+          />
+        </div>
       ) : (
         <div className="field-list">
           {items.map((ev) => {
@@ -412,6 +414,7 @@ function FieldToday({ items }: { items: FieldEvent[] }) {
                   <Link href={`/app/chantiers/${ev.worksite.id}`}>{ev.worksite.title}</Link>
                   <div className="sub">{ev.worksite.ref}{ev.worksite.city ? ` · ${ev.worksite.city}` : ''}</div>
                 </div>
+                <div className="field-state"><span className={`badge ${st.tone}`}>{st.label}</span></div>
                 <div className="crew">
                   {ev.team && <span className="badge plain">{ev.team}</span>}
                   {ev.people.map((p) => (
@@ -420,13 +423,12 @@ function FieldToday({ items }: { items: FieldEvent[] }) {
                     </span>
                   ))}
                 </div>
-                <div className="field-state"><span className={`badge ${st.tone}`}>{st.label}</span></div>
               </div>
             );
           })}
         </div>
       )}
-    </>
+    </section>
   );
 }
 
@@ -552,37 +554,41 @@ export default function DashboardPage() {
             <Kpi ic={Clock} label="À encaisser" value={<Money value={data.kpis.receivableAmount} />} sub="factures émises non payées" />
           </div>
 
-          <div className="row" style={{ justifyContent: 'space-between', margin: '1.8rem 0 0.8rem' }}>
-            <div className="section-title" style={{ margin: 0 }}>À traiter en priorité <span className="hint">{data.alerts.length}</span></div>
-            <span className="hint">trié par urgence</span>
-          </div>
-          {data.alerts.length === 0 ? (
-            <EmptyState
-              icon={ShieldCheck}
-              title="Rien à traiter en priorité"
-              text="Aucune facture échue, relance ou échéance à surveiller pour l’instant. Le prochain point apparaîtra ici dès qu’il devient urgent."
-              action={<Link href="/app/documents" className="btn primary">Voir les devis &amp; factures</Link>}
-              secondary={<Link href="/app/planning" className="btn">Ouvrir le planning</Link>}
-            />
-          ) : (
-            <div className="alert-card">
-              <div className="alert-list">
-                {data.alerts.map((a) => {
-                  const AlertIc = ALERT_KIND_ICON[a.kind] ?? AlertTriangle;
-                  return (
-                    <Link key={a.kind} href={a.href} className={`alert ${a.severity}`}>
-                      <span className="sev"><AlertIc size={17} strokeWidth={2} /></span>
-                      <span className="label">{a.label}<span className="n">{a.count} élément{a.count > 1 ? 's' : ''}</span></span>
-                      {a.amount != null && <span className="amount"><Money value={a.amount} /></span>}
-                      <ChevronRight size={18} strokeWidth={2} className="chev" />
-                    </Link>
-                  );
-                })}
+          <div className="split" style={{ margin: '1.8rem 0 0.8rem' }}>
+            <section className="panel">
+              <div className="panelhead">
+                <h2>À traiter en priorité <span className="hint">{data.alerts.length}</span></h2>
+                <small>trié par urgence</small>
               </div>
-            </div>
-          )}
+              {data.alerts.length === 0 ? (
+                <div className="panel-empty">
+                  <EmptyState
+                    icon={ShieldCheck}
+                    title="Rien à traiter en priorité"
+                    text="Aucune facture échue, relance ou échéance à surveiller pour l’instant. Le prochain point apparaîtra ici dès qu’il devient urgent."
+                    action={<Link href="/app/documents" className="btn primary">Voir les devis &amp; factures</Link>}
+                    secondary={<Link href="/app/planning" className="btn">Ouvrir le planning</Link>}
+                  />
+                </div>
+              ) : (
+                <div className="alert-list">
+                  {data.alerts.map((a) => {
+                    const AlertIc = ALERT_KIND_ICON[a.kind] ?? AlertTriangle;
+                    return (
+                      <Link key={a.kind} href={a.href} className={`alert ${a.severity}`}>
+                        <span className="sev"><AlertIc size={17} strokeWidth={2} /></span>
+                        <span className="label">{a.label}<span className="n">{a.count} élément{a.count > 1 ? 's' : ''}</span></span>
+                        {a.amount != null && <span className="amount"><Money value={a.amount} /></span>}
+                        <ChevronRight size={18} strokeWidth={2} className="chev" />
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
 
-          <FieldToday items={data.fieldToday ?? []} />
+            <FieldToday items={data.fieldToday ?? []} />
+          </div>
 
           {data.inProgress.length > 0 && <InProgressBand rows={data.inProgress} />}
 

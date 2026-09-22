@@ -30,6 +30,9 @@
   --nav-fg-active: #ffffff;
   --nav-active-bg: rgba(255, 255, 255, 0.12);
   --nav-line: rgba(255, 255, 255, 0.14);
+  /* lien de nav sélectionné : pastille claire (pas un simple voile blanc translucide) */
+  --nav-active-pill-bg: #f1f5e8;
+  --nav-active-pill-fg: #16422e;
 
   /* sémantique — plus de bleu : --info retombe sur la marque */
   --ok: #173f34;
@@ -142,28 +145,31 @@ p { margin: 0; }
 }
 
 /* ---------------------------------------------------- shell */
-.shell { display: grid; grid-template-columns: 242px minmax(0, 1fr); min-height: 100vh; }
+/* 1ère colonne = simple réservation d'espace : la sidebar flotte par-dessus en position:fixed
+   (272px = 12px de marge + 248px de large + 12px d'air avant le contenu). */
+.shell { display: grid; grid-template-columns: 272px minmax(0, 1fr); min-height: 100vh; }
 .topbar { display: none; }
 .bottom-tabs { display: none; }
 
 .sidebar {
   /* #173f34 -> #102f27 en clair ; les variables suivent le thème sombre */
-  background: linear-gradient(180deg, var(--nav-bg-2), var(--nav-bg));
+  background: linear-gradient(155deg, var(--nav-bg-2), var(--nav-bg));
   color: var(--nav-fg);
   padding: 1.1rem 0.85rem 1rem;
   display: flex; flex-direction: column; gap: 2px;
-  position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  position: fixed; top: 12px; left: 12px; bottom: 12px; width: 248px;
+  border-radius: 21px; box-shadow: 0 7px 20px rgba(12, 48, 37, 0.094);
+  overflow-y: auto;
 }
 .sidebar .brand {
-  display: flex; align-items: center; gap: 0.55rem;
+  display: flex; align-items: center; gap: 0.7rem;
   padding: 0.3rem 0.6rem 1.2rem;
-  font-weight: 800; font-size: 1.05rem; letter-spacing: -0.02em; color: #fff;
+  font-family: var(--font-serif); font-weight: 750; font-size: 1.5rem; letter-spacing: -0.02em; color: #fff;
 }
-.sidebar .brand { font-family: var(--font-serif); font-weight: 700; letter-spacing: -0.02em; }
 .sidebar .brand .mark {
-  width: 26px; height: 26px; border-radius: 7px;
-  background: var(--gold); color: #241c05;
-  display: grid; place-items: center; font-size: 0.9rem; font-weight: 700; font-family: var(--font);
+  width: 38px; height: 41px; border-radius: 11px; flex-shrink: 0;
+  background: linear-gradient(135deg, #e2c98b, #c9a35c); color: var(--nav-bg-2);
+  display: grid; place-items: center; font-size: 1.75rem; font-weight: 750; font-family: var(--font-serif);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 /* carte « organisation » — sous le logo, au-dessus de la nav (repère d'espace de travail) */
@@ -183,22 +189,20 @@ p { margin: 0; }
 }
 .navlink {
   display: flex; align-items: center; gap: 0.7rem;
-  padding: 0.52rem 0.7rem; border-radius: var(--radius-sm);
-  color: var(--nav-fg); font-weight: 600; font-size: 0.87rem;
+  padding: 0.69rem 0.75rem; border-radius: 10px;
+  color: var(--nav-fg); font-weight: 400; font-size: 0.875rem;
   position: relative; transition: background 0.12s, color 0.12s;
 }
 .navlink:hover { background: var(--nav-active-bg); color: #e9ecf4; }
-.navlink.active { background: var(--nav-active-bg); color: var(--nav-fg-active); }
-.navlink.active::before {
-  content: ""; position: absolute; left: -0.85rem; top: 50%; transform: translateY(-50%);
-  width: 3px; height: 18px; border-radius: 0 3px 3px 0; background: var(--gold);
-}
+/* sélectionné : pastille claire pleine (pas un voile translucide) — se détache franchement
+   du fond vert sombre, comme la maquette de référence. */
+.navlink.active { background: var(--nav-active-pill-bg); color: var(--nav-active-pill-fg); }
 .navlink .ic {
   width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center;
   opacity: 0.85; flex-shrink: 0;
   border-radius: 6px; transition: background 0.12s;
 }
-.navlink.active .ic { background: rgba(255, 255, 255, 0.12); opacity: 1; }
+.navlink.active .ic { opacity: 1; }
 .sidebar .foot {
   margin-top: auto; padding: 0.8rem 0.7rem 0.2rem;
   border-top: 1px solid var(--nav-line); font-size: 0.76rem;
@@ -211,7 +215,13 @@ p { margin: 0; }
 }
 .sidebar .foot .logout:hover { background: rgba(255,255,255,0.1); color: #fff; }
 
-.main { padding: 1.7rem clamp(1rem, 3vw, 2.6rem); max-width: 1240px; width: 100%; min-width: 0; }
+.main {
+  /* grid-column explicite : la sidebar (position:fixed) ne réserve plus sa cellule de grille,
+     sans ça .main retomberait en colonne 1 et passerait sous elle. */
+  grid-column: 2;
+  padding: 1.25rem clamp(1.25rem, 2.9vw, 2.25rem) 2.75rem;
+  max-width: 1240px; width: 100%; min-width: 0;
+}
 
 .page-head {
   display: flex; align-items: flex-start; justify-content: space-between;
@@ -333,10 +343,10 @@ p { margin: 0; }
 /* ---------------------------------------------------- stat cards */
 /* 3 par rangée comme la maquette (pas auto-fit — les cartes plus larges évitent le texte
    trop dominant dans une case étroite) ; repasse en 2 puis 1 sur petit écran, voir media queries plus bas. */
-.kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+.kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
 .kpi {
-  background: var(--surface); border: 1px solid var(--line); min-width: 0;
-  border-radius: var(--radius); padding: 1.1rem 1.2rem; box-shadow: var(--shadow-sm);
+  background: var(--surface); border: 1px solid #e0e7e3; min-width: 0; min-height: 158px;
+  border-radius: 17px; padding: 23px; box-shadow: 0 4px 18px rgba(20, 60, 45, 0.024), 0 1px 2px rgba(20, 60, 45, 0.016);
   display: flex; flex-direction: column; gap: 0.35rem;
 }
 .kpi-head { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; }
@@ -344,15 +354,18 @@ p { margin: 0; }
   width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center;
   background: var(--gold-soft); color: var(--gold); flex-shrink: 0;
 }
-.kpi .label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.09em; color: var(--ink-3); font-weight: 700; }
+/* casse normale (pas de majuscules), comme la maquette : plus lisible sur un libellé un peu long. */
+.kpi .label { font-size: 0.875rem; color: var(--ink-2); font-weight: 400; }
 .kpi .value {
-  font-family: var(--font-serif); font-size: clamp(1.1rem, 1.6vw, 1.45rem); font-weight: 700;
-  letter-spacing: -0.03em; font-variant-numeric: tabular-nums; line-height: 1.15; overflow-wrap: anywhere;
+  font-family: var(--font-serif); font-size: 34px; font-weight: 650;
+  letter-spacing: -1.4px; font-variant-numeric: tabular-nums; line-height: normal; overflow-wrap: anywhere;
 }
 .kpi .value.neg { color: var(--crit); }
-.kpi .sub { font-size: 0.76rem; color: var(--ink-2); }
-.kpi.warn { border-color: var(--warn); background: var(--warn-soft); }
-.kpi.warn .ic { background: var(--warn); color: #fff; }
+.kpi .sub { font-size: 0.75rem; color: var(--ink-2); }
+/* alerte financière : aplat crème et liseré or discrets (pas un bloc beige appuyé) */
+.kpi.warn { border-color: #eee2d0; background: #fffaf2; }
+.kpi.warn .ic { background: rgba(152, 101, 63, 0.14); color: #98653f; }
+.kpi.warn .value { color: #98653f; }
 /* tuile « hero » : met en avant LE chiffre du jour (ex. facturé ce mois-ci) au milieu de
    tuiles neutres — à utiliser sur une seule tuile par rangée, pas en style par défaut.
    Fond = celui de la sidebar (--nav-bg-2), volontairement PAS --primary : --primary
@@ -364,32 +377,49 @@ p { margin: 0; }
 .kpi.hero .sub { color: var(--nav-fg); }
 .kpi.hero .value.neg { color: #ffb4a8; }
 
-/* ---------------------------------------------------- alerts : liste "à traiter" en carte */
-.alert-card { background: transparent; border: 0; box-shadow: none; }
-.alert-list { display: flex; flex-direction: column; gap: 0.6rem; }
+/* ---------------------------------------------------- panneau partagé (2 colonnes bureau) */
+/* un seul panneau par bloc, avec en-tête et lignes séparées par des traits discrets — pas une
+   carte indépendante par ligne. */
+.split { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; align-items: start; }
+@media (max-width: 900px) { .split { grid-template-columns: 1fr; } }
+.panel {
+  background: var(--surface); border: 1px solid #e0e7e3; border-radius: 18px;
+  box-shadow: 0 4px 18px rgba(20, 60, 45, 0.024), 0 1px 2px rgba(20, 60, 45, 0.016);
+  overflow: hidden;
+}
+.panelhead {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.8rem;
+  padding: 22px 24px; border-bottom: 1px solid #e9efe5;
+}
+.panelhead h2 { font-size: 1.125rem; font-weight: 750; }
+.panelhead small, .panelhead .hint { font-size: 0.75rem; color: var(--ink-2); }
+.panel-empty { padding: 0 24px 24px; }
+
+/* ---------------------------------------------------- alerts : lignes "à traiter" */
+.alert-list { display: flex; flex-direction: column; }
 .alert {
   display: flex; align-items: center; gap: 0.85rem;
-  padding: 0.85rem 1rem; background: var(--surface); border: 1px solid var(--line);
-  border-radius: var(--radius); box-shadow: var(--shadow-sm);
-  transition: border-color 0.12s, transform 0.12s, box-shadow 0.12s;
+  padding: 22px 24px; border-bottom: 1px solid #edf1e8;
+  transition: background 0.12s;
 }
-.alert:hover { border-color: var(--primary-line); transform: translateY(-1px); box-shadow: var(--shadow); }
-.alert:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--primary-soft); }
+.alert-list a.alert:last-child, .alert-list > *:last-child .alert { border-bottom: none; }
+.alert:hover { background: var(--surface-2); }
+.alert:focus-visible { outline: none; box-shadow: inset 0 0 0 3px var(--primary-soft); }
 .alert .chev { color: var(--ink-3); flex-shrink: 0; }
 .alert:hover .chev { color: var(--primary); }
 .alert .sev {
-  width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0;
-  display: grid; place-items: center; font-size: 0.95rem;
+  width: 40px; height: 40px; border-radius: 10px; flex-shrink: 0;
+  display: grid; place-items: center; font-size: 1rem;
 }
 .alert.critical .sev { background: var(--crit-soft); color: var(--crit); }
 .alert.warning .sev { background: var(--warn-soft); color: var(--warn); }
 .alert.info .sev { background: var(--primary-soft); color: var(--primary); }
-.alert .label { flex: 1; font-weight: 700; font-size: 0.9rem; }
-.alert .label .n { display: block; font-weight: 500; font-size: 0.78rem; color: var(--ink-2); margin-top: 0.1rem; }
-.alert .amount { color: var(--ink); font-weight: 700; font-size: 0.9rem; font-variant-numeric: tabular-nums; text-align: right; }
+.alert .label { flex: 1; font-weight: 700; font-size: 0.94rem; }
+.alert .label .n { display: block; font-weight: 500; font-size: 0.81rem; color: var(--ink-2); margin-top: 0.1rem; }
+.alert .amount { color: var(--ink); font-weight: 700; font-size: 1rem; font-variant-numeric: tabular-nums; text-align: right; }
 .alert .count {
-  font-weight: 800; font-variant-numeric: tabular-nums; min-width: 1.6rem; text-align: center;
-  background: var(--surface-2); border-radius: 999px; padding: 0.1rem 0.5rem; font-size: 0.85rem;
+  font-weight: 550; font-variant-numeric: tabular-nums; text-align: center;
+  background: #fff1db; color: #875e22; border-radius: 7px; padding: 0.35rem 0.6rem; font-size: 0.75rem;
 }
 
 /* ---------------------------------------------------- tableau de bord bureau */
@@ -421,11 +451,13 @@ p { margin: 0; }
 .dash-account .who { display: flex; flex-direction: column; line-height: 1.15; }
 .dash-account .who strong { font-size: 0.84rem; }
 .dash-account .who span { font-size: 0.72rem; color: var(--ink-2); }
-.dash-title h1 { font-size: 2.3rem; letter-spacing: -0.03em; }
+.dash-title h1 { font-size: clamp(28px, 2.5vw, 38px); font-weight: 650; letter-spacing: -1.4px; line-height: 1.18; }
 @media (max-width: 900px) { .dash-bar { display: none; } .dash-title h1 { font-size: 1.6rem; } }
 
 /* historique 6 mois dans la tuile hero */
-.kpi-history { display: flex; align-items: flex-end; gap: 0.4rem; height: 64px; margin-top: 0.55rem; }
+/* hauteur réduite : l'historique reste secondaire, la 1ère tuile ne doit pas s'imposer
+   sur ses voisines (elle garde une hauteur proche, pas le double). */
+.kpi-history { display: flex; align-items: flex-end; gap: 0.4rem; height: 34px; margin-top: 0.4rem; }
 .kpi-history .bar { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 0.2rem; min-width: 0; }
 .kpi-history .bar span { display: block; width: 100%; border-radius: 4px 4px 0 0; background: rgba(255, 255, 255, 0.28); }
 .kpi-history .bar.cur span { background: var(--gold); }
@@ -450,21 +482,24 @@ p { margin: 0; }
 .kpi-group { margin: 1.3rem 0 0.6rem; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.09em; font-weight: 700; color: var(--ink-3); }
 
 /* sur le terrain aujourd'hui */
-.field-list { display: flex; flex-direction: column; gap: 0.6rem; }
+/* panneau « sur le terrain » — même logique que .alert : lignes divisées par des traits
+   discrets dans le panneau, plus des cartes indépendantes. Flex + wrap plutôt qu'une grille
+   figée à 4 colonnes : dans une colonne de .split (~moitié de la largeur), un horaire + un
+   chantier + l'équipe + un badge tiennent plus naturellement en se repliant au besoin. */
+.field-list { display: flex; flex-direction: column; }
 .field-row {
-  display: grid; grid-template-columns: 110px minmax(0, 1.6fr) minmax(0, 1.2fr) auto; gap: 1rem; align-items: center;
-  padding: 0.85rem 1rem; background: var(--surface); border: 1px solid var(--line);
-  border-radius: var(--radius); box-shadow: var(--shadow-sm);
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem;
+  padding: 22px 24px; border-bottom: 1px solid #edf1e8;
 }
-.field-row:hover { border-color: var(--primary-line); }
-.field-row .when { font-weight: 700; font-variant-numeric: tabular-nums; font-size: 0.9rem; }
+.field-list .field-row:last-child { border-bottom: none; }
+.field-row .when { flex: 0 0 auto; font-weight: 700; font-variant-numeric: tabular-nums; font-size: 0.9rem; }
 .field-row .when small { display: block; font-weight: 500; color: var(--ink-2); font-size: 0.74rem; }
-.field-row .ws { min-width: 0; }
+.field-row .ws { flex: 1 1 180px; min-width: 0; }
 .field-row .ws a { font-weight: 700; font-size: 0.9rem; }
 .field-row .ws .sub { color: var(--ink-2); font-size: 0.78rem; }
-.field-row .crew { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.field-row .crew { flex: 1 1 100%; display: flex; flex-wrap: wrap; gap: 0.3rem; order: 3; }
 .field-row .crew .who { font-size: 0.78rem; color: var(--ink-2); }
-.field-state { text-align: right; }
+.field-state { flex: 0 0 auto; margin-left: auto; text-align: right; }
 .field-state .badge { white-space: nowrap; }
 @media (max-width: 760px) {
   .field-row { grid-template-columns: 1fr; gap: 0.4rem; }
@@ -820,6 +855,10 @@ p { margin: 0; }
 /* ---------------------------------------------------- responsive */
 @media (max-width: 900px) {
   .shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; align-content: start; }
+  /* .shell n'a plus qu'une colonne ici : sans ce reset, le grid-column:2 (utile en bureau pour
+     que .main ignore la colonne réservée à la sidebar position:fixed) crée une 2e colonne
+     implicite — .topbar (resté en colonne 1, sans grid-column) s'y retrouve écrasé à ~30px. */
+  .main { grid-column: auto; }
   .topbar {
     display: flex; align-items: center; gap: 0.75rem;
     position: sticky; top: 0; z-index: 30;

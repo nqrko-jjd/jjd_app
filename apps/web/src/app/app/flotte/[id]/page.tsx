@@ -183,7 +183,7 @@ export default function VehicleDetail({ params }: { params: Promise<{ id: string
         basePath={`/api/vehicles/${v.id}`}
         photoUrl={v.photoUrl}
         alt={[v.brand, v.model].filter(Boolean).join(' ')}
-        fallback={v.plate ? <PlateBE plate={v.plate} size={34} /> : <Truck size={40} strokeWidth={1.6} />}
+        fallback={v.plate ? <PlateBE plate={v.plate} size={78} /> : <Truck size={40} strokeWidth={1.6} />}
         onChange={reload}
       />
       <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', marginBottom: '1.4rem' }}>

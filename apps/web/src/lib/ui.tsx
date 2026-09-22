@@ -173,21 +173,35 @@ export function Thumb({ src, size = 40, icon: Icon }: { src?: string | null; siz
   );
 }
 
-/** Plaque belge (fond blanc, contour et texte rouges) — identifie un véhicule d'un coup d'œil,
- *  mieux qu'une icône générique. `size` en hauteur de plaque, en px. */
+/** Plaque belge (bandeau UE bleu à étoiles + « B », texte rouge, double liseré noir/rouge) —
+ *  identifie un véhicule d'un coup d'œil, mieux qu'une icône générique. SVG à viewBox fixe :
+ *  `size` (hauteur en px) définit juste la taille de rendu, tout le dessin reste net. */
 export function PlateBE({ plate, size = 26 }: { plate: string; size?: number }) {
+  const text = plate.toUpperCase();
+  const chars = text.replace(/[^A-Z0-9]/g, '').length || 1;
+  // la police rétrécit pour les plaques longues, plafonnée pour ne pas être ridicule sur "LEJ7"
+  const fontSize = Math.max(22, Math.min(46, 335 / (chars * 0.62)));
+  const stars = Array.from({ length: 12 }, (_, i) => {
+    const a = (i / 12) * Math.PI * 2 - Math.PI / 2;
+    return { cx: 41 + Math.cos(a) * 16, cy: 38 + Math.sin(a) * 16 };
+  });
   return (
-    <span
-      style={{
-        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-        height: size, minWidth: size * 3.5, padding: `0 ${Math.round(size * 0.32)}px`,
-        background: '#fff', border: `${Math.max(2, Math.round(size / 13))}px solid #c8102e`,
-        borderRadius: Math.round(size / 5.5), color: '#c8102e', fontWeight: 800,
-        fontFamily: 'var(--font-mono)', letterSpacing: '0.04em', fontSize: size * 0.44,
-        lineHeight: 1, whiteSpace: 'nowrap',
-      }}
+    <svg
+      width={size * 4.6} height={size} viewBox="0 0 460 100" role="img" aria-label={`Plaque ${text}`}
+      style={{ flexShrink: 0, display: 'block' }}
     >
-      {plate}
-    </span>
+      <rect x="2" y="2" width="456" height="96" rx="12" fill="#fff" stroke="#1a1a1a" strokeWidth="2.5" />
+      <rect x="7" y="7" width="446" height="86" rx="9" fill="none" stroke="#c8102e" strokeWidth="4" />
+      <path d="M9 18 a10 10 0 0 1 10-10 h53 v84 h-53 a10 10 0 0 1 -10-10 z" fill="#039" />
+      {stars.map((s, i) => <circle key={i} cx={s.cx} cy={s.cy} r="1.9" fill="#ffcc00" />)}
+      <text x="41" y="80" textAnchor="middle" fontFamily="Arial, Helvetica, sans-serif" fontWeight={800} fontSize="27" fill="#fff">B</text>
+      <text
+        x="267" y="66" textAnchor="middle" dominantBaseline="middle"
+        fontFamily="Arial, Helvetica, sans-serif" fontWeight={800} fontSize={fontSize} letterSpacing="1.5"
+        fill="#c8102e"
+      >
+        {text}
+      </text>
+    </svg>
   );
 }

@@ -217,8 +217,13 @@ export default function FlottePage() {
             const badgeTone = v.excludedFromPlanning ? 'plain' : status === 'assigned' ? 'primary' : status === 'unavailable' ? 'crit' : 'ok';
             return (
               <div key={v.id} className="avail-card plate-card">
+                {v.photoThumbUrl && (
+                  <div className="avail-card-photo">
+                    <img src={v.photoThumbUrl} alt="" />
+                  </div>
+                )}
                 <div className="avail-card-top">
-                  {v.plate ? <PlateBE plate={v.plate} size={28} /> : <Thumb src={v.photoThumbUrl} size={40} icon={Truck} />}
+                  {v.plate ? <PlateBE plate={v.plate} size={28} /> : <Thumb src={v.photoThumbUrl ? null : undefined} size={40} icon={Truck} />}
                   <span className={`badge ${badgeTone}`}>{badgeLabel}</span>
                 </div>
                 <div className="avail-card-name">{vehicleLabel(v)}</div>

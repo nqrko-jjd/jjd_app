@@ -161,6 +161,16 @@ export const vehicleDocInput = z.object({
   expiresOn: z.coerce.date().nullish(),
 });
 
+/** Frais de réparation / entretien ponctuel (garage) — distinct des coûts fixes de revient (fiche véhicule). */
+export const vehicleRepairInput = z.object({
+  vehicleId: nonEmpty,
+  date: z.coerce.date().nullish(),
+  description: z.string().trim().nullish(),
+  garage: z.string().trim().nullish(),
+  amount: z.coerce.number().nonnegative().nullish(),
+  km: z.string().trim().nullish(),
+});
+
 /** Avance versée ou dette imputée à un ouvrier — à déduire de sa prochaine paie. */
 export const personAdjustmentInput = z.object({
   type: z.enum(ADJUSTMENT_TYPES),

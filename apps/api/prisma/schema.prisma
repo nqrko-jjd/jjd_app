@@ -895,6 +895,22 @@ model Vehicle {
   eventLinks EventVehicle[]
   payments   VehiclePayment[]
   docs       VehicleDoc[]
+  repairs    VehicleRepair[]
+}
+
+/// Frais de réparation / entretien ponctuel (garage) — distinct des coûts fixes de revient.
+model VehicleRepair {
+  id          String    @id @default(cuid())
+  vehicleId   String
+  vehicle     Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  date        DateTime?
+  description String?
+  garage      String?
+  amount      Float?
+  km          String?
+  createdAt   DateTime  @default(now())
+
+  @@index([vehicleId, date])
 }
 
 /// Document véhicule (certificat d'immatriculation, assurance, contrôle technique…).

@@ -32,14 +32,26 @@ interface Detail {
     fines: { id: string; date: string | null; type: string | null; amount: number | null; status: string | null }[];
     payments: { id: string; dueOn: string | null; amount: number | null; principal: number | null; interest: number | null; balance: number | null }[];
     docs: { id: string; type: string; label: string | null; number: string | null; expiresOn: string | null; fileUrl: string | null }[];
+    repairs: { id: string; date: string | null; description: string | null; garage: string | null; amount: number | null; km: string | null }[];
   };
 }
+
+interface Repair { id: string; date: string | null; description: string | null; garage: string | null; amount: number | null; km: string | null }
+
+const REPAIR_FIELDS: FieldDef[] = [
+  { name: 'date', label: 'Date', type: 'date' },
+  { name: 'description', label: 'Réparation / entretien', placeholder: 'Plaquettes de frein, courroie…' },
+  { name: 'garage', label: 'Garage / fournisseur' },
+  { name: 'amount', label: 'Montant (€)', type: 'number' },
+  { name: 'km', label: 'Kilométrage' },
+];
 
 export default function VehicleDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { data, loading, error, reload } = useApi<Detail>(`/api/vehicles/${id}`);
   const [editing, setEditing] = useState(false);
   const [addingDoc, setAddingDoc] = useState(false);
+  const [repairModal, setRepairModal] = useState<'new' | Repair | null>(null);
   if (loading) return <SkeletonRows />;
   if (!data) {
     return error
@@ -59,6 +71,12 @@ export default function VehicleDetail({ params }: { params: Promise<{ id: string
     const url = await apiBlobUrl(`/api/vehicles/${id}/docs/${docId}/file`);
     window.open(url, '_blank');
   }
+  async function removeRepair(repairId: string) {
+    if (!confirm('Supprimer cette réparation ?')) return;
+    await api(`/api/vehicles/${id}/repairs/${repairId}`, { method: 'DELETE' });
+    reload();
+  }
+  const totalRepairs = v.repairs.reduce((s, r) => s + (r.amount ?? 0), 0);
 
   const editFields: FieldDef[] = [
     { name: 'brand', label: 'Marque' },
@@ -113,6 +131,22 @@ export default function VehicleDetail({ params }: { params: Promise<{ id: string
           }}
         />
       )}
+      {repairModal && (
+        <FormModal
+          title={repairModal === 'new' ? 'Nouvelle réparation' : 'Modifier la réparation'}
+          fields={REPAIR_FIELDS}
+          initial={repairModal === 'new' ? {} : {
+            date: toDateInput(repairModal.date), description: repairModal.description, garage: repairModal.garage,
+            amount: repairModal.amount, km: repairModal.km,
+          }}
+          onClose={() => setRepairModal(null)}
+          onSubmit={async (body) => {
+            const path = repairModal === 'new' ? `/api/vehicles/${id}/repairs` : `/api/vehicles/${id}/repairs/${(repairModal as Repair).id}`;
+            await api(path, { method: repairModal === 'new' ? 'POST' : 'PATCH', body });
+            reload();
+          }}
+        />
+      )}
       {editing && (
         <FormModal
           title={`Modifier ${[v.brand, v.model].filter(Boolean).join(' ') || v.code || 'le véhicule'}`}
@@ -149,7 +183,7 @@ export default function VehicleDetail({ params }: { params: Promise<{ id: string
         basePath={`/api/vehicles/${v.id}`}
         photoUrl={v.photoUrl}
         alt={[v.brand, v.model].filter(Boolean).join(' ')}
-        fallback="🚐"
+        fallback={<Truck size={40} strokeWidth={1.6} />}
         onChange={reload}
       />
       <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', marginBottom: '1.4rem' }}>
@@ -238,6 +272,37 @@ export default function VehicleDetail({ params }: { params: Promise<{ id: string
                     </tr>
                   );
                 })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <section style={{ marginBottom: '1.4rem' }}>
+        <div className="section-title">
+          Réparations{v.repairs.length > 0 && ` — ${totalRepairs.toLocaleString('fr-BE', { maximumFractionDigits: 0 })} €`}
+          <button className="btn primary" style={{ marginLeft: 'auto', padding: '0.2rem 0.7rem', fontSize: '0.8rem' }} onClick={() => setRepairModal('new')}>+ Ajouter</button>
+        </div>
+        {v.repairs.length === 0 ? (
+          <div className="card card-pad muted">Aucune réparation enregistrée pour l’instant.</div>
+        ) : (
+          <div className="tbl-wrap">
+            <table className="tbl">
+              <thead><tr><th>Date</th><th>Réparation</th><th>Garage</th><th>Km</th><th style={{ textAlign: 'right' }}>Montant</th><th /></tr></thead>
+              <tbody>
+                {v.repairs.map((r) => (
+                  <tr key={r.id}>
+                    <td className="tnum">{formatDateBE(r.date)}</td>
+                    <td>{r.description ?? '—'}</td>
+                    <td>{r.garage ?? '—'}</td>
+                    <td className="tnum">{r.km ?? '—'}</td>
+                    <td style={{ textAlign: 'right' }}><Money value={r.amount} /></td>
+                    <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                      <button className="btn ghost" style={{ padding: '0.15rem 0.45rem', fontSize: '0.75rem' }} onClick={() => setRepairModal(r)}>Modifier</button>
+                      <button className="btn ghost" style={{ padding: '0.15rem 0.45rem', fontSize: '0.75rem' }} onClick={() => removeRepair(r.id)} aria-label="Supprimer">✕</button>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>

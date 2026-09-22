@@ -224,7 +224,7 @@ export default function FlottePage() {
                   </div>
                 )}
                 <div className="avail-card-top">
-                  <Thumb src={v.photoThumbUrl ? null : undefined} size={56} />
+                  <Thumb src={v.photoThumbUrl ? null : undefined} size={56} icon={Truck} />
                   <span className={`badge ${badgeTone}`}>{badgeLabel}</span>
                 </div>
                 <div className="avail-card-name">{vehicleLabel(v)}</div>
@@ -266,7 +266,7 @@ export default function FlottePage() {
                     onContextMenu={(e) => ctx.open(e, v)}
                   >
                     <td>
-                      <Thumb src={v.photoThumbUrl} />
+                      <Thumb src={v.photoThumbUrl} icon={Truck} />
                       <Link href={`/app/flotte/${v.id}`}>{[v.brand, v.model].filter(Boolean).join(' ')}</Link>
                       {v.code && <span className="muted mono" style={{ fontSize: '0.75rem' }}> · {v.code}</span>}
                     </td>

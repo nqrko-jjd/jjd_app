@@ -3,6 +3,7 @@ import { SkeletonRows, ErrorState } from '@/components/States';
 import { useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
+import { Truck } from 'lucide-react';
 import { PageHead, Money, formatDateBE, Thumb } from '@/lib/ui';
 
 interface Fine {
@@ -45,7 +46,7 @@ export default function PvPage() {
                   <td>
                     {f.vehicle ? (
                       <>
-                        <Thumb src={f.vehicle.photoThumbUrl} size={28} />
+                        <Thumb src={f.vehicle.photoThumbUrl} size={28} icon={Truck} />
                         <Link href={`/app/flotte/${f.vehicle.id}`}>{[f.vehicle.brand, f.vehicle.model].filter(Boolean).join(' ')}</Link>
                       </>
                     ) : (f.plateRaw ?? '—')}

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import path from 'node:path';
 import { createReadStream, existsSync } from 'node:fs';
 import multer from 'multer';
-import { planningEventInput, teamInput, consumableInput, vehicleInput, vehicleDocInput, vehicleCostPerKm, absenceInput } from '@jjd/shared';
+import { planningEventInput, teamInput, consumableInput, vehicleInput, vehicleDocInput, vehicleRepairInput, vehicleCostPerKm, absenceInput } from '@jjd/shared';
 import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, STAFF, OFFICE } from '../lib/auth.js';
@@ -416,6 +416,7 @@ vehiclesRouter.get(
         fines: { orderBy: { date: 'desc' }, take: 50 },
         payments: { orderBy: { dueOn: 'asc' } },
         docs: { orderBy: [{ expiresOn: 'asc' }, { createdAt: 'desc' }] },
+        repairs: { orderBy: [{ date: 'desc' }, { createdAt: 'desc' }] },
       },
     });
     if (!v) throw new HttpError(404, 'Véhicule introuvable');
@@ -477,6 +478,40 @@ vehiclesRouter.get(
     res.setHeader('Content-Type', type);
     res.setHeader('Content-Disposition', `inline; filename="${(doc.label ?? doc.type).replace(/[^\w.-]/g, '_')}${ext}"`);
     createReadStream(file).pipe(res);
+  }),
+);
+
+/* ---------------------------------------------------- réparations véhicule (garage, hors coûts fixes) */
+
+vehiclesRouter.post(
+  '/:id/repairs',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const data = vehicleRepairInput.parse({ ...req.body, vehicleId: req.params.id });
+    const repair = await prisma.vehicleRepair.create({ data });
+    res.status(201).json({ repair });
+  }),
+);
+
+vehiclesRouter.patch(
+  '/:id/repairs/:repairId',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const data = vehicleRepairInput.omit({ vehicleId: true }).partial().parse(req.body);
+    const repair = await prisma.vehicleRepair.update({
+      where: { id: req.params.repairId },
+      data,
+    });
+    res.json({ repair });
+  }),
+);
+
+vehiclesRouter.delete(
+  '/:id/repairs/:repairId',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    await prisma.vehicleRepair.delete({ where: { id: req.params.repairId } });
+    res.status(204).end();
   }),
 );
 

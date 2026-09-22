@@ -1,5 +1,5 @@
 'use client';
-import { useRef, useState } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { api, apiUpload } from '@/lib/api';
 
 /**
@@ -18,7 +18,7 @@ export function PhotoHeader({
   basePath: string;
   photoUrl: string | null;
   alt: string;
-  fallback?: string; // initiales / emoji si pas de photo
+  fallback?: ReactNode; // initiales, emoji ou icône si pas de photo
   shape?: 'wide' | 'round';
   editable?: boolean;
   onChange?: () => void;

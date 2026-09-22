@@ -154,7 +154,7 @@ export function Avatar({ src, label, size = 26, raw }: { src?: string | null; la
 }
 
 /** Vignette rectangulaire (véhicule) pour les listes. */
-export function Thumb({ src, size = 40 }: { src?: string | null; size?: number }) {
+export function Thumb({ src, size = 40, icon: Icon }: { src?: string | null; size?: number; icon?: LucideIcon }) {
   return (
     <span
       style={{
@@ -166,6 +166,8 @@ export function Thumb({ src, size = 40 }: { src?: string | null; size?: number }
       {src ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+      ) : Icon ? (
+        <Icon size={size * 0.5} strokeWidth={1.8} color="var(--ink-3)" />
       ) : <span style={{ fontSize: size * 0.5 }}>🚐</span>}
     </span>
   );

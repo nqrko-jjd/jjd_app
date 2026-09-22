@@ -11,7 +11,7 @@ import { FormModal, type FieldDef } from '@/components/FormModal';
 import { PlanningAssignmentModal } from '@/components/PlanningAssignmentModal';
 import { useSort, useColumnFilter, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
-import { PageHead, Money, formatDateBE, Thumb, VehicleStatusBadge, Kpi } from '@/lib/ui';
+import { PageHead, Money, formatDateBE, Thumb, PlateBE, VehicleStatusBadge, Kpi } from '@/lib/ui';
 import { VEHICLE_STATUSES, VEHICLE_STATUS_LABEL, WORKSITE_STATUS_OPEN } from '@jjd/shared';
 import { Truck, CircleCheck, Building2, TriangleAlert, CalendarPlus, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { PlanningEv, PlanPerson } from '@/components/planningTypes';
@@ -48,7 +48,6 @@ function toDateInput(d: Date) { return `${d.getFullYear()}-${String(d.getMonth()
 function addDaysStr(dateStr: string, n: number) { const d = new Date(`${dateStr}T00:00:00`); d.setDate(d.getDate() + n); return toDateInput(d); }
 function dayShort(dateStr: string) { return new Date(`${dateStr}T00:00:00`).toLocaleDateString('fr-BE', { weekday: 'short', day: '2-digit', month: 'short' }); }
 function vehicleLabel(v: Vehicle) { return [v.brand, v.model].filter(Boolean).join(' ') || v.code || v.plate || '—'; }
-function vehicleSub(v: Vehicle) { return [v.code, v.plate].filter(Boolean).join(' · '); }
 
 type DayStatus = 'available' | 'assigned' | 'unavailable';
 
@@ -217,20 +216,14 @@ export default function FlottePage() {
             const badgeLabel = v.excludedFromPlanning ? 'Hors planning' : status === 'assigned' ? 'Affecté' : status === 'unavailable' ? VEHICLE_STATUS_LABEL[v.status as keyof typeof VEHICLE_STATUS_LABEL] : 'Disponible';
             const badgeTone = v.excludedFromPlanning ? 'plain' : status === 'assigned' ? 'primary' : status === 'unavailable' ? 'crit' : 'ok';
             return (
-              <div key={v.id} className="avail-card">
-                {v.photoThumbUrl && (
-                  <div className="avail-card-photo">
-                    <img src={v.photoThumbUrl} alt="" />
-                  </div>
-                )}
+              <div key={v.id} className="avail-card plate-card">
                 <div className="avail-card-top">
-                  <Thumb src={v.photoThumbUrl ? null : undefined} size={56} icon={Truck} />
+                  {v.plate ? <PlateBE plate={v.plate} size={28} /> : <Thumb src={v.photoThumbUrl} size={40} icon={Truck} />}
                   <span className={`badge ${badgeTone}`}>{badgeLabel}</span>
                 </div>
                 <div className="avail-card-name">{vehicleLabel(v)}</div>
-                <div className="avail-card-role">{vehicleSub(v) || v.type || '—'}{v.driver && ` · ${v.driver}`}</div>
                 <div className="avail-card-actions">
-                  <Link href={`/app/flotte/${v.id}`} className="btn ghost" style={{ flex: 1, justifyContent: 'center' }}>Ouvrir →</Link>
+                  <Link href={`/app/flotte/${v.id}`} className="btn primary" style={{ flex: 1, justifyContent: 'center' }}>Ouvrir →</Link>
                 </div>
               </div>
             );

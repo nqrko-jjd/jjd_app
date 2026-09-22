@@ -5,7 +5,7 @@ import { use, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
 import { api, apiBlobUrl, apiUpload } from '@/lib/api';
-import { PageHead, Money, formatDateBE, VehicleStatusBadge } from '@/lib/ui';
+import { PageHead, Money, formatDateBE, VehicleStatusBadge, PlateBE } from '@/lib/ui';
 import { PhotoHeader } from '@/components/PhotoHeader';
 import { FormModal, toDateInput, type FieldDef } from '@/components/FormModal';
 import { DocWithFileModal } from '@/components/DocWithFileModal';
@@ -183,7 +183,7 @@ export default function VehicleDetail({ params }: { params: Promise<{ id: string
         basePath={`/api/vehicles/${v.id}`}
         photoUrl={v.photoUrl}
         alt={[v.brand, v.model].filter(Boolean).join(' ')}
-        fallback={<Truck size={40} strokeWidth={1.6} />}
+        fallback={v.plate ? <PlateBE plate={v.plate} size={34} /> : <Truck size={40} strokeWidth={1.6} />}
         onChange={reload}
       />
       <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', marginBottom: '1.4rem' }}>

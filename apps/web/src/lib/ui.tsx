@@ -172,3 +172,22 @@ export function Thumb({ src, size = 40, icon: Icon }: { src?: string | null; siz
     </span>
   );
 }
+
+/** Plaque belge (fond blanc, contour et texte rouges) — identifie un véhicule d'un coup d'œil,
+ *  mieux qu'une icône générique. `size` en hauteur de plaque, en px. */
+export function PlateBE({ plate, size = 26 }: { plate: string; size?: number }) {
+  return (
+    <span
+      style={{
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+        height: size, minWidth: size * 3.5, padding: `0 ${Math.round(size * 0.32)}px`,
+        background: '#fff', border: `${Math.max(2, Math.round(size / 13))}px solid #c8102e`,
+        borderRadius: Math.round(size / 5.5), color: '#c8102e', fontWeight: 800,
+        fontFamily: 'var(--font-mono)', letterSpacing: '0.04em', fontSize: size * 0.44,
+        lineHeight: 1, whiteSpace: 'nowrap',
+      }}
+    >
+      {plate}
+    </span>
+  );
+}

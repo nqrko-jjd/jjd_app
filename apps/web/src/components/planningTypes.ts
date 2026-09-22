@@ -12,7 +12,7 @@ export interface PlanningEv {
   status: string;
   worksite: { id: string; ref: string; title: string; city: string | null; address?: string | null };
   team: { id: string; name: string; color: string | null } | null;
-  vehicles: { vehicle: PlanVehicleRef }[];
+  vehicles: { vehicle: PlanVehicleRef; driver: PlanPerson | null }[];
   assignments: { person: PlanPerson }[];
   equipment: { equipment: { id: string; name: string } }[];
   consumables: { qty: number; consumable: { id: string; name: string; unit: string } }[];

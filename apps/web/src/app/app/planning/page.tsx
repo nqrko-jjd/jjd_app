@@ -3,6 +3,7 @@ import { SkeletonRows } from '@/components/States';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
+import { api } from '@/lib/api';
 import { PageHead } from '@/lib/ui';
 import { PlanningAssignmentModal } from '@/components/PlanningAssignmentModal';
 import { PlanningEventDetail } from '@/components/PlanningEventDetail';
@@ -42,15 +43,10 @@ function monthGridDays(monthAnchor: Date): Date[] {
  *  jour précédent et décalerait toute la grille d'une colonne. */
 const toDateInput = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const sameDate = (a: string, b: string) => a === b;
-function businessDays(anchor: Date, count: number): Date[] {
-  const out: Date[] = [];
-  const cur = new Date(anchor);
-  while (out.length < count) {
-    const day = cur.getDay();
-    if (day !== 0 && day !== 6) out.push(new Date(cur));
-    cur.setDate(cur.getDate() + 1);
-  }
-  return out;
+/** `count` jours consécutifs à partir de `anchor` (inclus) — samedi et dimanche compris : les
+ *  équipes travaillent aussi le week-end, contrairement à un calendrier de bureau classique. */
+function daysFrom(anchor: Date, count: number): Date[] {
+  return Array.from({ length: count }, (_, i) => addDays(anchor, i));
 }
 function personLabel(p: { displayName: string | null; firstName: string }) { return p.displayName || p.firstName; }
 function initials(p: { displayName: string | null; firstName: string }) { return personLabel(p).slice(0, 2).toUpperCase(); }
@@ -81,9 +77,12 @@ export default function PlanningPage() {
 
   const [assignmentModal, setAssignmentModal] = useState<{
     existing?: PlanningEv | null;
+    duplicateFrom?: PlanningEv | null;
     prefill?: { worksiteId?: string; date?: string; personId?: string; vehicleId?: string; equipmentId?: string };
   } | null>(null);
   const [detailEv, setDetailEv] = useState<PlanningEv | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragOverDay, setDragOverDay] = useState<string | null>(null);
   const [absenceModal, setAbsenceModal] = useState<{ existing?: PlanAbsence | null; prefill?: { personId?: string; date?: string } } | null>(null);
 
   useEffect(() => {
@@ -91,7 +90,7 @@ export default function PlanningPage() {
     return () => { document.body.classList.remove('plan-wide'); };
   }, [wide]);
 
-  const weekDays = useMemo(() => businessDays(anchor, periodWeeks * 5), [anchor, periodWeeks]);
+  const weekDays = useMemo(() => daysFrom(anchor, periodWeeks * 7), [anchor, periodWeeks]);
   const monthDays = useMemo(() => monthGridDays(monthAnchor), [monthAnchor]);
   const days = view === 'month' ? monthDays : weekDays;
   const dayStrs = useMemo(() => days.map(toDateInput), [days]);
@@ -112,6 +111,24 @@ export default function PlanningPage() {
   const absences = absData?.items ?? [];
 
   function reloadAll() { reload(); reloadPeople(); reloadAbsences(); }
+
+  /** Glisser-déposer (vue mensuelle) : déplace l'affectation à un autre jour en conservant
+   *  l'heure et la durée du créneau. */
+  async function moveEventToDay(ev: PlanningEv, targetDs: string) {
+    const curDs = toDateInput(new Date(ev.startAt));
+    if (curDs === targetDs) return;
+    const start = new Date(ev.startAt);
+    const end = new Date(ev.endAt);
+    const [ty, tm, td] = targetDs.split('-').map(Number);
+    const newStart = new Date(ty!, tm! - 1, td!, start.getHours(), start.getMinutes(), start.getSeconds());
+    const newEnd = new Date(newStart.getTime() + (end.getTime() - start.getTime()));
+    try {
+      await api(`/api/planning/${ev.id}`, { method: 'PATCH', body: { startAt: newStart.toISOString(), endAt: newEnd.toISOString() } });
+      reloadAll();
+    } catch (e) {
+      alert((e as Error).message ?? 'Échec du déplacement');
+    }
+  }
 
   const toneByWorksite = useMemo(() => {
     const map = new Map<string, number>();
@@ -233,10 +250,9 @@ export default function PlanningPage() {
   }
   function openDuplicate(ev: PlanningEv) {
     setDetailEv(null);
-    setAssignmentModal({
-      existing: null,
-      prefill: { worksiteId: ev.worksite.id, date: toDateInput(new Date(ev.startAt)) },
-    });
+    // duplique l'équipe, le(s) véhicule(s)/conducteur(s), le matériel et les notes ; seule la
+    // date reste à ajuster (même jour par défaut, à changer dans le formulaire au besoin).
+    setAssignmentModal({ existing: null, duplicateFrom: ev });
   }
 
   function renderChips(dayStr: string, list: PlanningEv[]) {
@@ -353,8 +369,17 @@ export default function PlanningPage() {
               return (
                 <div
                   key={ds}
-                  className={`plan-month-day${outside ? ' outside' : ''}${sameDate(ds, trackedDay) ? ' selected-day' : ''}${isToday ? ' today' : ''}`}
+                  className={`plan-month-day${outside ? ' outside' : ''}${sameDate(ds, trackedDay) ? ' selected-day' : ''}${isToday ? ' today' : ''}${dragOverDay === ds ? ' drag-over' : ''}`}
                   onClick={() => selectTrackedDay(ds)}
+                  onDragOver={(dragEv) => { if (draggingId) { dragEv.preventDefault(); dragEv.dataTransfer.dropEffect = 'move'; setDragOverDay(ds); } }}
+                  onDragLeave={() => setDragOverDay((cur) => (cur === ds ? null : cur))}
+                  onDrop={(dragEv) => {
+                    dragEv.preventDefault();
+                    setDragOverDay(null);
+                    const id = dragEv.dataTransfer.getData('text/plain');
+                    const moved = events.find((x) => x.id === id);
+                    if (moved) moveEventToDay(moved, ds);
+                  }}
                 >
                   <div className="plan-month-daynum">{isToday ? <span className="plan-month-today-dot">{d.getDate()}</span> : d.getDate()}</div>
                   <div className="plan-month-events">
@@ -362,8 +387,12 @@ export default function PlanningPage() {
                       <button
                         key={e.id}
                         type="button"
-                        className={`plan-month-chip tone-${toneFor(e.worksite.id)}${e.status === 'tentative' ? ' tentative' : ''}`}
+                        draggable
+                        title="Glisser pour déplacer à un autre jour"
+                        className={`plan-month-chip tone-${toneFor(e.worksite.id)}${e.status === 'tentative' ? ' tentative' : ''}${draggingId === e.id ? ' dragging' : ''}`}
                         onClick={(ev) => { ev.stopPropagation(); setDetailEv(e); }}
+                        onDragStart={(dragEv) => { dragEv.dataTransfer.setData('text/plain', e.id); dragEv.dataTransfer.effectAllowed = 'move'; setDraggingId(e.id); }}
+                        onDragEnd={() => { setDraggingId(null); setDragOverDay(null); }}
                       >
                         <span className="tm">{hhmm(e.startAt)}</span> {e.worksite.ref}
                       </button>
@@ -504,6 +533,7 @@ export default function PlanningPage() {
           equipmentList={equipmentList}
           events={events}
           existing={assignmentModal.existing}
+          duplicateFrom={assignmentModal.duplicateFrom}
           prefill={assignmentModal.prefill}
           onClose={() => setAssignmentModal(null)}
           onSaved={() => { setAssignmentModal(null); reloadAll(); }}

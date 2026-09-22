@@ -27,7 +27,7 @@ async function syncToGoogle(eventId: string) {
     include: {
       worksite: { select: { ref: true, title: true, address: true, city: true } },
       team: { select: { name: true } },
-      vehicles: { include: { vehicle: { select: { plate: true, model: true } } } },
+      vehicles: { include: { vehicle: { select: { plate: true, model: true } }, driver: { select: { displayName: true, firstName: true } } } },
       assignments: { include: { person: { select: { displayName: true, firstName: true } } } },
       equipment: { include: { equipment: { select: { name: true } } } },
       consumables: { include: { consumable: { select: { name: true, unit: true } } } },
@@ -37,7 +37,11 @@ async function syncToGoogle(eventId: string) {
   const people = ev.assignments.map((a) => a.person.displayName || a.person.firstName).join(', ');
   const equipmentList = ev.equipment.map((e) => e.equipment.name).join(', ');
   const consumablesList = ev.consumables.map((c) => `${c.consumable.name} (${c.qty} ${c.consumable.unit})`).join(', ');
-  const vehiclesList = ev.vehicles.map((v) => [v.vehicle.plate, v.vehicle.model].filter(Boolean).join(' ')).join(', ');
+  const vehiclesList = ev.vehicles.map((v) => {
+    const label = [v.vehicle.plate, v.vehicle.model].filter(Boolean).join(' ');
+    const driver = v.driver ? (v.driver.displayName || v.driver.firstName) : null;
+    return driver ? `${label} (${driver})` : label;
+  }).join(', ');
   const lines = [
     ev.team ? `Équipe : ${ev.team.name}` : null,
     people ? `Ouvriers : ${people}` : null,
@@ -75,7 +79,12 @@ planningRouter.get(
       include: {
         worksite: { select: { id: true, ref: true, title: true, city: true, address: true, acp: { select: { photoThumbUrl: true } } } },
         team: { select: { id: true, name: true, color: true } },
-        vehicles: { include: { vehicle: { select: { id: true, plate: true, model: true, brand: true, code: true, seats: true } } } },
+        vehicles: {
+          include: {
+            vehicle: { select: { id: true, plate: true, model: true, brand: true, code: true, seats: true } },
+            driver: { select: { id: true, displayName: true, firstName: true } },
+          },
+        },
         assignments: { include: { person: { select: { id: true, displayName: true, firstName: true, phone: true } } } },
         equipment: { include: { equipment: { select: { id: true, name: true } } } },
         consumables: { include: { consumable: { select: { id: true, name: true, unit: true } } } },
@@ -123,7 +132,7 @@ planningRouter.post(
         assignments: { create: d.personIds.map((personId) => ({ personId })) },
         equipment: { create: d.equipmentIds.map((equipmentId) => ({ equipmentId })) },
         consumables: { create: d.consumables.map((c) => ({ consumableId: c.consumableId, qty: c.qty })) },
-        vehicles: { create: d.vehicleIds.map((vehicleId) => ({ vehicleId })) },
+        vehicles: { create: d.vehicles.map((v) => ({ vehicleId: v.vehicleId, driverPersonId: v.driverPersonId ?? null })) },
       },
     });
     await syncToGoogle(ev.id);
@@ -163,8 +172,8 @@ planningRouter.patch(
         ...(d.consumables
           ? { consumables: { deleteMany: {}, create: d.consumables.map((c) => ({ consumableId: c.consumableId, qty: c.qty })) } }
           : {}),
-        ...(d.vehicleIds
-          ? { vehicles: { deleteMany: {}, create: d.vehicleIds.map((vehicleId) => ({ vehicleId })) } }
+        ...(d.vehicles
+          ? { vehicles: { deleteMany: {}, create: d.vehicles.map((v) => ({ vehicleId: v.vehicleId, driverPersonId: v.driverPersonId ?? null })) } }
           : {}),
       },
     });
@@ -271,7 +280,7 @@ async function withIncludes(id: string) {
     include: {
       worksite: { select: { id: true, ref: true, title: true, city: true, address: true } },
       team: true,
-      vehicles: { include: { vehicle: true } },
+      vehicles: { include: { vehicle: true, driver: { select: { id: true, displayName: true, firstName: true } } } },
       assignments: { include: { person: { select: { id: true, displayName: true, firstName: true, phone: true } } } },
       equipment: { include: { equipment: { select: { id: true, name: true } } } },
       consumables: { include: { consumable: { select: { id: true, name: true, unit: true } } } },

@@ -1,7 +1,7 @@
 'use client';
 import { useMemo, useState } from 'react';
 import { api } from '@/lib/api';
-import { ComboBox } from './ComboBox';
+import { WorksitePicker, type WsPickerOption } from './WorksitePicker';
 import {
   PLANNING_EVENT_STATUSES, PLANNING_EVENT_STATUS_LABEL, PERSON_ROLE_LABEL,
 } from '@jjd/shared';
@@ -10,6 +10,7 @@ import type { PlanningEv, PlanPerson, PlanVehicleRef } from './planningTypes';
 interface WsRef { id: string; ref: string; title: string; city: string | null }
 interface PersonRef extends PlanPerson { role: string; specialties?: unknown; active: boolean }
 interface EquipRef { id: string; name: string }
+interface VehicleSel { vehicleId: string; driverPersonId: string }
 
 // Heure LOCALE — jamais toISOString() pour lire une date/heure affichée à l'utilisateur :
 // la Belgique est en avance sur UTC (UTC+1/+2), ça décalerait le jour ou l'heure affichés.
@@ -25,17 +26,17 @@ function fmtDayShort(dateStr: string) {
   return new Date(`${dateStr}T00:00:00`).toLocaleDateString('fr-BE', { weekday: 'short', day: '2-digit', month: 'short' });
 }
 
-/** jours ouvrés (lun-ven) entre from et until inclus, limité à 31 jours d'écart. */
-function weekdaysBetween(from: string, until: string): string[] {
+/** tous les jours (samedi/dimanche compris — les équipes travaillent aussi le week-end) entre
+ *  from et until inclus, limité à 31 jours d'écart. */
+function daysBetween(from: string, until: string): string[] {
   const start = new Date(`${from}T00:00:00`);
   const end = new Date(`${until}T00:00:00`);
   if (end < start) return [from];
   const out: string[] = [];
   const cur = new Date(start);
   let guard = 0;
-  while (cur <= end && guard < 62) {
-    const day = cur.getDay();
-    if (day !== 0 && day !== 6) out.push(toDateInput(cur));
+  while (cur <= end && guard < 31) {
+    out.push(toDateInput(cur));
     cur.setDate(cur.getDate() + 1);
     guard++;
   }
@@ -44,7 +45,7 @@ function weekdaysBetween(from: string, until: string): string[] {
 
 export function PlanningAssignmentModal({
   worksites, people, vehicles, equipmentList, events,
-  existing, prefill,
+  existing, duplicateFrom, prefill,
   onClose, onSaved,
 }: {
   worksites: WsRef[];
@@ -53,30 +54,39 @@ export function PlanningAssignmentModal({
   equipmentList: EquipRef[];
   events: PlanningEv[];
   existing?: PlanningEv | null;
+  /** Affectation source d'un « Dupliquer » : équipe, véhicules/conducteurs, matériel et notes
+   *  sont repris tels quels (seule la date reste à ajuster). */
+  duplicateFrom?: PlanningEv | null;
   prefill?: { worksiteId?: string; date?: string; personId?: string; vehicleId?: string; equipmentId?: string };
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const initDate = existing ? toDateInput(new Date(existing.startAt)) : prefill?.date ?? toDateInput(new Date());
+  // source des valeurs par défaut : l'affectation modifiée, ou celle dupliquée — jamais les deux
+  const seed = existing ?? duplicateFrom ?? null;
+  const initDate = existing
+    ? toDateInput(new Date(existing.startAt))
+    : prefill?.date ?? (duplicateFrom ? toDateInput(new Date(duplicateFrom.startAt)) : toDateInput(new Date()));
   const [f, setF] = useState(() => ({
-    worksiteId: existing?.worksite.id ?? prefill?.worksiteId ?? '',
+    worksiteId: seed?.worksite.id ?? prefill?.worksiteId ?? '',
     date: initDate,
-    start: existing ? toTimeInput(existing.startAt) : '08:00',
-    end: existing ? toTimeInput(existing.endAt) : '16:30',
+    start: seed ? toTimeInput(seed.startAt) : '08:30',
+    end: seed ? toTimeInput(seed.endAt) : '17:00',
     repeatUntil: '',
     status: (existing?.status ?? 'confirmed') as string,
-    personIds: existing ? existing.assignments.map((a) => a.person.id) : prefill?.personId ? [prefill.personId] : [],
-    leadPersonId: existing?.leadPerson?.id ?? '',
-    driverPersonId: existing?.driverPerson?.id ?? '',
-    vehicleId: existing?.vehicles[0]?.vehicle.id ?? prefill?.vehicleId ?? '',
-    equipmentIds: existing ? existing.equipment.map((e) => e.equipment.id) : (prefill?.equipmentId ? [prefill.equipmentId] : [] as string[]),
-    tasksNote: existing?.tasksNote ?? '',
-    departureFrom: existing?.departureFrom ?? '',
-    departureTime: existing?.departureAt ? toTimeInput(existing.departureAt) : '',
-    note: existing?.note ?? '',
-    accessNote: existing?.accessNote ?? '',
+    personIds: seed ? seed.assignments.map((a) => a.person.id) : prefill?.personId ? [prefill.personId] : [],
+    leadPersonId: seed?.leadPerson?.id ?? '',
+    vehicles: seed
+      ? seed.vehicles.map((v): VehicleSel => ({ vehicleId: v.vehicle.id, driverPersonId: v.driver?.id ?? '' }))
+      : prefill?.vehicleId ? [{ vehicleId: prefill.vehicleId, driverPersonId: '' }] : [] as VehicleSel[],
+    equipmentIds: seed ? seed.equipment.map((e) => e.equipment.id) : (prefill?.equipmentId ? [prefill.equipmentId] : [] as string[]),
+    tasksNote: seed?.tasksNote ?? '',
+    departureFrom: seed?.departureFrom ?? '',
+    departureTime: seed?.departureAt ? toTimeInput(seed.departureAt) : '',
+    note: seed?.note ?? '',
+    accessNote: seed?.accessNote ?? '',
   }));
   const [workerQuery, setWorkerQuery] = useState('');
+  const [equipmentQuery, setEquipmentQuery] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -98,12 +108,30 @@ export function PlanningAssignmentModal({
     [eventsOnDay],
   );
 
+  // le chantier de l'affectation modifiée/dupliquée peut être clôturé/archivé (donc absent de
+  // `worksites`, qui ne liste que les chantiers actifs) : on l'ajoute quand même à la liste,
+  // sinon le champ chantier apparaît vide alors que la valeur est bien enregistrée.
+  const worksiteOptions = useMemo((): WsPickerOption[] => {
+    const extra = seed?.worksite;
+    if (extra && !worksites.some((w) => w.id === extra.id)) return [{ ...extra }, ...worksites];
+    return worksites;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [worksites, seed?.worksite.id]);
+
   const filteredPeople = useMemo(() => {
     const q = workerQuery.trim().toLowerCase();
     const active = people.filter((p) => p.active);
     if (!q) return active;
     return active.filter((p) => personLabel(p).toLowerCase().includes(q) || specialtyLabel(p).toLowerCase().includes(q));
   }, [people, workerQuery]);
+
+  const filteredEquipment = useMemo(() => {
+    const q = equipmentQuery.trim().toLowerCase();
+    if (!q) return equipmentList;
+    return equipmentList.filter((eq) => eq.name.toLowerCase().includes(q));
+  }, [equipmentList, equipmentQuery]);
+
+  const selectedPeople = people.filter((p) => f.personIds.includes(p.id));
 
   function toggleWorker(id: string) {
     setF((cur) => {
@@ -112,12 +140,24 @@ export function PlanningAssignmentModal({
       return {
         ...cur, personIds,
         leadPersonId: personIds.includes(cur.leadPersonId) ? cur.leadPersonId : '',
-        driverPersonId: personIds.includes(cur.driverPersonId) ? cur.driverPersonId : '',
+        // un conducteur retiré de l'équipe n'est plus proposé comme conducteur d'un véhicule
+        vehicles: cur.vehicles.map((v) => (v.driverPersonId && !personIds.includes(v.driverPersonId) ? { ...v, driverPersonId: '' } : v)),
       };
     });
   }
   function toggleEquipment(id: string) {
     setF((cur) => ({ ...cur, equipmentIds: cur.equipmentIds.includes(id) ? cur.equipmentIds.filter((x) => x !== id) : [...cur.equipmentIds, id] }));
+  }
+  function toggleVehicle(id: string) {
+    setF((cur) => ({
+      ...cur,
+      vehicles: cur.vehicles.some((v) => v.vehicleId === id)
+        ? cur.vehicles.filter((v) => v.vehicleId !== id)
+        : [...cur.vehicles, { vehicleId: id, driverPersonId: '' }],
+    }));
+  }
+  function setVehicleDriver(id: string, driverPersonId: string) {
+    setF((cur) => ({ ...cur, vehicles: cur.vehicles.map((v) => (v.vehicleId === id ? { ...v, driverPersonId } : v)) }));
   }
 
   async function submit() {
@@ -125,15 +165,16 @@ export function PlanningAssignmentModal({
     setBusy(true);
     setError(null);
     try {
-      const dates = existing ? [f.date] : (f.repeatUntil ? weekdaysBetween(f.date, f.repeatUntil) : [f.date]);
+      const dates = existing ? [f.date] : (f.repeatUntil ? daysBetween(f.date, f.repeatUntil) : [f.date]);
       const base = {
         worksiteId: f.worksiteId,
         allDay: false,
         status: f.status,
         personIds: f.personIds,
         leadPersonId: f.leadPersonId || null,
-        driverPersonId: f.driverPersonId || null,
-        vehicleIds: f.vehicleId ? [f.vehicleId] : [],
+        // conservé pour compatibilité (anciens usages d'un conducteur unique) : celui du 1er véhicule
+        driverPersonId: f.vehicles[0]?.driverPersonId || null,
+        vehicles: f.vehicles.map((v) => ({ vehicleId: v.vehicleId, driverPersonId: v.driverPersonId || null })),
         equipmentIds: f.equipmentIds,
         tasksNote: f.tasksNote.trim() || null,
         departureFrom: f.departureFrom.trim() || null,
@@ -175,13 +216,15 @@ export function PlanningAssignmentModal({
     <div className="modal-scrim" onClick={onClose}>
       <div className="modal wiz" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
-          <h2>{existing ? 'Modifier l’affectation' : 'Nouvelle affectation'}</h2>
+          <h2>{existing ? 'Modifier l’affectation' : duplicateFrom ? 'Dupliquer l’affectation' : 'Nouvelle affectation'}</h2>
           <button type="button" className="btn ghost" onClick={onClose} aria-label="Fermer">✕</button>
         </div>
         <div className="wiz-body">
           <div className="plan-form-intro">
             <strong>Une équipe pour cette intervention</strong>
-            <p style={{ margin: '0.2rem 0 0' }}>Sélectionnez librement les ouvriers, puis réservez les moyens nécessaires.</p>
+            <p style={{ margin: '0.2rem 0 0' }}>
+              {duplicateFrom ? 'Équipe, véhicules et notes repris à l’identique — ajustez la date et le reste au besoin.' : 'Sélectionnez librement les ouvriers, puis réservez les moyens nécessaires.'}
+            </p>
           </div>
           {error && <div className="plan-form-error">{error}</div>}
 
@@ -189,11 +232,10 @@ export function PlanningAssignmentModal({
             <legend>01 · Chantier & créneau</legend>
             <div className="field full" style={{ marginBottom: '0.85rem' }}>
               <label>Chantier</label>
-              <ComboBox
-                placeholder="chercher un chantier (réf ou nom)…"
+              <WorksitePicker
                 value={f.worksiteId}
                 onChange={(v) => setF((cur) => ({ ...cur, worksiteId: v }))}
-                options={worksites.map((w) => ({ value: w.id, label: `${w.ref} · ${w.title} · ${w.city ?? ''}` }))}
+                options={worksiteOptions}
               />
             </div>
             <div className="wiz-grid">
@@ -222,7 +264,7 @@ export function PlanningAssignmentModal({
                 </select>
               </div>
             </div>
-            {!existing && <small style={{ display: 'block', marginTop: '0.6rem' }}>Créneau sur une journée. Répétition les jours ouvrés, maximum 31 jours.</small>}
+            {!existing && <small style={{ display: 'block', marginTop: '0.6rem' }}>Créneau sur une journée. Répétition tous les jours, week-end compris, maximum 31 jours.</small>}
           </fieldset>
 
           <fieldset>
@@ -250,38 +292,51 @@ export function PlanningAssignmentModal({
                 <label>Référent de l’intervention</label>
                 <select className="select" value={f.leadPersonId} onChange={(e) => setF({ ...f, leadPersonId: e.target.value })}>
                   <option value="">Choisir parmi les ouvriers sélectionnés</option>
-                  {people.filter((p) => f.personIds.includes(p.id)).map((p) => <option key={p.id} value={p.id}>{personLabel(p)}</option>)}
-                </select>
-              </div>
-              <div className="field">
-                <label>Conducteur</label>
-                <select className="select" value={f.driverPersonId} onChange={(e) => setF({ ...f, driverPersonId: e.target.value })}>
-                  <option value="">Sans conducteur</option>
-                  {people.filter((p) => f.personIds.includes(p.id)).map((p) => <option key={p.id} value={p.id}>{personLabel(p)}</option>)}
+                  {selectedPeople.map((p) => <option key={p.id} value={p.id}>{personLabel(p)}</option>)}
                 </select>
               </div>
             </div>
           </fieldset>
 
           <fieldset>
-            <legend>03 · Véhicule & matériel</legend>
-            <div className="field full" style={{ marginBottom: '0.4rem' }}>
-              <label>Véhicule</label>
-              <select className="select" value={f.vehicleId} onChange={(e) => setF({ ...f, vehicleId: e.target.value })}>
-                <option value="">Sans véhicule réservé / accès autonome</option>
-                {vehicles.map((v) => {
-                  const label = [v.code, [v.brand, v.model].filter(Boolean).join(' ')].filter(Boolean).join(' · ');
-                  return <option key={v.id} value={v.id}>{label || v.plate || '—'}</option>;
-                })}
-              </select>
+            <legend>03 · Véhicules & matériel</legend>
+            <label style={{ display: 'block', fontWeight: 600, fontSize: '0.82rem', color: 'var(--ink-2)', marginBottom: '0.4rem' }}>
+              Véhicules — plusieurs possibles, un conducteur par véhicule
+            </label>
+            <div className="plan-vehicle-picker">
+              {vehicles.map((v) => {
+                const sel = f.vehicles.find((x) => x.vehicleId === v.id);
+                const busyHere = busyVehicleIds.has(v.id);
+                const label = [v.code, [v.brand, v.model].filter(Boolean).join(' ')].filter(Boolean).join(' · ') || v.plate || '—';
+                return (
+                  <div key={v.id} className="plan-vehicle-option">
+                    <label>
+                      <input type="checkbox" checked={!!sel} onChange={() => toggleVehicle(v.id)} />
+                      <div>
+                        <div>{label}</div>
+                        <div className="plan-availability" style={{ marginTop: 2 }}>{busyHere ? `Indisponible · ${fmtDayShort(f.date)}` : 'Disponible'}</div>
+                      </div>
+                    </label>
+                    {sel && (
+                      <select
+                        className="select driver-select"
+                        value={sel.driverPersonId}
+                        onChange={(e) => setVehicleDriver(v.id, e.target.value)}
+                      >
+                        <option value="">Sans conducteur assigné</option>
+                        {selectedPeople.map((p) => <option key={p.id} value={p.id}>{personLabel(p)} conduit</option>)}
+                      </select>
+                    )}
+                  </div>
+                );
+              })}
             </div>
-            <small style={{ display: 'block', marginBottom: '0.7rem' }}>
-              {f.vehicleId
-                ? (busyVehicleIds.has(f.vehicleId) ? `Indisponible · ${fmtDayShort(f.date)}` : 'Disponible')
-                : 'Aucun véhicule réservé'}
-            </small>
+            {vehicles.length === 0 && <p className="muted" style={{ margin: '0 0 0.7rem' }}>Aucun véhicule dans la flotte.</p>}
+
+            <label style={{ display: 'block', fontWeight: 600, fontSize: '0.82rem', color: 'var(--ink-2)', margin: '0.9rem 0 0.4rem' }}>Matériel</label>
+            <input className="input" style={{ marginBottom: '0.7rem' }} placeholder="Chercher un matériel…" value={equipmentQuery} onChange={(e) => setEquipmentQuery(e.target.value)} />
             <div className="plan-equipment-picker">
-              {equipmentList.map((eq) => {
+              {filteredEquipment.map((eq) => {
                 const on = f.equipmentIds.includes(eq.id);
                 const busyHere = busyEquipmentIds.has(eq.id);
                 return (
@@ -294,6 +349,7 @@ export function PlanningAssignmentModal({
                   </label>
                 );
               })}
+              {filteredEquipment.length === 0 && <p className="muted" style={{ margin: 0 }}>Aucun résultat.</p>}
             </div>
           </fieldset>
 

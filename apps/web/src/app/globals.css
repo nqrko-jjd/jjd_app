@@ -1138,6 +1138,7 @@ p { margin: 0; }
 .plan-month-day.outside { background: var(--surface-2); }
 .plan-month-day.outside .plan-month-daynum { color: var(--ink-3); }
 .plan-month-day.selected-day { background: var(--primary-soft); }
+.plan-month-day.drag-over { background: var(--primary-soft); outline: 2px dashed var(--primary); outline-offset: -2px; }
 .plan-month-daynum { font-size: 0.82rem; font-weight: 600; color: var(--ink-2); }
 .plan-month-today-dot {
   display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px;
@@ -1152,6 +1153,8 @@ p { margin: 0; }
 }
 .plan-month-chip.tentative { border-left-style: dashed; }
 .plan-month-chip .tm { font-weight: 700; margin-right: 0.3rem; }
+.plan-month-chip[draggable="true"] { cursor: grab; }
+.plan-month-chip.dragging { opacity: 0.4; }
 .plan-month-more {
   border: 0; background: none; color: var(--ink-3); font-size: 0.7rem; text-align: left; padding: 0.1rem 0.4rem;
   cursor: pointer; font: inherit;
@@ -1190,6 +1193,13 @@ p { margin: 0; }
 .plan-equipment-picker { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem; margin: 0.9rem 0; }
 .plan-equipment-picker label { display: flex; align-items: flex-start; gap: 0.55rem; background: var(--surface-2); padding: 0.65rem; border-radius: 9px; margin: 0; font-size: 0.82rem; cursor: pointer; }
 
+/* véhicules : comme .plan-equipment-picker, mais le conducteur (un <select>) est hors du <label>
+ * pour qu'un clic dessus ne décoche pas le véhicule. */
+.plan-vehicle-picker { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem; margin: 0.9rem 0; }
+.plan-vehicle-option { background: var(--surface-2); padding: 0.65rem; border-radius: 9px; font-size: 0.82rem; }
+.plan-vehicle-option > label { display: flex; align-items: flex-start; gap: 0.55rem; margin: 0; cursor: pointer; }
+.plan-vehicle-option .driver-select { margin-top: 0.5rem; width: 100%; font-size: 0.78rem; padding: 0.3rem 0.4rem; }
+
 /* mode "Agrandir le planning" : masque la sidebar pour libérer la largeur */
 /* display:none sortirait la sidebar de la grille et ferait replacer .main dans la 1re
  * colonne (0 large) au lieu de la 2e — on passe la grille à une seule colonne à la place. */
@@ -1201,7 +1211,7 @@ body.plan-wide .main { max-width: none; }
   .plan-kpis { grid-template-columns: repeat(2, 1fr); }
   .plan-kpis > div:nth-child(2n) { border-right: none; }
   .plan-detail-columns { grid-template-columns: 1fr; }
-  .plan-worker-picker, .plan-equipment-picker { grid-template-columns: 1fr; }
+  .plan-worker-picker, .plan-equipment-picker, .plan-vehicle-picker { grid-template-columns: 1fr; }
 }
 
 /* ---------------------------------------------------- messagerie unifiée */

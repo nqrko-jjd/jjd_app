@@ -62,12 +62,13 @@ export function PlanningEventDetail({
                   <p key={v.vehicle.id} style={{ margin: '0 0 0.3rem' }}>
                     {[v.vehicle.brand, v.vehicle.model].filter(Boolean).join(' ') || v.vehicle.code || v.vehicle.plate}
                     {v.vehicle.code ? ` · ${v.vehicle.code}` : ''}
+                    {v.driver && <span className="muted"> · conduit par {v.driver.displayName || v.driver.firstName}</span>}
                   </p>
                 ))
               ) : (
                 <p className="muted" style={{ margin: 0 }}>Accès autonome / sans véhicule réservé</p>
               )}
-              {ev.driverPerson && <p className="muted" style={{ margin: '0 0 0.2rem' }}>Conducteur : {ev.driverPerson.displayName || ev.driverPerson.firstName}</p>}
+              {ev.vehicles.length === 0 && ev.driverPerson && <p className="muted" style={{ margin: '0 0 0.2rem' }}>Conducteur : {ev.driverPerson.displayName || ev.driverPerson.firstName}</p>}
               {ev.departureFrom && (
                 <p className="muted" style={{ margin: 0 }}>
                   {ev.departureFrom}{ev.departureAt ? ` · départ ${hhmm(ev.departureAt)}` : ''}

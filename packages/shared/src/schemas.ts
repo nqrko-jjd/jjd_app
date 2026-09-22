@@ -209,10 +209,11 @@ export const planningEventInput = z.object({
   allDay: z.boolean().default(false),
   status: z.enum(PLANNING_EVENT_STATUSES).default('confirmed'),
   teamId: z.string().nullish(),
-  vehicleIds: z.array(z.string()).default([]),
+  // un événement peut réserver plusieurs véhicules, chacun avec son propre conducteur
+  vehicles: z.array(z.object({ vehicleId: nonEmpty, driverPersonId: z.string().nullish() })).default([]),
   personIds: z.array(z.string()).default([]),
   leadPersonId: z.string().nullish(),
-  driverPersonId: z.string().nullish(),
+  driverPersonId: z.string().nullish(), // legacy — conducteur unique, conservé pour les événements créés avant les conducteurs par véhicule
   departureAt: z.coerce.date().nullish(),
   departureFrom: z.string().trim().nullish(),
   tasksNote: z.string().trim().nullish(),

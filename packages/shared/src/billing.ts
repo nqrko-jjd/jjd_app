@@ -90,6 +90,30 @@ export function computeDueDate(issuedOn: Date, days = 30): Date {
   return d;
 }
 
+/**
+ * Mentions légales TVA à afficher automatiquement sur un devis/facture selon les taux utilisés
+ * sur ses lignes (construction : 6% réduit "habitation privée de plus de 10 ans" et 0%
+ * "autoliquidation/co-contractant") — reprises telles quelles du texte apposé par TrustUp sur
+ * les documents concernés. Le taux normal (21%) n'a pas de mention particulière.
+ */
+export const VAT_RATE_NOTE: Record<string, string> = {
+  '0.06': 'Taux de TVA : En l’absence de contestation par écrit, dans un délai d’un mois à compter de la réception de la facture, le client est présumé reconnaître que\n(1) les travaux sont effectués à un bâtiment d’habitation dont la première occupation a eu lieu au cours d’une année civile qui précède d’au moins dix ans la date de la première facture relative à ces travaux,\n(2) qu’après l’exécution de ces travaux, l’habitation est utilisée, soit exclusivement soit à titre principal comme logement privé\net\n(3) que ces travaux sont fournis et facturés à un consommateur final.\nSi au moins une de ces conditions n’est pas remplie, le taux normal de TVA de 21 % sera applicable et le client endossera, par rapport à ces conditions, la responsabilité quant au paiement de la taxe, des intérêts et des amendes dus.',
+  '0': 'Autoliquidation : En l’absence de contestation par écrit, dans un délai d’un mois à compter de la réception de la facture, le client est présumé reconnaître qu’il est un assujetti tenu au dépôt de déclarations périodiques. Si cette condition n’est pas remplie, le client endossera, par rapport à cette condition, la responsabilité quant au paiement de la taxe, des intérêts et des amendes dus.',
+};
+
+/** Notes TVA à afficher pour un document, une seule fois par taux présent, dans l'ordre des lignes. */
+export function vatLegalNotes(vatRates: (number | null | undefined)[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const r of vatRates) {
+    if (r == null) continue;
+    const key = String(r);
+    const note = VAT_RATE_NOTE[key];
+    if (note && !seen.has(key)) { seen.add(key); out.push(note); }
+  }
+  return out;
+}
+
 export const DOC_KIND_LABEL: Record<string, string> = {
   quote: 'Devis',
   invoice: 'Facture',

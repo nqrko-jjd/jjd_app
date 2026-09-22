@@ -4,7 +4,7 @@ import {
   computeWorksiteMargin, parseAmount, parseLooseDate, excelSerialToDate,
   normalizeName, guessWorksiteStatus, htFromTtc, formatVat,
   computeDocTotals, belgianStructuredComm, formatDocNumber, computeDueDate, distanceMeters,
-  vehicleCostPerKm, perDayFromMonthly,
+  vehicleCostPerKm, perDayFromMonthly, vatLegalNotes,
 } from '../src/index.js';
 
 test('parseAmount gère les formats belges et Excel', () => {
@@ -134,4 +134,16 @@ test('formatDocNumber & computeDueDate', () => {
   assert.equal(formatDocNumber('invoice', 2026, 14), 'F2026-014');
   assert.equal(formatDocNumber('quote', 2026, 3), 'D2026-003');
   assert.equal(computeDueDate(new Date('2026-01-15'), 30).toISOString().slice(0, 10), '2026-02-14');
+});
+
+test('vatLegalNotes : mention réduit 6% et autoliquidation 0%, pas de doublon, rien en 21% seul', () => {
+  assert.equal(vatLegalNotes([0.21, 0.21]).length, 0);
+  const one = vatLegalNotes([0.06, 0.21]);
+  assert.equal(one.length, 1);
+  assert.match(one[0]!, /Taux de TVA/);
+  const both = vatLegalNotes([0.06, 0, 0.06]); // 0.06 présent 2x -> une seule mention
+  assert.equal(both.length, 2);
+  assert.match(both[0]!, /Taux de TVA/);
+  assert.match(both[1]!, /Autoliquidation/);
+  assert.equal(vatLegalNotes([null, undefined]).length, 0);
 });

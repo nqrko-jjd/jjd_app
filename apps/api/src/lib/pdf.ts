@@ -9,7 +9,7 @@
  * apt dans l'image Docker — voir apps/api/Dockerfile).
  */
 import puppeteer from 'puppeteer-core';
-import { computeDocTotals, formatEur, formatDateBE, DOC_KIND_LABEL, type DocLineLike } from '@jjd/shared';
+import { computeDocTotals, formatEur, formatDateBE, DOC_KIND_LABEL, vatLegalNotes, type DocLineLike } from '@jjd/shared';
 import type { Company } from './documents.js';
 import { renderEpcQrDataUrl, isValidBelgianIban } from './epc-qr.js';
 
@@ -74,6 +74,10 @@ async function buildHtml(d: PdfDoc, co: Company): Promise<string> {
 
   const vatRows = Object.entries(totals.vatBreakdown)
     .map(([rate, b]) => `<tr><td>TVA ${Math.round(Number(rate) * 100)}%</td><td>${formatEur(b.vat)}</td></tr>`)
+    .join('');
+  // mention légale spécifique (taux réduit 6% habitation, autoliquidation 0%…), une fois par taux présent
+  const vatNotes = vatLegalNotes(d.lines.filter((l) => l.kind === 'item').map((l) => l.vatRate))
+    .map((note) => `<p class="vat-note">${esc(note).replace(/\n/g, '<br>')}</p>`)
     .join('');
 
   const dateLines = [
@@ -151,6 +155,7 @@ async function buildHtml(d: PdfDoc, co: Company): Promise<string> {
           <tr class="grand"><td>Total TTC</td><td>${formatEur(totals.totalTtc)}</td></tr>
         </tbody></table>
       </div>
+      ${vatNotes}
       ${payBlock}
       <footer class="terms">${esc(d.terms || (d.kind === 'quote' ? co.quoteTerms : co.invoiceTerms))}</footer>
     </div>
@@ -159,6 +164,9 @@ async function buildHtml(d: PdfDoc, co: Company): Promise<string> {
 
 const CSS = `
   @page { size: A4; margin: 16mm; }
+  /* déjà forcé côté serveur par printBackground: true (page.pdf ci-dessous) — gardé ici en
+     miroir de la page d'impression web, dont le rendu navigateur en dépend vraiment. */
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
   body { background: #fff; margin: 0; }
   .sheet { max-width: 780px; margin: 0 auto; padding: 24px; font: 12px/1.6 "Segoe UI", -apple-system, Roboto, Arial, sans-serif; color: #26372f; }
 
@@ -220,6 +228,8 @@ const CSS = `
   .pay-qr span { display: block; font-size: 9px; color: #788078; margin-top: 2px; }
 
   .terms { margin-top: 22px; padding-top: 10px; border-top: 1px solid #e5e7df; color: #9aa79e; font-size: 9.5px; white-space: pre-wrap; }
+  .vat-note { margin: 14px 0 0; color: #788078; font-size: 9.5px; line-height: 1.5; }
+  .vat-note + .vat-note { margin-top: 8px; }
 `;
 
 /** Chemin de l'exécutable Chromium (variable d'env prioritaire, sinon Chromium apt sur le VPS). */

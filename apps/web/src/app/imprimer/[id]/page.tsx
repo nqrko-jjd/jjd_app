@@ -3,7 +3,7 @@ import { use, useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { formatEur, formatDateBE } from '@/lib/ui';
 import { DOC_KIND_LABEL, type DocFull, type Company } from '@/lib/doc-ui';
-import { computeDocTotals } from '@jjd/shared';
+import { computeDocTotals, vatLegalNotes } from '@jjd/shared';
 
 export default function PrintDocument({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -38,6 +38,8 @@ export default function PrintDocument({ params }: { params: Promise<{ id: string
   const clientAddr = d.billingAddress ?? [d.contact?.address, [d.contact?.postalCode, d.contact?.city].filter(Boolean).join(' ')].filter(Boolean).join(', ');
   const clientVat = d.billingVat ?? d.contact?.vat;
   const hasDiscount = items.some((l) => l.kind === 'item' && l.discountPct > 0);
+  // mention légale spécifique (taux réduit 6% habitation, autoliquidation 0%…), une fois par taux présent
+  const vatNotes = vatLegalNotes(items.filter((l) => l.kind === 'item').map((l) => l.vatRate));
 
   return (
     <>
@@ -131,6 +133,8 @@ export default function PrintDocument({ params }: { params: Promise<{ id: string
           </table>
         </div>
 
+        {vatNotes.map((note, i) => <p key={i} className="vat-note">{note}</p>)}
+
         {(d.kind === 'invoice' || d.kind === 'deposit_invoice') && (
           <div className="pay">
             <div><strong>Paiement</strong> — {co.iban ? `IBAN ${co.iban}` : 'coordonnées bancaires sur demande'}</div>
@@ -148,6 +152,10 @@ export default function PrintDocument({ params }: { params: Promise<{ id: string
 
 const CSS = `
   @page { size: A4; margin: 16mm; }
+  /* sinon Chrome/Firefox n'impriment les couleurs de fond (bandeau vert, encadrés…) que si
+     l'utilisateur coche "Graphiques d'arrière-plan" dans la boîte de dialogue d'impression —
+     ces règles rendent ce réglage inutile, comme le PDF serveur (printBackground: true). */
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
   body { background: #fff; }
   .sheet { max-width: 780px; margin: 0 auto; padding: 24px; font: 12px/1.6 "Segoe UI", -apple-system, Roboto, Arial, sans-serif; color: #26372f; }
 
@@ -205,6 +213,8 @@ const CSS = `
   .pay strong { color: #173f34; }
 
   .terms { margin-top: 22px; padding-top: 10px; border-top: 1px solid #e5e7df; color: #9aa79e; font-size: 9.5px; white-space: pre-wrap; }
+  .vat-note { margin: 14px 0 0; color: #788078; font-size: 9.5px; line-height: 1.5; white-space: pre-line; }
+  .vat-note + .vat-note { margin-top: 8px; }
   .toolbar { max-width: 780px; margin: 12px auto 0; padding: 0 24px; text-align: right; }
   .toolbar button { padding: 8px 14px; border: 1px solid #173f34; background: #173f34; color: #fff; border-radius: 8px; font-size: 12px; cursor: pointer; }
   @media print { .sheet { padding: 0; max-width: none; } .no-print { display: none !important; } }

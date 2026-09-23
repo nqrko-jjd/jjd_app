@@ -321,6 +321,11 @@ documentsRouter.patch(
       });
     }
 
+    // Échéance repoussée dans le futur sur une facture déjà "en retard" : la repasse
+    // sent/partial selon ce qui a déjà été payé (sinon elle resterait faussement en retard).
+    const dueMovedToFuture = data.dueOn !== undefined && data.dueOn !== null && data.dueOn >= new Date();
+    const revertOverdue = existing.status === 'overdue' && dueMovedToFuture;
+
     await prisma.document.update({
       where: { id: existing.id },
       data: {
@@ -339,6 +344,7 @@ documentsRouter.patch(
         billingEmail: data.billingEmail === undefined ? undefined : data.billingEmail,
         customerRef: data.customerRef === undefined ? undefined : data.customerRef,
         paidAmount: data.paidAmount ?? undefined,
+        status: revertOverdue ? (existing.paidAmount > 0 ? 'partial' : 'sent') : undefined,
       },
     });
 

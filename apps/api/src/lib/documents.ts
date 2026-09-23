@@ -216,6 +216,23 @@ export async function syncLedgerEntryForDocument(documentId: string) {
   });
 }
 
+/**
+ * Une facture envoyée (ou partiellement payée) dont l'échéance est dépassée passe
+ * automatiquement en "En retard". Purement déclaratif — n'affecte ni paidAmount ni
+ * le grand livre — donc idempotent et sûr à rejouer à intervalles réguliers.
+ */
+export async function markOverdueInvoices(now: Date = new Date()) {
+  const r = await prisma.document.updateMany({
+    where: {
+      kind: { in: ['invoice', 'deposit_invoice'] },
+      status: { in: ['sent', 'partial'] },
+      dueOn: { lt: now },
+    },
+    data: { status: 'overdue' },
+  });
+  return r.count;
+}
+
 const COMPANY_DEFAULTS = {
   name: 'JJD Consult SRL',
   address: '',

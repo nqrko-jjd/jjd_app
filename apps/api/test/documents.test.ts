@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import type { Server } from 'node:http';
 import { createApp } from '../src/app.js';
 import { prisma } from '../src/db.js';
+import { markOverdueInvoices } from '../src/lib/documents.js';
 
 let server: Server;
 let base = '';
@@ -299,4 +300,37 @@ test('paidAmount corrigé à la main après émission (PATCH) : écriture resync
   await fetch(`${base}/api/documents/${id}`, { method: 'PATCH', headers: auth(), body: JSON.stringify({ paidAmount: 100 }) });
   const entry = await prisma.ledgerEntry.findUnique({ where: { documentId: id } });
   assert.equal(entry!.paymentStatus, 'Payé');
+});
+
+test('facture envoyée, échéance dépassée : passe automatiquement "en retard"', async () => {
+  const created = await (
+    await fetch(`${base}/api/documents`, { method: 'POST', headers: auth(), body: JSON.stringify({ kind: 'invoice', worksiteId: wsId, lines: [{ label: 'Poste', qty: 1, unitPriceHt: 100, vatRate: 0 }] }) })
+  ).json();
+  const id = created.document.id;
+  const issuedOn = new Date(Date.now() - 40 * 86400_000); // dueOn par défaut = +30j -> déjà dépassée
+  await fetch(`${base}/api/documents/${id}/issue`, { method: 'POST', headers: auth(), body: JSON.stringify({ issuedOn: issuedOn.toISOString() }) });
+  assert.equal((await prisma.document.findUnique({ where: { id } }))!.status, 'sent');
+
+  const count = await markOverdueInvoices();
+  assert.ok(count >= 1);
+  assert.equal((await prisma.document.findUnique({ where: { id } }))!.status, 'overdue');
+
+  // idempotent : un second passage ne trouve plus rien à faire pour ce document
+  await markOverdueInvoices();
+  assert.equal((await prisma.document.findUnique({ where: { id } }))!.status, 'overdue');
+});
+
+test('facture "en retard" dont on corrige l’échéance dans le futur : repasse envoyée', async () => {
+  const created = await (
+    await fetch(`${base}/api/documents`, { method: 'POST', headers: auth(), body: JSON.stringify({ kind: 'invoice', worksiteId: wsId, lines: [{ label: 'Poste', qty: 1, unitPriceHt: 100, vatRate: 0 }] }) })
+  ).json();
+  const id = created.document.id;
+  const issuedOn = new Date(Date.now() - 40 * 86400_000);
+  await fetch(`${base}/api/documents/${id}/issue`, { method: 'POST', headers: auth(), body: JSON.stringify({ issuedOn: issuedOn.toISOString() }) });
+  await markOverdueInvoices();
+  assert.equal((await prisma.document.findUnique({ where: { id } }))!.status, 'overdue');
+
+  const future = new Date(Date.now() + 10 * 86400_000);
+  await fetch(`${base}/api/documents/${id}`, { method: 'PATCH', headers: auth(), body: JSON.stringify({ dueOn: future.toISOString() }) });
+  assert.equal((await prisma.document.findUnique({ where: { id } }))!.status, 'sent');
 });

@@ -3,6 +3,7 @@ import { createApp } from './app.js';
 import { env } from './env.js';
 import { prisma } from './db.js';
 import { invoiceMailboxConfigured, syncInvoiceMailbox } from './lib/invoice-mailbox.js';
+import { markOverdueInvoices } from './lib/documents.js';
 
 function lanAddresses(): string[] {
   const out: string[] = [];
@@ -53,6 +54,21 @@ async function backfillArchivedClosed() {
 
 await backfillMessageAudience();
 await backfillArchivedClosed();
+
+/**
+ * Factures envoyées/partielles dont l'échéance est dépassée -> "En retard".
+ * Repasse au démarrage puis toutes les heures (le statut affiché reste donc
+ * à jour à une heure près, sans avoir à recalculer à chaque lecture).
+ */
+async function runMarkOverdue() {
+  const count = await markOverdueInvoices();
+  if (count) {
+    // eslint-disable-next-line no-console
+    console.log(`[overdue] ${count} facture(s) passée(s) en retard`);
+  }
+}
+await runMarkOverdue();
+setInterval(() => { runMarkOverdue().catch((e) => console.error('[overdue] échec :', e.message)); }, 60 * 60_000);
 
 createApp().listen(env.port, '0.0.0.0', () => {
   // eslint-disable-next-line no-console

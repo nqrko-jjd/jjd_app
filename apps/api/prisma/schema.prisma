@@ -567,6 +567,10 @@ model Document {
   children       Document[]        @relation("DocumentLineage")
   trustupId      String?
   source         String?
+  // écriture du grand livre synchronisée automatiquement à l'émission / au paiement
+  // (voir syncLedgerEntryForDocument, lib/documents.ts) — remplace le rattrapage manuel
+  // pour les documents émis depuis l'appli.
+  ledgerEntry    LedgerEntry?
   createdById    String?
   createdBy      User?             @relation("DocumentAuthor", fields: [createdById], references: [id])
   lines          DocumentLine[]
@@ -653,6 +657,10 @@ model LedgerEntry {
   notes         String?
   pdfPath       String? // pièce jointe (PDF ou image), via storeFile -> uploads/expenses/…
   source        String?
+  // lien vers le devis/facture/NC de l'appli qui a généré cette écriture (source: "document-sync") —
+  // unique : un document ne peut avoir qu'une seule écriture synchronisée, mise à jour en place.
+  documentId    String?   @unique
+  document      Document? @relation(fields: [documentId], references: [id], onDelete: SetNull)
   createdById   String?
   createdBy     User?     @relation("LedgerEntryAuthor", fields: [createdById], references: [id])
   createdAt     DateTime  @default(now())

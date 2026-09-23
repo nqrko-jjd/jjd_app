@@ -129,7 +129,7 @@ export async function issueDocument(documentId: string, opts: { issuedOn?: Date;
     ? [`c/o ${syndic.name}`, syndic.address, syndic.city].filter(Boolean).join(', ')
     : null;
 
-  return prisma.document.update({
+  const updated = await prisma.document.update({
     where: { id: documentId },
     data: {
       number,
@@ -145,6 +145,74 @@ export async function issueDocument(documentId: string, opts: { issuedOn?: Date;
       billingAddress: doc.billingAddress ?? (syndicAddress || contactAddress || null),
     },
     include: docInclude,
+  });
+  await syncLedgerEntryForDocument(documentId);
+  return updated;
+}
+
+function deriveLedgerPeriod(date: Date) {
+  const m = date.getMonth() + 1;
+  return { year: date.getFullYear(), month: String(m), quarter: `T${Math.ceil(m / 3)}` };
+}
+
+/**
+ * Fait exister/tient à jour l'écriture du grand livre correspondant à un devis/facture/NC
+ * de vente émis — pour que le CA facturé dans l'appli (Devis & factures) alimente Analyse /
+ * marge chantier sans repasser par le rattrapage manuel ou le réimport Excel. Appelée après
+ * chaque changement de statut de paiement ou d'émission (voir issueDocument, /mark-paid,
+ * PATCH /:id) ; sans effet sur les devis (pas du CA) et sur les brouillons (pas encore émis).
+ */
+export async function syncLedgerEntryForDocument(documentId: string) {
+  const doc = await prisma.document.findUnique({
+    where: { id: documentId },
+    select: {
+      id: true, kind: true, lockedAt: true, issuedOn: true, number: true,
+      worksiteId: true, contactId: true, billingName: true,
+      totalHt: true, totalVat: true, totalTtc: true, paidAmount: true, paidOn: true,
+      contact: { select: { name: true } },
+    },
+  });
+  if (!doc || !doc.lockedAt || !doc.issuedOn) return;
+  const isSaleSide = doc.kind === 'invoice' || doc.kind === 'deposit_invoice' || doc.kind === 'credit_note';
+  if (!isSaleSide) return;
+
+  const paymentStatus = doc.totalTtc > 0 && doc.paidAmount + 0.01 >= doc.totalTtc ? 'Payé' : 'Non payé';
+  const supplierName = doc.billingName ?? doc.contact?.name ?? null;
+  const period = deriveLedgerPeriod(doc.issuedOn);
+
+  await prisma.ledgerEntry.upsert({
+    where: { documentId: doc.id },
+    create: {
+      documentId: doc.id,
+      date: doc.issuedOn,
+      direction: doc.kind === 'credit_note' ? 'credit_note' : 'sale',
+      docType: doc.kind === 'credit_note' ? 'Note de crédit' : 'Facture de vente',
+      docNumber: doc.number,
+      worksiteId: doc.worksiteId,
+      contactId: doc.contactId,
+      supplierName,
+      categoryRaw: doc.kind === 'credit_note' ? 'Note de crédit vente' : null,
+      ht: doc.totalHt,
+      vatDue: doc.totalVat,
+      ttc: doc.totalTtc,
+      paymentStatus,
+      paidOn: doc.paidOn,
+      source: 'document-sync',
+      ...period,
+    },
+    update: {
+      date: doc.issuedOn,
+      docNumber: doc.number,
+      worksiteId: doc.worksiteId,
+      contactId: doc.contactId,
+      supplierName,
+      ht: doc.totalHt,
+      vatDue: doc.totalVat,
+      ttc: doc.totalTtc,
+      paymentStatus,
+      paidOn: doc.paidOn,
+      ...period,
+    },
   });
 }
 

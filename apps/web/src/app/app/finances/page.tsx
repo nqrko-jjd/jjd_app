@@ -61,6 +61,7 @@ export default function FinancesPage() {
           <div className="row">
             <button className="btn" onClick={exportSalesCsv} title="Exporter les ventes du grand livre en CSV (éditable dans Excel)">⇩ Exporter ventes</button>
             <button className="btn" onClick={importSalesCsv} title="Réimporter un CSV/Excel de ventes corrigé (met à jour par id, crée les nouvelles lignes)">⇧ Importer ventes</button>
+            <Link href="/app/finances/grand-livre" className="btn">Rapprochement grand livre →</Link>
             <Link href="/app/finances/banque" className="btn">Rapprochement bancaire →</Link>
           </div>
         }

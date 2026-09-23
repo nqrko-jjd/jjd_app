@@ -8,7 +8,7 @@ import { documentInput, documentBackfillInput, priceItemInput, DOC_KIND_LABEL } 
 import { prisma, nextCounter } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, OFFICE } from '../lib/auth.js';
-import { docInclude, buildLineRows, cloneLineRows, refreshDocTotals, issueDocument, getCompany } from '../lib/documents.js';
+import { docInclude, buildLineRows, cloneLineRows, refreshDocTotals, issueDocument, getCompany, syncLedgerEntryForDocument } from '../lib/documents.js';
 import { renderDocumentPdf } from '../lib/pdf.js';
 import { extractDocumentInfo } from '../lib/document-extract.js';
 import { UPLOADS_DIR } from '../lib/media.js';
@@ -339,6 +339,7 @@ documentsRouter.patch(
       if (data.lines.length) await prisma.documentLine.createMany({ data: buildLineRows(existing.id, data.lines) });
       await refreshDocTotals(existing.id);
     }
+    if (existing.lockedAt) await syncLedgerEntryForDocument(existing.id);
     const full = await prisma.document.findUnique({ where: { id: existing.id }, include: docInclude });
     res.json({ document: full });
   }),
@@ -496,6 +497,7 @@ documentsRouter.post(
       data: { paidAmount, paidOn: status === 'paid' ? paidOn : doc.paidOn, status },
       include: docInclude,
     });
+    await syncLedgerEntryForDocument(doc.id);
     res.json({ document: updated });
   }),
 );

@@ -11,6 +11,7 @@ import { parseBankCsv, decodeCsvBuffer, type ParsedBankRow } from '../lib/bank-c
 import { parseCardStatement, pdfToRawText, pdftotextAvailable } from '../lib/bank-pdf.js';
 import { toCsv, readTableBuffer, pick } from '../lib/table-io.js';
 import { parseAmount, parseLooseDate } from '@jjd/shared';
+import { syncLedgerEntryForDocument } from '../lib/documents.js';
 
 export const financeRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -520,5 +521,82 @@ financeRouter.post(
     const { imported, duplicates } = await insertBankRows(parsed.rows, bankLabel || 'CSV', 'csv');
     const match = await autoMatchAll();
     res.json({ imported, duplicates, kind: 'csv', skipped: parsed.skipped, mapped: parsed.mapped, headers: parsed.headers, match });
+  }),
+);
+
+/**
+ * Rapprochement grand livre <-> devis/factures/NC de vente émis dans l'appli : liste les
+ * documents émis qui n'ont pas (encore) d'écriture synchronisée (voir syncLedgerEntryForDocument),
+ * en distinguant deux cas — une écriture existante partage déjà le même numéro (import Excel ou
+ * rattrapage manuel antérieur : à lier plutôt qu'à dupliquer), ou rien du tout (vrai trou : une
+ * écriture neuve peut être créée sans risque de doublon).
+ */
+financeRouter.get(
+  '/ledger-sync/gaps',
+  requireAuth(...OFFICE),
+  asyncHandler(async (_req, res) => {
+    const docs = await prisma.document.findMany({
+      where: {
+        kind: { in: ['invoice', 'deposit_invoice', 'credit_note'] },
+        lockedAt: { not: null },
+        source: { not: 'demo' },
+        ledgerEntry: null,
+      },
+      select: {
+        id: true, kind: true, number: true, issuedOn: true, totalTtc: true, status: true,
+        worksite: { select: { ref: true } },
+        contact: { select: { name: true } },
+      },
+      orderBy: { issuedOn: 'asc' },
+    });
+    const numbers = docs.map((d) => d.number).filter((n): n is string => !!n);
+    const candidates = numbers.length
+      ? await prisma.ledgerEntry.findMany({
+          where: { docNumber: { in: numbers }, documentId: null, direction: { in: ['sale', 'credit_note'] } },
+          select: { id: true, docNumber: true, date: true, ht: true, ttc: true, paymentStatus: true, source: true },
+        })
+      : [];
+    const byNumber = new Map(candidates.map((c) => [c.docNumber, c]));
+    const items = docs.map((d) => ({
+      id: d.id,
+      kind: d.kind,
+      number: d.number,
+      issuedOn: d.issuedOn,
+      totalTtc: d.totalTtc,
+      status: d.status,
+      worksiteRef: d.worksite?.ref ?? null,
+      contactName: d.contact?.name ?? null,
+      match: (d.number && byNumber.get(d.number)) || null,
+    }));
+    res.json({
+      items,
+      missingCount: items.filter((i) => !i.match).length,
+      matchableCount: items.filter((i) => i.match).length,
+    });
+  }),
+);
+
+/** Crée l'écriture manquante (pas de doublon possible : upsert par documentId). */
+financeRouter.post(
+  '/ledger-sync/gaps/:id/create',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    await syncLedgerEntryForDocument(req.params.id as string);
+    res.json({ ok: true });
+  }),
+);
+
+/** Lie le document à une écriture existante (import Excel / rattrapage manuel) au lieu d'en créer une neuve. */
+financeRouter.post(
+  '/ledger-sync/gaps/:id/link',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const { ledgerEntryId } = req.body as { ledgerEntryId?: string };
+    if (!ledgerEntryId) throw new HttpError(422, 'ledgerEntryId requis');
+    const entry = await prisma.ledgerEntry.findUnique({ where: { id: ledgerEntryId } });
+    if (!entry) throw new HttpError(404, 'Écriture introuvable');
+    if (entry.documentId) throw new HttpError(409, 'Écriture déjà liée à un autre document');
+    await prisma.ledgerEntry.update({ where: { id: ledgerEntryId }, data: { documentId: req.params.id } });
+    res.json({ ok: true });
   }),
 );

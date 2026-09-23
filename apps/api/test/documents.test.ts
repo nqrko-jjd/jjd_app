@@ -32,6 +32,7 @@ before(async () => {
 });
 
 after(async () => {
+  await prisma.ledgerEntry.deleteMany({ where: { worksiteId: wsId } });
   await prisma.document.deleteMany({ where: { source: 'manual', worksiteId: wsId } });
   // scopé par id (pas par source:'test', qui matcherait aussi les chantiers créés
   // par d'autres fichiers de test tournant en parallèle)
@@ -232,4 +233,70 @@ test('brouillon : coordonnées de facturation, réf. client et acompte réglés 
   assert.equal(issued.document.billingName, 'Facturation SA');
   assert.equal(issued.document.customerRef, 'BC-2026-042');
   assert.equal(issued.document.paidAmount, 250);
+});
+
+test('émission facture : écriture du grand livre créée automatiquement (source document-sync)', async () => {
+  const created = await (
+    await fetch(`${base}/api/documents`, { method: 'POST', headers: auth(), body: JSON.stringify({ kind: 'invoice', worksiteId: wsId, lines: [{ label: 'Poste', qty: 1, unitPriceHt: 1000, vatRate: 0.21 }] }) })
+  ).json();
+  const id = created.document.id;
+
+  // brouillon : pas encore d'écriture
+  assert.equal(await prisma.ledgerEntry.findUnique({ where: { documentId: id } }), null);
+
+  const issued = await (await fetch(`${base}/api/documents/${id}/issue`, { method: 'POST', headers: auth(), body: '{}' })).json();
+  const entry = await prisma.ledgerEntry.findUnique({ where: { documentId: id } });
+  assert.ok(entry, 'une écriture doit exister après émission');
+  assert.equal(entry!.direction, 'sale');
+  assert.equal(entry!.docNumber, issued.document.number);
+  assert.equal(entry!.worksiteId, wsId);
+  assert.equal(entry!.ht, 1000);
+  assert.equal(entry!.ttc, 1210);
+  assert.equal(entry!.paymentStatus, 'Non payé');
+  assert.equal(entry!.source, 'document-sync');
+
+  // encaissement -> l'écriture (même id, pas de doublon) passe "Payé"
+  await fetch(`${base}/api/documents/${id}/mark-paid`, { method: 'POST', headers: auth(), body: JSON.stringify({ amount: 1210 }) });
+  const paid = await prisma.ledgerEntry.findUnique({ where: { documentId: id } });
+  assert.equal(paid!.id, entry!.id, 'même écriture mise à jour, pas une nouvelle');
+  assert.equal(paid!.paymentStatus, 'Payé');
+  assert.ok(paid!.paidOn);
+
+  const count = await prisma.ledgerEntry.count({ where: { documentId: id } });
+  assert.equal(count, 1, 'jamais plus d’une écriture par document');
+});
+
+test('devis émis : aucune écriture du grand livre (ce n’est pas du CA)', async () => {
+  const created = await (
+    await fetch(`${base}/api/documents`, { method: 'POST', headers: auth(), body: JSON.stringify({ kind: 'quote', worksiteId: wsId, lines: [{ label: 'Poste', qty: 1, unitPriceHt: 500, vatRate: 0.21 }] }) })
+  ).json();
+  await fetch(`${base}/api/documents/${created.document.id}/issue`, { method: 'POST', headers: auth(), body: '{}' });
+  const entry = await prisma.ledgerEntry.findUnique({ where: { documentId: created.document.id } });
+  assert.equal(entry, null);
+});
+
+test('note de crédit émise : écriture "vente" (réduit le CA, pas un achat)', async () => {
+  const inv = await (
+    await fetch(`${base}/api/documents`, { method: 'POST', headers: auth(), body: JSON.stringify({ kind: 'invoice', worksiteId: wsId, lines: [{ label: 'Poste', qty: 1, unitPriceHt: 200, vatRate: 0.21 }] }) })
+  ).json();
+  await fetch(`${base}/api/documents/${inv.document.id}/issue`, { method: 'POST', headers: auth(), body: '{}' });
+  const cn = await (await fetch(`${base}/api/documents/${inv.document.id}/credit-note`, { method: 'POST', headers: auth(), body: '{}' })).json();
+  await fetch(`${base}/api/documents/${cn.document.id}/issue`, { method: 'POST', headers: auth(), body: '{}' });
+
+  const entry = await prisma.ledgerEntry.findUnique({ where: { documentId: cn.document.id } });
+  assert.ok(entry);
+  assert.equal(entry!.direction, 'credit_note');
+  assert.match(entry!.categoryRaw ?? '', /vente/i);
+});
+
+test('paidAmount corrigé à la main après émission (PATCH) : écriture resynchronisée', async () => {
+  const created = await (
+    await fetch(`${base}/api/documents`, { method: 'POST', headers: auth(), body: JSON.stringify({ kind: 'invoice', worksiteId: wsId, lines: [{ label: 'Poste', qty: 1, unitPriceHt: 100, vatRate: 0 }] }) })
+  ).json();
+  const id = created.document.id;
+  await fetch(`${base}/api/documents/${id}/issue`, { method: 'POST', headers: auth(), body: '{}' });
+
+  await fetch(`${base}/api/documents/${id}`, { method: 'PATCH', headers: auth(), body: JSON.stringify({ paidAmount: 100 }) });
+  const entry = await prisma.ledgerEntry.findUnique({ where: { documentId: id } });
+  assert.equal(entry!.paymentStatus, 'Payé');
 });

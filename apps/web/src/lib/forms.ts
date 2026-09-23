@@ -70,7 +70,7 @@ export const CONTACT_FIELDS = (
         { name: 'lastName', label: 'Nom' },
       ] : [{ name: 'name', label: 'Nom', required: true, full: true }]),
       ...(isAcp ? [{ name: 'syndicId', label: 'Syndic (adresse de facturation "c/o")', type: 'select' as const, options: syndics.map((s) => ({ value: s.id, label: s.name })) }] : []),
-      ...(!isAcpOrDeveloper ? [{ name: 'buildingId', label: 'Immeuble / ACP rattaché(e)', type: 'contact' as const, contactKindFilter: ['acp', 'developer'], full: true }] : []),
+      ...(!isAcpOrDeveloper ? [{ name: 'buildingId', label: 'Immeuble / ACP rattaché(e)', type: 'contact' as const, contactKindFilter: ['acp', 'developer'], placeholder: 'Nom de l’immeuble / ACP…', full: true }] : []),
       { name: 'email', label: 'E-mail' },
       { name: 'phone', label: 'Téléphone' },
       ...(showVat ? [{ name: 'vat', label: 'N° TVA', placeholder: 'BE0123456789', action: { label: 'Rechercher', run: vatLookupAction } }] : []),

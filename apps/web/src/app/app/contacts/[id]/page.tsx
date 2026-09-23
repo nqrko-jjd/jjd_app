@@ -9,6 +9,7 @@ import { PageHead, StatusBadge, Money, formatDateBE, Kpi, formatEur } from '@/li
 import { Wallet, Euro, Scale, FileText, Users } from 'lucide-react';
 import { FormModal, type FieldDef } from '@/components/FormModal';
 import { CollapsibleSection } from '@/components/CollapsibleSection';
+import { PhotoHeader } from '@/components/PhotoHeader';
 import { useSort, SortTh } from '@/lib/sort';
 import { CONTACT_FIELDS, composeContactPayload, splitContactName } from '@/lib/forms';
 import { CLIENT_KIND_LABEL, formatVat } from '@jjd/shared';
@@ -27,6 +28,7 @@ interface Detail {
     id: string; name: string; type: string; kind: string | null;
     email: string | null; phone: string | null; vat: string | null;
     address: string | null; postalCode: string | null; city: string | null; note: string | null;
+    photoUrl: string | null; photoThumbUrl: string | null;
     syndic: { id: string; name: string } | null;
     building: { id: string; name: string } | null;
     worksites: { id: string; ref: string; title: string; status: string; quotedHt: number | null }[];
@@ -153,6 +155,16 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
         <h1>{c.name}</h1>
         <div className="sub">{c.kind ? CLIENT_KIND_LABEL[c.kind as keyof typeof CLIENT_KIND_LABEL] : c.type === 'supplier' ? 'Fournisseur' : c.type === 'both' ? 'Client + Fournisseur' : c.type}</div>
       </div>
+
+      <PhotoHeader
+        basePath={`/api/contacts/${c.id}`}
+        photoUrl={c.photoUrl}
+        alt={c.name}
+        shape="round"
+        fallback={c.name.slice(0, 2).toUpperCase()}
+        onChange={reload}
+      />
+
       <div className="info-grid" style={{ marginBottom: '1.4rem' }}>
         <Info label="E-mail" value={c.email ?? '—'} />
         <Info label="Téléphone" value={c.phone ?? '—'} />

@@ -4,11 +4,13 @@ import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, STAFF, OFFICE, hashPassword } from '../lib/auth.js';
 import { lookupBelgianVat } from '../lib/vies.js';
+import { attachPhotoRoutes } from '../lib/photo-upload.js';
 
 const isPaidStr = (s: string | null) =>
   (s ?? '').toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').trim() === 'paye';
 
 export const contactsRouter = Router();
+attachPhotoRoutes(contactsRouter, (id, data) => prisma.contact.update({ where: { id }, data }));
 
 /** Un contact de catégorie "Syndic" doit être relié à une fiche `Syndic` — la table à part
  *  qui alimente le sélecteur de syndic d'une ACP (`/api/meta/syndics`) et l'accès portail

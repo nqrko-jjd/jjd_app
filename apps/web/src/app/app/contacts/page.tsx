@@ -123,7 +123,7 @@ function ContactsInner() {
           {sort.rows.map((c) => (
             <Link key={c.id} href={`/app/contacts/${c.id}`} className="card gallery-card">
               <div className="gallery-thumb" style={{ borderRadius: '10px 10px 0 0' }}>
-                <Avatar label={c.name} size={56} />
+                <Avatar src={c.photoThumbUrl} label={c.name} size={56} />
               </div>
               <div className="gallery-body">
                 <div className="gallery-title">{c.name}</div>

@@ -27,6 +27,17 @@ const TABS: { key: string; label: string; kind?: string; scope?: string }[] = [
   { key: 'drafts', label: 'Brouillons', scope: 'drafts' },
 ];
 
+const SORTS: { key: string; label: string }[] = [
+  { key: '', label: 'Trier : plus récents' },
+  { key: 'number_desc', label: 'N° (décroissant)' },
+  { key: 'number_asc', label: 'N° (croissant)' },
+  { key: 'contact_asc', label: 'Client (A→Z)' },
+  { key: 'worksite_asc', label: 'Chantier (A→Z)' },
+  { key: 'dueOn_asc', label: 'Échéance (proche d’abord)' },
+  { key: 'totalTtc_desc', label: 'Montant (élevé d’abord)' },
+  { key: 'totalTtc_asc', label: 'Montant (faible d’abord)' },
+];
+
 export default function DocumentsPage() {
   return (
     <Suspense fallback={<SkeletonRows />}>
@@ -48,6 +59,7 @@ function DocumentsInner() {
   const [tab, setTab] = useState(initialTab);
   const [q, setQ] = useState('');
   const [status, setStatus] = useState(sp.get('statut') ?? '');
+  const [sort, setSort] = useState('');
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [exporting, setExporting] = useState(false);
@@ -58,13 +70,18 @@ function DocumentsInner() {
   const active = TABS.find((t) => t.key === tab)!;
 
   // revient à la 1ère page à chaque changement de filtre/onglet
-  useEffect(() => { setPage(1); }, [tab, status, q]);
+  useEffect(() => { setPage(1); }, [tab, status, q, sort]);
 
   const params = new URLSearchParams();
   if (active.kind) params.set('kind', active.kind);
   if (active.scope) params.set('scope', active.scope);
   if (status && active.kind) params.set('status', status);
   if (q) params.set('q', q);
+  if (sort) {
+    const [sortKey, sortDir] = sort.split('_');
+    params.set('sort', sortKey);
+    params.set('dir', sortDir);
+  }
   params.set('page', String(page));
   params.set('pageSize', String(pageSize));
   const { data, loading, error, reload } = useApi<{ items: Row[]; page: number; pageSize: number; totalPages: number; totalCount: number }>(`/api/documents?${params}`);
@@ -239,6 +256,11 @@ function DocumentsInner() {
             ))}
           </select>
         )}
+        <select className="select" style={{ maxWidth: 220 }} value={sort} onChange={(e) => setSort(e.target.value)}>
+          {SORTS.map((s) => (
+            <option key={s.key} value={s.key}>{s.label}</option>
+          ))}
+        </select>
         <input
           className="input"
           style={{ maxWidth: 240, marginLeft: 'auto' }}

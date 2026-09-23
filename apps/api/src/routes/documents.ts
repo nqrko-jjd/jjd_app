@@ -172,7 +172,7 @@ documentsRouter.get(
   '/',
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
-    const { kind, status, q, worksiteId, contactId, scope, page: pageStr, pageSize: pageSizeStr } = req.query as Record<string, string>;
+    const { kind, status, q, worksiteId, contactId, scope, page: pageStr, pageSize: pageSizeStr, sort, dir } = req.query as Record<string, string>;
     const where: Record<string, unknown> = {};
     if (kind) where.kind = kind;
     if (status) where.status = status;
@@ -193,10 +193,18 @@ documentsRouter.get(
     const page = Math.max(1, Math.trunc(Number(pageStr)) || 1);
     // plafond haut : l'app mobile (écran Devis & factures) charge tout en une fois et cherche côté client
     const pageSize = Math.min(5000, Math.max(20, Math.trunc(Number(pageSizeStr)) || 100));
+    const sortDir: 'asc' | 'desc' = dir === 'asc' ? 'asc' : 'desc';
+    const orderBy: Record<string, unknown>[] =
+      sort === 'number' ? [{ number: sortDir }, { draftRef: sortDir }]
+      : sort === 'contact' ? [{ contact: { name: sortDir } }]
+      : sort === 'worksite' ? [{ worksite: { ref: sortDir } }]
+      : sort === 'dueOn' ? [{ dueOn: sortDir }]
+      : sort === 'totalTtc' ? [{ totalTtc: sortDir }]
+      : [{ issuedOn: sortDir }, { createdAt: sortDir }];
     const [items, totalCount] = await Promise.all([
       prisma.document.findMany({
         where,
-        orderBy: [{ issuedOn: 'desc' }, { createdAt: 'desc' }],
+        orderBy,
         skip: (page - 1) * pageSize,
         take: pageSize,
         include: {

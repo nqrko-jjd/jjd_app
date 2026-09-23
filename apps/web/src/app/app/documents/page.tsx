@@ -6,11 +6,10 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
 import { api, apiBlobUrl, apiUpload } from '@/lib/api';
-import { PageHead, Money, formatDateBE } from '@/lib/ui';
+import { PageHead, Money, formatEur, formatDateBE } from '@/lib/ui';
 import { DocStatusBadge, DOC_KIND_LABEL } from '@/lib/doc-ui';
 import { ContextMenu, useContextMenu, openActions, type MenuItem } from '@/components/ContextMenu';
 import { PaginationBar } from '@/components/PaginationBar';
-import { useSort, useColumnFilter, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
 import { DOC_STATUS_LABEL } from '@jjd/shared';
 
@@ -69,6 +68,7 @@ function DocumentsInner() {
   params.set('page', String(page));
   params.set('pageSize', String(pageSize));
   const { data, loading, error, reload } = useApi<{ items: Row[]; page: number; pageSize: number; totalPages: number; totalCount: number }>(`/api/documents?${params}`);
+  const { data: dash } = useApi<{ kpis: { invoicedMonth: number; receivableAmount: number; overdueAmount: number; quotesPendingAmount: number } }>('/api/dashboard');
   const ctx = useContextMenu<Row>();
   const statusOptions = active.kind ? (STATUS_BY_KIND[active.kind] ?? []) : [];
 
@@ -107,19 +107,6 @@ function DocumentsInner() {
         : []),
     ];
   }
-  const docAccessors = {
-    number: (d: Row) => d.number ?? d.draftRef,
-    title: (d: Row) => d.title,
-    contact: (d: Row) => d.contact?.name,
-    worksite: (d: Row) => d.worksite?.ref,
-    issuedOn: (d: Row) => (d.issuedOn ? new Date(d.issuedOn) : null),
-    dueOn: (d: Row) => (d.dueOn ? new Date(d.dueOn) : null),
-    status: (d: Row) => DOC_STATUS_LABEL[d.status] ?? d.status,
-    totalTtc: (d: Row) => d.totalTtc,
-  };
-  const colFilter = useColumnFilter<Row>(data?.items ?? [], docAccessors);
-  const sort = useSort<Row>(colFilter.rows, docAccessors);
-
   async function create(kind: string) {
     setBusy(true);
     try {
@@ -169,7 +156,7 @@ function DocumentsInner() {
     });
   }
   function toggleAll() {
-    const rows = sort.rows;
+    const rows = data?.items ?? [];
     setSelected((s) => (s.size === rows.length ? new Set() : new Set(rows.map((d) => d.id))));
   }
   async function exportZip() {
@@ -218,11 +205,29 @@ function DocumentsInner() {
         }
       />
 
+      {dash && (active.kind === 'quote' || active.kind === 'invoice') && (
+        <div className="panel doc-stats" style={{ marginBottom: '1rem' }}>
+          {active.kind === 'quote' && (
+            <>
+              <div className="doc-stat"><span className="label">Devis en attente</span><span className="value">{formatEur(dash.kpis.quotesPendingAmount)}</span></div>
+              <div className="doc-stat"><span className="label">Facturé ce mois</span><span className="value">{formatEur(dash.kpis.invoicedMonth)}</span></div>
+            </>
+          )}
+          {active.kind === 'invoice' && (
+            <>
+              <div className="doc-stat"><span className="label">Facturé ce mois</span><span className="value">{formatEur(dash.kpis.invoicedMonth)}</span></div>
+              <div className="doc-stat"><span className="label">À encaisser</span><span className="value">{formatEur(dash.kpis.receivableAmount)}</span></div>
+              <div className="doc-stat"><span className="label">En retard</span><span className="value crit">{formatEur(dash.kpis.overdueAmount)}</span></div>
+            </>
+          )}
+        </div>
+      )}
+
       <div className="row" style={{ marginBottom: '1rem', gap: '0.4rem', flexWrap: 'wrap' }}>
         <div className="seg">
           {TABS.map((t) => (
             <button key={t.key} className={tab === t.key ? 'on' : ''} onClick={() => { setTab(t.key); setStatus(''); setSelected(new Set()); }}>
-              {t.label}
+              {t.label}{tab === t.key && data ? ` · ${data.totalCount}` : ''}
             </button>
           ))}
         </div>
@@ -241,6 +246,11 @@ function DocumentsInner() {
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
+        {data && data.items.length > 0 && (
+          <button type="button" className="btn" onClick={toggleAll}>
+            {selected.size === data.items.length ? 'Tout désélectionner' : 'Tout sélectionner'}
+          </button>
+        )}
       </div>
 
       {loading && <SkeletonRows />}
@@ -254,56 +264,48 @@ function DocumentsInner() {
           secondary={<button className="btn" disabled={busy} onClick={() => create('quote')}>+ Devis</button>}
         />}
       {data && data.items.length > 0 && (
-        <div className="tbl-wrap">
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th style={{ width: 28 }}>
-                  <input
-                    type="checkbox"
-                    checked={sort.rows.length > 0 && selected.size === sort.rows.length}
-                    onChange={toggleAll}
-                    aria-label="Tout sélectionner"
-                  />
-                </th>
-                <SortTh k="number" sort={sort} filter={colFilter}>N°</SortTh>
-                <SortTh k="title" sort={sort} filter={colFilter}>Objet</SortTh>
-                <SortTh k="contact" sort={sort} filter={colFilter}>Client</SortTh>
-                <SortTh k="worksite" sort={sort} filter={colFilter}>Chantier</SortTh>
-                <SortTh k="issuedOn" sort={sort} filter={colFilter}>Émis</SortTh>
-                <SortTh k="dueOn" sort={sort} filter={colFilter}>Échéance</SortTh>
-                <SortTh k="status" sort={sort} filter={colFilter}>Statut</SortTh>
-                <SortTh k="totalTtc" sort={sort} align="right" filter={colFilter}>TTC</SortTh>
-              </tr>
-            </thead>
-            <tbody>
-              {sort.rows.map((d) => (
-                <tr
-                  key={d.id}
-                  className={`row-link${ctx.menu?.row.id === d.id ? ' ctx-target' : ''}`}
-                  onClick={rowNav(`/app/documents/${d.id}`, (h) => router.push(h))}
-                  onContextMenu={(e) => ctx.open(e, d)}
-                >
-                  <td onClick={(e) => e.stopPropagation()}>
-                    <input type="checkbox" checked={selected.has(d.id)} onChange={() => toggleSelected(d.id)} aria-label="Sélectionner" />
-                  </td>
-                  <td className="mono">
-                    <Link href={`/app/documents/${d.id}`}>{d.number ?? d.draftRef ?? '—'}</Link>
-                    {d.originalPdf && <span title="PDF d’origine disponible" style={{ marginLeft: 6 }}>📄</span>}
-                    {!d.number && <span className="badge plain" style={{ marginLeft: 6 }}>{DOC_KIND_LABEL[d.kind]}</span>}
-                    {d.source === 'ai-draft' && <span className="badge warn" style={{ marginLeft: 6 }} title="Créé par l'assistant IA — à vérifier avant validation">✨ Proposé par l&apos;IA</span>}
-                  </td>
-                  <td>{d.title ?? '—'}</td>
-                  <td>{d.contact?.name ?? '—'}</td>
-                  <td className="mono">{d.worksite?.ref ?? '—'}</td>
-                  <td className="tnum">{d.issuedOn ? formatDateBE(d.issuedOn) : '—'}</td>
-                  <td className="tnum">{d.dueOn ? formatDateBE(d.dueOn) : '—'}</td>
-                  <td><DocStatusBadge status={d.status} /></td>
-                  <td style={{ textAlign: 'right' }}><Money value={d.totalTtc} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="panel doc-list">
+          {data.items.map((d) => (
+            <div
+              key={d.id}
+              className={`doc-item${ctx.menu?.row.id === d.id ? ' ctx-target' : ''}`}
+              onClick={rowNav(`/app/documents/${d.id}`, (h) => router.push(h))}
+              onContextMenu={(e) => ctx.open(e, d)}
+            >
+              <input
+                type="checkbox"
+                className="doc-item-check"
+                checked={selected.has(d.id)}
+                onChange={() => toggleSelected(d.id)}
+                onClick={(e) => e.stopPropagation()}
+                aria-label="Sélectionner"
+              />
+              <div className="doc-item-body">
+                <div className="doc-item-top">
+                  <Link href={`/app/documents/${d.id}`} className="mono doc-item-num">{d.number ?? d.draftRef ?? '—'}</Link>
+                  {d.originalPdf && <span title="PDF d’origine disponible">📄</span>}
+                  {!d.number && <span className="badge plain">{DOC_KIND_LABEL[d.kind]}</span>}
+                  {d.source === 'ai-draft' && <span className="badge warn" title="Créé par l'assistant IA — à vérifier avant validation">✨ IA</span>}
+                  <DocStatusBadge status={d.status} />
+                  <span className="doc-item-amount"><Money value={d.totalTtc} /></span>
+                  <button
+                    type="button"
+                    className="doc-item-more"
+                    onClick={(e) => ctx.open(e, d)}
+                    aria-label="Actions"
+                    title="Actions"
+                  >
+                    …
+                  </button>
+                </div>
+                <div className="doc-item-title">{d.title || DOC_KIND_LABEL[d.kind]}</div>
+                <div className="doc-item-meta">
+                  <span>{[d.contact?.name, d.worksite?.ref].filter(Boolean).join(' · ') || '—'}</span>
+                  <span>Échéance : {d.dueOn ? formatDateBE(d.dueOn) : '—'}</span>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 

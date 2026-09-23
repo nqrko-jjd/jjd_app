@@ -52,7 +52,12 @@
 
   --font: "DM Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; /* corps de texte */
   --font-serif: "Manrope", var(--font); /* titres/chiffres — pas un vrai sérif (David a rejeté le sérif classique), juste une police d'affichage plus dense pour les titres/KPI, sur le modèle de la maquette */
-  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  /* pour les numéros de référence (devis/factures, chantiers, plaques…) — l'ancienne police à chasse fixe
+     (IBM Plex Mono) était peu lisible sur ces identifiants alphanumériques ; Lato reste bien distincte
+     du corps de texte (DM Sans) sans l'effet "code". Le vrai monospace technique (traces d'erreur) garde
+     sa propre police, voir .state .tech ci-dessous. */
+  --font-mono: "Lato", var(--font);
+  --font-code: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
   --measure: 68ch;
   color-scheme: light;
@@ -407,6 +412,37 @@ p { margin: 0; }
 .alert:focus-visible { outline: none; box-shadow: inset 0 0 0 3px var(--primary-soft); }
 .alert .chev { color: var(--ink-3); flex-shrink: 0; }
 .alert:hover .chev { color: var(--primary); }
+
+/* ---------------------------------------------------- devis/factures : stats + liste en cartes */
+.doc-stats { display: flex; flex-wrap: wrap; }
+.doc-stat { flex: 1 1 160px; padding: 22px 24px; border-right: 1px solid #edf1e8; }
+.doc-stat:last-child { border-right: none; }
+.doc-stat .label { display: block; font-size: 0.875rem; color: var(--ink-2); font-weight: 400; margin-bottom: 0.3rem; }
+.doc-stat .value { font-size: 1.375rem; font-weight: 700; letter-spacing: -0.5px; font-variant-numeric: tabular-nums; }
+.doc-stat .value.crit { color: var(--crit); }
+@media (max-width: 700px) {
+  /* les montants (ex. "243 513,65 €" en gras) dépassent souvent 50% de large sur un petit écran —
+     une colonne pleine largeur évite un retour à la ligne disgracieux dans la valeur. */
+  .doc-stat { flex: 1 1 100%; border-right: none; border-bottom: 1px solid #edf1e8; }
+  .doc-stat:last-child { border-bottom: none; }
+}
+
+.doc-list { display: flex; flex-direction: column; }
+.doc-item {
+  display: flex; align-items: flex-start; gap: 0.8rem; padding: 18px 24px;
+  border-bottom: 1px solid #edf1e8; cursor: pointer; transition: background 0.12s;
+}
+.doc-list > *:last-child { border-bottom: none; }
+.doc-item:hover { background: var(--surface-2); }
+.doc-item.ctx-target { background: var(--primary-soft); }
+.doc-item-check { margin-top: 3px; flex-shrink: 0; }
+.doc-item-body { flex: 1; min-width: 0; }
+.doc-item-top { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem; }
+.doc-item-num { font-weight: 700; color: var(--ink); }
+.doc-item-amount { margin-left: auto; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.doc-item-more { color: var(--ink-3); flex-shrink: 0; padding: 2px 4px; }
+.doc-item-title { font-weight: 600; color: var(--ink); margin-bottom: 0.2rem; }
+.doc-item-meta { display: flex; justify-content: space-between; gap: 0.6rem; color: var(--ink-2); font-size: 0.86rem; flex-wrap: wrap; }
 .alert .sev {
   width: 40px; height: 40px; border-radius: 10px; flex-shrink: 0;
   display: grid; place-items: center; font-size: 1rem;
@@ -640,7 +676,7 @@ p { margin: 0; }
 .state .tech {
   margin: 0.8rem 0 0; padding: 0.7rem 0.9rem; max-width: 100%; overflow-x: auto; text-align: left;
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm);
-  font-family: var(--font-mono); font-size: 0.78rem; color: var(--ink-2); white-space: pre-wrap;
+  font-family: var(--font-code); font-size: 0.78rem; color: var(--ink-2); white-space: pre-wrap;
 }
 
 .skel-list { display: flex; flex-direction: column; gap: 0.5rem; }

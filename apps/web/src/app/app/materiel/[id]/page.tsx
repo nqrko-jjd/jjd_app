@@ -1,11 +1,11 @@
 'use client';
-import { Wrench } from 'lucide-react';
+import { Wrench, Boxes, Warehouse, Building2, Truck } from 'lucide-react';
 import { SkeletonRows, EmptyState, ErrorState } from '@/components/States';
 import { use, useState } from 'react';
 import Link from 'next/link';
 import { api, ApiError } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
-import { formatDateBE } from '@/lib/ui';
+import { formatDateBE, Kpi } from '@/lib/ui';
 import { WorksitePicker, LocationPicker } from '@/components/MaterielPickers';
 
 interface Unit {
@@ -113,11 +113,11 @@ export default function MaterielDetail({ params }: { params: Promise<{ id: strin
       </div>
 
       <div className="card card-pad" style={{ marginBottom: '1.4rem', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-        <div style={{ width: 200, height: 150, flexShrink: 0, background: 'var(--surface-2)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+        <div style={{ width: 220, aspectRatio: '4 / 3', flexShrink: 0, background: 'var(--surface-2)', borderRadius: 'var(--radius-sm)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
           {p.image ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={p.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-          ) : <span className="muted" style={{ fontSize: '0.78rem' }}>pas de photo</span>}
+            <img src={p.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          ) : <Wrench size={28} strokeWidth={1.6} className="muted" />}
         </div>
         <div style={{ flex: '1 1 260px', minWidth: 0 }}>
           {(p.shortDescription || p.description) && <p style={{ margin: '0 0 0.8rem' }}>{p.shortDescription || p.description}</p>}
@@ -132,11 +132,14 @@ export default function MaterielDetail({ params }: { params: Promise<{ id: strin
         </div>
       </div>
 
+      <div className="kpis" style={{ marginBottom: '1.4rem' }}>
+        <Kpi ic={Boxes} label="Exemplaires" value={p.total} sub="Toutes situations" hero />
+        <Kpi ic={Warehouse} label="Au dépôt" value={p.available} sub="Disponibles maintenant" />
+        <Kpi ic={Building2} label="Sur chantier" value={p.onSite} sub="En cours d'utilisation" />
+        <Kpi ic={Truck} label="Loué" value={p.rented} sub="Client Bricoloc" />
+      </div>
+
       <div className="info-grid" style={{ marginBottom: '1.4rem' }}>
-        <Info label="Exemplaires" value={p.total} />
-        <Info label="Au dépôt" value={p.available} />
-        <Info label="Sur chantier" value={p.onSite} />
-        <Info label="Loué" value={p.rented} />
         <Info label="Catégorie" value={p.category ?? '—'} />
         <Info label="Marque / modèle" value={[p.brand, p.model].filter(Boolean).join(' ') || '—'} />
       </div>

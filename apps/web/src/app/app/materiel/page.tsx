@@ -272,32 +272,33 @@ export default function MaterielPage() {
           {loading && !stock && <SkeletonRows />}
 
           {mode === 'gallery' && (
-            <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
+            <div className="gallery-grid">
               {paged.map((p) => (
-                <button
+                <div
                   key={p.id}
+                  className="card gallery-card"
+                  style={{ cursor: 'pointer' }}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => router.push(`/app/materiel/${p.id}`)}
-                  className="card"
-                  style={{ padding: 0, textAlign: 'left', cursor: 'pointer', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/app/materiel/${p.id}`); }}
                 >
-                  <div style={{ aspectRatio: '4 / 3', background: 'var(--surface-2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div className="gallery-thumb">
                     {p.image ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={p.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-                    ) : (
-                      <span className="muted" style={{ fontSize: '0.75rem' }}>pas de photo</span>
-                    )}
+                      <img src={p.image} alt="" />
+                    ) : <Wrench size={22} strokeWidth={1.6} />}
                   </div>
-                  <div style={{ padding: '0.6rem 0.7rem', display: 'grid', gap: 4 }}>
-                    <div style={{ fontWeight: 650, fontSize: '0.9rem', lineHeight: 1.25 }}>{p.name}</div>
-                    {p.brand && <div className="muted" style={{ fontSize: '0.75rem' }}>{p.brand}{p.model ? ` ${p.model}` : ''}</div>}
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 2 }}>
-                      <span className={`badge plain ${p.available > 0 ? 'ok' : ''}`} style={{ fontSize: '0.68rem' }}>{p.available} dispo</span>
-                      {p.onSite > 0 && <span className="badge plain warn" style={{ fontSize: '0.68rem' }}>{p.onSite} chantier</span>}
-                      {p.rented > 0 && <span className="badge plain" style={{ fontSize: '0.68rem' }}>{p.rented} loué</span>}
-                    </div>
+                  <div className="gallery-body">
+                    <div className="gallery-title">{p.name}</div>
+                    <div className="gallery-sub">{p.brand ? `${p.brand}${p.model ? ` ${p.model}` : ''}` : (p.category ?? '—')}</div>
                   </div>
-                </button>
+                  <div className="row" style={{ padding: '0 0.85rem 0.7rem', gap: 6, flexWrap: 'wrap' }}>
+                    <span className={`badge plain ${p.available > 0 ? 'ok' : ''}`} style={{ fontSize: '0.68rem' }}>{p.available} dispo</span>
+                    {p.onSite > 0 && <span className="badge plain warn" style={{ fontSize: '0.68rem' }}>{p.onSite} chantier</span>}
+                    {p.rented > 0 && <span className="badge plain" style={{ fontSize: '0.68rem' }}>{p.rented} loué</span>}
+                  </div>
+                </div>
               ))}
             </div>
           )}

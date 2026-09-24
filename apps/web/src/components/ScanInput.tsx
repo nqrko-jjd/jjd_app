@@ -58,6 +58,42 @@ export function ScanInput({
     return () => clearInterval(id);
   }, [camera]);
 
+  // Filet de sécurité : si le focus est ailleurs (bouton cliqué, liste, etc.), la rafale de la gâchette ne doit pas se perdre.
+  // On écoute donc aussi le clavier de la page (hors champs de saisie) et on reconnaît une rafale de douchette.
+  const submitRef = useRef(submit);
+  submitRef.current = submit;
+  useEffect(() => {
+    if (camera) return;
+    let buf = '';
+    let n = 0;
+    let first = 0;
+    let last = 0;
+    let quiet: ReturnType<typeof setTimeout> | undefined;
+    const reset = () => { buf = ''; n = 0; };
+    const isBurst = () => buf.length >= 4 && n >= 4 && (last - first) / (n - 1) < 50;
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t === ref.current) return; // le champ de scan gère déjà sa propre saisie
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key === 'Enter') {
+        clearTimeout(quiet);
+        if (isBurst()) { e.preventDefault(); const c = buf; reset(); submitRef.current(c); } else reset();
+        return;
+      }
+      if (e.key.length !== 1) return;
+      const now = Date.now();
+      if (now - last > 100) { reset(); first = now; }
+      buf += e.key;
+      n += 1;
+      last = now;
+      clearTimeout(quiet);
+      quiet = setTimeout(() => { if (isBurst()) { const c = buf; reset(); submitRef.current(c); } else reset(); }, 140);
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => { window.removeEventListener('keydown', onKey, true); clearTimeout(quiet); };
+  }, [camera]);
+
   return (
     <>
       {camera && (

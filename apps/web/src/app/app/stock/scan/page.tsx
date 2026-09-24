@@ -1,5 +1,5 @@
 'use client';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
 import { api, ApiError } from '@/lib/api';
@@ -65,6 +65,11 @@ function ScanPanel({
   const [rack, setRack] = useState<string | null>(null);
   const rackRef = useRef<string | null>(null);
   const [rackTyped, setRackTyped] = useState('');
+  // Après un scan : fenêtre « quelle quantité ? » puis « Ajouter au panier » (désactivable : +1 par scan).
+  const [askQty, setAskQty] = useState(true);
+  useEffect(() => { try { if (localStorage.getItem('jjd_scan_ask') === '0') setAskQty(false); } catch { /* ignore */ } }, []);
+  function toggleAsk(v: boolean) { setAskQty(v); try { localStorage.setItem('jjd_scan_ask', v ? '1' : '0'); } catch { /* ignore */ } }
+  const [pending, setPending] = useState<{ item: StockItem; unitName: string | null } | null>(null);
   const { data: racksData } = useApi<{ items: { code: string }[] }>('/api/stock/locations');
   const [query, setQuery] = useState('');
   const [lastScan, setLastScan] = useState<string | null>(null);
@@ -109,12 +114,12 @@ function ScanPanel({
   // Un clic sur une carte de stock/consommable ajoute 1 exemplaire — un 2e clic augmente la
   // quantité, comme un 2e scan (cf. panier de la maquette). Un outil est un exemplaire
   // physique précis (étiqueté) : chaque clic ajoute un exemplaire disponible différent.
-  function addStock(it: StockItem, unitName: string | null = null) {
+  function addStock(it: StockItem, unitName: string | null = null, addQty = 1) {
     const key = `stock:${it.id}:${unitName ?? ''}`;
     setCart((cur) => {
       const existing = cur.find((l) => l.key === key);
-      if (existing && existing.kind === 'stock') return cur.map((l) => (l.key === key && l.kind === 'stock' ? { ...l, qty: l.qty + 1 } : l));
-      return [{ kind: 'stock', key, id: it.id, name: it.name, unit: it.unit, unitName, units: it.units, qty: 1, image: it.photoThumbUrl, location: action === 'out' ? null : rackRef.current }, ...cur];
+      if (existing && existing.kind === 'stock') return cur.map((l) => (l.key === key && l.kind === 'stock' ? { ...l, qty: l.qty + addQty } : l));
+      return [{ kind: 'stock', key, id: it.id, name: it.name, unit: it.unit, unitName, units: it.units, qty: addQty, image: it.photoThumbUrl, location: action === 'out' ? null : rackRef.current }, ...cur];
     });
     setToast(null);
     setErr(null);
@@ -173,9 +178,10 @@ function ScanPanel({
     if (/^(BRZ|RACK)-.+/i.test(code)) { pickRack(code); return; }
     try {
       const r = await api<{ item: StockItem; unitName: string | null }>(`/api/stock/scan/${encodeURIComponent(code)}`);
+      scanFeedback(true);
+      if (askQty) { setPending({ item: r.item, unitName: r.unitName }); return; }
       addStock(r.item, r.unitName);
       setLastScan(`${r.item.name}${r.unitName ? ` · 1 ${r.unitName}` : ''}`);
-      scanFeedback(true);
       return;
     } catch (e) {
       if (!(e instanceof ApiError) || e.status !== 404) { setErr(e instanceof ApiError ? e.message : 'Erreur de scan'); scanFeedback(false); return; }
@@ -264,7 +270,24 @@ function ScanPanel({
         hint="Gâchette du terminal, caméra du smartphone, ou saisie du code. Un 2ᵉ scan du même article ajoute 1. En entrée : scannez aussi l’étiquette du rack."
         onScan={handleScan}
       />
+      <label className="scan-ask">
+        <input type="checkbox" checked={askQty} onChange={(e) => toggleAsk(e.target.checked)} /> Demander la quantité à chaque scan <span className="muted">(sinon +1 par scan)</span>
+      </label>
       {lastScan && <div className="scan-last">✓ {lastScan}</div>}
+      {pending && (
+        <QtyDialog
+          item={pending.item}
+          initialUnit={pending.unitName}
+          action={action}
+          rack={rack}
+          onCancel={() => setPending(null)}
+          onConfirm={(qty, unitName) => {
+            addStock(pending.item, unitName, qty);
+            setLastScan(`${pending.item.name} · ${qty} ${unitName ?? pending.item.unit}`);
+            setPending(null);
+          }}
+        />
+      )}
       <div className="stock-move-actions">
         <button type="button" className={action === 'in' ? 'on' : ''} onClick={() => setAction('in')}>
           <ArrowDownToLine className="ic" size={24} strokeWidth={1.75} />
@@ -434,6 +457,80 @@ function ScanPanel({
         </div>
 
       </details>
+    </div>
+  );
+}
+
+const fmtN = (n: number) => new Intl.NumberFormat('fr-BE', { maximumFractionDigits: 2 }).format(n);
+
+/** Fenêtre ouverte par un scan : quantité (et conditionnement) à entrer / sortir, puis « Ajouter au panier ». Entrée = valider. */
+function QtyDialog({ item, initialUnit, action, rack, onCancel, onConfirm }: {
+  item: StockItem; initialUnit: string | null; action: 'in' | 'out' | 'return'; rack: string | null;
+  onCancel: () => void; onConfirm: (qty: number, unitName: string | null) => void;
+}) {
+  const [qty, setQty] = useState('1');
+  const [unit, setUnit] = useState<string>(initialUnit ?? '');
+  const ref = useRef<HTMLInputElement>(null);
+  const openedAt = useRef(Date.now());
+  useEffect(() => { ref.current?.focus(); ref.current?.select(); }, []);
+  const n = Number(qty.replace(',', '.'));
+  const valid = Number.isFinite(n) && n > 0;
+  const factor = !unit ? 1 : item.units.find((u) => u.name === unit)?.factor ?? 1;
+  const short = action === 'out' && valid && n * factor > item.qty + 0.0001;
+  const bump = (d: number) => setQty(String(Math.max(1, Math.round(((valid ? n : 0) + d) * 100) / 100)));
+  const verb = action === 'in' ? 'entrer' : action === 'out' ? 'sortir' : 'retourner';
+
+  return (
+    <div className="modal-scrim" onClick={onCancel}>
+      <form
+        className="modal"
+        style={{ maxWidth: 460 }}
+        onClick={(e) => e.stopPropagation()}
+        // un « Entrée » tardif de la gâchette (fin du scan) ne doit pas valider la fenêtre à peine ouverte
+        onSubmit={(e) => { e.preventDefault(); if (valid && Date.now() - openedAt.current > 400) onConfirm(n, unit || null); }}
+        onKeyDown={(e) => { if (e.key === 'Escape') onCancel(); }}
+      >
+        <div className="modal-head">
+          <h2>{ACTION_BADGE[action]}</h2>
+          <button type="button" className="btn ghost" onClick={onCancel} aria-label="Fermer">✕</button>
+        </div>
+        <div className="modal-body" style={{ gridTemplateColumns: '1fr' }}>
+          <div className="row" style={{ gap: '0.8rem', alignItems: 'center', flexWrap: 'nowrap' }}>
+            {item.photoThumbUrl && <Thumb src={item.photoThumbUrl} size={64} />}
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontWeight: 800, fontSize: '1.1rem', lineHeight: 1.2 }}>{item.name}</div>
+              <div className="muted" style={{ fontSize: '0.82rem' }}>
+                En stock : <strong>{fmtN(item.qty)} {item.unit}</strong>{item.location ? ` · 📍 ${item.location}` : ''}
+              </div>
+            </div>
+          </div>
+          <div className="field">
+            <label htmlFor="qd-qty">Quantité à {verb}</label>
+            <div className="row" style={{ gap: '0.5rem', flexWrap: 'nowrap', alignItems: 'center' }}>
+              <button type="button" className="btn" style={{ fontSize: '1.4rem', padding: '0.3rem 1rem' }} onClick={() => bump(-1)} aria-label="Moins">−</button>
+              <input
+                id="qd-qty" ref={ref} className="input" style={{ fontSize: '1.6rem', fontWeight: 800, textAlign: 'center', width: 110 }}
+                inputMode="decimal" value={qty}
+                onChange={(e) => { if (e.target.value.length <= 6) setQty(e.target.value); }}
+              />
+              <button type="button" className="btn" style={{ fontSize: '1.4rem', padding: '0.3rem 1rem' }} onClick={() => bump(1)} aria-label="Plus">＋</button>
+              {item.units.length > 0 ? (
+                <select className="select" style={{ fontSize: '1.05rem', flex: 1 }} value={unit} onChange={(e) => setUnit(e.target.value)} aria-label="Unité">
+                  <option value="">{item.unit}</option>
+                  {item.units.map((u) => <option key={u.name} value={u.name}>{u.name} ({fmtN(u.factor)} {item.unit})</option>)}
+                </select>
+              ) : <span className="muted">{item.unit}</span>}
+            </div>
+            {valid && factor !== 1 && <span className="muted" style={{ fontSize: '0.8rem' }}>= {fmtN(n * factor)} {item.unit}</span>}
+          </div>
+          {action !== 'out' && rack && <div className="badge ok" style={{ padding: '0.35rem 0.7rem' }}>📍 Rangé dans le rack {rack}</div>}
+          {short && <div className="badge warn" style={{ padding: '0.35rem 0.7rem' }}>Attention : il n’y a que {fmtN(item.qty)} {item.unit} en stock.</div>}
+        </div>
+        <div className="modal-foot">
+          <button type="button" className="btn" onClick={onCancel}>Annuler</button>
+          <button type="submit" className="btn primary" disabled={!valid}>Ajouter au panier</button>
+        </div>
+      </form>
     </div>
   );
 }

@@ -1585,3 +1585,5 @@ body.plan-wide .main { max-width: none; }
 .rack-bar-input { width: 170px; }
 .stock-manual { margin-top: 1.4rem; max-width: 860px; }
 .stock-manual > summary { cursor: pointer; color: var(--ink-3); font-size: 0.85rem; font-weight: 600; }
+
+.scan-ask { display: flex; align-items: center; gap: 0.5rem; margin: -0.3rem 0 0.8rem; font-size: 0.82rem; color: var(--ink-2); cursor: pointer; }

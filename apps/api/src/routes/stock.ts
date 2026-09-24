@@ -8,6 +8,7 @@ import { Router } from 'express';
 import type { Prisma } from '@prisma/client';
 import { stockItemInput, stockMovementInput, stockSupplierInput, stockBarcodeInput, round2 } from '@jjd/shared';
 import { prisma, nextCounter } from '../db.js';
+import { applyStockMovement, resolveStockCode, sameName } from '../lib/stock.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, STOCK_READ, STOCK_MOVE, STOCK_MANAGE } from '../lib/auth.js';
 
@@ -24,7 +25,7 @@ const itemInclude = {
   },
 } satisfies Prisma.StockItemInclude;
 
-const same = (a: string | null | undefined, b: string | null | undefined) => (a ?? '').trim().toLowerCase() === (b ?? '').trim().toLowerCase();
+const same = sameName;
 
 function shapeItem<T extends { qty: number; avgCost: number | null; minQty: number | null }>(it: T) {
   return { ...it, value: round2(it.qty * (it.avgCost ?? 0)), low: it.minQty != null && it.qty < it.minQty };
@@ -56,7 +57,7 @@ stockRouter.get(
     const { q, active } = req.query as Record<string, string>;
     const where: Record<string, unknown> = {};
     if (active !== '0') where.active = true; // par défaut : masque les articles désactivés
-    if (q) where.OR = [{ name: { contains: q } }, { category: { contains: q } }, { ref: { contains: q } }, { brand: { contains: q } }];
+    if (q) where.OR = [{ name: { contains: q } }, { category: { contains: q } }, { ref: { contains: q } }, { brand: { contains: q } }, { model: { contains: q } }];
     const items = await prisma.stockItem.findMany({ where, orderBy: { name: 'asc' }, include: itemInclude });
     res.json({ items: items.map(shapeItem) });
   }),
@@ -82,7 +83,7 @@ stockRouter.post(
     if (await prisma.stockItem.findUnique({ where: { ref }, select: { id: true } })) throw new HttpError(409, `La référence ${ref} existe déjà`);
     const item = await prisma.stockItem.create({
       data: {
-        ref, name: d.name, unit: d.unit, brand: d.brand ?? null, note: d.note ?? null,
+        ref, name: d.name, unit: d.unit, brand: d.brand ?? null, model: d.model ?? null, note: d.note ?? null,
         category: d.category ?? null, minQty: d.minQty ?? null,
         units: { create: (d.units ?? []).map((u, i) => ({ name: u.name, factor: u.factor, position: i })) },
       },
@@ -122,6 +123,7 @@ stockRouter.patch(
           unit: d.unit,
           ref: d.ref || undefined,
           brand: d.brand === undefined ? undefined : (d.brand ?? null),
+          model: d.model === undefined ? undefined : (d.model ?? null),
           note: d.note === undefined ? undefined : (d.note ?? null),
           category: d.category === undefined ? undefined : (d.category ?? null),
           minQty: d.minQty === undefined ? undefined : (d.minQty ?? null),
@@ -187,18 +189,10 @@ stockRouter.get(
     const code = String(req.params.code ?? '').trim();
     if (!code) throw new HttpError(422, 'Code vide');
 
-    const bc = await prisma.stockBarcode.findUnique({ where: { code }, include: { stockItem: { include: itemInclude } } });
-    if (bc?.stockItem.active) return res.json({ kind: 'stock', item: shapeItem(bc.stockItem), unitName: bc.unitName, via: 'barcode' });
-
-    const m = code.match(/^(.+?)(?::(.+))?$/);
-    const ref = (m?.[1] ?? code).trim().toUpperCase();
-    const item = await prisma.stockItem.findFirst({ where: { ref, active: true }, include: itemInclude });
-    if (item) {
-      const wanted = m?.[2]?.trim() || null;
-      const unitName = wanted && !same(wanted, item.unit) ? item.units.find((u) => same(u.name, wanted))?.name ?? null : null;
-      return res.json({ kind: 'stock', item: shapeItem(item), unitName, via: 'ref' });
-    }
-    throw new HttpError(404, 'Code inconnu');
+    const hit = await resolveStockCode(code);
+    if (!hit) throw new HttpError(404, 'Code inconnu');
+    const item = await prisma.stockItem.findUnique({ where: { id: hit.item.id }, include: itemInclude });
+    return res.json({ kind: 'stock', item: shapeItem(item!), unitName: hit.unitName, via: hit.via });
   }),
 );
 
@@ -310,91 +304,13 @@ stockRouter.get(
   }),
 );
 
-/**
- * Bon d'entrée / de sortie / d'inventaire — met à jour la quantité (et le coût moyen sur une entrée).
- * La saisie peut se faire dans une unité alternative de l'article (« 4 sacs ») : la quantité
- * stockée est toujours en unité de base (4 × 25 = 100 kg), le mouvement garde ce qui a été saisi.
- */
+/** Bon d'entrée / de sortie / d'inventaire — voir applyStockMovement (saisie possible en unité alternative). */
 stockRouter.post(
   '/movements',
   requireAuth(...STOCK_MOVE),
   asyncHandler(async (req, res) => {
     const d = stockMovementInput.parse(req.body);
-    if (d.type === 'out' && !d.worksiteId) throw new HttpError(422, 'Chantier requis pour une sortie');
-    if (d.type !== 'adjustment' && d.qty <= 0) throw new HttpError(422, 'Quantité invalide');
-
-    const result = await prisma.$transaction(async (tx) => {
-      const item = await tx.stockItem.findUnique({ where: { id: d.stockItemId }, include: { units: true } });
-      if (!item) throw new HttpError(404, 'Article introuvable');
-
-      const enteredUnit = d.unit?.trim() || null;
-      let factor = 1;
-      if (enteredUnit && !same(enteredUnit, item.unit)) {
-        const u = item.units.find((x) => same(x.name, enteredUnit));
-        if (!u) throw new HttpError(422, `Unité « ${enteredUnit} » inconnue pour cet article`);
-        factor = u.factor;
-      }
-      if (d.contactId) {
-        if (d.type !== 'in') throw new HttpError(422, 'Un fournisseur ne s’indique que sur une entrée');
-        if (!(await tx.contact.findUnique({ where: { id: d.contactId }, select: { id: true } }))) throw new HttpError(422, 'Fournisseur introuvable');
-      }
-
-      const baseQty = round2(d.qty * factor);
-      const baseCost = d.unitCost != null ? round2(d.unitCost / factor) : null; // coût par unité de base
-
-      let newQty: number;
-      let newAvgCost = item.avgCost;
-      let storedQty: number; // valeur enregistrée sur le mouvement (toujours positive pour in/out, delta signé pour adjustment)
-
-      if (d.type === 'in') {
-        storedQty = baseQty;
-        newQty = round2(item.qty + baseQty);
-        if (baseCost != null) {
-          const oldValue = item.qty * (item.avgCost ?? baseCost);
-          newAvgCost = round2((oldValue + baseQty * baseCost) / (newQty || 1));
-        }
-      } else if (d.type === 'out') {
-        storedQty = baseQty;
-        newQty = round2(item.qty - baseQty);
-      } else {
-        // adjustment : baseQty = quantité réelle comptée (cible), pas un delta
-        storedQty = round2(baseQty - item.qty);
-        newQty = baseQty;
-      }
-
-      const updated = await tx.stockItem.update({ where: { id: item.id }, data: { qty: newQty, avgCost: newAvgCost } });
-      const movement = await tx.stockMovement.create({
-        data: {
-          stockItemId: item.id,
-          type: d.type,
-          qty: storedQty,
-          enteredQty: enteredUnit && !same(enteredUnit, item.unit) ? d.qty : null,
-          enteredUnit: enteredUnit && !same(enteredUnit, item.unit) ? enteredUnit : null,
-          contactId: d.type === 'in' ? d.contactId ?? null : null,
-          unitCost: d.type === 'in' ? baseCost : null,
-          worksiteId: d.worksiteId ?? null,
-          requestedByName: d.requestedByName ?? null,
-          note: d.note ?? null,
-          createdById: req.user!.id,
-        },
-        include: {
-          stockItem: { select: { id: true, name: true, unit: true } },
-          worksite: { select: { id: true, ref: true, title: true } },
-          contact: { select: { id: true, name: true } },
-        },
-      });
-
-      // Dernier prix payé chez ce fournisseur : met à jour sa ligne s'il est déjà lié à l'article.
-      if (d.type === 'in' && d.contactId && d.unitCost != null) {
-        const unitName = enteredUnit && !same(enteredUnit, item.unit) ? enteredUnit : null;
-        await tx.stockSupplier.updateMany({
-          where: { stockItemId: item.id, contactId: d.contactId, unitName },
-          data: { price: d.unitCost },
-        });
-      }
-      return { item: updated, movement };
-    });
-
+    const result = await prisma.$transaction((tx) => applyStockMovement(tx, d, req.user!.id));
     res.status(201).json(result);
   }),
 );

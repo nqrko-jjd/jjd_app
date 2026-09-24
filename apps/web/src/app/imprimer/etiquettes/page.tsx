@@ -52,8 +52,8 @@ function Inner() {
   if (!items) return <div style={{ padding: 40 }}>Chargement…</div>;
 
   const labels: Label[] = items.flatMap((it) => [
-    { key: `${it.id}:`, code: it.ref!, name: it.name, ref: it.ref!, brand: it.brand, unitLine: `Unité : ${it.unit}` },
-    ...it.units.map((u) => ({ key: `${it.id}:${u.name}`, code: `${it.ref}:${u.name}`, name: it.name, ref: it.ref!, brand: it.brand, unitLine: `1 ${u.name} = ${u.factor} ${it.unit}` })),
+    { key: `${it.id}:`, code: it.ref!, name: it.name, ref: it.ref!, brand: [it.brand, it.model].filter(Boolean).join(' ') || null, unitLine: `Unité : ${it.unit}` },
+    ...it.units.map((u) => ({ key: `${it.id}:${u.name}`, code: `${it.ref}:${u.name}`, name: it.name, ref: it.ref!, brand: [it.brand, it.model].filter(Boolean).join(' ') || null, unitLine: `1 ${u.name} = ${u.factor} ${it.unit}` })),
   ]);
   const sheet = labels.flatMap((l) => Array.from({ length: copies }, (_, i) => ({ ...l, key: `${l.key}#${i}` })));
 

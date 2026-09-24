@@ -108,7 +108,7 @@ export default function StockDetail({ params }: { params: Promise<{ id: string }
       </div>
 
       <div className="detail-hero">
-        <div className="eyebrow">{[item.ref, item.brand, item.category].filter(Boolean).join(' · ') || 'Stock de matériaux'}</div>
+        <div className="eyebrow">{[item.ref, [item.brand, item.model].filter(Boolean).join(' '), item.category].filter(Boolean).join(' · ') || 'Stock de matériaux'}</div>
         <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'nowrap', gap: '1rem' }}>
           <h1>{item.name}</h1>
           <span className={`badge ${item.low ? 'crit' : 'ok'}`}>{item.low ? 'À réapprovisionner' : 'Disponible'}</span>

@@ -276,6 +276,7 @@ model Contact {
   residents     Contact[] @relation("ContactLinkedAcp")
 
   stockSuppliers   StockSupplier[]   @relation("StockSupplierContact")
+  purchaseOrders   PurchaseOrder[]   @relation("PurchaseOrderSupplier")
   stockMovements   StockMovement[]   @relation("StockMovementSupplier")
   user             User?             @relation("UserClientAccount")
   worksites        Worksite[]        @relation("WorksiteClient")
@@ -453,6 +454,8 @@ model Worksite {
   tasks          WorksiteTask[]
   taskPhases     WorksiteTaskPhase[]
   stockMovements StockMovement[]
+  stockOrders    StockOrder[]    @relation("StockOrderWorksite")
+  purchaseOrders PurchaseOrder[] @relation("PurchaseOrderWorksite")
   contacts       WorksiteContact[]
 
   @@index([status])
@@ -1199,6 +1202,7 @@ model StockItem {
   ref       String? @unique // référence interne (ART-0001), générée à la création
   name      String
   brand     String? // marque / fabricant (Knauf…)
+  model     String? // référence fabricant (MP75…) — le nom complet reste dans `name` (« KNAUF MP75 25KG »)
   note      String?
   unit      String // unité de base du stock ("kg" | "m²" | "u" | "L" | …) — les quantités sont stockées dans cette unité
   category  String?
@@ -1213,6 +1217,8 @@ model StockItem {
   units     StockItemUnit[]
   suppliers StockSupplier[]
   barcodes  StockBarcode[]
+  orderLines    StockOrderLine[]
+  purchaseLines PurchaseOrderLine[]
 
   @@index([active])
 }
@@ -1228,6 +1234,80 @@ model StockItemUnit {
   position    Int       @default(0)
 
   @@unique([stockItemId, name])
+}
+
+/// Préparation de commande pour un chantier : le bureau la crée, le magasinier la prépare en
+/// scannant chaque article (picking) ; la validation génère les sorties de stock vers le chantier.
+model StockOrder {
+  id           String           @id @default(cuid())
+  ref          String           @unique // PREP-2026-001
+  worksiteId   String
+  worksite     Worksite         @relation("StockOrderWorksite", fields: [worksiteId], references: [id])
+  status       String           @default("to_prepare") // to_prepare | preparing | prepared | cancelled
+  neededOn     DateTime? // pour quand le chantier en a besoin
+  note         String?
+  createdById  String?
+  preparedById String?
+  preparedBy   String? // nom affiché de celui qui a préparé
+  preparedAt   DateTime?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  lines        StockOrderLine[]
+
+  @@index([status])
+  @@index([worksiteId])
+}
+
+model StockOrderLine {
+  id          String     @id @default(cuid())
+  orderId     String
+  order       StockOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  stockItemId String
+  stockItem   StockItem  @relation(fields: [stockItemId], references: [id])
+  unitName    String? // unité de la ligne (sac) ; vide = unité de base
+  qty         Float // demandé, dans l'unité de la ligne
+  pickedQty   Float      @default(0) // préparé, dans l'unité de la ligne
+  note        String?
+  position    Int        @default(0)
+
+  @@index([orderId])
+}
+
+/// Commande fournisseur : créée au bureau, réceptionnée par le magasinier (scan) quand elle arrive.
+model PurchaseOrder {
+  id          String              @id @default(cuid())
+  ref         String              @unique // CF-2026-001
+  contactId   String
+  contact     Contact             @relation("PurchaseOrderSupplier", fields: [contactId], references: [id])
+  worksiteId  String? // chantier pour lequel on commande (information)
+  worksite    Worksite?           @relation("PurchaseOrderWorksite", fields: [worksiteId], references: [id])
+  status      String              @default("ordered") // draft | ordered | partial | received | cancelled
+  orderedOn   DateTime?
+  expectedOn  DateTime?
+  supplierRef String? // n° de commande / bon de livraison chez le fournisseur
+  note        String?
+  createdById String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  lines       PurchaseOrderLine[]
+
+  @@index([status])
+  @@index([contactId])
+}
+
+model PurchaseOrderLine {
+  id          String        @id @default(cuid())
+  orderId     String
+  order       PurchaseOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  stockItemId String
+  stockItem   StockItem     @relation(fields: [stockItemId], references: [id])
+  unitName    String? // unité de commande ; vide = unité de base
+  qty         Float // commandé, dans l'unité de la ligne
+  price       Float? // prix HT par unité de commande
+  receivedQty Float         @default(0) // déjà réceptionné, dans l'unité de la ligne
+  position    Int           @default(0)
+
+  @@index([orderId])
 }
 
 /// Code-barres (EAN du sac, étiquette interne…) qui identifie cet article — et éventuellement

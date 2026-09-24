@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutGrid, Building2, CalendarDays, ListChecks, Clock, TrendingUp, FileText, Wallet,
   BarChart3, Euro, Warehouse, Contact, Users, Truck, Wrench, Package, ScanLine, Flag, Settings, ExternalLink,
-  MessageSquare, type LucideIcon,
+  MessageSquare, ClipboardList, type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useApi } from '@/lib/use-api';
@@ -38,7 +38,8 @@ const STOREKEEPER_NAV: Group[] = [
   {
     title: 'Magasin',
     items: [
-      { href: '/app/stock/scan', label: 'Scan', ic: ScanLine },
+      { href: '/app/stock/preparations', label: 'Préparations', ic: ClipboardList },
+      { href: '/app/stock/scan', label: 'Scan libre (entrée / sortie)', ic: ScanLine },
       { href: '/app/stock', label: 'Stock matériaux', ic: Package },
       { href: '/app/materiel', label: 'Matériel', ic: Wrench },
     ],
@@ -92,6 +93,7 @@ const NAV: Group[] = [
       { href: '/app/flotte', label: 'Flotte', ic: Truck },
       { href: '/app/materiel', label: 'Matériel', ic: Wrench },
       { href: '/app/stock', label: 'Stock matériaux', ic: Package },
+      { href: '/app/stock/preparations', label: 'Préparations', ic: ClipboardList, roles: ['admin', 'office'] },
       { href: '/app/stock/scan', label: 'Scan & mouvements', ic: ScanLine },
     ],
   },

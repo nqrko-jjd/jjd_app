@@ -86,7 +86,7 @@ function ScanPanel({
 
   const q = query.trim().toLowerCase();
   const stockCatalog = catalogType === 'materiaux'
-    ? items.filter((it) => !q || `${it.name} ${it.ref ?? ''} ${it.brand ?? ''} ${it.category ?? ''}`.toLowerCase().includes(q))
+    ? items.filter((it) => !q || `${it.name} ${it.ref ?? ''} ${it.brand ?? ''} ${it.model ?? ''} ${it.category ?? ''}`.toLowerCase().includes(q))
     : [];
   const materielCatalog = catalogType === 'machines' && machinesEnabled
     ? materielProducts

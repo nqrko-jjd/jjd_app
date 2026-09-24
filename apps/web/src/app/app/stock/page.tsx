@@ -13,7 +13,7 @@ import { StockItemModal } from '@/components/StockItemModal';
 import { ViewToggle, useViewMode } from '@/components/ViewToggle';
 
 interface StockItem {
-  id: string; ref: string | null; brand: string | null; name: string; unit: string; category: string | null;
+  id: string; ref: string | null; brand: string | null; model: string | null; name: string; unit: string; category: string | null;
   minQty: number | null; qty: number; avgCost: number | null; value: number; low: boolean; active: boolean;
 }
 
@@ -90,7 +90,7 @@ export default function StockPage() {
       </div>
 
       <div className="row" style={{ marginBottom: '1rem' }}>
-        <input className="input" style={{ maxWidth: 280 }} placeholder="Nom, réf., marque, catégorie…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input className="input" style={{ maxWidth: 280 }} placeholder="Nom, réf., marque, réf. fabricant…" value={q} onChange={(e) => setQ(e.target.value)} />
         <ViewToggle mode={mode} onChange={setMode} />
       </div>
 
@@ -120,7 +120,7 @@ export default function StockPage() {
                   {it.low && <span className="badge warn" style={{ marginLeft: 6, fontSize: '0.68rem' }}>bas</span>}
                 </div>
                 <div className="gallery-sub">
-                  {[it.ref, it.brand ?? it.category].filter(Boolean).join(' · ') || '—'} · {it.qty} {it.unit}
+                  {[it.ref, [it.brand, it.model].filter(Boolean).join(' ') || it.category].filter(Boolean).join(' · ') || '—'} · {it.qty} {it.unit}
                 </div>
               </div>
               <div className="row" style={{ padding: '0 0.85rem 0.7rem', justifyContent: 'space-between' }}>
@@ -147,7 +147,7 @@ export default function StockPage() {
                 <tr key={it.id} className="row-link" onClick={rowNav(`/app/stock/${it.id}`, (h) => router.push(h))}>
                   <td className="mono" style={{ fontSize: '0.82rem' }}>{it.ref ?? '—'}</td>
                   <td>
-                    {it.name}{it.brand && <span className="muted"> · {it.brand}</span>}
+                    {it.name}{(it.brand || it.model) && <span className="muted"> · {[it.brand, it.model].filter(Boolean).join(' ')}</span>}
                     {it.low && <span className="badge warn" style={{ marginLeft: 6, fontSize: '0.7rem' }}>sous le seuil ({it.minQty})</span>}
                   </td>
                   <td>{it.category ?? '—'}</td>

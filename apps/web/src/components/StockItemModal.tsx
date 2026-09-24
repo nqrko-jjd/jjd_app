@@ -8,7 +8,7 @@ export interface StockSupplierLink {
   preferred: boolean; note: string | null; contact: { id: string; name: string };
 }
 export interface StockItemFull {
-  id: string; ref: string | null; name: string; brand: string | null; note: string | null; unit: string;
+  id: string; ref: string | null; name: string; brand: string | null; model: string | null; note: string | null; unit: string;
   category: string | null; minQty: number | null; qty: number; avgCost: number | null; value: number; low: boolean; active: boolean;
   units: StockUnit[]; suppliers: StockSupplierLink[];
   barcodes: { id: string; code: string; unitName: string | null; note: string | null }[];
@@ -19,7 +19,7 @@ export const COMMON_UNITS = ['kg', 'u', 'm²', 'm³', 'ml', 'm', 'L', 'sac', 'pc
 /** Création / modification d'un article : identité, unité de base, unités alternatives (sac, pcs, palette…). */
 export function StockItemModal({ item, onClose, onSaved }: { item?: StockItemFull; onClose: () => void; onSaved: (it: StockItemFull) => void }) {
   const [v, setV] = useState({
-    name: item?.name ?? '', ref: item?.ref ?? '', brand: item?.brand ?? '', category: item?.category ?? '',
+    name: item?.name ?? '', ref: item?.ref ?? '', brand: item?.brand ?? '', model: item?.model ?? '', category: item?.category ?? '',
     unit: item?.unit ?? '', minQty: item?.minQty != null ? String(item.minQty) : '', note: item?.note ?? '',
   });
   const [units, setUnits] = useState<{ name: string; factor: string }[]>(
@@ -42,7 +42,7 @@ export function StockItemModal({ item, onClose, onSaved }: { item?: StockItemFul
     setErr(null);
     try {
       const body = {
-        name: v.name, unit: v.unit, brand: v.brand || null, category: v.category || null, note: v.note || null,
+        name: v.name, unit: v.unit, brand: v.brand || null, model: v.model || null, category: v.category || null, note: v.note || null,
         minQty: v.minQty === '' ? null : Number(v.minQty),
         ...(v.ref.trim() ? { ref: v.ref.trim() } : {}),
         units: units.filter((u) => u.name.trim()).map((u) => ({ name: u.name.trim(), factor: Number(String(u.factor).replace(',', '.')) })),
@@ -65,16 +65,20 @@ export function StockItemModal({ item, onClose, onSaved }: { item?: StockItemFul
         </div>
         <div className="modal-body">
           <div className="field" style={{ gridColumn: '1 / -1' }}>
-            <label htmlFor="si-name">Nom *</label>
-            <input id="si-name" className="input" required value={v.name} onChange={(e) => set('name', e.target.value)} placeholder="Enduit Knauf MP75" />
-          </div>
-          <div className="field">
-            <label htmlFor="si-ref">Référence interne</label>
-            <input id="si-ref" className="input" value={v.ref} onChange={(e) => set('ref', e.target.value)} placeholder={item ? '' : 'automatique (ART-0001…)'} />
+            <label htmlFor="si-name">Nom complet * <span className="muted" style={{ fontWeight: 400 }}>— comme sur les factures</span></label>
+            <input id="si-name" className="input" required value={v.name} onChange={(e) => set('name', e.target.value)} placeholder="KNAUF MP75 25KG" />
           </div>
           <div className="field">
             <label htmlFor="si-brand">Marque</label>
             <input id="si-brand" className="input" value={v.brand} onChange={(e) => set('brand', e.target.value)} placeholder="Knauf" />
+          </div>
+          <div className="field">
+            <label htmlFor="si-model">Réf. fabricant</label>
+            <input id="si-model" className="input" value={v.model} onChange={(e) => set('model', e.target.value)} placeholder="MP75" />
+          </div>
+          <div className="field">
+            <label htmlFor="si-ref">Référence interne</label>
+            <input id="si-ref" className="input" value={v.ref} onChange={(e) => set('ref', e.target.value)} placeholder={item ? '' : 'automatique (ART-0001…)'} />
           </div>
           <div className="field">
             <label htmlFor="si-unit">Unité de stock (de base) *</label>

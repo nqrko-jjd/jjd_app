@@ -252,3 +252,22 @@ test('magasinier : accède au stock et aux mouvements, pas aux chantiers ni aux 
   assert.equal(created.status, 201, 'le magasinier crée et gère ses articles');
   await prisma.stockItem.deleteMany({ where: { name: 'Article magasinier — test' } });
 });
+
+test('article : nom complet + marque + réf. fabricant, retrouvés par la recherche', async () => {
+  let id = '';
+  try {
+    const c = await jf<{ item: { id: string; brand: string; model: string } }>('/api/stock/items', {
+      method: 'POST', body: JSON.stringify({ name: 'KNAUF MP75 25KG — test', unit: 'sac', brand: 'Knauf', model: 'MP75' }),
+    });
+    assert.equal(c.status, 201);
+    id = c.body.item.id;
+    assert.equal(c.body.item.brand, 'Knauf');
+    assert.equal(c.body.item.model, 'MP75');
+    const byModel = await jf<{ items: { id: string }[] }>('/api/stock/items?q=MP75');
+    assert.ok(byModel.body.items.some((i) => i.id === id));
+    const upd = await jf<{ item: { model: string | null } }>('/api/stock/items/' + id, { method: 'PATCH', body: JSON.stringify({ model: null }) });
+    assert.equal(upd.body.item.model, null);
+  } finally {
+    if (id) await prisma.stockItem.delete({ where: { id } }).catch(() => {});
+  }
+});

@@ -372,6 +372,7 @@ export const stockItemInput = z.object({
   unit: z.string().trim().min(1), // unité de base du stock
   ref: z.string().trim().nullish(), // référence interne ; générée (ART-0001) si absente à la création
   brand: z.string().trim().nullish(),
+  model: z.string().trim().nullish(), // référence fabricant
   note: z.string().trim().nullish(),
   category: z.string().trim().nullish(),
   minQty: z.coerce.number().min(0).nullish(),

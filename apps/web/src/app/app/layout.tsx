@@ -14,7 +14,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const blocked = user?.role === 'storekeeper' && !STOREKEEPER_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 
   useEffect(() => {
-    if (blocked) router.replace('/app/stock/scan');
+    if (blocked) router.replace('/app/stock/preparations');
   }, [blocked, router]);
 
   if (loading) return <div className="empty">Chargement…</div>;

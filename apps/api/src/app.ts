@@ -27,6 +27,7 @@ import { worksiteReportsRouter, reportsRouter } from './routes/reports.js';
 import { worksiteTasksRouter, tasksRouter, worksitePhasesRouter, phasesRouter } from './routes/tasks.js';
 import { materielRouter } from './routes/materiel.js';
 import { stockRouter } from './routes/stock.js';
+import { stockOrdersRouter } from './routes/stock-orders.js';
 import { assistantRouter } from './routes/assistant.js';
 import { geocodeRouter } from './routes/geocode.js';
 import { usersRouter } from './routes/users.js';
@@ -78,6 +79,7 @@ export function createApp() {
   app.use('/api/imports', importsRouter);
   app.use('/api/materiel', materielRouter);
   app.use('/api/stock', stockRouter);
+  app.use('/api/stock-orders', stockOrdersRouter);
   app.use('/api/assistant', assistantRouter);
   app.use('/api/geocode', geocodeRouter);
   app.use('/api/users', usersRouter);

@@ -30,7 +30,7 @@ const MATERIEL_STATE_LABEL: Record<string, string> = {
 type CatalogType = 'materiaux' | 'machines' | 'consommables';
 
 type CartLine =
-  | { kind: 'stock'; key: string; id: string; name: string; unit: string; unitName: string | null; units: { name: string; factor: number }[]; qty: number }
+  | { kind: 'stock'; key: string; id: string; name: string; unit: string; unitName: string | null; units: { name: string; factor: number }[]; qty: number; image?: string | null }
   | { kind: 'materiel'; key: string; assetTag: string; name: string; sub: string; image?: string | null }
   | { kind: 'consommable'; key: string; productId: string; name: string; qty: number };
 
@@ -109,7 +109,7 @@ function ScanPanel({
     setCart((cur) => {
       const existing = cur.find((l) => l.key === key);
       if (existing && existing.kind === 'stock') return cur.map((l) => (l.key === key && l.kind === 'stock' ? { ...l, qty: l.qty + 1 } : l));
-      return [{ kind: 'stock', key, id: it.id, name: it.name, unit: it.unit, unitName, units: it.units, qty: 1 }, ...cur];
+      return [{ kind: 'stock', key, id: it.id, name: it.name, unit: it.unit, unitName, units: it.units, qty: 1, image: it.photoThumbUrl }, ...cur];
     });
     setToast(null);
     setErr(null);
@@ -298,7 +298,7 @@ function ScanPanel({
 
             {catalogType === 'materiaux' && stockCatalog.map((it) => (
               <button key={`stock-${it.id}`} type="button" className="stock-catalog-card" onClick={() => addStock(it)}>
-                <span className="icon">▥</span>
+                {it.photoThumbUrl ? <Thumb src={it.photoThumbUrl} size={40} /> : <span className="icon">▥</span>}
                 <span className="info">
                   <span className="name">{it.name}</span>
                   <span className="sub">{it.qty} {it.unit} en stock{it.category ? ` · ${it.category}` : ''}</span>
@@ -344,7 +344,7 @@ function ScanPanel({
               <p className="stock-basket-empty">Cliquez (ou scannez) un article pour l’ajouter.</p>
             ) : cart.map((line) => (
               <div key={line.key} className="stock-basket-line">
-                {line.kind === 'materiel' && line.image ? <Thumb src={line.image} size={40} /> : (
+                {(line.kind === 'materiel' || line.kind === 'stock') && line.image ? <Thumb src={line.image} size={40} /> : (
                   <span className="icon">{line.kind === 'materiel' ? '🔧' : line.kind === 'consommable' ? '🧰' : '▥'}</span>
                 )}
                 <span className="info">

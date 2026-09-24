@@ -25,7 +25,7 @@ const orderInclude = {
     include: {
       stockItem: {
         select: {
-          id: true, ref: true, name: true, brand: true, unit: true, qty: true,
+          id: true, ref: true, name: true, brand: true, unit: true, qty: true, photoThumbUrl: true,
           units: { select: { name: true, factor: true } },
         },
       },

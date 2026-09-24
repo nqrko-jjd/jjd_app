@@ -11,8 +11,14 @@ import { prisma, nextCounter } from '../db.js';
 import { applyStockMovement, resolveStockCode, sameName } from '../lib/stock.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, STOCK_READ, STOCK_MOVE, STOCK_MANAGE } from '../lib/auth.js';
+import { attachPhotoRoutes } from '../lib/photo-upload.js';
 
 export const stockRouter = Router();
+
+// photo du produit : POST/DELETE /api/stock/items/:id/photo (bureau + magasinier)
+const itemPhotoRouter = Router();
+attachPhotoRoutes(itemPhotoRouter, (id, data) => prisma.stockItem.update({ where: { id }, data }), STOCK_MANAGE);
+stockRouter.use('/items', itemPhotoRouter);
 
 /* ------------------------------------------------------------------ articles */
 
@@ -83,11 +89,33 @@ stockRouter.post(
     checkUnits(d.unit, d.units ?? []);
     const ref = d.ref || (await nextItemRef());
     if (await prisma.stockItem.findUnique({ where: { ref }, select: { id: true } })) throw new HttpError(409, `La référence ${ref} existe déjà`);
+    // fournisseurs liés dès la création : un prix par (fournisseur, conditionnement), un seul « préféré »
+    const suppliers = d.suppliers ?? [];
+    if (suppliers.length) {
+      const known = await prisma.contact.findMany({ where: { id: { in: suppliers.map((x) => x.contactId) } }, select: { id: true } });
+      if (known.length !== new Set(suppliers.map((x) => x.contactId)).size) throw new HttpError(422, 'Fournisseur introuvable');
+    }
+    const altNames = (d.units ?? []).map((u) => u.name);
+    const seen = new Set<string>();
+    const supplierRows = suppliers.map((sp) => {
+      const raw = sp.unitName?.trim() || null;
+      if (raw && !sameName(raw, d.unit) && !altNames.some((n) => sameName(n, raw))) throw new HttpError(422, `Unité d’achat « ${raw} » inconnue pour cet article`);
+      const unitName = raw && !sameName(raw, d.unit) ? raw : null;
+      const key = `${sp.contactId}|${(unitName ?? '').toLowerCase()}`;
+      if (seen.has(key)) throw new HttpError(422, 'Ce fournisseur est déjà indiqué avec le même conditionnement');
+      seen.add(key);
+      return { contactId: sp.contactId, supplierRef: sp.supplierRef ?? null, unitName, price: sp.price ?? null, preferred: !!sp.preferred, note: sp.note ?? null };
+    });
+    if (supplierRows.length && !supplierRows.some((x) => x.preferred)) supplierRows[0]!.preferred = true;
+    let preferredSeen = false;
+    for (const row of supplierRows) { if (row.preferred && preferredSeen) row.preferred = false; if (row.preferred) preferredSeen = true; }
+
     const item = await prisma.stockItem.create({
       data: {
         ref, name: d.name, unit: d.unit, brand: d.brand ?? null, model: d.model ?? null, note: d.note ?? null,
         category: d.category ?? null, minQty: d.minQty ?? null,
         units: { create: (d.units ?? []).map((u, i) => ({ name: u.name, factor: u.factor, position: i })) },
+        suppliers: { create: supplierRows },
       },
       include: itemInclude,
     });

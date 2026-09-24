@@ -134,7 +134,7 @@ const orderInclude = {
   lines: {
     orderBy: { position: 'asc' as const },
     include: {
-      stockItem: { select: { id: true, ref: true, name: true, brand: true, model: true, unit: true, units: { select: { name: true, factor: true } } } },
+      stockItem: { select: { id: true, ref: true, name: true, brand: true, model: true, unit: true, photoThumbUrl: true, units: { select: { name: true, factor: true } } } },
     },
   },
 } satisfies Prisma.PurchaseOrderInclude;

@@ -14,7 +14,7 @@ import { ViewToggle, useViewMode } from '@/components/ViewToggle';
 
 interface StockItem {
   id: string; ref: string | null; brand: string | null; model: string | null; name: string; unit: string; category: string | null;
-  minQty: number | null; qty: number; avgCost: number | null; value: number; low: boolean; active: boolean;
+  minQty: number | null; qty: number; avgCost: number | null; value: number; low: boolean; active: boolean; photoThumbUrl: string | null;
 }
 
 export default function StockPage() {
@@ -113,7 +113,12 @@ export default function StockPage() {
               onClick={() => router.push(`/app/stock/${it.id}`)}
               onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/app/stock/${it.id}`); }}
             >
-              <div className="gallery-thumb"><Package size={22} strokeWidth={1.6} /></div>
+              <div className="gallery-thumb">
+                {it.photoThumbUrl
+                  // eslint-disable-next-line @next/next/no-img-element
+                  ? <img src={it.photoThumbUrl} alt="" loading="lazy" />
+                  : <Package size={22} strokeWidth={1.6} />}
+              </div>
               <div className="gallery-body">
                 <div className="gallery-title">
                   {it.name}
@@ -147,8 +152,16 @@ export default function StockPage() {
                 <tr key={it.id} className="row-link" onClick={rowNav(`/app/stock/${it.id}`, (h) => router.push(h))}>
                   <td className="mono" style={{ fontSize: '0.82rem' }}>{it.ref ?? '—'}</td>
                   <td>
+                    <span className="row" style={{ display: 'inline-flex', gap: '0.55rem', alignItems: 'center', flexWrap: 'nowrap' }}>
+                      {it.photoThumbUrl
+                        // eslint-disable-next-line @next/next/no-img-element
+                        ? <img src={it.photoThumbUrl} alt="" loading="lazy" style={{ width: 34, height: 34, borderRadius: 6, objectFit: 'cover', flexShrink: 0 }} />
+                        : <span style={{ width: 34, height: 34, borderRadius: 6, background: 'var(--surface-2)', flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-3)' }}><Package size={16} strokeWidth={1.6} /></span>}
+                      <span>
                     {it.name}{(it.brand || it.model) && <span className="muted"> · {[it.brand, it.model].filter(Boolean).join(' ')}</span>}
                     {it.low && <span className="badge warn" style={{ marginLeft: 6, fontSize: '0.7rem' }}>sous le seuil ({it.minQty})</span>}
+                      </span>
+                    </span>
                   </td>
                   <td>{it.category ?? '—'}</td>
                   <td className="tnum">{it.qty} {it.unit}</td>

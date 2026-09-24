@@ -11,6 +11,7 @@ import { ComboBox } from '@/components/ComboBox';
 import { ContactPicker } from '@/components/ContactPicker';
 import { ScanInput } from '@/components/ScanInput';
 import { PaginationBar, PAGE_SIZE_ALL } from '@/components/PaginationBar';
+import { PhotoHeader } from '@/components/PhotoHeader';
 import { StockItemModal, type StockItemFull, type StockSupplierLink } from '@/components/StockItemModal';
 
 interface Movement {
@@ -107,13 +108,20 @@ export default function StockDetail({ params }: { params: Promise<{ id: string }
         {canManage && <button className="btn" onClick={() => setEditing(true)}>Modifier l’article</button>}
       </div>
 
-      <div className="detail-hero">
+      <div className="row" style={{ alignItems: 'flex-start', gap: '1.2rem', flexWrap: 'wrap' }}>
+      {(item.photoUrl || canManage) && (
+        <div style={{ width: 240, flexShrink: 0 }}>
+          <PhotoHeader basePath={`/api/stock/items/${item.id}`} photoUrl={item.photoUrl} alt={item.name} editable={canManage} onChange={reload} />
+        </div>
+      )}
+      <div className="detail-hero" style={{ flex: 1, minWidth: 280 }}>
         <div className="eyebrow">{[item.ref, [item.brand, item.model].filter(Boolean).join(' '), item.category].filter(Boolean).join(' · ') || 'Stock de matériaux'}</div>
         <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'nowrap', gap: '1rem' }}>
           <h1>{item.name}</h1>
           <span className={`badge ${item.low ? 'crit' : 'ok'}`}>{item.low ? 'À réapprovisionner' : 'Disponible'}</span>
         </div>
         <div className="sub">{fmtQty(item.qty)} {item.unit} en stock{inBig}</div>
+      </div>
       </div>
 
       <div className="kpis" style={{ margin: '1.4rem 0' }}>

@@ -369,6 +369,15 @@ export const stockItemUnitInput = z.object({
   factor: z.coerce.number().positive(), // unités de base dans 1 de cette unité (ex. sac = 25 kg)
 });
 
+export const stockSupplierInput = z.object({
+  contactId: z.string().min(1),
+  supplierRef: z.string().trim().nullish(),
+  unitName: z.string().trim().nullish(), // unité d'achat ; vide = unité de base
+  price: z.coerce.number().min(0).nullish(), // HT par unité d'achat
+  preferred: z.boolean().optional(),
+  note: z.string().trim().nullish(),
+});
+
 export const stockItemInput = z.object({
   name: z.string().trim().min(1),
   unit: z.string().trim().min(1), // unité de base du stock
@@ -379,6 +388,7 @@ export const stockItemInput = z.object({
   category: z.string().trim().nullish(),
   minQty: z.coerce.number().min(0).nullish(),
   units: z.array(stockItemUnitInput).optional(), // unités alternatives (remplace la liste si fournie)
+  suppliers: z.array(stockSupplierInput).optional(), // fournisseurs à lier dès la création (plusieurs, un prix par conditionnement)
 });
 
 export const stockBarcodeInput = z.object({
@@ -387,14 +397,6 @@ export const stockBarcodeInput = z.object({
   note: z.string().trim().nullish(),
 });
 
-export const stockSupplierInput = z.object({
-  contactId: z.string().min(1),
-  supplierRef: z.string().trim().nullish(),
-  unitName: z.string().trim().nullish(), // unité d'achat ; vide = unité de base
-  price: z.coerce.number().min(0).nullish(), // HT par unité d'achat
-  preferred: z.boolean().optional(),
-  note: z.string().trim().nullish(),
-});
 export type StockItemInput = z.infer<typeof stockItemInput>;
 
 export const stockMovementInput = z.object({

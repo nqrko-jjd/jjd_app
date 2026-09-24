@@ -13,7 +13,7 @@ import { ORDER_STATUS_LABEL, ORDER_STATUS_TONE } from '@/lib/stock-orders-ui';
 
 interface Line {
   id: string; stockItemId: string; unitName: string | null; qty: number; pickedQty: number; note: string | null;
-  stockItem: { id: string; ref: string | null; name: string; brand: string | null; unit: string; qty: number };
+  stockItem: { id: string; ref: string | null; name: string; brand: string | null; unit: string; qty: number; photoThumbUrl: string | null };
 }
 interface Order {
   id: string; ref: string; status: string; neededOn: string | null; note: string | null;
@@ -132,7 +132,10 @@ export default function PreparationDetail({ params }: { params: Promise<{ id: st
           return (
             <div key={l.id} className="card card-pad" style={{ borderLeft: `4px solid ${complete ? 'var(--ok)' : l.pickedQty > 0 ? 'var(--gold)' : 'var(--line)'}` }}>
               <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'nowrap', gap: '1rem' }}>
-                <div style={{ minWidth: 0 }}>
+                {l.stockItem.photoThumbUrl
+                  // eslint-disable-next-line @next/next/no-img-element
+                  && <img src={l.stockItem.photoThumbUrl} alt="" style={{ width: 64, height: 64, borderRadius: 10, objectFit: 'cover', flexShrink: 0 }} />}
+                <div style={{ minWidth: 0, flex: 1 }}>
                   <div style={{ fontWeight: 700, fontSize: '1.02rem' }}>{l.stockItem.name}</div>
                   <div className="muted" style={{ fontSize: '0.8rem' }}>
                     <span className="mono">{l.stockItem.ref}</span>{l.stockItem.brand ? ` · ${l.stockItem.brand}` : ''} · en stock : {fmt(l.stockItem.qty)} {l.stockItem.unit}

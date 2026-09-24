@@ -271,3 +271,59 @@ test('article : nom complet + marque + réf. fabricant, retrouvés par la recher
     if (id) await prisma.stockItem.delete({ where: { id } }).catch(() => {});
   }
 });
+
+test('création d’un article avec plusieurs fournisseurs : prix à l’unité et à la palette chez le même fournisseur', async () => {
+  const a = await prisma.contact.create({ data: { name: 'Four. A création — test', normalizedName: 'four a creation test', type: 'supplier' } });
+  const b = await prisma.contact.create({ data: { name: 'Four. B création — test', normalizedName: 'four b creation test', type: 'supplier' } });
+  let id = '';
+  try {
+    const body = {
+      name: 'KNAUF MP75 25KG — création test', unit: 'kg', model: 'MP75',
+      units: [{ name: 'sac', factor: 25 }, { name: 'palette', factor: 1125 }],
+      suppliers: [
+        { contactId: a.id, supplierRef: '100057', unitName: 'sac', price: 9.6 },
+        { contactId: a.id, supplierRef: '100057', unitName: 'palette', price: 410 },
+        { contactId: b.id, unitName: 'sac', price: 9.9, preferred: true },
+      ],
+    };
+    const r = await jf<{ item: { id: string; suppliers: { contactId: string; unitName: string | null; price: number; preferred: boolean }[] } }>('/api/stock/items', { method: 'POST', body: JSON.stringify(body) });
+    assert.equal(r.status, 201);
+    id = r.body.item.id;
+    assert.equal(r.body.item.suppliers.length, 3);
+    assert.equal(r.body.item.suppliers.filter((x) => x.preferred).length, 1, 'un seul fournisseur préféré');
+    assert.ok(r.body.item.suppliers.find((x) => x.contactId === b.id)!.preferred);
+    assert.ok(r.body.item.suppliers.some((x) => x.contactId === a.id && x.unitName === 'palette' && x.price === 410));
+
+    const dup = await jf('/api/stock/items', { method: 'POST', body: JSON.stringify({ name: 'Doublon — test', unit: 'kg', suppliers: [{ contactId: a.id, price: 1 }, { contactId: a.id, price: 2 }] }) });
+    assert.equal(dup.status, 422);
+    const badUnit = await jf('/api/stock/items', { method: 'POST', body: JSON.stringify({ name: 'Unité — test', unit: 'kg', suppliers: [{ contactId: a.id, unitName: 'camion', price: 1 }] }) });
+    assert.equal(badUnit.status, 422);
+    const noContact = await jf('/api/stock/items', { method: 'POST', body: JSON.stringify({ name: 'Inconnu — test', unit: 'kg', suppliers: [{ contactId: 'nope', price: 1 }] }) });
+    assert.equal(noContact.status, 422);
+  } finally {
+    if (id) await prisma.stockItem.delete({ where: { id } }).catch(() => {});
+    await prisma.stockItem.deleteMany({ where: { name: { in: ['Doublon — test', 'Unité — test', 'Inconnu — test'] } } });
+    await prisma.contact.deleteMany({ where: { id: { in: [a.id, b.id] } } });
+  }
+});
+
+test('stock : photo produit — upload puis suppression, visible dans la fiche', async () => {
+  const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+  const created = await jf<{ item: { id: string } }>('/api/stock/items', { method: 'POST', body: JSON.stringify({ name: 'Photo — test', unit: 'u' }) });
+  assert.equal(created.status, 201);
+  const id = created.body.item.id;
+  try {
+    const form = new FormData();
+    form.append('file', new Blob([PNG], { type: 'image/png' }), 'p.png');
+    const up = await fetch(`${base}/api/stock/items/${id}/photo`, { method: 'POST', headers: { authorization: `Bearer ${token}` }, body: form });
+    assert.equal(up.status, 201);
+    const fiche = await jf<{ item: { photoUrl: string | null; photoThumbUrl: string | null } }>(`/api/stock/items/${id}`);
+    assert.match(fiche.body.item.photoUrl ?? '', /^\/uploads\/media\/.+\.webp$/);
+    assert.ok(fiche.body.item.photoThumbUrl);
+    const del = await fetch(`${base}/api/stock/items/${id}/photo`, { method: 'DELETE', headers: { authorization: `Bearer ${token}` } });
+    assert.equal(del.status, 200);
+    assert.equal((await jf<{ item: { photoUrl: string | null } }>(`/api/stock/items/${id}`)).body.item.photoUrl, null);
+  } finally {
+    await prisma.stockItem.delete({ where: { id } }).catch(() => {});
+  }
+});

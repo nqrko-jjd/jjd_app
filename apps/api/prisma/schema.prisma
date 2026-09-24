@@ -1207,6 +1207,8 @@ model StockItem {
   brand     String? // marque / fabricant (Knauf…)
   model     String? // référence fabricant (MP75…) — le nom complet reste dans `name` (« KNAUF MP75 25KG »)
   note      String?
+  photoUrl      String?
+  photoThumbUrl String?
   unit      String // unité de base du stock ("kg" | "m²" | "u" | "L" | …) — les quantités sont stockées dans cette unité
   category  String?
   minQty    Float? // seuil d'alerte réappro

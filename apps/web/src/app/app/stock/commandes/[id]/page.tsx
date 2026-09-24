@@ -13,7 +13,7 @@ import { PO_STATUS_LABEL, PO_STATUS_TONE } from '@/lib/stock-orders-ui';
 
 interface Line {
   id: string; stockItemId: string; unitName: string | null; qty: number; price: number | null; receivedQty: number;
-  stockItem: { id: string; ref: string | null; name: string; brand: string | null; model: string | null; unit: string; units: { name: string; factor: number }[] };
+  stockItem: { id: string; ref: string | null; name: string; brand: string | null; model: string | null; unit: string; photoThumbUrl: string | null; units: { name: string; factor: number }[] };
 }
 interface Order {
   id: string; ref: string; status: string; expectedOn: string | null; orderedOn: string | null; supplierRef: string | null; note: string | null;
@@ -130,7 +130,10 @@ export default function CommandeDetail({ params }: { params: Promise<{ id: strin
           return (
             <div key={l.id} className="card card-pad" style={{ borderLeft: `4px solid ${done ? 'var(--ok)' : l.receivedQty + p > 0 ? 'var(--gold)' : 'var(--line)'}` }}>
               <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'nowrap', gap: '1rem' }}>
-                <div style={{ minWidth: 0 }}>
+                {l.stockItem.photoThumbUrl
+                  // eslint-disable-next-line @next/next/no-img-element
+                  && <img src={l.stockItem.photoThumbUrl} alt="" style={{ width: 64, height: 64, borderRadius: 10, objectFit: 'cover', flexShrink: 0 }} />}
+                <div style={{ minWidth: 0, flex: 1 }}>
                   <div style={{ fontWeight: 700, fontSize: '1.02rem' }}>{l.stockItem.name}</div>
                   <div className="muted" style={{ fontSize: '0.8rem' }}>
                     <span className="mono">{l.stockItem.ref}</span>{l.stockItem.brand || l.stockItem.model ? ` · ${[l.stockItem.brand, l.stockItem.model].filter(Boolean).join(' ')}` : ''}

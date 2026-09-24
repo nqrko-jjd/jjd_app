@@ -355,3 +355,21 @@ test('stock : rack — scan d’étiquette, emplacement mémorisé à l’entré
     await prisma.stockLocation.deleteMany({ where: { code: { startsWith: 'TST-' } } });
   }
 });
+
+test('stock : scan tolérant — EAN à 12 chiffres (sans clé) et GTIN-14 retrouvent l’article', async () => {
+  const created = await jf<{ item: { id: string } }>('/api/stock/items', { method: 'POST', body: JSON.stringify({ name: 'EAN — test', unit: 'sac' }) });
+  const id = created.body.item.id;
+  try {
+    const bc = await jf('/api/stock/items/' + id + '/barcodes', { method: 'POST', body: JSON.stringify({ code: '9999990000019' }) });
+    assert.equal(bc.status, 201);
+    for (const code of ['9999990000019', '999999000001', '09999990000019']) {
+      const r = await jf<{ item: { id: string } }>(`/api/stock/scan/${code}`);
+      assert.equal(r.status, 200, code);
+      assert.equal(r.body.item.id, id, code);
+    }
+    assert.equal((await jf('/api/stock/scan/999999000002')).status, 404);
+  } finally {
+    await prisma.stockBarcode.deleteMany({ where: { stockItemId: id } });
+    await prisma.stockItem.delete({ where: { id } }).catch(() => {});
+  }
+});

@@ -108,7 +108,19 @@ export async function applyStockMovement(tx: Prisma.TransactionClient, d: StockM
  */
 export async function resolveStockCode(code: string) {
   const withUnits = { units: true } as const;
-  const bc = await prisma.stockBarcode.findUnique({ where: { code }, include: { stockItem: { include: withUnits } } });
+  let bc = await prisma.stockBarcode.findUnique({ where: { code }, include: { stockItem: { include: withUnits } } });
+  // Lecteurs qui déforment un EAN : 12 chiffres (clé de contrôle non transmise), 14 chiffres (GTIN avec 0 devant), UPC-A.
+  if (!bc && /^\d{12,14}$/.test(code)) {
+    const variants = code.length === 12 ? [] : code.length === 14 && code.startsWith('0') ? [code.slice(1)] : code.length === 13 && code.startsWith('0') ? [code.slice(1)] : [];
+    for (const v of variants) {
+      bc = await prisma.stockBarcode.findUnique({ where: { code: v }, include: { stockItem: { include: withUnits } } });
+      if (bc) break;
+    }
+    if (!bc && code.length === 12) {
+      const cands = await prisma.stockBarcode.findMany({ where: { code: { startsWith: code } }, include: { stockItem: { include: withUnits } }, take: 2 });
+      if (cands.length === 1) bc = cands[0]!;
+    }
+  }
   if (bc?.stockItem.active) return { item: bc.stockItem, unitName: bc.unitName, via: 'barcode' as const };
 
   const m = code.match(/^(.+?)(?::(.+))?$/);

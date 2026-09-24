@@ -39,11 +39,16 @@ export function ScanInput({
     stamps.current.push(Date.now());
     clearTimeout(timer.current);
     // rafale = ≥ 4 caractères à moins de 50 ms d'écart en moyenne → lecture de douchette, pas une frappe humaine
+    // Terminal tactile (Zebra, smartphone) : le clavier est masqué, tout ce qui arrive dans le champ vient donc de la
+    // gâchette — on valide après un court silence, même si DataWedge n'envoie pas « Entrée » ou tape lentement.
+    const touch = !typing && typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
+    if (touch && /^\d{13}$/.test(v)) { submit(v); return; } // EAN-13 complet : inutile d'attendre
     timer.current = setTimeout(() => {
       const t = stamps.current;
-      if (v.length >= 4 && t.length >= 4 && (t[t.length - 1]! - t[0]!) / (t.length - 1) < 50) submit(v);
+      if (touch && v.length >= 5) submit(v);
+      else if (v.length >= 4 && t.length >= 4 && (t[t.length - 1]! - t[0]!) / (t.length - 1) < 50) submit(v);
       else stamps.current = [];
-    }, 140);
+    }, touch ? 350 : 140);
   }
 
   // Garde le focus sur le champ tant que rien d'autre n'est en cours de saisie : la gâchette doit toujours tomber ici.

@@ -28,6 +28,8 @@ export const contactInput = z.object({
   syndicId: z.string().nullish(),
   buildingId: z.string().nullish(),
   note: z.string().nullish(),
+  customerNumber: z.string().trim().nullish(), // fournisseur : notre n° de client chez lui
+  onAccount: z.boolean().optional(), // fournisseur : achats en compte
 });
 
 export const contactPersonInput = z.object({

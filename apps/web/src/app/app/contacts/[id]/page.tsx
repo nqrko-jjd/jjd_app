@@ -29,6 +29,7 @@ interface Detail {
     email: string | null; phone: string | null; vat: string | null;
     address: string | null; postalCode: string | null; city: string | null; note: string | null;
     photoUrl: string | null; photoThumbUrl: string | null;
+    customerNumber: string | null; onAccount: boolean;
     syndic: { id: string; name: string } | null;
     building: { id: string; name: string } | null;
     worksites: { id: string; ref: string; title: string; status: string; quotedHt: number | null }[];
@@ -122,7 +123,7 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
           initial={{
             name: c.name, ...(c.kind === 'individual' ? splitContactName(c.name) : {}), type: c.type, kind: c.kind, email: c.email, phone: c.phone,
             vat: c.vat, address: c.address, postalCode: c.postalCode, city: c.city, note: c.note,
-            buildingId: c.building?.id ?? '', syndicId: c.syndic?.id ?? '',
+            buildingId: c.building?.id ?? '', syndicId: c.syndic?.id ?? '', customerNumber: c.customerNumber, onAccount: c.onAccount,
           }}
           onClose={() => setEditing(false)}
           onSubmit={async (v) => { await api(`/api/contacts/${id}`, { method: 'PATCH', body: composeContactPayload(v) }); reload(); }}
@@ -170,6 +171,8 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
         <Info label="Téléphone" value={c.phone ?? '—'} />
         <Info label="TVA" value={formatVat(c.vat) ?? '—'} />
         <Info label="Adresse" value={[c.address, c.postalCode, c.city].filter(Boolean).join(' ') || '—'} />
+        {isSupplier && <Info label="N° de client chez lui" value={c.customerNumber ?? '—'} />}
+        {isSupplier && <Info label="Paiement" value={c.onAccount ? 'En compte' : 'Comptant'} />}
         {c.syndic && <Info label="Syndic" value={<Link href={`/app/immeubles?syndicId=${c.syndic.id}`}>{c.syndic.name}</Link>} />}
         {c.building && <Info label="Immeuble / ACP" value={<Link href={`/app/immeubles/${c.building.id}`}>{c.building.name}</Link>} />}
         {isClientLike && (

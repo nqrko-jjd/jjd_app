@@ -27,8 +27,10 @@ const itemInclude = {
 
 const same = sameName;
 
-function shapeItem<T extends { qty: number; avgCost: number | null; minQty: number | null }>(it: T) {
-  return { ...it, value: round2(it.qty * (it.avgCost ?? 0)), low: it.minQty != null && it.qty < it.minQty };
+function shapeItem<T extends { qty: number; avgCost: number | null; minQty: number | null }>(it: T, role?: string) {
+  const shaped = { ...it, value: round2(it.qty * (it.avgCost ?? 0)), low: it.minQty != null && it.qty < it.minQty };
+  // les prix d'achat et les fournisseurs ne sont pas destinés aux ouvriers
+  return role === 'worker' && 'suppliers' in shaped ? { ...shaped, suppliers: [], avgCost: null, value: 0 } : shaped;
 }
 
 /** Référence interne suivante (ART-0001…), sautant celles déjà prises (saisies à la main). */
@@ -59,7 +61,7 @@ stockRouter.get(
     if (active !== '0') where.active = true; // par défaut : masque les articles désactivés
     if (q) where.OR = [{ name: { contains: q } }, { category: { contains: q } }, { ref: { contains: q } }, { brand: { contains: q } }, { model: { contains: q } }];
     const items = await prisma.stockItem.findMany({ where, orderBy: { name: 'asc' }, include: itemInclude });
-    res.json({ items: items.map(shapeItem) });
+    res.json({ items: items.map((i) => shapeItem(i, req.user!.role)) });
   }),
 );
 
@@ -69,7 +71,7 @@ stockRouter.get(
   asyncHandler(async (req, res) => {
     const item = await prisma.stockItem.findUnique({ where: { id: req.params.id }, include: itemInclude });
     if (!item) throw new HttpError(404, 'Article introuvable');
-    res.json({ item: shapeItem(item) });
+    res.json({ item: shapeItem(item, req.user!.role) });
   }),
 );
 
@@ -192,7 +194,7 @@ stockRouter.get(
     const hit = await resolveStockCode(code);
     if (!hit) throw new HttpError(404, 'Code inconnu');
     const item = await prisma.stockItem.findUnique({ where: { id: hit.item.id }, include: itemInclude });
-    return res.json({ kind: 'stock', item: shapeItem(item!), unitName: hit.unitName, via: hit.via });
+    return res.json({ kind: 'stock', item: shapeItem(item!, req.user!.role), unitName: hit.unitName, via: hit.via });
   }),
 );
 

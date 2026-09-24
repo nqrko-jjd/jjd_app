@@ -277,6 +277,9 @@ model Contact {
 
   stockSuppliers   StockSupplier[]   @relation("StockSupplierContact")
   purchaseOrders   PurchaseOrder[]   @relation("PurchaseOrderSupplier")
+  supplierProducts SupplierProduct[] @relation("SupplierProductContact")
+  customerNumber   String? // fournisseur : notre n° de client chez lui
+  onAccount        Boolean           @default(false) // fournisseur : achats en compte (facturés plus tard)
   stockMovements   StockMovement[]   @relation("StockMovementSupplier")
   user             User?             @relation("UserClientAccount")
   worksites        Worksite[]        @relation("WorksiteClient")
@@ -1271,6 +1274,24 @@ model StockOrderLine {
   position    Int        @default(0)
 
   @@index([orderId])
+}
+
+/// Ligne du tarif d'un fournisseur (import de sa liste de prix) : n° d'article chez lui, libellé,
+/// unité de vente, prix HT. Sert à créer un article de stock / à préremplir une commande.
+model SupplierProduct {
+  id          String   @id @default(cuid())
+  contactId   String
+  contact     Contact  @relation("SupplierProductContact", fields: [contactId], references: [id], onDelete: Cascade)
+  ref         String // n° d'article chez le fournisseur (« - » + libellé abrégé quand il n'en a pas)
+  label       String
+  unit        String? // unité de vente (PC, KG…)
+  priceHt     Float // prix net HT par unité de vente
+  grossPrice  Float? // prix brut avant remise
+  discountPct Float? // remise en %
+  updatedAt   DateTime @updatedAt
+
+  @@unique([contactId, ref])
+  @@index([contactId])
 }
 
 /// Commande fournisseur : créée au bureau, réceptionnée par le magasinier (scan) quand elle arrive.

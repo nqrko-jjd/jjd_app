@@ -39,6 +39,7 @@ const STOREKEEPER_NAV: Group[] = [
     title: 'Magasin',
     items: [
       { href: '/app/stock/preparations', label: 'Préparations', ic: ClipboardList },
+      { href: '/app/stock/commandes', label: 'Réceptions (commandes)', ic: Truck },
       { href: '/app/stock/scan', label: 'Scan libre (entrée / sortie)', ic: ScanLine },
       { href: '/app/stock', label: 'Stock matériaux', ic: Package },
       { href: '/app/materiel', label: 'Matériel', ic: Wrench },
@@ -94,6 +95,7 @@ const NAV: Group[] = [
       { href: '/app/materiel', label: 'Matériel', ic: Wrench },
       { href: '/app/stock', label: 'Stock matériaux', ic: Package },
       { href: '/app/stock/preparations', label: 'Préparations', ic: ClipboardList, roles: ['admin', 'office'] },
+      { href: '/app/stock/commandes', label: 'Commandes fournisseurs', ic: Truck, roles: ['admin', 'office'] },
       { href: '/app/stock/scan', label: 'Scan & mouvements', ic: ScanLine },
     ],
   },

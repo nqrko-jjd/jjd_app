@@ -83,6 +83,10 @@ export const CONTACT_FIELDS = (
       ] : []),
       { name: 'postalCode', label: 'Code postal' },
       { name: 'city', label: 'Ville' },
+      ...(isSupplierOnly || values.type === 'supplier' || values.type === 'both' ? [
+        { name: 'customerNumber', label: 'Notre n° de client chez ce fournisseur' },
+        { name: 'onAccount', label: 'Paiement', type: 'checkbox' as const, placeholder: 'Achats en compte (facturés plus tard)' },
+      ] : []),
       { name: 'note', label: 'Note', type: 'textarea', full: true },
     ];
   };

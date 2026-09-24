@@ -4,6 +4,7 @@ import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, STAFF, OFFICE, hashPassword } from '../lib/auth.js';
 import { attachPhotoRoutes } from '../lib/photo-upload.js';
+import { withQuotedFromDocuments } from '../lib/worksite-margin.js';
 
 export const buildingsRouter = Router();
 
@@ -60,7 +61,7 @@ buildingsRouter.get(
     });
     if (!building || !ACP_KINDS.includes(building.kind ?? '')) throw new HttpError(404, 'Immeuble introuvable');
     const { acpKeyContacts, acpUnits, acpWorksites, residents, ...rest } = building;
-    res.json({ building: { ...rest, contacts: acpKeyContacts, units: acpUnits, worksites: acpWorksites, linkedContacts: residents } });
+    res.json({ building: { ...rest, contacts: acpKeyContacts, units: acpUnits, worksites: await withQuotedFromDocuments(acpWorksites), linkedContacts: residents } });
   }),
 );
 

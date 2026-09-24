@@ -361,3 +361,38 @@ test('rattrapage : une facture d’acompte « FA… » est renumérotée dans la
   assert.match(after!.number!, /^F\d{4}-\d+$/);
   assert.ok(after!.structuredComm);
 });
+
+test('« Devisé HT » d’un chantier = devis du logiciel (acceptés, sinon envoyés), pas le montant Excel', async () => {
+  const ws = await prisma.worksite.create({ data: { ref: 'R-DEVISTEST', title: 'Devisé test', source: 'test', quotedHt: 13083 } });
+  try {
+    const mk = async (ht: number) => {
+      const c = await (await fetch(`${base}/api/documents`, { method: 'POST', headers: auth(), body: JSON.stringify({ kind: 'quote', worksiteId: ws.id, lines: [{ label: 'Poste', qty: 1, unitPriceHt: ht, vatRate: 0.21 }] }) })).json();
+      await fetch(`${base}/api/documents/${c.document.id}/issue`, { method: 'POST', headers: auth(), body: '{}' });
+      return c.document.id as string;
+    };
+    const get = async () => (await (await fetch(`${base}/api/worksites/${ws.id}`, { headers: auth() })).json());
+
+    // sans devis émis : on garde le montant importé d'Excel
+    assert.equal((await get()).margin.quotedHt, 13083);
+
+    const q1 = await mk(26166);
+    let r = await get();
+    assert.equal(r.margin.quotedHt, 26166);
+    assert.equal(r.worksite.quotedHt, 26166);
+
+    // un devis accepté prime sur les devis simplement envoyés
+    await mk(9999);
+    await fetch(`${base}/api/documents/${q1}/status`, { method: 'POST', headers: auth(), body: JSON.stringify({ status: 'accepted' }) });
+    r = await get();
+    assert.equal(r.margin.quotedHt, 26166);
+  } finally {
+    await prisma.document.deleteMany({ where: { worksiteId: ws.id } });
+    await prisma.worksite.delete({ where: { id: ws.id } });
+  }
+});
+
+test('onglet Factures : la liste inclut aussi les factures d’acompte', async () => {
+  const dep = await prisma.document.create({ data: { kind: 'deposit_invoice', direction: 'sale', number: 'F2099-001', status: 'sent', worksiteId: wsId, source: 'manual', issuedOn: new Date(), lockedAt: new Date() } });
+  const r = await (await fetch(`${base}/api/documents?kind=invoice&q=F2099-001`, { headers: auth() })).json();
+  assert.ok(r.items.some((d: { id: string }) => d.id === dep.id));
+});

@@ -7,7 +7,7 @@ import {
 import { prisma, nextWorksiteRef } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, STAFF, OFFICE } from '../lib/auth.js';
-import { worksiteMargin, worksiteInvoicedHtBatch } from '../lib/worksite-margin.js';
+import { worksiteMargin, worksiteInvoicedHtBatch, withQuotedFromDocuments } from '../lib/worksite-margin.js';
 import { geocode } from '../lib/geocode.js';
 import { syncChantierSafe } from '../lib/bricoloc.js';
 import { toCsv, readTableBuffer, pick } from '../lib/table-io.js';
@@ -88,8 +88,9 @@ worksitesRouter.get(
       prisma.worksite.count({ where }),
     ]);
     const invoicedById = await worksiteInvoicedHtBatch(items.map((w) => w.id));
+    const withQuotes = await withQuotedFromDocuments(items);
     res.json({
-      items: items.map(({ acp, ...w }) => ({ ...w, building: acp, invoicedHt: invoicedById.get(w.id) ?? 0 })),
+      items: withQuotes.map(({ acp, ...w }) => ({ ...w, building: acp, invoicedHt: invoicedById.get(w.id) ?? 0 })),
       page, pageSize, totalCount, totalPages: Math.max(1, Math.ceil(totalCount / pageSize)),
     });
   }),
@@ -339,7 +340,7 @@ worksitesRouter.get(
       ...ws.reports.filter((r) => r.signedAt).map((r) => ({ id: `report-${r.id}`, label: `Rapport signé${r.clientName ? ` par ${r.clientName}` : ''}`, by: r.authorName, at: r.signedAt as Date })),
     ].sort((a, b) => b.at.getTime() - a.at.getTime()).slice(0, 6);
 
-    const { acp, ...wsRest } = ws;
+    const { acp, ...wsRest } = (await withQuotedFromDocuments([ws]))[0]!;
     const shaped = { ...wsRest, building: acp };
     res.json({ worksite: isWorker ? { ...shaped, documents: [] } : shaped, margin, activity: isWorker ? [] : activity });
   }),

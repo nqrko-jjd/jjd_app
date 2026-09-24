@@ -4,6 +4,39 @@ import { worksiteTransport, type WorksiteTransport } from './vehicle-cost.js';
 import { isOuvrierRemuneration, isCreditNoteSale, isPaid, isVehicleFinancing } from './consolidated.js';
 
 /**
+ * « Devisé HT » d'un chantier d'après les devis présents dans le logiciel : devis émis et
+ * acceptés ; à défaut d'acceptés, les devis envoyés (en attente). Les devis refusés, expirés
+ * ou encore en brouillon ne comptent pas. Un chantier sans devis dans le logiciel garde le
+ * montant historique importé d'Excel (`Worksite.quotedHt`).
+ */
+export async function worksiteQuotedHtBatch(worksiteIds: string[]): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  if (worksiteIds.length === 0) return out;
+  const quotes = await prisma.document.findMany({
+    where: { kind: 'quote', worksiteId: { in: worksiteIds }, lockedAt: { not: null }, status: { in: ['accepted', 'sent'] } },
+    select: { worksiteId: true, status: true, totalHt: true },
+  });
+  const accepted = new Map<string, number>();
+  const sent = new Map<string, number>();
+  for (const q of quotes) {
+    if (!q.worksiteId) continue;
+    const m = q.status === 'accepted' ? accepted : sent;
+    m.set(q.worksiteId, (m.get(q.worksiteId) ?? 0) + q.totalHt);
+  }
+  for (const id of worksiteIds) {
+    const v = accepted.get(id) ?? sent.get(id);
+    if (v != null) out.set(id, Math.round(v * 100) / 100);
+  }
+  return out;
+}
+
+/** Remplace `quotedHt` par le total des devis du logiciel quand il y en a (voir ci-dessus). */
+export async function withQuotedFromDocuments<T extends { id: string; quotedHt: number | null }>(rows: T[]): Promise<T[]> {
+  const quoted = await worksiteQuotedHtBatch(rows.map((r) => r.id));
+  return rows.map((r) => (quoted.has(r.id) ? { ...r, quotedHt: quoted.get(r.id)! } : r));
+}
+
+/**
  * Facturé HT par chantier — juste la partie "CA vente" de worksiteMargin(), en un seul aller-
  * retour DB pour toute une liste (page Chantiers) plutôt qu'un worksiteMargin() complet par ligne
  * (qui ferait 4+ requêtes par chantier, bien trop coûteux sur une liste).
@@ -120,7 +153,7 @@ export async function worksiteMargin(worksiteId: string): Promise<WorksiteMargin
 
   const margin = computeWorksiteMargin({
     entity: (ws.entity as Entity) ?? 'jjd',
-    quotedHt: ws.quotedHt ?? 0,
+    quotedHt: (await worksiteQuotedHtBatch([worksiteId])).get(worksiteId) ?? ws.quotedHt ?? 0,
     invoicedHt,
     paidHt,
     materialCost,

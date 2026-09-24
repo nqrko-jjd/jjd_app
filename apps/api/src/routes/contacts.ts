@@ -5,6 +5,7 @@ import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, STAFF, OFFICE, hashPassword } from '../lib/auth.js';
 import { lookupBelgianVat } from '../lib/vies.js';
 import { attachPhotoRoutes } from '../lib/photo-upload.js';
+import { withQuotedFromDocuments } from '../lib/worksite-margin.js';
 
 const isPaidStr = (s: string | null) =>
   (s ?? '').toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').trim() === 'paye';
@@ -99,7 +100,7 @@ contactsRouter.get(
       },
     });
     if (!found) throw new HttpError(404, 'Contact introuvable');
-    const contact = shapeContact(found);
+    const contact = shapeContact({ ...found, worksites: await withQuotedFromDocuments(found.worksites) });
 
     // Achats : tout l'historique (achats + notes de crédit) — sert au résumé, à la liste
     // récente affichée et au solde du compte (« en compte » chez le fournisseur : les

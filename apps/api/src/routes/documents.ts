@@ -174,7 +174,7 @@ documentsRouter.get(
   asyncHandler(async (req, res) => {
     const { kind, status, q, worksiteId, contactId, scope, page: pageStr, pageSize: pageSizeStr, sort, dir } = req.query as Record<string, string>;
     const where: Record<string, unknown> = {};
-    if (kind) where.kind = kind;
+    if (kind) where.kind = kind === 'invoice' ? { in: ['invoice', 'deposit_invoice'] } : kind;
     if (status) where.status = status;
     if (worksiteId) where.worksiteId = worksiteId;
     if (contactId) where.contactId = contactId;

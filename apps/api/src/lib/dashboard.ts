@@ -75,16 +75,16 @@ export async function bureauDashboard() {
     crmNextActions, todayEvents,
   ] = await Promise.all([
     prisma.document.aggregate({
-      where: { kind: 'invoice', issuedOn: { gte: monthStart }, source: { not: 'demo' } }, _sum: { totalHt: true },
+      where: { kind: { in: ['invoice', 'deposit_invoice'] }, issuedOn: { gte: monthStart }, source: { not: 'demo' } }, _sum: { totalHt: true },
     }),
     prisma.document.aggregate({
-      where: { kind: 'invoice', issuedOn: { gte: prevMonthStart, lt: monthStart }, source: { not: 'demo' } }, _sum: { totalHt: true },
+      where: { kind: { in: ['invoice', 'deposit_invoice'] }, issuedOn: { gte: prevMonthStart, lt: monthStart }, source: { not: 'demo' } }, _sum: { totalHt: true },
     }),
     prisma.document.aggregate({
-      where: { kind: 'invoice', status: 'paid', issuedOn: { gte: monthStart }, source: { not: 'demo' } }, _sum: { totalHt: true },
+      where: { kind: { in: ['invoice', 'deposit_invoice'] }, status: 'paid', issuedOn: { gte: monthStart }, source: { not: 'demo' } }, _sum: { totalHt: true },
     }),
-    prisma.document.findMany({ where: { kind: 'invoice', status: 'overdue', source: { not: 'demo' } } }),
-    prisma.document.findMany({ where: { kind: 'invoice', status: { in: ['sent', 'partial', 'overdue'] }, source: { not: 'demo' } } }),
+    prisma.document.findMany({ where: { kind: { in: ['invoice', 'deposit_invoice'] }, status: 'overdue', source: { not: 'demo' } } }),
+    prisma.document.findMany({ where: { kind: { in: ['invoice', 'deposit_invoice'] }, status: { in: ['sent', 'partial', 'overdue'] }, source: { not: 'demo' } } }),
     prisma.document.findMany({ where: { kind: 'quote', status: 'sent', source: { not: 'demo' } } }),
     prisma.worksite.count({ where: { status: 'to_invoice', archived: false, source: { not: 'demo' } } }),
     prisma.legalDoc.findMany({

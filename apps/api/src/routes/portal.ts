@@ -129,7 +129,7 @@ portalRouter.get(
           manager: mSel,
           // dernière facture émise : sert à afficher payé/impayé à côté du statut chantier
           // ("Facturé" ou "Clôturé" ne dit pas au syndic si l'argent est vraiment arrivé)
-          documents: { where: { kind: 'invoice', number: { not: null } }, orderBy: { issuedOn: 'desc' }, take: 1, select: { status: true } },
+          documents: { where: { kind: { in: ['invoice', 'deposit_invoice'] }, number: { not: null } }, orderBy: { issuedOn: 'desc' }, take: 1, select: { status: true } },
         },
       }),
       prisma.document.findMany({
@@ -474,7 +474,7 @@ portalRouter.get(
         id: d.id, number: d.number, title: d.title, status: d.status, hasPdf: !!d.originalPdf,
         totalHt: d.totalHt, totalTtc: d.totalTtc, issuedOn: d.issuedOn, dueOn: d.dueOn,
       })),
-      invoices: !full ? [] : w.documents.filter((d) => d.kind === 'invoice' && d.number).map((d) => ({
+      invoices: !full ? [] : w.documents.filter((d) => (d.kind === 'invoice' || d.kind === 'deposit_invoice') && d.number).map((d) => ({
         id: d.id, number: d.number, status: d.status, hasPdf: !!d.originalPdf,
         totalTtc: d.totalTtc, paidAmount: d.paidAmount, issuedOn: d.issuedOn, dueOn: d.dueOn,
       })),

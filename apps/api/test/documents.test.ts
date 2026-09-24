@@ -396,3 +396,17 @@ test('onglet Factures : la liste inclut aussi les factures d’acompte', async (
   const r = await (await fetch(`${base}/api/documents?kind=invoice&q=F2099-001`, { headers: auth() })).json();
   assert.ok(r.items.some((d: { id: string }) => d.id === dep.id));
 });
+
+test('remplacer le PDF d’origine d’un document importé', async () => {
+  const dep = await prisma.document.create({ data: { kind: 'invoice', direction: 'sale', draftRef: 'BROUILLON-PDFTEST', status: 'draft', worksiteId: wsId, source: 'manual', originalPdf: 'ancien.pdf' } });
+  const fd = new FormData();
+  fd.append('file', new Blob(['%PDF-1.4 test'], { type: 'application/pdf' }), 'x.pdf');
+  const r = await fetch(`${base}/api/documents/${dep.id}/original.pdf`, { method: 'POST', headers: { authorization: `Bearer ${token}` }, body: fd });
+  assert.equal(r.status, 200);
+  const after = await prisma.document.findUnique({ where: { id: dep.id } });
+  assert.notEqual(after!.originalPdf, 'ancien.pdf');
+  assert.match(after!.originalPdf!, /\.pdf$/);
+  const bad = new FormData();
+  bad.append('file', new Blob(['x'], { type: 'text/plain' }), 'x.txt');
+  assert.equal((await fetch(`${base}/api/documents/${dep.id}/original.pdf`, { method: 'POST', headers: { authorization: `Bearer ${token}` }, body: bad })).status, 422);
+});

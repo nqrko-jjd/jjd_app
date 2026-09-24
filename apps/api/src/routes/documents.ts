@@ -245,6 +245,27 @@ documentsRouter.get(
   }),
 );
 
+/** Remplace le PDF d'origine d'un document (import) par un fichier corrigé. L'ancien fichier reste sur disque. */
+documentsRouter.post(
+  '/:id/original.pdf',
+  requireAuth(...OFFICE),
+  upload.single('file'),
+  asyncHandler(async (req, res) => {
+    const doc = await prisma.document.findUnique({ where: { id: req.params.id }, select: { id: true, number: true, originalPdf: true } });
+    if (!doc) throw new HttpError(404, 'Document introuvable');
+    if (!req.file) throw new HttpError(422, 'Aucun fichier');
+    if (req.file.mimetype !== 'application/pdf') throw new HttpError(422, 'Un PDF est attendu');
+    if (!existsSync(PDF_DIR)) mkdirSync(PDF_DIR, { recursive: true });
+    const filename = `${nanoid(14)}.pdf`;
+    writeFileSync(path.join(PDF_DIR, filename), req.file.buffer);
+    await prisma.document.update({ where: { id: doc.id }, data: { originalPdf: filename } });
+    await prisma.auditLog.create({
+      data: { actorId: req.user!.id, action: 'replace_original_pdf', entity: 'document', entityId: doc.id, meta: { number: doc.number, previous: doc.originalPdf } },
+    });
+    res.json({ ok: true });
+  }),
+);
+
 /** PDF du document (généré à la volée pour les documents JJD natifs). Authentifié, streamé inline. */
 documentsRouter.get(
   '/:id/pdf',

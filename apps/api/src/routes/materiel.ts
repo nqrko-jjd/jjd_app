@@ -6,7 +6,7 @@
 import { Router } from 'express';
 import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
-import { requireAuth, STAFF, OFFICE } from '../lib/auth.js';
+import { requireAuth, STOCK_READ, STOCK_MOVE, OFFICE } from '../lib/auth.js';
 import {
   bricolocEnabled,
   createLoan,
@@ -47,14 +47,14 @@ function actorName(req: import('express').Request): string | undefined {
 
 materielRouter.get(
   '/status',
-  requireAuth(...STAFF),
+  requireAuth(...STOCK_MOVE),
   asyncHandler(async (_req, res) => res.json({ enabled: bricolocEnabled() })),
 );
 
 /** Chantiers JJD éligibles pour une sortie (projets actifs). */
 materielRouter.get(
   '/worksites',
-  requireAuth(...STAFF),
+  requireAuth(...STOCK_MOVE),
   asyncHandler(async (_req, res) => {
     const items = await prisma.worksite.findMany({
       where: { kind: 'project', archived: false, status: { notIn: ['done', 'closed', 'cancelled', 'refused'] }, source: { not: 'demo' } },
@@ -68,7 +68,7 @@ materielRouter.get(
 
 materielRouter.get(
   '/stock',
-  requireAuth(...STAFF),
+  requireAuth(...STOCK_MOVE),
   asyncHandler(async (req, res) => {
     const q = typeof req.query.q === 'string' ? req.query.q : undefined;
     res.json(await getStock(q));
@@ -77,20 +77,20 @@ materielRouter.get(
 
 materielRouter.get(
   '/consumables',
-  requireAuth(...STAFF),
+  requireAuth(...STOCK_MOVE),
   asyncHandler(async (_req, res) => res.json(await getConsumables())),
 );
 
 materielRouter.get(
   '/units/:code',
-  requireAuth(...STAFF),
+  requireAuth(...STOCK_MOVE),
   asyncHandler(async (req, res) => res.json(await getUnit(req.params.code!))),
 );
 
 /** Fiche matériel d'un chantier (outils présents + consommables). */
 materielRouter.get(
   '/worksites/:id/report',
-  requireAuth(...STAFF),
+  requireAuth(...STOCK_MOVE),
   asyncHandler(async (req, res) => {
     await ensureChantierSynced(req.params.id!);
     res.json(await getChantierReport(req.params.id!));
@@ -100,7 +100,7 @@ materielRouter.get(
 /** Sortie chantier : scanne un outil, l'affecte à un chantier JJD. */
 materielRouter.post(
   '/loans',
-  requireAuth(...STAFF),
+  requireAuth(...STOCK_MOVE),
   asyncHandler(async (req, res) => {
     const { code, worksiteId, note } = req.body ?? {};
     if (!code || !worksiteId) throw new HttpError(422, 'code et worksiteId requis');
@@ -113,7 +113,7 @@ materielRouter.post(
 
 materielRouter.post(
   '/returns',
-  requireAuth(...STAFF),
+  requireAuth(...STOCK_MOVE),
   asyncHandler(async (req, res) => {
     const { code, note, toState, storageLocation } = req.body ?? {};
     if (!code) throw new HttpError(422, 'code requis');
@@ -124,7 +124,7 @@ materielRouter.post(
 
 materielRouter.post(
   '/consumption',
-  requireAuth(...STAFF),
+  requireAuth(...STOCK_MOVE),
   asyncHandler(async (req, res) => {
     const { code, productId, quantity, worksiteId, note } = req.body ?? {};
     if ((!code && !productId) || !quantity || !worksiteId)

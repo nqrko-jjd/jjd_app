@@ -6,7 +6,7 @@ import { api, setToken } from './api';
 export interface SessionUser {
   id: string;
   email: string;
-  role: 'admin' | 'office' | 'foreman' | 'worker' | 'client';
+  role: 'admin' | 'office' | 'foreman' | 'worker' | 'storekeeper' | 'client';
   isPartner: boolean;
   locale: string;
   personId: string | null;

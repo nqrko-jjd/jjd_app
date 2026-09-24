@@ -6,7 +6,7 @@
 
 /* ------------------------------------------------------------------ Rôles */
 
-export const ROLES = ['admin', 'office', 'foreman', 'worker', 'client'] as const;
+export const ROLES = ['admin', 'office', 'foreman', 'worker', 'storekeeper', 'client'] as const;
 export type Role = (typeof ROLES)[number];
 
 export const ROLE_LABEL: Record<Role, string> = {
@@ -14,11 +14,12 @@ export const ROLE_LABEL: Record<Role, string> = {
   office: 'Bureau',
   foreman: 'Chef de chantier',
   worker: 'Ouvrier',
+  storekeeper: 'Magasinier',
   client: 'Client',
 };
 
 /** Accès « interne » (tout sauf le client). */
-export const INTERNAL_ROLES: Role[] = ['admin', 'office', 'foreman', 'worker'];
+export const INTERNAL_ROLES: Role[] = ['admin', 'office', 'foreman', 'worker', 'storekeeper'];
 
 /* ---------------------------------------------------- Fonction (fiche ouvrier) */
 /**

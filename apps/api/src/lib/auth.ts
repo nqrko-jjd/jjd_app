@@ -84,5 +84,12 @@ export function requirePartner(req: Request, _res: Response, next: NextFunction)
 
 export const STAFF: Role[] = ['admin', 'office', 'foreman', 'worker'];
 export const OFFICE: Role[] = ['admin', 'office'];
+/** Le magasinier n'est volontairement PAS dans STAFF (qui donne accès aux chantiers, messages, etc.) :
+ *  ses droits se limitent au stock, aux préparations/réceptions et au parc d'outillage. */
+export const STOCK_READ: Role[] = ['admin', 'office', 'foreman', 'worker', 'storekeeper'];
+/** Mouvements de stock (entrées/sorties/inventaire, scan). */
+export const STOCK_MOVE: Role[] = ['admin', 'office', 'foreman', 'storekeeper'];
+/** Gestion du stock : fiches articles, fournisseurs, codes-barres, préparations, réceptions. */
+export const STOCK_MANAGE: Role[] = ['admin', 'office', 'storekeeper'];
 /** Bureau + chefs de chantier (saisie terrain : dépenses, achats matériel…). */
 export const FIELD_OFFICE: Role[] = ['admin', 'office', 'foreman'];

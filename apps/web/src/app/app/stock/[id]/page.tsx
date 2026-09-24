@@ -9,6 +9,7 @@ import { useAuth } from '@/lib/auth';
 import { Money, formatDateBE, formatEur, Kpi } from '@/lib/ui';
 import { ComboBox } from '@/components/ComboBox';
 import { ContactPicker } from '@/components/ContactPicker';
+import { ScanInput } from '@/components/ScanInput';
 import { PaginationBar, PAGE_SIZE_ALL } from '@/components/PaginationBar';
 import { StockItemModal, type StockItemFull, type StockSupplierLink } from '@/components/StockItemModal';
 
@@ -34,7 +35,8 @@ const factorOf = (it: StockItemFull, unit: string | null) => (!unit || unit.toLo
 export default function StockDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { user } = useAuth();
-  const canManage = user?.role !== 'worker';
+  const canManage = user?.role === 'admin' || user?.role === 'office' || user?.role === 'storekeeper';
+  const canMove = canManage || user?.role === 'foreman';
   const { data, loading, reload } = useApi<{ item: StockItemFull }>(`/api/stock/items/${id}`);
   const { data: meta } = useApi<Meta>('/api/stock/meta');
   const item = data?.item ?? null;
@@ -47,6 +49,8 @@ export default function StockDetail({ params }: { params: Promise<{ id: string }
   const [moving, setMoving] = useState(false);
   const [editing, setEditing] = useState(false);
   const [supplierModal, setSupplierModal] = useState<'new' | StockSupplierLink | null>(null);
+  const [bcUnit, setBcUnit] = useState('');
+  const [bcMsg, setBcMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   if (loading && !data) return <SkeletonRows />;
   if (!item) {
@@ -63,6 +67,20 @@ export default function StockDetail({ params }: { params: Promise<{ id: string }
   const bigUnit = item.units.length ? [...item.units].sort((a, b) => b.factor - a.factor)[0]! : null;
   const inBig = bigUnit && bigUnit.factor > 1 ? ` (≈ ${fmtQty(item.qty / bigUnit.factor)} ${bigUnit.name})` : '';
 
+  async function addBarcode(code: string) {
+    setBcMsg(null);
+    try {
+      await api(`/api/stock/items/${id}/barcodes`, { method: 'POST', body: { code, unitName: bcUnit || null } });
+      setBcMsg({ ok: true, text: `Code ${code} enregistré${bcUnit ? ` pour 1 ${bcUnit}` : ''}.` });
+      reload();
+    } catch (e) {
+      setBcMsg({ ok: false, text: (e as Error).message });
+    }
+  }
+  async function removeBarcode(bid: string) {
+    await api(`/api/stock/items/${id}/barcodes/${bid}`, { method: 'DELETE' });
+    reload();
+  }
   async function removeSupplier(s: StockSupplierLink) {
     if (!confirm(`Retirer ${s.contact.name} de cet article ?`)) return;
     await api(`/api/stock/items/${id}/suppliers/${s.id}`, { method: 'DELETE' });
@@ -110,7 +128,7 @@ export default function StockDetail({ params }: { params: Promise<{ id: string }
         />
       </div>
 
-      {canManage && (
+      {canMove && (
         <div className="row" style={{ marginBottom: '1.6rem' }}>
           <button className="btn primary" onClick={() => setMoving(true)}>+ Mouvement</button>
         </div>
@@ -128,6 +146,39 @@ export default function StockDetail({ params }: { params: Promise<{ id: string }
             <span className="badge plain">1 {item.unit} (base)</span>
             {item.units.map((u) => <span key={u.name} className="badge plain">1 {u.name} = {fmtQty(u.factor)} {item.unit}</span>)}
           </div>
+        )}
+      </div>
+
+      <div className="section-title">
+        Codes-barres & étiquettes
+        <a className="btn" style={{ marginLeft: 'auto', padding: '0.2rem 0.6rem', fontSize: '0.78rem' }} href={`/imprimer/etiquettes?ids=${item.id}`} target="_blank" rel="noreferrer">Imprimer les étiquettes</a>
+      </div>
+      <div className="card card-pad" style={{ marginBottom: '1.6rem' }}>
+        <p className="muted" style={{ marginTop: 0, fontSize: '0.86rem' }}>
+          Scannez le code-barres du sac (ou de la boîte) une fois : ensuite, scanner ce sac fait entrer/sortir 1 sac. Sans code-barres d’origine, imprimez une étiquette interne ({item.ref}).
+        </p>
+        {item.barcodes.length > 0 && (
+          <div className="row" style={{ gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.8rem' }}>
+            {item.barcodes.map((b) => (
+              <span key={b.id} className="badge plain">
+                <span className="mono">{b.code}</span> · 1 {b.unitName ?? item.unit}
+                {canManage && <button type="button" className="btn ghost" style={{ ...mini, marginLeft: 4 }} onClick={() => removeBarcode(b.id)} aria-label="Retirer le code">✕</button>}
+              </span>
+            ))}
+          </div>
+        )}
+        {canManage && (
+          <>
+            <div className="row" style={{ gap: '0.5rem', marginBottom: '0.5rem', alignItems: 'center' }}>
+              <label htmlFor="bc-unit" className="muted" style={{ fontSize: '0.85rem' }}>Le code scanné correspond à 1</label>
+              <select id="bc-unit" className="select" style={{ width: 'auto' }} value={bcUnit} onChange={(e) => setBcUnit(e.target.value)}>
+                <option value="">{item.unit} (base)</option>
+                {item.units.map((u) => <option key={u.name} value={u.name}>{u.name}</option>)}
+              </select>
+            </div>
+            <ScanInput placeholder="Scannez le code-barres du sac…" onScan={addBarcode} cameraMulti={false} />
+            {bcMsg && <div className={`badge ${bcMsg.ok ? 'ok' : 'crit'}`} style={{ padding: '0.35rem 0.7rem' }}>{bcMsg.text}</div>}
+          </>
         )}
       </div>
 

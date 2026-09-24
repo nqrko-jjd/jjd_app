@@ -34,6 +34,17 @@ const WORKER_NAV: Group[] = [
 
 // Espace filtré (comme la maquette) : coordonner sa propre équipe/ses propres chantiers,
 // pas gérer l'administratif de toute l'entreprise (devis, finances, achats…).
+const STOREKEEPER_NAV: Group[] = [
+  {
+    title: 'Magasin',
+    items: [
+      { href: '/app/stock/scan', label: 'Scan', ic: ScanLine },
+      { href: '/app/stock', label: 'Stock matériaux', ic: Package },
+      { href: '/app/materiel', label: 'Matériel', ic: Wrench },
+    ],
+  },
+];
+
 const FOREMAN_NAV: Group[] = [
   {
     title: 'Sur le terrain',
@@ -101,7 +112,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [chatOpen, setChatOpen] = useState(false);
   const bureau = user?.role === 'admin' || user?.role === 'office';
   const { data: assistant } = useApi<{ enabled: boolean }>(bureau ? '/api/assistant/status' : null);
-  const isStaff = !!user && user.role !== 'client';
+  const isStaff = !!user && user.role !== 'client' && user.role !== 'storekeeper';
   const { data: unread, reload: reloadUnread } = useApi<{ internal: number; client: number }>(isStaff ? '/api/messagerie/unread-count' : null);
   const unreadTotal = (unread?.internal ?? 0) + (unread?.client ?? 0);
   useEffect(() => {
@@ -113,7 +124,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const visible = (i: Item) => !i.roles || (user && i.roles.includes(user.role));
   const isWorker = user?.role === 'worker';
   const isForeman = user?.role === 'foreman';
-  const nav = isWorker ? WORKER_NAV : isForeman ? FOREMAN_NAV : NAV;
+  const isStorekeeper = user?.role === 'storekeeper';
+  const nav = isWorker ? WORKER_NAV : isForeman ? FOREMAN_NAV : isStorekeeper ? STOREKEEPER_NAV : NAV;
   const bestMatch = nav
     .flatMap((g) => g.items)
     .map((i) => i.href)

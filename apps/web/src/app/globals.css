@@ -1549,3 +1549,31 @@ body.plan-wide .main { max-width: none; }
 .doc-recap-actions { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 1.1rem; }
 .doc-recap-actions .btn { width: 100%; justify-content: center; }
 .doc-recap-dirty { font-size: 0.6875rem; color: var(--warn); margin-top: 0.7rem; padding-top: 1rem; border-top: 1px solid var(--line); text-align: left; font-weight: 400; }
+
+/* ---------------------------------------------------- scan (gâchette / caméra) */
+.scan-bar {
+  display: flex; align-items: center; gap: 0.6rem;
+  background: var(--surface); border: 2px solid var(--gold); border-radius: var(--radius);
+  padding: 0.6rem 0.7rem; box-shadow: var(--shadow); margin-bottom: 0.4rem;
+}
+.scan-bar:focus-within { border-color: var(--primary); box-shadow: 0 0 0 4px var(--primary-soft); }
+.scan-bar-ic { color: var(--gold); flex-shrink: 0; }
+.scan-bar-input {
+  flex: 1; min-width: 0; border: 0; outline: 0; background: transparent;
+  font: inherit; font-size: 1.25rem; font-weight: 600; color: var(--ink); padding: 0.55rem 0.2rem;
+}
+.scan-bar-input::placeholder { color: var(--ink-3); font-weight: 500; font-size: 1.05rem; }
+.scan-bar-btn {
+  display: inline-flex; align-items: center; gap: 0.4rem; border: 1px solid var(--line);
+  background: var(--surface-2); color: var(--ink); border-radius: var(--radius-sm);
+  padding: 0.65rem 0.8rem; font-weight: 700; cursor: pointer; flex-shrink: 0;
+}
+.scan-bar-btn.on { background: var(--primary); color: #fff; border-color: var(--primary); }
+.scan-bar-btn.cam { background: var(--primary); color: #fff; border-color: var(--primary); }
+.scan-last { margin: 0 0 0.9rem; padding: 0.45rem 0.8rem; border-radius: var(--radius-sm); background: var(--ok-soft); color: var(--ok); font-weight: 700; }
+.cam-frame { position: relative; }
+.cam-aim {
+  position: absolute; inset: 22% 12%; border: 3px solid rgba(255, 255, 255, 0.85); border-radius: 14px;
+  box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.25); pointer-events: none;
+}
+@media (max-width: 560px) { .scan-bar-btn.cam span { display: none; } }

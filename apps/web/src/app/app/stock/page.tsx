@@ -20,7 +20,7 @@ interface StockItem {
 export default function StockPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const canManage = user?.role !== 'worker'; // un ouvrier consulte le stock, il ne le gère pas
+  const canManage = user?.role === 'admin' || user?.role === 'office' || user?.role === 'storekeeper'; // un ouvrier consulte le stock, il ne le gère pas
   const [q, setQ] = useState('');
   const [stockFilter, setStockFilter] = useState<'all' | 'low' | 'ok'>('all');
   const [creating, setCreating] = useState(false);
@@ -57,8 +57,9 @@ export default function StockPage() {
         action={
           canManage ? (
             <div className="row">
-              <Link href="/app/stock/scan" className="btn"><ScanLine size={15} strokeWidth={2} /> Scan &amp; mouvements →</Link>
-              <button className="btn primary" onClick={() => setCreating(true)}>+ Nouvel article</button>
+              <a className="btn" href="/imprimer/etiquettes?all=1" target="_blank" rel="noreferrer">Étiquettes</a>
+              <Link href="/app/stock/scan" className="btn primary"><ScanLine size={15} strokeWidth={2} /> Scan &amp; mouvements →</Link>
+              <button className="btn" onClick={() => setCreating(true)}>+ Nouvel article</button>
             </div>
           ) : undefined
         }

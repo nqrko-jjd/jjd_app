@@ -198,3 +198,57 @@ test('article multi-unités / multi-fournisseurs : sac = 25 kg, entrée en sacs,
     await prisma.contact.deleteMany({ where: { id: { in: [c1.id, c2.id] } } });
   }
 });
+
+test('code-barres du sac + étiquette interne : le scan retrouve l’article et le conditionnement', async () => {
+  let id = '';
+  try {
+    const created = await jf<{ item: { id: string; ref: string } }>('/api/stock/items', {
+      method: 'POST', body: JSON.stringify({ name: 'Knauf MP75 scan — test', unit: 'kg', units: [{ name: 'sac', factor: 25 }] }),
+    });
+    id = created.body.item.id;
+    const ref = created.body.item.ref;
+
+    const bc = await jf(`/api/stock/items/${id}/barcodes`, { method: 'POST', body: JSON.stringify({ code: '4003982000123', unitName: 'sac' }) });
+    assert.equal(bc.status, 201);
+    assert.equal((await jf(`/api/stock/items/${id}/barcodes`, { method: 'POST', body: JSON.stringify({ code: '4003982000123' }) })).status, 409, 'un code est unique');
+    assert.equal((await jf(`/api/stock/items/${id}/barcodes`, { method: 'POST', body: JSON.stringify({ code: '999999', unitName: 'camion' }) })).status, 422);
+
+    const byEan = await jf<{ kind: string; item: { id: string }; unitName: string | null }>('/api/stock/scan/4003982000123');
+    assert.equal(byEan.body.item.id, id);
+    assert.equal(byEan.body.unitName, 'sac');
+
+    const byRef = await jf<{ item: { id: string }; unitName: string | null }>(`/api/stock/scan/${ref}`);
+    assert.equal(byRef.body.item.id, id);
+    assert.equal(byRef.body.unitName, null);
+    const byRefUnit = await jf<{ unitName: string | null }>(`/api/stock/scan/${ref}:sac`);
+    assert.equal(byRefUnit.body.unitName, 'sac');
+    const lower = await jf<{ item: { id: string } }>(`/api/stock/scan/${ref.toLowerCase()}`);
+    assert.equal(lower.body.item.id, id);
+
+    assert.equal((await jf('/api/stock/scan/INCONNU-123')).status, 404);
+  } finally {
+    if (id) await prisma.stockItem.delete({ where: { id } }).catch(() => {});
+  }
+});
+
+test('magasinier : accède au stock et aux mouvements, pas aux chantiers ni aux devis/factures', async () => {
+  const login = await fetch(base + '/api/auth/login', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email: 'magasin@jjd-consult.be', password: 'jjd' }),
+  });
+  assert.equal(login.status, 200);
+  const t = (await login.json()).token;
+  const get = (p: string) => fetch(base + p, { headers: { authorization: `Bearer ${t}` } });
+  assert.equal((await get('/api/stock/items')).status, 200);
+  assert.equal((await get('/api/stock/meta')).status, 200);
+  assert.equal((await get('/api/materiel/status')).status, 200);
+  assert.equal((await get('/api/worksites')).status, 403);
+  assert.equal((await get('/api/documents')).status, 403);
+  assert.equal((await get('/api/finance/consolidated')).status, 403);
+  const created = await fetch(base + '/api/stock/items', {
+    method: 'POST', headers: { authorization: `Bearer ${t}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ name: 'Article magasinier — test', unit: 'u' }),
+  });
+  assert.equal(created.status, 201, 'le magasinier crée et gère ses articles');
+  await prisma.stockItem.deleteMany({ where: { name: 'Article magasinier — test' } });
+});

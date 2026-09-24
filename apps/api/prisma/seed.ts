@@ -71,6 +71,7 @@ async function main() {
     { email: 'melvina@jjd-consult.be', role: 'office', isPartner: false },
     { email: 'chef@jjd-consult.be', role: 'foreman', isPartner: false },
     { email: 'ouvrier@jjd-consult.be', role: 'worker', isPartner: false },
+    { email: 'magasin@jjd-consult.be', role: 'storekeeper', isPartner: false },
   ];
   for (const u of demo) {
     await prisma.user.upsert({

@@ -1,16 +1,16 @@
 'use client';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
 import { api, ApiError } from '@/lib/api';
 import { PageHead, Thumb } from '@/lib/ui';
 import { ArrowDownToLine, ArrowUpFromLine, Undo2, ScanLine } from 'lucide-react';
 import { ComboBox } from '@/components/ComboBox';
+import { ScanInput } from '@/components/ScanInput';
+import { scanFeedback } from '@/lib/scanFeedback';
+import type { StockItemFull } from '@/components/StockItemModal';
 
-interface StockItem {
-  id: string; name: string; unit: string; category: string | null;
-  minQty: number | null; qty: number; avgCost: number | null; value: number; low: boolean; active: boolean;
-}
+type StockItem = StockItemFull;
 interface Meta {
   worksites: { id: string; name: string }[];
   categories: string[];
@@ -30,7 +30,7 @@ const MATERIEL_STATE_LABEL: Record<string, string> = {
 type CatalogType = 'materiaux' | 'machines' | 'consommables';
 
 type CartLine =
-  | { kind: 'stock'; key: string; id: string; name: string; unit: string; qty: number }
+  | { kind: 'stock'; key: string; id: string; name: string; unit: string; unitName: string | null; units: { name: string; factor: number }[]; qty: number }
   | { kind: 'materiel'; key: string; assetTag: string; name: string; sub: string; image?: string | null }
   | { kind: 'consommable'; key: string; productId: string; name: string; qty: number };
 
@@ -62,9 +62,7 @@ function ScanPanel({
   const [worksiteId, setWorksiteId] = useState('');
   const [storageLocation, setStorageLocation] = useState('');
   const [query, setQuery] = useState('');
-  const [scanCode, setScanCode] = useState('');
-  const [scanBusy, setScanBusy] = useState(false);
-  const scanRef = useRef<HTMLInputElement>(null);
+  const [lastScan, setLastScan] = useState<string | null>(null);
   const [cart, setCart] = useState<CartLine[]>([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -88,7 +86,7 @@ function ScanPanel({
 
   const q = query.trim().toLowerCase();
   const stockCatalog = catalogType === 'materiaux'
-    ? items.filter((it) => !q || `${it.name} ${it.category ?? ''}`.toLowerCase().includes(q))
+    ? items.filter((it) => !q || `${it.name} ${it.ref ?? ''} ${it.brand ?? ''} ${it.category ?? ''}`.toLowerCase().includes(q))
     : [];
   const materielCatalog = catalogType === 'machines' && machinesEnabled
     ? materielProducts
@@ -106,15 +104,18 @@ function ScanPanel({
   // Un clic sur une carte de stock/consommable ajoute 1 exemplaire — un 2e clic augmente la
   // quantité, comme un 2e scan (cf. panier de la maquette). Un outil est un exemplaire
   // physique précis (étiqueté) : chaque clic ajoute un exemplaire disponible différent.
-  function addStock(it: StockItem) {
-    const key = `stock:${it.id}`;
+  function addStock(it: StockItem, unitName: string | null = null) {
+    const key = `stock:${it.id}:${unitName ?? ''}`;
     setCart((cur) => {
       const existing = cur.find((l) => l.key === key);
       if (existing && existing.kind === 'stock') return cur.map((l) => (l.key === key && l.kind === 'stock' ? { ...l, qty: l.qty + 1 } : l));
-      return [{ kind: 'stock', key, id: it.id, name: it.name, unit: it.unit, qty: 1 }, ...cur];
+      return [{ kind: 'stock', key, id: it.id, name: it.name, unit: it.unit, unitName, units: it.units, qty: 1 }, ...cur];
     });
     setToast(null);
     setErr(null);
+  }
+  function setLineUnit(key: string, unitName: string | null) {
+    setCart((cur) => cur.map((l) => (l.key === key && l.kind === 'stock' ? { ...l, unitName } : l)));
   }
   function addConsommable(c: Consumable) {
     const key = `consommable:${c.id}`;
@@ -145,33 +146,43 @@ function ScanPanel({
     setCart((cur) => cur.filter((l) => l.key !== key));
   }
 
-  // Scanner (ou taper) l'étiquette d'un outil — le stock de matériaux et les consommables
-  // n'ont pas d'étiquette par article (contrairement au parc Bricoloc), donc seuls les
-  // outils peuvent être scannés ici.
-  async function resolveScan() {
-    const code = scanCode.trim();
+  // Un scan (gâchette Zebra, caméra ou saisie) : d'abord un article de stock (code-barres du sac ou
+  // étiquette ART-…), sinon l'étiquette d'un outil du parc (Bricoloc).
+  async function handleScan(codeRaw: string) {
+    const code = codeRaw.trim();
     if (!code) return;
-    setScanBusy(true);
     setErr(null);
     try {
-      const info = await api<{ unit: { assetTag: string; state: string }; product: { id: string; name: string } }>(
-        `/api/materiel/units/${encodeURIComponent(code)}`,
-      );
-      const wanted = action === 'out' ? 'AVAILABLE' : 'ON_SITE';
-      if (info.unit.state !== wanted) {
-        setErr(`${info.product.name} (${info.unit.assetTag}) est actuellement ${MATERIEL_STATE_LABEL[info.unit.state] ?? info.unit.state}, pas ${action === 'out' ? 'disponible' : 'sur chantier'}.`);
-      } else if (alreadyInCart(info.unit.assetTag)) {
-        setErr('Cet exemplaire est déjà dans le panier.');
-      } else {
-        addMaterielUnit(info.unit.assetTag, info.product.name, info.unit.assetTag);
-      }
-      setScanCode('');
-      scanRef.current?.focus();
+      const r = await api<{ item: StockItem; unitName: string | null }>(`/api/stock/scan/${encodeURIComponent(code)}`);
+      addStock(r.item, r.unitName);
+      setLastScan(`${r.item.name}${r.unitName ? ` · 1 ${r.unitName}` : ''}`);
+      scanFeedback(true);
+      return;
     } catch (e) {
-      setErr(e instanceof ApiError ? e.message : 'Article introuvable pour ce code.');
-    } finally {
-      setScanBusy(false);
+      if (!(e instanceof ApiError) || e.status !== 404) { setErr(e instanceof ApiError ? e.message : 'Erreur de scan'); scanFeedback(false); return; }
     }
+    if (materielStatus?.enabled && action !== 'in') {
+      try {
+        const info = await api<{ unit: { assetTag: string; state: string }; product: { id: string; name: string } }>(
+          `/api/materiel/units/${encodeURIComponent(code)}`,
+        );
+        const wanted = action === 'out' ? 'AVAILABLE' : 'ON_SITE';
+        if (info.unit.state !== wanted) {
+          setErr(`${info.product.name} (${info.unit.assetTag}) est actuellement ${MATERIEL_STATE_LABEL[info.unit.state] ?? info.unit.state}, pas ${action === 'out' ? 'disponible' : 'sur chantier'}.`);
+          scanFeedback(false);
+        } else if (alreadyInCart(info.unit.assetTag)) {
+          setErr('Cet exemplaire est déjà dans le panier.');
+          scanFeedback(false);
+        } else {
+          addMaterielUnit(info.unit.assetTag, info.product.name, info.unit.assetTag);
+          setLastScan(info.product.name);
+          scanFeedback(true);
+        }
+        return;
+      } catch { /* code inconnu aussi côté outils */ }
+    }
+    setErr(`Code « ${code} » inconnu. Article non enregistré : ajoutez ce code-barres sur sa fiche.`);
+    scanFeedback(false);
   }
 
   const materielLinesCount = cart.filter((l) => l.kind === 'materiel').length;
@@ -194,6 +205,7 @@ function ScanPanel({
               stockItemId: line.id,
               type: action === 'return' ? 'in' : action,
               qty: line.qty,
+              unit: line.unitName,
               worksiteId: action !== 'in' ? worksiteId : null,
               note: action === 'return' ? 'Retour dépôt' : null,
             },
@@ -227,6 +239,12 @@ function ScanPanel({
 
   return (
     <div>
+      <ScanInput
+        placeholder={`Scannez un article pour ${action === 'in' ? 'le réceptionner' : action === 'out' ? 'le sortir' : 'le retourner'}…`}
+        hint="Gâchette du terminal, caméra du smartphone, ou saisie du code. Un 2ᵉ scan du même article ajoute 1."
+        onScan={handleScan}
+      />
+      {lastScan && <div className="scan-last">✓ {lastScan}</div>}
       <div className="stock-move-actions">
         <button type="button" className={action === 'in' ? 'on' : ''} onClick={() => setAction('in')}>
           <ArrowDownToLine className="ic" size={24} strokeWidth={1.75} />
@@ -274,17 +292,6 @@ function ScanPanel({
             <button className={catalogType === 'consommables' ? 'on' : ''} onClick={() => setCatalogType('consommables')}>Consommables</button>
           </div>
           <input className="input" placeholder="Nom, catégorie…" value={query} onChange={(e) => setQuery(e.target.value)} />
-
-          {catalogType === 'machines' && machinesEnabled && (
-            <details className="wf-scan">
-              <summary><ScanLine size={14} strokeWidth={2} style={{ verticalAlign: 'middle', marginRight: 4 }} /> Scanner l’étiquette d’un outil</summary>
-              <form onSubmit={(e) => { e.preventDefault(); resolveScan(); }}>
-                <input ref={scanRef} className="input" placeholder="ex. AGRAFEUSE-LW4TN2" value={scanCode} onChange={(e) => setScanCode(e.target.value)} />
-                <button type="submit" className="btn primary" disabled={scanBusy || !scanCode.trim()}>{scanBusy ? '…' : 'Ajouter'}</button>
-              </form>
-              <small className="muted">Douchette clavier ou saisie manuelle du code de l’outil.</small>
-            </details>
-          )}
 
           <div className="stock-catalog-grid">
             {emptyReason && <p className="muted" style={{ fontSize: '0.85rem' }}>{emptyReason}</p>}
@@ -342,7 +349,16 @@ function ScanPanel({
                 )}
                 <span className="info">
                   <span className="name">{line.name}</span>
-                  <span className="sub">{line.kind === 'stock' ? line.unit : line.kind === 'materiel' ? line.sub : ''}</span>
+                  <span className="sub">
+                    {line.kind === 'stock' ? (
+                      line.units.length > 0 ? (
+                        <select className="select" style={{ padding: '0.1rem 0.4rem', fontSize: '0.78rem', width: 'auto' }} value={line.unitName ?? ''} onChange={(e) => setLineUnit(line.key, e.target.value || null)} aria-label="Unité">
+                          <option value="">{line.unit}</option>
+                          {line.units.map((u) => <option key={u.name} value={u.name}>{u.name} ({u.factor} {line.unit})</option>)}
+                        </select>
+                      ) : line.unit
+                    ) : line.kind === 'materiel' ? line.sub : ''}
+                  </span>
                   {line.kind === 'materiel' ? (
                     <span className="stock-qty-stepper">
                       <button type="button" className="remove" onClick={() => removeLine(line.key)}>Retirer</button>

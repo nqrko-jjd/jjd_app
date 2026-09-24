@@ -378,6 +378,12 @@ export const stockItemInput = z.object({
   units: z.array(stockItemUnitInput).optional(), // unités alternatives (remplace la liste si fournie)
 });
 
+export const stockBarcodeInput = z.object({
+  code: z.string().trim().min(3, 'Code trop court'),
+  unitName: z.string().trim().nullish(), // vide = unité de base
+  note: z.string().trim().nullish(),
+});
+
 export const stockSupplierInput = z.object({
   contactId: z.string().min(1),
   supplierRef: z.string().trim().nullish(),

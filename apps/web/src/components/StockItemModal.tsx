@@ -11,6 +11,7 @@ export interface StockItemFull {
   id: string; ref: string | null; name: string; brand: string | null; note: string | null; unit: string;
   category: string | null; minQty: number | null; qty: number; avgCost: number | null; value: number; low: boolean; active: boolean;
   units: StockUnit[]; suppliers: StockSupplierLink[];
+  barcodes: { id: string; code: string; unitName: string | null; note: string | null }[];
 }
 
 export const COMMON_UNITS = ['kg', 'u', 'm²', 'm³', 'ml', 'm', 'L', 'sac', 'pcs', 'h', 'lot'];

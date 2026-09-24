@@ -42,7 +42,7 @@ export default function LoginPage() {
           {busy ? 'Connexion…' : 'Se connecter'}
         </button>
         <p className="muted" style={{ fontSize: '0.78rem', margin: 0 }}>
-          Comptes de démarrage : david@ / julien@ / melvina@ / chef@ / ouvrier@ · mot de passe <span className="mono">jjd</span>
+          Comptes de démarrage : david@ / julien@ / melvina@ / chef@ / ouvrier@ / magasin@ · mot de passe <span className="mono">jjd</span>
         </p>
       </form>
     </div>

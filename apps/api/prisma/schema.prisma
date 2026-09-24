@@ -1212,6 +1212,7 @@ model StockItem {
   movements StockMovement[]
   units     StockItemUnit[]
   suppliers StockSupplier[]
+  barcodes  StockBarcode[]
 
   @@index([active])
 }
@@ -1227,6 +1228,20 @@ model StockItemUnit {
   position    Int       @default(0)
 
   @@unique([stockItemId, name])
+}
+
+/// Code-barres (EAN du sac, étiquette interne…) qui identifie cet article — et éventuellement
+/// un conditionnement précis (le code du sac = 1 sac). Un scan retrouve l'article et l'unité.
+model StockBarcode {
+  id          String    @id @default(cuid())
+  stockItemId String
+  stockItem   StockItem @relation(fields: [stockItemId], references: [id], onDelete: Cascade)
+  code        String    @unique
+  unitName    String? // vide = unité de base
+  note        String?
+  createdAt   DateTime  @default(now())
+
+  @@index([stockItemId])
 }
 
 /// Un fournisseur chez qui on peut acheter cet article (plusieurs possibles), avec sa

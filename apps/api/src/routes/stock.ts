@@ -6,10 +6,10 @@
  */
 import { Router } from 'express';
 import type { Prisma } from '@prisma/client';
-import { stockItemInput, stockMovementInput, stockSupplierInput, round2 } from '@jjd/shared';
+import { stockItemInput, stockMovementInput, stockSupplierInput, stockBarcodeInput, round2 } from '@jjd/shared';
 import { prisma, nextCounter } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
-import { requireAuth, OFFICE, FIELD_OFFICE, STAFF } from '../lib/auth.js';
+import { requireAuth, STOCK_READ, STOCK_MOVE, STOCK_MANAGE } from '../lib/auth.js';
 
 export const stockRouter = Router();
 
@@ -17,6 +17,7 @@ export const stockRouter = Router();
 
 const itemInclude = {
   units: { orderBy: [{ position: 'asc' as const }, { name: 'asc' as const }] },
+  barcodes: { orderBy: { createdAt: 'asc' as const } },
   suppliers: {
     orderBy: [{ preferred: 'desc' as const }, { updatedAt: 'desc' as const }],
     include: { contact: { select: { id: true, name: true } } },
@@ -50,7 +51,7 @@ function checkUnits(base: string, units: { name: string; factor: number }[]) {
 
 stockRouter.get(
   '/items',
-  requireAuth(...STAFF),
+  requireAuth(...STOCK_READ),
   asyncHandler(async (req, res) => {
     const { q, active } = req.query as Record<string, string>;
     const where: Record<string, unknown> = {};
@@ -63,7 +64,7 @@ stockRouter.get(
 
 stockRouter.get(
   '/items/:id',
-  requireAuth(...STAFF),
+  requireAuth(...STOCK_READ),
   asyncHandler(async (req, res) => {
     const item = await prisma.stockItem.findUnique({ where: { id: req.params.id }, include: itemInclude });
     if (!item) throw new HttpError(404, 'Article introuvable');
@@ -73,7 +74,7 @@ stockRouter.get(
 
 stockRouter.post(
   '/items',
-  requireAuth(...OFFICE),
+  requireAuth(...STOCK_MANAGE),
   asyncHandler(async (req, res) => {
     const d = stockItemInput.parse(req.body);
     checkUnits(d.unit, d.units ?? []);
@@ -93,7 +94,7 @@ stockRouter.post(
 
 stockRouter.patch(
   '/items/:id',
-  requireAuth(...OFFICE),
+  requireAuth(...STOCK_MANAGE),
   asyncHandler(async (req, res) => {
     const d = stockItemInput.partial().parse(req.body);
     const current = await prisma.stockItem.findUnique({ where: { id: req.params.id }, include: { suppliers: true } });
@@ -135,10 +136,69 @@ stockRouter.patch(
 /** Désactive un article (jamais de suppression : l'historique des mouvements doit rester lisible). */
 stockRouter.delete(
   '/items/:id',
-  requireAuth(...OFFICE),
+  requireAuth(...STOCK_MANAGE),
   asyncHandler(async (req, res) => {
     const item = await prisma.stockItem.update({ where: { id: req.params.id }, data: { active: false } });
     res.json({ item });
+  }),
+);
+
+/* ------------------------------------------------------------------ codes-barres & scan */
+
+/** Associe un code-barres (EAN du sac, étiquette…) à l'article — et à un conditionnement précis. */
+stockRouter.post(
+  '/items/:id/barcodes',
+  requireAuth(...STOCK_MANAGE),
+  asyncHandler(async (req, res) => {
+    const d = stockBarcodeInput.parse(req.body);
+    const item = await prisma.stockItem.findUnique({ where: { id: req.params.id }, include: { units: true } });
+    if (!item) throw new HttpError(404, 'Article introuvable');
+    const unitName = d.unitName?.trim() || null;
+    if (unitName && !same(unitName, item.unit) && !item.units.some((u) => same(u.name, unitName))) {
+      throw new HttpError(422, `Unité « ${unitName} » inconnue pour cet article`);
+    }
+    const clash = await prisma.stockBarcode.findUnique({ where: { code: d.code }, include: { stockItem: { select: { name: true } } } });
+    if (clash) throw new HttpError(409, `Ce code est déjà associé à « ${clash.stockItem.name} »`);
+    const barcode = await prisma.stockBarcode.create({
+      data: { stockItemId: item.id, code: d.code, unitName: unitName && same(unitName, item.unit) ? null : unitName, note: d.note ?? null },
+    });
+    res.status(201).json({ barcode });
+  }),
+);
+
+stockRouter.delete(
+  '/items/:id/barcodes/:bid',
+  requireAuth(...STOCK_MANAGE),
+  asyncHandler(async (req, res) => {
+    const r = await prisma.stockBarcode.deleteMany({ where: { id: req.params.bid, stockItemId: req.params.id } });
+    if (!r.count) throw new HttpError(404, 'Code-barres introuvable');
+    res.json({ ok: true });
+  }),
+);
+
+/**
+ * Retrouve l'article d'un code scanné : code-barres enregistré (EAN du sac…) ou étiquette
+ * interne « ART-0003 » / « ART-0003:sac » (référence + conditionnement).
+ */
+stockRouter.get(
+  '/scan/:code',
+  requireAuth(...STOCK_READ),
+  asyncHandler(async (req, res) => {
+    const code = String(req.params.code ?? '').trim();
+    if (!code) throw new HttpError(422, 'Code vide');
+
+    const bc = await prisma.stockBarcode.findUnique({ where: { code }, include: { stockItem: { include: itemInclude } } });
+    if (bc?.stockItem.active) return res.json({ kind: 'stock', item: shapeItem(bc.stockItem), unitName: bc.unitName, via: 'barcode' });
+
+    const m = code.match(/^(.+?)(?::(.+))?$/);
+    const ref = (m?.[1] ?? code).trim().toUpperCase();
+    const item = await prisma.stockItem.findFirst({ where: { ref, active: true }, include: itemInclude });
+    if (item) {
+      const wanted = m?.[2]?.trim() || null;
+      const unitName = wanted && !same(wanted, item.unit) ? item.units.find((u) => same(u.name, wanted))?.name ?? null : null;
+      return res.json({ kind: 'stock', item: shapeItem(item), unitName, via: 'ref' });
+    }
+    throw new HttpError(404, 'Code inconnu');
   }),
 );
 
@@ -158,7 +218,7 @@ async function checkSupplierInput(itemId: string, d: { contactId: string; unitNa
 
 stockRouter.post(
   '/items/:id/suppliers',
-  requireAuth(...OFFICE),
+  requireAuth(...STOCK_MANAGE),
   asyncHandler(async (req, res) => {
     const d = stockSupplierInput.parse(req.body);
     const { item, unitName } = await checkSupplierInput(req.params.id as string, d);
@@ -180,7 +240,7 @@ stockRouter.post(
 
 stockRouter.patch(
   '/items/:id/suppliers/:sid',
-  requireAuth(...OFFICE),
+  requireAuth(...STOCK_MANAGE),
   asyncHandler(async (req, res) => {
     const existing = await prisma.stockSupplier.findFirst({ where: { id: req.params.sid, stockItemId: req.params.id } });
     if (!existing) throw new HttpError(404, 'Fournisseur introuvable sur cet article');
@@ -210,7 +270,7 @@ stockRouter.patch(
 
 stockRouter.delete(
   '/items/:id/suppliers/:sid',
-  requireAuth(...OFFICE),
+  requireAuth(...STOCK_MANAGE),
   asyncHandler(async (req, res) => {
     const r = await prisma.stockSupplier.deleteMany({ where: { id: req.params.sid, stockItemId: req.params.id } });
     if (!r.count) throw new HttpError(404, 'Fournisseur introuvable sur cet article');
@@ -222,7 +282,7 @@ stockRouter.delete(
 
 stockRouter.get(
   '/movements',
-  requireAuth(...STAFF),
+  requireAuth(...STOCK_READ),
   asyncHandler(async (req, res) => {
     const { stockItemId, worksiteId, type, page: pageStr, pageSize: pageSizeStr } = req.query as Record<string, string>;
     const where: Record<string, unknown> = {};
@@ -257,7 +317,7 @@ stockRouter.get(
  */
 stockRouter.post(
   '/movements',
-  requireAuth(...FIELD_OFFICE),
+  requireAuth(...STOCK_MOVE),
   asyncHandler(async (req, res) => {
     const d = stockMovementInput.parse(req.body);
     if (d.type === 'out' && !d.worksiteId) throw new HttpError(422, 'Chantier requis pour une sortie');
@@ -343,7 +403,7 @@ stockRouter.post(
 
 stockRouter.get(
   '/meta',
-  requireAuth(...STAFF),
+  requireAuth(...STOCK_READ),
   asyncHandler(async (_req, res) => {
     const worksites = await prisma.worksite.findMany({
       where: { archived: false, kind: 'project' },

@@ -17,14 +17,48 @@ interface Label { key: string; code: string; name: string; ref: string; unitLine
 type Format = 'ql-wide' | 'ql-tall' | 'a4';
 const FORMAT_LABEL: Record<Format, string> = { 'ql-wide': 'Brother QL — 38 × 90 mm (à l’italienne)', 'ql-tall': 'Brother QL — 38 × 90 mm (portrait)', a4: 'Planche A4 (63 × 38 mm)' };
 
+// La QL-600 imprime à 300 dpi : 1 point = 0,0847 mm. Barres et modules QR sont dimensionnés en nombre ENTIER de points,
+// sinon le pilote lisse les bords (gris tramé) et le code n'est plus lisible au scan.
+const DOT_MM = 25.4 / 300;
+const BAR_AVAIL_MM: Record<Format, number> = { 'ql-wide': 85, 'ql-tall': 34, a4: 56 };
+const QR_MAX_MM: Record<Format, number> = { 'ql-wide': 21, 'ql-tall': 21, a4: 15 };
+
+/** Code-barres 128 aux barres nettes : largeur de module = entier de points, zone calme respectée (centré, non étiré). */
+function Code128({ code, format }: { code: string; format: Format }) {
+  const svg = useRef<SVGSVGElement>(null);
+  useEffect(() => {
+    const el = svg.current;
+    if (!el) return;
+    JsBarcode(el, code, { format: 'CODE128', displayValue: false, width: 1, height: 40, margin: 0 });
+    const modules = parseInt(el.getAttribute('width') ?? '0', 10) || 100;
+    const dots = Math.max(2, Math.min(4, Math.floor(BAR_AVAIL_MM[format] / (modules * DOT_MM))));
+    el.setAttribute('viewBox', `0 0 ${modules} 40`);
+    el.setAttribute('preserveAspectRatio', 'none');
+    el.setAttribute('shape-rendering', 'crispEdges');
+    el.removeAttribute('height');
+    el.style.width = `${(modules * dots * DOT_MM).toFixed(3)}mm`;
+    el.style.height = '';
+  }, [code, format]);
+  return <svg ref={svg} className="lbl-bar" />;
+}
+
+/** QR aux modules carrés d'un nombre entier de points. */
+function QrCode({ code, format }: { code: string; format: Format }) {
+  const qr = QRCode.create(code, { errorCorrectionLevel: 'M' });
+  const n = qr.modules.size;
+  const dots = Math.max(4, Math.min(10, Math.floor(QR_MAX_MM[format] / (n * DOT_MM))));
+  const mm = (n * dots * DOT_MM).toFixed(3);
+  let d = '';
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (qr.modules.get(x, y)) d += `M${x} ${y}h1v1h-1z`;
+  return (
+    <svg className="lbl-qr" viewBox={`0 0 ${n} ${n}`} shapeRendering="crispEdges" style={{ width: `${mm}mm`, height: `${mm}mm` }}>
+      <path d={d} fill="#000" />
+    </svg>
+  );
+}
+
 /** Un exemplaire d'étiquette : image + QR + code-barres 128 du même code (le terminal lit l'un ou l'autre). */
 function LabelCard({ l, format, showImage }: { l: Label; format: Format; showImage: boolean }) {
-  const svg = useRef<SVGSVGElement>(null);
-  const [qr, setQr] = useState('');
-  useEffect(() => {
-    if (svg.current) JsBarcode(svg.current, l.code, { format: 'CODE128', displayValue: false, height: 40, width: 2, margin: 0 });
-    QRCode.toDataURL(l.code, { margin: 0, width: 300, errorCorrectionLevel: 'M' }).then(setQr).catch(() => setQr(''));
-  }, [l.code]);
   const img = showImage && l.image ? l.image : null;
   return (
     <div className={`lbl lbl-${format}`}>
@@ -35,9 +69,9 @@ function LabelCard({ l, format, showImage }: { l: Label; format: Format; showIma
           {l.brand && <div className="lbl-sub">{l.brand}</div>}
           <div className="lbl-unit">{l.unitLine}</div>
         </div>
-        {qr && /* eslint-disable-next-line @next/next/no-img-element */ <img src={qr} alt="" className="lbl-qr" />}
+        <QrCode code={l.code} format={format} />
       </div>
-      <svg ref={svg} className="lbl-bar" preserveAspectRatio="none" />
+      <Code128 code={l.code} format={format} />
       <div className="lbl-code">{l.code}</div>
     </div>
   );
@@ -121,8 +155,8 @@ function Inner() {
         .lbl-sub { color: #222; line-height: 1.15; }
         .lbl-unit { font-weight: 700; margin-top: 0.8mm; line-height: 1.15; }
         .lbl-img { object-fit: contain; flex-shrink: 0; filter: grayscale(1) contrast(1.25); }
-        .lbl-qr { flex-shrink: 0; image-rendering: pixelated; }
-        .lbl-bar { width: 100%; }
+        .lbl-qr { flex-shrink: 0; display: block; }
+        .lbl-bar { display: block; margin: 0 auto; }
         .lbl-code { text-align: center; font-family: ui-monospace, monospace; letter-spacing: 0.4px; }
 
         /* planche A4 : 63 × 38 mm */
@@ -131,7 +165,6 @@ function Inner() {
         .lbl-a4 .lbl-sub { font-size: 8pt; }
         .lbl-a4 .lbl-unit { font-size: 8.5pt; }
         .lbl-a4 .lbl-img { width: 14mm; height: 14mm; }
-        .lbl-a4 .lbl-qr { width: 15mm; height: 15mm; }
         .lbl-a4 .lbl-bar { height: 8mm; }
         .lbl-a4 .lbl-code { font-size: 8pt; }
 
@@ -139,7 +172,6 @@ function Inner() {
         .lbl-ql-wide { width: 90mm; height: 38mm; padding: 2mm 2.5mm 1.5mm; }
         .lbl-ql-wide .lbl-top { height: 21mm; gap: 2.5mm; }
         .lbl-ql-wide .lbl-img { width: 21mm; height: 21mm; }
-        .lbl-ql-wide .lbl-qr { width: 21mm; height: 21mm; }
         .lbl-ql-wide .lbl-txt { max-height: 21mm; overflow: hidden; }
         .lbl-ql-wide .lbl-name { font-size: 10pt; }
         .lbl-ql-wide .lbl-sub { font-size: 9pt; }
@@ -152,7 +184,7 @@ function Inner() {
         .lbl-ql-tall .lbl-top { flex-wrap: wrap; gap: 1.5mm; }
         .lbl-ql-tall .lbl-img { width: 34mm; height: 22mm; order: 0; }
         .lbl-ql-tall .lbl-txt { order: 1; flex-basis: 100%; }
-        .lbl-ql-tall .lbl-qr { order: 2; width: 21mm; height: 21mm; margin: 0 auto; }
+        .lbl-ql-tall .lbl-qr { order: 2; margin: 0 auto; }
         .lbl-ql-tall .lbl-name { font-size: 10.5pt; max-height: 13mm; }
         .lbl-ql-tall .lbl-sub { font-size: 8.5pt; }
         .lbl-ql-tall .lbl-unit { font-size: 9pt; }

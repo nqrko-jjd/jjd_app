@@ -1,6 +1,6 @@
 'use client';
 import { SkeletonRows } from '@/components/States';
-import { use, useEffect, useMemo, useState } from 'react';
+import { use, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api, apiBlobUrl } from '@/lib/api';
@@ -17,6 +17,36 @@ type Picker = {
   worksites: { id: string; name: string; clientId: string | null; city?: string | null }[];
   people: { id: string; name: string }[];
 };
+
+const UNIT_OPTIONS: { value: string; label: string }[] = [
+  { value: 'forfait', label: 'Forfait' }, { value: 'u', label: 'u' }, { value: 'm²', label: 'm²' },
+  { value: 'm³', label: 'm³' }, { value: 'ml', label: 'ml' }, { value: 'm', label: 'm' },
+  { value: 'h', label: 'h' }, { value: 'jour', label: 'Jour' }, { value: 'kg', label: 'kg' },
+  { value: 'L', label: 'L' }, { value: 'lot', label: 'Lot' }, { value: 'sac', label: 'Sac' },
+  { value: 'pièce', label: 'Pièce' },
+];
+
+/** Champ texte qui grandit avec son contenu — on voit toute la désignation, pas seulement le début. */
+function AutoText({ value, onChange, placeholder, bold }: { value: string; onChange: (v: string) => void; placeholder?: string; bold?: boolean }) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight + 2}px`;
+  }, [value]);
+  return (
+    <textarea
+      ref={ref}
+      className="input"
+      rows={1}
+      style={{ resize: 'none', overflow: 'hidden', lineHeight: 1.35, fontWeight: bold ? 700 : undefined }}
+      placeholder={placeholder}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+    />
+  );
+}
 
 const emptyLine = (): DocLine => ({ kind: 'item', label: '', qty: 1, unit: '', unitPriceHt: 0, discountPct: 0, vatRate: 0.21 });
 /** « R-047 · Toiture » -> { ref: "R-047", title: "R-047 · Toiture" } — même découpage que côté API (worksiteRef). */
@@ -283,12 +313,12 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
                 <thead>
                   <tr>
                     <th style={{ width: 44 }}></th>
-                    <th>Désignation</th>
-                    <th style={{ width: 64, textAlign: 'right' }}>Qté</th>
-                    <th style={{ width: 60 }}>Unité</th>
-                    <th style={{ width: 95, textAlign: 'right' }}>Prix HT</th>
+                    <th style={{ minWidth: 220 }}>Désignation</th>
+                    <th style={{ minWidth: 80, textAlign: 'right' }}>Qté</th>
+                    <th style={{ minWidth: 84 }}>Unité</th>
+                    <th style={{ minWidth: 92, textAlign: 'right' }}>Prix HT</th>
                     {showDiscount && <th style={{ width: 60, textAlign: 'right' }}>Rem.%</th>}
-                    <th style={{ width: 68 }}>TVA %</th>
+                    <th style={{ minWidth: 76 }}>TVA %</th>
                     <th style={{ width: 105, textAlign: 'right' }}>Total HT</th>
                     <th style={{ width: 44 }}></th>
                   </tr>
@@ -301,12 +331,11 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
                         <button className="btn ghost" style={btnMini} onClick={() => moveLine(i, 1)} aria-label="Descendre">↓</button>
                       </td>
                       <td>
-                        <input
-                          className="input"
-                          style={l.kind === 'section' ? { fontWeight: 700 } : undefined}
+                        <AutoText
+                          bold={l.kind === 'section'}
                           placeholder={l.kind === 'section' ? 'Titre de section' : l.kind === 'text' ? 'Texte libre' : 'Désignation'}
                           value={l.label}
-                          onChange={(e) => setLine(i, { label: e.target.value })}
+                          onChange={(v) => setLine(i, { label: v })}
                         />
                         {l.kind === 'item' && (
                           openDesc.has(i) ? (
@@ -328,8 +357,14 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
                       </td>
                       {l.kind === 'item' ? (
                         <>
-                          <td><input className="input" type="number" style={{ textAlign: 'right' }} value={l.qty} onChange={(e) => setLine(i, { qty: Number(e.target.value) })} /></td>
-                          <td><input className="input" value={l.unit ?? ''} onChange={(e) => setLine(i, { unit: e.target.value })} /></td>
+                          <td><input className="input" type="number" step="any" style={{ textAlign: 'right', minWidth: 70 }} value={l.qty} onChange={(e) => setLine(i, { qty: Number(e.target.value) })} /></td>
+                          <td>
+                            <select className="select" value={l.unit ?? ''} onChange={(e) => setLine(i, { unit: e.target.value })}>
+                              <option value="">—</option>
+                              {l.unit && !UNIT_OPTIONS.some((o) => o.value === l.unit) && <option value={l.unit}>{l.unit}</option>}
+                              {UNIT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                            </select>
+                          </td>
                           <td><input className="input" type="number" style={{ textAlign: 'right' }} value={l.unitPriceHt} onChange={(e) => setLine(i, { unitPriceHt: Number(e.target.value) })} /></td>
                           {showDiscount && (
                             <td><input className="input" type="number" style={{ textAlign: 'right' }} value={l.discountPct} onChange={(e) => setLine(i, { discountPct: Number(e.target.value) })} /></td>

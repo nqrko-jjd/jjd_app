@@ -6,6 +6,13 @@ import { HttpError } from './http.js';
 export const sameName = (a: string | null | undefined, b: string | null | undefined) =>
   (a ?? '').trim().toLowerCase() === (b ?? '').trim().toLowerCase();
 
+/** « BRZ-R-01-A » (étiquette scannée) ou « r-01-a » → « R-01-A » ; null si vide. */
+export function normalizeLocation(raw: string | null | undefined): string | null {
+  const c = (raw ?? '').trim().toUpperCase().replace(/^(BRZ|RACK)-/, '').trim();
+  return c ? c.slice(0, 32) : null;
+}
+export const isRackCode = (code: string) => /^(BRZ|RACK)-.+/i.test(code.trim());
+
 /** Facteur de conversion d'une unité de saisie vers l'unité de base de l'article (1 si base/vide). */
 export function unitFactor(item: { unit: string; units: { name: string; factor: number }[] }, unit: string | null | undefined): number {
   const u = unit?.trim();
@@ -59,7 +66,9 @@ export async function applyStockMovement(tx: Prisma.TransactionClient, d: StockM
     newQty = baseQty;
   }
 
-  const updated = await tx.stockItem.update({ where: { id: item.id }, data: { qty: newQty, avgCost: newAvgCost } });
+  const location = d.type === 'in' ? normalizeLocation(d.location) : null;
+  if (location) await tx.stockLocation.upsert({ where: { code: location }, create: { code: location }, update: {} });
+  const updated = await tx.stockItem.update({ where: { id: item.id }, data: { qty: newQty, avgCost: newAvgCost, ...(location ? { location } : {}) } });
   const movement = await tx.stockMovement.create({
     data: {
       stockItemId: item.id,
@@ -69,6 +78,7 @@ export async function applyStockMovement(tx: Prisma.TransactionClient, d: StockM
       enteredUnit: customUnit ? enteredUnit : null,
       contactId: d.type === 'in' ? d.contactId ?? null : null,
       unitCost: d.type === 'in' ? baseCost : null,
+      location,
       worksiteId: d.worksiteId ?? null,
       requestedByName: d.requestedByName ?? null,
       note: d.note ?? null,

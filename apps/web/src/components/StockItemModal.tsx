@@ -12,7 +12,7 @@ export interface StockSupplierLink {
 export interface StockItemFull {
   id: string; ref: string | null; name: string; brand: string | null; model: string | null; note: string | null; unit: string;
   category: string | null; minQty: number | null; qty: number; avgCost: number | null; value: number; low: boolean; active: boolean;
-  photoUrl: string | null; photoThumbUrl: string | null;
+  photoUrl: string | null; photoThumbUrl: string | null; location?: string | null;
   units: StockUnit[]; suppliers: StockSupplierLink[];
   barcodes: { id: string; code: string; unitName: string | null; note: string | null }[];
 }

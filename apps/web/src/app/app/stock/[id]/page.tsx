@@ -120,7 +120,7 @@ export default function StockDetail({ params }: { params: Promise<{ id: string }
           <h1>{item.name}</h1>
           <span className={`badge ${item.low ? 'crit' : 'ok'}`}>{item.low ? 'À réapprovisionner' : 'Disponible'}</span>
         </div>
-        <div className="sub">{fmtQty(item.qty)} {item.unit} en stock{inBig}</div>
+        <div className="sub">{fmtQty(item.qty)} {item.unit} en stock{inBig}{item.location ? ` · 📍 rack ${item.location}` : ''}</div>
       </div>
       </div>
 

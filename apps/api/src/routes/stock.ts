@@ -5,12 +5,14 @@
  * au coût moyen pondéré. Historique de mouvements immuable façon grand livre.
  */
 import { Router } from 'express';
+import { z } from 'zod';
 import type { Prisma } from '@prisma/client';
 import { stockItemInput, stockMovementInput, stockSupplierInput, stockBarcodeInput, round2 } from '@jjd/shared';
 import { prisma, nextCounter } from '../db.js';
 import { applyStockMovement, resolveStockCode, sameName } from '../lib/stock.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, STOCK_READ, STOCK_MOVE, STOCK_MANAGE } from '../lib/auth.js';
+import { normalizeLocation, isRackCode } from '../lib/stock.js';
 import { attachPhotoRoutes } from '../lib/photo-upload.js';
 
 export const stockRouter = Router();
@@ -219,10 +221,53 @@ stockRouter.get(
     const code = String(req.params.code ?? '').trim();
     if (!code) throw new HttpError(422, 'Code vide');
 
+    if (isRackCode(code)) return res.json({ kind: 'rack', code: normalizeLocation(code) });
     const hit = await resolveStockCode(code);
     if (!hit) throw new HttpError(404, 'Code inconnu');
     const item = await prisma.stockItem.findUnique({ where: { id: hit.item.id }, include: itemInclude });
     return res.json({ kind: 'stock', item: shapeItem(item!, req.user!.role), unitName: hit.unitName, via: hit.via });
+  }),
+);
+
+/* ------------------------------------------------------------------ racks */
+
+/** Racks déclarés + ceux déjà utilisés par un article, avec le nombre d'articles rangés dedans. */
+stockRouter.get(
+  '/locations',
+  requireAuth(...STOCK_READ),
+  asyncHandler(async (_req, res) => {
+    const [declared, used] = await Promise.all([
+      prisma.stockLocation.findMany({ orderBy: { code: 'asc' } }),
+      prisma.stockItem.groupBy({ by: ['location'], where: { active: true, location: { not: null } }, _count: { _all: true } }),
+    ]);
+    const counts = new Map(used.map((u) => [u.location!, u._count._all]));
+    const codes = new Set([...declared.map((d) => d.code), ...counts.keys()]);
+    const byCode = new Map(declared.map((d) => [d.code, d]));
+    const items = [...codes].sort().map((code) => ({ code, id: byCode.get(code)?.id ?? null, label: byCode.get(code)?.label ?? null, itemCount: counts.get(code) ?? 0 }));
+    res.json({ items });
+  }),
+);
+
+stockRouter.post(
+  '/locations',
+  requireAuth(...STOCK_MANAGE),
+  asyncHandler(async (req, res) => {
+    const { codes } = z.object({ codes: z.array(z.string().trim().min(1).max(40)).min(1).max(300) }).parse(req.body);
+    const clean = [...new Set(codes.map((c) => normalizeLocation(c)).filter((c): c is string => !!c))];
+    if (!clean.length) throw new HttpError(422, 'Aucun code de rack valide');
+    for (const code of clean) await prisma.stockLocation.upsert({ where: { code }, create: { code }, update: {} });
+    res.status(201).json({ ok: true, count: clean.length });
+  }),
+);
+
+stockRouter.delete(
+  '/locations/:code',
+  requireAuth(...STOCK_MANAGE),
+  asyncHandler(async (req, res) => {
+    const code = normalizeLocation(String(req.params.code));
+    if (!code) throw new HttpError(422, 'Code invalide');
+    await prisma.stockLocation.deleteMany({ where: { code } }); // l'emplacement mémorisé sur les articles reste : c'est un historique
+    res.json({ ok: true });
   }),
 );
 

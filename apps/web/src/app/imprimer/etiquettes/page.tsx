@@ -6,7 +6,7 @@ import JsBarcode from 'jsbarcode';
 import { api } from '@/lib/api';
 import type { StockItemFull } from '@/components/StockItemModal';
 
-interface Label { key: string; code: string; name: string; ref: string; unitLine: string; brand: string | null; image: string | null }
+interface Label { key: string; code: string; name: string; ref: string; unitLine: string; brand: string | null; image: string | null; rack?: boolean }
 
 /**
  * Formats d'impression :
@@ -61,7 +61,7 @@ function QrCode({ code, format }: { code: string; format: Format }) {
 function LabelCard({ l, format, showImage }: { l: Label; format: Format; showImage: boolean }) {
   const img = showImage && l.image ? l.image : null;
   return (
-    <div className={`lbl lbl-${format}`}>
+    <div className={`lbl lbl-${format}${l.rack ? ' lbl-rack' : ''}`}>
       <div className="lbl-top">
         {img && /* eslint-disable-next-line @next/next/no-img-element */ <img src={img} alt="" className="lbl-img" />}
         <div className="lbl-txt">
@@ -81,6 +81,8 @@ function Inner() {
   const sp = useSearchParams();
   const ids = (sp.get('ids') ?? '').split(',').filter(Boolean);
   const all = sp.get('all') === '1';
+  const racksParam = sp.get('racks'); // mode « étiquettes de rack » : ?racks=all ou ?racks=R-01-A,R-01-B
+  const [rackCodes, setRackCodes] = useState<string[] | null>(null);
   const [items, setItems] = useState<StockItemFull[] | null>(null);
   const [copies, setCopies] = useState(1);
   const [format, setFormat] = useState<Format>('ql-wide');
@@ -93,6 +95,14 @@ function Inner() {
       const f = localStorage.getItem('jjd_label_format') as Format | null;
       if (f && f in FORMAT_LABEL) setFormat(f);
     } catch { /* stockage indisponible */ }
+    if (racksParam !== null) {
+      const wanted = racksParam.split(',').map((c) => c.trim().toUpperCase()).filter(Boolean);
+      api<{ items: { code: string }[] }>('/api/stock/locations')
+        .then((r) => setRackCodes(r.items.map((i) => i.code).filter((c) => racksParam === 'all' || wanted.includes(c))))
+        .catch((e) => setErr((e as Error).message));
+      setItems([]);
+      return;
+    }
     api<{ items: StockItemFull[] }>('/api/stock/items')
       .then((r) => setItems(r.items.filter((i) => i.ref && (all || ids.includes(i.id)))))
       .catch((e) => setErr((e as Error).message));
@@ -105,9 +115,10 @@ function Inner() {
   }
 
   if (err) return <div style={{ padding: 40 }}>Erreur : {err}</div>;
-  if (!items) return <div style={{ padding: 40 }}>Chargement…</div>;
+  if (!items || (racksParam !== null && !rackCodes)) return <div style={{ padding: 40 }}>Chargement…</div>;
 
-  const labels: Label[] = items.flatMap((it) => {
+  const rackLabels: Label[] = (rackCodes ?? []).map((c) => ({ key: `rack:${c}`, code: `BRZ-${c}`, name: c, ref: c, brand: null, image: null, unitLine: 'Emplacement', rack: true }));
+  const labels: Label[] = racksParam !== null ? rackLabels : items.flatMap((it) => {
     const brand = [it.brand, it.model].filter(Boolean).join(' ') || null;
     const image = it.photoUrl ?? null;
     return [
@@ -133,10 +144,10 @@ function Inner() {
           {ql
             ? 'Dans la fenêtre d’impression : choisir la Brother QL-600, papier « 38 mm × 90 mm », marges « aucune », échelle 100 %. Si l’étiquette sort tournée, changer le format ci-dessus (à l’italienne ↔ portrait). '
             : ''}
-          Le code de l’étiquette « sac » (ART-0001:sac) fait entrer/sortir 1 sac ; celui sans unité, 1 unité de base.
+          {racksParam !== null ? 'Scanner cette étiquette pendant une entrée indique le rack de rangement (même format que les racks Bricoloc).' : 'Le code de l’étiquette « sac » (ART-0001:sac) fait entrer/sortir 1 sac ; celui sans unité, 1 unité de base.'}
         </span>
       </div>
-      {sheet.length === 0 && <p>Aucun article avec référence à imprimer.</p>}
+      {sheet.length === 0 && <p>{racksParam !== null ? 'Aucun rack à imprimer.' : 'Aucun article avec référence à imprimer.'}</p>}
       <div className={ql ? 'lbl-stack' : 'lbl-grid'}>{sheet.map((l) => <LabelCard key={l.key} l={l} format={format} showImage={showImage} />)}</div>
       <style>{`
         body { background: #fff; }
@@ -160,7 +171,7 @@ function Inner() {
         .lbl-code { text-align: center; font-family: ui-monospace, monospace; letter-spacing: 0.4px; }
 
         /* planche A4 : 63 × 38 mm */
-        .lbl-a4 { width: 63mm; height: 38mm; border-radius: 2mm; padding: 2mm 2.5mm; }
+                .lbl-a4 { width: 63mm; height: 38mm; border-radius: 2mm; padding: 2mm 2.5mm; }
         .lbl-a4 .lbl-name { font-size: 10.5pt; max-height: 11.5mm; }
         .lbl-a4 .lbl-sub { font-size: 8pt; }
         .lbl-a4 .lbl-unit { font-size: 8.5pt; }
@@ -190,6 +201,11 @@ function Inner() {
         .lbl-ql-tall .lbl-unit { font-size: 9pt; }
         .lbl-ql-tall .lbl-bar { height: 8mm; }
         .lbl-ql-tall .lbl-code { font-size: 8pt; }
+
+.lbl-rack .lbl-name { line-height: 1; -webkit-line-clamp: 1; }
+        .lbl-rack.lbl-ql-wide .lbl-name { font-size: 28pt; }
+        .lbl-rack.lbl-ql-tall .lbl-name { font-size: 20pt; }
+        .lbl-rack.lbl-a4 .lbl-name { font-size: 20pt; }
 
         @media print {
           .lbl-controls { display: none; }

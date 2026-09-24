@@ -409,6 +409,7 @@ export const stockMovementInput = z.object({
   worksiteId: z.string().nullish(),
   requestedByName: z.string().trim().nullish(),
   note: z.string().trim().nullish(),
+  location: z.string().trim().max(40).nullish(), // rack de rangement (entrée) — « R-01-A » ou l'étiquette scannée « BRZ-R-01-A »
 });
 export type StockMovementInput = z.infer<typeof stockMovementInput>;
 

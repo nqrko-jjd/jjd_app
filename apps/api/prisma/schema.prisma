@@ -1209,6 +1209,7 @@ model StockItem {
   note      String?
   photoUrl      String?
   photoThumbUrl String?
+  location  String? // dernier rack où l'article a été rangé (scan de l'étiquette du rack à l'entrée)
   unit      String // unité de base du stock ("kg" | "m²" | "u" | "L" | …) — les quantités sont stockées dans cette unité
   category  String?
   minQty    Float? // seuil d'alerte réappro
@@ -1378,6 +1379,7 @@ model StockMovement {
   enteredUnit     String? // unité choisie (ex. « sac ») — qty = enteredQty × facteur
   contactId       String? // fournisseur (entrée)
   contact         Contact?  @relation("StockMovementSupplier", fields: [contactId], references: [id])
+  location        String? // rack de rangement (entrée)
   unitCost        Float? // par unité de base ; renseigné sur une entrée, alimente le coût moyen pondéré
   worksiteId      String? // obligatoire pour une sortie
   worksite        Worksite? @relation(fields: [worksiteId], references: [id])
@@ -1423,4 +1425,13 @@ model ImportIssue {
   @@index([entity])
   @@index([resolved])
   @@index([severity])
+}
+
+/// Racks / étagères du dépôt (ex. « R-01-A »). Étiquette QR « BRZ-R-01-A » — même format que les zones de Bricoloc,
+/// les étiquettes de rack sont donc interchangeables. Une entrée en crée automatiquement la ligne si elle n'existe pas.
+model StockLocation {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  label     String?
+  createdAt DateTime @default(now())
 }

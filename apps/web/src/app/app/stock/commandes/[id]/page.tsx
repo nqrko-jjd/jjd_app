@@ -1,7 +1,7 @@
 'use client';
 import { use, useState } from 'react';
 import Link from 'next/link';
-import { Truck } from 'lucide-react';
+import { Truck, MapPin } from 'lucide-react';
 import { useApi } from '@/lib/use-api';
 import { api, ApiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -37,6 +37,7 @@ export default function CommandeDetail({ params }: { params: Promise<{ id: strin
   const [deliveryNote, setDeliveryNote] = useState('');
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [rack, setRack] = useState<string | null>(null); // rack où la marchandise est rangée (étiquette scannée)
   const order = data?.order ?? null;
 
   if (loading && !data) return <SkeletonRows />;
@@ -48,6 +49,13 @@ export default function CommandeDetail({ params }: { params: Promise<{ id: strin
 
   async function scan(code: string) {
     setMsg(null);
+    if (/^(BRZ|RACK)-.+/i.test(code.trim())) {
+      const r = code.trim().toUpperCase().replace(/^(BRZ|RACK)-/, '');
+      setRack(r);
+      setMsg({ ok: true, text: `✓ Rack ${r}` });
+      scanFeedback(true);
+      return;
+    }
     try {
       const r = await api<{ item: { id: string; name: string }; unitName: string | null }>(`/api/stock/scan/${encodeURIComponent(code)}`);
       const lines = order!.lines.filter((l) => l.stockItemId === r.item.id);
@@ -71,8 +79,9 @@ export default function CommandeDetail({ params }: { params: Promise<{ id: strin
     if (over.length && !confirm(`Quantité reçue supérieure à la commande pour : ${over.map((l) => l.stockItem.name).join(', ')}. Valider quand même ?`)) return;
     setBusy(true);
     try {
-      await api(`/api/purchasing/orders/${id}/receive`, { method: 'POST', body: { lines, deliveryNote: deliveryNote || null } });
+      await api(`/api/purchasing/orders/${id}/receive`, { method: 'POST', body: { lines, deliveryNote: deliveryNote || null, location: rack } });
       setPending({});
+      setRack(null);
       setDeliveryNote('');
       setMsg({ ok: true, text: 'Réception enregistrée : le stock est à jour.' });
       reload();
@@ -117,6 +126,13 @@ export default function CommandeDetail({ params }: { params: Promise<{ id: strin
       {open && canManage && (
         <div style={{ marginTop: '1.1rem' }}>
           <ScanInput onScan={scan} placeholder="Scannez chaque article livré…" hint="Chaque scan ajoute 1 à la quantité reçue. Rien n’entre en stock avant « Valider la réception »." />
+          <div className={`rack-bar${rack ? ' on' : ''}`}>
+            <MapPin size={20} strokeWidth={2} />
+            <div className="rack-bar-txt">
+              {rack ? <><strong>Rack {rack}</strong><span> — la marchandise reçue y est rangée</span></> : <span>Scannez l’étiquette du <strong>rack</strong> où vous rangez <span className="muted">(facultatif)</span></span>}
+            </div>
+            {rack && <button type="button" className="btn ghost" onClick={() => setRack(null)} aria-label="Retirer le rack">✕</button>}
+          </div>
           {msg && <div className={msg.ok ? 'scan-last' : 'badge crit'} style={msg.ok ? undefined : { padding: '0.5rem 0.8rem', marginBottom: '0.9rem', display: 'block' }}>{msg.text}</div>}
         </div>
       )}

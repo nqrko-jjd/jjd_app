@@ -57,6 +57,7 @@ export default function StockPage() {
         action={
           canManage ? (
             <div className="row">
+              <Link href="/app/stock/racks" className="btn">Racks</Link>
               <a className="btn" href="/imprimer/etiquettes?all=1" target="_blank" rel="noreferrer">Étiquettes</a>
               <Link href="/app/stock/scan" className="btn primary"><ScanLine size={15} strokeWidth={2} /> Scan &amp; mouvements →</Link>
               <button className="btn" onClick={() => setCreating(true)}>+ Nouvel article</button>

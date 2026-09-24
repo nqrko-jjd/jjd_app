@@ -327,3 +327,31 @@ test('stock : photo produit — upload puis suppression, visible dans la fiche',
     await prisma.stockItem.delete({ where: { id } }).catch(() => {});
   }
 });
+
+test('stock : rack — scan d’étiquette, emplacement mémorisé à l’entrée, liste des racks', async () => {
+  const scan = await jf<{ kind: string; code: string }>('/api/stock/scan/BRZ-tst-01-a');
+  assert.equal(scan.status, 200);
+  assert.deepEqual([scan.body.kind, scan.body.code], ['rack', 'TST-01-A']);
+
+  const created = await jf<{ item: { id: string } }>('/api/stock/items', { method: 'POST', body: JSON.stringify({ name: 'Rack — test', unit: 'u' }) });
+  const id = created.body.item.id;
+  try {
+    const mv = await jf('/api/stock/movements', { method: 'POST', body: JSON.stringify({ stockItemId: id, type: 'in', qty: 3, location: 'BRZ-TST-01-A' }) });
+    assert.equal(mv.status, 201);
+    assert.equal((await jf<{ item: { location: string | null } }>(`/api/stock/items/${id}`)).body.item.location, 'TST-01-A');
+
+    const out = await jf('/api/stock/movements', { method: 'POST', body: JSON.stringify({ stockItemId: id, type: 'out', qty: 1, worksiteId, location: 'TST-99' }) });
+    assert.equal(out.status, 201);
+    assert.equal((await jf<{ item: { location: string | null } }>(`/api/stock/items/${id}`)).body.item.location, 'TST-01-A', 'une sortie ne déplace pas le rack');
+
+    const post = await jf('/api/stock/locations', { method: 'POST', body: JSON.stringify({ codes: ['tst-02-b', 'BRZ-TST-02-B'] }) });
+    assert.equal(post.status, 201);
+    const list = await jf<{ items: { code: string; itemCount: number }[] }>('/api/stock/locations');
+    assert.equal(list.body.items.find((l) => l.code === 'TST-01-A')?.itemCount, 1);
+    assert.ok(list.body.items.some((l) => l.code === 'TST-02-B'));
+  } finally {
+    await prisma.stockMovement.deleteMany({ where: { stockItemId: id } });
+    await prisma.stockItem.delete({ where: { id } }).catch(() => {});
+    await prisma.stockLocation.deleteMany({ where: { code: { startsWith: 'TST-' } } });
+  }
+});

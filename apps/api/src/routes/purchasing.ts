@@ -283,6 +283,7 @@ purchasingRouter.post(
     const d = z.object({
       lines: z.array(z.object({ lineId: z.string(), qty: z.coerce.number().min(0) })).min(1),
       deliveryNote: z.string().trim().nullish(),
+      location: z.string().trim().max(40).nullish(), // rack où la marchandise est rangée
     }).parse(req.body);
     const order = await loadOrder(req.params.id as string);
     if (!OPEN.includes(order.status)) throw new HttpError(409, 'Cette commande n’est pas en attente de réception');
@@ -299,7 +300,7 @@ purchasingRouter.post(
           tx,
           {
             stockItemId: line.stockItemId, type: 'in', qty: r.qty, unit: line.unitName, contactId: order.contactId,
-            unitCost: line.price ?? undefined,
+            unitCost: line.price ?? undefined, location: d.location,
             note: `Réception ${order.ref}${d.deliveryNote ? ` · BL ${d.deliveryNote}` : ''}`,
           },
           req.user!.id,

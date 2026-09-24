@@ -1577,3 +1577,11 @@ body.plan-wide .main { max-width: none; }
   box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.25); pointer-events: none;
 }
 @media (max-width: 560px) { .scan-bar-btn.cam span { display: none; } }
+
+/* Rack actif (scan d'entrée / retour) */
+.rack-bar { display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; padding: 0.65rem 0.9rem; margin-bottom: 0.9rem; border: 1.5px dashed var(--line); border-radius: var(--radius-sm); background: var(--surface-2); color: var(--ink-2); }
+.rack-bar.on { border-style: solid; border-color: var(--primary); background: var(--primary-soft, var(--surface-2)); color: var(--primary); }
+.rack-bar-txt { flex: 1; min-width: 200px; }
+.rack-bar-input { width: 170px; }
+.stock-manual { margin-top: 1.4rem; max-width: 860px; }
+.stock-manual > summary { cursor: pointer; color: var(--ink-3); font-size: 0.85rem; font-weight: 600; }

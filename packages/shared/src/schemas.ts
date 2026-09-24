@@ -362,19 +362,39 @@ export const saleEntryBackfillInput = z.object({
 });
 export type SaleEntryBackfillInput = z.infer<typeof saleEntryBackfillInput>;
 
+export const stockItemUnitInput = z.object({
+  name: z.string().trim().min(1),
+  factor: z.coerce.number().positive(), // unités de base dans 1 de cette unité (ex. sac = 25 kg)
+});
+
 export const stockItemInput = z.object({
   name: z.string().trim().min(1),
-  unit: z.string().trim().min(1),
+  unit: z.string().trim().min(1), // unité de base du stock
+  ref: z.string().trim().nullish(), // référence interne ; générée (ART-0001) si absente à la création
+  brand: z.string().trim().nullish(),
+  note: z.string().trim().nullish(),
   category: z.string().trim().nullish(),
   minQty: z.coerce.number().min(0).nullish(),
+  units: z.array(stockItemUnitInput).optional(), // unités alternatives (remplace la liste si fournie)
+});
+
+export const stockSupplierInput = z.object({
+  contactId: z.string().min(1),
+  supplierRef: z.string().trim().nullish(),
+  unitName: z.string().trim().nullish(), // unité d'achat ; vide = unité de base
+  price: z.coerce.number().min(0).nullish(), // HT par unité d'achat
+  preferred: z.boolean().optional(),
+  note: z.string().trim().nullish(),
 });
 export type StockItemInput = z.infer<typeof stockItemInput>;
 
 export const stockMovementInput = z.object({
   stockItemId: z.string(),
   type: z.enum(['in', 'out', 'adjustment']),
-  qty: z.coerce.number(), // positive pour in/out ; valeur cible (pas un delta) pour adjustment
-  unitCost: z.coerce.number().min(0).nullish(),
+  qty: z.coerce.number(), // positive pour in/out ; valeur cible (pas un delta) pour adjustment — dans `unit`
+  unit: z.string().trim().nullish(), // unité de saisie (ex. « sac ») ; absent = unité de base
+  contactId: z.string().nullish(), // fournisseur (entrée)
+  unitCost: z.coerce.number().min(0).nullish(), // par unité de saisie
   worksiteId: z.string().nullish(),
   requestedByName: z.string().trim().nullish(),
   note: z.string().trim().nullish(),

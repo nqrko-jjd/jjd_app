@@ -132,3 +132,69 @@ test('désactivation d’un article (jamais de suppression)', async () => {
   // ré-activer pour le cleanup normal (after() le supprime pour de bon)
   await jf(`/api/stock/items/${itemId}`, { method: 'PATCH', body: JSON.stringify({}) });
 });
+
+test('article multi-unités / multi-fournisseurs : sac = 25 kg, entrée en sacs, prix par fournisseur', async () => {
+  const c1 = await prisma.contact.create({ data: { name: 'Fournisseur A — test stock', normalizedName: 'fournisseur a test stock', type: 'supplier' } });
+  const c2 = await prisma.contact.create({ data: { name: 'Fournisseur B — test stock', normalizedName: 'fournisseur b test stock', type: 'supplier' } });
+  let id = '';
+  try {
+    const created = await jf<{ item: { id: string; ref: string; units: { name: string; factor: number }[] } }>('/api/stock/items', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Knauf MP75 — test', unit: 'kg', brand: 'Knauf', units: [{ name: 'sac', factor: 25 }, { name: 'palette', factor: 1500 }] }),
+    });
+    assert.equal(created.status, 201);
+    id = created.body.item.id;
+    assert.match(created.body.item.ref, /^ART-\d{4}$/);
+    assert.equal(created.body.item.units.length, 2);
+
+    // unité en double / identique à la base : refusé
+    const dup = await jf('/api/stock/items/' + id, { method: 'PATCH', body: JSON.stringify({ units: [{ name: 'KG', factor: 1 }] }) });
+    assert.equal(dup.status, 422);
+
+    // deux fournisseurs, prix par sac chez A, par kilo chez B
+    const a = await jf<{ supplier: { id: string } }>(`/api/stock/items/${id}/suppliers`, { method: 'POST', body: JSON.stringify({ contactId: c1.id, supplierRef: 'MP75-25', unitName: 'sac', price: 12, preferred: true }) });
+    assert.equal(a.status, 201);
+    const b = await jf<{ supplier: { id: string } }>(`/api/stock/items/${id}/suppliers`, { method: 'POST', body: JSON.stringify({ contactId: c2.id, unitName: 'kg', price: 0.6 }) });
+    assert.equal(b.status, 201);
+    const badUnit = await jf(`/api/stock/items/${id}/suppliers`, { method: 'POST', body: JSON.stringify({ contactId: c1.id, unitName: 'camion' }) });
+    assert.equal(badUnit.status, 422);
+    // le fournisseur préféré est unique
+    await jf(`/api/stock/items/${id}/suppliers/${b.body.supplier.id}`, { method: 'PATCH', body: JSON.stringify({ preferred: true }) });
+    let item = (await jf<{ item: { suppliers: { contactId: string; preferred: boolean; unitName: string | null }[] } }>(`/api/stock/items/${id}`)).body.item;
+    assert.equal(item.suppliers.filter((s) => s.preferred).length, 1);
+    assert.equal(item.suppliers.find((s) => s.contactId === c2.id)!.unitName, null, 'unité de base = pas d’unité d’achat spécifique');
+
+    // entrée de 4 sacs à 13 €/sac chez A -> 100 kg, coût 0,52 €/kg, prix du fournisseur mis à jour
+    const inn = await jf<{ item: { qty: number; avgCost: number }; movement: { qty: number; enteredQty: number; enteredUnit: string; unitCost: number } }>('/api/stock/movements', {
+      method: 'POST',
+      body: JSON.stringify({ stockItemId: id, type: 'in', qty: 4, unit: 'sac', unitCost: 13, contactId: c1.id }),
+    });
+    assert.equal(inn.status, 201);
+    assert.equal(inn.body.item.qty, 100);
+    assert.equal(inn.body.item.avgCost, 0.52);
+    assert.equal(inn.body.movement.enteredQty, 4);
+    assert.equal(inn.body.movement.enteredUnit, 'sac');
+    item = (await jf<{ item: { suppliers: { contactId: string; price: number }[] } }>(`/api/stock/items/${id}`)).body.item as never;
+    assert.equal((item.suppliers as { contactId: string; price: number }[]).find((s) => s.contactId === c1.id)!.price, 13);
+
+    // sortie d'1 sac vers le chantier -> 75 kg ; unité inconnue refusée
+    const out = await jf<{ item: { qty: number } }>('/api/stock/movements', {
+      method: 'POST', body: JSON.stringify({ stockItemId: id, type: 'out', qty: 1, unit: 'sac', worksiteId }),
+    });
+    assert.equal(out.body.item.qty, 75);
+    assert.equal((await jf('/api/stock/movements', { method: 'POST', body: JSON.stringify({ stockItemId: id, type: 'out', qty: 1, unit: 'camion', worksiteId }) })).status, 422);
+    // fournisseur uniquement sur une entrée
+    assert.equal((await jf('/api/stock/movements', { method: 'POST', body: JSON.stringify({ stockItemId: id, type: 'out', qty: 1, worksiteId, contactId: c1.id }) })).status, 422);
+
+    // inventaire compté en sacs : 2 sacs = 50 kg
+    const inv = await jf<{ item: { qty: number } }>('/api/stock/movements', { method: 'POST', body: JSON.stringify({ stockItemId: id, type: 'adjustment', qty: 2, unit: 'sac' }) });
+    assert.equal(inv.body.item.qty, 50);
+
+    // on ne peut pas retirer l'unité « sac » tant qu'un fournisseur l'utilise
+    const rm = await jf(`/api/stock/items/${id}`, { method: 'PATCH', body: JSON.stringify({ units: [{ name: 'palette', factor: 1500 }] }) });
+    assert.equal(rm.status, 409);
+  } finally {
+    if (id) await prisma.stockItem.delete({ where: { id } }).catch(() => {});
+    await prisma.contact.deleteMany({ where: { id: { in: [c1.id, c2.id] } } });
+  }
+});

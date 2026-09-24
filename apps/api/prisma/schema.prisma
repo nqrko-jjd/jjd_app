@@ -275,6 +275,8 @@ model Contact {
   linkedAcp     Contact?  @relation("ContactLinkedAcp", fields: [linkedAcpId], references: [id])
   residents     Contact[] @relation("ContactLinkedAcp")
 
+  stockSuppliers   StockSupplier[]   @relation("StockSupplierContact")
+  stockMovements   StockMovement[]   @relation("StockMovementSupplier")
   user             User?             @relation("UserClientAccount")
   worksites        Worksite[]        @relation("WorksiteClient")
   acpWorksites     Worksite[]        @relation("WorksiteAcp")
@@ -1194,8 +1196,11 @@ model TaskAssignment {
 /// recalculés à chaque mouvement (StockMovement) — jamais modifiés directement.
 model StockItem {
   id        String   @id @default(cuid())
+  ref       String? @unique // référence interne (ART-0001), générée à la création
   name      String
-  unit      String // "sac" | "m²" | "u" | "L" | …
+  brand     String? // marque / fabricant (Knauf…)
+  note      String?
+  unit      String // unité de base du stock ("kg" | "m²" | "u" | "L" | …) — les quantités sont stockées dans cette unité
   category  String?
   minQty    Float? // seuil d'alerte réappro
   qty       Float    @default(0)
@@ -1205,8 +1210,42 @@ model StockItem {
   updatedAt DateTime @updatedAt
 
   movements StockMovement[]
+  units     StockItemUnit[]
+  suppliers StockSupplier[]
 
   @@index([active])
+}
+
+/// Unité alternative d'un article, avec son facteur de conversion vers l'unité de base
+/// (ex. article en kg : « sac » = 25). L'unité de base elle-même est `StockItem.unit` (facteur 1).
+model StockItemUnit {
+  id          String    @id @default(cuid())
+  stockItemId String
+  stockItem   StockItem @relation(fields: [stockItemId], references: [id], onDelete: Cascade)
+  name        String // "sac", "pcs", "palette"…
+  factor      Float // combien d'unités de base dans 1 de cette unité
+  position    Int       @default(0)
+
+  @@unique([stockItemId, name])
+}
+
+/// Un fournisseur chez qui on peut acheter cet article (plusieurs possibles), avec sa
+/// référence, son conditionnement d'achat et son prix.
+model StockSupplier {
+  id          String    @id @default(cuid())
+  stockItemId String
+  stockItem   StockItem @relation(fields: [stockItemId], references: [id], onDelete: Cascade)
+  contactId   String
+  contact     Contact   @relation("StockSupplierContact", fields: [contactId], references: [id])
+  supplierRef String? // référence chez le fournisseur
+  unitName    String? // unité d'achat (sac, pcs…) ; vide = unité de base
+  price       Float? // prix HT par unité d'achat
+  preferred   Boolean   @default(false)
+  note        String?
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([stockItemId, contactId, unitName])
+  @@index([contactId])
 }
 
 /// Bon d'entrée / de sortie / d'inventaire. Historique immuable (jamais modifié après coup,
@@ -1216,8 +1255,12 @@ model StockMovement {
   stockItemId     String
   stockItem       StockItem @relation(fields: [stockItemId], references: [id], onDelete: Cascade)
   type            String // "in" (entrée) | "out" (sortie chantier) | "adjustment" (inventaire)
-  qty             Float // toujours positive ; le sens est donné par `type`
-  unitCost        Float? // renseigné sur une entrée, alimente le coût moyen pondéré
+  qty             Float // en unité de base de l'article, toujours positive ; le sens est donné par `type`
+  enteredQty      Float? // quantité saisie dans l'unité choisie (ex. 4)
+  enteredUnit     String? // unité choisie (ex. « sac ») — qty = enteredQty × facteur
+  contactId       String? // fournisseur (entrée)
+  contact         Contact?  @relation("StockMovementSupplier", fields: [contactId], references: [id])
+  unitCost        Float? // par unité de base ; renseigné sur une entrée, alimente le coût moyen pondéré
   worksiteId      String? // obligatoire pour une sortie
   worksite        Worksite? @relation(fields: [worksiteId], references: [id])
   requestedByName String? // « le demandeur » (personne qui reçoit la sortie sur chantier)

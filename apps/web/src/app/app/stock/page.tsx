@@ -4,17 +4,16 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
-import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { PageHead, Money, Kpi } from '@/lib/ui';
 import { Warehouse, AlertTriangle, Layers, ScanLine, Package } from 'lucide-react';
 import { useSort, useColumnFilter, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
-import { FormModal, type FieldDef } from '@/components/FormModal';
+import { StockItemModal } from '@/components/StockItemModal';
 import { ViewToggle, useViewMode } from '@/components/ViewToggle';
 
 interface StockItem {
-  id: string; name: string; unit: string; category: string | null;
+  id: string; ref: string | null; brand: string | null; name: string; unit: string; category: string | null;
   minQty: number | null; qty: number; avgCost: number | null; value: number; low: boolean; active: boolean;
 }
 
@@ -33,6 +32,7 @@ export default function StockPage() {
   const filteredItems = stockFilter === 'all' ? allItems : allItems.filter((i) => (stockFilter === 'low' ? i.low : !i.low));
 
   const stockAccessors = {
+    ref: (i: StockItem) => i.ref,
     name: (i: StockItem) => i.name,
     category: (i: StockItem) => i.category,
     qty: (i: StockItem) => i.qty,
@@ -44,23 +44,11 @@ export default function StockPage() {
   const totalValue = allItems.reduce((s, i) => s + i.value, 0);
   const lowCount = allItems.filter((i) => i.low).length;
 
-  const itemFields: FieldDef[] = [
-    { name: 'name', label: 'Nom', required: true, full: true, placeholder: 'Sac de ciment 25kg' },
-    { name: 'unit', label: 'Unité', required: true, placeholder: 'sac, m², u, L…' },
-    { name: 'category', label: 'Catégorie', placeholder: 'facultatif' },
-    { name: 'minQty', label: 'Seuil d’alerte (mini)', type: 'number' },
-  ];
-
   return (
     <>
       {ctxItems.error && <div className="empty">Erreur de chargement.</div>}
       {creating && (
-        <FormModal
-          title="Nouvel article"
-          fields={itemFields}
-          onClose={() => setCreating(false)}
-          onSubmit={async (v) => { await api('/api/stock/items', { method: 'POST', body: v }); reload(); }}
-        />
+        <StockItemModal onClose={() => setCreating(false)} onSaved={(it) => router.push(`/app/stock/${it.id}`)} />
       )}
       <PageHead
         eyebrow="Ressources"
@@ -101,7 +89,7 @@ export default function StockPage() {
       </div>
 
       <div className="row" style={{ marginBottom: '1rem' }}>
-        <input className="input" style={{ maxWidth: 280 }} placeholder="Nom, catégorie…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input className="input" style={{ maxWidth: 280 }} placeholder="Nom, réf., marque, catégorie…" value={q} onChange={(e) => setQ(e.target.value)} />
         <ViewToggle mode={mode} onChange={setMode} />
       </div>
 
@@ -131,7 +119,7 @@ export default function StockPage() {
                   {it.low && <span className="badge warn" style={{ marginLeft: 6, fontSize: '0.68rem' }}>bas</span>}
                 </div>
                 <div className="gallery-sub">
-                  {it.category ?? '—'} · {it.qty} {it.unit}
+                  {[it.ref, it.brand ?? it.category].filter(Boolean).join(' · ') || '—'} · {it.qty} {it.unit}
                 </div>
               </div>
               <div className="row" style={{ padding: '0 0.85rem 0.7rem', justifyContent: 'space-between' }}>
@@ -146,6 +134,7 @@ export default function StockPage() {
           <table className="tbl">
             <thead>
               <tr>
+                <SortTh k="ref" sort={sort} filter={colFilter}>Réf.</SortTh>
                 <SortTh k="name" sort={sort} filter={colFilter}>Article</SortTh>
                 <SortTh k="category" sort={sort} filter={colFilter}>Catégorie</SortTh>
                 <SortTh k="qty" sort={sort} align="right" filter={colFilter}>Quantité</SortTh>
@@ -155,8 +144,9 @@ export default function StockPage() {
             <tbody>
               {sort.rows.map((it) => (
                 <tr key={it.id} className="row-link" onClick={rowNav(`/app/stock/${it.id}`, (h) => router.push(h))}>
+                  <td className="mono" style={{ fontSize: '0.82rem' }}>{it.ref ?? '—'}</td>
                   <td>
-                    {it.name}
+                    {it.name}{it.brand && <span className="muted"> · {it.brand}</span>}
                     {it.low && <span className="badge warn" style={{ marginLeft: 6, fontSize: '0.7rem' }}>sous le seuil ({it.minQty})</span>}
                   </td>
                   <td>{it.category ?? '—'}</td>

@@ -11,13 +11,19 @@ import { HttpError } from './http.js';
  * du plus grand numéro déjà présent (import TrustUp inclus) puis avance ; on
  * saute tout numéro déjà pris par sécurité.
  */
-async function nextFreeDocNumber(kind: string, year: number): Promise<{ number: string; seq: number }> {
+/** Une facture d'acompte partage la numérotation des factures (F2026-392), pas de série « FA » à part. */
+const numberingKind = (kind: string) => (kind === 'deposit_invoice' ? 'invoice' : kind);
+const kindsSharingNumbers = (kind: string) => (kind === 'invoice' ? ['invoice', 'deposit_invoice'] : [kind]);
+
+async function nextFreeDocNumber(docKind: string, year: number): Promise<{ number: string; seq: number }> {
+  const kind = numberingKind(docKind);
+  const kinds = kindsSharingNumbers(kind);
   const counterName = docCounterName(kind, year);
   const existing = await prisma.counter.findUnique({ where: { name: counterName } });
   if (!existing) {
     const prefix = formatDocNumber(kind, year, 0).replace(/0+$/, '');
     const docs = await prisma.document.findMany({
-      where: { kind, number: { startsWith: prefix } },
+      where: { kind: { in: kinds }, number: { startsWith: prefix } },
       select: { number: true },
     });
     let max = 0;
@@ -30,7 +36,7 @@ async function nextFreeDocNumber(kind: string, year: number): Promise<{ number: 
   for (let i = 0; i < 50; i++) {
     const seq = await nextCounter(counterName);
     const number = formatDocNumber(kind, year, seq);
-    const clash = await prisma.document.findFirst({ where: { kind, number }, select: { id: true } });
+    const clash = await prisma.document.findFirst({ where: { kind: { in: kinds }, number }, select: { id: true } });
     if (!clash) return { number, seq };
   }
   throw new HttpError(500, 'Impossible d’attribuer un numéro de document');
@@ -148,6 +154,30 @@ export async function issueDocument(documentId: string, opts: { issuedOn?: Date;
   });
   await syncLedgerEntryForDocument(documentId);
   return updated;
+}
+
+/**
+ * Rattrapage : les factures d'acompte émises avant que la série F soit partagée portaient un
+ * numéro « FA2026-001 ». Les renumérote à la suite des factures (F2026-392…), avec leur
+ * communication structurée et leur écriture du grand livre. Idempotent : plus rien ne matche
+ * une fois rattrapé.
+ */
+export async function renumberFaDepositInvoices(): Promise<number> {
+  const docs = await prisma.document.findMany({
+    where: { kind: 'deposit_invoice', number: { startsWith: 'FA' } },
+    orderBy: [{ issuedOn: 'asc' }, { createdAt: 'asc' }],
+    select: { id: true, issuedOn: true, createdAt: true },
+  });
+  for (const d of docs) {
+    const year = (d.issuedOn ?? d.createdAt).getFullYear();
+    const { number, seq } = await nextFreeDocNumber('deposit_invoice', year);
+    await prisma.document.update({
+      where: { id: d.id },
+      data: { number, structuredComm: belgianStructuredComm(year * 100000 + seq) },
+    });
+    await prisma.ledgerEntry.updateMany({ where: { documentId: d.id }, data: { docNumber: number } });
+  }
+  return docs.length;
 }
 
 function deriveLedgerPeriod(date: Date) {

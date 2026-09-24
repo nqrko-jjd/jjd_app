@@ -3,7 +3,7 @@ import { createApp } from './app.js';
 import { env } from './env.js';
 import { prisma } from './db.js';
 import { invoiceMailboxConfigured, syncInvoiceMailbox } from './lib/invoice-mailbox.js';
-import { markOverdueInvoices } from './lib/documents.js';
+import { markOverdueInvoices, renumberFaDepositInvoices } from './lib/documents.js';
 
 function lanAddresses(): string[] {
   const out: string[] = [];
@@ -54,6 +54,11 @@ async function backfillArchivedClosed() {
 
 await backfillMessageAudience();
 await backfillArchivedClosed();
+{
+  const n = await renumberFaDepositInvoices();
+  // eslint-disable-next-line no-console
+  if (n) console.log(`[backfill] ${n} facture(s) d'acompte renumérotée(s) dans la série F`);
+}
 
 /**
  * Factures envoyées/partielles dont l'échéance est dépassée -> "En retard".

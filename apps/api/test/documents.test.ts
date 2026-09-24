@@ -334,3 +334,30 @@ test('facture "en retard" dont on corrige l’échéance dans le futur : repasse
   await fetch(`${base}/api/documents/${id}`, { method: 'PATCH', headers: auth(), body: JSON.stringify({ dueOn: future.toISOString() }) });
   assert.equal((await prisma.document.findUnique({ where: { id } }))!.status, 'sent');
 });
+
+test('facture d’acompte : numérotée dans la série F des factures (pas de série FA)', async () => {
+  const mk = async (kind: string) => {
+    const c = await (await fetch(`${base}/api/documents`, { method: 'POST', headers: auth(), body: JSON.stringify({ kind, worksiteId: wsId, lines: [{ label: 'Poste', qty: 1, unitPriceHt: 100, vatRate: 0 }] }) })).json();
+    const i = await (await fetch(`${base}/api/documents/${c.document.id}/issue`, { method: 'POST', headers: auth(), body: '{}' })).json();
+    return i.document as { id: string; number: string };
+  };
+  const a = await mk('invoice');
+  const dep = await prisma.document.create({ data: { kind: 'deposit_invoice', direction: 'sale', draftRef: 'BROUILLON-DEPTEST', status: 'draft', worksiteId: wsId, source: 'manual' } });
+  const issued = await (await fetch(`${base}/api/documents/${dep.id}/issue`, { method: 'POST', headers: auth(), body: '{}' })).json();
+  const n = (s: string) => Number(s.match(/(\d+)$/)![1]);
+  assert.match(issued.document.number, /^F\d{4}-\d+$/);
+  assert.equal(n(issued.document.number), n(a.number) + 1);
+  const b = await mk('invoice');
+  assert.equal(n(b.number), n(a.number) + 2, 'la série continue sans trou ni doublon');
+});
+
+test('rattrapage : une facture d’acompte « FA… » est renumérotée dans la série F', async () => {
+  const { renumberFaDepositInvoices } = await import('../src/lib/documents.js');
+  const dep = await prisma.document.create({
+    data: { kind: 'deposit_invoice', direction: 'sale', number: 'FA2026-001', status: 'sent', worksiteId: wsId, source: 'manual', issuedOn: new Date(), lockedAt: new Date() },
+  });
+  await renumberFaDepositInvoices();
+  const after = await prisma.document.findUnique({ where: { id: dep.id } });
+  assert.match(after!.number!, /^F\d{4}-\d+$/);
+  assert.ok(after!.structuredComm);
+});

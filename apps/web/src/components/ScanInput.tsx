@@ -51,52 +51,56 @@ export function ScanInput({
     }, touch ? 350 : 140);
   }
 
-  // Garde le focus sur le champ tant que rien d'autre n'est en cours de saisie : la gâchette doit toujours tomber ici.
+  const valueRef = useRef('');
+  valueRef.current = value;
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  const submitRef = useRef(submit);
+  submitRef.current = submit;
+
+  const isEditable = (el: Element | null) => {
+    const a = el as HTMLElement | null;
+    return !!a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT' || a.isContentEditable);
+  };
+  const isTouch = () => typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches;
+
+  // Garde le focus sur le champ : la gâchette doit toujours tomber ici. Sur un terminal tactile, un clic sur un bouton
+  // (« Réceptionner »…) donne le focus au bouton : on le rend aussitôt au champ de scan.
   useEffect(() => {
     if (camera) return;
     const refocus = () => {
       const a = document.activeElement;
-      if (!a || a === document.body) ref.current?.focus({ preventScroll: true });
+      if (a === ref.current) return;
+      if (!a || a === document.body || (isTouch() && !isEditable(a))) ref.current?.focus({ preventScroll: true });
     };
     refocus();
     const id = setInterval(refocus, 800);
-    return () => clearInterval(id);
+    const onClick = () => setTimeout(refocus, 40);
+    window.addEventListener('click', onClick);
+    return () => { clearInterval(id); window.removeEventListener('click', onClick); };
   }, [camera]);
 
-  // Filet de sécurité : si le focus est ailleurs (bouton cliqué, liste, etc.), la rafale de la gâchette ne doit pas se perdre.
-  // On écoute donc aussi le clavier de la page (hors champs de saisie) et on reconnaît une rafale de douchette.
-  const submitRef = useRef(submit);
-  submitRef.current = submit;
+  // Filet de sécurité : une touche tapée alors que le focus est ailleurs (bouton, liste…) — c'est la gâchette de la Zebra
+  // en mode clavier — est redirigée vers le champ de scan, qui applique sa logique habituelle (Entrée ou silence).
   useEffect(() => {
     if (camera) return;
-    let buf = '';
-    let n = 0;
-    let first = 0;
-    let last = 0;
-    let quiet: ReturnType<typeof setTimeout> | undefined;
-    const reset = () => { buf = ''; n = 0; };
-    const isBurst = () => buf.length >= 4 && n >= 4 && (last - first) / (n - 1) < 50;
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
-      if (t === ref.current) return; // le champ de scan gère déjà sa propre saisie
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+      if (t === ref.current || isEditable(t)) return;
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.key === 'Enter') {
-        clearTimeout(quiet);
-        if (isBurst()) { e.preventDefault(); const c = buf; reset(); submitRef.current(c); } else reset();
+        if (valueRef.current.trim().length >= 3) { e.preventDefault(); submitRef.current(valueRef.current); }
         return;
       }
       if (e.key.length !== 1) return;
-      const now = Date.now();
-      if (now - last > 100) { reset(); first = now; }
-      buf += e.key;
-      n += 1;
-      last = now;
-      clearTimeout(quiet);
-      quiet = setTimeout(() => { if (isBurst()) { const c = buf; reset(); submitRef.current(c); } else reset(); }, 140);
+      e.preventDefault();
+      ref.current?.focus({ preventScroll: true });
+      const next = valueRef.current + e.key;
+      valueRef.current = next; // plusieurs touches peuvent arriver avant le rendu React
+      onChangeRef.current(next);
     };
     window.addEventListener('keydown', onKey, true);
-    return () => { window.removeEventListener('keydown', onKey, true); clearTimeout(quiet); };
+    return () => window.removeEventListener('keydown', onKey, true);
   }, [camera]);
 
   return (

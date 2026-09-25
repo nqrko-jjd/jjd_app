@@ -286,6 +286,16 @@ function ScanPanel({
             setLastScan(`${pending.item.name} · ${qty} ${unitName ?? pending.item.unit}`);
             setPending(null);
           }}
+          // un scan pendant que la fenêtre est ouverte : même article/conditionnement = +1, sinon on valide la fenêtre et on traite le nouveau code
+          onRescan={async (code, unit) => {
+            if (/^(BRZ|RACK)-/i.test(code)) return 'other';
+            try {
+              const r = await api<{ item: StockItem; unitName: string | null }>(`/api/stock/scan/${encodeURIComponent(code)}`);
+              if (r.item.id === pending.item.id && (r.unitName ?? '') === unit) return 'same';
+            } catch { /* code inconnu : traité comme un nouveau scan (message d'erreur) */ }
+            return 'other';
+          }}
+          onNext={(code) => { void handleScan(code); }}
         />
       )}
       <div className="stock-move-actions">
@@ -464,17 +474,24 @@ function ScanPanel({
 const fmtN = (n: number) => new Intl.NumberFormat('fr-BE', { maximumFractionDigits: 2 }).format(n);
 
 /** Fenêtre ouverte par un scan : quantité (et conditionnement) à entrer / sortir, puis « Ajouter au panier ». Entrée = valider. */
-function QtyDialog({ item, initialUnit, action, rack, onCancel, onConfirm }: {
+function QtyDialog({ item, initialUnit, action, rack, onCancel, onConfirm, onRescan, onNext }: {
   item: StockItem; initialUnit: string | null; action: 'in' | 'out' | 'return'; rack: string | null;
   onCancel: () => void; onConfirm: (qty: number, unitName: string | null) => void;
+  onRescan: (code: string, unit: string) => Promise<'same' | 'other'>; onNext: (code: string) => void;
 }) {
   const [qty, setQty] = useState('1');
   const [unit, setUnit] = useState<string>(initialUnit ?? '');
   const ref = useRef<HTMLInputElement>(null);
   const openedAt = useRef(Date.now());
+  // Rafale de la gâchette tombée dans le champ quantité : on la reconnaît (caractères très rapprochés) au lieu de la prendre pour une quantité.
+  const burst = useRef<{ stamps: number[]; before: string; timer?: ReturnType<typeof setTimeout> }>({ stamps: [], before: '1' });
+  const qtyRef = useRef('1');
+  const unitRef = useRef(initialUnit ?? '');
   useEffect(() => { ref.current?.focus(); ref.current?.select(); }, []);
+  qtyRef.current = qty;
+  unitRef.current = unit;
   const n = Number(qty.replace(',', '.'));
-  const valid = Number.isFinite(n) && n > 0;
+  const valid = Number.isFinite(n) && n > 0 && n < 100000;
   const factor = !unit ? 1 : item.units.find((u) => u.name === unit)?.factor ?? 1;
   const short = action === 'out' && valid && n * factor > item.qty + 0.0001;
   const bump = (d: number) => setQty(String(Math.max(1, Math.round(((valid ? n : 0) + d) * 100) / 100)));
@@ -487,7 +504,12 @@ function QtyDialog({ item, initialUnit, action, rack, onCancel, onConfirm }: {
         style={{ maxWidth: 460 }}
         onClick={(e) => e.stopPropagation()}
         // un « Entrée » tardif de la gâchette (fin du scan) ne doit pas valider la fenêtre à peine ouverte
-        onSubmit={(e) => { e.preventDefault(); if (valid && Date.now() - openedAt.current > 400) onConfirm(n, unit || null); }}
+        onSubmit={(e) => {
+          e.preventDefault();
+          const st = burst.current.stamps; // Entrée finale d'une rafale de scan : pas une validation de quantité
+          if (st.length >= 3 && Date.now() - st[st.length - 1]! < 400) return;
+          if (valid && Date.now() - openedAt.current > 400) onConfirm(n, unit || null);
+        }}
         onKeyDown={(e) => { if (e.key === 'Escape') onCancel(); }}
       >
         <div className="modal-head">
@@ -511,7 +533,30 @@ function QtyDialog({ item, initialUnit, action, rack, onCancel, onConfirm }: {
               <input
                 id="qd-qty" ref={ref} className="input" style={{ fontSize: '1.6rem', fontWeight: 800, textAlign: 'center', width: 110 }}
                 inputMode="decimal" value={qty}
-                onChange={(e) => { if (e.target.value.length <= 6) setQty(e.target.value); }}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  const b = burst.current;
+                  const now = Date.now();
+                  if (b.stamps.length === 0 || now - b.stamps[b.stamps.length - 1]! > 300) { b.stamps = []; b.before = qtyRef.current; }
+                  b.stamps.push(now);
+                  setQty(v);
+                  clearTimeout(b.timer);
+                  b.timer = setTimeout(async () => {
+                    const t = b.stamps;
+                    b.stamps = [];
+                    const fast = t.length >= 4 && (t[t.length - 1]! - t[0]!) / (t.length - 1) < 80;
+                    if (!fast || v.trim().length < 4) return; // frappe humaine : c'est une quantité
+                    setQty(b.before); // ce n'était pas une quantité
+                    const verdict = await onRescan(v.trim(), unitRef.current);
+                    if (verdict === 'same') {
+                      const cur = Number(b.before.replace(',', '.'));
+                      setQty(String(Math.round(((Number.isFinite(cur) ? cur : 0) + 1) * 100) / 100));
+                    } else {
+                      onConfirm(Number(b.before.replace(',', '.')) > 0 ? Number(b.before.replace(',', '.')) : 1, unitRef.current || null);
+                      onNext(v.trim());
+                    }
+                  }, 200);
+                }}
               />
               <button type="button" className="btn" style={{ fontSize: '1.4rem', padding: '0.3rem 1rem' }} onClick={() => bump(1)} aria-label="Plus">＋</button>
               {item.units.length > 0 ? (

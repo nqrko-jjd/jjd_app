@@ -26,12 +26,21 @@ export function ScanInput({
   const stamps = useRef<number[]>([]);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
+  const lastCode = useRef({ code: '', at: 0 });
+  const [received, setReceived] = useState<string | null>(null);
+
   function submit(raw: string) {
-    const code = raw.trim();
+    const code = raw.replace(/[\r\n\t]/g, '').trim();
     stamps.current = [];
     clearTimeout(timer.current);
     setValue('');
-    if (code) onScan(code);
+    if (!code) return;
+    // anti-doublon : une gâchette qui envoie la rafale ET l'Entrée ne doit compter qu'un scan
+    const now = Date.now();
+    if (code === lastCode.current.code && now - lastCode.current.at < 700) return;
+    lastCode.current = { code, at: now };
+    setReceived(code);
+    onScan(code);
   }
 
   function onChange(v: string) {
@@ -41,14 +50,14 @@ export function ScanInput({
     // rafale = ≥ 4 caractères à moins de 50 ms d'écart en moyenne → lecture de douchette, pas une frappe humaine
     // Terminal tactile (Zebra, smartphone) : le clavier est masqué, tout ce qui arrive dans le champ vient donc de la
     // gâchette — on valide après un court silence, même si DataWedge n'envoie pas « Entrée » ou tape lentement.
-    const touch = !typing && typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
+    const touch = !typing && isTouch();
     if (touch && /^\d{13}$/.test(v)) { submit(v); return; } // EAN-13 complet : inutile d'attendre
     timer.current = setTimeout(() => {
       const t = stamps.current;
-      if (touch && v.length >= 5) submit(v);
+      if (touch && v.trim().length >= 3) submit(v);
       else if (v.length >= 4 && t.length >= 4 && (t[t.length - 1]! - t[0]!) / (t.length - 1) < 50) submit(v);
       else stamps.current = [];
-    }, touch ? 350 : 140);
+    }, touch ? 220 : 140);
   }
 
   const valueRef = useRef('');
@@ -62,7 +71,7 @@ export function ScanInput({
     const a = el as HTMLElement | null;
     return !!a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT' || a.isContentEditable);
   };
-  const isTouch = () => typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches;
+  const isTouch = () => typeof window !== 'undefined' && (/Android/i.test(navigator.userAgent) || !!window.matchMedia?.('(pointer: coarse)').matches);
 
   // Garde le focus sur le champ : la gâchette doit toujours tomber ici. Sur un terminal tactile, un clic sur un bouton
   // (« Réceptionner »…) donne le focus au bouton : on le rend aussitôt au champ de scan.
@@ -133,6 +142,7 @@ export function ScanInput({
           <Camera size={20} /> <span>Caméra</span>
         </button>
       </div>
+      {received && <div className="muted" style={{ fontSize: '0.72rem', margin: '0.2rem 0 0.4rem' }}>Dernier code reçu : <span className="mono">{received}</span></div>}
       {hint && <div className="muted" style={{ fontSize: '0.8rem', margin: '0.35rem 0 0.9rem' }}>{hint}</div>}
     </>
   );

@@ -545,7 +545,7 @@ function ExpenseModal({
       const r = await apiUpload<{
         extraction: {
           kind: string | null; docNumber: string | null; issuedOn: string | null; dueOn: string | null;
-          totalHt: number | null; totalTtc: number | null; vatRate: number | null;
+          totalHt: number | null; totalTtc: number | null; totalVat: number | null; vatRate: number | null;
           contactId: string | null; worksiteId: string | null; worksiteRef: string | null;
           otherWorksiteRefs: string[]; textExtracted: boolean;
         };
@@ -553,10 +553,11 @@ function ExpenseModal({
       const ex = r.extraction;
       if (!ex.textExtracted) { setExtractNote('PDF sans texte lisible (scan/photo) — à compléter à la main.'); return; }
       const ht = ex.totalHt ?? (ex.totalTtc != null ? Math.round((ex.totalTtc / (1 + (ex.vatRate ?? 0.21))) * 100) / 100 : null);
-      // la TVA récupérable = TTC − HT, calculée à partir des montants déjà résolus ci-dessus
-      // plutôt que lue telle quelle dans le PDF (le repère de montant de TVA isolé est peu
-      // fiable — souvent noyé dans un tableau — alors que HT et TTC sont vérifiés)
-      const vatRecup = ht != null && ex.totalTtc != null ? Math.round((ex.totalTtc - ht) * 100) / 100 : null;
+      // la TVA récupérable = le montant de TVA lu tel quel dans le PDF quand il a été trouvé de
+      // façon fiable (le repère isolé "TVA 21% …" est peu sûr — souvent noyé dans un tableau —
+      // mais un montant retrouvé par recoupement structurel, ex. dans un tableau HT/TVA/TTC où
+      // HT + TVA retombe exactement sur le TTC, l'est) ; sinon TTC − HT en repli.
+      const vatRecup = ex.totalVat ?? (ht != null && ex.totalTtc != null ? Math.round((ex.totalTtc - ht) * 100) / 100 : null);
       setV((prev) => ({
         ...prev,
         direction: ex.kind === 'credit_note' ? 'credit_note' : ex.kind === 'delivery_slip' ? 'delivery_slip' : prev.direction,

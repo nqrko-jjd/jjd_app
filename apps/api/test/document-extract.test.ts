@@ -291,6 +291,11 @@ test('parseDocumentText : bordereau (Vector 3) — détecté avant "facture", n�
   assert.equal(r.docNumber, '114160');
   assert.equal(r.issuedOn, '2026-09-24');
   assert.equal(r.totalTtc, 9.67);
+  // HT/TVA lus directement dans la ligne de tableau (HT répété, taux tronqué "21." sans %, puis
+  // le montant de TVA), validés contre le TTC déjà trouvé — pas de simple TTC/1,21 approximatif
+  assert.equal(r.totalHt, 7.99);
+  assert.equal(r.totalVat, 1.68);
+  assert.equal(r.vatRate, 0.21);
 });
 
 test('parseDocumentText : bordereau (BigMat) — n° après "No-Tva" sur la même ligne, ne prend pas le n° de client à la place', () => {
@@ -318,4 +323,39 @@ test('parseDocumentText : bordereau (BigMat) — n° après "No-Tva" sur la mêm
   assert.equal(r.docNumber, '260894');
   assert.equal(r.issuedOn, '2026-09-21');
   assert.equal(r.totalTtc, 185.58);
+  assert.equal(r.totalHt, 153.37);
+  assert.equal(r.totalVat, 32.21);
+  assert.equal(r.vatRate, 0.21);
+});
+
+test('parseDocumentText : facture Sani Mat Wavre — n° après un intitulé "FACTURE" sur sa propre ligne (pas "FACTURE" pris pour le n°), HT/TVA lus dans le tableau', () => {
+  // reproduit un vrai cas remonté : contrairement au cas générique ci-dessus, "FACTURE" est ICI
+  // sur sa propre ligne entre l'en-tête "No-Doc." et la ligne de valeurs — le repli qui ne
+  // regardait que la ligne suivante prenait alors "FACTURE" lui-même pour le n° de document
+  const text = [
+    ' BV JJD CONSULT ',
+    ' GIETERIJSTRAAT 49 ',
+    ' B−1601 RUISBROEK (BT.) ',
+    'Tél: 0470/69.37.65 ',
+    ' Date No−Tva No−Cl. No−Doc.',
+    'FACTURE',
+    ' 24/09/26 BE 1003.823.997 3958 20/360814 ',
+    ' Article Libellé Qté UV PV−Brut %−Rem PV−Net Montant C',
+    ' 198356 PLAQUETTE FIXATION PANN.ISOLANT 5*70 ZN 1. PC 22.89 −30. % 16.02 16.02 3 ',
+    'POUR ACCORD SIGNATURE: ....................................',
+    'SAMUEL 24/09/26 13h36 (Page No 1)',
+    'C Tot−Marchandise Base Taxable %−TVA Total Tva Total A PAYER',
+    '3 191.12 191.12 21. 40.14 231.26 231.26 EUR',
+    'DATE D’ECHEANCE: 24/09/26',
+  ].join('\n');
+  const r = parseDocumentText(text);
+  assert.equal(r.docNumber, '20/360814');
+  assert.equal(r.issuedOn, '2026-09-24');
+  assert.equal(r.totalTtc, 231.26);
+  assert.equal(r.totalHt, 191.12);
+  assert.equal(r.totalVat, 40.14);
+  assert.equal(r.vatRate, 0.21);
+  // le n° de TVA du client (JJD) est bien lu, mais ce n'est pas celui du fournisseur (Sani Mat
+  // Wavre, dont le nom/logo n'existent qu'en image dans ce PDF — voir extractDocumentInfo)
+  assert.deepEqual(r.vatNumbersFound, ['BE1003823997']);
 });

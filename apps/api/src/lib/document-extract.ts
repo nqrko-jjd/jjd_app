@@ -142,13 +142,24 @@ function findDocNumber(text: string): string | null {
 
   // repli mise en page en tableau : en-tête "No-Doc." (ou variantes, y compris avec un tiret
   // typographique "−" plutôt qu'un tiret ASCII selon la police du PDF d'origine), n° de
-  // document = dernier jeton de la ligne de valeurs qui suit
+  // document = dernier jeton de la ligne de valeurs qui suit. Cette ligne n'est pas toujours
+  // IMMÉDIATEMENT la suivante : certains PDF (vu chez Sani Mat Wavre) insèrent l'intitulé du
+  // document ("FACTURE") sur sa propre ligne, entre l'en-tête et les valeurs, alors que
+  // d'autres (vu chez Cebeo) le collent à la fin de la ligne d'en-tête elle-même — on
+  // cherche donc, parmi les quelques lignes suivantes, la 1ère qui commence par une date
+  // plausible (jj/mm/aa[aa]) : la colonne "Date" est toujours la 1ère de ce type de tableau.
   const idx = text.search(/no[\s\-‐-―−]{0,2}doc\.?/i);
   if (idx === -1) return null;
-  const nextLine = lineAndNext(text, idx).split('\n')[1] ?? '';
-  const tokens = nextLine.trim().split(/\s+/).filter(Boolean);
-  const last = tokens[tokens.length - 1];
-  return last && /[A-Z0-9]/i.test(last) ? last.replace(/[.,;]+$/, '') : null;
+  const rest = text.slice(idx).split('\n');
+  for (let i = 1; i <= 4 && i < rest.length; i++) {
+    const line = rest[i] ?? '';
+    const d = line.match(/^\s*(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})\b/);
+    if (!d || !validDate(Number(d[1]), Number(d[2]))) continue;
+    const tokens = line.trim().split(/\s+/).filter(Boolean);
+    const last = tokens[tokens.length - 1];
+    return last && /[A-Z0-9]/i.test(last) ? last.replace(/[.,;]+$/, '') : null;
+  }
+  return null;
 }
 
 /**
@@ -228,15 +239,37 @@ function findTotals(text: string): { ht: number | null; vat: number | null; ttc:
     // reste-à-payer à 0 (facture déjà réglée) au lieu du montant total réel
     ttc = Math.round(ht * (1 + (vatRate ?? 0.21)) * 100) / 100;
   }
+  const payIdx = text.search(/[aà]\s*payer/i);
   if (ttc == null) {
     // dernier repli, mise en page en tableau : en-tête "... A PAYER" / "Total ... TVAC" puis
     // les montants sur la ligne suivante -> on prend le dernier montant de cette zone (la
     // colonne "total" est presque toujours la dernière du tableau)
-    const idx = text.search(/[aà]\s*payer/i);
-    if (idx !== -1) {
-      const zone = lineAndNext(text, idx);
+    if (payIdx !== -1) {
+      const zone = lineAndNext(text, payIdx);
       const nums = [...zone.matchAll(AMOUNT_STRICT_G)].map((m) => parseAmount(m[1])).filter((n): n is number => n != null);
       if (nums.length) ttc = nums[nums.length - 1]!;
+    }
+  }
+
+  if ((ht == null || vat == null) && ttc != null && payIdx !== -1) {
+    // même mise en page en tableau (Vector 3, BigMat, Sani Mat… vraisemblablement le même
+    // logiciel de facturation chez plusieurs grossistes) : la ligne de valeurs répète le HT
+    // (colonnes "Tot-Marchandise"/"Tot-Htva" puis "Base Taxable"), puis le taux de TVA tronqué
+    // en "NN." SANS le symbole % (qui n'est que dans l'en-tête de colonne "%-TVA"), puis le
+    // montant de TVA lui-même. On ne les accepte que si HT + TVA retombe exactement sur le TTC
+    // déjà connu (± 2 c) — sinon on risquerait de prendre un nombre sans rapport pour la TVA.
+    const zone = lineAndNext(text, payIdx);
+    for (const m of zone.matchAll(/\b(\d{1,2})\.\s+(\d+[.,]\d{2})\b/g)) {
+      const rate = Number(m[1]);
+      if (rate < 1 || rate > 30) continue;
+      const vatCand = parseAmount(m[2]);
+      const priorNums = [...zone.slice(0, m.index).matchAll(AMOUNT_STRICT_G)];
+      const htCand = priorNums.length ? parseAmount(priorNums[priorNums.length - 1]![1]) : null;
+      if (vatCand == null || htCand == null || Math.abs(htCand + vatCand - ttc) >= 0.02) continue;
+      if (ht == null) ht = htCand;
+      if (vat == null) vat = vatCand;
+      if (vatRate == null) vatRate = rate / 100;
+      break;
     }
   }
 
@@ -365,13 +398,25 @@ export async function extractDocumentInfo(
   let { kind, issuedOn, dueOn, docNumber, totalHt, totalVat, totalTtc, vatRate, vatNumbersFound } = parseDocumentText(text);
   let aiSupplierName: string | null = null;
 
-  // Repli IA : soit rien d'exploitable trouvé par les règles (ni montant ni n° de document),
-  // soit aucun n° de TVA repéré dans le texte — la seule piste fiable pour retrouver le bon
-  // fournisseur parmi les contacts JJD (sinon le nom reste vide ou mal deviné) -> on retente en
-  // lisant le PDF directement avec Claude, qui gère bien mieux les mises en page atypiques et le
-  // néerlandais — ne comble que ce qui manque, ne tourne que pour les cas qui en ont besoin
-  // (coût maîtrisé : pas un appel par facture, la plupart portent déjà un n° de TVA).
-  if ((totalHt == null && totalTtc == null && docNumber == null) || vatNumbersFound.length === 0) {
+  // Un n° de TVA trouvé dans le texte n'est pas forcément celui du fournisseur : beaucoup de
+  // ces PDF (grossistes belges — Sani Mat, Vector 3…) impriment le nom/logo du fournisseur en
+  // image (donc invisible pour pdftotext) et ne laissent en texte que le n° de TVA du CLIENT
+  // (JJD), dans le bloc adresse. Vérifie ici si un des n° trouvés correspond à un contact
+  // connu ; sinon rien de fiable ne permettra de l'identifier par les règles seules.
+  let vatMatchesKnownContact = false;
+  if (vatNumbersFound.length) {
+    const knownVats = await prisma.contact.findMany({ where: { vat: { not: null } }, select: { vat: true } });
+    vatMatchesKnownContact = knownVats.some((c) => c.vat && vatNumbersFound.includes(normVat(c.vat)));
+  }
+
+  // Repli IA : rien d'exploitable trouvé par les règles (ni montant ni n° de document), ou
+  // aucun n° de TVA du texte ne correspond à un contact connu — la seule piste fiable pour
+  // retrouver le bon fournisseur (sinon le nom reste vide ou mal deviné, cf. ci-dessus) -> on
+  // retente en lisant le PDF directement avec Claude, qui gère bien mieux les mises en page
+  // atypiques, le néerlandais, et un logo/en-tête uniquement graphique (pas de texte à lire).
+  // Ne comble que ce qui manque, ne tourne que pour les cas qui en ont besoin (coût maîtrisé :
+  // pas un appel par facture, la plupart citent déjà un fournisseur déjà connu par sa TVA).
+  if ((totalHt == null && totalTtc == null && docNumber == null) || !vatMatchesKnownContact) {
     const ai = await extractWithAi(buf);
     if (ai) {
       if (kind == null && ai.kind && AI_KINDS.has(ai.kind)) kind = ai.kind as DocumentExtraction['kind'];

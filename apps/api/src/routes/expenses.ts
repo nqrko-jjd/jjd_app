@@ -9,7 +9,7 @@ import path from 'node:path';
 import { createReadStream, existsSync, readFileSync } from 'node:fs';
 import multer from 'multer';
 import { zipSync } from 'fflate';
-import { expenseInput, saleEntryBackfillInput, parseAmount, parseLooseDate } from '@jjd/shared';
+import { expenseInput, linkInvoiceInput, saleEntryBackfillInput, parseAmount, parseLooseDate } from '@jjd/shared';
 import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, OFFICE, FIELD_OFFICE } from '../lib/auth.js';
@@ -27,7 +27,14 @@ const inc = {
   contact: { select: { id: true, name: true } },
   category: { select: { code: true, label: true } },
   createdBy: { select: { email: true } },
+  // bordereau (direction "delivery_slip") -> facture reçue ensuite ; facture -> ses bordereaux liés
+  linkedInvoice: { select: { id: true, docNumber: true, date: true } },
+  _count: { select: { bordereaux: true } },
 } as const;
+
+function docTypeOf(direction: string): string {
+  return direction === 'credit_note' ? 'Note de crédit' : direction === 'delivery_slip' ? 'Bordereau' : "Facture d'achat";
+}
 
 function derive(date: Date) {
   const m = date.getMonth() + 1;
@@ -44,18 +51,25 @@ function resolveUpload(rel: string): string {
 
 /** Filtre commun à la liste et à l'export CSV. */
 function buildWhere(q: Record<string, string>) {
-  const { q: search, paid, worksiteId, contactId, category, from, to, year } = q;
-  // achats + notes de crédit d'achat (une NC de vente réduit le CA, pas une dépense).
+  const { q: search, paid, worksiteId, contactId, category, from, to, year, type, linked } = q;
+  // achats + notes de crédit d'achat (une NC de vente réduit le CA, pas une dépense) + bordereaux
+  // (preuve d'enlèvement/paiement reçue avant la facture — voir linkedInvoiceId).
   // categoryRaw peut être NULL (saisie manuelle sans catégorie) : NOT{contains} exclurait
   // alors la ligne (NULL n'est ni "contient" ni "ne contient pas" en SQL) -> OR explicite.
   const and: Record<string, unknown>[] = [
     {
       OR: [
         { direction: 'purchase' },
+        { direction: 'delivery_slip' },
         { direction: 'credit_note', OR: [{ categoryRaw: null }, { NOT: { categoryRaw: { contains: 'vente' } } }] },
       ],
     },
   ];
+  // type = purchase | credit_note | delivery_slip (déjà un sous-ensemble du OR ci-dessus, jamais
+  // contradictoire) ; linked = 0/1 ne s'applique qu'aux bordereaux (linkedInvoiceId)
+  if (type) and.push({ direction: type });
+  if (linked === '0') and.push({ linkedInvoiceId: null });
+  if (linked === '1') and.push({ NOT: { linkedInvoiceId: null } });
   if (worksiteId) and.push({ worksiteId });
   if (contactId) and.push({ contactId });
   if (category) and.push({ categoryRaw: category });
@@ -100,14 +114,24 @@ expensesRouter.get(
         include: inc,
       }),
       // totaux (KPI) sur l'ensemble du filtre, pas seulement la page affichée
-      prisma.ledgerEntry.findMany({ where: { AND: and }, select: { ht: true, ttc: true, paymentStatus: true, direction: true } }),
+      prisma.ledgerEntry.findMany({
+        where: { AND: and },
+        select: { ht: true, ttc: true, paymentStatus: true, direction: true, linkedInvoiceId: true },
+      }),
     ]);
 
     const totals = all.reduce(
       (acc, e) => {
+        acc.count += 1;
+        // bordereau : pas un document fiscal (pas de TVA récupérable dessus) -> exclu des
+        // montants, sinon la facture reçue ensuite le compterait deux fois. Seul son statut
+        // « en attente de facture » (non relié) intéresse ici.
+        if (e.direction === 'delivery_slip') {
+          if (!e.linkedInvoiceId) acc.pendingSlips += 1;
+          return acc;
+        }
         const ttc = e.ttc ?? e.ht;
         const sign = e.direction === 'credit_note' ? -1 : 1;
-        acc.count += 1;
         acc.ht += sign * e.ht;
         acc.ttc += sign * ttc;
         // une note de crédit vient toujours en déduction (elle n'est jamais "payée")
@@ -115,7 +139,7 @@ expensesRouter.get(
         else if (!isPaidStr(e.paymentStatus)) acc.unpaidTtc += ttc;
         return acc;
       },
-      { count: 0, ht: 0, ttc: 0, unpaidTtc: 0 },
+      { count: 0, ht: 0, ttc: 0, unpaidTtc: 0, pendingSlips: 0 },
     );
 
     res.json({
@@ -132,6 +156,7 @@ expensesRouter.get(
         ht: Math.round(totals.ht * 100) / 100,
         ttc: Math.round(totals.ttc * 100) / 100,
         unpaidTtc: Math.round(totals.unpaidTtc * 100) / 100,
+        pendingSlips: totals.pendingSlips,
       },
       page,
       pageSize,
@@ -488,7 +513,7 @@ expensesRouter.post(
         date: d.date,
         dueDate: d.dueDate ?? null,
         direction: d.direction,
-        docType: d.direction === 'credit_note' ? 'Note de crédit' : "Facture d'achat",
+        docType: docTypeOf(d.direction),
         docNumber: d.docNumber ?? null,
         supplierName,
         contactId: d.contactId ?? null,
@@ -569,7 +594,7 @@ expensesRouter.patch(
     if ('dueDate' in d) data.dueDate = d.dueDate ?? null;
     if (d.direction) {
       data.direction = d.direction;
-      data.docType = d.direction === 'credit_note' ? 'Note de crédit' : "Facture d'achat";
+      data.docType = docTypeOf(d.direction);
     }
     if ('docNumber' in d) data.docNumber = d.docNumber ?? null;
     if ('worksiteId' in d) data.worksiteId = d.worksiteId ?? null;
@@ -630,6 +655,31 @@ expensesRouter.post(
       data: { paymentStatus: paid ? 'Payé' : 'Non payé', paidOn: paid ? paidOn : null },
       include: inc,
     });
+    res.json({ expense: e });
+  }),
+);
+
+/* ------------------------------------------------------------------ lien bordereau -> facture */
+
+/**
+ * Relie un bordereau (direction "delivery_slip") à la facture d'achat reçue ensuite
+ * (`invoiceId: null` pour délier). Plusieurs bordereaux peuvent pointer vers la même facture
+ * (un fournisseur en consolide parfois plusieurs sur une facture mensuelle unique).
+ */
+expensesRouter.post(
+  '/:id/link',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const slip = await prisma.ledgerEntry.findUnique({ where: { id: req.params.id }, select: { id: true, direction: true } });
+    if (!slip) throw new HttpError(404, 'Bordereau introuvable');
+    if (slip.direction !== 'delivery_slip') throw new HttpError(422, 'Seul un bordereau peut être relié à une facture.');
+    const { invoiceId } = linkInvoiceInput.parse(req.body);
+    if (invoiceId) {
+      if (invoiceId === slip.id) throw new HttpError(422, 'Un bordereau ne peut pas se relier lui-même.');
+      const invoice = await prisma.ledgerEntry.findUnique({ where: { id: invoiceId }, select: { direction: true } });
+      if (!invoice || invoice.direction !== 'purchase') throw new HttpError(422, 'Facture d’achat introuvable.');
+    }
+    const e = await prisma.ledgerEntry.update({ where: { id: slip.id }, data: { linkedInvoiceId: invoiceId ?? null }, include: inc });
     res.json({ expense: e });
   }),
 );

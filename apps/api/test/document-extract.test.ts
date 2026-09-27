@@ -261,3 +261,61 @@ test('parseDocumentText : texte sans repère connu -> tout à null, pas d’erre
   assert.equal(r.totalTtc, null);
   assert.deepEqual(r.vatNumbersFound, []);
 });
+
+test('parseDocumentText : bordereau (Vector 3) — détecté avant "facture", n° et date au format "No", total en tableau "A PAYER"', () => {
+  // reproduit un vrai bordereau remis à l'enlèvement (pas de facture correspondante avant coup) :
+  // aucun mot "facture" nulle part, n° et date introduits par "No"/"Date..:" (pas de libellé standard)
+  const text = [
+    ' JJD CONSULT SRL ',
+    ' GIETERIJSTRAAT 49 ',
+    ' B−1601 RUISBROEK (BT.) ',
+    'Tél: 02/887.92.39',
+    'BORDEREAU No 114160',
+    'No−Cl : 603',
+    'No−Tva: BE 1003.823.997',
+    'No−Doc: 162297',
+    'Date..: 24/09/26',
+    'No−Art Libellé Qté UV Qté UF PV−Brut %−Rem PV−Net Total C',
+    'Référence client: R493 ',
+    '100297 CF2 ACRYRUB 310ML 1. PC 2.392 2.392 2.39 3',
+    '108319 PLAQUE PP2 40X100 10. PC .56 0.56 5.60 3',
+    'POUR ACCORD SIGNATURE: ....................................',
+    'ENLEVE PAR: DANILO',
+    'PAWEL 24/09/26 15h03',
+    'C Tot−March. Base−Taxable %−Tva Total−Tva Total Acompte A PAYER',
+    '3 7.99 7.99 21. 1.68 9.67 9.67 EUR',
+    'Voir les conditions générales de vente au verso',
+  ].join('\n');
+  const r = parseDocumentText(text);
+  assert.equal(r.kind, 'delivery_slip');
+  assert.equal(r.docNumber, '114160');
+  assert.equal(r.issuedOn, '2026-09-24');
+  assert.equal(r.totalTtc, 9.67);
+});
+
+test('parseDocumentText : bordereau (BigMat) — n° après "No-Tva" sur la même ligne, ne prend pas le n° de client à la place', () => {
+  // le n° de client ("No-Cl") précède textuellement le n° de bordereau ici : sans le mot-clé
+  // "bordereau" dans le repère, le repli générique attraperait "17331" (client) au lieu de
+  // "260894" (bordereau)
+  const text = [
+    ' BV JJD CONSULT ',
+    ' GIETERIJSTRAAT 49 ',
+    ' B−1601 RUISBROEK (BT.) ',
+    'Tél: 0470/69.37.65',
+    'No−Cl : 17331',
+    'No−Tva: BE 1003.823.997 BORDEREAU No 260894 Le 21/09/26',
+    'No−Art Libellé Qté UV Qté UF PV−Brut Remise PV−Net Total C',
+    'Référence interne => 500742',
+    '111010 FERS A BETON L=3M D=10MM 30. PC 4.988 −57.9% 2.10 63.00 3',
+    '276047 PROMO BETOKONTAKT 20KG KNAUF+10% GRATIS 1. PC 68.552 −24.3% 51.894 51.89 3',
+    '[78 Kg] QUENTIN ',
+    '21/09/26 12h07',
+    'C Tot−Htva Base−Tax. %−TVA TVA Total Acompte A PAYER',
+    '3 153.37 153.37 21. 32.21 185.58 185.58 EUR',
+  ].join('\n');
+  const r = parseDocumentText(text);
+  assert.equal(r.kind, 'delivery_slip');
+  assert.equal(r.docNumber, '260894');
+  assert.equal(r.issuedOn, '2026-09-21');
+  assert.equal(r.totalTtc, 185.58);
+});

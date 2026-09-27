@@ -327,11 +327,15 @@ export const documentBackfillInput = z.object({
   paid: z.boolean().default(false),
 });
 
-/** Facture d'achat / dépense — une ligne du grand livre saisie à la main. */
+/**
+ * Facture d'achat / dépense — une ligne du grand livre saisie à la main.
+ * `delivery_slip` (bordereau) : preuve d'enlèvement/paiement reçue chez certains fournisseurs
+ * avant la facture elle-même — voir `linkInvoiceInput` pour la relier une fois la facture reçue.
+ */
 export const expenseInput = z.object({
   date: z.coerce.date(),
   dueDate: z.coerce.date().nullish(),
-  direction: z.enum(['purchase', 'credit_note']).default('purchase'),
+  direction: z.enum(['purchase', 'credit_note', 'delivery_slip']).default('purchase'),
   supplierName: z.string().trim().nullish(),
   contactId: z.string().nullish(),
   docNumber: z.string().trim().nullish(),
@@ -345,6 +349,10 @@ export const expenseInput = z.object({
   paymentStatus: z.enum(['Non payé', 'Payé']).default('Non payé'),
 });
 export type ExpenseInput = z.infer<typeof expenseInput>;
+
+/** Relie (ou délie, `invoiceId: null`) un bordereau à la facture d'achat reçue ensuite. */
+export const linkInvoiceInput = z.object({ invoiceId: z.string().nullish() });
+export type LinkInvoiceInput = z.infer<typeof linkInvoiceInput>;
 
 /**
  * Écriture "Facture de vente" du grand livre saisie/rattrapée à la main (ex. import xlsx pas

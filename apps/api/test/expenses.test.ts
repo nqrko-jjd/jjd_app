@@ -201,3 +201,65 @@ test('export CSV puis réimport : met à jour par id, crée les nouvelles lignes
   // donc pas couvertes par le nettoyage global du fichier
   await prisma.ledgerEntry.deleteMany({ where: { id: { in: [created.id, badRef.id] } } });
 });
+
+test('bordereau : création, apparaît dans la liste sans peser sur les totaux HT/TTC, compte "en attente"', async () => {
+  const before = await jf<{ totals: { ht: number; ttc: number; pendingSlips: number } }>(`/api/finance/expenses?worksiteId=${worksiteId}`);
+
+  const created = await jf<{ expense: { id: string; direction: string; docType: string } }>(
+    '/api/finance/expenses',
+    { method: 'POST', body: JSON.stringify({ date: '2026-09-12', direction: 'delivery_slip', supplierName: 'Vector 3', worksiteId, docNumber: '114160', ht: 7.99, ttc: 9.67, paymentStatus: 'Payé' }) },
+  );
+  assert.equal(created.status, 201);
+  assert.equal(created.body.expense.direction, 'delivery_slip');
+  assert.equal(created.body.expense.docType, 'Bordereau');
+  const slipId = created.body.expense.id;
+
+  const list = await jf<{ items: { id: string; direction: string }[]; totals: { ht: number; ttc: number; pendingSlips: number } }>(
+    `/api/finance/expenses?worksiteId=${worksiteId}`,
+  );
+  assert.ok(list.body.items.some((i) => i.id === slipId), 'le bordereau apparaît dans la liste');
+  assert.equal(list.body.totals.ht, before.body.totals.ht, 'un bordereau non lié ne pèse pas sur le total HT');
+  assert.equal(list.body.totals.ttc, before.body.totals.ttc, 'un bordereau non lié ne pèse pas sur le total TTC');
+  assert.equal(list.body.totals.pendingSlips, before.body.totals.pendingSlips + 1);
+
+  await prisma.ledgerEntry.delete({ where: { id: slipId } });
+});
+
+test('bordereau : lien vers la facture reçue ensuite — apparaît relié, n’est plus « en attente », se délie', async () => {
+  const before = await jf<{ totals: { pendingSlips: number } }>(`/api/finance/expenses?worksiteId=${worksiteId}`);
+  const slip = await prisma.ledgerEntry.create({
+    data: { direction: 'delivery_slip', docType: 'Bordereau', worksiteId, ht: 7.99, ttc: 9.67, date: new Date('2026-09-12'), source: 'manual', supplierName: 'Vector 3', paymentStatus: 'Payé' },
+  });
+  const invoice = await prisma.ledgerEntry.create({
+    data: { direction: 'purchase', docType: "Facture d'achat", worksiteId, ht: 7.99, ttc: 9.67, date: new Date('2026-09-20'), source: 'manual', supplierName: 'Vector 3', docNumber: 'FA-9001', paymentStatus: 'Non payé' },
+  });
+
+  // refus : lier une écriture qui n'est pas un bordereau
+  const badSubject = await jf(`/api/finance/expenses/${invoice.id}/link`, { method: 'POST', body: JSON.stringify({ invoiceId: null }) });
+  assert.equal(badSubject.status, 422);
+
+  // refus : cible qui n'est pas une facture d'achat (ex. un autre bordereau)
+  const badTarget = await jf(`/api/finance/expenses/${slip.id}/link`, { method: 'POST', body: JSON.stringify({ invoiceId: slip.id }) });
+  assert.equal(badTarget.status, 422);
+
+  const link = await jf<{ expense: { linkedInvoiceId: string | null; linkedInvoice: { docNumber: string | null } | null } }>(
+    `/api/finance/expenses/${slip.id}/link`, { method: 'POST', body: JSON.stringify({ invoiceId: invoice.id }) },
+  );
+  assert.equal(link.status, 200);
+  assert.equal(link.body.expense.linkedInvoiceId, invoice.id);
+  assert.equal(link.body.expense.linkedInvoice?.docNumber, 'FA-9001');
+
+  const listAfter = await jf<{ totals: { pendingSlips: number } }>(`/api/finance/expenses?worksiteId=${worksiteId}`);
+  assert.equal(listAfter.body.totals.pendingSlips, before.body.totals.pendingSlips, 'relié : ne compte plus comme en attente (créé déjà relié)');
+
+  const invoiceRow = await jf<{ expense: { _count: { bordereaux: number } } }>(`/api/finance/expenses/${invoice.id}`);
+  assert.equal(invoiceRow.body.expense._count.bordereaux, 1);
+
+  const unlink = await jf<{ expense: { linkedInvoiceId: string | null } }>(
+    `/api/finance/expenses/${slip.id}/link`, { method: 'POST', body: JSON.stringify({ invoiceId: null }) },
+  );
+  assert.equal(unlink.status, 200);
+  assert.equal(unlink.body.expense.linkedInvoiceId, null);
+
+  await prisma.ledgerEntry.deleteMany({ where: { id: { in: [slip.id, invoice.id] } } });
+});

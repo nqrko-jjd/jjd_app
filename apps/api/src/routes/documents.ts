@@ -83,7 +83,9 @@ documentsRouter.post(
     const seq = await nextCounter('doc:draft');
     const doc = await prisma.document.create({
       data: {
-        kind: extraction.kind ?? 'invoice',
+        // "bordereau" (fournisseur) n'a pas de sens ici : on importe une facture/un devis ÉMIS par
+        // JJD, jamais un bordereau — repli défensif au cas où le texte contiendrait ce mot.
+        kind: extraction.kind && extraction.kind !== 'delivery_slip' ? extraction.kind : 'invoice',
         direction: extraction.kind === 'credit_note' ? 'credit_note' : 'sale',
         draftRef: `BROUILLON-${seq}`,
         status: 'draft',

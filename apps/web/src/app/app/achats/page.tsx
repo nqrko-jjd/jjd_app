@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
 import { api, apiUpload, apiBlobUrl } from '@/lib/api';
 import { PageHead, Money, formatDateBE, Kpi } from '@/lib/ui';
-import { Wallet, AlertTriangle, Receipt } from 'lucide-react';
+import { Wallet, AlertTriangle, Receipt, Truck } from 'lucide-react';
 import { useSort, useColumnFilter, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
 import { ContextMenu, useContextMenu, type MenuItem } from '@/components/ContextMenu';
@@ -39,6 +39,11 @@ interface Expense {
   hasPdf: boolean;
   editable: boolean;
   source: string | null;
+  // bordereau (direction "delivery_slip") -> facture reçue ensuite, une fois reliée
+  linkedInvoiceId: string | null;
+  linkedInvoice: { id: string; docNumber: string | null; date: string | null } | null;
+  // facture (direction "purchase") -> nombre de bordereaux qui pointent vers elle
+  _count: { bordereaux: number } | null;
 }
 interface Meta {
   categories: { code: string; label: string; kind: string }[];
@@ -76,16 +81,19 @@ function AchatsInner() {
   const [contactId, setContactId] = useState('');
   const [category, setCategory] = useState('');
   const [year, setYear] = useState('');
+  const [type, setType] = useState(''); // '' | purchase | credit_note | delivery_slip
+  const [linked, setLinked] = useState(''); // '' | 0 | 1 — ne s'applique qu'aux bordereaux
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(100);
-  const [edit, setEdit] = useState<Expense | 'new' | null>(null);
+  const [edit, setEdit] = useState<Expense | 'new' | { prefillFrom: Expense } | null>(null);
+  const [linking, setLinking] = useState<Expense | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [exporting, setExporting] = useState(false);
   const ctx = useContextMenu<Expense>();
 
   // revient à la 1ère page à chaque changement de filtre (sinon on peut se retrouver
   // sur une page qui n'existe plus après un filtrage plus restrictif)
-  useEffect(() => { setPage(1); }, [q, paid, worksiteId, contactId, category, year]);
+  useEffect(() => { setPage(1); }, [q, paid, worksiteId, contactId, category, year, type, linked]);
 
   const params = new URLSearchParams();
   if (q) params.set('q', q);
@@ -94,11 +102,13 @@ function AchatsInner() {
   if (contactId) params.set('contactId', contactId);
   if (category) params.set('category', category);
   if (year) params.set('year', year);
+  if (type) params.set('type', type);
+  if (linked) params.set('linked', linked);
   params.set('page', String(page));
   params.set('pageSize', String(pageSize));
   const { data, loading, error, reload } = useApi<{
     items: Expense[];
-    totals: { count: number; ht: number; ttc: number; unpaidTtc: number };
+    totals: { count: number; ht: number; ttc: number; unpaidTtc: number; pendingSlips: number };
     page: number;
     pageSize: number;
     totalPages: number;
@@ -135,6 +145,11 @@ function AchatsInner() {
   async function remove(e: Expense) {
     if (!window.confirm(`Supprimer la dépense ${e.docNumber ?? ''} (${e.supplier ?? ''}) ?`)) return;
     await api(`/api/finance/expenses/${e.id}`, { method: 'DELETE' });
+    reload();
+  }
+  async function unlinkSlip(e: Expense) {
+    if (!window.confirm(`Délier ce bordereau de la facture ${e.linkedInvoice?.docNumber ?? ''} ?`)) return;
+    await api(`/api/finance/expenses/${e.id}/link`, { method: 'POST', body: { invoiceId: null } });
     reload();
   }
 
@@ -203,9 +218,18 @@ function AchatsInner() {
   }
 
   function rowMenu(e: Expense): MenuItem[] {
+    const slipActions: MenuItem[] = e.direction === 'delivery_slip'
+      ? e.linkedInvoiceId
+        ? [{ label: `Délier de la facture ${e.linkedInvoice?.docNumber ?? ''}`, onClick: () => unlinkSlip(e) }]
+        : [
+            { label: 'Facture reçue…', onClick: () => setEdit({ prefillFrom: e }) },
+            { label: 'Lier à une facture existante…', onClick: () => setLinking(e) },
+          ]
+      : [];
     return [
       { label: 'Ouvrir / modifier', onClick: () => setEdit(e) },
       ...(e.hasPdf ? [{ label: 'Voir la pièce jointe', onClick: () => viewPdf(e.id) }] : []),
+      ...(slipActions.length ? ['separator' as const, ...slipActions] : []),
       'separator',
       e.paid
         ? { label: 'Marquer non payé', onClick: () => setPaidStatus(e, false) }
@@ -221,17 +245,25 @@ function AchatsInner() {
       {ctx.menu && <ContextMenu x={ctx.menu.x} y={ctx.menu.y} items={rowMenu(ctx.menu.row)} onClose={ctx.close} />}
       {edit && meta && (
         <ExpenseModal
-          expense={edit === 'new' ? null : edit}
+          expense={edit === 'new' || (typeof edit === 'object' && 'prefillFrom' in edit) ? null : edit}
+          prefillFrom={typeof edit === 'object' && edit && 'prefillFrom' in edit ? edit.prefillFrom : null}
           meta={meta}
           onClose={() => setEdit(null)}
           onSaved={() => { setEdit(null); reload(); }}
+        />
+      )}
+      {linking && (
+        <LinkSlipModal
+          slip={linking}
+          onClose={() => setLinking(null)}
+          onLinked={() => { setLinking(null); reload(); }}
         />
       )}
 
       <PageHead
         eyebrow="Comptabilité"
         title="Achats / Dépenses"
-        sub={data ? `${data.totals.count} factures d'achat · page ${data.page}/${data.totalPages} · clic droit pour les actions rapides` : undefined}
+        sub={data ? `${data.totals.count} ligne${data.totals.count > 1 ? 's' : ''} · page ${data.page}/${data.totalPages} · clic droit pour les actions rapides` : undefined}
         action={
           <div className="row">
             {selected.size > 0 && (
@@ -269,6 +301,21 @@ function AchatsInner() {
           sub={total > 0 ? `${Math.round((unpaidTotal / total) * 100)} % du total` : 'Rien à payer'}
           warn={unpaidTotal > 0}
         />
+        <div
+          role="button"
+          tabIndex={0}
+          style={{ cursor: 'pointer' }}
+          title="Filtrer sur les bordereaux en attente de facture"
+          onClick={() => { setType('delivery_slip'); setLinked('0'); }}
+        >
+          <Kpi
+            ic={Truck}
+            label="Bordereaux en attente"
+            value={String(data?.totals.pendingSlips ?? 0)}
+            sub="Enlèvement/paiement sans facture reçue"
+            warn={(data?.totals.pendingSlips ?? 0) > 0}
+          />
+        </div>
       </div>
 
       <div className="row" style={{ marginBottom: '1rem', flexWrap: 'wrap', gap: '0.4rem' }}>
@@ -278,6 +325,19 @@ function AchatsInner() {
           <option value="0">Non payé</option>
           <option value="1">Payé</option>
         </select>
+        <select className="select" style={{ maxWidth: 180 }} value={type} onChange={(e) => { setType(e.target.value); if (e.target.value !== 'delivery_slip') setLinked(''); }}>
+          <option value="">Tous les types</option>
+          <option value="purchase">Factures d’achat</option>
+          <option value="credit_note">Notes de crédit</option>
+          <option value="delivery_slip">Bordereaux</option>
+        </select>
+        {type === 'delivery_slip' && (
+          <select className="select" style={{ maxWidth: 170 }} value={linked} onChange={(e) => setLinked(e.target.value)}>
+            <option value="">Reliés & en attente</option>
+            <option value="0">En attente de facture</option>
+            <option value="1">Reliés</option>
+          </select>
+        )}
         <ComboBox
           style={{ maxWidth: 220 }}
           placeholder="Tous les chantiers"
@@ -359,6 +419,16 @@ function AchatsInner() {
                   <td>
                     {e.supplier ?? '—'}
                     {e.direction === 'credit_note' && <span className="badge warn" style={{ marginLeft: 6 }}>NC</span>}
+                    {e.direction === 'delivery_slip' && (
+                      e.linkedInvoiceId
+                        ? <span className="badge ok" style={{ marginLeft: 6 }} title={`Relié à la facture ${e.linkedInvoice?.docNumber ?? ''}`}>📦 Bordereau · relié</span>
+                        : <span className="badge warn" style={{ marginLeft: 6 }} title="Preuve d’enlèvement/paiement — la facture n’est pas encore arrivée">📦 Bordereau · en attente</span>
+                    )}
+                    {e.direction === 'purchase' && !!e._count?.bordereaux && (
+                      <span className="badge plain" style={{ marginLeft: 6 }} title="Bordereau(x) relié(s) à cette facture">
+                        📦 {e._count.bordereaux} bordereau{e._count.bordereaux > 1 ? 'x' : ''}
+                      </span>
+                    )}
                     {e.source === 'chat' && <span className="badge plain" style={{ marginLeft: 6 }} title="Envoyée depuis le fil de chantier — à vérifier">📎 Fil de chantier</span>}
                     {e.source === 'email' && <span className="badge plain" style={{ marginLeft: 6 }} title="Reçue sur la boîte mail factures — à vérifier">✉️ Boîte mail</span>}
                   </td>
@@ -390,11 +460,15 @@ function AchatsInner() {
 
 function ExpenseModal({
   expense,
+  prefillFrom,
   meta,
   onClose,
   onSaved,
 }: {
   expense: Expense | null;
+  /** Bordereau d'origine : « Facture reçue… » depuis un bordereau — préremplit fournisseur/chantier,
+   *  et la facture créée est reliée automatiquement au bordereau une fois enregistrée. */
+  prefillFrom?: Expense | null;
   meta: Meta;
   onClose: () => void;
   onSaved: () => void;
@@ -402,17 +476,17 @@ function ExpenseModal({
   const [v, setV] = useState({
     date: toDateInput(expense?.date ?? new Date().toISOString()),
     dueDate: toDateInput(expense?.dueDate ?? null),
-    direction: (expense?.direction === 'credit_note' ? 'credit_note' : 'purchase') as 'purchase' | 'credit_note',
-    supplierName: expense?.contactId ? '' : (expense?.supplierName ?? ''),
-    contactId: expense?.contactId ?? '',
+    direction: (prefillFrom ? 'purchase' : expense?.direction === 'credit_note' ? 'credit_note' : expense?.direction === 'delivery_slip' ? 'delivery_slip' : 'purchase') as 'purchase' | 'credit_note' | 'delivery_slip',
+    supplierName: (expense ?? prefillFrom)?.contactId ? '' : ((expense ?? prefillFrom)?.supplierName ?? ''),
+    contactId: (expense ?? prefillFrom)?.contactId ?? '',
     docNumber: expense?.docNumber ?? '',
-    categoryCode: expense?.categoryCode ?? '',
-    categoryRaw: expense?.categoryRaw ?? '',
-    worksiteId: expense?.worksiteId ?? '',
+    categoryCode: (expense ?? prefillFrom)?.categoryCode ?? '',
+    categoryRaw: (expense ?? prefillFrom)?.categoryRaw ?? '',
+    worksiteId: (expense ?? prefillFrom)?.worksiteId ?? '',
     ht: expense?.ht != null ? String(expense.ht) : '',
     vatRecup: expense?.vatRecup != null ? String(expense.vatRecup) : '',
     ttc: expense?.ttc != null ? String(expense.ttc) : '',
-    notes: expense?.notes ?? '',
+    notes: expense?.notes ?? (prefillFrom ? `Bordereau ${prefillFrom.docNumber ?? ''}`.trim() : ''),
     paymentStatus: (expense?.paid ? 'Payé' : 'Non payé') as 'Payé' | 'Non payé',
   });
   // Une facture peut couvrir plusieurs chantiers (ex. sous-traitant intervenu sur
@@ -456,7 +530,7 @@ function ExpenseModal({
       const vatRecup = ht != null && ex.totalTtc != null ? Math.round((ex.totalTtc - ht) * 100) / 100 : null;
       setV((prev) => ({
         ...prev,
-        direction: ex.kind === 'credit_note' ? 'credit_note' : prev.direction,
+        direction: ex.kind === 'credit_note' ? 'credit_note' : ex.kind === 'delivery_slip' ? 'delivery_slip' : prev.direction,
         date: ex.issuedOn || prev.date,
         dueDate: prev.dueDate || ex.dueOn || '',
         docNumber: prev.docNumber || ex.docNumber || '',
@@ -584,6 +658,10 @@ function ExpenseModal({
         ? await api<{ expense: { id: string } }>(`/api/finance/expenses/${expense.id}`, { method: 'PATCH', body })
         : await api<{ expense: { id: string } }>('/api/finance/expenses', { method: 'POST', body });
       await attachFile(saved.expense.id);
+      // « Facture reçue… » depuis un bordereau : la nouvelle facture est reliée dès sa création
+      if (!expense && prefillFrom) {
+        await api(`/api/finance/expenses/${prefillFrom.id}/link`, { method: 'POST', body: { invoiceId: saved.expense.id } });
+      }
       onSaved();
     } catch (e2) {
       setErr((e2 as Error).message ?? 'Erreur');
@@ -595,9 +673,14 @@ function ExpenseModal({
     <div className="modal-scrim" onClick={onClose}>
       <form className="modal" style={{ maxWidth: 640 }} onClick={(e) => e.stopPropagation()} onSubmit={submit}>
         <div className="modal-head">
-          <h2>{expense ? 'Modifier la dépense' : 'Nouvelle dépense'}</h2>
+          <h2>{expense ? 'Modifier la dépense' : prefillFrom ? `Facture reçue — bordereau ${prefillFrom.docNumber ?? ''}` : 'Nouvelle dépense'}</h2>
           <button type="button" className="btn ghost" onClick={onClose} aria-label="Fermer">✕</button>
         </div>
+        {prefillFrom && (
+          <div className="banner success" style={{ margin: '0 1.2rem 0.6rem' }}>
+            <span className="txt">Reliée automatiquement au bordereau {prefillFrom.docNumber ?? ''} ({prefillFrom.supplier ?? 'fournisseur'}) à l’enregistrement.</span>
+          </div>
+        )}
         <div className="modal-body">
           <div className="field">
             <label>Date *</label>
@@ -609,9 +692,10 @@ function ExpenseModal({
           </div>
           <div className="field">
             <label>Type</label>
-            <select className="select" value={v.direction} onChange={(e) => set('direction', e.target.value)}>
+            <select className="select" value={v.direction} disabled={!!prefillFrom} onChange={(e) => set('direction', e.target.value)}>
               <option value="purchase">Facture d’achat</option>
               <option value="credit_note">Note de crédit fournisseur</option>
+              <option value="delivery_slip">Bordereau (en attente de facture)</option>
             </select>
           </div>
           <div className="field" style={{ gridColumn: '1 / -1' }}>
@@ -628,7 +712,7 @@ function ExpenseModal({
             />
           </div>
           <div className="field">
-            <label>N° de facture</label>
+            <label>{v.direction === 'delivery_slip' ? 'N° de bordereau' : v.direction === 'credit_note' ? 'N° de note de crédit' : 'N° de facture'}</label>
             <input className="input" value={v.docNumber} onChange={(e) => set('docNumber', e.target.value)} />
           </div>
           <div className="field">
@@ -787,6 +871,89 @@ function ExpenseModal({
           <button type="submit" className="btn primary" disabled={busy}>{busy ? 'Enregistrement…' : 'Enregistrer'}</button>
         </div>
       </form>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------- modale lier un bordereau à une facture existante */
+
+/**
+ * Cas d'un fournisseur qui consolide plusieurs bordereaux sur une seule facture reçue : la
+ * facture existe déjà côté app (créée pour un 1er bordereau via « Facture reçue… », ou saisie
+ * normalement) — on cherche parmi les factures d'achat déjà enregistrées, filtrées d'abord sur
+ * le même fournisseur.
+ */
+function LinkSlipModal({ slip, onClose, onLinked }: { slip: Expense; onClose: () => void; onLinked: () => void }) {
+  const [q, setQ] = useState('');
+  const [sameSupplierOnly, setSameSupplierOnly] = useState(!!slip.contactId);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  const params = new URLSearchParams({ type: 'purchase', pageSize: '30' });
+  if (q.trim()) params.set('q', q.trim());
+  if (sameSupplierOnly && slip.contactId) params.set('contactId', slip.contactId);
+  const { data, loading } = useApi<{ items: Expense[] }>(`/api/finance/expenses?${params}`);
+
+  useEffect(() => {
+    const onEsc = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onEsc);
+    return () => window.removeEventListener('keydown', onEsc);
+  }, [onClose]);
+
+  async function link(invoiceId: string) {
+    setBusy(invoiceId);
+    setErr(null);
+    try {
+      await api(`/api/finance/expenses/${slip.id}/link`, { method: 'POST', body: { invoiceId } });
+      onLinked();
+    } catch (e) {
+      setErr((e as Error).message ?? 'Erreur');
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="modal-scrim" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 560 }} onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <h2>Lier le bordereau {slip.docNumber ?? ''} à une facture</h2>
+          <button type="button" className="btn ghost" onClick={onClose} aria-label="Fermer">✕</button>
+        </div>
+        <div className="modal-body" style={{ gridTemplateColumns: '1fr' }}>
+          <div className="row" style={{ gap: '0.5rem', flexWrap: 'wrap' }}>
+            <input className="input" style={{ flex: 1, minWidth: 200 }} autoFocus placeholder="N° de facture, fournisseur…" value={q} onChange={(e) => setQ(e.target.value)} />
+            {slip.contactId && (
+              <label className="row" style={{ gap: '0.35rem', fontSize: '0.82rem', alignItems: 'center' }}>
+                <input type="checkbox" checked={sameSupplierOnly} onChange={(e) => setSameSupplierOnly(e.target.checked)} />
+                {slip.supplier} uniquement
+              </label>
+            )}
+          </div>
+          {loading && <p className="muted">Recherche…</p>}
+          {!loading && data && data.items.length === 0 && <p className="muted">Aucune facture d’achat ne correspond.</p>}
+          {!loading && data && data.items.length > 0 && (
+            <div style={{ display: 'grid', gap: '0.4rem', maxHeight: 320, overflowY: 'auto' }}>
+              {data.items.map((inv) => (
+                <button
+                  key={inv.id}
+                  type="button"
+                  className="btn"
+                  style={{ justifyContent: 'space-between' }}
+                  disabled={!!busy}
+                  onClick={() => link(inv.id)}
+                >
+                  <span>{formatDateBE(inv.date)} · {inv.docNumber ?? 'sans n°'} · {inv.supplier ?? '—'}{inv.worksite ? ` · ${inv.worksite.ref}` : ''}</span>
+                  <Money value={inv.ttc ?? inv.ht} />
+                </button>
+              ))}
+            </div>
+          )}
+          {err && <div className="badge crit" style={{ padding: '0.4rem 0.7rem' }}>{err}</div>}
+        </div>
+        <div className="modal-foot">
+          <button type="button" className="btn" onClick={onClose}>Annuler</button>
+        </div>
+      </div>
     </div>
   );
 }

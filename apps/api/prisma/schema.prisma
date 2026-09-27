@@ -641,8 +641,8 @@ model LedgerEntry {
   dueDate       DateTime? // échéance (facture d'achat)
   year          Int?
   month         String?
-  direction     String // sale | purchase | credit_note
-  docType       String? // "Facture de vente" | "Facture d'achat" | "Note de crédit"
+  direction     String // sale | purchase | credit_note | delivery_slip
+  docType       String? // "Facture de vente" | "Facture d'achat" | "Note de crédit" | "Bordereau"
   docNumber     String?
   worksiteRef   String? // R-xxx / E-xx tel qu'écrit
   worksiteId    String?
@@ -669,6 +669,12 @@ model LedgerEntry {
   // unique : un document ne peut avoir qu'une seule écriture synchronisée, mise à jour en place.
   documentId    String?   @unique
   document      Document? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  // Bordereau (direction: "delivery_slip") -> facture d'achat reçue ensuite. Plusieurs bordereaux
+  // peuvent pointer vers la même facture (un fournisseur en consolide parfois plusieurs sur une
+  // seule facture mensuelle) : la contrainte vit donc côté bordereau, pas d'unicité ici.
+  linkedInvoiceId String?
+  linkedInvoice   LedgerEntry?  @relation("BordereauInvoice", fields: [linkedInvoiceId], references: [id], onDelete: SetNull)
+  bordereaux      LedgerEntry[] @relation("BordereauInvoice")
   createdById   String?
   createdBy     User?     @relation("LedgerEntryAuthor", fields: [createdById], references: [id])
   createdAt     DateTime  @default(now())
@@ -678,6 +684,7 @@ model LedgerEntry {
   @@index([worksiteRef])
   @@index([direction])
   @@index([date])
+  @@index([linkedInvoiceId])
 }
 
 /// Import brut des relevés bancaires (Belfius + ING). Rapprochement progressif.

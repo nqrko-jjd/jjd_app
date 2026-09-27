@@ -16,7 +16,7 @@ import { prisma } from '../db.js';
 import { env } from '../env.js';
 
 export interface DocumentExtraction {
-  kind: 'quote' | 'invoice' | 'credit_note' | 'deposit_invoice' | null;
+  kind: 'quote' | 'invoice' | 'credit_note' | 'deposit_invoice' | 'delivery_slip' | null;
   issuedOn: string | null; // ISO (yyyy-mm-dd)
   dueOn: string | null; // ISO — échéance
   docNumber: string | null;
@@ -48,6 +48,10 @@ const VAT_RE = /\bBE\s?\d{4}[.\s]?\d{3}[.\s]?\d{3}\b/gi;
 const normVat = (v: string) => v.replace(/[^0-9A-Z]/gi, '').toUpperCase();
 
 function detectKind(text: string): DocumentExtraction['kind'] {
+  // « BORDEREAU » d'abord : certains fournisseurs (Vector 3, BigMat…) remettent ce document à
+  // l'enlèvement/au paiement, avant la vraie facture — jamais les mots facture/devis dessus,
+  // donc aucun risque de conflit avec les détections suivantes.
+  if (/\bbordereau\b/i.test(text)) return 'delivery_slip';
   // FR d'abord (contexte majoritaire JJD), puis équivalents NL — beaucoup de fournisseurs
   // belges (Cebeo, Sixt…) facturent en néerlandais, jusqu'ici jamais reconnu.
   if (/note\s+de\s+cr[ée]dit|\bavoir\s+n[°o]|creditnota/i.test(text)) return 'credit_note';
@@ -119,7 +123,7 @@ function findDueDate(text: string): string | null {
  *  ressort parfois en U+FFFD (caractère de remplacement Unicode) quand `pdftotext` ne sait pas
  *  décoder le glyphe d'origine (vu sur de vraies factures Cebeo) — toléré au même titre que "°"/"o". */
 function findDocNumber(text: string): string | null {
-  const m = text.match(/(?:facture|devis|note\s+de\s+cr[ée]dit|avoir|offre)\s*n[°o�]\.?\s*:?\s*([A-Z0-9][A-Z0-9\-/.]{1,24})/i)
+  const m = text.match(/(?:facture|devis|note\s+de\s+cr[ée]dit|avoir|offre|bordereau)\s*n[°o�]\.?\s*:?\s*([A-Z0-9][A-Z0-9\-/.]{1,24})/i)
     ?? text.match(/num[eé]ro\s*(?:\/\s*date)?\s*du\s*document\s*:?\s*([A-Z0-9][A-Z0-9\-/.]{1,24})/i)
     // ordre inversé "Numéro de facture : …" (vu chez ENGIE) — le numéro peut être groupé par
     // espaces ("709 934 470 024"), tolérés tant qu'ils séparent deux blocs alphanumériques.
@@ -273,11 +277,11 @@ export function parseDocumentText(text: string): ParsedDocumentText {
 const AI_MODEL = 'claude-sonnet-5';
 const aiClient = env.anthropicApiKey ? new Anthropic({ apiKey: env.anthropicApiKey }) : null;
 
-const AI_EXTRACTION_PROMPT = `Tu es un extracteur de données de documents commerciaux belges (facture, devis ou note de crédit fournisseur — en français ou en néerlandais). Le destinataire est toujours "JJD Consult" : ignore-le, seul l'ÉMETTEUR du document t'intéresse.
+const AI_EXTRACTION_PROMPT = `Tu es un extracteur de données de documents commerciaux belges (facture, devis, note de crédit ou bordereau fournisseur — en français ou en néerlandais). Le destinataire est toujours "JJD Consult" : ignore-le, seul l'ÉMETTEUR du document t'intéresse. Un "bordereau" (ou "afleveringsbon") est une preuve d'enlèvement/de paiement remise avant la vraie facture — à distinguer d'une facture.
 
 Réponds UNIQUEMENT avec un objet JSON valide (aucun texte avant/après, aucun bloc markdown), avec exactement ces clés :
 {
-  "kind": "invoice" | "quote" | "credit_note" | "deposit_invoice" | null,
+  "kind": "invoice" | "quote" | "credit_note" | "deposit_invoice" | "delivery_slip" | null,
   "issuedOn": "YYYY-MM-DD" | null,
   "dueOn": "YYYY-MM-DD" | null,
   "docNumber": string | null,
@@ -308,7 +312,7 @@ interface AiExtraction {
   supplierVat?: string | null;
 }
 
-const AI_KINDS = new Set(['quote', 'invoice', 'credit_note', 'deposit_invoice']);
+const AI_KINDS = new Set(['quote', 'invoice', 'credit_note', 'deposit_invoice', 'delivery_slip']);
 
 /**
  * Repli IA (Claude) quand l'extraction par règles ne trouve rien d'exploitable — mise en page

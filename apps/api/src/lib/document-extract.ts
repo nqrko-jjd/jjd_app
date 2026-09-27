@@ -365,12 +365,13 @@ export async function extractDocumentInfo(
   let { kind, issuedOn, dueOn, docNumber, totalHt, totalVat, totalTtc, vatRate, vatNumbersFound } = parseDocumentText(text);
   let aiSupplierName: string | null = null;
 
-  // Repli IA : rien d'exploitable trouvé par les règles (ni montant ni n° de document) -> on
-  // retente en lisant le PDF directement avec Claude, qui gère bien mieux les mises en page
-  // atypiques et le néerlandais — ne comble que ce qui manque, ne tourne que pour les cas
-  // vraiment bloqués (coût maîtrisé : pas un appel par facture, seulement pour celles où les
-  // règles échouent complètement).
-  if (totalHt == null && totalTtc == null && docNumber == null) {
+  // Repli IA : soit rien d'exploitable trouvé par les règles (ni montant ni n° de document),
+  // soit aucun n° de TVA repéré dans le texte — la seule piste fiable pour retrouver le bon
+  // fournisseur parmi les contacts JJD (sinon le nom reste vide ou mal deviné) -> on retente en
+  // lisant le PDF directement avec Claude, qui gère bien mieux les mises en page atypiques et le
+  // néerlandais — ne comble que ce qui manque, ne tourne que pour les cas qui en ont besoin
+  // (coût maîtrisé : pas un appel par facture, la plupart portent déjà un n° de TVA).
+  if ((totalHt == null && totalTtc == null && docNumber == null) || vatNumbersFound.length === 0) {
     const ai = await extractWithAi(buf);
     if (ai) {
       if (kind == null && ai.kind && AI_KINDS.has(ai.kind)) kind = ai.kind as DocumentExtraction['kind'];

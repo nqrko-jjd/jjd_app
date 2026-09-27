@@ -117,6 +117,7 @@ function AchatsInner() {
   const { data: mailbox } = useApi<{ configured: boolean }>('/api/finance/expenses/mailbox-status');
   const [syncingMailbox, setSyncingMailbox] = useState(false);
   const [reprocessing, setReprocessing] = useState(false);
+  const [scanningProcessed, setScanningProcessed] = useState(false);
 
   const expenseAccessors = {
     date: (e: Expense) => (e.date ? new Date(e.date) : null),
@@ -206,6 +207,24 @@ function AchatsInner() {
     }
   }
 
+  async function scanProcessedMailbox() {
+    setScanningProcessed(true);
+    try {
+      const r = await api<{ messagesScanned: number; pdfsFound: number; alreadyInSystem: number; created: number; errors: string[] }>(
+        '/api/finance/expenses/scan-processed-mailbox', { method: 'POST' },
+      );
+      alert(
+        `${r.created} facture(s) retrouvée(s) et importée(s) sur ${r.pdfsFound} PDF vu(s) dans ${r.messagesScanned} mail(s) déjà classés « Traité par JJD App »`
+        + ` (${r.alreadyInSystem} déjà connue(s)).${r.errors.length ? `\n${r.errors.length} erreur(s).` : ''}`,
+      );
+      reload();
+    } catch (e) {
+      alert(`Échec de la recherche : ${(e as Error).message}`);
+    } finally {
+      setScanningProcessed(false);
+    }
+  }
+
   function exportCsv() {
     downloadCsv(`/api/finance/expenses/export.csv?${params}`, `achats-${new Date().toISOString().slice(0, 10)}.csv`);
   }
@@ -279,6 +298,16 @@ function AchatsInner() {
             <button className="btn" disabled={reprocessing} onClick={reprocessMailbox} title="Relit les factures boîte mail déjà importées dont le montant, le n° ou le fournisseur n'avaient pas été trouvés">
               {reprocessing ? 'Retraitement…' : '🔄 Retraiter les imports mail'}
             </button>
+            {mailbox?.configured && (
+              <button
+                className="btn"
+                disabled={scanningProcessed}
+                onClick={scanProcessedMailbox}
+                title="Un mail avec plusieurs pièces jointes (facture + conditions générales…) pouvait être classé « traité » sans que la facture soit importée — recherche celles qui manquent dans ce dossier"
+              >
+                {scanningProcessed ? 'Recherche…' : '🗂️ Retrouver des factures manquées'}
+              </button>
+            )}
             <button className="btn" onClick={exportCsv} title="Exporter la liste filtrée en CSV (éditable dans Excel)">⇩ Exporter CSV</button>
             <button className="btn" onClick={importCsv} title="Réimporter un CSV/Excel corrigé (met à jour par id, crée les nouvelles lignes)">⇧ Importer</button>
             <button className="btn primary" onClick={() => setEdit('new')}>+ Nouvelle dépense</button>

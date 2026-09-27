@@ -17,7 +17,7 @@ import { storeFile, UPLOADS_DIR } from '../lib/media.js';
 import { nameOverlap } from '../lib/bank-match.js';
 import { extractDocumentInfo } from '../lib/document-extract.js';
 import { toCsv, readTableBuffer, pick } from '../lib/table-io.js';
-import { invoiceMailboxConfigured, syncInvoiceMailbox, reprocessEmailEntries } from '../lib/invoice-mailbox.js';
+import { invoiceMailboxConfigured, syncInvoiceMailbox, reprocessEmailEntries, scanInvoiceMailboxHistory, PROCESSED_MAILBOX } from '../lib/invoice-mailbox.js';
 
 export const expensesRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
@@ -491,6 +491,23 @@ expensesRouter.post(
   requireAuth(...OFFICE),
   asyncHandler(async (_req, res) => {
     const stats = await reprocessEmailEntries();
+    res.json(stats);
+  }),
+);
+
+/**
+ * Reprend le dossier « Traité par JJD App » : un mail classé « traité » avant le correctif du
+ * multi-pièces-jointes (un échec sur l'une d'elles y faisait atterrir le mail avec sa vraie
+ * facture jamais importée) peut y contenir une facture manquante. Ne modifie jamais les mails
+ * (comme scanInvoiceMailboxHistory) — dédoublonne par n° de document / montant + date, jamais
+ * de doublon si une pièce du mail était en fait déjà connue.
+ */
+expensesRouter.post(
+  '/scan-processed-mailbox',
+  requireAuth(...OFFICE),
+  asyncHandler(async (_req, res) => {
+    if (!invoiceMailboxConfigured()) throw new HttpError(409, 'Boîte mail non configurée');
+    const stats = await scanInvoiceMailboxHistory([PROCESSED_MAILBOX]);
     res.json(stats);
   }),
 );

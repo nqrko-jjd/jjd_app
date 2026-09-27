@@ -21,7 +21,13 @@ import { prisma } from '../db.js';
 import { storeFile, UPLOADS_DIR } from './media.js';
 import { extractDocumentInfo } from './document-extract.js';
 
-const PROCESSED_MAILBOX = 'Traité par JJD App';
+export const PROCESSED_MAILBOX = 'Traité par JJD App';
+
+// Pièces jointes PDF qui ne sont jamais une facture/note de crédit — conditions générales,
+// mentions légales… souvent jointes au même mail que la vraie facture (vu chez Vanlaethem
+// Containers : "Algemene voorwaarden - Co…" à côté du PDF de facture). Ignorées avant toute
+// tentative d'extraction, pour ne jamais créer une dépense fantôme à partir de ce genre de PDF.
+export const NON_INVOICE_ATTACHMENT_RE = /algemene\s*voorwaarden|conditions?\s*g[ée]n[ée]rales?|\bcgv\b|general\s*terms|terms\s*(?:and|&)?\s*conditions|privacy\s*policy|vie\s*priv[ée]e/i;
 
 export function invoiceMailboxConfigured(): boolean {
   const m = env.invoicesMailbox;
@@ -76,7 +82,7 @@ interface SyncStats {
  * montant TTC (± 2 c) et date proche (± 5 j). Amounts à 0/absents = extraction peu fiable,
  * jamais utilisés comme clé (risque de faux positif entre plusieurs factures à 0 €).
  */
-async function findExistingMatch(extraction: Awaited<ReturnType<typeof extractDocumentInfo>>): Promise<string | null> {
+export async function findExistingMatch(extraction: Awaited<ReturnType<typeof extractDocumentInfo>>): Promise<string | null> {
   if (extraction.docNumber) {
     const byDoc = await prisma.ledgerEntry.findFirst({
       where: { direction: 'purchase', docNumber: extraction.docNumber },
@@ -104,6 +110,14 @@ async function findExistingMatch(extraction: Awaited<ReturnType<typeof extractDo
  * dépense « à vérifier »), puis déplace le message traité dans `PROCESSED_MAILBOX` (créé si
  * besoin) pour ne jamais le retraiter. Un message sans PDF est juste marqué lu (laissé dans
  * INBOX) — David le verra passer sans qu'on perde la trace d'un mail non exploité.
+ *
+ * Chaque pièce jointe PDF est traitée INDÉPENDAMMENT des autres (essentiel quand un mail en
+ * contient plusieurs — facture + conditions générales par ex.) : un échec sur l'une d'elles ne
+ * doit ni faire perdre les autres, ni faire classer le mail comme traité. Un message n'est
+ * marqué lu/déplacé QUE si toutes ses pièces jointes ont été traitées sans erreur (importées ou
+ * déjà connues) — sinon il reste non lu en INBOX, retenté au prochain sync ; un dédoublonnage
+ * (par n° de document ou montant+date, comme le scan rétroactif) rend cette relecture sûre :
+ * la pièce déjà importée n'est jamais recréée, seule celle qui avait échoué est retentée.
  */
 export async function syncInvoiceMailbox(): Promise<SyncStats> {
   const stats: SyncStats = { messagesSeen: 0, pdfsImported: 0, errors: [] };
@@ -129,23 +143,36 @@ export async function syncInvoiceMailbox(): Promise<SyncStats> {
       const uids = await client.search({ seen: false }, { uid: true });
       for (const uid of uids as number[]) {
         stats.messagesSeen++;
-        let importedAny = false;
+        let allOk = true;
+        let importedAny = false; // ≥1 pièce jointe reconnue comme facture, importée à l'instant ou déjà connue
         try {
           const msg = (await client.fetchOne(String(uid), { source: true }, { uid: true })) as FetchMessageObject | false;
           if (!msg || !msg.source) continue;
           const parsed = await simpleParser(msg.source);
           for (const att of parsed.attachments) {
             if (att.contentType !== 'application/pdf') continue;
-            const { data } = await buildExpenseFromPdf(att.content, att.filename || 'facture.pdf');
-            await prisma.ledgerEntry.create({ data: { ...data, createdById: null } });
-            stats.pdfsImported++;
-            importedAny = true;
+            if (att.filename && NON_INVOICE_ATTACHMENT_RE.test(att.filename)) continue;
+            try {
+              const { data, extraction } = await buildExpenseFromPdf(att.content, att.filename || 'facture.pdf');
+              if (await findExistingMatch(extraction)) { importedAny = true; continue; } // déjà importée (relecture après échec d'une autre pièce jointe du même mail)
+              await prisma.ledgerEntry.create({ data: { ...data, createdById: null } });
+              stats.pdfsImported++;
+              importedAny = true;
+            } catch (e) {
+              allOk = false;
+              stats.errors.push(`uid ${uid}, ${att.filename ?? 'pièce jointe'} : ${(e as Error).message}`);
+            }
           }
         } catch (e) {
+          allOk = false;
           stats.errors.push(`uid ${uid} : ${(e as Error).message}`);
         }
-        await client.messageFlagsAdd(uid, ['\\Seen'], { uid: true });
-        if (importedAny) await client.messageMove(uid, PROCESSED_MAILBOX, { uid: true });
+        // pas d'erreur -> lu, laissé en INBOX si rien à en tirer, déplacé sinon ; une erreur sur
+        // au moins une pièce jointe laisse le mail non lu, retenté (sans doublon) au prochain sync
+        if (allOk) {
+          await client.messageFlagsAdd(uid, ['\\Seen'], { uid: true });
+          if (importedAny) await client.messageMove(uid, PROCESSED_MAILBOX, { uid: true });
+        }
       }
     } finally {
       lock.release();
@@ -190,8 +217,14 @@ export async function scanInvoiceMailboxHistory(folders?: string[]): Promise<Sca
   await client.connect();
   try {
     const list = await client.list();
+    const allPaths = list.map((m) => m.path);
     const skip = new Set(['Sent', 'Drafts', 'Junk', 'Trash']);
-    const targets = folders ?? list.map((m) => m.path).filter((p) => !skip.has(p) && !p.includes(PROCESSED_MAILBOX));
+    // un nom de dossier fourni par l'appelant (ex. PROCESSED_MAILBOX) peut différer du chemin
+    // IMAP réel selon le séparateur du serveur ("INBOX.Traité par JJD App" chez certains) —
+    // on le résout contre la liste réelle (égalité ou suffixe) avant de verrouiller le dossier
+    const targets = folders
+      ? folders.map((f) => allPaths.find((p) => p === f || p.endsWith(f)) ?? f)
+      : allPaths.filter((p) => !skip.has(p) && !p.includes(PROCESSED_MAILBOX));
 
     for (const path of targets) {
       const lock = await client.getMailboxLock(path).catch(() => null);
@@ -207,6 +240,7 @@ export async function scanInvoiceMailboxHistory(folders?: string[]): Promise<Sca
             const parsed = await simpleParser(msg.source);
             for (const att of parsed.attachments) {
               if (att.contentType !== 'application/pdf') continue;
+              if (att.filename && NON_INVOICE_ATTACHMENT_RE.test(att.filename)) continue;
               stats.pdfsFound++;
               const extraction = await extractDocumentInfo(att.content, 'application/pdf', ['supplier', 'both']);
               // le n° de document est une clé fiable même sans montant détecté (findExistingMatch

@@ -262,7 +262,8 @@ portalRouter.get(
   requirePortal,
   asyncHandler(async (req, res) => {
     const u = req.portalUser!;
-    const { status, buildingId, q } = req.query as Record<string, string>;
+    const { status, buildingId, q: qRaw } = req.query as Record<string, string>;
+    const q = qRaw?.toLowerCase();
     const where: Record<string, unknown> = { ...worksiteScope(u) };
     if (status === 'open') where.status = { in: OPEN_STATUSES };
     else if (status) where.status = status;

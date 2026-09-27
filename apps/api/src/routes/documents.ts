@@ -174,7 +174,8 @@ documentsRouter.get(
   '/',
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
-    const { kind, status, q, worksiteId, contactId, scope, page: pageStr, pageSize: pageSizeStr, sort, dir } = req.query as Record<string, string>;
+    const { kind, status, q: qRaw, worksiteId, contactId, scope, page: pageStr, pageSize: pageSizeStr, sort, dir } = req.query as Record<string, string>;
+    const q = qRaw?.toLowerCase();
     const where: Record<string, unknown> = {};
     if (kind) where.kind = kind === 'invoice' ? { in: ['invoice', 'deposit_invoice'] } : kind;
     if (status) where.status = status;
@@ -635,7 +636,8 @@ priceItemsRouter.get(
   '/',
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
-    const { q, category } = req.query as Record<string, string>;
+    const { q: qRaw, category } = req.query as Record<string, string>;
+    const q = qRaw?.toLowerCase();
     const where: Record<string, unknown> = { active: true };
     if (category) where.category = category;
     if (q) where.OR = [{ label: { contains: q } }, { ref: { contains: q } }, { description: { contains: q } }];

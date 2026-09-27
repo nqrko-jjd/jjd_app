@@ -16,7 +16,8 @@ buildingsRouter.get(
   '/',
   requireAuth(...STAFF),
   asyncHandler(async (req, res) => {
-    const { q, syndicId } = req.query as Record<string, string>;
+    const { q: qRaw, syndicId } = req.query as Record<string, string>;
+    const q = qRaw?.toLowerCase();
     const where: Record<string, unknown> = { kind: { in: ACP_KINDS } };
     if (syndicId) where.syndicId = syndicId;
     if (q) where.OR = [{ name: { contains: q } }, { city: { contains: q } }];

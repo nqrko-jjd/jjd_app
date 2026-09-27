@@ -140,7 +140,7 @@ Règles impératives :
 export async function runTool(name: string, input: Record<string, unknown>, userId: string): Promise<{ result: unknown; action?: DraftAction }> {
   switch (name) {
     case 'search_worksites': {
-      const q = String(input.query ?? '');
+      const q = String(input.query ?? '').toLowerCase();
       const items = await prisma.worksite.findMany({
         where: { OR: [{ ref: { contains: q } }, { title: { contains: q } }] },
         take: 10,
@@ -149,7 +149,7 @@ export async function runTool(name: string, input: Record<string, unknown>, user
       return { result: items };
     }
     case 'search_contacts': {
-      const q = String(input.query ?? '');
+      const q = String(input.query ?? '').toLowerCase();
       const type = input.type === 'client' || input.type === 'supplier' ? input.type : undefined;
       const items = await prisma.contact.findMany({
         where: { name: { contains: q }, ...(type ? { OR: [{ type }, { type: 'both' }] } : {}) },
@@ -159,7 +159,7 @@ export async function runTool(name: string, input: Record<string, unknown>, user
       return { result: items };
     }
     case 'search_people': {
-      const q = String(input.query ?? '');
+      const q = String(input.query ?? '').toLowerCase();
       const items = await prisma.person.findMany({
         where: { active: true, OR: [{ firstName: { contains: q } }, { lastName: { contains: q } }, { displayName: { contains: q } }] },
         take: 10,

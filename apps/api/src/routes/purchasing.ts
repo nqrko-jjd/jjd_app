@@ -43,7 +43,8 @@ purchasingRouter.get(
   '/catalog',
   requireAuth(...STOCK_MANAGE),
   asyncHandler(async (req, res) => {
-    const { contactId, q } = req.query as Record<string, string>;
+    const { contactId, q: qRaw } = req.query as Record<string, string>;
+    const q = qRaw?.toLowerCase();
     if (!contactId) throw new HttpError(422, 'Fournisseur requis');
     const where: Prisma.SupplierProductWhereInput = { contactId };
     if (q?.trim()) where.OR = [{ label: { contains: q.trim() } }, { ref: { contains: q.trim() } }];

@@ -64,7 +64,8 @@ stockRouter.get(
   '/items',
   requireAuth(...STOCK_READ),
   asyncHandler(async (req, res) => {
-    const { q, active } = req.query as Record<string, string>;
+    const { q: qRaw, active } = req.query as Record<string, string>;
+    const q = qRaw?.toLowerCase();
     const where: Record<string, unknown> = {};
     if (active !== '0') where.active = true; // par défaut : masque les articles désactivés
     if (q) where.OR = [{ name: { contains: q } }, { category: { contains: q } }, { ref: { contains: q } }, { brand: { contains: q } }, { model: { contains: q } }];

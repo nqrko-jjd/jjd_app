@@ -51,7 +51,10 @@ function resolveUpload(rel: string): string {
 
 /** Filtre commun à la liste et à l'export CSV. */
 function buildWhere(q: Record<string, string>) {
-  const { q: search, paid, worksiteId, contactId, category, from, to, year, type, linked } = q;
+  const { q: searchRaw, paid, worksiteId, contactId, category, from, to, year, type, linked } = q;
+  // recherche insensible à la casse (y compris accents : le repli SQLite n'insensibilise que
+  // l'ASCII, "café"/"CAFÉ" ne matcheraient pas sans ce passage en minuscules côté JS)
+  const search = searchRaw?.toLowerCase();
   // achats + notes de crédit d'achat (une NC de vente réduit le CA, pas une dépense) + bordereaux
   // (preuve d'enlèvement/paiement reçue avant la facture — voir linkedInvoiceId).
   // categoryRaw peut être NULL (saisie manuelle sans catégorie) : NOT{contains} exclurait

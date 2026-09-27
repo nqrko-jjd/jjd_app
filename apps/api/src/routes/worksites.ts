@@ -45,7 +45,8 @@ worksitesRouter.get(
   '/',
   requireAuth(...STAFF),
   asyncHandler(async (req, res) => {
-    const { status, entity, q, archived, kind, page: pageStr, pageSize: pageSizeStr } = req.query as Record<string, string>;
+    const { status, entity, q: qRaw, archived, kind, page: pageStr, pageSize: pageSizeStr } = req.query as Record<string, string>;
+    const q = qRaw?.toLowerCase();
     // "Clôturé" est un statut comme un autre pour la page Chantiers (onglet "Tous" =
     // archived=all, montre tout) ; archived reste par ailleurs le filtre "actif ?" utilisé
     // par le tableau de bord, le picker planning/stock, la messagerie et la synchro Bricoloc.
@@ -128,7 +129,8 @@ worksitesRouter.get(
   requireAuth(...STAFF),
   asyncHandler(async (req, res) => {
     const personId = req.user!.personId;
-    const { q } = req.query as Record<string, string>;
+    const { q: qRaw } = req.query as Record<string, string>;
+    const q = qRaw?.toLowerCase();
     if (!personId) return res.json({ items: [] });
     const where: Record<string, unknown> = {
       OR: [
@@ -174,7 +176,8 @@ worksitesRouter.get(
   '/export.csv',
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
-    const { status, entity, q, archived, kind } = req.query as Record<string, string>;
+    const { status, entity, q: qRaw, archived, kind } = req.query as Record<string, string>;
+    const q = qRaw?.toLowerCase();
     const where: Record<string, unknown> = { archived: archived === '1' ? true : false, kind: kind || 'project' };
     if (status) where.status = status;
     if (entity) where.entity = entity;

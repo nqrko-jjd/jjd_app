@@ -190,3 +190,19 @@ test('un contact "Syndic" du même nom qu\'un syndic déjà connu (import) se re
   await prisma.contact.deleteMany({ where: { name: 'Syndic Préexistant — test' } });
   await prisma.syndic.deleteMany({ where: { id: pre.id } });
 });
+
+test('recherche de contact : insensible à la casse, y compris sur une lettre accentuée', async () => {
+  await prisma.contact.deleteMany({ where: { name: 'Cédric Wavre — test' } });
+  const c = await prisma.contact.create({
+    data: { name: 'Cédric Wavre — test', normalizedName: 'cedric wavre test', type: 'supplier', source: 'manual' },
+  });
+  try {
+    for (const q of ['Cédric', 'cédric', 'CÉDRIC']) {
+      const r = await jf<{ items: { id: string }[] }>(`/api/contacts?q=${encodeURIComponent(q)}`);
+      assert.equal(r.status, 200, q);
+      assert.ok(r.body.items.some((i) => i.id === c.id), `« ${q} » devrait retrouver le contact`);
+    }
+  } finally {
+    await prisma.contact.delete({ where: { id: c.id } }).catch(() => {});
+  }
+});

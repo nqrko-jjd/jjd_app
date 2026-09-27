@@ -239,7 +239,8 @@ financeRouter.get(
   '/bank',
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
-    const { matched, q, from, bank, page: pageStr, pageSize: pageSizeStr } = req.query as Record<string, string>;
+    const { matched, q: qRaw, from, bank, page: pageStr, pageSize: pageSizeStr } = req.query as Record<string, string>;
+    const q = qRaw?.toLowerCase();
     const and: Record<string, unknown>[] = [];
     if (matched === '1') and.push({ OR: [{ matchedLedgerId: { not: null } }, { matchedDocumentId: { not: null } }] });
     if (matched === '0') and.push({ matchedLedgerId: null }, { matchedDocumentId: null });
@@ -309,7 +310,7 @@ financeRouter.get(
     // recherche manuelle : l'utilisateur cherche lui-même (n° facture, fournisseur, chantier…)
     // au lieu de se limiter aux propositions automatiques (montant/date proches) — utile
     // quand il n'y a aucune proposition ou que la bonne facture n'y figure pas
-    const q = (req.query.q as string | undefined)?.trim();
+    const q = (req.query.q as string | undefined)?.trim().toLowerCase();
     if (q) {
       const [ledgers, docs] = await Promise.all([
         prisma.ledgerEntry.findMany({

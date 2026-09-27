@@ -52,7 +52,9 @@ contactsRouter.get(
   '/',
   requireAuth(...STAFF),
   asyncHandler(async (req, res) => {
-    const { type, kind, q, page: pageStr, pageSize: pageSizeStr } = req.query as Record<string, string>;
+    const { type, kind, q: qRaw, page: pageStr, pageSize: pageSizeStr } = req.query as Record<string, string>;
+    // insensible à la casse ET aux accents (SQLite ne fait le repli que sur l'ASCII)
+    const q = qRaw?.toLowerCase();
     const where: Record<string, unknown> = {};
     if (type && type !== 'all') where.OR = [{ type }, { type: 'both' }];
     if (kind) where.kind = { in: kind.split(',') };

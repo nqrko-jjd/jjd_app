@@ -33,7 +33,8 @@ peopleRouter.get(
   '/',
   requireAuth(...STAFF),
   asyncHandler(async (req, res) => {
-    const { role, active, q } = req.query as Record<string, string>;
+    const { role, active, q: qRaw } = req.query as Record<string, string>;
+    const q = qRaw?.toLowerCase();
     const where: Record<string, unknown> = {};
     if (role) where.role = role;
     if (active === '1') where.active = true;

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { contactInput, contactPersonInput, normalizeName, round2 } from '@jjd/shared';
 import { prisma } from '../db.js';
+import { insensitive } from '../lib/search.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, STAFF, OFFICE, hashPassword } from '../lib/auth.js';
 import { lookupBelgianVat } from '../lib/vies.js';
@@ -59,7 +60,7 @@ contactsRouter.get(
     if (type && type !== 'all') where.OR = [{ type }, { type: 'both' }];
     if (kind) where.kind = { in: kind.split(',') };
     if (q) {
-      where.AND = [{ OR: [{ name: { contains: q } }, { city: { contains: q } }, { vat: { contains: q } }] }];
+      where.AND = [{ OR: [{ name: { contains: q, ...insensitive } }, { city: { contains: q, ...insensitive } }, { vat: { contains: q, ...insensitive } }] }];
     }
     // pagination facultative (page absent = tout charger, utilisé par l'appli mobile)
     const paginated = pageStr !== undefined;

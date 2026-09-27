@@ -11,6 +11,7 @@ import multer from 'multer';
 import { zipSync } from 'fflate';
 import { expenseInput, linkInvoiceInput, saleEntryBackfillInput, parseAmount, parseLooseDate } from '@jjd/shared';
 import { prisma } from '../db.js';
+import { insensitive } from '../lib/search.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, OFFICE, FIELD_OFFICE } from '../lib/auth.js';
 import { storeFile, UPLOADS_DIR } from '../lib/media.js';
@@ -84,13 +85,13 @@ function buildWhere(q: Record<string, string>) {
   if (search) {
     and.push({
       OR: [
-        { supplierName: { contains: search } },
-        { docNumber: { contains: search } },
-        { categoryRaw: { contains: search } },
-        { notes: { contains: search } },
-        { worksiteRef: { contains: search } },
-        { contact: { name: { contains: search } } },
-        { worksite: { ref: { contains: search } } },
+        { supplierName: { contains: search, ...insensitive } },
+        { docNumber: { contains: search, ...insensitive } },
+        { categoryRaw: { contains: search, ...insensitive } },
+        { notes: { contains: search, ...insensitive } },
+        { worksiteRef: { contains: search, ...insensitive } },
+        { contact: { name: { contains: search, ...insensitive } } },
+        { worksite: { ref: { contains: search, ...insensitive } } },
       ],
     });
   }

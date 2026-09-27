@@ -8,6 +8,7 @@ import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { round2 } from '@jjd/shared';
 import { prisma, nextCounter } from '../db.js';
+import { insensitive } from '../lib/search.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, STOCK_MOVE, STOCK_MANAGE } from '../lib/auth.js';
 import { applyStockMovement, sameName, unitFactor } from '../lib/stock.js';
@@ -47,7 +48,7 @@ purchasingRouter.get(
     const q = qRaw?.toLowerCase();
     if (!contactId) throw new HttpError(422, 'Fournisseur requis');
     const where: Prisma.SupplierProductWhereInput = { contactId };
-    if (q?.trim()) where.OR = [{ label: { contains: q.trim() } }, { ref: { contains: q.trim() } }];
+    if (q?.trim()) where.OR = [{ label: { contains: q.trim(), ...insensitive } }, { ref: { contains: q.trim(), ...insensitive } }];
     const [items, total] = await Promise.all([
       prisma.supplierProduct.findMany({ where, orderBy: { label: 'asc' }, take: 100 }),
       prisma.supplierProduct.count({ where }),

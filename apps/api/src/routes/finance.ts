@@ -2,6 +2,7 @@ import { Router } from 'express';
 import type { Prisma } from '@prisma/client';
 import multer from 'multer';
 import { prisma } from '../db.js';
+import { insensitive } from '../lib/search.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, requirePartner, OFFICE } from '../lib/auth.js';
 import { consolidatedPnl, profitShare } from '../lib/consolidated.js';
@@ -246,7 +247,7 @@ financeRouter.get(
     if (matched === '0') and.push({ matchedLedgerId: null }, { matchedDocumentId: null });
     if (from) and.push({ bookingDate: { gte: new Date(from) } });
     if (bank) and.push({ bank });
-    if (q) and.push({ OR: [{ counterpartyName: { contains: q } }, { description: { contains: q } }, { communication: { contains: q } }] });
+    if (q) and.push({ OR: [{ counterpartyName: { contains: q, ...insensitive } }, { description: { contains: q, ...insensitive } }, { communication: { contains: q, ...insensitive } }] });
     const where: Record<string, unknown> = and.length ? { AND: and } : {};
 
     const page = Math.max(1, Math.trunc(Number(pageStr)) || 1);
@@ -316,11 +317,11 @@ financeRouter.get(
         prisma.ledgerEntry.findMany({
           where: {
             OR: [
-              { docNumber: { contains: q } },
-              { supplierName: { contains: q } },
-              { worksite: { ref: { contains: q } } },
-              { worksite: { title: { contains: q } } },
-              { contact: { name: { contains: q } } },
+              { docNumber: { contains: q, ...insensitive } },
+              { supplierName: { contains: q, ...insensitive } },
+              { worksite: { ref: { contains: q, ...insensitive } } },
+              { worksite: { title: { contains: q, ...insensitive } } },
+              { contact: { name: { contains: q, ...insensitive } } },
             ],
           },
           take: 20, include: inc, orderBy: { date: 'desc' },
@@ -328,10 +329,10 @@ financeRouter.get(
         prisma.document.findMany({
           where: {
             OR: [
-              { number: { contains: q } },
-              { contact: { name: { contains: q } } },
-              { worksite: { ref: { contains: q } } },
-              { worksite: { title: { contains: q } } },
+              { number: { contains: q, ...insensitive } },
+              { contact: { name: { contains: q, ...insensitive } } },
+              { worksite: { ref: { contains: q, ...insensitive } } },
+              { worksite: { title: { contains: q, ...insensitive } } },
             ],
           },
           take: 15, orderBy: { issuedOn: 'desc' },

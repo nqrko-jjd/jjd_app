@@ -8,6 +8,7 @@ import {
   PERSON_ROLES, PERSON_ROLE_LABEL, WORKER_CONTRACT_TYPES, WORKER_CONTRACT_LABEL,
 } from '@jjd/shared';
 import { prisma } from '../db.js';
+import { insensitive } from '../lib/search.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, STAFF, OFFICE, hashPassword } from '../lib/auth.js';
 import { attachPhotoRoutes } from '../lib/photo-upload.js';
@@ -39,7 +40,7 @@ peopleRouter.get(
     if (role) where.role = role;
     if (active === '1') where.active = true;
     if (active === '0') where.active = false;
-    if (q) where.OR = [{ firstName: { contains: q } }, { lastName: { contains: q } }, { displayName: { contains: q } }];
+    if (q) where.OR = [{ firstName: { contains: q, ...insensitive } }, { lastName: { contains: q, ...insensitive } }, { displayName: { contains: q, ...insensitive } }];
     const items = await prisma.person.findMany({
       where,
       orderBy: [{ active: 'desc' }, { firstName: 'asc' }],

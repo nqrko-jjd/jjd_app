@@ -5,6 +5,7 @@ import {
   ENTITIES, ENTITY_LABEL, parseLooseDate,
 } from '@jjd/shared';
 import { prisma, nextWorksiteRef } from '../db.js';
+import { insensitive } from '../lib/search.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, STAFF, OFFICE } from '../lib/auth.js';
 import { worksiteMargin, worksiteInvoicedHtBatch, withQuotedFromDocuments } from '../lib/worksite-margin.js';
@@ -64,9 +65,9 @@ worksitesRouter.get(
     if (entity) where.entity = entity;
     if (q) {
       where.OR = [
-        { ref: { contains: q } },
-        { title: { contains: q } },
-        { city: { contains: q } },
+        { ref: { contains: q, ...insensitive } },
+        { title: { contains: q, ...insensitive } },
+        { city: { contains: q, ...insensitive } },
       ];
     }
     // pagination facultative (page absent = comportement historique « tout charger », utilisé par
@@ -139,7 +140,7 @@ worksitesRouter.get(
       ],
     };
     if (q) {
-      where.AND = [{ OR: [{ ref: { contains: q } }, { title: { contains: q } }, { city: { contains: q } }] }];
+      where.AND = [{ OR: [{ ref: { contains: q, ...insensitive } }, { title: { contains: q, ...insensitive } }, { city: { contains: q, ...insensitive } }] }];
     }
     const items = await prisma.worksite.findMany({
       where,
@@ -181,7 +182,7 @@ worksitesRouter.get(
     const where: Record<string, unknown> = { archived: archived === '1' ? true : false, kind: kind || 'project' };
     if (status) where.status = status;
     if (entity) where.entity = entity;
-    if (q) where.OR = [{ ref: { contains: q } }, { title: { contains: q } }, { city: { contains: q } }];
+    if (q) where.OR = [{ ref: { contains: q, ...insensitive } }, { title: { contains: q, ...insensitive } }, { city: { contains: q, ...insensitive } }];
     const items = await prisma.worksite.findMany({
       where,
       orderBy: { updatedAt: 'desc' },

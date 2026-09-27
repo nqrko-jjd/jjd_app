@@ -6,6 +6,7 @@ import multer from 'multer';
 import { nanoid } from 'nanoid';
 import { documentInput, documentBackfillInput, priceItemInput, DOC_KIND_LABEL } from '@jjd/shared';
 import { prisma, nextCounter } from '../db.js';
+import { insensitive } from '../lib/search.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, OFFICE } from '../lib/auth.js';
 import { docInclude, buildLineRows, cloneLineRows, refreshDocTotals, issueDocument, getCompany, syncLedgerEntryForDocument } from '../lib/documents.js';
@@ -185,12 +186,12 @@ documentsRouter.get(
     if (scope === 'issued') where.lockedAt = { not: null };
     if (q) {
       where.OR = [
-        { number: { contains: q } },
-        { draftRef: { contains: q } },
-        { title: { contains: q } },
-        { billingName: { contains: q } },
-        { contact: { name: { contains: q } } },
-        { worksite: { ref: { contains: q } } },
+        { number: { contains: q, ...insensitive } },
+        { draftRef: { contains: q, ...insensitive } },
+        { title: { contains: q, ...insensitive } },
+        { billingName: { contains: q, ...insensitive } },
+        { contact: { name: { contains: q, ...insensitive } } },
+        { worksite: { ref: { contains: q, ...insensitive } } },
       ];
     }
     const page = Math.max(1, Math.trunc(Number(pageStr)) || 1);
@@ -640,7 +641,7 @@ priceItemsRouter.get(
     const q = qRaw?.toLowerCase();
     const where: Record<string, unknown> = { active: true };
     if (category) where.category = category;
-    if (q) where.OR = [{ label: { contains: q } }, { ref: { contains: q } }, { description: { contains: q } }];
+    if (q) where.OR = [{ label: { contains: q, ...insensitive } }, { ref: { contains: q, ...insensitive } }, { description: { contains: q, ...insensitive } }];
     const items = await prisma.priceItem.findMany({ where, orderBy: [{ category: 'asc' }, { label: 'asc' }], take: 500 });
     const categories = [...new Set(items.map((i) => i.category).filter(Boolean))];
     res.json({ items, categories });

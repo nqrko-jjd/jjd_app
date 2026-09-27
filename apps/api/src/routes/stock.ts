@@ -9,6 +9,7 @@ import { z } from 'zod';
 import type { Prisma } from '@prisma/client';
 import { stockItemInput, stockMovementInput, stockSupplierInput, stockBarcodeInput, round2 } from '@jjd/shared';
 import { prisma, nextCounter } from '../db.js';
+import { insensitive } from '../lib/search.js';
 import { applyStockMovement, resolveStockCode, sameName } from '../lib/stock.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, STOCK_READ, STOCK_MOVE, STOCK_MANAGE } from '../lib/auth.js';
@@ -68,7 +69,7 @@ stockRouter.get(
     const q = qRaw?.toLowerCase();
     const where: Record<string, unknown> = {};
     if (active !== '0') where.active = true; // par défaut : masque les articles désactivés
-    if (q) where.OR = [{ name: { contains: q } }, { category: { contains: q } }, { ref: { contains: q } }, { brand: { contains: q } }, { model: { contains: q } }];
+    if (q) where.OR = [{ name: { contains: q, ...insensitive } }, { category: { contains: q, ...insensitive } }, { ref: { contains: q, ...insensitive } }, { brand: { contains: q, ...insensitive } }, { model: { contains: q, ...insensitive } }];
     const items = await prisma.stockItem.findMany({ where, orderBy: { name: 'asc' }, include: itemInclude });
     res.json({ items: items.map((i) => shapeItem(i, req.user!.role)) });
   }),

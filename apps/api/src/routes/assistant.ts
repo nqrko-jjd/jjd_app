@@ -10,6 +10,7 @@
 import { Router } from 'express';
 import Anthropic from '@anthropic-ai/sdk';
 import { prisma, nextCounter } from '../db.js';
+import { insensitive } from '../lib/search.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, OFFICE } from '../lib/auth.js';
 import { buildLineRows, refreshDocTotals } from '../lib/documents.js';
@@ -142,7 +143,7 @@ export async function runTool(name: string, input: Record<string, unknown>, user
     case 'search_worksites': {
       const q = String(input.query ?? '').toLowerCase();
       const items = await prisma.worksite.findMany({
-        where: { OR: [{ ref: { contains: q } }, { title: { contains: q } }] },
+        where: { OR: [{ ref: { contains: q, ...insensitive } }, { title: { contains: q, ...insensitive } }] },
         take: 10,
         select: { id: true, ref: true, title: true },
       });
@@ -152,7 +153,7 @@ export async function runTool(name: string, input: Record<string, unknown>, user
       const q = String(input.query ?? '').toLowerCase();
       const type = input.type === 'client' || input.type === 'supplier' ? input.type : undefined;
       const items = await prisma.contact.findMany({
-        where: { name: { contains: q }, ...(type ? { OR: [{ type }, { type: 'both' }] } : {}) },
+        where: { name: { contains: q, ...insensitive }, ...(type ? { OR: [{ type }, { type: 'both' }] } : {}) },
         take: 10,
         select: { id: true, name: true, type: true },
       });
@@ -161,7 +162,7 @@ export async function runTool(name: string, input: Record<string, unknown>, user
     case 'search_people': {
       const q = String(input.query ?? '').toLowerCase();
       const items = await prisma.person.findMany({
-        where: { active: true, OR: [{ firstName: { contains: q } }, { lastName: { contains: q } }, { displayName: { contains: q } }] },
+        where: { active: true, OR: [{ firstName: { contains: q, ...insensitive } }, { lastName: { contains: q, ...insensitive } }, { displayName: { contains: q, ...insensitive } }] },
         take: 10,
         select: { id: true, firstName: true, lastName: true, displayName: true },
       });

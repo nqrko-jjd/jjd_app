@@ -10,6 +10,7 @@ import {
   type WorksiteStatus, type WorksitePriority,
 } from '@jjd/shared';
 import { prisma } from '../db.js';
+import { insensitive } from '../lib/search.js';
 import { env } from '../env.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { sendMail } from '../lib/mail.js';
@@ -268,7 +269,7 @@ portalRouter.get(
     if (status === 'open') where.status = { in: OPEN_STATUSES };
     else if (status) where.status = status;
     if (buildingId) where.acpId = buildingId;
-    if (q) where.OR = [{ ref: { contains: q } }, { title: { contains: q } }];
+    if (q) where.OR = [{ ref: { contains: q, ...insensitive } }, { title: { contains: q, ...insensitive } }];
     const items = await prisma.worksite.findMany({
       where,
       orderBy: [{ updatedAt: 'desc' }],

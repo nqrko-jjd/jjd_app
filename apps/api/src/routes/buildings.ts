@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { buildingInput, buildingContactInput, buildingUnitInput, normalizeName } from '@jjd/shared';
 import { prisma } from '../db.js';
+import { insensitive } from '../lib/search.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, STAFF, OFFICE, hashPassword } from '../lib/auth.js';
 import { attachPhotoRoutes } from '../lib/photo-upload.js';
@@ -20,7 +21,7 @@ buildingsRouter.get(
     const q = qRaw?.toLowerCase();
     const where: Record<string, unknown> = { kind: { in: ACP_KINDS } };
     if (syndicId) where.syndicId = syndicId;
-    if (q) where.OR = [{ name: { contains: q } }, { city: { contains: q } }];
+    if (q) where.OR = [{ name: { contains: q, ...insensitive } }, { city: { contains: q, ...insensitive } }];
     const items = await prisma.contact.findMany({
       where,
       orderBy: { name: 'asc' },

@@ -117,7 +117,7 @@ export function PlanningEventDetail({
             className="btn"
             style={{ color: 'var(--crit)', marginRight: 'auto' }}
             onClick={async () => {
-              if (!confirm('Retirer cette affectation ?')) return;
+              if (!confirm(isMeeting ? 'Retirer ce rendez-vous ?' : 'Retirer cette affectation ?')) return;
               await api(`/api/planning/${ev.id}`, { method: 'DELETE' });
               onDeleted();
             }}
@@ -125,7 +125,7 @@ export function PlanningEventDetail({
             Retirer
           </button>
           <button className="btn" onClick={onDuplicate}>Dupliquer</button>
-          <button className="btn primary" onClick={onEdit}>Modifier l’affectation</button>
+          <button className="btn primary" onClick={onEdit}>{isMeeting ? 'Modifier le rendez-vous' : 'Modifier l’affectation'}</button>
         </div>
         <div className="modal-foot" style={{ borderTop: 'none', paddingTop: 0, justifyContent: 'space-between' }}>
           <a href={`/fiche/${ev.id}`} target="_blank" rel="noreferrer" className="hint">Imprimer la fiche →</a>

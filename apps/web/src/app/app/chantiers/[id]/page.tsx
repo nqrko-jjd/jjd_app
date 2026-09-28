@@ -115,7 +115,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
     { name: 'billingMode', label: 'Facturation', type: 'select', options: WORKSITE_BILLING_MODES.map((b) => ({ value: b, label: WORKSITE_BILLING_MODE_LABEL[b] })) },
     { name: 'requestKind', label: 'Type de demande', type: 'select', options: WORKSITE_REQUEST_KINDS.map((k) => ({ value: k, label: WORKSITE_REQUEST_KIND_LABEL[k] })) },
     { name: 'address', label: 'Adresse', full: true, type: 'address', addressFill: { postalCode: 'postalCode', city: 'city' } },
-    { name: 'box', label: 'Boîte' },
+    { name: 'box', label: 'Boîte', placeholder: 'ex. 4 (sans « bte »)' },
     { name: 'postalCode', label: 'Code postal' },
     { name: 'city', label: 'Ville' },
     { name: 'unitLabel', label: 'Lot, étage, bâtiment ou zone' },

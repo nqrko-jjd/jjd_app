@@ -119,6 +119,16 @@ function BanqueInner() {
     } catch (e) { setFlash((e as Error).message); }
     finally { setBusy(null); }
   }
+  async function renameBank(from: string) {
+    const to = window.prompt(`Renommer « ${from} » en :`, from);
+    if (!to || !to.trim() || to.trim() === from) return;
+    try {
+      const r = await api<{ renamed: number }>('/api/finance/bank/rename', { method: 'POST', body: { from, to: to.trim() } });
+      setFlash(`${r.renamed} transaction(s) renommée(s) « ${from} » → « ${to.trim()} ».`);
+      setBank(to.trim());
+      reload();
+    } catch (e) { setFlash((e as Error).message); }
+  }
   async function autoMatch() {
     setBusy('match'); setFlash(null);
     try {
@@ -241,6 +251,11 @@ function BanqueInner() {
             <option key={b.bank} value={b.bank!}>{b.bank} ({b._count})</option>
           ))}
         </select>
+        {bank && (
+          <button className="btn" title="Renomme ce libellé pour toutes ses transactions" onClick={() => renameBank(bank)}>
+            Renommer
+          </button>
+        )}
       </div>
 
       {loading && <SkeletonRows />}

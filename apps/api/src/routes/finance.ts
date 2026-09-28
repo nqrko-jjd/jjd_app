@@ -305,6 +305,7 @@ financeRouter.get(
         prisma.ledgerEntry.findMany({
           where: {
             id: { notIn: usedLedgerIds },
+            documentId: null, // sinon la même facture ressort 2x : la LedgerEntry synchronisée ET son Document d'origine (voir plus bas)
             OR: [
               { docNumber: { contains: q, ...insensitive } },
               { supplierName: { contains: q, ...insensitive } },
@@ -380,10 +381,11 @@ financeRouter.get(
       : {};
 
     const byComm = !tx.matches.length && tx.structuredComm && tx.structuredComm.length >= 10
-      ? await prisma.ledgerEntry.findMany({ where: { bankComm: { contains: tx.structuredComm.slice(0, 12) }, id: { notIn: usedLedgerIds } }, take: 5, include: inc })
+      ? await prisma.ledgerEntry.findMany({ where: { bankComm: { contains: tx.structuredComm.slice(0, 12) }, id: { notIn: usedLedgerIds }, documentId: null }, take: 5, include: inc })
       : [];
     const byAmount = await prisma.ledgerEntry.findMany({
-      where: { ttc: { gte: amount - 1, lte: amount + 1 }, id: { notIn: usedLedgerIds }, ...window },
+      // documentId: null — sinon la même facture ressort 2x (LedgerEntry synchronisée + son Document d'origine, voir docItems plus bas)
+      where: { ttc: { gte: amount - 1, lte: amount + 1 }, id: { notIn: usedLedgerIds }, documentId: null, ...window },
       take: 12, include: inc, orderBy: { date: 'desc' },
     });
     const seen = new Set<string>();
@@ -492,6 +494,19 @@ financeRouter.delete(
       await prisma.bankTransaction.update({ where: { id: req.params.id }, data: { matchConfidence: null, matchedAt: null } });
     }
     res.json({ ok: true });
+  }),
+);
+
+/** Renomme en masse le libellé « banque/carte » (ex. faute de frappe au moment de l'import). */
+financeRouter.post(
+  '/bank/rename',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const from = String(req.body?.from ?? '').trim();
+    const to = String(req.body?.to ?? '').trim();
+    if (!from || !to) throw new HttpError(422, 'Ancien et nouveau libellé requis.');
+    const { count } = await prisma.bankTransaction.updateMany({ where: { bank: from }, data: { bank: to } });
+    res.json({ renamed: count });
   }),
 );
 

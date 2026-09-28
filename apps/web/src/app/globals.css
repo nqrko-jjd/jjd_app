@@ -1419,7 +1419,12 @@ body.plan-wide .main { max-width: none; }
 
 .msg-back { display: none; }
 
-@media (max-width: 760px) {
+/* seuil relevé de 760px à 1024px : en-dessous, liste + conversation côte à côte (320px + le
+ * reste) ne laissent quasi plus de place pour lire les messages une fois la sidebar de l'appli
+ * comptée — ça touche la plupart des tablettes, pas seulement les téléphones. Comportement façon
+ * WhatsApp mobile : une conversation ouverte masque la liste et prend tout l'écran, avec un
+ * bouton retour, plutôt que d'écraser les deux dans une largeur trop étroite. */
+@media (max-width: 1024px) {
   .msg-layout { grid-template-columns: 1fr; height: calc(100dvh - 190px); }
   .msg-list { border-right: none; }
   .msg-layout.has-selection .msg-list { display: none; }

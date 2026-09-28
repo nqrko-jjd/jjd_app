@@ -57,6 +57,10 @@ export function RichText({
           {btn('bold', 'G', 'Gras')}
           {btn('italic', 'I', 'Italique')}
           {btn('underline', 'S', 'Souligné')}
+          {btn('strikeThrough', 'B', 'Barré')}
+          <span className="rt-sep" />
+          {btn('insertUnorderedList', '•', 'Liste à puces')}
+          {btn('insertOrderedList', '1.', 'Liste numérotée')}
           <span className="rt-sep" />
           {COLORS.map((c) => (
             <button

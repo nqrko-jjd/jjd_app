@@ -47,7 +47,7 @@ export default function ReportPrint({ params }: { params: Promise<{ id: string }
       <div className="sheet">
         <header>
           <div>
-            <div className="co"><img src="/brand/icon-color.png" alt="" className="co-mark" />JJD Consult</div>
+            <div className="co"><img src="/brand/icon-mono.png" alt="" className="co-mark" />JJD Consult</div>
             <div className="mut">Rapport d’intervention</div>
           </div>
           <div className="right">

@@ -25,7 +25,7 @@ export default function PortalLogin() {
   return (
     <div className="p-login-wrap">
       <div className="p-login">
-        <div className="brand"><span className="mk"><img src="/brand/icon-color.png" alt="" /></span> JJD Consult</div>
+        <div className="brand"><span className="mk"><img src="/brand/icon-mono.png" alt="" /></span> JJD Consult</div>
         <h1 style={{ fontSize: '1.35rem', marginTop: '1rem' }}>Espace client</h1>
         <p className="p-note" style={{ marginTop: '0.3rem' }}>
           Suivez vos chantiers, devis, factures et photos.

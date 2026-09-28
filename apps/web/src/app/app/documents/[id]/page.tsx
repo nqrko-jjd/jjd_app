@@ -215,9 +215,10 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
 
       <div className="doc-layout">
         <div className="doc-main">
-          {/* 01 · Client & chantier */}
-          <section className="doc-card">
-            <div className="doc-card-head"><span className="doc-card-num">01</span><h2>Client & chantier</h2></div>
+          <div className="doc-sheet">
+          {/* Client & chantier */}
+          <div className="doc-sheet-section">
+            <div className="doc-sheet-section-head"><h2>Client & chantier</h2></div>
             <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
               <label className="field">
                 <span>Client</span>
@@ -280,12 +281,12 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
                 </label>
               </div>
             )}
-          </section>
+          </div>
 
-          {/* 02 · Prestations & fournitures */}
-          <section className="doc-card">
-            <div className="doc-card-head">
-              <span className="doc-card-num">02</span><h2>Prestations & fournitures</h2>
+          {/* Prestations & fournitures */}
+          <div className="doc-sheet-section">
+            <div className="doc-sheet-section-head">
+              <h2>Prestations & fournitures</h2>
               <label className="row" style={{ marginLeft: 'auto', gap: '0.4rem', fontSize: '0.82rem', fontWeight: 600, color: 'var(--ink-2)' }}>
                 <input type="checkbox" checked={showDiscount} onChange={(e) => setShowDiscount(e.target.checked)} /> Remises
               </label>
@@ -414,11 +415,11 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
                 ))}
               </div>
             )}
-          </section>
+          </div>
 
-          {/* 03 · Règlement */}
-          <section className="doc-card">
-            <div className="doc-card-head"><span className="doc-card-num">03</span><h2>Règlement</h2></div>
+          {/* Règlement */}
+          <div className="doc-sheet-section">
+            <div className="doc-sheet-section-head"><h2>Règlement</h2></div>
             <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
               <label className="field">
                 <span>Date {isInvoiceLike ? 'de facture' : 'du devis'}</span>
@@ -443,7 +444,8 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
                 </>
               )}
             </div>
-          </section>
+          </div>
+          </div>
 
           {/* Actions secondaires */}
           <section className="doc-card">

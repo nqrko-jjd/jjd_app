@@ -25,8 +25,8 @@ export default function LoginPage() {
     <div className="login-wrap">
       <form className="card card-pad login-card grid" onSubmit={submit} style={{ gap: '0.85rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', fontWeight: 800, fontSize: '1.1rem' }}>
-          <span style={{ width: 28, height: 28, borderRadius: 8, background: 'linear-gradient(135deg, #e2c98b, #c9a35c)', display: 'grid', placeItems: 'center' }}>
-            <img src="/brand/icon-color.png" alt="" style={{ width: '68%', height: '68%', objectFit: 'contain' }} />
+          <span style={{ width: 28, height: 28, display: 'grid', placeItems: 'center' }}>
+            <img src="/brand/icon-mono.png" alt="" style={{ width: '90%', height: '90%', objectFit: 'contain' }} />
           </span>
           JJD Consult
         </div>

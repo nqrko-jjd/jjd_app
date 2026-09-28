@@ -31,3 +31,8 @@ test('sanitizeLineHtml : supprime script/on* et le style non autorisé', () => {
 test('sanitizeLineHtml : le texte brut sans balise passe inchangé (rétrocompat des anciennes lignes)', () => {
   assert.equal(sanitizeLineHtml('Nettoyage façade'), 'Nettoyage façade');
 });
+
+test('sanitizeLineHtml : conserve listes à puces/numérotées et le barré', () => {
+  const html = '<ul><li>Un</li><li>Deux</li></ul><ol><li>Un</li></ol><strike>ancien prix</strike><s>autre</s>';
+  assert.equal(sanitizeLineHtml(html), html);
+});

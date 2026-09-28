@@ -144,14 +144,14 @@ export function Shell({ children }: { children: React.ReactNode }) {
       <header className="topbar">
         <button className="burger" aria-label="Menu" onClick={() => setOpen(true)}>≡</button>
         <span className="topbar-title">{current}</span>
-        <span className="brand-mini"><span className="mark"><img src="/brand/icon-color.png" alt="" /></span>JJD</span>
+        <span className="brand-mini"><span className="mark"><img src="/brand/icon-white.png" alt="" /></span>JJD</span>
       </header>
 
       {open && <div className="scrim" onClick={() => setOpen(false)} />}
       <nav className={`sidebar${open ? ' open' : ''}`}>
-        <div className="brand"><span className="mark"><img src="/brand/icon-color.png" alt="" /></span>JJD Consult</div>
+        <div className="brand"><span className="mark"><img src="/brand/icon-white.png" alt="" /></span>JJD Consult</div>
         <div className="org-card">
-          <span className="mark"><img src="/brand/icon-color.png" alt="" /></span>
+          <span className="mark"><img src="/brand/icon-white.png" alt="" /></span>
           <div>
             <div className="org-name">JJD Consult SRL</div>
             <div className="org-role">{user ? (ROLE_LABEL[user.role] ?? user.role) : '—'}</div>

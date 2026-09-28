@@ -13,7 +13,8 @@ export function sanitizeLineHtml(html: string): string {
     // <font color> : c'est ce que produit réellement execCommand('foreColor') sous Chromium
     // (le moteur de la barre d'outils RichText, voir components/RichText.tsx), pas <span
     // style="color:…"> — les deux sont acceptés pour ne pas dépendre d'un comportement de moteur.
-    allowedTags: ['b', 'strong', 'i', 'em', 'u', 'span', 'font', 'br'],
+    // <strike> : idem pour execCommand('strikeThrough') — <s> accepté aussi par prudence.
+    allowedTags: ['b', 'strong', 'i', 'em', 'u', 's', 'strike', 'span', 'font', 'br', 'ul', 'ol', 'li'],
     allowedAttributes: { span: ['style'], font: ['color'] },
     allowedStyles: {
       span: {

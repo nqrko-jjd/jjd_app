@@ -53,7 +53,7 @@ export default function PrintDocument({ params }: { params: Promise<{ id: string
       <div className="sheet">
         <header className="head">
           <div className="brand">
-            <span className="mark"><img src="/brand/icon-color.png" alt="" /></span>
+            <span className="mark"><img src="/brand/icon-mono.png" alt="" /></span>
             <div className="brand-text">
               <div className="brand-name">JJD Consult</div>
               <div className="brand-tag">Maintenance · Rénovation · Gestion de projets</div>
@@ -169,11 +169,8 @@ const CSS = `
 
   .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; padding-bottom: 16px; border-bottom: 1px solid #e5e7df; }
   .brand { display: flex; align-items: center; gap: 10px; }
-  .mark {
-    width: 34px; height: 34px; flex-shrink: 0; border-radius: 8px; background: #c5a35d; color: #173f34;
-    display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 800;
-  }
-  .mark img { width: 68%; height: 68%; object-fit: contain; }
+  .mark { width: 34px; height: 34px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+  .mark img { width: 90%; height: 90%; object-fit: contain; }
   .brand-name { font-size: 16px; font-weight: 800; color: #173f34; letter-spacing: -0.01em; }
   .brand-tag { font-size: 8.5px; text-transform: uppercase; letter-spacing: .06em; color: #9aa79e; font-weight: 700; margin-top: 2px; }
   .doc-box { text-align: right; min-width: 220px; }
@@ -207,6 +204,7 @@ const CSS = `
   .c-qty .unit { color: #9aa79e; }
   .ln-label { font-weight: 600; }
   .desc { color: #788078; font-size: 11px; margin-top: 1px; white-space: pre-line; }
+  .ln-label ul, .ln-label ol, .desc ul, .desc ol { margin: 2px 0; padding-left: 18px; }
   .ln-section td { background: #f5f5ef; font-weight: 700; border-bottom: 1px solid #e5e7df; }
   .ln-text td { color: #55606e; font-style: italic; border-bottom: none; }
 

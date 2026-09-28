@@ -85,6 +85,8 @@ export default function PreparationsPage() {
 
 interface DraftLine { stockItemId: string; unitName: string; qty: string }
 
+const fmtQty = (n: number) => new Intl.NumberFormat('fr-BE', { maximumFractionDigits: 2 }).format(n);
+
 function NewOrderModal({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string) => void }) {
   const { data: meta } = useApi<Meta>('/api/stock/meta');
   const { data: itemsData } = useApi<{ items: StockItemFull[] }>('/api/stock/items');
@@ -103,7 +105,12 @@ function NewOrderModal({ onClose, onCreated }: { onClose: () => void; onCreated:
   }, [onClose]);
 
   const setLine = (i: number, patch: Partial<DraftLine>) => setLines((ls) => ls.map((l, j) => (j === i ? { ...l, ...patch } : l)));
-  const itemOptions = items.map((it) => ({ value: it.id, label: `${it.ref ?? ''} · ${it.name}${it.brand || it.model ? ` (${[it.brand, it.model].filter(Boolean).join(' ')})` : ''}` }));
+  // la quantité déjà en stock aide le bureau à juger ce qu'il reste vraiment à commander
+  const itemOptions = items.map((it) => {
+    const desc = [it.brand, it.model].filter(Boolean).join(' ');
+    const stockText = it.qty > 0 ? `${fmtQty(it.qty)} ${it.unit} en stock` : 'rupture de stock';
+    return { value: it.id, label: `${it.ref ?? ''} · ${it.name}${desc ? ` (${desc})` : ''} — ${stockText}` };
+  });
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -129,47 +136,66 @@ function NewOrderModal({ onClose, onCreated }: { onClose: () => void; onCreated:
 
   return (
     <div className="modal-scrim" onClick={onClose}>
-      <form className="modal" style={{ maxWidth: 820 }} onClick={(e) => e.stopPropagation()} onSubmit={submit}>
+      <form className="modal wiz" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
         <div className="modal-head">
           <h2>Nouvelle préparation de commande</h2>
           <button type="button" className="btn ghost" onClick={onClose} aria-label="Fermer">✕</button>
         </div>
-        <div className="modal-body">
-          <div className="field" style={{ gridColumn: '1 / -1' }}>
-            <label>Chantier *</label>
-            <ComboBox placeholder="chercher un chantier" value={worksiteId} onChange={setWorksiteId} options={(meta?.worksites ?? []).map((w) => ({ value: w.id, label: w.name }))} />
+        <div className="wiz-body">
+          <div className="plan-form-intro">
+            <strong>Une liste pour le magasinier</strong>
+            <p style={{ margin: '0.2rem 0 0' }}>
+              Indiquez le chantier et les articles nécessaires. Le magasinier la retrouve dans « Préparations », coche chaque article en le scannant, puis la marque prête.
+            </p>
           </div>
-          <div className="field">
-            <label htmlFor="po-date">Pour le</label>
-            <input id="po-date" className="input" type="date" value={neededOn} onChange={(e) => setNeededOn(e.target.value)} />
-          </div>
-          <div className="field">
-            <label htmlFor="po-note">Note pour le magasinier</label>
-            <input id="po-note" className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Livraison chantier lundi 7h…" />
-          </div>
+          {err && <div className="plan-form-error">{err}</div>}
 
-          <div className="field" style={{ gridColumn: '1 / -1' }}>
-            <label>Articles à préparer</label>
+          <fieldset>
+            <legend>01 · Chantier & délai</legend>
+            <div className="field" style={{ marginBottom: '0.85rem' }}>
+              <label>Chantier *</label>
+              <ComboBox placeholder="Chercher un chantier (réf ou nom)…" value={worksiteId} onChange={setWorksiteId} options={(meta?.worksites ?? []).map((w) => ({ value: w.id, label: w.name }))} />
+            </div>
+            <div className="wiz-grid">
+              <div className="field">
+                <label htmlFor="po-date">Besoin sur chantier le (facultatif)</label>
+                <input id="po-date" className="input" type="date" value={neededOn} onChange={(e) => setNeededOn(e.target.value)} />
+              </div>
+              <div className="field">
+                <label htmlFor="po-note">Note pour le magasinier</label>
+                <input id="po-note" className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Livraison chantier lundi 7h…" />
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>02 · Articles à préparer</legend>
+            <div className="row" style={{ gap: '0.5rem', marginBottom: '0.4rem', fontSize: '0.76rem', fontWeight: 700, color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+              <div style={{ flex: 1 }}>Article</div>
+              <div style={{ width: 90 }}>Quantité</div>
+              <div style={{ width: 130 }}>Unité</div>
+              <div style={{ width: 30 }} />
+            </div>
             {lines.map((l, i) => {
               const it = items.find((x) => x.id === l.stockItemId);
               return (
                 <div key={i} className="row" style={{ gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'nowrap', alignItems: 'center' }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <ComboBox placeholder="chercher un article (nom, réf.)" value={l.stockItemId} onChange={(v) => setLine(i, { stockItemId: v, unitName: '' })} options={itemOptions} />
+                    <ComboBox placeholder="Chercher un article (nom, réf., réf. fournisseur)…" value={l.stockItemId} onChange={(v) => setLine(i, { stockItemId: v, unitName: '' })} options={itemOptions} />
                   </div>
                   <input className="input" style={{ width: 90 }} type="number" step="any" min="0" value={l.qty} onChange={(e) => setLine(i, { qty: e.target.value })} aria-label="Quantité" />
                   <select className="select" style={{ width: 130 }} value={l.unitName} onChange={(e) => setLine(i, { unitName: e.target.value })} aria-label="Unité" disabled={!it}>
                     <option value="">{it?.unit ?? 'unité'}</option>
                     {(it?.units ?? []).map((u) => <option key={u.name} value={u.name}>{u.name}</option>)}
                   </select>
-                  <button type="button" className="btn ghost" onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))} aria-label="Retirer">✕</button>
+                  <button type="button" className="btn ghost" onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))} aria-label="Retirer cet article" title="Retirer cet article">✕</button>
                 </div>
               );
             })}
             <button type="button" className="btn" style={{ alignSelf: 'flex-start' }} onClick={() => setLines((ls) => [...ls, { stockItemId: '', unitName: '', qty: '1' }])}>+ Ajouter un article</button>
-          </div>
+            <p className="wiz-hint" style={{ marginTop: '0.7rem' }}>La quantité déjà en stock s’affiche à côté de chaque article, pour juger ce qu’il reste réellement à sortir.</p>
+          </fieldset>
         </div>
-        {err && <div className="badge crit" style={{ margin: '0 1.15rem', padding: '0.4rem 0.7rem' }}>{err}</div>}
         <div className="modal-foot">
           <button type="button" className="btn" onClick={onClose}>Annuler</button>
           <button type="submit" className="btn primary" disabled={busy}>{busy ? 'Création…' : 'Créer la préparation'}</button>

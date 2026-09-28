@@ -9,12 +9,18 @@ import { useAuth } from '@/lib/auth';
 import { PageHead, Money, formatDateBE } from '@/lib/ui';
 import { PaginationBar } from '@/components/PaginationBar';
 
+interface Match {
+  id: string;
+  ledgerEntry: { docNumber: string | null; supplierName: string | null; direction: string; ttc: number | null; ht: number; worksite: { ref: string } | null } | null;
+  document: { number: string | null; kind: string; totalTtc: number | null; contact: { name: string } | null; worksite: { ref: string } | null } | null;
+}
 interface Tx {
   id: string; bookingDate: string | null; bank: string | null; counterpartyName: string | null;
   description: string | null; amount: number | null; communication: string | null;
-  matchedLedgerId: string | null; matchedDocumentId: string | null; matchConfidence: string | null;
-  matchedLedger: { docNumber: string | null; supplierName: string | null; worksite: { ref: string } | null } | null;
-  matchedDocument: { number: string | null; contact: { name: string } | null; worksite: { ref: string } | null } | null;
+  matchConfidence: string | null;
+  // plusieurs factures possibles pour une même transaction — un acompte réglé en une fois,
+  // décompté ensuite par le fournisseur sur plusieurs factures reçues
+  matches: Match[];
 }
 interface Suggestion {
   kind: 'ledger' | 'document';
@@ -27,6 +33,23 @@ interface PontoStatus {
 }
 
 const CONF_LABEL: Record<string, string> = { strong: 'auto ✓✓', good: 'auto ✓', manual: 'manuel' };
+
+function matchAmount(m: Match): number {
+  if (m.ledgerEntry) return m.ledgerEntry.ttc ?? m.ledgerEntry.ht;
+  if (m.document) return m.document.totalTtc ?? 0;
+  return 0;
+}
+function matchLabel(m: Match): string {
+  if (m.ledgerEntry) {
+    const l = m.ledgerEntry;
+    return [l.worksite?.ref, l.docNumber ?? l.supplierName].filter(Boolean).join(' · ');
+  }
+  if (m.document) {
+    const d = m.document;
+    return [d.worksite?.ref, `facture ${d.number ?? ''}`, d.contact?.name].filter(Boolean).join(' · ');
+  }
+  return '';
+}
 
 export default function BanquePage() {
   return (
@@ -60,7 +83,7 @@ function BanqueInner() {
   const [openTx, setOpenTx] = useState<string | null>(null);
   const [manualQ, setManualQ] = useState('');
   const suggQs = manualQ.trim() ? `?q=${encodeURIComponent(manualQ.trim())}` : '';
-  const { data: sugg, loading: suggLoading } = useApi<{ items: Suggestion[] }>(openTx ? `/api/finance/bank/${openTx}/suggestions${suggQs}` : null);
+  const { data: sugg, loading: suggLoading, reload: reloadSugg } = useApi<{ items: Suggestion[]; remaining: number }>(openTx ? `/api/finance/bank/${openTx}/suggestions${suggQs}` : null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -69,9 +92,16 @@ function BanqueInner() {
     else if (p === 'error') setFlash(`Échec de la connexion Ponto : ${sp.get('msg') ?? ''}`);
   }, [sp, reloadPonto]);
 
-  async function match(txId: string, body: { ledgerId?: string | null; documentId?: string | null }) {
-    await api(`/api/finance/bank/${txId}/match`, { method: 'POST', body });
-    setOpenTx(null);
+  // laisse le tiroir ouvert après l'ajout : un paiement peut couvrir plusieurs factures
+  // (acompte décompté ensuite) — on peut donc en ajouter une autre tout de suite
+  async function addMatch(txId: string, body: { ledgerId?: string | null; documentId?: string | null }) {
+    await api(`/api/finance/bank/${txId}/matches`, { method: 'POST', body });
+    setManualQ('');
+    reload();
+    reloadSugg();
+  }
+  async function removeMatch(txId: string, matchId: string) {
+    await api(`/api/finance/bank/${txId}/matches/${matchId}`, { method: 'DELETE' });
     reload();
   }
   async function connect() {
@@ -202,41 +232,49 @@ function BanqueInner() {
                     <td className="mono" style={{ fontSize: '0.78rem' }}>{(t.communication ?? '').slice(0, 28)}</td>
                     <td style={{ textAlign: 'right' }}><Money value={t.amount} sign /></td>
                     <td style={{ fontSize: '0.8rem' }}>
-                      {t.matchedLedgerId || t.matchedDocumentId ? (
-                        <span>
-                          <span className={`badge ${t.matchConfidence === 'strong' ? 'ok' : t.matchConfidence === 'good' ? 'warn' : 'plain'}`}>
-                            {CONF_LABEL[t.matchConfidence ?? ''] ?? 'lié'}
-                          </span>{' '}
-                          {t.matchedLedger && (
-                            <span className="muted">
-                              {t.matchedLedger.worksite ? `${t.matchedLedger.worksite.ref} · ` : ''}
-                              {t.matchedLedger.docNumber ?? t.matchedLedger.supplierName ?? ''}
-                            </span>
+                      {t.matches.length === 0 ? (
+                        <span className="muted">—</span>
+                      ) : (
+                        <div className="grid" style={{ gap: '0.25rem' }}>
+                          {t.matches.map((m) => (
+                            <div key={m.id} className="row" style={{ gap: '0.4rem', alignItems: 'center', flexWrap: 'nowrap' }}>
+                              <span className={`badge ${t.matchConfidence === 'strong' ? 'ok' : t.matchConfidence === 'good' ? 'warn' : 'plain'}`}>
+                                {CONF_LABEL[t.matchConfidence ?? ''] ?? 'lié'}
+                              </span>
+                              <span className="muted" style={{ flex: 1, minWidth: 0 }}>{matchLabel(m)}</span>
+                              <span className="tnum" style={{ fontSize: '0.76rem', whiteSpace: 'nowrap' }}><Money value={matchAmount(m)} /></span>
+                              <button
+                                className="btn ghost"
+                                style={{ padding: '0.1rem 0.35rem', fontSize: '0.72rem' }}
+                                onClick={() => removeMatch(t.id, m.id)}
+                                title="Détacher cette facture"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ))}
+                          {t.matches.length > 1 && (
+                            <div className="muted" style={{ fontSize: '0.74rem' }}>
+                              Total rapproché : <Money value={t.matches.reduce((s, m) => s + matchAmount(m), 0)} /> / <Money value={Math.abs(t.amount ?? 0)} />
+                            </div>
                           )}
-                          {t.matchedDocument && (
-                            <span className="muted">
-                              {t.matchedDocument.worksite ? `${t.matchedDocument.worksite.ref} · ` : ''}
-                              facture {t.matchedDocument.number ?? ''} {t.matchedDocument.contact?.name ?? ''}
-                            </span>
-                          )}
-                        </span>
-                      ) : <span className="muted">—</span>}
+                        </div>
+                      )}
                     </td>
                     <td>
-                      {t.matchedLedgerId || t.matchedDocumentId ? (
-                        <button className="btn" style={{ padding: '0.2rem 0.5rem', fontSize: '0.76rem' }} onClick={() => match(t.id, { ledgerId: null, documentId: null })}>Défaire</button>
-                      ) : (
-                        <button className="btn" style={{ padding: '0.2rem 0.5rem', fontSize: '0.76rem' }} onClick={() => { setOpenTx(openTx === t.id ? null : t.id); setManualQ(''); }}>
-                          {openTx === t.id ? 'Fermer' : 'Rapprocher'}
-                        </button>
-                      )}
+                      <button className="btn" style={{ padding: '0.2rem 0.5rem', fontSize: '0.76rem' }} onClick={() => { setOpenTx(openTx === t.id ? null : t.id); setManualQ(''); }}>
+                        {openTx === t.id ? 'Fermer' : t.matches.length ? '+ Ajouter' : 'Rapprocher'}
+                      </button>
                     </td>
                   </tr>
                   {openTx === t.id && (
                     <tr>
                       <td colSpan={7} style={{ background: 'var(--surface-2)', padding: '0.8rem 0.9rem' }}>
-                        <div className="row" style={{ marginBottom: '0.6rem', gap: '0.5rem' }}>
+                        <div className="row" style={{ marginBottom: '0.6rem', gap: '0.5rem', alignItems: 'center' }}>
                           <div className="eyebrow" style={{ margin: 0 }}>{manualQ.trim() ? 'Recherche' : 'Factures proposées (achat & vente)'}</div>
+                          {!manualQ.trim() && sugg && t.matches.length > 0 && (
+                            <span className="muted" style={{ fontSize: '0.8rem' }}>reste à affecter : <Money value={sugg.remaining} /></span>
+                          )}
                           <input
                             className="input"
                             style={{ maxWidth: 260, marginLeft: 'auto' }}
@@ -256,7 +294,7 @@ function BanqueInner() {
                                 key={`${s.kind}-${s.id}`}
                                 className="btn"
                                 style={{ justifyContent: 'space-between' }}
-                                onClick={() => match(t.id, s.kind === 'ledger' ? { ledgerId: s.id } : { documentId: s.id })}
+                                onClick={() => addMatch(t.id, s.kind === 'ledger' ? { ledgerId: s.id } : { documentId: s.id })}
                               >
                                 <span>
                                   <span className={`badge ${s.direction === 'sale' ? 'ok' : 'plain'}`} style={{ marginRight: 6 }}>

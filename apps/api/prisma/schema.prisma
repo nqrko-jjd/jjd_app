@@ -586,6 +586,7 @@ model Document {
   createdBy      User?             @relation("DocumentAuthor", fields: [createdById], references: [id])
   lines          DocumentLine[]
   bankMatches    BankTransaction[] @relation("DocumentBankMatches")
+  bankMatchLines BankTransactionMatch[] @relation("DocumentBankMatchLines")
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
 
@@ -683,6 +684,8 @@ model LedgerEntry {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @default(now()) @updatedAt
 
+  bankMatches BankTransactionMatch[]
+
   @@index([worksiteId])
   @@index([worksiteRef])
   @@index([direction])
@@ -724,6 +727,9 @@ model BankTransaction {
   communication       String?
   structuredComm      String? // communication structurée normalisée (+++xxx/xxxx/xxxxx+++)
   side                String? // "in" (crédit / encaissement) | "out" (débit / paiement)
+  // legacy — un seul lien direct, remplacé par `matches` (plusieurs factures possibles pour un
+  // même paiement, ex. un acompte décompté ensuite sur plusieurs factures reçues) ; conservés
+  // en base pour l'historique mais plus écrits (voir backfillBankMatches, lib/bank-match.ts)
   matchedLedgerId     String?
   matchedDocumentId   String?
   matchedDocument     Document?    @relation("DocumentBankMatches", fields: [matchedDocumentId], references: [id])
@@ -732,9 +738,30 @@ model BankTransaction {
   source              String? // "xlsx" | "ponto"
   createdAt           DateTime     @default(now())
 
+  matches BankTransactionMatch[]
+
   @@index([bookingDate])
   @@index([matchedLedgerId])
   @@index([matchedDocumentId])
+}
+
+/// Une facture rapprochée d'une transaction bancaire — plusieurs possibles par transaction (un
+/// paiement unique décompté ensuite sur plusieurs factures fournisseur) et, en théorie, plusieurs
+/// transactions pour une même facture (paiement en plusieurs fois). Remplace le lien unique
+/// matchedLedgerId/matchedDocumentId de BankTransaction.
+model BankTransactionMatch {
+  id                String          @id @default(cuid())
+  bankTransactionId String
+  bankTransaction   BankTransaction @relation(fields: [bankTransactionId], references: [id], onDelete: Cascade)
+  ledgerEntryId     String?
+  ledgerEntry       LedgerEntry?    @relation(fields: [ledgerEntryId], references: [id], onDelete: Cascade)
+  documentId        String?
+  document          Document?       @relation("DocumentBankMatchLines", fields: [documentId], references: [id], onDelete: Cascade)
+  createdAt         DateTime        @default(now())
+
+  @@index([bankTransactionId])
+  @@index([ledgerEntryId])
+  @@index([documentId])
 }
 
 // ─────────────────────────────────────────────────────────── Pointage & planning

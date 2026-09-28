@@ -120,10 +120,11 @@ expensesRouter.get(
       // totaux (KPI) sur l'ensemble du filtre, pas seulement la page affichée
       prisma.ledgerEntry.findMany({
         where: { AND: and },
-        select: { ht: true, ttc: true, paymentStatus: true, direction: true, linkedInvoiceId: true },
+        select: { ht: true, ttc: true, paymentStatus: true, direction: true, linkedInvoiceId: true, dueDate: true },
       }),
     ]);
 
+    const now = new Date();
     const totals = all.reduce(
       (acc, e) => {
         acc.count += 1;
@@ -140,10 +141,13 @@ expensesRouter.get(
         acc.ttc += sign * ttc;
         // une note de crédit vient toujours en déduction (elle n'est jamais "payée")
         if (e.direction === 'credit_note') acc.unpaidTtc -= ttc;
-        else if (!isPaidStr(e.paymentStatus)) acc.unpaidTtc += ttc;
+        else if (!isPaidStr(e.paymentStatus)) {
+          acc.unpaidTtc += ttc;
+          if (e.dueDate && e.dueDate < now) { acc.overdueCount += 1; acc.overdueTtc += ttc; }
+        }
         return acc;
       },
-      { count: 0, ht: 0, ttc: 0, unpaidTtc: 0, pendingSlips: 0 },
+      { count: 0, ht: 0, ttc: 0, unpaidTtc: 0, pendingSlips: 0, overdueCount: 0, overdueTtc: 0 },
     );
 
     res.json({
@@ -161,6 +165,8 @@ expensesRouter.get(
         ttc: Math.round(totals.ttc * 100) / 100,
         unpaidTtc: Math.round(totals.unpaidTtc * 100) / 100,
         pendingSlips: totals.pendingSlips,
+        overdueCount: totals.overdueCount,
+        overdueTtc: Math.round(totals.overdueTtc * 100) / 100,
       },
       page,
       pageSize,
@@ -405,11 +411,12 @@ expensesRouter.get(
   asyncHandler(async (req, res) => {
     const e = await prisma.ledgerEntry.findUnique({ where: { id: req.params.id }, include: inc });
     if (!e) throw new HttpError(404, 'Dépense introuvable');
-    const bankMatch = await prisma.bankTransaction.findFirst({
-      where: { matchedLedgerId: e.id },
-      select: { id: true, bookingDate: true, amount: true, bank: true, counterpartyName: true, communication: true },
+    const matches = await prisma.bankTransactionMatch.findMany({
+      where: { ledgerEntryId: e.id },
+      include: { bankTransaction: { select: { id: true, bookingDate: true, amount: true, bank: true, counterpartyName: true, communication: true } } },
     });
-    res.json({ expense: { ...e, hasPdf: !!e.pdfPath, editable: e.source !== 'xlsx', bankMatch } });
+    const bankMatches = matches.map((m) => ({ matchId: m.id, ...m.bankTransaction }));
+    res.json({ expense: { ...e, hasPdf: !!e.pdfPath, editable: e.source !== 'xlsx', bankMatches } });
   }),
 );
 
@@ -429,8 +436,7 @@ expensesRouter.get(
       : {};
     const raw = await prisma.bankTransaction.findMany({
       where: {
-        matchedLedgerId: null,
-        matchedDocumentId: null,
+        matches: { none: {} },
         // décaissement : montant négatif de valeur proche du TTC de la dépense
         amount: { gte: -(amount + 1), lte: -(amount - 1) },
         ...win,
@@ -657,8 +663,16 @@ expensesRouter.delete(
     const e = await prisma.ledgerEntry.findUnique({ where: { id: req.params.id }, select: { source: true } });
     if (!e) throw new HttpError(404, 'Dépense introuvable');
     if (e.source === 'xlsx') throw new HttpError(409, "Écriture de l'import historique Excel : suppression impossible.");
-    await prisma.bankTransaction.updateMany({ where: { matchedLedgerId: req.params.id }, data: { matchedLedgerId: null, matchConfidence: null, matchedAt: null } });
+    // les BankTransactionMatch de cette dépense partent en cascade (onDelete: Cascade) ; il reste
+    // à nettoyer le badge de confiance des transactions qui n'ont plus aucun rapprochement.
+    const affectedTxIds = (await prisma.bankTransactionMatch.findMany({ where: { ledgerEntryId: req.params.id }, select: { bankTransactionId: true } })).map((m) => m.bankTransactionId);
     await prisma.ledgerEntry.delete({ where: { id: req.params.id } });
+    if (affectedTxIds.length) {
+      const stillMatched = await prisma.bankTransactionMatch.findMany({ where: { bankTransactionId: { in: affectedTxIds } }, select: { bankTransactionId: true } });
+      const stillMatchedSet = new Set(stillMatched.map((m) => m.bankTransactionId));
+      const nowEmpty = affectedTxIds.filter((id) => !stillMatchedSet.has(id));
+      if (nowEmpty.length) await prisma.bankTransaction.updateMany({ where: { id: { in: nowEmpty } }, data: { matchConfidence: null, matchedAt: null } });
+    }
     res.json({ ok: true });
   }),
 );

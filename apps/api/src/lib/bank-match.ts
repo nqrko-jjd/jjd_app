@@ -83,6 +83,24 @@ export function pickMatch(tx: TxLite, candidates: LedgerLite[]): { ledgerId: str
 }
 
 /**
+ * Migration paresseuse : au démarrage, matérialise les anciens liens uniques (matchedLedgerId /
+ * matchedDocumentId, posés avant l'introduction de BankTransactionMatch) en vraies lignes de
+ * rapprochement — idempotent (ne retraite jamais une transaction déjà migrée), sûr à rappeler à
+ * chaque redémarrage.
+ */
+export async function backfillBankMatches(): Promise<number> {
+  const legacy = await prisma.bankTransaction.findMany({
+    where: { OR: [{ matchedLedgerId: { not: null } }, { matchedDocumentId: { not: null } }], matches: { none: {} } },
+    select: { id: true, matchedLedgerId: true, matchedDocumentId: true },
+  });
+  if (!legacy.length) return 0;
+  await prisma.bankTransactionMatch.createMany({
+    data: legacy.map((t) => ({ bankTransactionId: t.id, ledgerEntryId: t.matchedLedgerId, documentId: t.matchedDocumentId })),
+  });
+  return legacy.length;
+}
+
+/**
  * Rapproche automatiquement les transactions non liées.
  * @returns nombre de rapprochements créés, par niveau de confiance.
  */
@@ -90,7 +108,7 @@ export async function autoMatchAll(
   opts: { onlyUnmatched?: boolean; txFilter?: Prisma.BankTransactionWhereInput } = {},
 ): Promise<{ strong: number; good: number; scanned: number }> {
   const txs = await prisma.bankTransaction.findMany({
-    where: { ...(opts.onlyUnmatched === false ? {} : { matchedLedgerId: null }), ...opts.txFilter },
+    where: { ...(opts.onlyUnmatched === false ? {} : { matches: { none: {} } }), ...opts.txFilter },
     select: { id: true, amount: true, bookingDate: true, structuredComm: true, counterpartyName: true, side: true },
     orderBy: { bookingDate: 'desc' },
   });
@@ -139,9 +157,12 @@ export async function autoMatchAll(
   for (let i = 0; i < updates.length; i += 100) {
     await prisma.$transaction(
       updates.slice(i, i + 100).flatMap((u) => [
+        prisma.bankTransactionMatch.create({
+          data: { bankTransactionId: u.id, ledgerEntryId: u.ledgerId },
+        }),
         prisma.bankTransaction.update({
           where: { id: u.id },
-          data: { matchedLedgerId: u.ledgerId, matchConfidence: u.confidence, matchedAt: now },
+          data: { matchConfidence: u.confidence, matchedAt: now },
         }),
         prisma.ledgerEntry.update({
           where: { id: u.ledgerId },

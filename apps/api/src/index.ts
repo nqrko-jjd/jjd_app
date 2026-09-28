@@ -4,6 +4,7 @@ import { env } from './env.js';
 import { prisma } from './db.js';
 import { invoiceMailboxConfigured, syncInvoiceMailbox } from './lib/invoice-mailbox.js';
 import { markOverdueInvoices, renumberFaDepositInvoices } from './lib/documents.js';
+import { backfillBankMatches } from './lib/bank-match.js';
 
 function lanAddresses(): string[] {
   const out: string[] = [];
@@ -54,6 +55,11 @@ async function backfillArchivedClosed() {
 
 await backfillMessageAudience();
 await backfillArchivedClosed();
+{
+  const n = await backfillBankMatches();
+  // eslint-disable-next-line no-console
+  if (n) console.log(`[backfill] ${n} rapprochement(s) bancaire(s) migré(s) vers BankTransactionMatch`);
+}
 {
   const n = await renumberFaDepositInvoices();
   // eslint-disable-next-line no-console

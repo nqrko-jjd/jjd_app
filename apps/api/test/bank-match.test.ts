@@ -99,10 +99,10 @@ test('autoMatchAll : lie la comm structurée (strong) et le montant+nom (good)',
   assert.ok(r.strong >= 1, `strong=${r.strong}`);
   assert.ok(r.good >= 1, `good=${r.good}`);
 
-  const strong = await prisma.bankTransaction.findFirst({ where: { source: 'test', structuredComm: '090933755493' } });
+  const strong = await prisma.bankTransaction.findFirst({ where: { source: 'test', structuredComm: '090933755493' }, include: { matches: true } });
   assert.equal(strong?.matchConfidence, 'strong');
-  assert.ok(strong?.matchedLedgerId);
+  assert.ok(strong?.matches.some((m) => m.ledgerEntryId));
 
-  const unmatched = await prisma.bankTransaction.findFirst({ where: { source: 'test', counterpartyName: 'Inconnu' } });
-  assert.equal(unmatched?.matchedLedgerId, null);
+  const unmatched = await prisma.bankTransaction.findFirst({ where: { source: 'test', counterpartyName: 'Inconnu' }, include: { matches: true } });
+  assert.equal(unmatched?.matches.length, 0);
 });

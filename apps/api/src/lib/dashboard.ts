@@ -72,7 +72,7 @@ export async function bureauDashboard() {
   const [
     invoicedMonth, invoicedPrevMonth, paidMonth, overdue, receivable, quotesPending, worksitesToInvoice,
     expiringDocs, ctExpiring, activeCount, activeWorksites,
-    crmNextActions, todayEvents,
+    crmNextActions, todayEvents, supplierOverdue,
   ] = await Promise.all([
     prisma.document.aggregate({
       where: { kind: { in: ['invoice', 'deposit_invoice'] }, issuedOn: { gte: monthStart }, source: { not: 'demo' } }, _sum: { totalHt: true },
@@ -110,6 +110,11 @@ export async function bureauDashboard() {
       where: { startAt: { lt: todayEnd }, endAt: { gt: todayStart } },
       select: { teamId: true },
     }),
+    // factures d'achat échues et pas encore payées — pendant fournisseur, symétrique des « Impayés » client
+    prisma.ledgerEntry.findMany({
+      where: { direction: 'purchase', dueDate: { not: null, lt: now }, NOT: { paymentStatus: 'Payé' } },
+      select: { ht: true, ttc: true },
+    }),
   ]);
 
   const teamsOnSiteToday = new Set(todayEvents.map((e) => e.teamId).filter((id): id is string => !!id)).size;
@@ -118,10 +123,13 @@ export async function bureauDashboard() {
   const overdueAmount = round2(overdue.reduce((s, d) => s + Math.max(0, (d.totalTtc || 0) - (d.paidAmount || 0)), 0));
   const receivableAmount = round2(receivable.reduce((s, d) => s + Math.max(0, (d.totalTtc || 0) - (d.paidAmount || 0)), 0));
   const quotesPendingAmount = round2(quotesPending.reduce((s, d) => s + (d.totalHt || 0), 0));
+  const supplierOverdueAmount = round2(supplierOverdue.reduce((s, e) => s + (e.ttc ?? e.ht), 0));
 
   const alerts: Alert[] = [];
   if (overdue.length)
     alerts.push({ kind: 'overdue_invoices', severity: 'critical', label: 'Factures échues impayées', count: overdue.length, amount: overdueAmount, href: '/app/documents?kind=invoice&statut=overdue' });
+  if (supplierOverdue.length)
+    alerts.push({ kind: 'overdue_supplier_invoices', severity: 'critical', label: 'Factures fournisseurs échues', count: supplierOverdue.length, amount: supplierOverdueAmount, href: '/app/achats?paid=0' });
   if (worksitesToInvoice)
     alerts.push({ kind: 'to_invoice', severity: 'warning', label: 'Chantiers terminés à facturer', count: worksitesToInvoice, href: '/app/chantiers?statut=to_invoice' });
   if (quotesPending.length)
@@ -143,6 +151,8 @@ export async function bureauDashboard() {
       paidMonth: round2(paidMonth._sum.totalHt ?? 0),
       overdueAmount,
       overdueCount: overdue.length,
+      supplierOverdueAmount,
+      supplierOverdueCount: supplierOverdue.length,
       openWorksites: activeCount,
       teamsOnSiteToday,
       receivableAmount,

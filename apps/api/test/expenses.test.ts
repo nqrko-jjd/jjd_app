@@ -42,7 +42,6 @@ before(async () => {
   // nettoie d'éventuels restes d'un run précédent interrompu
   const stale = await prisma.worksite.findMany({ where: { ref: 'R-EXP-TEST' }, select: { id: true } });
   for (const w of stale) {
-    await prisma.bankTransaction.updateMany({ where: { matchedLedgerId: { in: (await prisma.ledgerEntry.findMany({ where: { worksiteId: w.id }, select: { id: true } })).map((x) => x.id) } }, data: { matchedLedgerId: null } });
     await prisma.ledgerEntry.deleteMany({ where: { worksiteId: w.id } });
     await prisma.worksite.delete({ where: { id: w.id } });
   }
@@ -127,18 +126,56 @@ test('rapprochement bancaire -> facture d\'achat passe « payé », défaire la 
     data: { direction: 'purchase', worksiteId, ht: 100, ttc: 121, date: new Date('2026-09-04'), source: 'manual', paymentStatus: 'Non payé' },
   });
 
-  const m = await jf<{ transaction: { matchedLedgerId: string | null } }>(`/api/finance/bank/${txId}/match`, {
+  const m = await jf<{ ok: boolean }>(`/api/finance/bank/${txId}/matches`, {
     method: 'POST', body: JSON.stringify({ ledgerId: exp.id }),
   });
-  assert.equal(m.body.transaction.matchedLedgerId, exp.id);
+  assert.equal(m.status, 201);
   const afterMatch = await prisma.ledgerEntry.findUnique({ where: { id: exp.id } });
   assert.equal(afterMatch!.paymentStatus, 'Payé');
   assert.ok(afterMatch!.paidOn);
 
-  await jf(`/api/finance/bank/${txId}/match`, { method: 'POST', body: JSON.stringify({ ledgerId: null }) });
+  const match = await prisma.bankTransactionMatch.findFirstOrThrow({ where: { bankTransactionId: txId, ledgerEntryId: exp.id } });
+  await jf(`/api/finance/bank/${txId}/matches/${match.id}`, { method: 'DELETE' });
   const afterUnmatch = await prisma.ledgerEntry.findUnique({ where: { id: exp.id } });
   assert.equal(afterUnmatch!.paymentStatus, 'Non payé');
   assert.equal(afterUnmatch!.paidOn, null);
+});
+
+test('rapprochement bancaire : un même paiement réparti sur plusieurs factures (acompte décompté ensuite)', async () => {
+  const [f1, f2, f3] = await Promise.all([
+    prisma.ledgerEntry.create({ data: { direction: 'purchase', worksiteId, ht: 3000, ttc: 3630, date: new Date('2026-09-10'), source: 'manual', paymentStatus: 'Non payé', supplierName: 'CF Group' } }),
+    prisma.ledgerEntry.create({ data: { direction: 'purchase', worksiteId, ht: 3000, ttc: 3630, date: new Date('2026-09-11'), source: 'manual', paymentStatus: 'Non payé', supplierName: 'CF Group' } }),
+    prisma.ledgerEntry.create({ data: { direction: 'purchase', worksiteId, ht: 3000, ttc: 2740, date: new Date('2026-09-12'), source: 'manual', paymentStatus: 'Non payé', supplierName: 'CF Group' } }),
+  ]);
+  const deposit = await prisma.bankTransaction.create({
+    data: { bookingDate: new Date('2026-09-01'), amount: -10000, side: 'out', counterpartyName: 'CF Group', source: 'test' },
+  });
+
+  for (const f of [f1, f2, f3]) {
+    const r = await jf<{ ok: boolean }>(`/api/finance/bank/${deposit.id}/matches`, { method: 'POST', body: JSON.stringify({ ledgerId: f.id }) });
+    assert.equal(r.status, 201);
+  }
+
+  const [e1, e2, e3] = await Promise.all([f1, f2, f3].map((f) => prisma.ledgerEntry.findUnique({ where: { id: f.id } })));
+  assert.ok(e1!.paymentStatus === 'Payé' && e2!.paymentStatus === 'Payé' && e3!.paymentStatus === 'Payé');
+
+  const tx = await prisma.bankTransaction.findUnique({ where: { id: deposit.id }, include: { matches: true } });
+  assert.equal(tx!.matches.length, 3);
+
+  // relier deux fois la même facture à la même transaction est refusé
+  const dup = await jf(`/api/finance/bank/${deposit.id}/matches`, { method: 'POST', body: JSON.stringify({ ledgerId: f1.id }) });
+  assert.equal(dup.status, 409);
+
+  // retirer une seule ligne ne touche pas les deux autres
+  const m1 = tx!.matches.find((m) => m.ledgerEntryId === f1.id)!;
+  await jf(`/api/finance/bank/${deposit.id}/matches/${m1.id}`, { method: 'DELETE' });
+  const afterPartialUnmatch = await prisma.ledgerEntry.findUnique({ where: { id: f1.id } });
+  assert.equal(afterPartialUnmatch!.paymentStatus, 'Non payé');
+  const stillMatched = await prisma.bankTransactionMatch.count({ where: { bankTransactionId: deposit.id } });
+  assert.equal(stillMatched, 2);
+
+  await prisma.bankTransaction.delete({ where: { id: deposit.id } });
+  await prisma.ledgerEntry.deleteMany({ where: { id: { in: [f1.id, f2.id, f3.id] } } });
 });
 
 test('note de crédit fournisseur : créable, et vient en déduction des totaux (pas en plus)', async () => {

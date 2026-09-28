@@ -243,8 +243,8 @@ financeRouter.get(
     const { matched, q: qRaw, from, bank, page: pageStr, pageSize: pageSizeStr } = req.query as Record<string, string>;
     const q = qRaw?.toLowerCase();
     const and: Record<string, unknown>[] = [];
-    if (matched === '1') and.push({ OR: [{ matchedLedgerId: { not: null } }, { matchedDocumentId: { not: null } }] });
-    if (matched === '0') and.push({ matchedLedgerId: null }, { matchedDocumentId: null });
+    if (matched === '1') and.push({ matches: { some: {} } });
+    if (matched === '0') and.push({ matches: { none: {} } });
     if (from) and.push({ bookingDate: { gte: new Date(from) } });
     if (bank) and.push({ bank });
     if (q) and.push({ OR: [{ counterpartyName: { contains: q, ...insensitive } }, { description: { contains: q, ...insensitive } }, { communication: { contains: q, ...insensitive } }] });
@@ -253,46 +253,28 @@ financeRouter.get(
     const page = Math.max(1, Math.trunc(Number(pageStr)) || 1);
     const pageSize = Math.min(5000, Math.max(20, Math.trunc(Number(pageSizeStr)) || 100));
 
-    const [items, filteredCount, stats] = await Promise.all([
+    const [items, filteredCount, stats, total, done] = await Promise.all([
       prisma.bankTransaction.findMany({
         where, orderBy: { bookingDate: 'desc' },
         skip: (page - 1) * pageSize, take: pageSize,
-        include: { account: { select: { label: true, iban: true } } },
+        include: {
+          account: { select: { label: true, iban: true } },
+          matches: {
+            orderBy: { createdAt: 'asc' },
+            include: {
+              ledgerEntry: { select: { id: true, docNumber: true, supplierName: true, direction: true, ttc: true, ht: true, worksite: { select: { ref: true } } } },
+              document: { select: { id: true, number: true, kind: true, totalTtc: true, contact: { select: { name: true } }, worksite: { select: { ref: true } } } },
+            },
+          },
+        },
       }),
       prisma.bankTransaction.count({ where }),
-      prisma.bankTransaction.groupBy({
-        by: ['bank'],
-        _count: true,
-        _sum: { amount: true },
-      }),
+      prisma.bankTransaction.groupBy({ by: ['bank'], _count: true, _sum: { amount: true } }),
+      prisma.bankTransaction.count(),
+      prisma.bankTransaction.count({ where: { matches: { some: {} } } }),
     ]);
-    // libellé de la facture rapprochée (pour l'affichage)
-    const ledgerIds = items.map((t) => t.matchedLedgerId).filter((x): x is string => !!x);
-    const docIds = items.map((t) => t.matchedDocumentId).filter((x): x is string => !!x);
-    const [ledgers, docs] = await Promise.all([
-      ledgerIds.length
-        ? prisma.ledgerEntry.findMany({
-            where: { id: { in: ledgerIds } },
-            select: { id: true, docNumber: true, supplierName: true, direction: true, ttc: true, worksite: { select: { ref: true } } },
-          })
-        : [],
-      docIds.length
-        ? prisma.document.findMany({
-            where: { id: { in: docIds } },
-            select: { id: true, number: true, kind: true, totalTtc: true, contact: { select: { name: true } }, worksite: { select: { ref: true } } },
-          })
-        : [],
-    ]);
-    const ledgerMap = new Map(ledgers.map((l) => [l.id, l]));
-    const docMap = new Map(docs.map((d) => [d.id, d]));
-    const total = await prisma.bankTransaction.count();
-    const done = await prisma.bankTransaction.count({ where: { OR: [{ matchedLedgerId: { not: null } }, { matchedDocumentId: { not: null } }] } });
     res.json({
-      items: items.map((t) => ({
-        ...t,
-        matchedLedger: t.matchedLedgerId ? ledgerMap.get(t.matchedLedgerId) ?? null : null,
-        matchedDocument: t.matchedDocumentId ? docMap.get(t.matchedDocumentId) ?? null : null,
-      })),
+      items,
       byBank: stats, matched: done, total,
       page, pageSize, totalCount: filteredCount, totalPages: Math.max(1, Math.ceil(filteredCount / pageSize)),
     });
@@ -304,9 +286,14 @@ financeRouter.get(
   '/bank/:id/suggestions',
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
-    const tx = await prisma.bankTransaction.findUnique({ where: { id: req.params.id } });
+    const tx = await prisma.bankTransaction.findUnique({ where: { id: req.params.id }, include: { matches: true } });
     if (!tx) throw new HttpError(404, 'Transaction introuvable');
     const inc = { worksite: { select: { ref: true, title: true } } };
+
+    // déjà rapproché à CETTE transaction — jamais reproposé (un paiement peut en couvrir
+    // plusieurs autres en revanche, donc pas d'exclusion cross-transaction)
+    const usedLedgerIds = tx.matches.map((m) => m.ledgerEntryId).filter((x): x is string => !!x);
+    const usedDocIds = tx.matches.map((m) => m.documentId).filter((x): x is string => !!x);
 
     // recherche manuelle : l'utilisateur cherche lui-même (n° facture, fournisseur, chantier…)
     // au lieu de se limiter aux propositions automatiques (montant/date proches) — utile
@@ -316,6 +303,7 @@ financeRouter.get(
       const [ledgers, docs] = await Promise.all([
         prisma.ledgerEntry.findMany({
           where: {
+            id: { notIn: usedLedgerIds },
             OR: [
               { docNumber: { contains: q, ...insensitive } },
               { supplierName: { contains: q, ...insensitive } },
@@ -328,6 +316,7 @@ financeRouter.get(
         }),
         prisma.document.findMany({
           where: {
+            id: { notIn: usedDocIds },
             OR: [
               { number: { contains: q, ...insensitive } },
               { contact: { name: { contains: q, ...insensitive } } },
@@ -364,16 +353,36 @@ financeRouter.get(
       });
     }
 
-    const amount = Math.abs(tx.amount ?? 0);
+    // déjà partiellement affecté (ex. acompte de 10 000 € réparti sur plusieurs factures) :
+    // les propositions par montant visent ce qu'il reste à couvrir, pas le montant total du
+    // virement — sinon plus aucune facture ne matcherait après le premier rapprochement.
+    const matchedAmounts = await Promise.all(
+      tx.matches.map(async (m) => {
+        if (m.ledgerEntryId) {
+          const l = await prisma.ledgerEntry.findUnique({ where: { id: m.ledgerEntryId }, select: { ttc: true, ht: true } });
+          return l ? (l.ttc ?? l.ht) : 0;
+        }
+        if (m.documentId) {
+          const d = await prisma.document.findUnique({ where: { id: m.documentId }, select: { totalTtc: true } });
+          return d?.totalTtc ?? 0;
+        }
+        return 0;
+      }),
+    );
+    const alreadyMatched = matchedAmounts.reduce((s, a) => s + a, 0);
+    const fullAmount = Math.abs(tx.amount ?? 0);
+    const remaining = fullAmount - alreadyMatched;
+    const amount = remaining > 0.5 ? remaining : fullAmount;
+
     const window = tx.bookingDate
       ? { date: { gte: new Date(tx.bookingDate.getTime() - 20 * 86400000), lte: new Date(tx.bookingDate.getTime() + 20 * 86400000) } }
       : {};
 
-    const byComm = tx.structuredComm && tx.structuredComm.length >= 10
-      ? await prisma.ledgerEntry.findMany({ where: { bankComm: { contains: tx.structuredComm.slice(0, 12) } }, take: 5, include: inc })
+    const byComm = !tx.matches.length && tx.structuredComm && tx.structuredComm.length >= 10
+      ? await prisma.ledgerEntry.findMany({ where: { bankComm: { contains: tx.structuredComm.slice(0, 12) }, id: { notIn: usedLedgerIds } }, take: 5, include: inc })
       : [];
     const byAmount = await prisma.ledgerEntry.findMany({
-      where: { ttc: { gte: amount - 1, lte: amount + 1 }, ...window },
+      where: { ttc: { gte: amount - 1, lte: amount + 1 }, id: { notIn: usedLedgerIds }, ...window },
       take: 12, include: inc, orderBy: { date: 'desc' },
     });
     const seen = new Set<string>();
@@ -396,6 +405,7 @@ financeRouter.get(
     const docs = await prisma.document.findMany({
       where: {
         kind: { in: ['invoice', 'deposit_invoice', 'credit_note'] },
+        id: { notIn: usedDocIds },
         totalTtc: { gte: amount - 1, lte: amount + 1 },
         ...docWindow,
       },
@@ -414,67 +424,73 @@ financeRouter.get(
       status: d.status,
     }));
 
-    res.json({ items: [...ledgerItems, ...docItems] });
+    res.json({ items: [...ledgerItems, ...docItems], remaining: Math.round(remaining * 100) / 100 });
   }),
 );
 
 /**
- * Rapproche une transaction bancaire d'une facture d'achat (grand livre) OU
- * d'une facture de vente (Document). Lier => la facture passe « payé » ;
- * délier => elle repasse « non payé ».
+ * Ajoute une facture au rapprochement d'une transaction bancaire — un même paiement peut en
+ * couvrir plusieurs (ex. un acompte de 10 000 € décompté ensuite sur 3 factures reçues) : appeler
+ * cette route plusieurs fois pour la même transaction ajoute autant de lignes. Facture d'achat
+ * (grand livre) OU facture de vente (Document) ; la cible passe « payée ».
  */
 financeRouter.post(
-  '/bank/:id/match',
+  '/bank/:id/matches',
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
     const ledgerId: string | null = req.body.ledgerId ?? null;
     const documentId: string | null = req.body.documentId ?? null;
-    const current = await prisma.bankTransaction.findUnique({ where: { id: req.params.id } });
-    if (!current) throw new HttpError(404, 'Transaction introuvable');
+    if (!ledgerId && !documentId) throw new HttpError(422, 'Choisissez une facture à rapprocher');
+    const tx = await prisma.bankTransaction.findUnique({ where: { id: req.params.id } });
+    if (!tx) throw new HttpError(404, 'Transaction introuvable');
 
-    // 1. défaire l'ancien rapprochement (repasse la cible en non payé)
-    if (current.matchedLedgerId && current.matchedLedgerId !== ledgerId) {
-      await prisma.ledgerEntry.update({
-        where: { id: current.matchedLedgerId },
-        data: { paymentStatus: 'Non payé', paidOn: null },
-      }).catch(() => {});
-    }
-    if (current.matchedDocumentId && current.matchedDocumentId !== documentId) {
-      await prisma.document.update({
-        where: { id: current.matchedDocumentId },
-        data: { status: 'sent', paidAmount: 0, paidOn: null },
-      }).catch(() => {});
-    }
+    const dup = await prisma.bankTransactionMatch.findFirst({
+      where: { bankTransactionId: tx.id, ledgerEntryId: ledgerId, documentId },
+    });
+    if (dup) throw new HttpError(409, 'Cette facture est déjà rapprochée de cette transaction');
 
-    // 2. appliquer le nouveau
+    await prisma.bankTransactionMatch.create({ data: { bankTransactionId: tx.id, ledgerEntryId: ledgerId, documentId } });
+
     if (ledgerId) {
       await prisma.ledgerEntry.update({
         where: { id: ledgerId },
-        data: { paymentStatus: 'Payé', paidOn: current.bookingDate ?? new Date() },
+        data: { paymentStatus: 'Payé', paidOn: tx.bookingDate ?? new Date() },
       });
     }
     if (documentId) {
       const doc = await prisma.document.findUnique({ where: { id: documentId }, select: { totalTtc: true } });
       await prisma.document.update({
         where: { id: documentId },
-        data: {
-          status: 'paid',
-          paidAmount: doc?.totalTtc ?? 0,
-          paidOn: current.bookingDate ?? new Date(),
-        },
+        data: { status: 'paid', paidAmount: doc?.totalTtc ?? 0, paidOn: tx.bookingDate ?? new Date() },
       });
     }
 
-    const tx = await prisma.bankTransaction.update({
-      where: { id: req.params.id },
-      data: {
-        matchedLedgerId: ledgerId,
-        matchedDocumentId: documentId,
-        matchConfidence: ledgerId || documentId ? 'manual' : null,
-        matchedAt: ledgerId || documentId ? new Date() : null,
-      },
-    });
-    res.json({ transaction: tx });
+    await prisma.bankTransaction.update({ where: { id: tx.id }, data: { matchConfidence: 'manual', matchedAt: new Date() } });
+    res.status(201).json({ ok: true });
+  }),
+);
+
+/** Retire une facture du rapprochement d'une transaction (elle repasse « non payée »). */
+financeRouter.delete(
+  '/bank/:id/matches/:matchId',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const m = await prisma.bankTransactionMatch.findFirst({ where: { id: req.params.matchId, bankTransactionId: req.params.id } });
+    if (!m) throw new HttpError(404, 'Rapprochement introuvable');
+    await prisma.bankTransactionMatch.delete({ where: { id: m.id } });
+
+    if (m.ledgerEntryId) {
+      await prisma.ledgerEntry.update({ where: { id: m.ledgerEntryId }, data: { paymentStatus: 'Non payé', paidOn: null } }).catch(() => {});
+    }
+    if (m.documentId) {
+      await prisma.document.update({ where: { id: m.documentId }, data: { status: 'sent', paidAmount: 0, paidOn: null } }).catch(() => {});
+    }
+
+    const remaining = await prisma.bankTransactionMatch.count({ where: { bankTransactionId: req.params.id } });
+    if (remaining === 0) {
+      await prisma.bankTransaction.update({ where: { id: req.params.id }, data: { matchConfidence: null, matchedAt: null } });
+    }
+    res.json({ ok: true });
   }),
 );
 

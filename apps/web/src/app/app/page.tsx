@@ -11,7 +11,7 @@ import { rowNav } from '@/lib/rowNav';
 import { LEGAL_DOC_LABEL, WORKSITE_STATUS_LABEL, WORKSITE_PROGRESS_PCT, type WorksiteStatus } from '@jjd/shared';
 import {
   BarChart3, Wallet, Building2, Flag, FileText, Clock, MessageSquare, Users,
-  Search, Bell, ChevronRight, AlertTriangle, Receipt, Mail, Phone, ShieldAlert, ShieldCheck, Truck, HardHat, type LucideIcon,
+  Search, Bell, ChevronRight, AlertTriangle, Receipt, Mail, Phone, ShieldAlert, ShieldCheck, Truck, HardHat, CreditCard, type LucideIcon,
 } from 'lucide-react';
 
 interface TodayEv {
@@ -316,7 +316,8 @@ function ForemanToday() {
 interface Dashboard {
   kpis: {
     invoicedMonth: number; invoicedPrevMonth: number; paidMonth: number; overdueAmount: number;
-    overdueCount: number; openWorksites: number; teamsOnSiteToday: number;
+    overdueCount: number; supplierOverdueAmount: number; supplierOverdueCount: number;
+    openWorksites: number; teamsOnSiteToday: number;
     receivableAmount: number; quotesPendingAmount: number; quotesPendingCount: number;
   };
   alerts: { kind: string; severity: string; label: string; count: number; amount?: number; href: string }[];
@@ -333,7 +334,7 @@ interface FieldEvent {
 }
 
 const ALERT_KIND_ICON: Record<string, LucideIcon> = {
-  overdue_invoices: AlertTriangle, to_invoice: Receipt, quotes_follow: Mail,
+  overdue_invoices: AlertTriangle, overdue_supplier_invoices: CreditCard, to_invoice: Receipt, quotes_follow: Mail,
   crm_due: Phone, expiring_docs: ShieldAlert, ct_expiring: Truck,
 };
 
@@ -550,6 +551,13 @@ export default function DashboardPage() {
               sub={data.kpis.teamsOnSiteToday > 0 ? `${data.kpis.teamsOnSiteToday} équipe${data.kpis.teamsOnSiteToday > 1 ? 's' : ''} sur le terrain aujourd’hui` : 'Aucune équipe sur le terrain aujourd’hui'}
             />
             <Kpi ic={Flag} label="Impayés" value={<Money value={data.kpis.overdueAmount} />} sub={`${data.kpis.overdueCount} facture${data.kpis.overdueCount > 1 ? 's' : ''} en retard`} warn />
+            <Kpi
+              ic={CreditCard}
+              label="Fournisseurs en retard"
+              value={<Money value={data.kpis.supplierOverdueAmount} />}
+              sub={data.kpis.supplierOverdueCount > 0 ? `${data.kpis.supplierOverdueCount} facture${data.kpis.supplierOverdueCount > 1 ? 's' : ''} échue${data.kpis.supplierOverdueCount > 1 ? 's' : ''}` : 'Tout est à jour'}
+              warn={data.kpis.supplierOverdueCount > 0}
+            />
             <Kpi ic={FileText} label="Devis en attente" value={<Money value={data.kpis.quotesPendingAmount} />} sub={`${data.kpis.quotesPendingCount} devis envoyés`} />
             <Kpi ic={Clock} label="À encaisser" value={<Money value={data.kpis.receivableAmount} />} sub="factures émises non payées" />
           </div>

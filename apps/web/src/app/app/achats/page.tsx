@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
 import { api, apiUpload, apiBlobUrl } from '@/lib/api';
 import { PageHead, Money, formatDateBE, Kpi } from '@/lib/ui';
-import { Wallet, AlertTriangle, Receipt, Truck } from 'lucide-react';
+import { Wallet, AlertTriangle, Receipt, Truck, CreditCard } from 'lucide-react';
 import { useSort, useColumnFilter, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
 import { ContextMenu, useContextMenu, type MenuItem } from '@/components/ContextMenu';
@@ -58,12 +58,15 @@ interface BankTx {
   bank: string | null; counterpartyName: string | null; communication: string | null;
   nameMatch?: boolean;
 }
+interface BankMatch extends BankTx { matchId: string }
 
 function toDateInput(iso: string | null): string {
   if (!iso) return '';
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10);
 }
+
+const isOverdue = (e: Expense) => !e.paid && !!e.dueDate && new Date(e.dueDate) < new Date();
 
 export default function AchatsPage() {
   return (
@@ -76,7 +79,7 @@ export default function AchatsPage() {
 function AchatsInner() {
   const sp = useSearchParams();
   const [q, setQ] = useState(sp.get('q') ?? '');
-  const [paid, setPaid] = useState('');
+  const [paid, setPaid] = useState(sp.get('paid') ?? '');
   const [worksiteId, setWorksiteId] = useState('');
   const [contactId, setContactId] = useState('');
   const [category, setCategory] = useState('');
@@ -108,7 +111,7 @@ function AchatsInner() {
   params.set('pageSize', String(pageSize));
   const { data, loading, error, reload } = useApi<{
     items: Expense[];
-    totals: { count: number; ht: number; ttc: number; unpaidTtc: number; pendingSlips: number };
+    totals: { count: number; ht: number; ttc: number; unpaidTtc: number; pendingSlips: number; overdueCount: number; overdueTtc: number };
     page: number;
     pageSize: number;
     totalPages: number;
@@ -330,6 +333,15 @@ function AchatsInner() {
           sub={total > 0 ? `${Math.round((unpaidTotal / total) * 100)} % du total` : 'Rien à payer'}
           warn={unpaidTotal > 0}
         />
+        <div role="button" tabIndex={0} style={{ cursor: 'pointer' }} title="Filtrer sur les factures non payées" onClick={() => setPaid('0')}>
+          <Kpi
+            ic={CreditCard}
+            label="En retard"
+            value={<Money value={data?.totals.overdueTtc ?? 0} />}
+            sub={(data?.totals.overdueCount ?? 0) > 0 ? `${data?.totals.overdueCount} facture${(data?.totals.overdueCount ?? 0) > 1 ? 's' : ''} échue${(data?.totals.overdueCount ?? 0) > 1 ? 's' : ''}` : 'Rien en retard'}
+            warn={(data?.totals.overdueCount ?? 0) > 0}
+          />
+        </div>
         <div
           role="button"
           tabIndex={0}
@@ -466,7 +478,16 @@ function AchatsInner() {
                   <td>{e.categoryLabel ?? '—'}</td>
                   <td style={{ textAlign: 'right' }}><Money value={e.ht} /></td>
                   <td style={{ textAlign: 'right' }}><Money value={e.ttc ?? e.ht} /></td>
-                  <td><span className={`badge ${e.paid ? 'ok' : 'warn'}`}>{e.paid ? 'Payé' : 'Non payé'}</span></td>
+                  <td>
+                    <span className={`badge ${e.paid ? 'ok' : isOverdue(e) ? 'crit' : 'warn'}`}>
+                      {e.paid ? 'Payé' : isOverdue(e) ? 'En retard' : 'Non payé'}
+                    </span>
+                    {!e.paid && e.dueDate && (
+                      <div className="muted" style={{ fontSize: '0.72rem', marginTop: 2, whiteSpace: 'nowrap' }}>
+                        éch. {formatDateBE(e.dueDate)}
+                      </div>
+                    )}
+                  </td>
                   <td style={{ textAlign: 'center' }}>{e.hasPdf ? '📎' : ''}</td>
                 </tr>
               ))}
@@ -529,7 +550,7 @@ function ExpenseModal({
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [extracting, setExtracting] = useState(false);
   const [extractNote, setExtractNote] = useState<string | null>(null);
-  const [bankMatch, setBankMatch] = useState<BankTx | null>(null);
+  const [bankMatches, setBankMatches] = useState<BankMatch[]>([]);
   const [bankSug, setBankSug] = useState<BankTx[] | null>(null);
 
   // à la création seulement : lit le PDF déposé pour préremplir le formulaire
@@ -591,8 +612,8 @@ function ExpenseModal({
   useEffect(() => {
     if (expense?.hasPdf) apiBlobUrl(`/api/finance/expenses/${expense.id}/pdf`).then(setPdfUrl).catch(() => {});
     if (expense) {
-      api<{ expense: { bankMatch: BankTx | null } }>(`/api/finance/expenses/${expense.id}`)
-        .then((r) => setBankMatch(r.expense.bankMatch))
+      api<{ expense: { bankMatches: BankMatch[] } }>(`/api/finance/expenses/${expense.id}`)
+        .then((r) => setBankMatches(r.expense.bankMatches))
         .catch(() => {});
     }
   }, [expense]);
@@ -602,13 +623,15 @@ function ExpenseModal({
     const r = await api<{ items: BankTx[] }>(`/api/finance/expenses/${expense.id}/bank-suggestions`);
     setBankSug(r.items);
   }
-  async function linkPayment(txId: string | null) {
+  async function linkPayment(txId: string) {
     if (!expense) return;
-    await api(`/api/finance/bank/${txId ?? bankMatch?.id}/match`, {
-      method: 'POST',
-      body: { ledgerId: txId ? expense.id : null },
-    });
+    await api(`/api/finance/bank/${txId}/matches`, { method: 'POST', body: { ledgerId: expense.id } });
     setBankSug(null);
+    onSaved();
+    onClose();
+  }
+  async function unlinkPayment(m: BankMatch) {
+    await api(`/api/finance/bank/${m.id}/matches/${m.matchId}`, { method: 'DELETE' });
     onSaved();
     onClose();
   }
@@ -862,12 +885,16 @@ function ExpenseModal({
           {expense && (
             <div className="field" style={{ gridColumn: '1 / -1' }}>
               <label>Paiement (rapprochement bancaire)</label>
-              {bankMatch ? (
-                <div className="row" style={{ gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                  <span className="badge ok">Rapproché</span>
-                  <span>{formatDateBE(bankMatch.bookingDate)} · <Money value={bankMatch.amount} sign /> · {bankMatch.bank ?? '—'}</span>
-                  {bankMatch.counterpartyName && <span className="muted">{bankMatch.counterpartyName}</span>}
-                  <button type="button" className="btn" onClick={() => linkPayment(null)}>Délier</button>
+              {bankMatches.length > 0 ? (
+                <div className="grid" style={{ gap: '0.4rem' }}>
+                  {bankMatches.map((m) => (
+                    <div key={m.matchId} className="row" style={{ gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <span className="badge ok">Rapproché</span>
+                      <span>{formatDateBE(m.bookingDate)} · <Money value={m.amount} sign /> · {m.bank ?? '—'}</span>
+                      {m.counterpartyName && <span className="muted">{m.counterpartyName}</span>}
+                      <button type="button" className="btn" onClick={() => unlinkPayment(m)}>Délier</button>
+                    </div>
+                  ))}
                 </div>
               ) : bankSug ? (
                 bankSug.length === 0 ? (

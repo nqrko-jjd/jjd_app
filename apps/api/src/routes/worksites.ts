@@ -179,8 +179,13 @@ worksitesRouter.get(
   asyncHandler(async (req, res) => {
     const { status, entity, q: qRaw, archived, kind } = req.query as Record<string, string>;
     const q = qRaw?.toLowerCase();
-    const where: Record<string, unknown> = { archived: archived === '1' ? true : false, kind: kind || 'project' };
-    if (status) where.status = status;
+    // mêmes règles que GET / : archived=1 -> clôturés seulement, archived=all -> pas de filtre
+    // (onglet "Tous"), sinon actifs seulement — sinon l'export de l'onglet "Tous" perdait
+    // silencieusement tous les chantiers clôturés.
+    const where: Record<string, unknown> = { kind: kind || 'project' };
+    if (archived === '1') where.archived = true;
+    else if (archived !== 'all') where.archived = false;
+    if (status) where.status = status.includes(',') ? { in: status.split(',') } : status;
     if (entity) where.entity = entity;
     if (q) where.OR = [{ ref: { contains: q, ...insensitive } }, { title: { contains: q, ...insensitive } }, { city: { contains: q, ...insensitive } }];
     const items = await prisma.worksite.findMany({

@@ -53,7 +53,7 @@ export default function ImmeublesPage() {
       {error && !loading && <ErrorState message={error} onRetry={reload} />}
       {data && data.items.length === 0 && (
         <div className="card card-pad muted">
-          Peu d'immeubles pour l'instant — ils se remplissent avec l'import des contacts TrustUp (les ACP « c/o Syndic »).
+          Peu d'immeubles/projets pour l'instant — clique « + Nouvel immeuble » pour créer une ACP (copropriété avec syndic) ou un projet Promoteur.
         </div>
       )}
       {data && data.items.length > 0 && mode === 'list' && (

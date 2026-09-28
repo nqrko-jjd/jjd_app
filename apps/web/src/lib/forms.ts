@@ -128,20 +128,28 @@ export const VEHICLE_DOC_FIELDS: FieldDef[] = [
   { name: 'expiresOn', label: 'Expire le', type: 'date' },
 ];
 
-/** Un immeuble/ACP/projet EST directement un Contact (fusion Contact/Immeuble) — ce formulaire
- *  crée/édite ce même Contact, juste avec les champs pertinents pour "le dossier immeuble"
- *  (pas de champ "client facturé" séparé : c'est cette fiche elle-même). */
-export const BUILDING_FIELDS = (syndics: { id: string; name: string }[] = []): FieldDef[] => [
-  { name: 'name', label: "Nom de l'immeuble / ACP / projet", required: true, full: true },
-  { name: 'kind', label: 'Catégorie', type: 'select', options: [{ value: 'acp', label: 'ACP / Copropriété' }, { value: 'developer', label: 'Promoteur' }] },
-  { name: 'syndicId', label: 'Syndic (si ACP)', type: 'select', options: syndics.map((s) => ({ value: s.id, label: s.name })) },
-  { name: 'address', label: 'Adresse', full: true, type: 'address', addressFill: { postalCode: 'postalCode', city: 'city' } },
-  { name: 'box', label: 'Boîte', placeholder: 'ex. 4 (sans « bte »)' },
-  { name: 'postalCode', label: 'Code postal' },
-  { name: 'city', label: 'Ville' },
-  { name: 'reference', label: 'Référence dossier (syndic / ACP)' },
-  { name: 'lotCount', label: 'Nombre de lots', type: 'number' },
-  { name: 'digicode', label: 'Digicode' },
-  { name: 'accessNote', label: 'Accès (clés, badges, parking…)', type: 'textarea', full: true },
-  { name: 'note', label: 'Note', type: 'textarea', full: true },
-];
+/**
+ * Un immeuble/ACP/projet EST directement un Contact (fusion Contact/Immeuble) — ce formulaire
+ * crée/édite ce même Contact, juste avec les champs pertinents pour "le dossier immeuble"
+ * (pas de champ "client facturé" séparé : c'est cette fiche elle-même). Le Syndic (adresse de
+ * facturation « c/o ») ne concerne qu'une ACP/copropriété — un projet Promoteur n'en a pas,
+ * donc le champ ne s'affiche que pour cette catégorie (sinon on a l'air d'exiger un syndic
+ * pour un promoteur, ce qui pousse à créer le projet en ACP par erreur).
+ */
+export const BUILDING_FIELDS = (syndics: { id: string; name: string }[] = []) => (values: Record<string, unknown>): FieldDef[] => {
+  const isAcp = (values.kind ?? 'acp') === 'acp';
+  return [
+    { name: 'name', label: "Nom de l'immeuble / ACP / projet", required: true, full: true },
+    { name: 'kind', label: 'Catégorie', type: 'select', options: [{ value: 'acp', label: 'ACP / Copropriété' }, { value: 'developer', label: 'Promoteur' }] },
+    ...(isAcp ? [{ name: 'syndicId', label: 'Syndic (adresse de facturation "c/o")', type: 'select' as const, options: syndics.map((s) => ({ value: s.id, label: s.name })) }] : []),
+    { name: 'address', label: 'Adresse', full: true, type: 'address', addressFill: { postalCode: 'postalCode', city: 'city' } },
+    { name: 'box', label: 'Boîte', placeholder: 'ex. 4 (sans « bte »)' },
+    { name: 'postalCode', label: 'Code postal' },
+    { name: 'city', label: 'Ville' },
+    { name: 'reference', label: isAcp ? 'Référence dossier (syndic / ACP)' : 'Référence dossier' },
+    { name: 'lotCount', label: 'Nombre de lots', type: 'number' },
+    { name: 'digicode', label: 'Digicode' },
+    { name: 'accessNote', label: 'Accès (clés, badges, parking…)', type: 'textarea', full: true },
+    { name: 'note', label: 'Note', type: 'textarea', full: true },
+  ];
+};

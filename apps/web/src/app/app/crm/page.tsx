@@ -53,7 +53,7 @@ function CrmInner() {
   const oppFields: FieldDef[] = [
     { name: 'title', label: 'Objet de la demande', required: true, full: true, placeholder: 'ex. Rénover une salle de bains' },
     { name: 'contactId', label: 'Client', type: 'contact', contactTypeFilter: 'client', placeholder: 'Nom du client…' },
-    { name: 'acpId', label: 'Immeuble / ACP (si syndic)', type: 'contact', contactTypeFilter: 'client', contactKindFilter: ['acp', 'developer'], placeholder: 'Nom de l’immeuble…' },
+    { name: 'acpId', label: 'Immeuble / ACP / projet (optionnel)', type: 'contact', contactTypeFilter: 'client', contactKindFilter: ['acp', 'developer'], placeholder: 'Nom de l’immeuble…' },
     { name: 'estimatedValue', label: 'Budget estimé HT (€)', type: 'number', placeholder: 'si connu' },
     { name: 'source', label: 'Origine', type: 'select', options: CRM_SOURCE_OPTIONS },
     { name: 'stage', label: 'Étape', type: 'select', options: stages.map((s) => ({ value: s, label: stageLabel(s) })) },

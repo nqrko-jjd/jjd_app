@@ -27,6 +27,8 @@ export default function PointagePage() {
   const { data, loading, error, reload } = useApi<{ items: Pending[] }>('/api/timesheet/pending');
   const [adding, setAdding] = useState(false);
   const [flash, setFlash] = useState<{ tone: 'success' | 'crit'; text: string } | null>(null);
+  // repliés par défaut, une seule personne ouverte à la fois — comme la liste des décomptes du mois
+  const [openPerson, setOpenPerson] = useState<string | null>(null);
 
   async function act(id: string, action: 'approve' | 'reject') {
     await api(`/api/timesheet/entries/${id}/${action}`, { method: 'POST' });
@@ -130,60 +132,75 @@ export default function PointagePage() {
         />
       )}
 
-      {[...byPerson.entries()].map(([name, entries]) => (
-        <div key={name} style={{ marginBottom: '1.3rem' }}>
-          <div className="section-title" style={{ display: 'flex', alignItems: 'center' }}>
-            <Avatar src={entries[0]!.person.photoThumbUrl} label={name} />
-            {name} <span className="hint">{entries.length} · {formatHours(entries.reduce((a, e) => a + (e.hours ?? 0), 0))} · <Money value={entries.reduce((a, e) => a + (e.amount ?? 0), 0)} /></span>
-            <button
-              className="btn primary"
-              style={{ marginLeft: 'auto' }}
-              disabled={entries.every((e) => e.geoFlag)}
-              onClick={() => approvePerson(name, entries)}
-              title={entries.some((e) => e.geoFlag) ? 'Valide toutes les lignes sauf celles pointées hors zone' : 'Valide tous les pointages de cette personne'}
+      {[...byPerson.entries()].map(([name, entries]) => {
+        const open = openPerson === name;
+        const flaggedCount = entries.filter((e) => e.geoFlag).length;
+        return (
+          <div key={name} className="card" style={{ marginBottom: '0.7rem', overflow: 'hidden' }}>
+            <div
+              className="row"
+              style={{ alignItems: 'center', padding: '0.85rem 1.05rem', cursor: 'pointer', gap: '0.6rem' }}
+              onClick={() => setOpenPerson(open ? null : name)}
             >
-              Valider la personne
-            </button>
+              <span style={{ width: 16, color: 'var(--ink-3)', flexShrink: 0 }}>{open ? '▾' : '▸'}</span>
+              <Avatar src={entries[0]!.person.photoThumbUrl} label={name} />
+              <strong>{name}</strong>
+              <span className="hint">
+                {entries.length} pointage{entries.length > 1 ? 's' : ''} · {formatHours(entries.reduce((a, e) => a + (e.hours ?? 0), 0))} · <Money value={entries.reduce((a, e) => a + (e.amount ?? 0), 0)} />
+              </span>
+              {flaggedCount > 0 && <span className="badge crit">{flaggedCount} hors zone</span>}
+              <button
+                className="btn primary"
+                style={{ marginLeft: 'auto' }}
+                disabled={entries.every((e) => e.geoFlag)}
+                onClick={(ev) => { ev.stopPropagation(); approvePerson(name, entries); }}
+                title={entries.some((e) => e.geoFlag) ? 'Valide toutes les lignes sauf celles pointées hors zone' : 'Valide tous les pointages de cette personne'}
+              >
+                Valider la personne
+              </button>
+            </div>
+            {open && (
+              <div className="tbl-wrap">
+                <table className="tbl">
+                  <thead>
+                    <tr><th>Date</th><th>Chantier</th><th>Tâche</th><th>Lieu</th><th style={{ textAlign: 'right' }}>Heures</th><th style={{ textAlign: 'right' }}>Montant</th><th></th></tr>
+                  </thead>
+                  <tbody>
+                    {entries.map((e) => (
+                      <tr key={e.id} style={e.geoFlag ? { background: 'var(--warn-soft)' } : undefined}>
+                        <td className="tnum">{formatDateBE(e.date)}</td>
+                        <td>{e.worksite ? <><span className="mono">{e.worksite.ref}</span> {e.worksite.title}</> : <span className="muted">—</span>}</td>
+                        <td className="muted">{e.task ?? '—'}</td>
+                        <td>
+                          <div className="row" style={{ gap: '0.4rem' }}>
+                            {e.geoFlag
+                              ? <span className="badge crit" title={`Pointé à ${e.geoDistance} m du chantier`}>Hors zone · {e.geoDistance} m</span>
+                              : e.geoDistance != null ? <span className="badge ok">Sur place</span>
+                              : <span className="muted" style={{ fontSize: '0.8rem' }}>—</span>}
+                            {e.startLat != null && e.startLng != null && (
+                              <a href={`https://www.google.com/maps?q=${e.startLat},${e.startLng}`} target="_blank" rel="noreferrer" style={{ fontSize: '0.78rem' }}>
+                                📍 voir
+                              </a>
+                            )}
+                          </div>
+                        </td>
+                        <td style={{ textAlign: 'right' }} className="tnum">{formatHours(e.hours)}</td>
+                        <td style={{ textAlign: 'right' }}><Money value={e.amount} /></td>
+                        <td>
+                          <div className="row" style={{ gap: '0.3rem' }}>
+                            <button className="btn primary" style={{ padding: '0.2rem 0.5rem', fontSize: '0.78rem' }} onClick={() => act(e.id, 'approve')}>Valider</button>
+                            <button className="btn" style={{ padding: '0.2rem 0.5rem', fontSize: '0.78rem' }} onClick={() => act(e.id, 'reject')}>Refuser</button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
-          <div className="tbl-wrap">
-            <table className="tbl">
-              <thead>
-                <tr><th>Date</th><th>Chantier</th><th>Tâche</th><th>Lieu</th><th style={{ textAlign: 'right' }}>Heures</th><th style={{ textAlign: 'right' }}>Montant</th><th></th></tr>
-              </thead>
-              <tbody>
-                {entries.map((e) => (
-                  <tr key={e.id} style={e.geoFlag ? { background: 'var(--warn-soft)' } : undefined}>
-                    <td className="tnum">{formatDateBE(e.date)}</td>
-                    <td>{e.worksite ? <><span className="mono">{e.worksite.ref}</span> {e.worksite.title}</> : <span className="muted">—</span>}</td>
-                    <td className="muted">{e.task ?? '—'}</td>
-                    <td>
-                      <div className="row" style={{ gap: '0.4rem' }}>
-                        {e.geoFlag
-                          ? <span className="badge crit" title={`Pointé à ${e.geoDistance} m du chantier`}>Hors zone · {e.geoDistance} m</span>
-                          : e.geoDistance != null ? <span className="badge ok">Sur place</span>
-                          : <span className="muted" style={{ fontSize: '0.8rem' }}>—</span>}
-                        {e.startLat != null && e.startLng != null && (
-                          <a href={`https://www.google.com/maps?q=${e.startLat},${e.startLng}`} target="_blank" rel="noreferrer" style={{ fontSize: '0.78rem' }}>
-                            📍 voir
-                          </a>
-                        )}
-                      </div>
-                    </td>
-                    <td style={{ textAlign: 'right' }} className="tnum">{formatHours(e.hours)}</td>
-                    <td style={{ textAlign: 'right' }}><Money value={e.amount} /></td>
-                    <td>
-                      <div className="row" style={{ gap: '0.3rem' }}>
-                        <button className="btn primary" style={{ padding: '0.2rem 0.5rem', fontSize: '0.78rem' }} onClick={() => act(e.id, 'approve')}>Valider</button>
-                        <button className="btn" style={{ padding: '0.2rem 0.5rem', fontSize: '0.78rem' }} onClick={() => act(e.id, 'reject')}>Refuser</button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ))}
+        );
+      })}
 
       {flagged > 0 && (
         <Banner tone="warn" title={`${flagged} ligne${flagged > 1 ? 's' : ''} hors zone`}>

@@ -1,5 +1,5 @@
-import { useCallback, useState } from 'react';
-import { View, TextInput, Pressable, FlatList, StyleSheet } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import { View, TextInput, Pressable, FlatList, StyleSheet, ScrollView } from 'react-native';
 import { Text } from '@/lib/AppText';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { apiGet } from '@/lib/api';
@@ -22,11 +22,20 @@ const TONE: Record<string, 'ok' | 'warn' | 'crit' | undefined> = {
   in_progress: undefined, done: 'ok', invoiced: 'ok', closed: 'ok', to_invoice: 'warn', on_hold: 'warn', cancelled: 'crit',
 };
 
+const OPEN_STATUSES = ['lead', 'to_plan', 'scheduled', 'in_progress', 'on_hold'];
+
+const FILTERS = [
+  { key: 'all', label: 'Tous', test: () => true },
+  { key: 'open', label: 'En cours', test: (it: WS) => OPEN_STATUSES.includes(it.status) },
+  { key: 'to_invoice', label: 'À facturer', test: (it: WS) => it.status === 'to_invoice' },
+] as const;
+
 export default function Chantiers() {
   const router = useRouter();
   const { user } = useSession();
   const worker = user?.role === 'worker';
   const [q, setQ] = useState('');
+  const [filter, setFilter] = useState<(typeof FILTERS)[number]['key']>('all');
   const [items, setItems] = useState<WS[]>([]);
 
   const load = useCallback(async () => {
@@ -40,9 +49,28 @@ export default function Chantiers() {
   }, [q, worker]);
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
+  const active = FILTERS.find((f) => f.key === filter) ?? FILTERS[0];
+  const filtered = useMemo(() => items.filter(active.test), [items, active]);
+
   return (
     <View style={{ flex: 1, backgroundColor: T.paper }}>
-      <View style={{ padding: 12 }}>
+      <View style={{ paddingHorizontal: 16, paddingTop: 14 }}>
+        <Text style={s.eyebrow}>Suivi des travaux</Text>
+        <Text style={s.title}>{worker ? 'Mes chantiers' : 'Vos chantiers'}</Text>
+        <Muted style={{ marginBottom: 12 }}>
+          {items.length} dossier{items.length > 1 ? 's' : ''} relevé{items.length > 1 ? 's' : ''}
+        </Muted>
+      </View>
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.pillRow}>
+        {FILTERS.map((f) => (
+          <Pressable key={f.key} onPress={() => setFilter(f.key)} style={[s.pill, filter === f.key && s.pillActive]}>
+            <Text style={[s.pillLabel, filter === f.key && s.pillLabelActive]}>{f.label}</Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+
+      <View style={{ paddingHorizontal: 12 }}>
         <TextInput
           style={s.search}
           placeholder="Rechercher (réf, titre, ville)…"
@@ -53,19 +81,18 @@ export default function Chantiers() {
         />
       </View>
       <FlatList
-        data={items}
+        data={filtered}
         keyExtractor={(x) => x.id}
-        contentContainerStyle={{ padding: 12, paddingTop: 0, gap: 8 }}
+        contentContainerStyle={{ padding: 12, paddingTop: 8, gap: 8 }}
         renderItem={({ item }) => (
           <Pressable style={s.row} onPress={() => router.push((worker ? `/fil/${item.id}` : `/chantier/${item.id}`) as never)}>
-            <View style={{ flex: 1 }}>
-              <Text style={s.title}>
-                <Text style={s.ref}>{item.ref}</Text> — {item.title}
-              </Text>
-              <Muted>{item.client?.name ?? '—'}</Muted>
-            </View>
-            <View style={{ alignItems: 'flex-end', gap: 4 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <Text style={s.ref}>{item.ref}</Text>
               <Badge tone={TONE[item.status]}>{STATUS_LABEL[item.status] ?? item.status}</Badge>
+            </View>
+            <Text style={s.rowTitle}>{item.title}</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+              <Muted>{item.client?.name ?? '—'}</Muted>
               {!worker && <Text style={s.amount}>{eur(item.quotedHt)}</Text>}
             </View>
           </Pressable>
@@ -76,9 +103,16 @@ export default function Chantiers() {
 }
 
 const s = StyleSheet.create({
+  eyebrow: { fontSize: 11.5, color: T.ink3, textTransform: 'uppercase', letterSpacing: 0.6, fontWeight: '700' },
+  title: { fontSize: 22, fontWeight: '800', color: T.ink, marginTop: 2, marginBottom: 2 },
+  pillRow: { paddingHorizontal: 16, paddingBottom: 10, gap: 8 },
+  pill: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, backgroundColor: T.surface, borderWidth: 1, borderColor: T.line },
+  pillActive: { backgroundColor: T.primary, borderColor: T.primary },
+  pillLabel: { color: T.ink2, fontWeight: '600', fontSize: 13 },
+  pillLabelActive: { color: '#fff' },
   search: { backgroundColor: T.surface, borderWidth: 1, borderColor: T.line, borderRadius: 10, padding: 12, color: T.ink },
-  row: { flexDirection: 'row', gap: 10, backgroundColor: T.surface, borderWidth: 1, borderColor: T.line, borderRadius: 10, padding: 12 },
-  title: { color: T.ink, fontWeight: '500' },
-  ref: { fontWeight: '700' },
+  row: { backgroundColor: T.surface, borderWidth: 1, borderColor: T.line, borderRadius: T.radius, padding: 12 },
+  rowTitle: { color: T.ink, fontWeight: '700', marginBottom: 4 },
+  ref: { fontWeight: '700', color: T.accent, fontSize: 12.5 },
   amount: { color: T.ink2, fontSize: 12 },
 });

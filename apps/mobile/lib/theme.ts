@@ -13,6 +13,8 @@ export const T = {
   gold: '#c5a35d',
   goldSoft: '#e8dfc8',
   nav: '#102f27',
+  heroFrom: '#0f2b22',
+  heroTo: '#1d4c3f',
   ok: '#173f34',
   okSoft: '#e9efe9',
   warn: '#a87529',

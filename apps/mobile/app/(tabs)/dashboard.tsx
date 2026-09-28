@@ -3,7 +3,8 @@ import { View, ScrollView, StyleSheet, RefreshControl } from 'react-native';
 import { Text } from '@/lib/AppText';
 import { useFocusEffect } from 'expo-router';
 import { apiGet } from '@/lib/api';
-import { Card, Label, Muted, Loading, eur } from '@/lib/ui';
+import { useSession } from '@/lib/session';
+import { Card, HeroTile, Label, Muted, Loading, eur } from '@/lib/ui';
 import { T } from '@/lib/theme';
 
 interface Dash {
@@ -11,7 +12,10 @@ interface Dash {
   alerts: { kind: string; severity: string; label: string; count: number; amount?: number }[];
 }
 
+const TODAY = new Date().toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' });
+
 export default function Dashboard() {
+  const { person } = useSession();
   const [data, setData] = useState<Dash | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -27,6 +31,7 @@ export default function Dashboard() {
   if (!data) return <Loading />;
 
   const sevColor: Record<string, string> = { critical: T.crit, warning: T.accent, info: T.ink2 };
+  const first = person?.firstName ?? person?.displayName?.split(' ')[0];
 
   return (
     <ScrollView
@@ -34,13 +39,26 @@ export default function Dashboard() {
       contentContainerStyle={{ padding: 16, gap: 12 }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} />}
     >
-      <View style={s.kpiRow}>
-        <Kpi label="Facturé ce mois" value={eur(data.kpis.invoicedMonth)} />
-        <Kpi label="Encaissé" value={eur(data.kpis.paidMonth)} />
+      <View style={{ marginBottom: 2 }}>
+        <Text style={s.eyebrow}>{TODAY}</Text>
+        <Text style={s.greeting}>{first ? `Bonjour ${first},` : 'Bonjour,'}</Text>
+        <Muted>Votre activité, vos chantiers et vos priorités.</Muted>
       </View>
+
+      <HeroTile icon="bar-chart-2">
+        <Text style={s.heroLabel}>Facturé ce mois</Text>
+        <Text style={s.heroValue}>{eur(data.kpis.invoicedMonth)}</Text>
+      </HeroTile>
+
       <View style={s.kpiRow}>
-        <Kpi label="Impayés" value={eur(data.kpis.overdueAmount)} sub={`${data.kpis.overdueCount} factures`} />
+        <Kpi label="Encaissé ce mois" value={eur(data.kpis.paidMonth)} sub={data.kpis.invoicedMonth ? `${Math.round((data.kpis.paidMonth / data.kpis.invoicedMonth) * 100)} % du montant facturé` : undefined} />
         <Kpi label="Chantiers ouverts" value={String(data.kpis.openWorksites)} />
+      </View>
+
+      <View style={[s.kpi, s.kpiWarn]}>
+        <Text style={[s.kpiLabel, { color: T.accent }]}>Impayés</Text>
+        <Text style={[s.kpiValue, { color: T.accent }]}>{eur(data.kpis.overdueAmount)}</Text>
+        <Text style={s.kpiSub}>{data.kpis.overdueCount} facture{data.kpis.overdueCount > 1 ? 's' : ''} en retard</Text>
       </View>
 
       <Label>Alertes</Label>
@@ -70,9 +88,14 @@ function Kpi({ label, value, sub }: { label: string; value: string; sub?: string
 }
 
 const s = StyleSheet.create({
+  eyebrow: { fontSize: 11.5, color: T.ink3, textTransform: 'uppercase', letterSpacing: 0.6, fontWeight: '700', marginBottom: 4 },
+  greeting: { fontSize: 24, fontWeight: '800', color: T.ink, marginBottom: 2 },
   kpiRow: { flexDirection: 'row', gap: 10 },
+  heroLabel: { fontSize: 12.5, color: 'rgba(255,255,255,0.75)', fontWeight: '600' },
+  heroValue: { fontSize: 26, fontWeight: '800', color: '#fff', marginTop: 4 },
   kpi: { flex: 1, backgroundColor: T.surface, borderWidth: 1, borderColor: T.line, borderRadius: T.radius, padding: 12 },
+  kpiWarn: { backgroundColor: T.warnSoft, borderColor: T.warnSoft },
   kpiLabel: { fontSize: 11, color: T.ink2, textTransform: 'uppercase', letterSpacing: 0.4 },
   kpiValue: { fontSize: 18, fontWeight: '700', color: T.ink, marginTop: 3 },
-  kpiSub: { fontSize: 11, color: T.ink2 },
+  kpiSub: { fontSize: 11, color: T.ink2, marginTop: 2 },
 });

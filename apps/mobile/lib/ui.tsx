@@ -2,10 +2,25 @@ import { useCallback, useState, type ReactNode } from 'react';
 import { View, StyleSheet, ActivityIndicator, Pressable, FlatList, TextInput, RefreshControl, Image, Alert } from 'react-native';
 import { Text } from '@/lib/AppText';
 import { Feather } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { apiGet, apiUploadPhoto, API_URL } from './api';
 import { T } from './theme';
+
+/** Bannière/tuile vert dégradé — mise en avant d'une métrique ou d'un titre de fiche (voir maquette). */
+export function HeroTile({ children, icon }: { children: ReactNode; icon?: keyof typeof Feather.glyphMap }) {
+  return (
+    <LinearGradient colors={[T.heroFrom, T.heroTo]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={st.hero}>
+      {icon && (
+        <View style={st.heroIcon}>
+          <Feather name={icon} size={16} color="#fff" />
+        </View>
+      )}
+      {children}
+    </LinearGradient>
+  );
+}
 
 /** Bandeau photo (fiche véhicule / personne). `basePath` = /api/vehicles/<id> etc. */
 export function PhotoHeader({
@@ -189,4 +204,9 @@ const st = StyleSheet.create({
   kvV: { color: T.ink, flex: 1, textAlign: 'right', fontWeight: '600' },
   search: { backgroundColor: T.surface, borderWidth: 1, borderColor: T.line, borderRadius: 10, padding: 12, color: T.ink },
   listRow: { backgroundColor: T.surface, borderWidth: 1, borderColor: T.line, borderRadius: 10, padding: 12 },
+  hero: { borderRadius: T.radius + 4, padding: 16, gap: 4 },
+  heroIcon: {
+    position: 'absolute', top: 14, right: 14, width: 28, height: 28, borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center',
+  },
 });

@@ -10,6 +10,7 @@ import { analytics } from '../lib/analytics.js';
 import { autoMatchAll } from '../lib/bank-match.js';
 import { parseBankCsv, decodeCsvBuffer, type ParsedBankRow } from '../lib/bank-csv.js';
 import { parseCardStatement, pdfToRawText, pdftotextAvailable } from '../lib/bank-pdf.js';
+import { parseScreenshots, screenshotImportAvailable } from '../lib/bank-screenshot.js';
 import { toCsv, readTableBuffer, pick } from '../lib/table-io.js';
 import { parseAmount, parseLooseDate } from '@jjd/shared';
 import { syncLedgerEntryForDocument } from '../lib/documents.js';
@@ -539,6 +540,29 @@ financeRouter.post(
     const { imported, duplicates } = await insertBankRows(parsed.rows, bankLabel || 'CSV', 'csv');
     const match = await autoMatchAll();
     res.json({ imported, duplicates, kind: 'csv', skipped: parsed.skipped, mapped: parsed.mapped, headers: parsed.headers, match });
+  }),
+);
+
+/**
+ * Import à partir d'une ou plusieurs captures d'écran de l'appli d'une carte prépayée (JPEG/PNG)
+ * — pour rapprocher les dépenses bien avant l'arrivée du relevé PDF officiel du mois. Lecture par
+ * IA (vision Claude) : nécessite une clé Anthropic configurée côté serveur (voir env.ts).
+ * Champ multipart « files » (jusqu'à 10), option « bank » (libellé).
+ */
+financeRouter.post(
+  '/bank/import-screenshot',
+  requireAuth(...OFFICE),
+  upload.array('files', 10),
+  asyncHandler(async (req, res) => {
+    if (!screenshotImportAvailable()) throw new HttpError(503, 'Lecture par IA non configurée (clé Anthropic absente côté serveur).');
+    const files = (req.files as Express.Multer.File[] | undefined) ?? [];
+    if (!files.length) throw new HttpError(422, 'Aucune image');
+    const bankLabel = String(req.body?.bank ?? '').trim() || 'Carte (capture)';
+    const rows = await parseScreenshots(files.map((f) => ({ buffer: f.buffer, mimetype: f.mimetype })));
+    if (!rows.length) throw new HttpError(422, 'Aucune transaction lisible sur ces captures.');
+    const { imported, duplicates } = await insertBankRows(rows, bankLabel, 'screenshot');
+    const match = await autoMatchAll();
+    res.json({ imported, duplicates, kind: 'screenshot', match });
   }),
 );
 

@@ -80,11 +80,13 @@ function BanqueInner() {
     page: number; totalPages: number; totalCount: number;
   }>(`/api/finance/bank?${qs}`);
   const { data: ponto, reload: reloadPonto } = useApi<PontoStatus>('/api/ponto/status');
+  const { data: aiStatus } = useApi<{ enabled: boolean }>('/api/assistant/status');
   const [openTx, setOpenTx] = useState<string | null>(null);
   const [manualQ, setManualQ] = useState('');
   const suggQs = manualQ.trim() ? `?q=${encodeURIComponent(manualQ.trim())}` : '';
   const { data: sugg, loading: suggLoading, reload: reloadSugg } = useApi<{ items: Suggestion[]; remaining: number }>(openTx ? `/api/finance/bank/${openTx}/suggestions${suggQs}` : null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const screenshotRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const p = sp.get('ponto');
@@ -146,6 +148,20 @@ function BanqueInner() {
     } catch (e) { setFlash((e as Error).message); }
     finally { setBusy(null); if (fileRef.current) fileRef.current.value = ''; }
   }
+  async function importScreenshots(files: FileList) {
+    setBusy('screenshot'); setFlash(null);
+    const label = window.prompt('Libellé de cette carte (ex. « Visa Belfius ») :', 'Carte (capture)');
+    if (label === null) { setBusy(null); return; }
+    try {
+      const fd = new FormData();
+      for (const f of files) fd.append('files', f);
+      fd.append('bank', label);
+      const r = await apiUpload<{ imported: number; duplicates: number; match: { strong: number; good: number } }>('/api/finance/bank/import-screenshot', fd);
+      setFlash(`${r.imported} dépense(s) lue(s) sur ${files.length} capture(s) · ${r.duplicates} déjà présente(s) · ${r.match.strong + r.match.good} rapprochée(s).`);
+      reload();
+    } catch (e) { setFlash((e as Error).message); }
+    finally { setBusy(null); if (screenshotRef.current) screenshotRef.current.value = ''; }
+  }
 
   const admin = user?.role === 'admin';
 
@@ -192,10 +208,22 @@ function BanqueInner() {
               ref={fileRef} type="file" accept=".csv,text/csv,.pdf,application/pdf" hidden
               onChange={(e) => { const f = e.target.files?.[0]; if (f) importFile(f); }}
             />
+            <button
+              className="btn"
+              disabled={busy === 'screenshot' || !aiStatus?.enabled}
+              onClick={() => screenshotRef.current?.click()}
+              title={aiStatus?.enabled ? 'Photo(s) de l’historique de l’appli carte — pour rapprocher avant l’arrivée du relevé PDF officiel du mois' : 'Lecture IA non configurée côté serveur (clé Anthropic absente)'}
+            >
+              {busy === 'screenshot' ? 'Lecture…' : '📸 Importer une capture d’écran'}
+            </button>
+            <input
+              ref={screenshotRef} type="file" accept="image/png,image/jpeg" multiple hidden
+              onChange={(e) => { const files = e.target.files; if (files?.length) importScreenshots(files); }}
+            />
           </div>
         </div>
         <div className="muted" style={{ marginTop: '0.5rem', fontSize: '0.82rem' }}>
-          « Importer un relevé » = pour les paiements absents du flux Ponto (cartes Visa/Mastercard). CSV, ou PDF « État des dépenses » de carte. Ré-importer le même fichier ne crée pas de doublons.
+          « Importer un relevé » = pour les paiements absents du flux Ponto (cartes Visa/Mastercard). CSV, ou PDF « État des dépenses » de carte. « Capture d’écran » = photo de l’historique de l’appli carte, lue par IA — utile avant l’arrivée du relevé PDF officiel du mois. Ré-importer les mêmes lignes ne crée pas de doublons.
         </div>
         {flash && <div className="muted" style={{ marginTop: '0.6rem', fontSize: '0.85rem' }}>{flash}</div>}
       </div>

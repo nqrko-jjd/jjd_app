@@ -53,9 +53,9 @@ export default function PrintDocument({ params }: { params: Promise<{ id: string
       <div className="sheet">
         <header className="head">
           <div className="brand">
-            <span className="mark">J</span>
+            <span className="mark"><img src="/brand/icon-color.png" alt="" /></span>
             <div className="brand-text">
-              <div className="brand-name">JD Consult</div>
+              <div className="brand-name">JJD Consult</div>
               <div className="brand-tag">Maintenance · Rénovation · Gestion de projets</div>
             </div>
           </div>
@@ -173,6 +173,7 @@ const CSS = `
     width: 34px; height: 34px; flex-shrink: 0; border-radius: 8px; background: #c5a35d; color: #173f34;
     display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 800;
   }
+  .mark img { width: 68%; height: 68%; object-fit: contain; }
   .brand-name { font-size: 16px; font-weight: 800; color: #173f34; letter-spacing: -0.01em; }
   .brand-tag { font-size: 8.5px; text-transform: uppercase; letter-spacing: .06em; color: #9aa79e; font-weight: 700; margin-top: 2px; }
   .doc-box { text-align: right; min-width: 220px; }

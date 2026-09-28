@@ -181,6 +181,9 @@ p { margin: 0; }
   display: grid; place-items: center; font-size: 1.75rem; font-weight: 750; font-family: var(--font-serif);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
+/* logo réel (icône seule) à l'intérieur du badge doré .mark, quelle que soit sa taille — le
+   badge garde sa forme/couleur de marque, seul le glyphe "J" est remplacé par l'image. */
+.mark img { width: 68%; height: 68%; object-fit: contain; }
 /* carte « organisation » — sous le logo, au-dessus de la nav (repère d'espace de travail) */
 .org-card {
   display: flex; align-items: center; gap: 0.6rem;
@@ -188,7 +191,11 @@ p { margin: 0; }
   background: rgba(255, 255, 255, 0.05); border: 1px solid var(--nav-line);
   border-radius: var(--radius-sm);
 }
-.org-card .mark { flex-shrink: 0; }
+.org-card .mark {
+  flex-shrink: 0; width: 30px; height: 32px; border-radius: 9px;
+  background: linear-gradient(135deg, #e2c98b, #c9a35c);
+  display: grid; place-items: center;
+}
 .org-name { font-size: 0.83rem; font-weight: 700; color: var(--nav-fg-active); }
 .org-role { font-size: 0.72rem; color: var(--nav-fg); }
 
@@ -932,7 +939,7 @@ p { margin: 0; }
   .brand-mini { margin-left: auto; font-weight: 800; font-size: 0.9rem; color: #fff; }
   .brand-mini .mark {
     display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 5px;
-    background: var(--primary); font-size: 0.7rem; margin-right: 0.3rem; vertical-align: middle;
+    background: linear-gradient(135deg, #e2c98b, #c9a35c); margin-right: 0.3rem; vertical-align: middle;
   }
   .sidebar {
     position: fixed; inset: 0 auto 0 0; width: 252px; z-index: 50;

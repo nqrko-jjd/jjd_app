@@ -42,7 +42,7 @@ export function PortalShell({
       {mobileOpen && <div className="p-scrim" onClick={() => setMobileOpen(false)} />}
       <aside className={`p-side${collapsed ? ' collapsed' : ''}${mobileOpen ? ' open' : ''}`}>
         <Link href="/portail/accueil" className="brand" onClick={() => setMobileOpen(false)}>
-          <span className="mk">J</span> <span className="lbl">JD Consult</span>
+          <span className="mk"><img src="/brand/icon-color.png" alt="" /></span> <span className="lbl">JJD Consult</span>
         </Link>
         <div className="p-org-card">
           <span className="av">{initials}</span>

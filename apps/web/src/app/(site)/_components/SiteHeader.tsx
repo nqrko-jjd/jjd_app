@@ -19,6 +19,7 @@ export function SiteHeader() {
     <header className="s-nav">
       <div className="s-nav-inner">
         <Link href="/" className="s-brand" onClick={() => setOpen(false)}>
+          <img src="/brand/icon-color.png" alt="" className="s-brand-mark" />
           <b>JJD</b> <span>Consult</span>
         </Link>
         <button className="s-burger" aria-label="Menu" onClick={() => setOpen((v) => !v)}>≡</button>

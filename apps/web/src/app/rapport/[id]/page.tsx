@@ -47,7 +47,7 @@ export default function ReportPrint({ params }: { params: Promise<{ id: string }
       <div className="sheet">
         <header>
           <div>
-            <div className="co">JJD Consult</div>
+            <div className="co"><img src="/brand/icon-color.png" alt="" className="co-mark" />JJD Consult</div>
             <div className="mut">Rapport d’intervention</div>
           </div>
           <div className="right">
@@ -112,7 +112,8 @@ const CSS = `
   .tb button { padding: 8px 14px; border: 1px solid #274a70; background: #274a70; color: #fff; border-radius: 6px; font-size: 12px; cursor: pointer; }
   .sheet { max-width: 760px; margin: 0 auto; padding: 24px; font: 13px/1.55 -apple-system,"Segoe UI",Roboto,sans-serif; color: #1c2733; }
   .sheet header { display: flex; justify-content: space-between; border-bottom: 2px solid #274a70; padding-bottom: 12px; align-items: flex-end; }
-  .co { font-size: 18px; font-weight: 800; color: #274a70; }
+  .co { font-size: 18px; font-weight: 800; color: #274a70; display: flex; align-items: center; gap: 7px; }
+  .co-mark { width: 22px; height: 22px; object-fit: contain; }
   .ref { font-size: 18px; font-weight: 800; }
   .right { text-align: right; }
   .mut { color: #6b7683; font-size: 12px; }

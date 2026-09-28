@@ -5,8 +5,14 @@ import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useFocusEffect, Stack, useRouter } from 'expo-router';
 import { apiGet } from '@/lib/api';
 import { useSession } from '@/lib/session';
-import { Card, Label, Loading, Badge, eur, dateBE } from '@/lib/ui';
+import { Card, HeroTile, Label, Loading, Badge, eur, dateBE } from '@/lib/ui';
 import { T } from '@/lib/theme';
+
+const STATUS_LABEL: Record<string, string> = {
+  lead: 'Demande', to_plan: 'À planifier', scheduled: 'Planifié', in_progress: 'En cours',
+  on_hold: 'En attente', done: 'Terminé', to_invoice: 'À facturer', invoiced: 'Facturé',
+  closed: 'Clôturé', cancelled: 'Abandonné',
+};
 
 interface Margin {
   quotedHt: number; invoicedHt: number; paidHt: number; materialCost: number; labourCost: number;
@@ -45,10 +51,20 @@ export default function ChantierDetail() {
   return (
     <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ padding: 16, gap: 12 }}>
       <Stack.Screen options={{ title: w.ref, headerBackTitle: 'Retour' }} />
-      <Text style={s.h1}>{w.title}</Text>
+
+      <HeroTile>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+          <Text style={s.heroRef}>{w.ref}</Text>
+          <View style={s.heroBadge}>
+            <Text style={s.heroBadgeTxt}>{STATUS_LABEL[w.status] ?? w.statusRaw ?? w.status}</Text>
+          </View>
+        </View>
+        <Text style={s.heroTitle}>{w.title}</Text>
+        {w.client?.name && <Text style={s.heroSub}>{w.client.name}</Text>}
+      </HeroTile>
+
       <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
         <Badge>{w.entity === 'tonton' ? 'Tonton' : w.entity === 'm7' ? 'M7' : 'JJD'}</Badge>
-        {w.statusRaw ? <Badge>{w.statusRaw}</Badge> : <Badge>{w.status}</Badge>}
       </View>
 
       <Pressable
@@ -94,7 +110,11 @@ function Row({ k, v, strong }: { k: string; v: string; strong?: boolean }) {
 }
 
 const s = StyleSheet.create({
-  h1: { fontSize: 20, fontWeight: '700', color: T.ink },
+  heroRef: { color: 'rgba(255,255,255,0.65)', fontWeight: '700', fontSize: 12.5, letterSpacing: 0.3 },
+  heroTitle: { color: '#fff', fontSize: 19, fontWeight: '800', marginTop: 6, lineHeight: 24 },
+  heroSub: { color: 'rgba(255,255,255,0.78)', fontSize: 13, marginTop: 4 },
+  heroBadge: { backgroundColor: 'rgba(255,255,255,0.16)', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
+  heroBadgeTxt: { color: '#fff', fontSize: 11.5, fontWeight: '700' },
   row: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, paddingVertical: 2 },
   k: { color: T.ink2, flexShrink: 0 },
   v: { color: T.ink, flex: 1, textAlign: 'right' },

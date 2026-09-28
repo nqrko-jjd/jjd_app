@@ -4,6 +4,7 @@ import { Text } from '@/lib/AppText';
 import { useFocusEffect } from 'expo-router';
 import { apiGet } from '@/lib/api';
 import { useSession } from '@/lib/session';
+import { Feather } from '@expo/vector-icons';
 import { Card, HeroTile, Label, Muted, Loading, eur } from '@/lib/ui';
 import { T } from '@/lib/theme';
 
@@ -51,13 +52,23 @@ export default function Dashboard() {
       </HeroTile>
 
       <View style={s.kpiRow}>
-        <Kpi label="Encaissé ce mois" value={eur(data.kpis.paidMonth)} sub={data.kpis.invoicedMonth ? `${Math.round((data.kpis.paidMonth / data.kpis.invoicedMonth) * 100)} % du montant facturé` : undefined} />
-        <Kpi label="Chantiers ouverts" value={String(data.kpis.openWorksites)} />
+        <Kpi
+          icon="credit-card"
+          label="Encaissé ce mois"
+          value={eur(data.kpis.paidMonth)}
+          sub={data.kpis.invoicedMonth ? `${Math.round((data.kpis.paidMonth / data.kpis.invoicedMonth) * 100)} % du montant facturé` : undefined}
+        />
+        <Kpi icon="home" label="Chantiers ouverts" value={String(data.kpis.openWorksites)} />
       </View>
 
       <View style={[s.kpi, s.kpiWarn]}>
-        <Text style={[s.kpiLabel, { color: T.accent }]}>Impayés</Text>
-        <Text style={[s.kpiValue, { color: T.accent }]}>{eur(data.kpis.overdueAmount)}</Text>
+        <View style={s.kpiHead}>
+          <Text style={[s.kpiLabel, { color: T.kpiWarnFg }]}>Impayés</Text>
+          <View style={[s.kpiIcon, { backgroundColor: T.kpiWarnIconBg }]}>
+            <Feather name="flag" size={14} color={T.kpiWarnFg} />
+          </View>
+        </View>
+        <Text style={[s.kpiValue, { color: T.kpiWarnFg }]}>{eur(data.kpis.overdueAmount)}</Text>
         <Text style={s.kpiSub}>{data.kpis.overdueCount} facture{data.kpis.overdueCount > 1 ? 's' : ''} en retard</Text>
       </View>
 
@@ -77,10 +88,15 @@ export default function Dashboard() {
   );
 }
 
-function Kpi({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function Kpi({ icon, label, value, sub }: { icon: keyof typeof Feather.glyphMap; label: string; value: string; sub?: string }) {
   return (
     <View style={s.kpi}>
-      <Text style={s.kpiLabel}>{label}</Text>
+      <View style={s.kpiHead}>
+        <Text style={s.kpiLabel}>{label}</Text>
+        <View style={s.kpiIcon}>
+          <Feather name={icon} size={14} color={T.gold} />
+        </View>
+      </View>
       <Text style={s.kpiValue}>{value}</Text>
       {sub && <Text style={s.kpiSub}>{sub}</Text>}
     </View>
@@ -93,9 +109,11 @@ const s = StyleSheet.create({
   kpiRow: { flexDirection: 'row', gap: 10 },
   heroLabel: { fontSize: 12.5, color: 'rgba(255,255,255,0.75)', fontWeight: '600' },
   heroValue: { fontSize: 26, fontWeight: '800', color: '#fff', marginTop: 4 },
-  kpi: { flex: 1, backgroundColor: T.surface, borderWidth: 1, borderColor: T.line, borderRadius: T.radius, padding: 12 },
-  kpiWarn: { backgroundColor: T.warnSoft, borderColor: T.warnSoft },
-  kpiLabel: { fontSize: 11, color: T.ink2, textTransform: 'uppercase', letterSpacing: 0.4 },
-  kpiValue: { fontSize: 18, fontWeight: '700', color: T.ink, marginTop: 3 },
-  kpiSub: { fontSize: 11, color: T.ink2, marginTop: 2 },
+  kpi: { flex: 1, backgroundColor: T.surface, borderWidth: 1, borderColor: T.line, borderRadius: T.radius + 3, padding: 14, gap: 4 },
+  kpiWarn: { backgroundColor: T.kpiWarnBg, borderColor: T.kpiWarnBorder },
+  kpiHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  kpiIcon: { width: 26, height: 26, borderRadius: 8, backgroundColor: T.goldSoft, alignItems: 'center', justifyContent: 'center' },
+  kpiLabel: { fontSize: 12.5, color: T.ink2, flexShrink: 1, marginRight: 6 },
+  kpiValue: { fontSize: 19, fontWeight: '700', color: T.ink, letterSpacing: -0.4 },
+  kpiSub: { fontSize: 11, color: T.ink2 },
 });

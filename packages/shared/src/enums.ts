@@ -251,7 +251,10 @@ export const INTERVENTION_PROBLEM_TYPE_LABEL: Record<InterventionProblemType, st
 export const CONTACT_TYPES = ['client', 'supplier', 'both'] as const;
 export type ContactType = (typeof CONTACT_TYPES)[number];
 
-export const CLIENT_KINDS = ['individual', 'company', 'acp', 'syndic', 'developer', 'public'] as const;
+// 'developer' = un projet promoteur (ex. "Léopold Views" — fusion Contact/Immeuble, comme 'acp')
+// 'promoter'  = le promoteur lui-même (ex. "Matexi" — même rôle que 'syndic' pour une ACP,
+// voir Contact.promoterId / le modèle Promoter)
+export const CLIENT_KINDS = ['individual', 'company', 'acp', 'syndic', 'developer', 'promoter', 'public'] as const;
 export type ClientKind = (typeof CLIENT_KINDS)[number];
 
 export const CLIENT_KIND_LABEL: Record<ClientKind, string> = {
@@ -259,7 +262,8 @@ export const CLIENT_KIND_LABEL: Record<ClientKind, string> = {
   company: 'Société',
   acp: 'ACP / Copropriété',
   syndic: 'Syndic',
-  developer: 'Promoteur',
+  developer: 'Projet (promoteur)',
+  promoter: 'Promoteur',
   public: 'Pouvoir public',
 };
 

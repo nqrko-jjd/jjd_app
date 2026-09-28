@@ -70,6 +70,8 @@ model User {
   contact      Contact?  @relation("UserClientAccount", fields: [contactId], references: [id])
   syndicId     String? // compte client "syndic" -> voit tous ses immeubles
   syndic       Syndic?   @relation(fields: [syndicId], references: [id])
+  promoterId   String? // compte client "promoteur" -> voit tous ses projets
+  promoter     Promoter? @relation(fields: [promoterId], references: [id])
   residentOfId String? // compte "résident" -> limité à un immeuble/ACP (non unique : plusieurs résidents peuvent partager un immeuble)
   residentOf   Contact?  @relation("ResidentOfAcp", fields: [residentOfId], references: [id])
   portalAccess String    @default("full") // full | limited (limited = suivi/photos/messages, sans devis/factures/montants)
@@ -239,13 +241,33 @@ model Syndic {
   @@index([normalizedName])
 }
 
+/// Promoteur (Matexi, Thomas & Piron…). Regroupe des projets (Contact kind='developer'),
+/// même rôle que Syndic pour une ACP — y compris un compte portail qui voit tous ses projets
+/// (User.promoterId).
+model Promoter {
+  id             String   @id @default(cuid())
+  name           String
+  normalizedName String
+  email          String?
+  phone          String?
+  address        String?
+  city           String?
+  note           String?
+  createdAt      DateTime @default(now())
+
+  contacts Contact[]
+  users    User[]
+
+  @@index([normalizedName])
+}
+
 /// Contact : client (particulier, société, ACP, pouvoir public) ou fournisseur.
 model Contact {
   id             String   @id @default(cuid())
   name           String
   normalizedName String
   type           String   @default("client") // client | supplier | both
-  kind           String? // individual | company | acp | syndic | public
+  kind           String? // individual | company | acp | syndic | developer | promoter | public
   email          String?
   phone          String?
   vat            String?
@@ -254,7 +276,12 @@ model Contact {
   postalCode     String?
   city           String?
   syndicId       String?
-  syndic         Syndic?  @relation(fields: [syndicId], references: [id])
+  syndic         Syndic?   @relation(fields: [syndicId], references: [id])
+  // kind='developer' (un projet, ex. "Léopold Views") : quel Promoteur le développe.
+  // kind='promoter' (le promoteur lui-même, ex. "Matexi") : lien vers sa propre fiche Promoter
+  // (même mécanique que syndicId sur un Contact kind='syndic' — voir linkPromoter côté API).
+  promoterId     String?
+  promoter       Promoter? @relation(fields: [promoterId], references: [id])
   note           String?
   trustupId      String?
   source         String?

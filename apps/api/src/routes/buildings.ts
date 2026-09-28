@@ -17,16 +17,18 @@ buildingsRouter.get(
   '/',
   requireAuth(...STAFF),
   asyncHandler(async (req, res) => {
-    const { q: qRaw, syndicId } = req.query as Record<string, string>;
+    const { q: qRaw, syndicId, promoterId } = req.query as Record<string, string>;
     const q = qRaw?.toLowerCase();
     const where: Record<string, unknown> = { kind: { in: ACP_KINDS } };
     if (syndicId) where.syndicId = syndicId;
+    if (promoterId) where.promoterId = promoterId;
     if (q) where.OR = [{ name: { contains: q, ...insensitive } }, { city: { contains: q, ...insensitive } }];
     const items = await prisma.contact.findMany({
       where,
       orderBy: { name: 'asc' },
       include: {
         syndic: { select: { id: true, name: true } },
+        promoter: { select: { id: true, name: true } },
         _count: { select: { acpWorksites: true, acpUnits: true } },
       },
       take: 5000,
@@ -43,6 +45,7 @@ buildingsRouter.get(
       where: { id: req.params.id },
       include: {
         syndic: true,
+        promoter: true,
         acpKeyContacts: { orderBy: [{ position: 'asc' }, { createdAt: 'asc' }], include: { contact: { select: { id: true, name: true } } } },
         residents: {
           orderBy: { name: 'asc' },
@@ -78,6 +81,7 @@ buildingsRouter.post(
         type: 'client',
         normalizedName: normalizeName(data.name),
         syndicId: data.syndicId ?? null,
+        promoterId: data.promoterId ?? null,
         lotCount: data.lotCount ?? null,
         source: 'manual',
       },

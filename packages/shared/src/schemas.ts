@@ -27,6 +27,7 @@ export const contactInput = z.object({
   postalCode: z.string().trim().nullish(),
   city: z.string().trim().nullish(),
   syndicId: z.string().nullish(),
+  promoterId: z.string().nullish(),
   buildingId: z.string().nullish(),
   note: z.string().nullish(),
   customerNumber: z.string().trim().nullish(), // fournisseur : notre n° de client chez lui
@@ -47,6 +48,7 @@ export const buildingInput = z.object({
   postalCode: z.string().trim().nullish(),
   city: z.string().trim().nullish(),
   syndicId: z.string().nullish(),
+  promoterId: z.string().nullish(),
   reference: z.string().trim().nullish(),
   lotCount: z.coerce.number().int().nonnegative().nullish(),
   digicode: z.string().trim().nullish(),

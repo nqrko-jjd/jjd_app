@@ -28,6 +28,17 @@ async function linkSyndic(name: string): Promise<string> {
   return created.id;
 }
 
+/** Même rôle que linkSyndic ci-dessus, pour un contact de catégorie "Promoteur" — alimente le
+ *  sélecteur de promoteur d'un projet (`/api/meta/pickers`) et l'accès portail promoteur
+ *  (`promoterId` sur `User`). */
+async function linkPromoter(name: string): Promise<string> {
+  const normalized = normalizeName(name);
+  const existing = await prisma.promoter.findFirst({ where: { normalizedName: normalized } });
+  if (existing) return existing.id;
+  const created = await prisma.promoter.create({ data: { name: name.trim(), normalizedName: normalized } });
+  return created.id;
+}
+
 /** L'API expose l'auto-référence `linkedAcpId`/`linkedAcp` (l'ACP à laquelle CE contact est
  *  rattaché) sous le nom `buildingId`/`building`, conservé pour la compatibilité avec les
  *  clients existants (web/mobile). */
@@ -74,6 +85,7 @@ contactsRouter.get(
         take: pageSize,
         include: {
           syndic: { select: { id: true, name: true } },
+          promoter: { select: { id: true, name: true } },
           linkedAcp: { select: { id: true, name: true } },
           _count: { select: { worksites: true } },
         },
@@ -95,6 +107,7 @@ contactsRouter.get(
       where: { id: req.params.id },
       include: {
         syndic: true,
+        promoter: true,
         linkedAcp: { select: { id: true, name: true } },
         worksites: { orderBy: { updatedAt: 'desc' }, take: 50 },
         opportunities: { orderBy: { updatedAt: 'desc' }, take: 20 },
@@ -161,12 +174,14 @@ contactsRouter.post(
   asyncHandler(async (req, res) => {
     const { buildingId, ...data } = contactInput.parse(req.body);
     const syndicId = data.kind === 'syndic' && !data.syndicId ? await linkSyndic(data.name) : data.syndicId ?? null;
+    const promoterId = data.kind === 'promoter' && !data.promoterId ? await linkPromoter(data.name) : data.promoterId ?? null;
     const contact = await prisma.contact.create({
       data: {
         ...data,
         email: data.email || null,
         normalizedName: normalizeName(data.name),
         syndicId,
+        promoterId,
         linkedAcpId: buildingId ?? null,
         source: 'manual',
       },
@@ -180,15 +195,16 @@ contactsRouter.post(
   '/:id/portal-access',
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
-    const contact = await prisma.contact.findUnique({ where: { id: req.params.id }, include: { user: true, syndic: true } });
+    const contact = await prisma.contact.findUnique({ where: { id: req.params.id }, include: { user: true, syndic: true, promoter: true } });
     if (!contact) throw new HttpError(404, 'Contact introuvable');
     if (contact.user) throw new HttpError(409, 'Un accès existe déjà');
     const email = String(req.body.email ?? contact.email ?? '').trim().toLowerCase();
     if (!/.+@.+\..+/.test(email)) throw new HttpError(422, 'E-mail requis');
     if (await prisma.user.findUnique({ where: { email } })) throw new HttpError(409, 'Cet e-mail est déjà utilisé');
 
-    // si le contact EST un syndic -> accès syndic (voit tous ses immeubles)
+    // si le contact EST un syndic/promoteur -> accès portefeuille (voit tous ses immeubles/projets)
     const asSyndic = contact.kind === 'syndic' && contact.syndicId;
+    const asPromoter = contact.kind === 'promoter' && contact.promoterId;
     const access = req.body.access === 'limited' ? 'limited' : 'full';
     const residentOfId = typeof req.body.buildingId === 'string' && req.body.buildingId ? req.body.buildingId : null;
     await prisma.user.create({
@@ -196,10 +212,11 @@ contactsRouter.post(
         email,
         passwordHash: await hashPassword(Math.random().toString(36).slice(2)),
         role: 'client',
-        contactId: asSyndic || residentOfId ? null : contact.id,
+        contactId: asSyndic || asPromoter || residentOfId ? null : contact.id,
         syndicId: asSyndic ? contact.syndicId : null,
+        promoterId: asPromoter ? contact.promoterId : null,
         residentOfId,
-        portalAccess: asSyndic ? 'full' : access,
+        portalAccess: asSyndic || asPromoter ? 'full' : access,
       },
     });
     res.status(201).json({ email, portal: `${req.protocol}://${req.get('host')?.replace(/:\d+$/, ':3100') ?? ''}/portail` });
@@ -211,18 +228,26 @@ contactsRouter.patch(
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
     const { buildingId, ...data } = contactInput.partial().parse(req.body);
-    const existing = await prisma.contact.findUnique({ where: { id: req.params.id }, select: { kind: true, syndicId: true, name: true } });
+    const existing = await prisma.contact.findUnique({ where: { id: req.params.id }, select: { kind: true, syndicId: true, promoterId: true, name: true } });
     if (!existing) throw new HttpError(404, 'Contact introuvable');
     const kind = data.kind ?? existing.kind;
     let syndicId = data.syndicId;
     if (kind === 'syndic' && !existing.syndicId && syndicId === undefined) {
       syndicId = await linkSyndic(data.name ?? existing.name);
     }
-    // garde le nom de la fiche Syndic à jour (c'est lui qui s'affiche dans le sélecteur de
-    // syndic d'une ACP), sans jamais créer de lien qui n'existait pas déjà
+    let promoterId = data.promoterId;
+    if (kind === 'promoter' && !existing.promoterId && promoterId === undefined) {
+      promoterId = await linkPromoter(data.name ?? existing.name);
+    }
+    // garde le nom de la fiche Syndic/Promoter à jour (c'est lui qui s'affiche dans le
+    // sélecteur d'une ACP/d'un projet), sans jamais créer de lien qui n'existait pas déjà
     const linkedSyndicId = syndicId ?? existing.syndicId;
     if (kind === 'syndic' && linkedSyndicId && data.name) {
       await prisma.syndic.update({ where: { id: linkedSyndicId }, data: { name: data.name.trim(), normalizedName: normalizeName(data.name) } });
+    }
+    const linkedPromoterId = promoterId ?? existing.promoterId;
+    if (kind === 'promoter' && linkedPromoterId && data.name) {
+      await prisma.promoter.update({ where: { id: linkedPromoterId }, data: { name: data.name.trim(), normalizedName: normalizeName(data.name) } });
     }
     const contact = await prisma.contact.update({
       where: { id: req.params.id },
@@ -232,6 +257,7 @@ contactsRouter.patch(
         ...(data.name ? { normalizedName: normalizeName(data.name) } : {}),
         ...(buildingId !== undefined ? { linkedAcpId: buildingId } : {}),
         ...(syndicId !== undefined ? { syndicId } : {}),
+        ...(promoterId !== undefined ? { promoterId } : {}),
       },
     });
     res.json({ contact: shapeContact(contact) });

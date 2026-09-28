@@ -15,6 +15,7 @@ interface Building {
   id: string; name: string; city: string | null;
   photoUrl: string | null; photoThumbUrl: string | null;
   syndic: { id: string; name: string } | null;
+  promoter: { id: string; name: string } | null;
   _count: { worksites: number };
 }
 
@@ -26,14 +27,14 @@ export default function ImmeublesPage() {
   const params = new URLSearchParams();
   if (q) params.set('q', q);
   const { data, loading, error, reload } = useApi<{ items: Building[] }>(`/api/buildings?${params}`);
-  const { data: pick } = useApi<{ syndics: { id: string; name: string }[] }>(creating ? '/api/meta/pickers' : null);
+  const { data: pick } = useApi<{ syndics: { id: string; name: string }[]; promoters: { id: string; name: string }[] }>(creating ? '/api/meta/pickers' : null);
 
   return (
     <>
       {creating && (
         <FormModal
           title="Nouvel immeuble / projet"
-          fields={BUILDING_FIELDS(pick?.syndics ?? [])}
+          fields={BUILDING_FIELDS(pick?.syndics ?? [], pick?.promoters ?? [])}
           initial={{ kind: 'acp' }}
           onClose={() => setCreating(false)}
           onSubmit={async (v) => { await api('/api/buildings', { method: 'POST', body: v }); reload(); }}
@@ -65,7 +66,7 @@ export default function ImmeublesPage() {
                 <tr key={b.id} className="row-link" onClick={rowNav(`/app/immeubles/${b.id}`, (h) => router.push(h))}>
                   <td><Avatar src={b.photoThumbUrl} label={b.name} /><Link href={`/app/immeubles/${b.id}`}>{b.name}</Link></td>
                   <td>{b.city ?? '—'}</td>
-                  <td>{b.syndic?.name ?? '—'}</td>
+                  <td>{b.syndic?.name ?? b.promoter?.name ?? '—'}</td>
                   <td style={{ textAlign: 'right' }} className="tnum">{b._count.worksites || ''}</td>
                   <td><span className={`badge ${b._count.worksites > 0 ? 'ok' : 'plain'}`}>{b._count.worksites > 0 ? 'Avec chantiers' : 'Aucun chantier'}</span></td>
                   <td className="muted">→</td>
@@ -85,7 +86,7 @@ export default function ImmeublesPage() {
               <div className="building-body">
                 {b.city && <div className="eyebrow">{b.city}</div>}
                 <h2>{b.name}</h2>
-                <p className="building-sub">{b.syndic?.name ?? 'Gestion privée'}</p>
+                <p className="building-sub">{b.syndic?.name ?? b.promoter?.name ?? 'Gestion privée'}</p>
                 <div className="building-foot">
                   <span>
                     {b._count.worksites > 0

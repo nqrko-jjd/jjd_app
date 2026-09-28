@@ -249,3 +249,55 @@ test('portail : urgence à 3 niveaux — « soon » n’est pas urgent, l’anci
   assert.deepEqual([by(plain).urgency, by(plain).urgent], ['normal', false]);
   await prisma.crmOpportunity.deleteMany({ where: { id: { in: [soon, legacy, plain] } } });
 });
+
+test('portail : un compte Promoteur voit tous ses projets (portefeuille), pas ceux d’un autre promoteur', async () => {
+  const names = ['Matexi — test portail', 'Léopold Views — test portail', 'CPB Franière — test portail', 'Autre Promoteur — test portail', 'Autre Projet — test portail'];
+  await prisma.contact.deleteMany({ where: { name: { in: names } } });
+  await prisma.promoter.deleteMany({ where: { normalizedName: { in: ['matexi test portail', 'autre promoteur test portail'] } } });
+
+  const matexi = await prisma.promoter.create({ data: { name: 'Matexi — test portail', normalizedName: 'matexi test portail' } });
+  const autrePromoteur = await prisma.promoter.create({ data: { name: 'Autre Promoteur — test portail', normalizedName: 'autre promoteur test portail' } });
+  const projet1 = await prisma.contact.create({ data: { name: 'Léopold Views — test portail', normalizedName: 'leopold views test portail', type: 'client', kind: 'developer', promoterId: matexi.id, source: 'test' } });
+  const projet2 = await prisma.contact.create({ data: { name: 'CPB Franière — test portail', normalizedName: 'cpb franiere test portail', type: 'client', kind: 'developer', promoterId: matexi.id, source: 'test' } });
+  const autreProjet = await prisma.contact.create({ data: { name: 'Autre Projet — test portail', normalizedName: 'autre projet test portail', type: 'client', kind: 'developer', promoterId: autrePromoteur.id, source: 'test' } });
+  const ws1 = await prisma.worksite.create({ data: { ref: 'R-TESTPROMO1', title: 'Chantier Léopold Views', status: 'in_progress', kind: 'project', acpId: projet1.id, source: 'test' } });
+  const wsAutre = await prisma.worksite.create({ data: { ref: 'R-TESTPROMOAUTRE', title: 'Chantier autre promoteur', status: 'in_progress', kind: 'project', acpId: autreProjet.id, source: 'test' } });
+
+  await prisma.user.upsert({
+    where: { email: 'test-promoteur@portal.test' },
+    create: { email: 'test-promoteur@portal.test', passwordHash: 'x', role: 'client', promoterId: matexi.id },
+    update: { promoterId: matexi.id, syndicId: null, contactId: null, residentOfId: null, active: true },
+  });
+  try {
+    const link = await (await fetch(`${base}/api/portal/request-link`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'test-promoteur@portal.test' }) })).json();
+    const { token: pt } = await (await fetch(`${base}/api/portal/verify`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: link.devToken }) })).json();
+    const h = { authorization: `Bearer ${pt}` };
+
+    const me = await (await fetch(`${base}/api/portal/me`, { headers: h })).json();
+    assert.equal(me.user.scope, 'promoter');
+    assert.equal(me.user.scopeLabel, 'Portefeuille');
+
+    const dash = await (await fetch(`${base}/api/portal/dashboard`, { headers: h })).json();
+    assert.equal(dash.greeting.isPromoter, true);
+    const portfolioIds = dash.portfolio.map((b: { id: string }) => b.id);
+    assert.ok(portfolioIds.includes(projet1.id), 'Léopold Views doit apparaître dans le portefeuille');
+    assert.ok(portfolioIds.includes(projet2.id), 'CPB Franière doit apparaître dans le portefeuille');
+    assert.ok(!portfolioIds.includes(autreProjet.id), 'le projet d’un autre promoteur ne doit pas apparaître');
+
+    const buildings = await (await fetch(`${base}/api/portal/buildings`, { headers: h })).json();
+    const buildingIds = buildings.buildings.map((b: { id: string }) => b.id);
+    assert.ok(buildingIds.includes(projet1.id) && buildingIds.includes(projet2.id));
+    assert.ok(!buildingIds.includes(autreProjet.id));
+
+    const iv = await (await fetch(`${base}/api/portal/interventions`, { headers: h })).json();
+    const ivIds = iv.items.map((w: { id: string }) => w.id);
+    assert.ok(ivIds.includes(ws1.id), 'le chantier du projet Matexi doit être visible');
+    assert.ok(!ivIds.includes(wsAutre.id), 'le chantier de l’autre promoteur ne doit pas être visible');
+  } finally {
+    await prisma.user.deleteMany({ where: { email: 'test-promoteur@portal.test' } });
+    await prisma.loginToken.deleteMany({ where: { email: 'test-promoteur@portal.test' } });
+    await prisma.worksite.deleteMany({ where: { id: { in: [ws1.id, wsAutre.id] } } });
+    await prisma.contact.deleteMany({ where: { id: { in: [projet1.id, projet2.id, autreProjet.id] } } });
+    await prisma.promoter.deleteMany({ where: { id: { in: [matexi.id, autrePromoteur.id] } } });
+  }
+});

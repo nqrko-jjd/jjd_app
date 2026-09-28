@@ -30,6 +30,7 @@ interface Detail {
     reference: string | null; lotCount: number | null; digicode: string | null; accessNote: string | null;
     photoUrl: string | null;
     syndic: { id: string; name: string; email: string | null; phone: string | null } | null;
+    promoter: { id: string; name: string; email: string | null; phone: string | null } | null;
     contacts: BContact[];
     linkedContacts: { id: string; name: string; type: string; kind: string | null; phone: string | null; email: string | null }[];
     units: BUnit[];
@@ -62,7 +63,7 @@ export default function ImmeubleDetail({ params }: { params: Promise<{ id: strin
   const { id } = use(params);
   const router = useRouter();
   const { data, loading, error, reload } = useApi<Detail>(`/api/buildings/${id}`);
-  const { data: pick } = useApi<{ syndics: { id: string; name: string }[] }>('/api/meta/pickers');
+  const { data: pick } = useApi<{ syndics: { id: string; name: string }[]; promoters: { id: string; name: string }[] }>('/api/meta/pickers');
   const [modal, setModal] = useState<null | { kind: 'building' | 'contact' | 'unit'; row?: BContact | BUnit }>(null);
 
   if (loading) return <SkeletonRows />;
@@ -111,6 +112,7 @@ export default function ImmeubleDetail({ params }: { params: Promise<{ id: strin
 
       <div className="info-grid" style={{ marginBottom: '1.6rem' }}>
         {b.syndic && <Info label="Syndic" value={<>{b.syndic.name}<br /><span className="muted" style={{ fontSize: '0.8rem' }}>{b.syndic.email ?? b.syndic.phone ?? ''}</span></>} />}
+        {b.promoter && <Info label="Promoteur" value={<>{b.promoter.name}<br /><span className="muted" style={{ fontSize: '0.8rem' }}>{b.promoter.email ?? b.promoter.phone ?? ''}</span></>} />}
         {b.reference && <Info label="Référence" value={b.reference} />}
         {b.lotCount != null && <Info label="Lots" value={String(b.lotCount)} />}
         {b.digicode && <Info label="Digicode" value={b.digicode} />}
@@ -248,8 +250,8 @@ export default function ImmeubleDetail({ params }: { params: Promise<{ id: strin
       {modal?.kind === 'building' && (
         <FormModal
           title="Modifier l’immeuble"
-          fields={BUILDING_FIELDS(pick?.syndics ?? [])}
-          initial={{ ...(b as unknown as Record<string, unknown>), syndicId: b.syndic?.id }}
+          fields={BUILDING_FIELDS(pick?.syndics ?? [], pick?.promoters ?? [])}
+          initial={{ ...(b as unknown as Record<string, unknown>), syndicId: b.syndic?.id, promoterId: b.promoter?.id }}
           onClose={() => setModal(null)}
           onSubmit={async (v) => { await api(`/api/buildings/${id}`, { method: 'PATCH', body: v }); closeAndReload(); }}
         />

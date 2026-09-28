@@ -31,6 +31,7 @@ interface Detail {
     photoUrl: string | null; photoThumbUrl: string | null;
     customerNumber: string | null; onAccount: boolean;
     syndic: { id: string; name: string } | null;
+    promoter: { id: string; name: string } | null;
     building: { id: string; name: string } | null;
     worksites: { id: string; ref: string; title: string; status: string; quotedHt: number | null }[];
     user?: { email: string } | null;
@@ -52,7 +53,7 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
   const { id } = use(params);
   const router = useRouter();
   const { data, loading, error, reload } = useApi<Detail>(`/api/contacts/${id}`);
-  const { data: pick } = useApi<{ buildings: { id: string; name: string }[]; syndics: { id: string; name: string }[] }>('/api/meta/pickers');
+  const { data: pick } = useApi<{ buildings: { id: string; name: string }[]; syndics: { id: string; name: string }[]; promoters: { id: string; name: string }[] }>('/api/meta/pickers');
   const [editing, setEditing] = useState(false);
   const [personModal, setPersonModal] = useState<'new' | ContactPerson | null>(null);
   const [portalInfo, setPortalInfo] = useState<{ email: string; portal: string } | null>(null);
@@ -119,11 +120,11 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
       {editing && (
         <FormModal
           title={`Modifier ${c.name}`}
-          fields={CONTACT_FIELDS(c.type, pick?.syndics ?? [])}
+          fields={CONTACT_FIELDS(c.type, pick?.syndics ?? [], pick?.promoters ?? [])}
           initial={{
             name: c.name, ...(c.kind === 'individual' ? splitContactName(c.name) : {}), type: c.type, kind: c.kind, email: c.email, phone: c.phone,
             vat: c.vat, address: c.address, box: c.box, postalCode: c.postalCode, city: c.city, note: c.note,
-            buildingId: c.building?.id ?? '', syndicId: c.syndic?.id ?? '', customerNumber: c.customerNumber, onAccount: c.onAccount,
+            buildingId: c.building?.id ?? '', syndicId: c.syndic?.id ?? '', promoterId: c.promoter?.id ?? '', customerNumber: c.customerNumber, onAccount: c.onAccount,
           }}
           onClose={() => setEditing(false)}
           onSubmit={async (v) => { await api(`/api/contacts/${id}`, { method: 'PATCH', body: composeContactPayload(v) }); reload(); }}
@@ -174,6 +175,7 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
         {isSupplier && <Info label="N° de client chez lui" value={c.customerNumber ?? '—'} />}
         {isSupplier && <Info label="Paiement" value={c.onAccount ? 'En compte' : 'Comptant'} />}
         {c.syndic && <Info label="Syndic" value={<Link href={`/app/immeubles?syndicId=${c.syndic.id}`}>{c.syndic.name}</Link>} />}
+        {c.promoter && <Info label="Promoteur" value={<Link href={`/app/immeubles?promoterId=${c.promoter.id}`}>{c.promoter.name}</Link>} />}
         {c.building && <Info label="Immeuble / ACP" value={<Link href={`/app/immeubles/${c.building.id}`}>{c.building.name}</Link>} />}
         {isClientLike && (
           <div className="info-cell">

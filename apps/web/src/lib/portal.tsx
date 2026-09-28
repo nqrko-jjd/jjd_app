@@ -47,8 +47,8 @@ export async function portalBlobUrl(path: string): Promise<string> {
 }
 
 interface Me {
-  email: string; label: string; isSyndic: boolean; access: 'full' | 'limited'; scopeLabel: string | null;
-  scope: 'syndic' | 'building' | 'client';
+  email: string; label: string; isSyndic: boolean; isPromoter: boolean; access: 'full' | 'limited'; scopeLabel: string | null;
+  scope: 'syndic' | 'promoter' | 'building' | 'client';
 }
 interface Ctx { me: Me | null; loading: boolean; signOut: () => void }
 const PortalContext = createContext<Ctx | null>(null);

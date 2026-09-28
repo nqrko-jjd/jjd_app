@@ -48,9 +48,9 @@ metaRouter.get(
   '/pickers',
   requireAuth(...STAFF),
   asyncHandler(async (_req, res) => {
-    const [clients, buildings, people, worksites, syndics] = await Promise.all([
+    const [clients, buildings, people, worksites, syndics, promoters] = await Promise.all([
       prisma.contact.findMany({ where: { OR: [{ type: 'client' }, { type: 'both' }] }, orderBy: { name: 'asc' }, select: { id: true, name: true } }),
-      prisma.contact.findMany({ where: { kind: { in: ['acp', 'developer'] } }, orderBy: { name: 'asc' }, select: { id: true, name: true, syndicId: true } }),
+      prisma.contact.findMany({ where: { kind: { in: ['acp', 'developer'] } }, orderBy: { name: 'asc' }, select: { id: true, name: true, syndicId: true, promoterId: true } }),
       prisma.person.findMany({ where: { active: true }, orderBy: { firstName: 'asc' }, select: { id: true, firstName: true, lastName: true, displayName: true } }),
       prisma.worksite.findMany({
         where: { archived: false, kind: 'project', source: { not: 'demo' } },
@@ -59,11 +59,13 @@ metaRouter.get(
         select: { id: true, ref: true, title: true, clientId: true, city: true, managerId: true },
       }),
       prisma.syndic.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }),
+      prisma.promoter.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }),
     ]);
     res.json({
       clients,
       buildings,
       syndics,
+      promoters,
       people: people.map((p) => ({ id: p.id, name: p.displayName || `${p.firstName} ${p.lastName ?? ''}`.trim() })),
       worksites: worksites.map((w) => ({ id: w.id, name: `${w.ref} · ${w.title}`, clientId: w.clientId, city: w.city, managerId: w.managerId })),
     });
@@ -79,6 +81,18 @@ metaRouter.get(
       include: { _count: { select: { contacts: { where: { kind: { in: ['acp', 'developer'] } } } } } },
     });
     res.json({ items: items.map((s) => ({ ...s, _count: { buildings: s._count.contacts } })) });
+  }),
+);
+
+metaRouter.get(
+  '/promoters',
+  requireAuth(...STAFF),
+  asyncHandler(async (_req, res) => {
+    const items = await prisma.promoter.findMany({
+      orderBy: { name: 'asc' },
+      include: { _count: { select: { contacts: { where: { kind: 'developer' } } } } },
+    });
+    res.json({ items: items.map((p) => ({ ...p, _count: { projects: p._count.contacts } })) });
   }),
 );
 

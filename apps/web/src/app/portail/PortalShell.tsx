@@ -48,7 +48,7 @@ export function PortalShell({
           <span className="av">{initials}</span>
           <div>
             <div className="nm">{me?.label}</div>
-            <div className="rl">{me?.isSyndic ? 'Syndic / Promoteur' : 'Client'}</div>
+            <div className="rl">{me?.scope === 'syndic' ? 'Syndic' : me?.scope === 'promoter' ? 'Promoteur' : 'Client'}</div>
           </div>
         </div>
         <nav className="p-nav">
@@ -92,7 +92,7 @@ export function PortalShell({
               <span className="av">{initials}</span>
               <span>
                 <span className="nm">{me?.label}</span>
-                <span className="rl"> · {me?.isSyndic ? 'Syndic' : 'Client'}</span>
+                <span className="rl"> · {me?.scope === 'syndic' ? 'Syndic' : me?.scope === 'promoter' ? 'Promoteur' : 'Client'}</span>
                 <br />
                 <button onClick={signOut}>Se déconnecter</button>
               </span>

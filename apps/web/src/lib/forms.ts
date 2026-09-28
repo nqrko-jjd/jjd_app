@@ -53,6 +53,7 @@ export function composeContactPayload(v: Record<string, unknown>): Record<string
 export const CONTACT_FIELDS = (
   forType?: string,
   syndics: { id: string; name: string }[] = [],
+  promoters: { id: string; name: string }[] = [],
 ) => {
   const isSupplierOnly = forType === 'supplier';
   return (values: Record<string, unknown>): FieldDef[] => {
@@ -70,6 +71,7 @@ export const CONTACT_FIELDS = (
         { name: 'lastName', label: 'Nom' },
       ] : [{ name: 'name', label: 'Nom', required: true, full: true }]),
       ...(isAcp ? [{ name: 'syndicId', label: 'Syndic (adresse de facturation "c/o")', type: 'select' as const, options: syndics.map((s) => ({ value: s.id, label: s.name })) }] : []),
+      ...(isDeveloper ? [{ name: 'promoterId', label: 'Promoteur', type: 'select' as const, options: promoters.map((p) => ({ value: p.id, label: p.name })) }] : []),
       ...(!isAcpOrDeveloper ? [{ name: 'buildingId', label: 'Immeuble / ACP rattaché(e)', type: 'contact' as const, contactKindFilter: ['acp', 'developer'], placeholder: 'Nom de l’immeuble / ACP…', full: true }] : []),
       { name: 'email', label: 'E-mail' },
       { name: 'phone', label: 'Téléphone' },
@@ -132,16 +134,20 @@ export const VEHICLE_DOC_FIELDS: FieldDef[] = [
  * Un immeuble/ACP/projet EST directement un Contact (fusion Contact/Immeuble) — ce formulaire
  * crée/édite ce même Contact, juste avec les champs pertinents pour "le dossier immeuble"
  * (pas de champ "client facturé" séparé : c'est cette fiche elle-même). Le Syndic (adresse de
- * facturation « c/o ») ne concerne qu'une ACP/copropriété — un projet Promoteur n'en a pas,
- * donc le champ ne s'affiche que pour cette catégorie (sinon on a l'air d'exiger un syndic
- * pour un promoteur, ce qui pousse à créer le projet en ACP par erreur).
+ * facturation « c/o ») ne concerne qu'une ACP/copropriété ; un projet Promoteur a son propre
+ * champ Promoteur à la place (qui le développe, ex. Matexi) — jamais les deux ensemble.
  */
-export const BUILDING_FIELDS = (syndics: { id: string; name: string }[] = []) => (values: Record<string, unknown>): FieldDef[] => {
+export const BUILDING_FIELDS = (
+  syndics: { id: string; name: string }[] = [],
+  promoters: { id: string; name: string }[] = [],
+) => (values: Record<string, unknown>): FieldDef[] => {
   const isAcp = (values.kind ?? 'acp') === 'acp';
   return [
     { name: 'name', label: "Nom de l'immeuble / ACP / projet", required: true, full: true },
-    { name: 'kind', label: 'Catégorie', type: 'select', options: [{ value: 'acp', label: 'ACP / Copropriété' }, { value: 'developer', label: 'Promoteur' }] },
-    ...(isAcp ? [{ name: 'syndicId', label: 'Syndic (adresse de facturation "c/o")', type: 'select' as const, options: syndics.map((s) => ({ value: s.id, label: s.name })) }] : []),
+    { name: 'kind', label: 'Catégorie', type: 'select', options: [{ value: 'acp', label: 'ACP / Copropriété' }, { value: 'developer', label: 'Projet (promoteur)' }] },
+    ...(isAcp
+      ? [{ name: 'syndicId', label: 'Syndic (adresse de facturation "c/o")', type: 'select' as const, options: syndics.map((s) => ({ value: s.id, label: s.name })) }]
+      : [{ name: 'promoterId', label: 'Promoteur', type: 'select' as const, options: promoters.map((p) => ({ value: p.id, label: p.name })) }]),
     { name: 'address', label: 'Adresse', full: true, type: 'address', addressFill: { postalCode: 'postalCode', city: 'city' } },
     { name: 'box', label: 'Boîte', placeholder: 'ex. 4 (sans « bte »)' },
     { name: 'postalCode', label: 'Code postal' },

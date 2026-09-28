@@ -101,10 +101,11 @@ portalRouter.get(
       user: {
         email: u.email, label: u.label,
         isSyndic: !!u.syndicId,
+        isPromoter: !!u.promoterId,
         access: u.access,
-        scopeLabel: u.buildingName ?? (u.syndicId ? 'Portefeuille' : null),
-        // syndic : portefeuille d'immeubles — building : résident d'un immeuble — client : particulier, projet(s) en direct
-        scope: u.syndicId ? 'syndic' : u.buildingId ? 'building' : 'client',
+        scopeLabel: u.buildingName ?? (u.syndicId || u.promoterId ? 'Portefeuille' : null),
+        // syndic/promoteur : portefeuille d'immeubles/projets — building : résident d'un immeuble — client : particulier, projet(s) en direct
+        scope: u.syndicId ? 'syndic' : u.promoterId ? 'promoter' : u.buildingId ? 'building' : 'client',
       },
     });
   }),
@@ -119,7 +120,11 @@ portalRouter.get(
     const u = req.portalUser!;
     const scope = worksiteScope(u);
 
-    const scopeKind = u.syndicId ? 'syndic' : u.buildingId ? 'building' : 'client';
+    const scopeKind = u.syndicId ? 'syndic' : u.promoterId ? 'promoter' : u.buildingId ? 'building' : 'client';
+    // syndic ET promoteur ont tous les deux une vue "portefeuille" (plusieurs immeubles/projets
+    // en avant sur l'accueil, cf. maquette) — seul "building" (résident) et "client" (projet en
+    // direct) n'en ont pas.
+    const isPortfolio = scopeKind === 'syndic' || scopeKind === 'promoter';
     const [buildingCount, worksites, quotes, events, docs, portfolioBuildings] = await Promise.all([
       prisma.contact.count({ where: buildingScope(u) }),
       prisma.worksite.findMany({
@@ -150,8 +155,8 @@ portalRouter.get(
         include: { worksite: { select: { acp: { select: { name: true } } } } },
       }),
       // portefeuille avec photos, en avant sur l'accueil comme la maquette — n'a de sens
-      // que pour un syndic gérant plusieurs immeubles (cf. nav portfolio: true).
-      scopeKind === 'syndic' ? prisma.contact.findMany({
+      // que pour un syndic/promoteur gérant plusieurs immeubles/projets (cf. nav portfolio: true).
+      isPortfolio ? prisma.contact.findMany({
         where: buildingScope(u),
         orderBy: { name: 'asc' },
         take: 4,
@@ -177,7 +182,7 @@ portalRouter.get(
     } : null;
 
     return res.json({
-      greeting: { name: u.label, isSyndic: !!u.syndicId, access: u.access, scopeLabel: u.buildingName },
+      greeting: { name: u.label, isSyndic: !!u.syndicId, isPromoter: !!u.promoterId, access: u.access, scopeLabel: u.buildingName },
       singleProject,
       portfolio: portfolioBuildings.map((b) => ({
         id: b.id, name: b.name, city: b.city, lotCount: b.lotCount, photoThumbUrl: b.photoThumbUrl,
@@ -378,6 +383,7 @@ portalRouter.get(
       orderBy: { name: 'asc' },
       include: {
         syndic: { select: { name: true } },
+        promoter: { select: { name: true } },
         acpWorksites: {
           where: worksiteScope(u),
           select: { id: true, ref: true, title: true, status: true, endedOn: true, updatedAt: true, manager: mSel },
@@ -391,7 +397,7 @@ portalRouter.get(
         name: b.name,
         address: [b.address, b.city].filter(Boolean).join(', '),
         city: b.city,
-        syndic: b.syndic?.name ?? null,
+        syndic: b.syndic?.name ?? b.promoter?.name ?? null,
         lotCount: b.lotCount,
         photoThumbUrl: b.photoThumbUrl,
         // « Interlocuteur JJD » façon maquette : le chef de chantier du dossier le plus
@@ -612,7 +618,7 @@ portalRouter.get(
  *  dans un champ à part (le document n'a pas de champ "note client" dédié). */
 async function respondToQuote(req: Request, res: Response, decision: 'accepted' | 'declined') {
   const u = req.portalUser!;
-  if (!portalFull(u)) throw new HttpError(403, 'Seul le syndic peut répondre à un devis');
+  if (!portalFull(u)) throw new HttpError(403, 'Accès limité — seul un accès complet permet de répondre à un devis');
   const doc = await prisma.document.findFirst({
     where: { id: req.params.id!, kind: 'quote', worksite: worksiteScope(u) },
     include: { worksite: { select: { id: true, ref: true } } },

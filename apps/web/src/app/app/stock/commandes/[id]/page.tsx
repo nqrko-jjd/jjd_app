@@ -27,6 +27,29 @@ const EPS = 0.0001;
 const factor = (item: Line['stockItem'], unit: string | null) =>
   !unit || unit.toLowerCase() === item.unit.toLowerCase() ? 1 : item.units.find((u) => u.name.toLowerCase() === unit.toLowerCase())?.factor ?? 1;
 
+/** Pré-remplit un e-mail de commande dans le client mail de l'utilisateur — jamais envoyé par
+ *  l'appli elle-même (pas de SMTP configuré), juste préparé pour relecture avant envoi. */
+function orderEmailHref(order: Order): string {
+  const lines = order.lines.map((l) => {
+    const unit = l.unitName ?? l.stockItem.unit;
+    return `- ${l.stockItem.ref ? `${l.stockItem.ref} · ` : ''}${l.stockItem.name} : ${fmt(l.qty)} ${unit}`;
+  }).join('\n');
+  const subject = `Commande ${order.ref}${order.worksite ? ` — chantier ${order.worksite.ref}` : ''}`;
+  const body = [
+    'Bonjour,',
+    '',
+    'Merci de bien vouloir nous confirmer la commande suivante :',
+    '',
+    lines,
+    '',
+    order.note ? `Note : ${order.note}` : null,
+    order.expectedOn ? `Livraison souhaitée pour le ${formatDateBE(order.expectedOn)}.` : null,
+    '',
+    'Cordialement,',
+  ].filter((l) => l !== null).join('\n');
+  return `mailto:${encodeURIComponent(order.contact.email ?? '')}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
 export default function CommandeDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { user } = useAuth();
@@ -106,6 +129,16 @@ export default function CommandeDetail({ params }: { params: Promise<{ id: strin
       <div className="row" style={{ justifyContent: 'space-between', marginBottom: '0.9rem', flexWrap: 'wrap' }}>
         <Link href="/app/stock/commandes" className="btn ghost">← Commandes</Link>
         <div className="row">
+          {canOrder && (
+            <a
+              className="btn"
+              href={orderEmailHref(order)}
+              title={order.contact.email ? undefined : 'Aucun e-mail enregistré pour ce fournisseur — à compléter sur sa fiche contact'}
+            >
+              ✉️ Générer l’e-mail
+            </a>
+          )}
+          <a className="btn" href={`/imprimer/commande/${order.id}`} target="_blank" rel="noreferrer">🖨️ Imprimer</a>
           {canOrder && order.status === 'draft' && <button className="btn primary" onClick={() => act('place')}>Marquer comme commandée</button>}
           {canOrder && order.status === 'partial' && <button className="btn" onClick={() => act('close', 'Clôturer cette commande ? Le reste ne sera plus attendu.')}>Clôturer (reste non livré)</button>}
           {canOrder && (order.status === 'draft' || order.status === 'ordered') && <button className="btn" onClick={() => act('cancel', 'Annuler cette commande ?')}>Annuler</button>}

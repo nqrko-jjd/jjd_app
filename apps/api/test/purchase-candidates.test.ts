@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { findLineCandidates } from '../src/lib/purchase-candidates.js';
+import { findLineCandidates, collapseByCode } from '../src/lib/purchase-candidates.js';
 
 // texte réel (pdftotext -raw) d'une facture Sani Mat Wavre
 const SANIMAT_TEXT = `
@@ -38,6 +38,15 @@ test('findLineCandidates : n’extrait rien de l’en-tête (date, n° TVA, n° 
 test('findLineCandidates : texte sans motif reconnaissable -> aucune ligne (repli silencieux, pas de faux positif)', () => {
   const found = findLineCandidates('Facture Vector 3\nTotal TTC : 120,00 EUR\nMerci de votre confiance');
   assert.equal(found.length, 0);
+});
+
+test('collapseByCode : un même code sur plusieurs lignes de la même facture -> une seule entrée, quantités additionnées', () => {
+  const collapsed = collapseByCode([
+    { code: '206', description: 'BETON C35/45', qty: 9 },
+    { code: '206', description: 'BETON C35/45', qty: 10 },
+  ]);
+  assert.equal(collapsed.size, 1);
+  assert.equal(collapsed.get('206')!.qty, 19);
 });
 
 test('findLineCandidates : plusieurs lignes d’article sur la même facture', () => {

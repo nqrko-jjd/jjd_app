@@ -43,6 +43,18 @@ export function findLineCandidates(rawText: string): LineCandidate[] {
   return out;
 }
 
+/** Un même code peut matcher plusieurs fois sur UNE MÊME facture (plusieurs lots livrés…) — pour
+ *  la récurrence (qui compte des factures, pas des lignes), on ne garde qu'une entrée par code,
+ *  quantités additionnées. */
+export function collapseByCode(matches: LineCandidate[]): Map<string, { description: string; qty: number }> {
+  const out = new Map<string, { description: string; qty: number }>();
+  for (const c of matches) {
+    const prev = out.get(c.code);
+    out.set(c.code, { description: c.description, qty: (prev?.qty ?? 0) + c.qty });
+  }
+  return out;
+}
+
 export interface PurchaseCandidate {
   code: string;
   description: string;
@@ -77,11 +89,11 @@ export async function findPurchaseCandidates(): Promise<PurchaseCandidate[]> {
     } catch {
       continue;
     }
-    for (const c of findLineCandidates(text)) {
-      const key = `${e.contactId}::${c.code}`;
+    for (const [code, c] of collapseByCode(findLineCandidates(text))) {
+      const key = `${e.contactId}::${code}`;
       if (knownKeys.has(key)) continue; // déjà un article de stock suivi pour cette réf.
       const g = groups.get(key) ?? {
-        code: c.code, description: c.description, contactId: e.contactId, contactName: e.contact?.name ?? '—', occurrences: [],
+        code, description: c.description, contactId: e.contactId, contactName: e.contact?.name ?? '—', occurrences: [],
       };
       g.occurrences.push({ ledgerEntryId: e.id, date: e.date?.toISOString() ?? null, docNumber: e.docNumber, qty: c.qty });
       groups.set(key, g);

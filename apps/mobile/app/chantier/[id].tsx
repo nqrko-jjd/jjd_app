@@ -1,5 +1,7 @@
 import { useCallback, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, Pressable } from 'react-native';
+import { View, ScrollView, StyleSheet, Pressable } from 'react-native';
+import { Text } from '@/lib/AppText';
+import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useFocusEffect, Stack, useRouter } from 'expo-router';
 import { apiGet } from '@/lib/api';
 import { useSession } from '@/lib/session';
@@ -50,10 +52,11 @@ export default function ChantierDetail() {
       </View>
 
       <Pressable
-        style={{ backgroundColor: T.primary, borderRadius: 10, padding: 13, alignItems: 'center' }}
+        style={{ backgroundColor: T.primary, borderRadius: 10, padding: 13, flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center' }}
         onPress={() => router.push(`/fil/${id}` as never)}
       >
-        <Text style={{ color: '#fff', fontWeight: '700' }}>💬 Ouvrir le fil de chantier</Text>
+        <Feather name="message-circle" size={16} color="#fff" />
+        <Text style={{ color: '#fff', fontWeight: '700' }}>Ouvrir le fil de chantier</Text>
       </Pressable>
 
       <Card>

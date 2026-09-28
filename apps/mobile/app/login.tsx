@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { View, Text, TextInput, Pressable, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, TextInput, Pressable, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import { Text } from '@/lib/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSession } from '@/lib/session';
 import { T } from '@/lib/theme';

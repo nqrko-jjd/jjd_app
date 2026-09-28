@@ -1,4 +1,5 @@
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Text } from '@/lib/AppText';
 import { Stack } from 'expo-router';
 import { ResourceList, Muted, eur, useRouterPush } from '@/lib/ui';
 
@@ -23,7 +24,7 @@ export default function Equipe() {
         onPress={(p) => push(`/personne/${p.id}`)}
         render={(p) => (
           <View>
-            <Text style={{ fontWeight: '600', color: '#1b2233' }}>{p.displayName || `${p.firstName} ${p.lastName ?? ''}`.trim()}</Text>
+            <Text style={{ fontWeight: '600', color: '#26372f' }}>{p.displayName || `${p.firstName} ${p.lastName ?? ''}`.trim()}</Text>
             <Muted>
               {ROLE[p.role] ?? p.role} · {CT[p.contractType] ?? p.contractType}
               {p.hourlyRate != null ? ` · ${eur(p.hourlyRate)}/h` : ' · taux à définir'}

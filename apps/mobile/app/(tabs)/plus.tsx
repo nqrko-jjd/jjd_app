@@ -1,18 +1,22 @@
-import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { View, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { Text } from '@/lib/AppText';
+import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSession } from '@/lib/session';
 import { API_URL } from '@/lib/api';
 import { T } from '@/lib/theme';
 
-const LINKS: { href: string; label: string; ic: string; roles?: string[] }[] = [
-  { href: '/immeubles', label: 'Immeubles / Projets', ic: '⌂' },
-  { href: '/contacts', label: 'Contacts', ic: '☰' },
-  { href: '/equipe', label: 'Équipe', ic: '☺' },
-  { href: '/flotte', label: 'Flotte', ic: '⛟' },
-  { href: '/pipeline', label: 'Pipeline commercial', ic: '⇗' },
-  { href: '/documents', label: 'Devis & factures', ic: '▧', roles: ['admin', 'office'] },
-  { href: '/decomptes', label: 'Décomptes du mois', ic: '€' },
-  { href: '/controle', label: 'File de contrôle', ic: '⚑' },
+type FeatherName = keyof typeof Feather.glyphMap;
+
+const LINKS: { href: string; label: string; ic: FeatherName; roles?: string[] }[] = [
+  { href: '/immeubles', label: 'Immeubles / Projets', ic: 'home' },
+  { href: '/contacts', label: 'Contacts', ic: 'book-open' },
+  { href: '/equipe', label: 'Équipe', ic: 'users' },
+  { href: '/flotte', label: 'Flotte', ic: 'truck' },
+  { href: '/pipeline', label: 'Pipeline commercial', ic: 'trending-up' },
+  { href: '/documents', label: 'Devis & factures', ic: 'file-text', roles: ['admin', 'office'] },
+  { href: '/decomptes', label: 'Décomptes du mois', ic: 'credit-card' },
+  { href: '/controle', label: 'File de contrôle', ic: 'flag' },
 ];
 
 export default function Plus() {
@@ -34,9 +38,9 @@ export default function Plus() {
             style={[s.row, i < links.length - 1 && s.rowBorder]}
             onPress={() => router.push(l.href as never)}
           >
-            <Text style={s.ic}>{l.ic}</Text>
+            <View style={s.ic}><Feather name={l.ic} size={17} color={T.ink2} /></View>
             <Text style={s.label}>{l.label}</Text>
-            <Text style={s.chev}>›</Text>
+            <Feather name="chevron-right" size={18} color={T.ink3} />
           </Pressable>
         ))}
       </View>
@@ -56,8 +60,7 @@ const s = StyleSheet.create({
   group: { backgroundColor: T.surface, borderRadius: T.radius, borderWidth: 1, borderColor: T.line, overflow: 'hidden' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
   rowBorder: { borderBottomWidth: 1, borderBottomColor: T.line },
-  ic: { fontSize: 15, width: 20, textAlign: 'center', color: T.ink2 },
+  ic: { width: 20, alignItems: 'center' },
   label: { flex: 1, fontWeight: '600', color: T.ink },
-  chev: { color: T.ink3, fontSize: 18 },
   logout: { backgroundColor: T.surface, borderWidth: 1, borderColor: T.line, borderRadius: 10, padding: 14, alignItems: 'center' },
 });

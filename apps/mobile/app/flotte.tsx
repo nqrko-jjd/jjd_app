@@ -1,4 +1,5 @@
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Text } from '@/lib/AppText';
 import { Stack } from 'expo-router';
 import { ResourceList, Muted, dateBE, useRouterPush } from '@/lib/ui';
 
@@ -19,7 +20,7 @@ export default function Flotte() {
         onPress={(v) => push(`/vehicule/${v.id}`)}
         render={(v) => (
           <View>
-            <Text style={{ fontWeight: '600', color: '#1b2233' }}>
+            <Text style={{ fontWeight: '600', color: '#26372f' }}>
               {[v.brand, v.model].filter(Boolean).join(' ')} {v.plate ? `· ${v.plate}` : ''}
             </Text>
             <Muted>

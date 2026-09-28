@@ -1,5 +1,7 @@
 import { useCallback, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, RefreshControl, Pressable } from 'react-native';
+import { View, ScrollView, StyleSheet, RefreshControl, Pressable } from 'react-native';
+import { Text } from '@/lib/AppText';
+import { Feather } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { apiGet } from '@/lib/api';
 import { useSession } from '@/lib/session';
@@ -67,9 +69,11 @@ export default function Heures() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} />}
     >
       <View style={s.nav}>
-        <Pressable style={s.navBtn} onPress={() => shift(-1)}><Text style={s.navTxt}>←</Text></Pressable>
+        <Pressable style={s.navBtn} onPress={() => shift(-1)}><Feather name="chevron-left" size={18} color={T.ink} /></Pressable>
         <Text style={s.month}>{MONTHS[m - 1]} {y}</Text>
-        <Pressable style={s.navBtn} onPress={() => !isCurrentMonth && shift(1)}><Text style={[s.navTxt, isCurrentMonth && { opacity: 0.3 }]}>→</Text></Pressable>
+        <Pressable style={s.navBtn} onPress={() => !isCurrentMonth && shift(1)}>
+          <Feather name="chevron-right" size={18} color={T.ink} style={isCurrentMonth ? { opacity: 0.3 } : undefined} />
+        </Pressable>
       </View>
 
       {statement && (
@@ -111,7 +115,6 @@ export default function Heures() {
 const s = StyleSheet.create({
   nav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   navBtn: { borderWidth: 1, borderColor: T.line, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 6, backgroundColor: T.surface },
-  navTxt: { fontSize: 16, color: T.ink },
   month: { fontWeight: '700', color: T.ink, fontSize: 15 },
   card: { backgroundColor: T.surface, borderRadius: T.radius, borderWidth: 1, borderColor: T.line, padding: 14, gap: 5 },
   label: { fontSize: 12, color: T.ink2, textTransform: 'uppercase', letterSpacing: 0.5 },

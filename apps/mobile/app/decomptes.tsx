@@ -1,5 +1,7 @@
 import { useCallback, useState } from 'react';
-import { ScrollView, Text, View, Pressable, StyleSheet } from 'react-native';
+import { ScrollView, View, Pressable, StyleSheet } from 'react-native';
+import { Text } from '@/lib/AppText';
+import { Feather } from '@expo/vector-icons';
 import { Stack, useFocusEffect } from 'expo-router';
 import { apiGet } from '@/lib/api';
 import { Card, Loading, eur } from '@/lib/ui';
@@ -32,9 +34,9 @@ export default function Decomptes() {
     <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ padding: 16, gap: 10 }}>
       <Stack.Screen options={{ title: 'Décomptes du mois', headerBackTitle: 'Retour' }} />
       <View style={s.nav}>
-        <Pressable style={s.btn} onPress={() => shift(-1)}><Text style={s.btnT}>←</Text></Pressable>
+        <Pressable style={s.btn} onPress={() => shift(-1)}><Feather name="chevron-left" size={18} color={T.ink} /></Pressable>
         <Text style={{ fontWeight: '700', color: T.ink }}>{M[m - 1]} {y}</Text>
-        <Pressable style={s.btn} onPress={() => shift(1)}><Text style={s.btnT}>→</Text></Pressable>
+        <Pressable style={s.btn} onPress={() => shift(1)}><Feather name="chevron-right" size={18} color={T.ink} /></Pressable>
       </View>
       {!d ? <Loading /> : (
         <>
@@ -61,5 +63,4 @@ export default function Decomptes() {
 const s = StyleSheet.create({
   nav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   btn: { borderWidth: 1, borderColor: T.line, borderRadius: 8, paddingHorizontal: 16, paddingVertical: 6, backgroundColor: T.surface },
-  btnT: { fontSize: 16, color: T.ink },
 });

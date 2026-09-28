@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import { View, Text, Pressable, ScrollView, StyleSheet, RefreshControl, Alert } from 'react-native';
+import { View, Pressable, ScrollView, StyleSheet, RefreshControl, Alert } from 'react-native';
+import { Text } from '@/lib/AppText';
+import { Feather } from '@expo/vector-icons';
 import { useFocusEffect, Redirect, useRouter } from 'expo-router';
 import { apiGet, apiSend, flushQueue, pendingCount } from '@/lib/api';
 import { currentPosition } from '@/lib/geo';
@@ -103,7 +105,12 @@ export default function Today() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} />}
     >
       <Text style={s.hi}>Bonjour {person?.displayName || person?.firstName || ''}</Text>
-      {queued > 0 && <Text style={s.queued}>⏳ {queued} pointage(s) en attente de réseau</Text>}
+      {queued > 0 && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Feather name="clock" size={14} color={T.accent} />
+          <Text style={s.queued}>{queued} pointage(s) en attente de réseau</Text>
+        </View>
+      )}
 
       {!linked && (
         <View style={[s.card, { borderColor: T.accent, borderWidth: 2 }]}>

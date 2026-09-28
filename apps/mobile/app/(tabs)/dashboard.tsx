@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, RefreshControl } from 'react-native';
+import { View, ScrollView, StyleSheet, RefreshControl } from 'react-native';
+import { Text } from '@/lib/AppText';
 import { useFocusEffect } from 'expo-router';
 import { apiGet } from '@/lib/api';
 import { Card, Label, Muted, Loading, eur } from '@/lib/ui';

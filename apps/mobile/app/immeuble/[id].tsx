@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { ScrollView, Text, Pressable, Linking, View } from 'react-native';
+import { ScrollView, Pressable, Linking, View } from 'react-native';
+import { Text } from '@/lib/AppText';
 import { Stack, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { apiGet } from '@/lib/api';
 import { Card, Label, Loading, Row, Badge, Muted, useRouterPush } from '@/lib/ui';
@@ -7,7 +8,8 @@ import { T } from '@/lib/theme';
 
 const BUILDING_CONTACT_ROLE_LABEL: Record<string, string> = {
   concierge: 'Concierge', president: "Président d'assemblée", council: 'Membre du conseil',
-  syndic_manager: 'Gestionnaire syndic', contact: 'Contact', owner_rep: 'Représentant des copropriétaires', other: 'Autre',
+  syndic_manager: 'Gestionnaire syndic', developer: 'Promoteur', contact: 'Contact',
+  owner_rep: 'Représentant des copropriétaires', other: 'Autre',
 };
 const OCCUPANT_KIND_LABEL: Record<string, string> = { owner: 'Propriétaire', tenant: 'Locataire', unknown: 'Inconnu' };
 

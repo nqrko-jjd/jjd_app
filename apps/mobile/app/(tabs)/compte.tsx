@@ -1,4 +1,5 @@
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Pressable, StyleSheet } from 'react-native';
+import { Text } from '@/lib/AppText';
 import { useSession } from '@/lib/session';
 import { API_URL } from '@/lib/api';
 import { T } from '@/lib/theme';

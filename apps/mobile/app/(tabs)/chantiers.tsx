@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { View, Text, TextInput, Pressable, FlatList, StyleSheet } from 'react-native';
+import { View, TextInput, Pressable, FlatList, StyleSheet } from 'react-native';
+import { Text } from '@/lib/AppText';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { apiGet } from '@/lib/api';
 import { useSession } from '@/lib/session';

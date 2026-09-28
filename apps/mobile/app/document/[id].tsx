@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { ScrollView, Text, View, Pressable, Alert } from 'react-native';
+import { ScrollView, View, Pressable, Alert } from 'react-native';
+import { Text } from '@/lib/AppText';
 import { Stack, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { apiGet, apiSend } from '@/lib/api';
 import { Card, Label, Loading, Row, Badge, Muted, eur, dateBE } from '@/lib/ui';

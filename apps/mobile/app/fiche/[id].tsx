@@ -1,5 +1,7 @@
 import { useCallback, useState } from 'react';
-import { ScrollView, Text, View, Pressable, Linking, TextInput } from 'react-native';
+import { ScrollView, View, Pressable, Linking, TextInput } from 'react-native';
+import { Text } from '@/lib/AppText';
+import { Feather } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams, useFocusEffect, useRouter } from 'expo-router';
 import { apiGet, apiSend } from '@/lib/api';
 import { Card, Label, Loading, Row, Muted, dateBE } from '@/lib/ui';
@@ -9,7 +11,7 @@ interface Task { id: string; title: string; status: string; assignees: { id: str
 
 const ROLE: Record<string, string> = {
   concierge: 'Concierge', president: 'Président', council: 'Conseil', syndic_manager: 'Gestionnaire syndic',
-  contact: 'Contact', owner_rep: 'Représentant copro', other: 'Autre',
+  developer: 'Promoteur', contact: 'Contact', owner_rep: 'Représentant copro', other: 'Autre',
 };
 
 interface Field {
@@ -92,8 +94,12 @@ export default function FicheDuJour() {
       <Card>
         <Text style={{ fontSize: 16, fontWeight: '700', color: T.ink }}>{w.title}</Text>
         {w.address ? (
-          <Pressable onPress={() => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(w.address)}`)} style={{ marginTop: 4 }}>
-            <Text style={{ color: T.primary, fontWeight: '600' }}>📍 {w.address}  ›  Itinéraire</Text>
+          <Pressable
+            onPress={() => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(w.address)}`)}
+            style={{ marginTop: 4, flexDirection: 'row', alignItems: 'center', gap: 6 }}
+          >
+            <Feather name="map-pin" size={14} color={T.primary} />
+            <Text style={{ color: T.primary, fontWeight: '600' }}>{w.address}  ›  Itinéraire</Text>
           </Pressable>
         ) : null}
         {d.building?.digicode ? <Row k="Digicode" v={d.building.digicode} /> : null}
@@ -104,22 +110,34 @@ export default function FicheDuJour() {
       <Card>
         <Label>À faire{d.today && !d.today.allDay ? ` · ${new Date(d.today.startAt).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' })}–${new Date(d.today.endAt).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' })}` : ''}</Label>
         <Text style={{ color: T.ink }}>{d.today?.toDo || w.description || 'Voir avec le bureau.'}</Text>
-        {d.today?.materials ? <Text style={{ color: T.ink2, marginTop: 6 }}>🧰 {d.today.materials}</Text> : null}
-        {d.today?.vehicle ? <Text style={{ color: T.ink2, marginTop: 2 }}>🚐 {d.today.vehicle}</Text> : null}
+        {d.today?.materials ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 }}>
+            <Feather name="tool" size={13} color={T.ink2} />
+            <Text style={{ color: T.ink2 }}>{d.today.materials}</Text>
+          </View>
+        ) : null}
+        {d.today?.vehicle ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+            <Feather name="truck" size={13} color={T.ink2} />
+            <Text style={{ color: T.ink2 }}>{d.today.vehicle}</Text>
+          </View>
+        ) : null}
       </Card>
 
       {d.today && (d.today.equipment.length > 0 || d.today.consumables.length > 0) ? (
         <Card>
           <Label>Matériel &amp; consommables</Label>
           {d.today.equipment.map((e, i) => (
-            <Text key={`e${i}`} style={{ color: T.ink, paddingVertical: 3 }}>
-              🧰 {e.name}{e.reference ? ` (${e.reference})` : ''}
-            </Text>
+            <View key={`e${i}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 3 }}>
+              <Feather name="tool" size={13} color={T.ink2} />
+              <Text style={{ color: T.ink }}>{e.name}{e.reference ? ` (${e.reference})` : ''}</Text>
+            </View>
           ))}
           {d.today.consumables.map((c, i) => (
-            <Text key={`c${i}`} style={{ color: T.ink, paddingVertical: 3 }}>
-              📦 {c.qty} {c.unit} — {c.name}
-            </Text>
+            <View key={`c${i}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 3 }}>
+              <Feather name="package" size={13} color={T.ink2} />
+              <Text style={{ color: T.ink }}>{c.qty} {c.unit} — {c.name}</Text>
+            </View>
           ))}
         </Card>
       ) : null}
@@ -190,8 +208,12 @@ export default function FicheDuJour() {
       </Card>
 
       <View style={{ gap: 8, marginTop: 4 }}>
-        <Pressable style={{ backgroundColor: T.surface2, borderWidth: 1, borderColor: T.line, borderRadius: 10, padding: 13, alignItems: 'center' }} onPress={() => router.push(`/fil/${id}` as never)}>
-          <Text style={{ color: T.ink, fontWeight: '700' }}>💬 Fil de chantier</Text>
+        <Pressable
+          style={{ backgroundColor: T.surface2, borderWidth: 1, borderColor: T.line, borderRadius: 10, padding: 13, flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center' }}
+          onPress={() => router.push(`/fil/${id}` as never)}
+        >
+          <Feather name="message-circle" size={16} color={T.ink} />
+          <Text style={{ color: T.ink, fontWeight: '700' }}>Fil de chantier</Text>
         </Pressable>
         <Pressable style={{ backgroundColor: T.primary, borderRadius: 10, padding: 14, alignItems: 'center' }} onPress={() => router.push(`/rapport/${id}` as never)}>
           <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Faire le rapport de chantier</Text>

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView, Image, StyleSheet, KeyboardAvoidingView, Platform, Alert, Linking } from 'react-native';
+import { View, TextInput, Pressable, ScrollView, Image, StyleSheet, KeyboardAvoidingView, Platform, Alert, Linking } from 'react-native';
+import { Text } from '@/lib/AppText';
+import { Feather } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams, useFocusEffect, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { apiGet, apiSend, apiUploadPhoto, API_URL } from '@/lib/api';
@@ -107,8 +109,9 @@ export default function Fil() {
           title: 'Fil de chantier',
           headerBackTitle: 'Retour',
           headerRight: () => (
-            <Pressable onPress={() => router.push(`/fiche/${id}` as never)} hitSlop={10}>
-              <Text style={{ color: T.primary, fontWeight: '700' }}>ℹ️ Infos</Text>
+            <Pressable onPress={() => router.push(`/fiche/${id}` as never)} hitSlop={10} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+              <Feather name="info" size={15} color={T.primary} />
+              <Text style={{ color: T.primary, fontWeight: '700' }}>Infos</Text>
             </Pressable>
           ),
         }}
@@ -122,13 +125,15 @@ export default function Fil() {
               <Image source={{ uri: `${API_URL}${m.thumbUrl ?? m.fileUrl}` }} style={s.photo} />
             )}
             {m.kind === 'video' && m.fileUrl && (
-              <Pressable style={s.mediaLink} onPress={() => Linking.openURL(`${API_URL}${m.fileUrl}`)}>
-                <Text style={{ color: T.primary, fontWeight: '600' }}>▶︎ Voir la vidéo</Text>
+              <Pressable style={[s.mediaLink, s.mediaLinkRow]} onPress={() => Linking.openURL(`${API_URL}${m.fileUrl}`)}>
+                <Feather name="play" size={14} color={T.primary} />
+                <Text style={{ color: T.primary, fontWeight: '600' }}>Voir la vidéo</Text>
               </Pressable>
             )}
             {m.kind === 'file' && m.fileUrl && (
-              <Pressable style={s.mediaLink} onPress={() => Linking.openURL(`${API_URL}${m.fileUrl}`)}>
-                <Text style={{ color: T.primary, fontWeight: '600' }}>📎 {m.body || 'Fichier'}</Text>
+              <Pressable style={[s.mediaLink, s.mediaLinkRow]} onPress={() => Linking.openURL(`${API_URL}${m.fileUrl}`)}>
+                <Feather name="paperclip" size={14} color={T.primary} />
+                <Text style={{ color: T.primary, fontWeight: '600' }}>{m.body || 'Fichier'}</Text>
               </Pressable>
             )}
             {m.body && m.kind !== 'file' ? (
@@ -141,14 +146,17 @@ export default function Fil() {
       {d.thread.closedAt ? (
         <View style={s.closed}><Text style={{ color: T.ok, fontWeight: '700' }}>Chantier signalé terminé</Text></View>
       ) : (
-        <Pressable style={s.doneBtn} onPress={markDone}><Text style={{ color: T.ok, fontWeight: '700' }}>✓ Chantier terminé</Text></Pressable>
+        <Pressable style={[s.doneBtn, { flexDirection: 'row', gap: 6, justifyContent: 'center' }]} onPress={markDone}>
+          <Feather name="check" size={16} color={T.ok} />
+          <Text style={{ color: T.ok, fontWeight: '700' }}>Chantier terminé</Text>
+        </Pressable>
       )}
 
       <View style={s.composer}>
-        <Pressable style={s.iconBtn} onPress={addPhoto} disabled={busy}><Text style={{ fontSize: 18 }}>📷</Text></Pressable>
-        <Pressable style={s.iconBtn} onPress={addInvoice} disabled={busy}><Text style={{ fontSize: 18 }}>📎</Text></Pressable>
+        <Pressable style={s.iconBtn} onPress={addPhoto} disabled={busy}><Feather name="camera" size={18} color={T.ink2} /></Pressable>
+        <Pressable style={s.iconBtn} onPress={addInvoice} disabled={busy}><Feather name="paperclip" size={18} color={T.ink2} /></Pressable>
         <TextInput style={s.input} placeholder="Message…" value={text} onChangeText={setText} placeholderTextColor={T.ink3} />
-        <Pressable style={s.sendBtn} onPress={send} disabled={busy || !text.trim()}><Text style={{ color: '#fff', fontWeight: '700' }}>›</Text></Pressable>
+        <Pressable style={s.sendBtn} onPress={send} disabled={busy || !text.trim()}><Feather name="send" size={16} color="#fff" /></Pressable>
       </View>
     </KeyboardAvoidingView>
   );
@@ -157,6 +165,7 @@ export default function Fil() {
 const s = StyleSheet.create({
   photo: { width: 220, height: 165, borderRadius: 10, backgroundColor: T.surface2 },
   mediaLink: { backgroundColor: T.surface2, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, alignSelf: 'flex-start' },
+  mediaLinkRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   bubble: { backgroundColor: T.surface, borderWidth: 1, borderColor: T.line, borderRadius: 10, padding: 10, alignSelf: 'flex-start', maxWidth: '85%', color: T.ink },
   status: { fontStyle: 'italic', color: T.ink2, fontSize: 13 },
   closed: { padding: 10, alignItems: 'center', backgroundColor: T.okSoft },

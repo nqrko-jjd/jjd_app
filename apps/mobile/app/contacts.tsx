@@ -1,4 +1,5 @@
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Text } from '@/lib/AppText';
 import { Stack } from 'expo-router';
 import { ResourceList, Muted, useRouterPush } from '@/lib/ui';
 
@@ -20,7 +21,7 @@ export default function Contacts() {
         onPress={(c) => push(`/contact/${c.id}`)}
         render={(c) => (
           <View>
-            <Text style={{ fontWeight: '600', color: '#1b2233' }}>{c.name}</Text>
+            <Text style={{ fontWeight: '600', color: '#26372f' }}>{c.name}</Text>
             <Muted>
               {c.kind ? KIND[c.kind] ?? c.kind : c.type === 'supplier' ? 'Fournisseur' : '—'}
               {c.syndic ? ` · c/o ${c.syndic.name}` : ''}{c.city ? ` · ${c.city}` : ''}

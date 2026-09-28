@@ -1,4 +1,5 @@
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Text } from '@/lib/AppText';
 import { Stack } from 'expo-router';
 import { ResourceList, Muted, useRouterPush } from '@/lib/ui';
 
@@ -20,7 +21,7 @@ export default function Immeubles() {
         onPress={(b) => push(`/immeuble/${b.id}`)}
         render={(b) => (
           <View>
-            <Text style={{ fontWeight: '600', color: '#1b2233' }}>{b.name}</Text>
+            <Text style={{ fontWeight: '600', color: '#26372f' }}>{b.name}</Text>
             <Muted>{b.syndic?.name ?? '—'}{b.city ? ` · ${b.city}` : ''} · {b._count.worksites} interventions</Muted>
           </View>
         )}

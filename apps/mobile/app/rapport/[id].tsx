@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { ScrollView, Text, View, Pressable, TextInput, Alert, Image, ActivityIndicator } from 'react-native';
+import { ScrollView, View, Pressable, TextInput, Alert, Image, ActivityIndicator } from 'react-native';
+import { Text } from '@/lib/AppText';
+import { Feather } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import SignatureScreen, { type SignatureViewRef } from 'react-native-signature-canvas';
@@ -90,7 +92,9 @@ export default function Rapport() {
     return (
       <View style={{ flex: 1, backgroundColor: T.paper, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 14 }}>
         <Stack.Screen options={{ title: 'Rapport', headerBackTitle: 'Retour' }} />
-        <Text style={{ fontSize: 44 }}>✅</Text>
+        <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: T.okSoft, alignItems: 'center', justifyContent: 'center' }}>
+          <Feather name="check-circle" size={40} color={T.ok} />
+        </View>
         <Text style={{ fontSize: 18, fontWeight: '700', color: T.ink, textAlign: 'center' }}>Rapport signé par {report.clientName || clientName}</Text>
         <Muted>Le bureau et le client y ont accès.</Muted>
         <Pressable style={{ backgroundColor: T.primary, borderRadius: 10, padding: 14, paddingHorizontal: 28 }} onPress={() => router.replace(`/fiche/${worksiteId}` as never)}>
@@ -168,8 +172,14 @@ export default function Rapport() {
           ))}
         </View>
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
-          <Pressable style={btn} disabled={busy} onPress={() => addPhoto(true)}><Text style={btnT}>📷 Photo</Text></Pressable>
-          <Pressable style={btn} disabled={busy} onPress={() => addPhoto(false)}><Text style={btnT}>🖼️ Galerie</Text></Pressable>
+          <Pressable style={[btn, btnRow]} disabled={busy} onPress={() => addPhoto(true)}>
+            <Feather name="camera" size={15} color={T.ink} />
+            <Text style={btnT}>Photo</Text>
+          </Pressable>
+          <Pressable style={[btn, btnRow]} disabled={busy} onPress={() => addPhoto(false)}>
+            <Feather name="image" size={15} color={T.ink} />
+            <Text style={btnT}>Galerie</Text>
+          </Pressable>
         </View>
         {busy && <ActivityIndicator style={{ marginTop: 8 }} color={T.primary} />}
       </Card>
@@ -187,4 +197,5 @@ export default function Rapport() {
 }
 
 const btn = { flex: 1, backgroundColor: T.surface2, borderWidth: 1, borderColor: T.line, borderRadius: 9, padding: 12, alignItems: 'center' as const };
+const btnRow = { flexDirection: 'row' as const, gap: 6, justifyContent: 'center' as const };
 const btnT = { color: T.ink, fontWeight: '700' as const };

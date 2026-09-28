@@ -1,5 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
-import { View, Text, Pressable, ScrollView, StyleSheet, RefreshControl } from 'react-native';
+import { View, Pressable, ScrollView, StyleSheet, RefreshControl } from 'react-native';
+import { Text } from '@/lib/AppText';
+import { Feather } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { apiGet } from '@/lib/api';
 import { Card, Muted, Loading } from '@/lib/ui';
@@ -56,12 +58,12 @@ export default function Planning() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} />}
     >
       <View style={s.nav}>
-        <Pressable style={s.navBtn} onPress={() => setWeekStart(new Date(weekStart.getTime() - 7 * 86400000))}><Text style={s.navTxt}>←</Text></Pressable>
+        <Pressable style={s.navBtn} onPress={() => setWeekStart(new Date(weekStart.getTime() - 7 * 86400000))}><Feather name="chevron-left" size={18} color={T.ink} /></Pressable>
         <Text style={s.week}>
           {weekStart.toLocaleDateString('fr-BE', { day: '2-digit', month: 'short' })} –{' '}
           {new Date(weekStart.getTime() + 6 * 86400000).toLocaleDateString('fr-BE', { day: '2-digit', month: 'short' })}
         </Text>
-        <Pressable style={s.navBtn} onPress={() => setWeekStart(new Date(weekStart.getTime() + 7 * 86400000))}><Text style={s.navTxt}>→</Text></Pressable>
+        <Pressable style={s.navBtn} onPress={() => setWeekStart(new Date(weekStart.getTime() + 7 * 86400000))}><Feather name="chevron-right" size={18} color={T.ink} /></Pressable>
       </View>
 
       {DAYS.map((label, i) => {
@@ -81,12 +83,20 @@ export default function Planning() {
                   {e.assignments.map((a) => a.person.displayName || a.person.firstName).join(', ') || 'Aucun ouvrier'}
                 </Text>
                 {(e.vehicles.length > 0 || e.materialsNote) && (
-                  <Muted>
-                    {[
-                      e.vehicles.length > 0 ? `🚐 ${e.vehicles.map((v) => v.vehicle.plate || v.vehicle.model).join(', ')}` : null,
-                      e.materialsNote ? `🔧 ${e.materialsNote}` : null,
-                    ].filter(Boolean).join('  ')}
-                  </Muted>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 2 }}>
+                    {e.vehicles.length > 0 && (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Feather name="truck" size={12} color={T.ink2} />
+                        <Muted>{e.vehicles.map((v) => v.vehicle.plate || v.vehicle.model).join(', ')}</Muted>
+                      </View>
+                    )}
+                    {e.materialsNote && (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Feather name="tool" size={12} color={T.ink2} />
+                        <Muted>{e.materialsNote}</Muted>
+                      </View>
+                    )}
+                  </View>
                 )}
               </Card>
             ))}
@@ -100,7 +110,6 @@ export default function Planning() {
 const s = StyleSheet.create({
   nav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   navBtn: { borderWidth: 1, borderColor: T.line, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 6, backgroundColor: T.surface },
-  navTxt: { fontSize: 16, color: T.ink },
   week: { fontWeight: '600', color: T.ink },
   day: { fontSize: 13, fontWeight: '700', color: T.ink2, textTransform: 'uppercase', letterSpacing: 0.4, marginTop: 6 },
   ref: { fontWeight: '600', color: T.ink },

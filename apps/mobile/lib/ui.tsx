@@ -1,5 +1,7 @@
 import { useCallback, useState, type ReactNode } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, Pressable, FlatList, TextInput, RefreshControl, Image, Alert } from 'react-native';
+import { View, StyleSheet, ActivityIndicator, Pressable, FlatList, TextInput, RefreshControl, Image, Alert } from 'react-native';
+import { Text } from '@/lib/AppText';
+import { Feather } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { apiGet, apiUploadPhoto, API_URL } from './api';
@@ -62,7 +64,7 @@ export function PhotoHeader({
           <View style={round
             ? { width: size, height: size, borderRadius: size! / 2, backgroundColor: T.surface2, alignItems: 'center', justifyContent: 'center' }
             : { width: '100%', aspectRatio: 16 / 10, borderRadius: 14, backgroundColor: T.surface2, alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ fontSize: 30 }}>📷</Text>
+            <Feather name="camera" size={26} color={T.ink3} />
           </View>
         )}
       </Pressable>

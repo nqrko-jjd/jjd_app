@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Text, View, Pressable } from 'react-native';
+import { View, Pressable } from 'react-native';
+import { Text } from '@/lib/AppText';
 import { Stack } from 'expo-router';
 import { ResourceList, Muted, Badge, eur, dateBE, useRouterPush } from '@/lib/ui';
 import { T } from '@/lib/theme';

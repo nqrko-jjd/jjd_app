@@ -63,15 +63,21 @@ export interface PurchaseCandidate {
   occurrences: { ledgerEntryId: string; date: string | null; docNumber: string | null; qty: number }[];
 }
 
+// achat (facture) ET bordereau (enlèvement) : un bordereau suit souvent le même export ERP que la
+// facture du même fournisseur, et c'est la preuve la plus directe d'un enlèvement réel — la
+// facture correspondante arrive parfois bien plus tard, parfois consolidée sur plusieurs bordereaux.
+const SCANNABLE_DIRECTIONS = ['purchase', 'delivery_slip'];
+
 /**
- * Rattrapage : relit les factures d'achat déjà en base, cherche des lignes d'article
- * reconnaissables, regroupe par (fournisseur, code) et ne garde que ce qui revient au moins deux
- * fois et n'est pas déjà suivi (aucun article de stock n'a déjà cette réf. chez ce fournisseur).
+ * Rattrapage : relit les factures et bordereaux d'achat déjà en base, cherche des lignes
+ * d'article reconnaissables, regroupe par (fournisseur, code) et ne garde que ce qui revient au
+ * moins deux fois et n'est pas déjà suivi (aucun article de stock n'a déjà cette réf. chez ce
+ * fournisseur).
  */
 export async function findPurchaseCandidates(): Promise<PurchaseCandidate[]> {
   if (!(await pdftotextAvailable())) return [];
   const entries = await prisma.ledgerEntry.findMany({
-    where: { direction: 'purchase', pdfPath: { not: null }, contactId: { not: null } },
+    where: { direction: { in: SCANNABLE_DIRECTIONS }, pdfPath: { not: null }, contactId: { not: null } },
     select: { id: true, date: true, docNumber: true, pdfPath: true, contactId: true, contact: { select: { name: true } } },
   });
 

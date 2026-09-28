@@ -28,13 +28,18 @@ export function findRefMatches(rawText: string, candidates: RefCandidate[]): Ref
   return candidates.filter((c) => c.supplierRef.trim().length >= 3 && text.includes(normRef(c.supplierRef)));
 }
 
-/** Scanne une facture (déjà en base, avec pièce jointe) pour les réf. fournisseur connues de son contact. */
+// achat (facture) ET bordereau (enlèvement) : les deux viennent du fournisseur et suivent
+// souvent le même export ERP — un bordereau est même la preuve la plus directe d'un enlèvement
+// réel (la facture, elle, peut arriver bien plus tard, parfois consolidée sur plusieurs bordereaux).
+const SCANNABLE_DIRECTIONS = ['purchase', 'delivery_slip'];
+
+/** Scanne une facture ou un bordereau (déjà en base, avec pièce jointe) pour les réf. fournisseur connues de son contact. */
 export async function scanEntryForRefs(entryId: string): Promise<number> {
   const entry = await prisma.ledgerEntry.findUnique({
     where: { id: entryId },
     select: { id: true, contactId: true, pdfPath: true, direction: true },
   });
-  if (!entry || entry.direction !== 'purchase' || !entry.contactId || !entry.pdfPath) return 0;
+  if (!entry || !SCANNABLE_DIRECTIONS.includes(entry.direction) || !entry.contactId || !entry.pdfPath) return 0;
   const file = resolveUpload(entry.pdfPath);
   if (!existsSync(file)) return 0;
 
@@ -70,7 +75,7 @@ export async function scanEntryForRefs(entryId: string): Promise<number> {
  *  nouvelle réf. fournisseur sur un article, pour retrouver son historique d'achat passé). */
 export async function scanAllEntriesForRefs(): Promise<{ scanned: number; matched: number }> {
   const entries = await prisma.ledgerEntry.findMany({
-    where: { direction: 'purchase', pdfPath: { not: null }, contactId: { not: null } },
+    where: { direction: { in: SCANNABLE_DIRECTIONS }, pdfPath: { not: null }, contactId: { not: null } },
     select: { id: true },
   });
   let matched = 0;

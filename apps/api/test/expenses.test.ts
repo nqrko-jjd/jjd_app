@@ -141,6 +141,16 @@ test('rapprochement bancaire -> facture d\'achat passe « payé », défaire la 
   assert.equal(afterUnmatch!.paidOn, null);
 });
 
+test('routes à chemin fixe déclarées avant GET /:id (sinon Express les prend pour un id de dépense)', async () => {
+  const candidates = await jf<{ items: unknown[] }>('/api/finance/expenses/purchase-candidates');
+  assert.equal(candidates.status, 200);
+  assert.ok(Array.isArray(candidates.body.items));
+
+  const scan = await jf<{ scanned: number; matched: number }>('/api/finance/expenses/scan-purchase-refs', { method: 'POST' });
+  assert.equal(scan.status, 200);
+  assert.equal(typeof scan.body.scanned, 'number');
+});
+
 test('rapprochement bancaire : un même paiement réparti sur plusieurs factures (acompte décompté ensuite)', async () => {
   const [f1, f2, f3] = await Promise.all([
     prisma.ledgerEntry.create({ data: { direction: 'purchase', worksiteId, ht: 3000, ttc: 3630, date: new Date('2026-09-10'), source: 'manual', paymentStatus: 'Non payé', supplierName: 'CF Group' } }),

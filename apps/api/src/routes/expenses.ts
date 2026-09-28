@@ -223,6 +223,20 @@ expensesRouter.get(
   }),
 );
 
+/**
+ * Repère, dans les factures d'achat déjà reçues, les articles qui reviennent souvent mais ne
+ * sont pas encore suivis en stock — best-effort (voir lib/purchase-candidates.ts), à vérifier
+ * avant de créer l'article : ne crée jamais rien tout seul. Route à chemin fixe : doit rester
+ * déclarée avant GET /:id, sinon Express la confond avec une dépense d'id "purchase-candidates".
+ */
+expensesRouter.get(
+  '/purchase-candidates',
+  requireAuth(...OFFICE),
+  asyncHandler(async (_req, res) => {
+    res.json({ items: await findPurchaseCandidates() });
+  }),
+);
+
 /* ------------------------------------------------------------------ export */
 
 /** Export groupé : les pièces jointes de plusieurs dépenses en un seul .zip (à glisser chez le comptable). */
@@ -519,19 +533,6 @@ expensesRouter.post(
   asyncHandler(async (_req, res) => {
     const stats = await scanAllEntriesForRefs();
     res.json(stats);
-  }),
-);
-
-/**
- * Repère, dans les factures d'achat déjà reçues, les articles qui reviennent souvent mais ne
- * sont pas encore suivis en stock — best-effort (voir lib/purchase-candidates.ts), à vérifier
- * avant de créer l'article : ne crée jamais rien tout seul.
- */
-expensesRouter.get(
-  '/purchase-candidates',
-  requireAuth(...OFFICE),
-  asyncHandler(async (_req, res) => {
-    res.json({ items: await findPurchaseCandidates() });
   }),
 );
 

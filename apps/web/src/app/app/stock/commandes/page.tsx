@@ -26,6 +26,10 @@ export default function CommandesPage() {
   const canOrder = user?.role === 'admin' || user?.role === 'office';
   const [tab, setTab] = useState<'open' | 'draft' | 'received'>('open');
   const { data, loading, reload } = useApi<{ items: OrderRow[] }>(`/api/purchasing/orders?status=${tab}`);
+  // compté à part (indépendamment de l'onglet actif) pour que les brouillons créés en coulisses
+  // (ex. « Commander le manquant » depuis une préparation) ne passent pas inaperçus
+  const { data: draftData } = useApi<{ items: OrderRow[] }>(tab === 'draft' ? null : '/api/purchasing/orders?status=draft');
+  const draftCount = tab === 'draft' ? data?.items.length ?? 0 : draftData?.items.length ?? 0;
   const [creating, setCreating] = useState(false);
 
   useEffect(() => {
@@ -50,7 +54,11 @@ export default function CommandesPage() {
       />
       <div className="msg-filter-chips" style={{ marginBottom: '1rem' }}>
         <button className={tab === 'open' ? 'on' : ''} onClick={() => setTab('open')}>À réceptionner</button>
-        {canOrder && <button className={tab === 'draft' ? 'on' : ''} onClick={() => setTab('draft')}>Brouillons</button>}
+        {canOrder && (
+          <button className={tab === 'draft' ? 'on' : ''} onClick={() => setTab('draft')}>
+            Brouillons{draftCount > 0 ? ` (${draftCount})` : ''}
+          </button>
+        )}
         <button className={tab === 'received' ? 'on' : ''} onClick={() => setTab('received')}>Reçues</button>
       </div>
       {loading && !data && <SkeletonRows />}

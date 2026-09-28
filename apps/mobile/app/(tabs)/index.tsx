@@ -6,6 +6,7 @@ import { useFocusEffect, Redirect, useRouter } from 'expo-router';
 import { apiGet, apiSend, flushQueue, pendingCount } from '@/lib/api';
 import { currentPosition } from '@/lib/geo';
 import { useSession } from '@/lib/session';
+import { HeroTile } from '@/lib/ui';
 import { T } from '@/lib/theme';
 
 interface Ev {
@@ -104,7 +105,10 @@ export default function Today() {
       contentContainerStyle={{ padding: 16, gap: 14 }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} />}
     >
-      <Text style={s.hi}>Bonjour {person?.displayName || person?.firstName || ''}</Text>
+      <View>
+        <Text style={s.eyebrow}>Ma journée</Text>
+        <Text style={s.hi}>Bonjour {person?.displayName || person?.firstName || ''}</Text>
+      </View>
       {queued > 0 && (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           <Feather name="clock" size={14} color={T.accent} />
@@ -123,19 +127,20 @@ export default function Today() {
       )}
 
       {linked && (running ? (
-        <View style={[s.card, { borderColor: T.ok, borderWidth: 2 }]}>
-          <Text style={s.label}>Compteur en cours</Text>
-          <Text style={s.wsRef}>{running.worksite?.ref} — {running.worksite?.title}</Text>
-          <Text style={s.big}>{elapsed(running.startedAt)}</Text>
-          <Pressable style={[s.btn, { backgroundColor: T.crit }]} onPress={stop}>
-            <Text style={s.btnTxt}>Arrêter</Text>
+        <HeroTile icon="clock">
+          <Text style={s.heroLabel}>Compteur en cours</Text>
+          <Text style={s.heroSub}>{running.worksite?.ref} — {running.worksite?.title}</Text>
+          <Text style={s.heroBig}>{elapsed(running.startedAt)}</Text>
+          <Pressable style={s.stopBtn} onPress={stop}>
+            <Text style={[s.btnTxt, { color: '#fff' }]}>Arrêter</Text>
           </Pressable>
-        </View>
+        </HeroTile>
       ) : (
-        <View style={s.card}>
-          <Text style={s.label}>Aucun compteur actif</Text>
-          <Text style={s.muted}>Choisis un chantier ci-dessous pour démarrer.</Text>
-        </View>
+        <HeroTile icon="play">
+          <Text style={s.heroLabel}>Prêt pour la journée</Text>
+          <Text style={s.heroBig}>0 h 00</Text>
+          <Text style={s.heroSub}>Choisis un chantier ci-dessous pour démarrer.</Text>
+        </HeroTile>
       ))}
 
       <Text style={s.section}>Mes chantiers du jour</Text>
@@ -150,8 +155,8 @@ export default function Today() {
           </Text>
           <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
             {linked && !running && (
-              <Pressable style={[s.btn, { flex: 1 }]} onPress={() => start(e.worksite.id)}>
-                <Text style={s.btnTxt}>Démarrer le compteur</Text>
+              <Pressable style={[s.btn, s.btnGold, { flex: 1 }]} onPress={() => start(e.worksite.id)}>
+                <Text style={[s.btnTxt, { color: '#241c05' }]}>Démarrer le compteur</Text>
               </Pressable>
             )}
             <Pressable style={[s.btn, { backgroundColor: T.surface2, borderWidth: 1, borderColor: T.line }]} onPress={() => router.push(`/fiche/${e.worksite.id}` as never)}>
@@ -165,7 +170,8 @@ export default function Today() {
 }
 
 const s = StyleSheet.create({
-  hi: { fontSize: 20, fontWeight: '700', color: T.ink },
+  eyebrow: { fontSize: 11.5, color: T.ink3, textTransform: 'uppercase', letterSpacing: 0.6, fontWeight: '700', marginBottom: 4 },
+  hi: { fontSize: 22, fontWeight: '800', color: T.ink },
   queued: { color: T.accent, fontWeight: '600' },
   section: { fontSize: 13, fontWeight: '700', color: T.ink2, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 6 },
   card: { backgroundColor: T.surface, borderRadius: T.radius, borderWidth: 1, borderColor: T.line, padding: 16, gap: 6 },
@@ -174,5 +180,10 @@ const s = StyleSheet.create({
   big: { fontSize: 40, fontWeight: '800', color: T.ink, marginVertical: 4 },
   muted: { color: T.ink2 },
   btn: { backgroundColor: T.primary, borderRadius: 10, padding: 14, alignItems: 'center', marginTop: 8 },
+  btnGold: { backgroundColor: T.gold },
   btnTxt: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  heroLabel: { fontSize: 12.5, color: 'rgba(255,255,255,0.75)', fontWeight: '600' },
+  heroSub: { fontSize: 13, color: 'rgba(255,255,255,0.85)', marginTop: 2 },
+  heroBig: { fontSize: 34, fontWeight: '800', color: '#fff', marginVertical: 6, fontVariant: ['tabular-nums'] },
+  stopBtn: { backgroundColor: T.crit, borderRadius: 10, padding: 12, alignItems: 'center', marginTop: 4 },
 });

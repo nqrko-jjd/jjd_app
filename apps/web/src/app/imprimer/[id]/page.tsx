@@ -106,14 +106,17 @@ export default function PrintDocument({ params }: { params: Promise<{ id: string
           <tbody>
             {items.map((l, i) => {
               const colspan = hasDiscount ? 6 : 5;
-              if (l.kind === 'section') return <tr key={i} className="ln-section"><td colSpan={colspan}>{l.label}</td></tr>;
-              if (l.kind === 'text') return <tr key={i} className="ln-text"><td colSpan={colspan}>{l.label}</td></tr>;
+              // label/description : HTML déjà nettoyé côté API à l'enregistrement (sanitizeLineHtml,
+              // voir lib/documents.ts) — seule la mise en forme inline autorisée (gras/couleur/…) y
+              // survit, donc sûr à injecter tel quel ici.
+              if (l.kind === 'section') return <tr key={i} className="ln-section"><td colSpan={colspan} dangerouslySetInnerHTML={{ __html: l.label }} /></tr>;
+              if (l.kind === 'text') return <tr key={i} className="ln-text"><td colSpan={colspan} dangerouslySetInnerHTML={{ __html: l.label }} /></tr>;
               const ht = l.qty * l.unitPriceHt * (1 - l.discountPct / 100);
               return (
                 <tr key={i}>
                   <td>
-                    <div className="ln-label">{l.label}</div>
-                    {l.description && <div className="desc">{l.description}</div>}
+                    <div className="ln-label" dangerouslySetInnerHTML={{ __html: l.label }} />
+                    {l.description && <div className="desc" dangerouslySetInnerHTML={{ __html: l.description }} />}
                   </td>
                   <td className="c-num c-qty">{l.qty}{l.unit && <span className="unit"> {l.unit}</span>}</td>
                   <td className="c-num">{formatEur(l.unitPriceHt)}</td>
@@ -202,7 +205,7 @@ const CSS = `
   .c-num { text-align: right; white-space: nowrap; }
   .c-qty .unit { color: #9aa79e; }
   .ln-label { font-weight: 600; }
-  .desc { color: #788078; font-size: 11px; margin-top: 1px; }
+  .desc { color: #788078; font-size: 11px; margin-top: 1px; white-space: pre-line; }
   .ln-section td { background: #f5f5ef; font-weight: 700; border-bottom: 1px solid #e5e7df; }
   .ln-text td { color: #55606e; font-style: italic; border-bottom: none; }
 

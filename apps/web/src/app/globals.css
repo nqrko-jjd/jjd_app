@@ -333,6 +333,26 @@ p { margin: 0; }
 .field label, .field > span { font-size: 0.78rem; font-weight: 600; color: var(--ink-2); }
 .field textarea.input { resize: vertical; font: inherit; }
 
+/* ---------------------------------------------------- texte enrichi (lignes devis/factures) */
+.rt-edit { font: inherit; line-height: 1.35; cursor: text; white-space: pre-wrap; }
+.rt-edit:empty:before { content: attr(data-placeholder); color: var(--ink-3); }
+.rt-toolbar {
+  position: absolute; z-index: 20; bottom: 100%; left: 0; margin-bottom: 4px;
+  display: flex; align-items: center; gap: 3px; padding: 4px;
+  background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+}
+.rt-btn {
+  min-width: 24px; height: 24px; padding: 0 6px; border: 1px solid transparent; border-radius: 4px;
+  background: none; color: var(--ink); font-size: 0.78rem; font-weight: 700; cursor: pointer;
+}
+.rt-btn:hover { background: var(--surface-2); border-color: var(--line); }
+.rt-sep { width: 1px; height: 18px; background: var(--line); margin: 0 2px; }
+.rt-swatch {
+  width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--line-strong); cursor: pointer; padding: 0;
+}
+.rt-color-pick { width: 22px; height: 22px; padding: 0; border: 1px solid var(--line-strong); border-radius: 4px; cursor: pointer; background: none; }
+
 /* ---------------------------------------------------- quick actions */
 .quick-actions { display: flex; flex-wrap: wrap; gap: 0.55rem; margin-bottom: 1.3rem; }
 .quick-actions .qa {

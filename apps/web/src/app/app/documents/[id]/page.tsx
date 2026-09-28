@@ -1,6 +1,6 @@
 'use client';
 import { SkeletonRows } from '@/components/States';
-import { use, useEffect, useMemo, useRef, useState } from 'react';
+import { use, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api, apiBlobUrl } from '@/lib/api';
@@ -10,7 +10,11 @@ import { DocStatusBadge, DOC_KIND_LABEL, type DocFull, type DocLine } from '@/li
 import { ContactPicker } from '@/components/ContactPicker';
 import { AssigneePicker } from '@/components/AssigneePicker';
 import { WorksitePicker, type WsPickerOption } from '@/components/WorksitePicker';
+import { RichText } from '@/components/RichText';
 import { computeDocTotals, VAT_RATES } from '@jjd/shared';
+
+/** Un <br> ou une balise vide compte comme "rien" — l'utilisateur n'a en réalité rien tapé. */
+const isEmptyHtml = (h: string | null | undefined) => !h || !h.replace(/<[^>]*>/g, '').trim();
 
 type Picker = {
   clients: { id: string; name: string }[];
@@ -25,28 +29,6 @@ const UNIT_OPTIONS: { value: string; label: string }[] = [
   { value: 'L', label: 'L' }, { value: 'lot', label: 'Lot' }, { value: 'sac', label: 'Sac' },
   { value: 'pièce', label: 'Pièce' },
 ];
-
-/** Champ texte qui grandit avec son contenu — on voit toute la désignation, pas seulement le début. */
-function AutoText({ value, onChange, placeholder, bold }: { value: string; onChange: (v: string) => void; placeholder?: string; bold?: boolean }) {
-  const ref = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    el.style.height = 'auto';
-    el.style.height = `${el.scrollHeight + 2}px`;
-  }, [value]);
-  return (
-    <textarea
-      ref={ref}
-      className="input"
-      rows={1}
-      style={{ resize: 'none', overflow: 'hidden', lineHeight: 1.35, fontWeight: bold ? 700 : undefined }}
-      placeholder={placeholder}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-    />
-  );
-}
 
 const emptyLine = (): DocLine => ({ kind: 'item', label: '', qty: 1, unit: '', unitPriceHt: 0, discountPct: 0, vatRate: 0.21 });
 /** « R-047 · Toiture » -> { ref: "R-047", title: "R-047 · Toiture" } — même découpage que côté API (worksiteRef). */
@@ -309,18 +291,22 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
               </label>
             </div>
             <div className="tbl-wrap">
-              <table className="tbl">
+              {/* table-layout: fixed + une seule colonne sans largeur (Désignation) : elle absorbe
+                  tout l'espace restant au lieu que les colonnes numériques (Qté…) se gonflent.
+                  minWidth évite que Désignation s'écrase sur un écran étroit — ça déborde plutôt
+                  (le .tbl-wrap défile alors horizontalement) que de devenir illisible. */}
+              <table className="tbl" style={{ tableLayout: 'fixed', width: '100%', minWidth: 860 }}>
                 <thead>
                   <tr>
-                    <th style={{ width: 44 }}></th>
-                    <th style={{ minWidth: 220 }}>Désignation</th>
-                    <th style={{ minWidth: 80, textAlign: 'right' }}>Qté</th>
-                    <th style={{ minWidth: 84 }}>Unité</th>
-                    <th style={{ minWidth: 92, textAlign: 'right' }}>Prix HT</th>
-                    {showDiscount && <th style={{ width: 60, textAlign: 'right' }}>Rem.%</th>}
-                    <th style={{ minWidth: 76 }}>TVA %</th>
-                    <th style={{ width: 105, textAlign: 'right' }}>Total HT</th>
-                    <th style={{ width: 44 }}></th>
+                    <th style={{ width: 60 }}></th>
+                    <th>Désignation</th>
+                    <th style={{ width: 70, textAlign: 'right' }}>Qté</th>
+                    <th style={{ width: 90 }}>Unité</th>
+                    <th style={{ width: 96, textAlign: 'right' }}>Prix HT</th>
+                    {showDiscount && <th style={{ width: 64, textAlign: 'right' }}>Rem.%</th>}
+                    <th style={{ width: 76 }}>TVA %</th>
+                    <th style={{ width: 104, textAlign: 'right' }}>Total HT</th>
+                    <th style={{ width: 64 }}></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -331,7 +317,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
                         <button className="btn ghost" style={btnMini} onClick={() => moveLine(i, 1)} aria-label="Descendre">↓</button>
                       </td>
                       <td>
-                        <AutoText
+                        <RichText
                           bold={l.kind === 'section'}
                           placeholder={l.kind === 'section' ? 'Titre de section' : l.kind === 'text' ? 'Texte libre' : 'Désignation'}
                           value={l.label}
@@ -339,15 +325,16 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
                         />
                         {l.kind === 'item' && (
                           openDesc.has(i) ? (
-                            <input
-                              className="input"
-                              style={{ marginTop: 4, fontSize: '0.8rem' }}
-                              placeholder="Description détaillée (optionnel)"
-                              value={l.description ?? ''}
-                              onChange={(e) => setLine(i, { description: e.target.value })}
-                              onBlur={() => { if (!l.description?.trim()) toggleDesc(i); }}
-                              autoFocus
-                            />
+                            <div style={{ marginTop: 4 }}>
+                              <RichText
+                                placeholder="Description détaillée (optionnel) — Entrée pour aller à la ligne"
+                                value={l.description ?? ''}
+                                onChange={(v) => setLine(i, { description: v })}
+                                onBlur={() => { if (isEmptyHtml(l.description)) toggleDesc(i); }}
+                                autoFocus
+                                minHeight={20}
+                              />
+                            </div>
                           ) : (
                             <button type="button" className="btn ghost" style={{ ...btnMini, marginTop: 4 }} onClick={() => toggleDesc(i)}>
                               + Description détaillée
@@ -357,7 +344,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
                       </td>
                       {l.kind === 'item' ? (
                         <>
-                          <td><input className="input" type="number" step="any" style={{ textAlign: 'right', minWidth: 70 }} value={l.qty} onChange={(e) => setLine(i, { qty: Number(e.target.value) })} /></td>
+                          <td><input className="input" type="number" step="any" style={{ textAlign: 'right' }} value={l.qty} onChange={(e) => setLine(i, { qty: Number(e.target.value) })} /></td>
                           <td>
                             <select className="select" value={l.unit ?? ''} onChange={(e) => setLine(i, { unit: e.target.value })}>
                               <option value="">—</option>

@@ -415,7 +415,7 @@ export const WORKSITE_CONTACT_FOR_LABEL: Record<WorksiteContactFor, string> = {
 
 /** Rôles d'un contact rattaché à un immeuble / ACP. */
 export const BUILDING_CONTACT_ROLES = [
-  'concierge', 'president', 'council', 'syndic_manager', 'contact', 'owner_rep', 'other',
+  'concierge', 'president', 'council', 'syndic_manager', 'developer', 'contact', 'owner_rep', 'other',
 ] as const;
 export type BuildingContactRole = (typeof BUILDING_CONTACT_ROLES)[number];
 
@@ -424,6 +424,7 @@ export const BUILDING_CONTACT_ROLE_LABEL: Record<BuildingContactRole, string> = 
   president: "Président d'assemblée",
   council: 'Membre du conseil',
   syndic_manager: 'Gestionnaire syndic',
+  developer: 'Promoteur',
   contact: 'Contact',
   owner_rep: 'Représentant des copropriétaires',
   other: 'Autre',

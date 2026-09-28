@@ -103,6 +103,31 @@ test('immeuble : un lot peut être lié à une vraie fiche contact (pas juste du
   }
 });
 
+test('immeuble : un projet Promoteur peut être rattaché à son promoteur via un contact clé (rôle "developer")', async () => {
+  await prisma.contact.deleteMany({ where: { name: { in: ['Léopold Views — test', 'Matexi — test'] } } });
+  const project = await prisma.contact.create({
+    data: { name: 'Léopold Views — test', normalizedName: 'leopold views test', type: 'client', kind: 'developer', source: 'test' },
+  });
+  const matexi = await prisma.contact.create({
+    data: { name: 'Matexi — test', normalizedName: 'matexi test', type: 'client', kind: 'company', source: 'test' },
+  });
+  try {
+    const c = await fetch(`${base}/api/buildings/${project.id}/contacts`, {
+      method: 'POST',
+      headers: auth(),
+      body: JSON.stringify({ role: 'developer', name: matexi.name, contactId: matexi.id }),
+    });
+    assert.equal(c.status, 201);
+
+    const detail = await (await fetch(`${base}/api/buildings/${project.id}`, { headers: auth() })).json();
+    assert.equal(detail.building.contacts.length, 1);
+    assert.equal(detail.building.contacts[0].role, 'developer');
+    assert.equal(detail.building.contacts[0].contactId, matexi.id);
+  } finally {
+    await prisma.contact.deleteMany({ where: { id: { in: [project.id, matexi.id] } } });
+  }
+});
+
 test('immeuble : créer un immeuble crée directement un contact ACP (plus de fiche séparée)', async () => {
   await prisma.contact.deleteMany({ where: { name: 'Projet — test' } });
   const created = await fetch(`${base}/api/buildings`, {

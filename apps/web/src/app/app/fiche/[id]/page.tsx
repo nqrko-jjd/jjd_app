@@ -10,7 +10,7 @@ interface Task { id: string; title: string; status: string; assignees: { id: str
 
 const CONTACT_ROLE: Record<string, string> = {
   concierge: 'Concierge', president: 'Président', council: 'Conseil', syndic_manager: 'Gestionnaire syndic',
-  contact: 'Contact', owner_rep: 'Représentant copro', other: 'Autre',
+  developer: 'Promoteur', contact: 'Contact', owner_rep: 'Représentant copro', other: 'Autre',
 };
 
 interface Field {

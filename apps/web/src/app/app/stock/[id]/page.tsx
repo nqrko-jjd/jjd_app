@@ -27,6 +27,10 @@ interface Meta {
   worksites: { id: string; name: string }[];
   categories: string[];
 }
+interface PurchaseSighting {
+  id: string; supplierRef: string; expenseId: string; date: string | null; docNumber: string | null;
+  supplier: string | null; ttc: number | null;
+}
 
 const TYPE_LABEL: Record<string, string> = { in: 'Entrée', out: 'Sortie', adjustment: 'Inventaire' };
 const TYPE_TONE: Record<string, string> = { in: 'ok', out: 'warn', adjustment: 'plain' };
@@ -49,6 +53,7 @@ export default function StockDetail({ params }: { params: Promise<{ id: string }
   const { data: moves, reload: reloadMoves } = useApi<{ items: Movement[]; page: number; totalPages: number }>(
     `/api/stock/movements?stockItemId=${id}&page=${page}&pageSize=${pageSize}`,
   );
+  const { data: purchaseHistory } = useApi<{ items: PurchaseSighting[] }>(`/api/stock/items/${id}/purchase-history`);
   const [moving, setMoving] = useState(false);
   const [editing, setEditing] = useState(false);
   const [supplierModal, setSupplierModal] = useState<'new' | StockSupplierLink | null>(null);
@@ -248,6 +253,33 @@ export default function StockDetail({ params }: { params: Promise<{ id: string }
                   </tr>
                 );
               })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div className="section-title">
+        Historique d’achat <span className="hint">réf. fournisseur détectée sur les factures reçues</span>
+      </div>
+      {!purchaseHistory ? <SkeletonRows /> : purchaseHistory.items.length === 0 ? (
+        <div className="card card-pad muted" style={{ marginBottom: '1.6rem' }}>
+          Aucune facture ne mentionne encore une réf. fournisseur enregistrée pour cet article — pas forcément jamais acheté : la réf.
+          n’est peut-être pas encore renseignée ci-dessus, ou l’article n’a pas encore été détecté sur une facture reçue.
+        </div>
+      ) : (
+        <div className="tbl-wrap" style={{ marginBottom: '1.6rem' }}>
+          <table className="tbl">
+            <thead><tr><th>Date</th><th>Fournisseur</th><th>Réf.</th><th>Facture</th><th style={{ textAlign: 'right' }}>Montant</th></tr></thead>
+            <tbody>
+              {purchaseHistory.items.map((p) => (
+                <tr key={p.id} className="row-link" onClick={() => window.open(`/app/achats?q=${encodeURIComponent(p.docNumber ?? p.supplierRef)}`, '_blank')}>
+                  <td className="tnum">{formatDateBE(p.date)}</td>
+                  <td>{p.supplier ?? '—'}</td>
+                  <td className="mono">{p.supplierRef}</td>
+                  <td className="mono">{p.docNumber ?? '—'}</td>
+                  <td style={{ textAlign: 'right' }}>{p.ttc != null ? formatEur(p.ttc) : '—'}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

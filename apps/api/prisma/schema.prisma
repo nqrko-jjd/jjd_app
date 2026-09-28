@@ -684,13 +684,33 @@ model LedgerEntry {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @default(now()) @updatedAt
 
-  bankMatches BankTransactionMatch[]
+  bankMatches   BankTransactionMatch[]
+  refSightings  PurchaseRefSighting[]
 
   @@index([worksiteId])
   @@index([worksiteRef])
   @@index([direction])
   @@index([date])
   @@index([linkedInvoiceId])
+}
+
+/// Une référence produit fournisseur (déjà enregistrée sur un article de stock, voir
+/// StockSupplier.supplierRef) retrouvée dans le texte d'une facture reçue — sert à visualiser la
+/// récurrence d'achat par article sans tenter un parsing générique des tableaux de factures (mise
+/// en page trop hétérogène d'un fournisseur à l'autre). Alimenté à la réception d'une facture
+/// (boîte mail) et par un rattrapage sur les factures déjà en base.
+model PurchaseRefSighting {
+  id            String      @id @default(cuid())
+  ledgerEntryId String
+  ledgerEntry   LedgerEntry @relation(fields: [ledgerEntryId], references: [id], onDelete: Cascade)
+  stockItemId   String
+  stockItem     StockItem   @relation(fields: [stockItemId], references: [id], onDelete: Cascade)
+  supplierRef   String
+  createdAt     DateTime    @default(now())
+
+  @@unique([ledgerEntryId, stockItemId])
+  @@index([stockItemId])
+  @@index([ledgerEntryId])
 }
 
 /// Import brut des relevés bancaires (Belfius + ING). Rapprochement progressif.
@@ -1270,6 +1290,7 @@ model StockItem {
   barcodes  StockBarcode[]
   orderLines    StockOrderLine[]
   purchaseLines PurchaseOrderLine[]
+  refSightings  PurchaseRefSighting[]
 
   @@index([active])
 }

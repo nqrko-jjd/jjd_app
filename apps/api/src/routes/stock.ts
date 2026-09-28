@@ -95,6 +95,38 @@ stockRouter.get(
   }),
 );
 
+/**
+ * Récurrence d'achat : les factures d'achat dont le texte mentionne une réf. fournisseur
+ * enregistrée sur cet article (voir lib/purchase-ref-scan.ts) — pas un historique exhaustif
+ * (dépend des réf. déjà renseignées et de la lisibilité du PDF), mais un aperçu best-effort.
+ */
+stockRouter.get(
+  '/items/:id/purchase-history',
+  requireAuth(...STOCK_READ),
+  asyncHandler(async (req, res) => {
+    const sightings = await prisma.purchaseRefSighting.findMany({
+      where: { stockItemId: req.params.id },
+      include: {
+        ledgerEntry: {
+          select: { id: true, date: true, docNumber: true, ttc: true, ht: true, supplierName: true, contact: { select: { name: true } } },
+        },
+      },
+      orderBy: { ledgerEntry: { date: 'desc' } },
+    });
+    res.json({
+      items: sightings.map((s) => ({
+        id: s.id,
+        supplierRef: s.supplierRef,
+        expenseId: s.ledgerEntry.id,
+        date: s.ledgerEntry.date,
+        docNumber: s.ledgerEntry.docNumber,
+        supplier: s.ledgerEntry.contact?.name ?? s.ledgerEntry.supplierName,
+        ttc: s.ledgerEntry.ttc ?? s.ledgerEntry.ht,
+      })),
+    });
+  }),
+);
+
 stockRouter.post(
   '/items',
   requireAuth(...STOCK_MANAGE),

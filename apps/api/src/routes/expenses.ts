@@ -19,6 +19,7 @@ import { nameOverlap } from '../lib/bank-match.js';
 import { extractDocumentInfo } from '../lib/document-extract.js';
 import { toCsv, readTableBuffer, pick } from '../lib/table-io.js';
 import { invoiceMailboxConfigured, syncInvoiceMailbox, reprocessEmailEntries, scanInvoiceMailboxHistory, PROCESSED_MAILBOX } from '../lib/invoice-mailbox.js';
+import { scanAllEntriesForRefs } from '../lib/purchase-ref-scan.js';
 
 export const expensesRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
@@ -501,6 +502,21 @@ expensesRouter.post(
   requireAuth(...OFFICE),
   asyncHandler(async (_req, res) => {
     const stats = await reprocessEmailEntries();
+    res.json(stats);
+  }),
+);
+
+/**
+ * Recherche, dans le texte des factures d'achat déjà en base, les références produit déjà
+ * enregistrées sur les articles de stock (StockSupplier.supplierRef) — alimente l'historique
+ * d'achat par article (voir GET /api/stock/items/:id/purchase-history). À relancer après avoir
+ * ajouté une nouvelle réf. fournisseur, pour retrouver son historique dans les factures passées.
+ */
+expensesRouter.post(
+  '/scan-purchase-refs',
+  requireAuth(...OFFICE),
+  asyncHandler(async (_req, res) => {
+    const stats = await scanAllEntriesForRefs();
     res.json(stats);
   }),
 );

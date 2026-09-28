@@ -20,6 +20,7 @@ import { env } from '../env.js';
 import { prisma } from '../db.js';
 import { storeFile, UPLOADS_DIR } from './media.js';
 import { extractDocumentInfo } from './document-extract.js';
+import { scanEntryForRefs } from './purchase-ref-scan.js';
 
 export const PROCESSED_MAILBOX = 'Traité par JJD App';
 
@@ -155,7 +156,8 @@ export async function syncInvoiceMailbox(): Promise<SyncStats> {
             try {
               const { data, extraction } = await buildExpenseFromPdf(att.content, att.filename || 'facture.pdf');
               if (await findExistingMatch(extraction)) { importedAny = true; continue; } // déjà importée (relecture après échec d'une autre pièce jointe du même mail)
-              await prisma.ledgerEntry.create({ data: { ...data, createdById: null } });
+              const created = await prisma.ledgerEntry.create({ data: { ...data, createdById: null } });
+              await scanEntryForRefs(created.id).catch(() => {});
               stats.pdfsImported++;
               importedAny = true;
             } catch (e) {
@@ -254,7 +256,7 @@ export async function scanInvoiceMailboxHistory(folders?: string[]): Promise<Sca
               const ht = extraction.totalHt
                 ?? (extraction.totalTtc != null ? Math.round((extraction.totalTtc / (1 + (extraction.vatRate ?? 0.21))) * 100) / 100 : 0);
               const pdfPath = storeFile(att.content, att.filename || 'facture.pdf', 'expenses');
-              await prisma.ledgerEntry.create({
+              const createdEntry = await prisma.ledgerEntry.create({
                 data: {
                   ...deriveYM(date),
                   date,
@@ -275,6 +277,7 @@ export async function scanInvoiceMailboxHistory(folders?: string[]): Promise<Sca
                   createdById: null,
                 },
               });
+              await scanEntryForRefs(createdEntry.id).catch(() => {});
               stats.created++;
               if (!reliable) stats.unreliableExtraction++;
             }

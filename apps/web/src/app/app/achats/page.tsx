@@ -121,6 +121,7 @@ function AchatsInner() {
   const [syncingMailbox, setSyncingMailbox] = useState(false);
   const [reprocessing, setReprocessing] = useState(false);
   const [scanningProcessed, setScanningProcessed] = useState(false);
+  const [scanningRefs, setScanningRefs] = useState(false);
 
   const expenseAccessors = {
     date: (e: Expense) => (e.date ? new Date(e.date) : null),
@@ -228,6 +229,18 @@ function AchatsInner() {
     }
   }
 
+  async function scanPurchaseRefs() {
+    setScanningRefs(true);
+    try {
+      const r = await api<{ scanned: number; matched: number }>('/api/finance/expenses/scan-purchase-refs', { method: 'POST' });
+      alert(`${r.matched} correspondance(s) de référence trouvée(s) sur ${r.scanned} facture(s) d’achat analysée(s).`);
+    } catch (e) {
+      alert(`Échec de la recherche : ${(e as Error).message}`);
+    } finally {
+      setScanningRefs(false);
+    }
+  }
+
   function exportCsv() {
     downloadCsv(`/api/finance/expenses/export.csv?${params}`, `achats-${new Date().toISOString().slice(0, 10)}.csv`);
   }
@@ -311,6 +324,14 @@ function AchatsInner() {
                 {scanningProcessed ? 'Recherche…' : '🗂️ Retrouver des factures manquées'}
               </button>
             )}
+            <button
+              className="btn"
+              disabled={scanningRefs}
+              onClick={scanPurchaseRefs}
+              title="Recherche dans les PDF déjà reçus les références produit déjà enregistrées sur vos articles de stock — alimente l'historique d'achat de chaque article"
+            >
+              {scanningRefs ? 'Recherche…' : '🔎 Détecter les réf. produits'}
+            </button>
             <button className="btn" onClick={exportCsv} title="Exporter la liste filtrée en CSV (éditable dans Excel)">⇩ Exporter CSV</button>
             <button className="btn" onClick={importCsv} title="Réimporter un CSV/Excel corrigé (met à jour par id, crée les nouvelles lignes)">⇧ Importer</button>
             <button className="btn primary" onClick={() => setEdit('new')}>+ Nouvelle dépense</button>

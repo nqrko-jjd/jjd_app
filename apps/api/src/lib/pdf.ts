@@ -35,7 +35,7 @@ export interface PdfDoc {
   billingEmail: string | null;
   customerRef: string | null;
   worksite: { ref: string } | null;
-  contact: { name: string; vat: string | null; address: string | null; postalCode: string | null; city: string | null } | null;
+  contact: { name: string; vat: string | null; address: string | null; box: string | null; postalCode: string | null; city: string | null } | null;
   lines: PdfDocLine[];
 }
 
@@ -51,7 +51,10 @@ async function buildHtml(d: PdfDoc, co: Company): Promise<string> {
   const title = DOC_KIND_LABEL[d.kind] ?? d.kind;
   const ref = d.number ?? d.draftRef ?? '';
   const clientName = d.billingName ?? d.contact?.name ?? '';
-  const clientAddr = d.billingAddress ?? [d.contact?.address, [d.contact?.postalCode, d.contact?.city].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+  const clientAddr = d.billingAddress ?? [
+    [d.contact?.address, d.contact?.box && `bte ${d.contact.box}`].filter(Boolean).join(' '),
+    [d.contact?.postalCode, d.contact?.city].filter(Boolean).join(' '),
+  ].filter(Boolean).join(', ');
   const clientVat = d.billingVat ?? d.contact?.vat;
   const hasDiscount = d.lines.some((l) => l.kind === 'item' && (l.discountPct ?? 0) > 0);
   const colspan = hasDiscount ? 6 : 5;

@@ -75,6 +75,7 @@ export const CONTACT_FIELDS = (
       { name: 'phone', label: 'Téléphone' },
       ...(showVat ? [{ name: 'vat', label: 'N° TVA', placeholder: 'BE0123456789', action: { label: 'Rechercher', run: vatLookupAction } }] : []),
       { name: 'address', label: 'Adresse', full: true, type: 'address' as const, addressFill: { postalCode: 'postalCode', city: 'city' } },
+      { name: 'box', label: 'Boîte' },
       ...(isAcpOrDeveloper ? [
         { name: 'reference', label: 'Référence dossier (syndic / ACP)' },
         { name: 'lotCount', label: 'Nombre de lots', type: 'number' as const },
@@ -104,6 +105,7 @@ export const PERSON_FIELDS: FieldDef[] = [
   { name: 'phone', label: 'Téléphone' },
   { name: 'email', label: 'E-mail' },
   { name: 'address', label: 'Adresse', full: true, type: 'address' },
+  { name: 'box', label: 'Boîte' },
   { name: 'languages', label: 'Langues (séparées par des virgules)', type: 'tags', full: true, placeholder: 'fr, nl, pt' },
   { name: 'emergencyContact', label: "Contact d'urgence", full: true },
   { name: 'active', label: 'Statut', type: 'checkbox', placeholder: 'Actif (décocher pour un ancien — les données sont conservées)', full: true },
@@ -134,6 +136,7 @@ export const BUILDING_FIELDS = (syndics: { id: string; name: string }[] = []): F
   { name: 'kind', label: 'Catégorie', type: 'select', options: [{ value: 'acp', label: 'ACP / Copropriété' }, { value: 'developer', label: 'Promoteur' }] },
   { name: 'syndicId', label: 'Syndic (si ACP)', type: 'select', options: syndics.map((s) => ({ value: s.id, label: s.name })) },
   { name: 'address', label: 'Adresse', full: true, type: 'address', addressFill: { postalCode: 'postalCode', city: 'city' } },
+  { name: 'box', label: 'Boîte' },
   { name: 'postalCode', label: 'Code postal' },
   { name: 'city', label: 'Ville' },
   { name: 'reference', label: 'Référence dossier (syndic / ACP)' },

@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { api } from '@/lib/api';
 import { WorksitePicker, type WsPickerOption } from './WorksitePicker';
 import {
-  PLANNING_EVENT_STATUSES, PLANNING_EVENT_STATUS_LABEL, PERSON_ROLE_LABEL,
+  PLANNING_EVENT_STATUSES, PLANNING_EVENT_STATUS_LABEL, PLANNING_EVENT_KINDS, PLANNING_EVENT_KIND_LABEL, PERSON_ROLE_LABEL,
 } from '@jjd/shared';
 import type { PlanningEv, PlanPerson, PlanVehicleRef } from './planningTypes';
 
@@ -67,6 +67,8 @@ export function PlanningAssignmentModal({
     ? toDateInput(new Date(existing.startAt))
     : prefill?.date ?? (duplicateFrom ? toDateInput(new Date(duplicateFrom.startAt)) : toDateInput(new Date()));
   const [f, setF] = useState(() => ({
+    kind: (seed?.kind ?? 'intervention') as string,
+    title: seed?.title ?? '',
     worksiteId: seed?.worksite.id ?? prefill?.worksiteId ?? '',
     date: initDate,
     start: seed ? toTimeInput(seed.startAt) : '08:30',
@@ -167,6 +169,8 @@ export function PlanningAssignmentModal({
     try {
       const dates = existing ? [f.date] : (f.repeatUntil ? daysBetween(f.date, f.repeatUntil) : [f.date]);
       const base = {
+        kind: f.kind,
+        title: f.title.trim() || null,
         worksiteId: f.worksiteId,
         allDay: false,
         status: f.status,
@@ -216,26 +220,54 @@ export function PlanningAssignmentModal({
     <div className="modal-scrim" onClick={onClose}>
       <div className="modal wiz" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
-          <h2>{existing ? 'Modifier l’affectation' : duplicateFrom ? 'Dupliquer l’affectation' : 'Nouvelle affectation'}</h2>
+          <h2>{existing ? (f.kind === 'meeting' ? 'Modifier le rendez-vous' : 'Modifier l’affectation') : duplicateFrom ? 'Dupliquer l’affectation' : 'Nouvel événement'}</h2>
           <button type="button" className="btn ghost" onClick={onClose} aria-label="Fermer">✕</button>
         </div>
         <div className="wiz-body">
           <div className="plan-form-intro">
-            <strong>Une équipe pour cette intervention</strong>
+            <strong>{f.kind === 'meeting' ? 'Un rendez-vous d’affaire' : 'Une équipe pour cette intervention'}</strong>
             <p style={{ margin: '0.2rem 0 0' }}>
-              {duplicateFrom ? 'Équipe, véhicules et notes repris à l’identique — ajustez la date et le reste au besoin.' : 'Sélectionnez librement les ouvriers, puis réservez les moyens nécessaires.'}
+              {duplicateFrom
+                ? 'Équipe, véhicules et notes repris à l’identique — ajustez la date et le reste au besoin.'
+                : f.kind === 'meeting'
+                  ? 'Réunion, visite ou négociation — avec l’architecte, le client, un fournisseur…'
+                  : 'Sélectionnez librement les ouvriers, puis réservez les moyens nécessaires.'}
             </p>
           </div>
           {error && <div className="plan-form-error">{error}</div>}
 
+          {!duplicateFrom && (
+            <div className="seg" style={{ marginBottom: '1rem' }}>
+              {PLANNING_EVENT_KINDS.map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  className={f.kind === k ? 'on' : ''}
+                  onClick={() => setF((cur) => ({ ...cur, kind: k }))}
+                >
+                  {PLANNING_EVENT_KIND_LABEL[k]}
+                </button>
+              ))}
+            </div>
+          )}
+
           <fieldset>
-            <legend>01 · Chantier & créneau</legend>
+            <legend>01 · {f.kind === 'meeting' ? 'Chantier & créneau du rendez-vous' : 'Chantier & créneau'}</legend>
             <div className="field full" style={{ marginBottom: '0.85rem' }}>
               <label>Chantier</label>
               <WorksitePicker
                 value={f.worksiteId}
                 onChange={(v) => setF((cur) => ({ ...cur, worksiteId: v }))}
                 options={worksiteOptions}
+              />
+            </div>
+            <div className="field full" style={{ marginBottom: '0.85rem' }}>
+              <label>{f.kind === 'meeting' ? 'Objet du rendez-vous' : 'Titre (facultatif)'}</label>
+              <input
+                className="input"
+                value={f.title}
+                onChange={(e) => setF({ ...f, title: e.target.value })}
+                placeholder={f.kind === 'meeting' ? 'RDV avec l’architecte Dupont' : ''}
               />
             </div>
             <div className="wiz-grid">
@@ -268,7 +300,7 @@ export function PlanningAssignmentModal({
           </fieldset>
 
           <fieldset>
-            <legend>02 · Ouvriers & responsabilités</legend>
+            <legend>02 · {f.kind === 'meeting' ? 'Qui de chez nous y assiste' : 'Ouvriers & responsabilités'}</legend>
             <input className="input" style={{ marginBottom: '0.7rem' }} placeholder="Nom ou métier…" value={workerQuery} onChange={(e) => setWorkerQuery(e.target.value)} />
             <div className="plan-worker-picker">
               {filteredPeople.map((p) => {
@@ -286,83 +318,93 @@ export function PlanningAssignmentModal({
                 );
               })}
             </div>
-            <div className="plan-selection-count">{f.personIds.length} ouvrier(s) sélectionné(s) · les disponibilités sont contrôlées à l’enregistrement.</div>
-            <div className="wiz-grid" style={{ marginTop: '0.85rem' }}>
-              <div className="field">
-                <label>Référent de l’intervention</label>
-                <select className="select" value={f.leadPersonId} onChange={(e) => setF({ ...f, leadPersonId: e.target.value })}>
-                  <option value="">Choisir parmi les ouvriers sélectionnés</option>
-                  {selectedPeople.map((p) => <option key={p.id} value={p.id}>{personLabel(p)}</option>)}
-                </select>
+            <div className="plan-selection-count">{f.personIds.length} personne(s) sélectionnée(s){f.kind === 'intervention' ? ' · les disponibilités sont contrôlées à l’enregistrement.' : ''}</div>
+            {f.kind === 'intervention' && (
+              <div className="wiz-grid" style={{ marginTop: '0.85rem' }}>
+                <div className="field">
+                  <label>Référent de l’intervention</label>
+                  <select className="select" value={f.leadPersonId} onChange={(e) => setF({ ...f, leadPersonId: e.target.value })}>
+                    <option value="">Choisir parmi les ouvriers sélectionnés</option>
+                    {selectedPeople.map((p) => <option key={p.id} value={p.id}>{personLabel(p)}</option>)}
+                  </select>
+                </div>
               </div>
-            </div>
+            )}
           </fieldset>
 
-          <fieldset>
-            <legend>03 · Véhicules & matériel</legend>
-            <label style={{ display: 'block', fontWeight: 600, fontSize: '0.82rem', color: 'var(--ink-2)', marginBottom: '0.4rem' }}>
-              Véhicules — plusieurs possibles, un conducteur par véhicule
-            </label>
-            <div className="plan-vehicle-picker">
-              {vehicles.map((v) => {
-                const sel = f.vehicles.find((x) => x.vehicleId === v.id);
-                const busyHere = busyVehicleIds.has(v.id);
-                const label = [v.code, [v.brand, v.model].filter(Boolean).join(' ')].filter(Boolean).join(' · ') || v.plate || '—';
-                return (
-                  <div key={v.id} className="plan-vehicle-option">
-                    <label>
-                      <input type="checkbox" checked={!!sel} onChange={() => toggleVehicle(v.id)} />
+          {f.kind === 'intervention' && (
+            <fieldset>
+              <legend>03 · Véhicules & matériel</legend>
+              <label style={{ display: 'block', fontWeight: 600, fontSize: '0.82rem', color: 'var(--ink-2)', marginBottom: '0.4rem' }}>
+                Véhicules — plusieurs possibles, un conducteur par véhicule
+              </label>
+              <div className="plan-vehicle-picker">
+                {vehicles.map((v) => {
+                  const sel = f.vehicles.find((x) => x.vehicleId === v.id);
+                  const busyHere = busyVehicleIds.has(v.id);
+                  const label = [v.code, [v.brand, v.model].filter(Boolean).join(' ')].filter(Boolean).join(' · ') || v.plate || '—';
+                  return (
+                    <div key={v.id} className="plan-vehicle-option">
+                      <label>
+                        <input type="checkbox" checked={!!sel} onChange={() => toggleVehicle(v.id)} />
+                        <div>
+                          <div>{label}</div>
+                          <div className="plan-availability" style={{ marginTop: 2 }}>{busyHere ? `Indisponible · ${fmtDayShort(f.date)}` : 'Disponible'}</div>
+                        </div>
+                      </label>
+                      {sel && (
+                        <select
+                          className="select driver-select"
+                          value={sel.driverPersonId}
+                          onChange={(e) => setVehicleDriver(v.id, e.target.value)}
+                        >
+                          <option value="">Sans conducteur assigné</option>
+                          {selectedPeople.map((p) => <option key={p.id} value={p.id}>{personLabel(p)} conduit</option>)}
+                        </select>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              {vehicles.length === 0 && <p className="muted" style={{ margin: '0 0 0.7rem' }}>Aucun véhicule dans la flotte.</p>}
+
+              <label style={{ display: 'block', fontWeight: 600, fontSize: '0.82rem', color: 'var(--ink-2)', margin: '0.9rem 0 0.4rem' }}>Matériel</label>
+              <input className="input" style={{ marginBottom: '0.7rem' }} placeholder="Chercher un matériel…" value={equipmentQuery} onChange={(e) => setEquipmentQuery(e.target.value)} />
+              <div className="plan-equipment-picker">
+                {filteredEquipment.map((eq) => {
+                  const on = f.equipmentIds.includes(eq.id);
+                  const busyHere = busyEquipmentIds.has(eq.id);
+                  return (
+                    <label key={eq.id}>
+                      <input type="checkbox" checked={on} onChange={() => toggleEquipment(eq.id)} />
                       <div>
-                        <div>{label}</div>
+                        <div>{eq.name}</div>
                         <div className="plan-availability" style={{ marginTop: 2 }}>{busyHere ? `Indisponible · ${fmtDayShort(f.date)}` : 'Disponible'}</div>
                       </div>
                     </label>
-                    {sel && (
-                      <select
-                        className="select driver-select"
-                        value={sel.driverPersonId}
-                        onChange={(e) => setVehicleDriver(v.id, e.target.value)}
-                      >
-                        <option value="">Sans conducteur assigné</option>
-                        {selectedPeople.map((p) => <option key={p.id} value={p.id}>{personLabel(p)} conduit</option>)}
-                      </select>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-            {vehicles.length === 0 && <p className="muted" style={{ margin: '0 0 0.7rem' }}>Aucun véhicule dans la flotte.</p>}
-
-            <label style={{ display: 'block', fontWeight: 600, fontSize: '0.82rem', color: 'var(--ink-2)', margin: '0.9rem 0 0.4rem' }}>Matériel</label>
-            <input className="input" style={{ marginBottom: '0.7rem' }} placeholder="Chercher un matériel…" value={equipmentQuery} onChange={(e) => setEquipmentQuery(e.target.value)} />
-            <div className="plan-equipment-picker">
-              {filteredEquipment.map((eq) => {
-                const on = f.equipmentIds.includes(eq.id);
-                const busyHere = busyEquipmentIds.has(eq.id);
-                return (
-                  <label key={eq.id}>
-                    <input type="checkbox" checked={on} onChange={() => toggleEquipment(eq.id)} />
-                    <div>
-                      <div>{eq.name}</div>
-                      <div className="plan-availability" style={{ marginTop: 2 }}>{busyHere ? `Indisponible · ${fmtDayShort(f.date)}` : 'Disponible'}</div>
-                    </div>
-                  </label>
-                );
-              })}
-              {filteredEquipment.length === 0 && <p className="muted" style={{ margin: 0 }}>Aucun résultat.</p>}
-            </div>
-          </fieldset>
+                  );
+                })}
+                {filteredEquipment.length === 0 && <p className="muted" style={{ margin: 0 }}>Aucun résultat.</p>}
+              </div>
+            </fieldset>
+          )}
 
           <fieldset>
-            <legend>04 · Tâches & organisation</legend>
+            <legend>{f.kind === 'intervention' ? '04' : '03'} · {f.kind === 'meeting' ? 'Rendez-vous' : 'Tâches & organisation'}</legend>
             <div className="field full" style={{ marginBottom: '0.85rem' }}>
-              <label>Travaux à réaliser — une tâche par ligne</label>
-              <textarea className="input" rows={3} value={f.tasksNote} onChange={(e) => setF({ ...f, tasksNote: e.target.value })} placeholder={'Protéger les parties communes\nPréparer les supports\nContrôler les finitions'} />
+              <label>{f.kind === 'meeting' ? 'Ordre du jour — un point par ligne' : 'Travaux à réaliser — une tâche par ligne'}</label>
+              <textarea
+                className="input"
+                rows={3}
+                value={f.tasksNote}
+                onChange={(e) => setF({ ...f, tasksNote: e.target.value })}
+                placeholder={f.kind === 'meeting' ? 'Suivi du chantier\nValidation des finitions\nDélais de livraison' : 'Protéger les parties communes\nPréparer les supports\nContrôler les finitions'}
+              />
             </div>
             <div className="wiz-grid" style={{ marginBottom: '0.85rem' }}>
               <div className="field">
-                <label>Rendez-vous / lieu de départ</label>
-                <input className="input" value={f.departureFrom} onChange={(e) => setF({ ...f, departureFrom: e.target.value })} placeholder="Dépôt · Ruisbroek" />
+                <label>{f.kind === 'meeting' ? 'Lieu du rendez-vous' : 'Rendez-vous / lieu de départ'}</label>
+                <input className="input" value={f.departureFrom} onChange={(e) => setF({ ...f, departureFrom: e.target.value })} placeholder={f.kind === 'meeting' ? 'Bureau de l’architecte · Bruxelles' : 'Dépôt · Ruisbroek'} />
               </div>
               <div className="field">
                 <label>Heure de départ</label>
@@ -370,12 +412,12 @@ export function PlanningAssignmentModal({
               </div>
             </div>
             <div className="field full" style={{ marginBottom: '0.85rem' }}>
-              <label>Contact sur place / coordination</label>
-              <input className="input" value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} placeholder="Julien · coordination JJD" />
+              <label>{f.kind === 'meeting' ? 'Avec qui (architecte, client, fournisseur…)' : 'Contact sur place / coordination'}</label>
+              <input className="input" value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} placeholder={f.kind === 'meeting' ? 'Arch. Dupont' : 'Julien · coordination JJD'} />
             </div>
             <div className="field full">
-              <label>Accès, livraison, protections & consignes</label>
-              <textarea className="input" rows={3} value={f.accessNote} onChange={(e) => setF({ ...f, accessNote: e.target.value })} placeholder="Clés, parking, accès au lot, EPI, livraison, points de vigilance…" />
+              <label>{f.kind === 'meeting' ? 'Notes' : 'Accès, livraison, protections & consignes'}</label>
+              <textarea className="input" rows={3} value={f.accessNote} onChange={(e) => setF({ ...f, accessNote: e.target.value })} placeholder={f.kind === 'meeting' ? 'Points à préparer, documents à apporter…' : 'Clés, parking, accès au lot, EPI, livraison, points de vigilance…'} />
             </div>
           </fieldset>
         </div>

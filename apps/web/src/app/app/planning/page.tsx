@@ -389,12 +389,12 @@ export default function PlanningPage() {
                         type="button"
                         draggable
                         title="Glisser pour déplacer à un autre jour"
-                        className={`plan-month-chip tone-${toneFor(e.worksite.id)}${e.status === 'tentative' ? ' tentative' : ''}${draggingId === e.id ? ' dragging' : ''}`}
+                        className={`plan-month-chip kind-${e.kind}${e.status === 'tentative' ? ' tentative' : ''}${draggingId === e.id ? ' dragging' : ''}`}
                         onClick={(ev) => { ev.stopPropagation(); setDetailEv(e); }}
                         onDragStart={(dragEv) => { dragEv.dataTransfer.setData('text/plain', e.id); dragEv.dataTransfer.effectAllowed = 'move'; setDraggingId(e.id); }}
                         onDragEnd={() => { setDraggingId(null); setDragOverDay(null); }}
                       >
-                        <span className="tm">{hhmm(e.startAt)}</span> {e.worksite.ref}
+                        <span className="tm">{hhmm(e.startAt)}</span> {e.kind === 'meeting' ? `RDV · ${e.title || e.worksite.ref}` : e.title || e.worksite.ref}
                       </button>
                     ))}
                     {extra > 0 && (
@@ -520,7 +520,14 @@ export default function PlanningPage() {
       )}
 
       <div className="plan-legend">
-        <span>Chaque couleur correspond à un chantier.</span>
+        {view === 'month' ? (
+          <>
+            <span><span className="plan-legend-swatch kind-intervention" /> Intervention confirmée</span>
+            <span><span className="plan-legend-swatch kind-meeting" /> Rendez-vous d’affaire</span>
+          </>
+        ) : (
+          <span>Chaque couleur correspond à un chantier.</span>
+        )}
         <span className="plan-dashed-key">À confirmer</span>
         <span>Congés et formations bloquent l’affectation.</span>
       </div>

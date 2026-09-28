@@ -97,6 +97,8 @@
   :root:not([data-theme="light"]) .tone-3 { --tone-line: #362e42; --tone-accent: #9884b8; --tone-bg: #241f2e; --tone-fg: #c4b3d9; }
   :root:not([data-theme="light"]) .tone-4 { --tone-line: #3d2c26; --tone-accent: #bd8a71; --tone-bg: #2c211d; --tone-fg: #d7ac97; }
   :root:not([data-theme="light"]) .tone-5 { --tone-line: #253d39; --tone-accent: #63a89a; --tone-bg: #182826; --tone-fg: #9dc9bd; }
+  :root:not([data-theme="light"]) .kind-intervention { --tone-line: #253748; --tone-accent: #6f9dc4; --tone-bg: #182530; --tone-fg: #a8c3dd; }
+  :root:not([data-theme="light"]) .kind-meeting { --tone-line: #3b3322; --tone-accent: #c9a25b; --tone-bg: #2b2717; --tone-fg: #d9bd85; }
 }
 :root[data-theme="dark"] {
   --paper: #10201b; --surface: #16271f; --surface-2: #1d3128; --surface-3: #274035;
@@ -117,6 +119,8 @@
 :root[data-theme="dark"] .tone-3 { --tone-line: #362e42; --tone-accent: #9884b8; --tone-bg: #241f2e; --tone-fg: #c4b3d9; }
 :root[data-theme="dark"] .tone-4 { --tone-line: #3d2c26; --tone-accent: #bd8a71; --tone-bg: #2c211d; --tone-fg: #d7ac97; }
 :root[data-theme="dark"] .tone-5 { --tone-line: #253d39; --tone-accent: #63a89a; --tone-bg: #182826; --tone-fg: #9dc9bd; }
+:root[data-theme="dark"] .kind-intervention { --tone-line: #253748; --tone-accent: #6f9dc4; --tone-bg: #182530; --tone-fg: #a8c3dd; }
+:root[data-theme="dark"] .kind-meeting { --tone-line: #3b3322; --tone-accent: #c9a25b; --tone-bg: #2b2717; --tone-fg: #d9bd85; }
 
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
@@ -1191,8 +1195,16 @@ p { margin: 0; }
   min-height: 75px; border-radius: 7px; color: var(--ink-3); font-size: 0.72rem; border: 0;
 }
 
-.plan-legend { display: flex; flex-wrap: wrap; gap: 1.2rem; padding: 1rem 0; color: var(--ink-3); font-size: 0.72rem; line-height: 1.6; }
+.plan-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 1.2rem; padding: 1rem 0; color: var(--ink-3); font-size: 0.72rem; line-height: 1.6; }
 .plan-dashed-key { border-bottom: 1px dashed var(--ink-3); }
+.plan-legend-swatch {
+  display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 0.35rem;
+  border: 1px solid var(--tone-line, var(--line)); background: var(--tone-accent, var(--line-strong)); vertical-align: middle;
+}
+
+/* rendez-vous d'affaire (jaune) vs intervention confirmée (bleu) — vue mensuelle uniquement */
+.kind-intervention { --tone-line: #cddbe9; --tone-accent: #4a7dc4; --tone-bg: #eaf2fa; --tone-fg: #2f5a94; }
+.kind-meeting { --tone-line: #f0dfa8; --tone-accent: #d1a52c; --tone-bg: #fdf6df; --tone-fg: #8a6d15; }
 
 /* -------------------------------------------------------- planning — vue mensuelle (agenda) */
 .plan-month-board { padding: 0; overflow: hidden; }

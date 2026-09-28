@@ -107,6 +107,7 @@ model Person {
   phone            String?
   email            String?
   address          String?
+  box              String? // boîte / n° d'appartement (ex. "bte 4") — l'autocomplete d'adresse ne le fournit pas
   languages        Json? // ["fr","pt","es"]
   specialties      Json? // ["maçon","carreleur","électricien"]
   emergencyContact String?
@@ -249,6 +250,7 @@ model Contact {
   phone          String?
   vat            String?
   address        String?
+  box            String? // boîte / n° d'appartement (ex. "bte 4") — l'autocomplete d'adresse ne le fournit pas
   postalCode     String?
   city           String?
   syndicId       String?
@@ -419,6 +421,7 @@ model Worksite {
   billingConditions String? // acompte, délai de paiement, validation préalable… (texte libre)
   quoteRef     String? // référence du devis lié, si déjà connue à l'ouverture du dossier
   address      String?
+  box          String? // boîte / n° d'appartement (ex. "bte 4") — l'autocomplete d'adresse ne le fournit pas
   postalCode   String?
   city         String?
   unitLabel    String? // lot, étage, bâtiment ou zone concernée (immeubles à plusieurs lots)
@@ -779,6 +782,7 @@ model PlanningEvent {
   endAt         DateTime
   allDay        Boolean  @default(false)
   status        String   @default("confirmed") // confirmed | tentative — "à confirmer" (créneau pas encore garanti)
+  kind          String   @default("intervention") // intervention | meeting — rendez-vous d'affaire (archi, client, fournisseur…)
   teamId        String?
   team          Team?    @relation(fields: [teamId], references: [id])
   vehicleId     String? // legacy, un seul véhicule — conservé pour ne pas perdre les données déjà en prod, plus utilisé par l'appli (voir EventVehicle)

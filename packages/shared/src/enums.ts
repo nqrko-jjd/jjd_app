@@ -458,6 +458,16 @@ export const PLANNING_EVENT_STATUS_LABEL: Record<PlanningEventStatus, string> = 
   tentative: 'À confirmer',
 };
 
+/** Nature d'un événement planning — l'intervention chantier (équipe, véhicules, matériel) reste
+ *  le cas par défaut ; le rendez-vous d'affaire (archi, client, fournisseur…) est plus léger. */
+export const PLANNING_EVENT_KINDS = ['intervention', 'meeting'] as const;
+export type PlanningEventKind = (typeof PLANNING_EVENT_KINDS)[number];
+
+export const PLANNING_EVENT_KIND_LABEL: Record<PlanningEventKind, string> = {
+  intervention: 'Intervention',
+  meeting: 'Rendez-vous d’affaire',
+};
+
 /** Nature d'une absence — bloque l'affectation de la personne sur la période. */
 export const ABSENCE_KINDS = ['leave', 'training', 'other'] as const;
 export type AbsenceKind = (typeof ABSENCE_KINDS)[number];

@@ -63,7 +63,7 @@ export interface DocFull {
   billingEmail: string | null;
   customerRef: string | null;
   worksite: { id: string; ref: string; title: string } | null;
-  contact: { id: string; name: string; vat: string | null; address: string | null; postalCode: string | null; city: string | null; email: string | null } | null;
+  contact: { id: string; name: string; vat: string | null; address: string | null; box: string | null; postalCode: string | null; city: string | null; email: string | null } | null;
   parent: { id: string; kind: string; number: string | null; draftRef: string | null } | null;
   children: { id: string; kind: string; number: string | null; draftRef: string | null; status: string }[];
   lines: DocLine[];

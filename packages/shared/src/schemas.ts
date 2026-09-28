@@ -5,7 +5,7 @@ import {
   CRM_STAGES, CRM_LOST_REASONS, INTERVENTION_PROBLEM_TYPES,
   CONTACT_TYPES, CLIENT_KINDS, WORKER_CONTRACT_TYPES, LEGAL_DOC_TYPES, VEHICLE_DOC_TYPES,
   BUILDING_CONTACT_ROLES, OCCUPANT_KINDS, VEHICLE_STATUSES, ADJUSTMENT_TYPES,
-  PLANNING_EVENT_STATUSES, ABSENCE_KINDS,
+  PLANNING_EVENT_STATUSES, PLANNING_EVENT_KINDS, ABSENCE_KINDS,
 } from './enums.js';
 
 const nonEmpty = z.string().trim().min(1);
@@ -23,6 +23,7 @@ export const contactInput = z.object({
   phone: z.string().trim().nullish(),
   vat: z.string().trim().nullish(),
   address: z.string().trim().nullish(),
+  box: z.string().trim().nullish(), // boîte / n° d'appartement
   postalCode: z.string().trim().nullish(),
   city: z.string().trim().nullish(),
   syndicId: z.string().nullish(),
@@ -109,6 +110,7 @@ export const worksiteInput = z.object({
   buildingId: z.string().nullish(),
   managerId: z.string().nullish(),
   address: z.string().trim().nullish(),
+  box: z.string().trim().nullish(), // boîte / n° d'appartement
   postalCode: z.string().trim().nullish(),
   city: z.string().trim().nullish(),
   unitLabel: z.string().trim().nullish(),
@@ -138,6 +140,7 @@ export const personInput = z.object({
   phone: z.string().trim().nullish(),
   email: z.string().trim().email().nullish().or(z.literal('')),
   address: z.string().trim().nullish(),
+  box: z.string().trim().nullish(), // boîte / n° d'appartement
   languages: z.array(z.string()).default([]),
   specialties: z.array(z.string()).default([]),
   emergencyContact: z.string().trim().nullish(),
@@ -210,6 +213,7 @@ export const planningEventInput = z.object({
   endAt: z.coerce.date(),
   allDay: z.boolean().default(false),
   status: z.enum(PLANNING_EVENT_STATUSES).default('confirmed'),
+  kind: z.enum(PLANNING_EVENT_KINDS).default('intervention'),
   teamId: z.string().nullish(),
   // un événement peut réserver plusieurs véhicules, chacun avec son propre conducteur
   vehicles: z.array(z.object({ vehicleId: nonEmpty, driverPersonId: z.string().nullish() })).default([]),

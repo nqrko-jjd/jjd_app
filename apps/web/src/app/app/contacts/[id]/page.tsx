@@ -27,7 +27,7 @@ interface Detail {
   contact: {
     id: string; name: string; type: string; kind: string | null;
     email: string | null; phone: string | null; vat: string | null;
-    address: string | null; postalCode: string | null; city: string | null; note: string | null;
+    address: string | null; box: string | null; postalCode: string | null; city: string | null; note: string | null;
     photoUrl: string | null; photoThumbUrl: string | null;
     customerNumber: string | null; onAccount: boolean;
     syndic: { id: string; name: string } | null;
@@ -122,7 +122,7 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
           fields={CONTACT_FIELDS(c.type, pick?.syndics ?? [])}
           initial={{
             name: c.name, ...(c.kind === 'individual' ? splitContactName(c.name) : {}), type: c.type, kind: c.kind, email: c.email, phone: c.phone,
-            vat: c.vat, address: c.address, postalCode: c.postalCode, city: c.city, note: c.note,
+            vat: c.vat, address: c.address, box: c.box, postalCode: c.postalCode, city: c.city, note: c.note,
             buildingId: c.building?.id ?? '', syndicId: c.syndic?.id ?? '', customerNumber: c.customerNumber, onAccount: c.onAccount,
           }}
           onClose={() => setEditing(false)}
@@ -170,7 +170,7 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
         <Info label="E-mail" value={c.email ?? '—'} />
         <Info label="Téléphone" value={c.phone ?? '—'} />
         <Info label="TVA" value={formatVat(c.vat) ?? '—'} />
-        <Info label="Adresse" value={[c.address, c.postalCode, c.city].filter(Boolean).join(' ') || '—'} />
+        <Info label="Adresse" value={[[c.address, c.box && `bte ${c.box}`].filter(Boolean).join(', '), c.postalCode, c.city].filter(Boolean).join(' ') || '—'} />
         {isSupplier && <Info label="N° de client chez lui" value={c.customerNumber ?? '—'} />}
         {isSupplier && <Info label="Paiement" value={c.onAccount ? 'En compte' : 'Comptant'} />}
         {c.syndic && <Info label="Syndic" value={<Link href={`/app/immeubles?syndicId=${c.syndic.id}`}>{c.syndic.name}</Link>} />}

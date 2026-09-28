@@ -45,7 +45,7 @@ async function nextFreeDocNumber(docKind: string, year: number): Promise<{ numbe
 export const docInclude = {
   lines: { orderBy: { position: 'asc' } },
   worksite: { select: { id: true, ref: true, title: true } },
-  contact: { select: { id: true, name: true, vat: true, address: true, postalCode: true, city: true, email: true } },
+  contact: { select: { id: true, name: true, vat: true, address: true, box: true, postalCode: true, city: true, email: true } },
   parent: { select: { id: true, kind: true, number: true, draftRef: true } },
   children: { select: { id: true, kind: true, number: true, draftRef: true, status: true } },
   createdBy: { select: { id: true, email: true } },
@@ -125,7 +125,10 @@ export async function issueDocument(documentId: string, opts: { issuedOn?: Date;
     : null;
 
   const contactAddress =
-    [doc.contact?.address, [doc.contact?.postalCode, doc.contact?.city].filter(Boolean).join(' ').trim()]
+    [
+      [doc.contact?.address, doc.contact?.box && `bte ${doc.contact.box}`].filter(Boolean).join(' '),
+      [doc.contact?.postalCode, doc.contact?.city].filter(Boolean).join(' ').trim(),
+    ]
       .filter(Boolean)
       .join(', ');
   // L'ACP a une adresse (le chantier, là où on intervient) mais la facture part au

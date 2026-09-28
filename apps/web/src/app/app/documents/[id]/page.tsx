@@ -242,7 +242,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
                 <ContactPicker
                   value={doc.contact?.id ?? ''}
                   onChange={(cid, name) => {
-                    patch({ contact: cid ? { id: cid, name, vat: null, address: null, postalCode: null, city: null, email: null } : null });
+                    patch({ contact: cid ? { id: cid, name, vat: null, address: null, box: null, postalCode: null, city: null, email: null } : null });
                   }}
                 />
               </label>

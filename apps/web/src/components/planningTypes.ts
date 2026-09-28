@@ -10,6 +10,7 @@ export interface PlanningEv {
   endAt: string;
   allDay: boolean;
   status: string;
+  kind: string;
   worksite: { id: string; ref: string; title: string; city: string | null; address?: string | null };
   team: { id: string; name: string; color: string | null } | null;
   vehicles: { vehicle: PlanVehicleRef; driver: PlanPerson | null }[];

@@ -10,7 +10,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 
 
 const reportInclude = {
   photos: { orderBy: { createdAt: 'asc' } },
-  worksite: { select: { id: true, ref: true, title: true, address: true, postalCode: true, city: true, client: { select: { name: true } }, acp: { select: { name: true } } } },
+  worksite: { select: { id: true, ref: true, title: true, address: true, box: true, postalCode: true, city: true, client: { select: { name: true } }, acp: { select: { name: true } } } },
   author: { select: { email: true } },
 } as const;
 

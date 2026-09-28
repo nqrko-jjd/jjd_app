@@ -26,7 +26,7 @@ interface BUnit {
 }
 interface Detail {
   building: {
-    id: string; name: string; address: string | null; postalCode: string | null; city: string | null; note: string | null;
+    id: string; name: string; address: string | null; box: string | null; postalCode: string | null; city: string | null; note: string | null;
     reference: string | null; lotCount: number | null; digicode: string | null; accessNote: string | null;
     photoUrl: string | null;
     syndic: { id: string; name: string; email: string | null; phone: string | null } | null;
@@ -98,7 +98,7 @@ export default function ImmeubleDetail({ params }: { params: Promise<{ id: strin
       <div className="detail-hero">
         <div className="eyebrow">Immeuble</div>
         <h1>{b.name}</h1>
-        <div className="sub">{[b.address, [b.postalCode, b.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') || 'Adresse non renseignée'}</div>
+        <div className="sub">{[b.address, b.box && `bte ${b.box}`, [b.postalCode, b.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') || 'Adresse non renseignée'}</div>
       </div>
 
       <PhotoHeader

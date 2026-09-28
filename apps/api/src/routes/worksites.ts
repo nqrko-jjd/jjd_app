@@ -452,6 +452,7 @@ worksitesRouter.post(
         acpId,
         managerId: data.managerId ?? null,
         address: data.address ?? null,
+        box: data.box ?? null,
         postalCode: data.postalCode ?? null,
         city: data.city ?? null,
         unitLabel: data.unitLabel ?? null,

@@ -27,7 +27,7 @@ interface Detail {
   worksite: {
     id: string; ref: string; title: string; status: string; priority: string; statusRaw: string | null;
     scope: string | null; billingMode: string | null; requestKind: string | null;
-    entity: string; address: string | null; city: string | null; unitLabel: string | null; billTo: string | null;
+    entity: string; address: string | null; box: string | null; city: string | null; unitLabel: string | null; billTo: string | null;
     lat: number | null; lng: number | null; geoSetAt: string | null;
     startedOn: string | null; endedOn: string | null; quotedHt: number | null; quoteRef: string | null; description: string | null;
     accessNotes: string | null;
@@ -115,6 +115,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
     { name: 'billingMode', label: 'Facturation', type: 'select', options: WORKSITE_BILLING_MODES.map((b) => ({ value: b, label: WORKSITE_BILLING_MODE_LABEL[b] })) },
     { name: 'requestKind', label: 'Type de demande', type: 'select', options: WORKSITE_REQUEST_KINDS.map((k) => ({ value: k, label: WORKSITE_REQUEST_KIND_LABEL[k] })) },
     { name: 'address', label: 'Adresse', full: true, type: 'address', addressFill: { postalCode: 'postalCode', city: 'city' } },
+    { name: 'box', label: 'Boîte' },
     { name: 'postalCode', label: 'Code postal' },
     { name: 'city', label: 'Ville' },
     { name: 'unitLabel', label: 'Lot, étage, bâtiment ou zone' },
@@ -149,7 +150,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
           initial={{
             title: w.title, clientId: w.client?.id ?? '', buildingId: w.building?.id ?? '', managerId: w.manager?.id ?? '',
             entity: w.entity, status: w.status, priority: w.priority, scope: w.scope, billingMode: w.billingMode, requestKind: w.requestKind,
-            address: w.address, city: w.city, unitLabel: w.unitLabel,
+            address: w.address, box: w.box, city: w.city, unitLabel: w.unitLabel,
             startedOn: toDateInput(w.startedOn), endedOn: toDateInput(w.endedOn),
             quotedHt: w.quotedHt, quoteRef: w.quoteRef, billToContactId: w.billToContact?.id ?? '', statusRaw: w.statusRaw, description: w.description,
             billToAttn: w.billToAttn, billToEmail: w.billToEmail, clientRef: w.clientRef,
@@ -179,7 +180,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
           <h1>{w.title}</h1>
           <StatusBadge status={w.status} />
         </div>
-        <div className="sub">{[w.address, w.city].filter(Boolean).join(', ') || 'Adresse non renseignée'}</div>
+        <div className="sub">{[w.address, w.box && `bte ${w.box}`, w.city].filter(Boolean).join(', ') || 'Adresse non renseignée'}</div>
         <div className="row" style={{ marginTop: '0.7rem' }}>
           <PriorityBadge priority={w.priority} />
           <EntityBadge entity={w.entity} />
@@ -234,7 +235,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
                     <Info label="Immeuble / ACP" value={<Link href={`/app/immeubles/${w.building.id}`}>{w.building.name}{w.building.syndic ? ` · ${w.building.syndic.name}` : ''}</Link>} />
                   )}
                   <Info label="Responsable" value={w.manager?.displayName ?? w.manager?.firstName ?? '—'} />
-                  <Info label="Localisation" value={[w.address, w.unitLabel, w.city].filter(Boolean).join(', ') || '—'} />
+                  <Info label="Localisation" value={[w.address, w.box && `bte ${w.box}`, w.unitLabel, w.city].filter(Boolean).join(', ') || '—'} />
                   {nextEvent && nextEvent.assignments.length > 0 && (
                     <Info label="Équipe affectée" value={[...new Set(nextEvent.assignments.map((a) => a.person.displayName || a.person.firstName))].join(', ')} />
                   )}

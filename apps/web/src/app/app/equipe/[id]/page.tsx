@@ -26,7 +26,7 @@ interface Detail {
   person: {
     id: string; firstName: string; lastName: string | null; displayName: string | null;
     role: string; contractType: string; hourlyRate: number | null; dailyHours: number; photoUrl: string | null;
-    phone: string | null; email: string | null; address: string | null;
+    phone: string | null; email: string | null; address: string | null; box: string | null;
     languages: string[] | null; specialties: string[] | null; emergencyContact: string | null; active: boolean; note: string | null;
     legalDocs: { id: string; type: string; label: string | null; number: string | null; expiresOn: string | null; fileUrl: string | null }[];
     equipment: { id: string; name: string }[];
@@ -161,7 +161,7 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
           initial={{
             firstName: p.firstName, lastName: p.lastName, displayName: p.displayName,
             role: p.role, contractType: p.contractType, hourlyRate: p.hourlyRate, dailyHours: p.dailyHours,
-            phone: p.phone, email: p.email, address: p.address,
+            phone: p.phone, email: p.email, address: p.address, box: p.box,
             languages: (p.languages ?? []).join(', '), specialties: (p.specialties ?? []).join(', '),
             emergencyContact: p.emergencyContact, note: p.note,
             active: p.active,
@@ -272,7 +272,7 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
           <Info label="Spécialités" value={(p.specialties ?? []).join(', ') || '—'} />
           <Info label="Téléphone" value={p.phone ?? '—'} />
           <Info label="E-mail" value={p.email ?? '—'} />
-          <Info label="Adresse" value={p.address ?? '—'} />
+          <Info label="Adresse" value={[p.address, p.box && `bte ${p.box}`].filter(Boolean).join(', ') || '—'} />
           <Info label="Langues" value={(p.languages ?? []).join(', ') || '—'} />
           <Info label="Contact d'urgence" value={p.emergencyContact ?? '—'} />
           <Info

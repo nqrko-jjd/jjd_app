@@ -35,7 +35,10 @@ export default function PrintDocument({ params }: { params: Promise<{ id: string
   const title = DOC_KIND_LABEL[d.kind];
   const ref = d.number ?? d.draftRef ?? '';
   const clientName = d.billingName ?? d.contact?.name ?? '';
-  const clientAddr = d.billingAddress ?? [d.contact?.address, [d.contact?.postalCode, d.contact?.city].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+  const clientAddr = d.billingAddress ?? [
+    [d.contact?.address, d.contact?.box && `bte ${d.contact.box}`].filter(Boolean).join(' '),
+    [d.contact?.postalCode, d.contact?.city].filter(Boolean).join(' '),
+  ].filter(Boolean).join(', ');
   const clientVat = d.billingVat ?? d.contact?.vat;
   const hasDiscount = items.some((l) => l.kind === 'item' && l.discountPct > 0);
   // mention légale spécifique (taux réduit 6% habitation, autoliquidation 0%…), une fois par taux présent

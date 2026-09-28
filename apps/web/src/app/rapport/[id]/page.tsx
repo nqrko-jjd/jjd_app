@@ -8,7 +8,7 @@ interface Report {
   status: string; clientName: string | null; signatureUrl: string | null; signedAt: string | null;
   photos: { id: string; url: string; caption: string | null }[];
   worksite: {
-    ref: string; title: string; address: string | null; postalCode: string | null; city: string | null;
+    ref: string; title: string; address: string | null; box: string | null; postalCode: string | null; city: string | null;
     client: { name: string } | null; building: { name: string } | null;
   };
 }
@@ -35,7 +35,10 @@ export default function ReportPrint({ params }: { params: Promise<{ id: string }
   if (err) return <div style={{ padding: 40 }}>Erreur : {err}</div>;
   if (!r) return <div style={{ padding: 40 }}>Chargement…</div>;
   const w = r.worksite;
-  const addr = [w.address, [w.postalCode, w.city].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+  const addr = [
+    [w.address, w.box && `bte ${w.box}`].filter(Boolean).join(' '),
+    [w.postalCode, w.city].filter(Boolean).join(' '),
+  ].filter(Boolean).join(', ');
 
   return (
     <>

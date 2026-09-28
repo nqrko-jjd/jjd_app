@@ -1542,7 +1542,7 @@ body.plan-wide .main { max-width: none; }
 }
 
 /* ---------------------------------------------------- éditeur devis/factures */
-.doc-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 340px); gap: 1.4rem; align-items: start; }
+.doc-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(230px, 290px); gap: 1.4rem; align-items: start; }
 @media (max-width: 980px) { .doc-layout { grid-template-columns: minmax(0, 1fr); } }
 .doc-main { min-width: 0; }
 .doc-card {

@@ -294,27 +294,31 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
               {/* table-layout: fixed + une seule colonne sans largeur (Désignation) : elle absorbe
                   tout l'espace restant au lieu que les colonnes numériques (Qté…) se gonflent.
                   minWidth évite que Désignation s'écrase sur un écran étroit — ça déborde plutôt
-                  (le .tbl-wrap défile alors horizontalement) que de devenir illisible. */}
-              <table className="tbl" style={{ tableLayout: 'fixed', width: '100%', minWidth: 860 }}>
+                  (le .tbl-wrap défile alors horizontalement) que de devenir illisible. Les icônes
+                  d'action (déplacer/dupliquer/supprimer) sont empilées à la verticale plutôt qu'à
+                  l'horizontale pour tenir dans une colonne étroite. */}
+              <table className="tbl" style={{ tableLayout: 'fixed', width: '100%', minWidth: 800 }}>
                 <thead>
                   <tr>
-                    <th style={{ width: 60 }}></th>
+                    <th style={{ width: 32 }}></th>
                     <th>Désignation</th>
-                    <th style={{ width: 70, textAlign: 'right' }}>Qté</th>
-                    <th style={{ width: 90 }}>Unité</th>
-                    <th style={{ width: 96, textAlign: 'right' }}>Prix HT</th>
-                    {showDiscount && <th style={{ width: 64, textAlign: 'right' }}>Rem.%</th>}
-                    <th style={{ width: 76 }}>TVA %</th>
-                    <th style={{ width: 104, textAlign: 'right' }}>Total HT</th>
-                    <th style={{ width: 64 }}></th>
+                    <th style={{ width: 60, textAlign: 'right' }}>Qté</th>
+                    <th style={{ width: 80 }}>Unité</th>
+                    <th style={{ width: 86, textAlign: 'right' }}>Prix HT</th>
+                    {showDiscount && <th style={{ width: 56, textAlign: 'right' }}>Rem.%</th>}
+                    <th style={{ width: 64 }}>TVA %</th>
+                    <th style={{ width: 92, textAlign: 'right' }}>Total HT</th>
+                    <th style={{ width: 34 }}></th>
                   </tr>
                 </thead>
                 <tbody>
                   {lines.map((l, i) => (
                     <tr key={i}>
-                      <td style={{ padding: '0.3rem', whiteSpace: 'nowrap' }}>
-                        <button className="btn ghost" style={btnMini} onClick={() => moveLine(i, -1)} aria-label="Monter">↑</button>
-                        <button className="btn ghost" style={btnMini} onClick={() => moveLine(i, 1)} aria-label="Descendre">↓</button>
+                      <td style={{ padding: '0.3rem' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <button className="btn ghost" style={btnMini} onClick={() => moveLine(i, -1)} aria-label="Monter">↑</button>
+                          <button className="btn ghost" style={btnMini} onClick={() => moveLine(i, 1)} aria-label="Descendre">↓</button>
+                        </div>
                       </td>
                       <td>
                         <RichText
@@ -368,9 +372,11 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
                       ) : (
                         <td colSpan={colspan}></td>
                       )}
-                      <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                        <button className="btn ghost" style={btnMini} onClick={() => duplicateLine(i)} aria-label="Dupliquer" title="Dupliquer">⧉</button>
-                        <button className="btn ghost" style={btnMini} onClick={() => removeLine(i)} aria-label="Supprimer">✕</button>
+                      <td style={{ padding: '0.3rem' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <button className="btn ghost" style={btnMini} onClick={() => duplicateLine(i)} aria-label="Dupliquer" title="Dupliquer">⧉</button>
+                          <button className="btn ghost" style={btnMini} onClick={() => removeLine(i)} aria-label="Supprimer">✕</button>
+                        </div>
                       </td>
                     </tr>
                   ))}

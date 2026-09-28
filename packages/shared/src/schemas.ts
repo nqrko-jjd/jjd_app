@@ -222,6 +222,11 @@ export const planningEventInput = z.object({
   driverPersonId: z.string().nullish(), // legacy — conducteur unique, conservé pour les événements créés avant les conducteurs par véhicule
   departureAt: z.coerce.date().nullish(),
   departureFrom: z.string().trim().nullish(),
+  meetingOnSite: z.boolean().default(true),
+  meetingAddress: z.string().trim().nullish(),
+  meetingBox: z.string().trim().nullish(),
+  meetingPostalCode: z.string().trim().nullish(),
+  meetingCity: z.string().trim().nullish(),
   tasksNote: z.string().trim().nullish(),
   accessNote: z.string().trim().nullish(),
   equipmentIds: z.array(z.string()).default([]),

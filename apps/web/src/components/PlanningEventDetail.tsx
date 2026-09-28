@@ -89,10 +89,24 @@ export function PlanningEventDetail({
             </div>
           )}
 
-          {isMeeting && ev.departureFrom && (
+          {isMeeting && (
             <div className="plan-detail-section">
               <h3>Lieu du rendez-vous</h3>
-              <p style={{ margin: 0 }}>{ev.departureFrom}{ev.departureAt ? ` · ${hhmm(ev.departureAt)}` : ''}</p>
+              {ev.meetingOnSite ? (
+                <p style={{ margin: 0 }}>
+                  Sur place — {[
+                    [ev.worksite.address, ev.worksite.box && `bte ${ev.worksite.box}`].filter(Boolean).join(' '),
+                    [ev.worksite.postalCode, ev.worksite.city].filter(Boolean).join(' '),
+                  ].filter(Boolean).join(', ') || `${ev.worksite.ref} · ${ev.worksite.title}`}
+                </p>
+              ) : (
+                <p style={{ margin: 0 }}>
+                  {[
+                    [ev.meetingAddress, ev.meetingBox && `bte ${ev.meetingBox}`].filter(Boolean).join(' '),
+                    [ev.meetingPostalCode, ev.meetingCity].filter(Boolean).join(' '),
+                  ].filter(Boolean).join(', ') || <span className="muted">Adresse non renseignée</span>}
+                </p>
+              )}
             </div>
           )}
 

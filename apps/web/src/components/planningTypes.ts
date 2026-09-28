@@ -11,7 +11,7 @@ export interface PlanningEv {
   allDay: boolean;
   status: string;
   kind: string;
-  worksite: { id: string; ref: string; title: string; city: string | null; address?: string | null };
+  worksite: { id: string; ref: string; title: string; city: string | null; address?: string | null; box?: string | null; postalCode?: string | null };
   team: { id: string; name: string; color: string | null } | null;
   vehicles: { vehicle: PlanVehicleRef; driver: PlanPerson | null }[];
   assignments: { person: PlanPerson }[];
@@ -21,6 +21,11 @@ export interface PlanningEv {
   driverPerson: PlanPerson | null;
   departureAt: string | null;
   departureFrom: string | null;
+  meetingOnSite: boolean;
+  meetingAddress: string | null;
+  meetingBox: string | null;
+  meetingPostalCode: string | null;
+  meetingCity: string | null;
   tasksNote: string | null;
   accessNote: string | null;
   materialsNote: string | null;

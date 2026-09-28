@@ -25,7 +25,7 @@ async function syncToGoogle(eventId: string) {
   const ev = await prisma.planningEvent.findUnique({
     where: { id: eventId },
     include: {
-      worksite: { select: { ref: true, title: true, address: true, city: true } },
+      worksite: { select: { ref: true, title: true, address: true, box: true, postalCode: true, city: true } },
       team: { select: { name: true } },
       vehicles: { include: { vehicle: { select: { plate: true, model: true } }, driver: { select: { displayName: true, firstName: true } } } },
       assignments: { include: { person: { select: { displayName: true, firstName: true } } } },
@@ -51,10 +51,20 @@ async function syncToGoogle(eventId: string) {
     ev.materialsNote ? `Autre matériel : ${ev.materialsNote}` : null,
     ev.note ? `Instructions : ${ev.note}` : null,
   ].filter(Boolean);
+  // RDV ailleurs qu'au chantier : sa propre adresse plutôt que celle du chantier
+  const location = ev.kind === 'meeting' && !ev.meetingOnSite
+    ? [
+        [ev.meetingAddress, ev.meetingBox && `bte ${ev.meetingBox}`].filter(Boolean).join(' '),
+        [ev.meetingPostalCode, ev.meetingCity].filter(Boolean).join(' '),
+      ].filter(Boolean).join(', ')
+    : [
+        [ev.worksite.address, ev.worksite.box && `bte ${ev.worksite.box}`].filter(Boolean).join(' '),
+        [ev.worksite.postalCode, ev.worksite.city].filter(Boolean).join(' '),
+      ].filter(Boolean).join(', ');
   const gid = await upsertEvent(ev.googleEventId, {
-    summary: `${ev.worksite.ref} — ${ev.title || ev.worksite.title}`,
+    summary: `${ev.kind === 'meeting' ? 'RDV' : ev.worksite.ref} — ${ev.title || ev.worksite.title}`,
     description: lines.join('\n'),
-    location: [ev.worksite.address, ev.worksite.city].filter(Boolean).join(', ') || undefined,
+    location: location || undefined,
     start: ev.startAt,
     end: ev.endAt,
     allDay: ev.allDay,
@@ -77,7 +87,7 @@ planningRouter.get(
       where,
       orderBy: { startAt: 'asc' },
       include: {
-        worksite: { select: { id: true, ref: true, title: true, city: true, address: true, acp: { select: { photoThumbUrl: true } } } },
+        worksite: { select: { id: true, ref: true, title: true, city: true, address: true, box: true, postalCode: true, acp: { select: { photoThumbUrl: true } } } },
         team: { select: { id: true, name: true, color: true } },
         vehicles: {
           include: {
@@ -125,6 +135,11 @@ planningRouter.post(
         driverPersonId: d.driverPersonId ?? null,
         departureAt: d.departureAt ?? null,
         departureFrom: d.departureFrom ?? null,
+        meetingOnSite: d.meetingOnSite,
+        meetingAddress: d.meetingAddress ?? null,
+        meetingBox: d.meetingBox ?? null,
+        meetingPostalCode: d.meetingPostalCode ?? null,
+        meetingCity: d.meetingCity ?? null,
         tasksNote: d.tasksNote ?? null,
         accessNote: d.accessNote ?? null,
         materialsNote: d.materialsNote ?? null,
@@ -161,6 +176,11 @@ planningRouter.patch(
         driverPersonId: d.driverPersonId,
         departureAt: d.departureAt,
         departureFrom: d.departureFrom,
+        meetingOnSite: d.meetingOnSite ?? undefined,
+        meetingAddress: d.meetingAddress,
+        meetingBox: d.meetingBox,
+        meetingPostalCode: d.meetingPostalCode,
+        meetingCity: d.meetingCity,
         tasksNote: d.tasksNote,
         accessNote: d.accessNote,
         materialsNote: d.materialsNote,
@@ -280,7 +300,7 @@ async function withIncludes(id: string) {
   return prisma.planningEvent.findUnique({
     where: { id },
     include: {
-      worksite: { select: { id: true, ref: true, title: true, city: true, address: true } },
+      worksite: { select: { id: true, ref: true, title: true, city: true, address: true, box: true, postalCode: true } },
       team: true,
       vehicles: { include: { vehicle: true, driver: { select: { id: true, displayName: true, firstName: true } } } },
       assignments: { include: { person: { select: { id: true, displayName: true, firstName: true, phone: true } } } },

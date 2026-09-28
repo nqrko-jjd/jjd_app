@@ -2,6 +2,7 @@
 import { useMemo, useState } from 'react';
 import { api } from '@/lib/api';
 import { WorksitePicker, type WsPickerOption } from './WorksitePicker';
+import { AddressAutocomplete } from './AddressAutocomplete';
 import {
   PLANNING_EVENT_STATUSES, PLANNING_EVENT_STATUS_LABEL, PLANNING_EVENT_KINDS, PLANNING_EVENT_KIND_LABEL, PERSON_ROLE_LABEL,
 } from '@jjd/shared';
@@ -84,6 +85,11 @@ export function PlanningAssignmentModal({
     tasksNote: seed?.tasksNote ?? '',
     departureFrom: seed?.departureFrom ?? '',
     departureTime: seed?.departureAt ? toTimeInput(seed.departureAt) : '',
+    meetingOnSite: seed?.meetingOnSite ?? true,
+    meetingAddress: seed?.meetingAddress ?? '',
+    meetingBox: seed?.meetingBox ?? '',
+    meetingPostalCode: seed?.meetingPostalCode ?? '',
+    meetingCity: seed?.meetingCity ?? '',
     note: seed?.note ?? '',
     accessNote: seed?.accessNote ?? '',
   }));
@@ -182,6 +188,11 @@ export function PlanningAssignmentModal({
         equipmentIds: f.equipmentIds,
         tasksNote: f.tasksNote.trim() || null,
         departureFrom: f.departureFrom.trim() || null,
+        meetingOnSite: f.meetingOnSite,
+        meetingAddress: f.meetingOnSite ? null : f.meetingAddress.trim() || null,
+        meetingBox: f.meetingOnSite ? null : f.meetingBox.trim() || null,
+        meetingPostalCode: f.meetingOnSite ? null : f.meetingPostalCode.trim() || null,
+        meetingCity: f.meetingOnSite ? null : f.meetingCity.trim() || null,
         note: f.note.trim() || null,
         accessNote: f.accessNote.trim() || null,
       };
@@ -270,6 +281,47 @@ export function PlanningAssignmentModal({
                 placeholder={f.kind === 'meeting' ? 'RDV avec l’architecte Dupont' : ''}
               />
             </div>
+
+            {f.kind === 'meeting' && (
+              <div className="field full" style={{ marginBottom: '0.85rem' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 400 }}>
+                  <input
+                    type="checkbox"
+                    checked={f.meetingOnSite}
+                    onChange={(e) => setF({ ...f, meetingOnSite: e.target.checked })}
+                  />
+                  Sur place — à l’adresse du chantier
+                </label>
+                {!f.meetingOnSite && (
+                  <div style={{ marginTop: '0.6rem' }}>
+                    <div className="field full" style={{ marginBottom: '0.6rem' }}>
+                      <label>Adresse</label>
+                      <AddressAutocomplete
+                        value={f.meetingAddress}
+                        onChange={(v) => setF((cur) => ({ ...cur, meetingAddress: v }))}
+                        onSelect={(hit) => setF((cur) => ({ ...cur, meetingAddress: hit.street, meetingPostalCode: hit.postalCode, meetingCity: hit.city }))}
+                        placeholder="Rue et numéro — resto, bureau de l’architecte…"
+                      />
+                    </div>
+                    <div className="wiz-grid">
+                      <div className="field">
+                        <label>Boîte</label>
+                        <input className="input" value={f.meetingBox} onChange={(e) => setF({ ...f, meetingBox: e.target.value })} placeholder="ex. 4 (sans « bte »)" />
+                      </div>
+                      <div className="field">
+                        <label>Code postal</label>
+                        <input className="input" value={f.meetingPostalCode} onChange={(e) => setF({ ...f, meetingPostalCode: e.target.value })} />
+                      </div>
+                    </div>
+                    <div className="field" style={{ marginTop: '0.6rem' }}>
+                      <label>Ville</label>
+                      <input className="input" value={f.meetingCity} onChange={(e) => setF({ ...f, meetingCity: e.target.value })} />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="wiz-grid">
               <div className="field">
                 <label>Date</label>
@@ -401,16 +453,18 @@ export function PlanningAssignmentModal({
                 placeholder={f.kind === 'meeting' ? 'Suivi du chantier\nValidation des finitions\nDélais de livraison' : 'Protéger les parties communes\nPréparer les supports\nContrôler les finitions'}
               />
             </div>
-            <div className="wiz-grid" style={{ marginBottom: '0.85rem' }}>
-              <div className="field">
-                <label>{f.kind === 'meeting' ? 'Lieu du rendez-vous' : 'Rendez-vous / lieu de départ'}</label>
-                <input className="input" value={f.departureFrom} onChange={(e) => setF({ ...f, departureFrom: e.target.value })} placeholder={f.kind === 'meeting' ? 'Bureau de l’architecte · Bruxelles' : 'Dépôt · Ruisbroek'} />
+            {f.kind === 'intervention' && (
+              <div className="wiz-grid" style={{ marginBottom: '0.85rem' }}>
+                <div className="field">
+                  <label>Rendez-vous / lieu de départ</label>
+                  <input className="input" value={f.departureFrom} onChange={(e) => setF({ ...f, departureFrom: e.target.value })} placeholder="Dépôt · Ruisbroek" />
+                </div>
+                <div className="field">
+                  <label>Heure de départ</label>
+                  <input className="input" type="time" value={f.departureTime} onChange={(e) => setF({ ...f, departureTime: e.target.value })} />
+                </div>
               </div>
-              <div className="field">
-                <label>Heure de départ</label>
-                <input className="input" type="time" value={f.departureTime} onChange={(e) => setF({ ...f, departureTime: e.target.value })} />
-              </div>
-            </div>
+            )}
             <div className="field full" style={{ marginBottom: '0.85rem' }}>
               <label>{f.kind === 'meeting' ? 'Avec qui (architecte, client, fournisseur…)' : 'Contact sur place / coordination'}</label>
               <input className="input" value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} placeholder={f.kind === 'meeting' ? 'Arch. Dupont' : 'Julien · coordination JJD'} />

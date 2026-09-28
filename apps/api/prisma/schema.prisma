@@ -819,7 +819,14 @@ model PlanningEvent {
   driverPersonId String? // conducteur du véhicule réservé, si applicable
   driverPerson   Person? @relation("EventDriver", fields: [driverPersonId], references: [id])
   departureAt   DateTime? // heure de départ (dépôt / point de rendez-vous), distincte du début d'intervention
-  departureFrom String? // lieu de rendez-vous / départ
+  departureFrom String? // lieu de rendez-vous / départ (intervention)
+  // lieu d'un rendez-vous d'affaire : au chantier par défaut, sinon une adresse propre
+  // (restaurant, bureau de l'architecte…) — comme les autres adresses de l'appli
+  meetingOnSite     Boolean @default(true)
+  meetingAddress    String?
+  meetingBox        String?
+  meetingPostalCode String?
+  meetingCity       String?
   tasksNote     String? // travaux à réaliser sur ce créneau, une tâche par ligne
   accessNote    String? // accès, livraison, protections & consignes propres à ce créneau
   materialsNote String?

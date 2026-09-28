@@ -14,7 +14,6 @@ import { PlanningAbsenceModal } from '@/components/PlanningAbsenceModal';
 import { useSort, useColumnFilter, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
 import { PERSON_FIELDS } from '@/lib/forms';
-import { downloadCsv, pickAndImportCsv, summarizeImport } from '@/lib/csvIO';
 import {
   PERSON_ROLE_LABEL, PERSON_ROLES, WORKER_CONTRACT_LABEL, WORKSITE_STATUS_OPEN, ABSENCE_KIND_LABEL,
 } from '@jjd/shared';
@@ -134,16 +133,6 @@ function EquipeInner() {
         : { label: 'Réactiver', onClick: () => patch(p.id, { active: true }) },
     ];
   }
-  function exportCsv() {
-    downloadCsv(`/api/people/export.csv?${params}`, `equipe-${toDateInput(new Date())}.csv`);
-  }
-  function importCsv() {
-    pickAndImportCsv(
-      '/api/people/import',
-      (r) => { alert(summarizeImport(r)); reload(); },
-      (msg) => alert(`Échec de l’import : ${msg}`),
-    );
-  }
   const personAccessors = {
     name,
     role: (p: Person) => PERSON_ROLE_LABEL[p.role as keyof typeof PERSON_ROLE_LABEL] ?? p.role,
@@ -195,8 +184,6 @@ function EquipeInner() {
         sub={data ? `${people.filter((p) => p.active).length} actifs · clic droit pour les actions rapides` : undefined}
         action={
           <div className="row">
-            <button className="btn" onClick={exportCsv} title="Exporter la liste filtrée en CSV (éditable dans Excel)">⇩ Exporter CSV</button>
-            <button className="btn" onClick={importCsv} title="Réimporter un CSV/Excel corrigé (met à jour par id, crée les nouvelles fiches)">⇧ Importer</button>
             <button className="btn" onClick={() => setAbsenceModal({ prefill: { date: day } })}><UserX size={15} strokeWidth={2} /> Congé / formation</button>
             <button className="btn" onClick={() => setAssignmentModal({ prefill: { date: day } })}><CalendarPlus size={15} strokeWidth={2} /> Nouvelle affectation</button>
             <button className="btn primary" onClick={() => setCreating(true)}>+ Nouvelle personne</button>

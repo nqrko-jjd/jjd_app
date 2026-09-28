@@ -9,6 +9,7 @@ import type { Company } from '@/lib/doc-ui';
 import { VAT_RATES, ROLES, ROLE_LABEL, INTERNAL_ROLES } from '@jjd/shared';
 import { AddressAutocomplete } from '@/components/AddressAutocomplete';
 import { FormModal, type FieldDef } from '@/components/FormModal';
+import { downloadCsv, pickAndImportCsv, summarizeImport } from '@/lib/csvIO';
 
 interface PriceItem {
   id: string; ref: string | null; label: string; description: string | null;
@@ -17,23 +18,112 @@ interface PriceItem {
 
 export default function ParametresPage() {
   const { user } = useAuth();
-  const [tab, setTab] = useState<'company' | 'library' | 'pointage' | 'depot' | 'users'>('company');
+  const [tab, setTab] = useState<'company' | 'library' | 'pointage' | 'depot' | 'users' | 'io'>('company');
   const admin = user?.role === 'admin';
   return (
     <>
-      <PageHead eyebrow="Administration" title="Paramètres" sub="Société, bibliothèque de prix, dépôt, pointage, utilisateurs" />
+      <PageHead eyebrow="Administration" title="Paramètres" sub="Société, bibliothèque de prix, dépôt, pointage, utilisateurs, import/export" />
       <div className="seg" style={{ marginBottom: '1rem' }}>
         <button className={tab === 'company' ? 'on' : ''} onClick={() => setTab('company')}>Société</button>
         <button className={tab === 'depot' ? 'on' : ''} onClick={() => setTab('depot')}>Dépôt</button>
         <button className={tab === 'library' ? 'on' : ''} onClick={() => setTab('library')}>Bibliothèque de prix</button>
         <button className={tab === 'pointage' ? 'on' : ''} onClick={() => setTab('pointage')}>Pointage</button>
+        <button className={tab === 'io' ? 'on' : ''} onClick={() => setTab('io')}>Import / Export</button>
         {admin && <button className={tab === 'users' ? 'on' : ''} onClick={() => setTab('users')}>Utilisateurs</button>}
       </div>
       {tab === 'company' ? <CompanyForm canEdit={admin} />
         : tab === 'depot' ? <DepotForm canEdit={admin} />
         : tab === 'library' ? <PriceLibrary />
         : tab === 'users' ? <UsersTab />
+        : tab === 'io' ? <ImportExportTab />
         : <GeoForm canEdit={admin} />}
+    </>
+  );
+}
+
+interface IoEntity { key: string; label: string; exportPath: string; importPath?: string; hint: string }
+
+// les 5 entités qui suivent déjà la convention générique CSV export/import du backend
+// (table-io.ts) — les autres (banque, tarifs fournisseurs, PDF devis/factures, zip achats)
+// restent sur leur page d'origine : ce sont des flux liés à une sélection ou un fichier
+// précis, pas des tableaux qu'on exporte/corrige/réimporte en masse.
+const IO_ENTITIES: IoEntity[] = [
+  {
+    key: 'worksites', label: 'Chantiers',
+    exportPath: '/api/worksites/export.csv?archived=all',
+    importPath: '/api/worksites/import',
+    hint: 'Actifs et clôturés. Une ligne sans id connu n’est pas créée — l’import sert à corriger l’existant en masse.',
+  },
+  {
+    key: 'people', label: 'Équipe',
+    exportPath: '/api/people/export.csv',
+    importPath: '/api/people/import',
+    hint: 'Une ligne avec id connu met à jour la fiche ; sans id, une nouvelle fiche est créée.',
+  },
+  {
+    key: 'sales', label: 'Ventes',
+    exportPath: '/api/finance/sales/export.csv',
+    importPath: '/api/finance/sales/import',
+    hint: 'Grand livre des ventes.',
+  },
+  {
+    key: 'expenses', label: 'Achats / Dépenses',
+    exportPath: '/api/finance/expenses/export.csv',
+    importPath: '/api/finance/expenses/import',
+    hint: 'Grand livre des achats (hors pièces jointes — voir la page Achats pour le zip des PDF).',
+  },
+  {
+    key: 'timesheet', label: 'Pointage',
+    exportPath: '/api/timesheet/entries/export.csv',
+    importPath: '/api/timesheet/entries/import',
+    hint: 'Les lignes réimportées repassent en file de validation, quel que soit leur statut dans le fichier.',
+  },
+];
+
+function ImportExportTab() {
+  const [busy, setBusy] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  async function doExport(e: IoEntity) {
+    setBusy(e.key);
+    try {
+      await downloadCsv(e.exportPath, `${e.key}-${new Date().toISOString().slice(0, 10)}.csv`);
+    } catch (err) {
+      setMsg(`${e.label} — ${(err as Error).message}`);
+    } finally {
+      setBusy(null);
+    }
+  }
+  function doImport(e: IoEntity) {
+    if (!e.importPath) return;
+    pickAndImportCsv(
+      e.importPath,
+      (r) => setMsg(`${e.label} — ${summarizeImport(r)}`),
+      (message) => setMsg(`${e.label} — ${message}`),
+    );
+  }
+
+  return (
+    <>
+      {msg && (
+        <div className="card card-pad" style={{ marginBottom: '1rem', whiteSpace: 'pre-wrap' }}>
+          {msg} <button className="btn ghost" style={{ marginLeft: '0.5rem' }} onClick={() => setMsg(null)}>✕</button>
+        </div>
+      )}
+      <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '0.8rem' }}>
+        {IO_ENTITIES.map((e) => (
+          <div key={e.key} className="card card-pad">
+            <div className="section-title">{e.label}</div>
+            <p className="muted" style={{ fontSize: '0.84rem', marginTop: 0 }}>{e.hint}</p>
+            <div className="row" style={{ gap: '0.5rem', marginTop: '0.6rem' }}>
+              <button className="btn" disabled={busy === e.key} onClick={() => doExport(e)}>
+                {busy === e.key ? 'Export…' : '⇩ Exporter CSV'}
+              </button>
+              {e.importPath && <button className="btn" onClick={() => doImport(e)}>⇧ Importer</button>}
+            </div>
+          </div>
+        ))}
+      </div>
     </>
   );
 }

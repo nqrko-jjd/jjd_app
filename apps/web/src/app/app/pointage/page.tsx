@@ -8,7 +8,6 @@ import { PageHead, Money, formatDateBE, Kpi, Avatar } from '@/lib/ui';
 import { Clock, ClipboardCheck, Building2, Euro, AlertTriangle } from 'lucide-react';
 import { ComboBox } from '@/components/ComboBox';
 import { formatHours } from '@jjd/shared';
-import { downloadCsv, pickAndImportCsv, summarizeImport } from '@/lib/csvIO';
 
 interface Meta { people: { id: string; name: string }[]; worksites: { id: string; name: string }[] }
 
@@ -50,16 +49,6 @@ export default function PointagePage() {
     });
     reload();
   }
-  function exportCsv() {
-    downloadCsv('/api/timesheet/entries/export.csv', `horaires-${toDateInput(new Date())}.csv`);
-  }
-  function importCsv() {
-    pickAndImportCsv(
-      '/api/timesheet/entries/import',
-      (r) => { setFlash({ tone: 'success', text: summarizeImport(r) }); reload(); },
-      (msg) => setFlash({ tone: 'crit', text: `Échec de l’import : ${msg}` }),
-    );
-  }
 
   const items = data?.items ?? [];
   const totalHours = items.reduce((a, e) => a + (e.hours ?? 0), 0);
@@ -84,8 +73,6 @@ export default function PointagePage() {
         action={
           <div className="row">
             <button className="btn primary" onClick={() => setAdding(true)}><Clock size={15} strokeWidth={2} /> Saisir des heures</button>
-            <button className="btn" onClick={exportCsv} title="Exporter tous les pointages en CSV (éditable dans Excel)">⇩ Exporter CSV</button>
-            <button className="btn" onClick={importCsv} title="Réimporter un CSV/Excel corrigé (met à jour par id, crée les nouveaux pointages)">⇧ Importer</button>
             {items.length > 0 && <button className="btn" onClick={approveAll}>Tout valider{flagged ? ' (sauf hors zone)' : ''}</button>}
             <Link href="/app/pointage/decomptes" className="btn">Décomptes du mois →</Link>
           </div>

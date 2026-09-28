@@ -11,7 +11,6 @@ import { ContextMenu, useContextMenu, openActions, type MenuItem } from '@/compo
 import { PaginationBar } from '@/components/PaginationBar';
 import { useSort, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
-import { downloadCsv, pickAndImportCsv, summarizeImport } from '@/lib/csvIO';
 import {
   WORKSITE_STATUS_LABEL, WORKSITE_STATUSES, WORKSITE_PRIORITIES, WORKSITE_PRIORITY_LABEL,
   WORKSITE_SCOPES, WORKSITE_SCOPE_LABEL, WORKSITE_BILLING_MODES, WORKSITE_BILLING_MODE_LABEL,
@@ -115,17 +114,6 @@ function ChantiersInner() {
     reloadAll();
   }
 
-  function exportCsv() {
-    const p = new URLSearchParams(params);
-    downloadCsv(`/api/worksites/export.csv?${p}`, `chantiers-${new Date().toISOString().slice(0, 10)}.csv`);
-  }
-  function importCsv() {
-    pickAndImportCsv(
-      '/api/worksites/import',
-      (r) => { alert(summarizeImport(r)); reloadAll(); },
-      (msg) => alert(`Échec de l’import : ${msg}`),
-    );
-  }
 
   function rowMenu(w: WS): MenuItem[] {
     return [
@@ -189,8 +177,6 @@ function ChantiersInner() {
         action={
           kind === 'project' ? (
             <div className="row">
-              <button className="btn" onClick={exportCsv} title="Exporter la liste filtrée en CSV (éditable dans Excel)">⇩ Exporter CSV</button>
-              <button className="btn" onClick={importCsv} title="Réimporter un CSV/Excel corrigé (met à jour par id, ne crée pas de nouveau chantier)">⇧ Importer</button>
               <button className="btn primary" onClick={() => setCreating(true)}>+ Nouveau chantier</button>
               <button className="btn ghost" onClick={() => { setKind('overhead'); setStatus(''); }} title="Frais généraux (postes E-xx), distincts des chantiers clients">Charges →</button>
             </div>

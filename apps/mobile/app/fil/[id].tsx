@@ -5,12 +5,13 @@ import { Feather } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams, useFocusEffect, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { apiGet, apiSend, apiUploadPhoto, API_URL } from '@/lib/api';
+import { useSession } from '@/lib/session';
 import { Loading } from '@/lib/ui';
 import { T } from '@/lib/theme';
 
 interface Msg {
   id: string; kind: string; body: string | null; fileUrl: string | null; thumbUrl: string | null;
-  authorName: string | null; createdAt: string;
+  authorId: string | null; authorName: string | null; createdAt: string;
 }
 interface Data {
   thread: { closedAt: string | null };
@@ -25,6 +26,7 @@ function time(iso: string) {
 export default function Fil() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { user } = useSession();
   const [d, setD] = useState<Data | null>(null);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -118,29 +120,36 @@ export default function Fil() {
       />
       <ScrollView ref={scroll} contentContainerStyle={{ padding: 14, gap: 10 }}>
         {d.messages.length === 0 && <Text style={{ color: T.ink2 }}>Aucun message.</Text>}
-        {d.messages.map((m) => (
-          <View key={m.id} style={{ gap: 3 }}>
-            <Text style={{ fontSize: 11, color: T.ink3 }}>{m.kind === 'status' ? '●' : m.authorName} · {time(m.createdAt)}</Text>
-            {m.kind === 'photo' && m.fileUrl && (
-              <Image source={{ uri: `${API_URL}${m.thumbUrl ?? m.fileUrl}` }} style={s.photo} />
-            )}
-            {m.kind === 'video' && m.fileUrl && (
-              <Pressable style={[s.mediaLink, s.mediaLinkRow]} onPress={() => Linking.openURL(`${API_URL}${m.fileUrl}`)}>
-                <Feather name="play" size={14} color={T.primary} />
-                <Text style={{ color: T.primary, fontWeight: '600' }}>Voir la vidéo</Text>
-              </Pressable>
-            )}
-            {m.kind === 'file' && m.fileUrl && (
-              <Pressable style={[s.mediaLink, s.mediaLinkRow]} onPress={() => Linking.openURL(`${API_URL}${m.fileUrl}`)}>
-                <Feather name="paperclip" size={14} color={T.primary} />
-                <Text style={{ color: T.primary, fontWeight: '600' }}>{m.body || 'Fichier'}</Text>
-              </Pressable>
-            )}
-            {m.body && m.kind !== 'file' ? (
-              <Text style={m.kind === 'status' ? s.status : s.bubble}>{m.body}</Text>
-            ) : null}
-          </View>
-        ))}
+        {d.messages.map((m) => {
+          if (m.kind === 'status') {
+            return <Text key={m.id} style={s.status}>{m.body} · {time(m.createdAt)}</Text>;
+          }
+          const mine = m.authorId === user?.id;
+          return (
+            <View key={m.id} style={[s.msgCol, mine && s.msgColMine]}>
+              {!mine && <Text style={s.author}>{m.authorName}</Text>}
+              {m.kind === 'photo' && m.fileUrl && (
+                <Image source={{ uri: `${API_URL}${m.thumbUrl ?? m.fileUrl}` }} style={s.photo} />
+              )}
+              {m.kind === 'video' && m.fileUrl && (
+                <Pressable style={[s.mediaLink, s.mediaLinkRow]} onPress={() => Linking.openURL(`${API_URL}${m.fileUrl}`)}>
+                  <Feather name="play" size={14} color={T.primary} />
+                  <Text style={{ color: T.primary, fontWeight: '600' }}>Voir la vidéo</Text>
+                </Pressable>
+              )}
+              {m.kind === 'file' && m.fileUrl && (
+                <Pressable style={[s.mediaLink, s.mediaLinkRow]} onPress={() => Linking.openURL(`${API_URL}${m.fileUrl}`)}>
+                  <Feather name="paperclip" size={14} color={T.primary} />
+                  <Text style={{ color: T.primary, fontWeight: '600' }}>{m.body || 'Fichier'}</Text>
+                </Pressable>
+              )}
+              {m.body && m.kind !== 'file' ? (
+                <Text style={[s.bubble, mine && s.bubbleMine]}>{m.body}</Text>
+              ) : null}
+              <Text style={[s.timeTxt, mine && { alignSelf: 'flex-end' }]}>{time(m.createdAt)}</Text>
+            </View>
+          );
+        })}
       </ScrollView>
 
       {d.thread.closedAt ? (
@@ -163,11 +172,16 @@ export default function Fil() {
 }
 
 const s = StyleSheet.create({
+  msgCol: { alignItems: 'flex-start', gap: 2 },
+  msgColMine: { alignItems: 'flex-end' },
+  author: { fontSize: 11, color: T.ink3, marginLeft: 2 },
+  timeTxt: { fontSize: 10, color: T.ink3, marginHorizontal: 2 },
   photo: { width: 220, height: 165, borderRadius: 10, backgroundColor: T.surface2 },
   mediaLink: { backgroundColor: T.surface2, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, alignSelf: 'flex-start' },
   mediaLinkRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  bubble: { backgroundColor: T.surface, borderWidth: 1, borderColor: T.line, borderRadius: 10, padding: 10, alignSelf: 'flex-start', maxWidth: '85%', color: T.ink },
-  status: { fontStyle: 'italic', color: T.ink2, fontSize: 13 },
+  bubble: { backgroundColor: T.surface, borderWidth: 1, borderColor: T.line, borderRadius: 14, borderBottomLeftRadius: 4, padding: 10, alignSelf: 'flex-start', maxWidth: '85%', color: T.ink },
+  bubbleMine: { backgroundColor: T.primary, borderColor: T.primary, borderBottomLeftRadius: 14, borderBottomRightRadius: 4, color: '#fff' },
+  status: { fontStyle: 'italic', color: T.ink2, fontSize: 12, alignSelf: 'center' },
   closed: { padding: 10, alignItems: 'center', backgroundColor: T.okSoft },
   doneBtn: { padding: 12, alignItems: 'center', borderTopWidth: 1, borderTopColor: T.line, backgroundColor: T.surface },
   composer: { flexDirection: 'row', gap: 8, padding: 10, borderTopWidth: 1, borderTopColor: T.line, backgroundColor: T.surface, alignItems: 'center' },

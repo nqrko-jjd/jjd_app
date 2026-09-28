@@ -1,8 +1,10 @@
+import { useCallback, useEffect, useState } from 'react';
 import { Tabs } from 'expo-router';
 import { View, type ColorValue } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSession } from '@/lib/session';
+import { apiGet } from '@/lib/api';
 import { T } from '@/lib/theme';
 
 type FeatherName = keyof typeof Feather.glyphMap;
@@ -34,10 +36,27 @@ export default function TabsLayout() {
   const office = role === 'admin' || role === 'office';
   const staff = foreman || office;
 
+  const [unread, setUnread] = useState(0);
+  const loadUnread = useCallback(async () => {
+    try {
+      const r = await apiGet<{ internal: number }>('/api/messagerie/unread-count');
+      setUnread(r.internal);
+    } catch {
+      /* hors ligne */
+    }
+  }, []);
+  useEffect(() => {
+    loadUnread();
+    const t = setInterval(loadUnread, 20000);
+    return () => clearInterval(t);
+  }, [loadUnread]);
+
   const hide = { href: null as null } as const;
-  const tab = (title: string, ic: FeatherName) => ({
+  const tab = (title: string, ic: FeatherName, badge?: number) => ({
     title,
     tabBarIcon: ({ color, focused }: { color: ColorValue; focused: boolean }) => <Icon name={ic} color={color} focused={focused} />,
+    tabBarBadge: badge && badge > 0 ? badge : undefined,
+    tabBarBadgeStyle: { backgroundColor: T.gold, color: '#241c05', fontSize: 10, fontWeight: '800' as const },
   });
 
   return (
@@ -72,8 +91,9 @@ export default function TabsLayout() {
       <Tabs.Screen name="heures" options={worker ? tab('Mes heures', 'clock') : hide} />
       <Tabs.Screen name="dashboard" options={office ? tab('Bord', 'grid') : hide} />
       <Tabs.Screen name="chantiers" options={staff ? tab('Chantiers', 'home') : worker ? tab('Mes chantiers', 'home') : hide} />
-      <Tabs.Screen name="planning" options={staff ? tab('Planning', 'calendar') : hide} />
+      <Tabs.Screen name="planning" options={staff || worker ? tab('Planning', 'calendar') : hide} />
       <Tabs.Screen name="valider" options={staff ? tab('Valider', 'check-square') : hide} />
+      <Tabs.Screen name="messages" options={tab('Messages', 'message-circle', unread)} />
       <Tabs.Screen name="plus" options={staff ? tab('Plus', 'more-horizontal') : hide} />
       <Tabs.Screen name="compte" options={worker ? tab('Compte', 'user') : hide} />
     </Tabs>

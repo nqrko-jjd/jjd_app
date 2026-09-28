@@ -4,6 +4,7 @@ import { Text } from '@/lib/AppText';
 import { Feather } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { apiGet } from '@/lib/api';
+import { useSession } from '@/lib/session';
 import { Card, Muted, Loading } from '@/lib/ui';
 import { T } from '@/lib/theme';
 
@@ -24,6 +25,8 @@ function mondayOf(d: Date) {
 const DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
 
 export default function Planning() {
+  const { user, person } = useSession();
+  const mine = user?.role === 'worker';
   const [weekStart, setWeekStart] = useState(() => mondayOf(new Date()));
   const [items, setItems] = useState<Ev[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -31,13 +34,14 @@ export default function Planning() {
   const load = useCallback(async () => {
     const from = weekStart.toISOString();
     const to = new Date(weekStart.getTime() + 7 * 86400000).toISOString();
+    const personParam = mine && person?.id ? `&personId=${person.id}` : '';
     try {
-      const r = await apiGet<{ items: Ev[] }>(`/api/planning?from=${from}&to=${to}`);
+      const r = await apiGet<{ items: Ev[] }>(`/api/planning?from=${from}&to=${to}${personParam}`);
       setItems(r.items);
     } catch {
       /* hors ligne */
     }
-  }, [weekStart]);
+  }, [weekStart, mine, person?.id]);
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const byDay = useMemo(() => {
@@ -57,6 +61,7 @@ export default function Planning() {
       contentContainerStyle={{ padding: 16, gap: 12 }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} />}
     >
+      <Text style={s.title}>{mine ? 'Mon planning' : 'Planning'}</Text>
       <View style={s.nav}>
         <Pressable style={s.navBtn} onPress={() => setWeekStart(new Date(weekStart.getTime() - 7 * 86400000))}><Feather name="chevron-left" size={18} color={T.ink} /></Pressable>
         <Text style={s.week}>
@@ -108,6 +113,7 @@ export default function Planning() {
 }
 
 const s = StyleSheet.create({
+  title: { fontSize: 22, fontWeight: '800', color: T.ink, marginBottom: 4 },
   nav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   navBtn: { borderWidth: 1, borderColor: T.line, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 6, backgroundColor: T.surface },
   week: { fontWeight: '600', color: T.ink },

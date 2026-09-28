@@ -59,6 +59,10 @@ interface BankTx {
   nameMatch?: boolean;
 }
 interface BankMatch extends BankTx { matchId: string }
+interface PurchaseCandidate {
+  code: string; description: string; contactId: string; contactName: string;
+  occurrences: { ledgerEntryId: string; date: string | null; docNumber: string | null; qty: number }[];
+}
 
 function toDateInput(iso: string | null): string {
   if (!iso) return '';
@@ -90,6 +94,7 @@ function AchatsInner() {
   const [pageSize, setPageSize] = useState(100);
   const [edit, setEdit] = useState<Expense | 'new' | { prefillFrom: Expense } | null>(null);
   const [linking, setLinking] = useState<Expense | null>(null);
+  const [showCandidates, setShowCandidates] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [exporting, setExporting] = useState(false);
   const ctx = useContextMenu<Expense>();
@@ -294,6 +299,7 @@ function AchatsInner() {
           onLinked={() => { setLinking(null); reload(); }}
         />
       )}
+      {showCandidates && <PurchaseCandidatesModal onClose={() => setShowCandidates(false)} />}
 
       <PageHead
         eyebrow="Comptabilité"
@@ -331,6 +337,13 @@ function AchatsInner() {
               title="Recherche dans les PDF déjà reçus les références produit déjà enregistrées sur vos articles de stock — alimente l'historique d'achat de chaque article"
             >
               {scanningRefs ? 'Recherche…' : '🔎 Détecter les réf. produits'}
+            </button>
+            <button
+              className="btn"
+              onClick={() => setShowCandidates(true)}
+              title="Repère les articles qui reviennent souvent sur vos factures mais n'ont pas encore de fiche stock"
+            >
+              📈 Articles récurrents non suivis
             </button>
             <button className="btn" onClick={exportCsv} title="Exporter la liste filtrée en CSV (éditable dans Excel)">⇩ Exporter CSV</button>
             <button className="btn" onClick={importCsv} title="Réimporter un CSV/Excel corrigé (met à jour par id, crée les nouvelles lignes)">⇧ Importer</button>
@@ -1030,6 +1043,72 @@ function LinkSlipModal({ slip, onClose, onLinked }: { slip: Expense; onClose: ()
         </div>
         <div className="modal-foot">
           <button type="button" className="btn" onClick={onClose}>Annuler</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Articles achetés souvent mais pas encore suivis en stock — lecture best-effort des factures
+ * déjà reçues (voir lib/purchase-candidates.ts côté API) : juste un repère à vérifier, rien n'est
+ * créé automatiquement.
+ */
+function PurchaseCandidatesModal({ onClose }: { onClose: () => void }) {
+  const [items, setItems] = useState<PurchaseCandidate[] | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    api<{ items: PurchaseCandidate[] }>('/api/finance/expenses/purchase-candidates')
+      .then((r) => setItems(r.items))
+      .catch((e) => setErr((e as Error).message));
+  }, []);
+
+  return (
+    <div className="modal-scrim" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 680 }} onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <h2>Articles récurrents non suivis</h2>
+          <button type="button" className="btn ghost" onClick={onClose} aria-label="Fermer">✕</button>
+        </div>
+        <div className="modal-body" style={{ display: 'block', maxHeight: '70vh', overflowY: 'auto' }}>
+          <p className="muted" style={{ marginTop: 0, fontSize: '0.85rem' }}>
+            Lecture des factures déjà reçues, uniquement celles dont la mise en page est reconnaissable — une mise en page inconnue
+            ne remonte simplement rien, plutôt que de risquer une lecture fausse. Vérifiez la facture avant de créer l’article.
+          </p>
+          {err && <div className="badge crit" style={{ padding: '0.5rem 0.7rem' }}>{err}</div>}
+          {!items && !err ? (
+            <SkeletonRows />
+          ) : items && items.length === 0 ? (
+            <p className="muted">Rien détecté pour l’instant — revenez après avoir reçu plus de factures, ou vérifiez que le fournisseur en question a une mise en page de facture avec un code article en début de ligne.</p>
+          ) : items ? (
+            <div className="tbl-wrap">
+              <table className="tbl">
+                <thead><tr><th>Article</th><th>Fournisseur</th><th>Réf.</th><th style={{ textAlign: 'right' }}>Factures</th><th></th></tr></thead>
+                <tbody>
+                  {items.map((c) => (
+                    <tr key={`${c.contactId}-${c.code}`}>
+                      <td>{c.description}</td>
+                      <td>{c.contactName}</td>
+                      <td className="mono">{c.code}</td>
+                      <td style={{ textAlign: 'right' }}>{c.occurrences.length}</td>
+                      <td>
+                        <a
+                          href={`/app/achats?q=${encodeURIComponent(c.occurrences[0]!.docNumber ?? c.code)}`}
+                          target="_blank" rel="noreferrer" className="hint"
+                        >
+                          Voir →
+                        </a>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+        </div>
+        <div className="modal-foot">
+          <button type="button" className="btn" onClick={onClose}>Fermer</button>
         </div>
       </div>
     </div>

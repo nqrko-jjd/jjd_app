@@ -20,6 +20,7 @@ import { extractDocumentInfo } from '../lib/document-extract.js';
 import { toCsv, readTableBuffer, pick } from '../lib/table-io.js';
 import { invoiceMailboxConfigured, syncInvoiceMailbox, reprocessEmailEntries, scanInvoiceMailboxHistory, PROCESSED_MAILBOX } from '../lib/invoice-mailbox.js';
 import { scanAllEntriesForRefs } from '../lib/purchase-ref-scan.js';
+import { findPurchaseCandidates } from '../lib/purchase-candidates.js';
 
 export const expensesRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
@@ -518,6 +519,19 @@ expensesRouter.post(
   asyncHandler(async (_req, res) => {
     const stats = await scanAllEntriesForRefs();
     res.json(stats);
+  }),
+);
+
+/**
+ * Repère, dans les factures d'achat déjà reçues, les articles qui reviennent souvent mais ne
+ * sont pas encore suivis en stock — best-effort (voir lib/purchase-candidates.ts), à vérifier
+ * avant de créer l'article : ne crée jamais rien tout seul.
+ */
+expensesRouter.get(
+  '/purchase-candidates',
+  requireAuth(...OFFICE),
+  asyncHandler(async (_req, res) => {
+    res.json({ items: await findPurchaseCandidates() });
   }),
 );
 

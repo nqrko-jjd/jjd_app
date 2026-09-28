@@ -3,6 +3,7 @@ import { Warehouse, Layers, AlertTriangle, Package } from 'lucide-react';
 import { SkeletonRows, EmptyState } from '@/components/States';
 import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -35,6 +36,7 @@ const factorOf = (it: StockItemFull, unit: string | null) => (!unit || unit.toLo
 
 export default function StockDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const router = useRouter();
   const { user } = useAuth();
   const canManage = user?.role === 'admin' || user?.role === 'office' || user?.role === 'storekeeper';
   const canMove = canManage || user?.role === 'foreman';
@@ -87,6 +89,21 @@ export default function StockDetail({ params }: { params: Promise<{ id: string }
     await api(`/api/stock/items/${id}/suppliers/${s.id}`, { method: 'DELETE' });
     reload();
   }
+  async function removeItem() {
+    if (!item) return;
+    if (!confirm(`Supprimer définitivement « ${item.name} » ? Cette action est irréversible.`)) return;
+    try {
+      const r = await api<{ deactivated?: boolean } | null>(`/api/stock/items/${id}`, { method: 'DELETE' });
+      if (r?.deactivated) {
+        alert('Cet article a déjà un historique (mouvements, préparation ou commande) : il a été désactivé plutôt que supprimé.');
+        reload();
+      } else {
+        router.push('/app/stock');
+      }
+    } catch (e) {
+      alert((e as Error).message);
+    }
+  }
 
   return (
     <>
@@ -105,7 +122,12 @@ export default function StockDetail({ params }: { params: Promise<{ id: string }
 
       <div className="row" style={{ justifyContent: 'space-between', marginBottom: '0.9rem', flexWrap: 'wrap' }}>
         <Link href="/app/stock" className="btn ghost">← Stock</Link>
-        {canManage && <button className="btn" onClick={() => setEditing(true)}>Modifier l’article</button>}
+        {canManage && (
+          <div className="row">
+            <button className="btn" onClick={() => setEditing(true)}>Modifier l’article</button>
+            <button className="btn" style={{ color: 'var(--crit)' }} onClick={removeItem}>Supprimer</button>
+          </div>
+        )}
       </div>
 
       <div className="row" style={{ alignItems: 'flex-start', gap: '1.2rem', flexWrap: 'wrap' }}>

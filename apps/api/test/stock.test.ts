@@ -125,12 +125,28 @@ test('historique des mouvements : filtrable par article et par chantier, paginé
   assert.ok(byWs.body.items.every((m) => m.worksiteId === worksiteId));
 });
 
-test('désactivation d’un article (jamais de suppression)', async () => {
-  const r = await jf<{ item: { active: boolean } }>(`/api/stock/items/${itemId}`, { method: 'DELETE' });
+test('suppression d’un article avec historique : désactivé plutôt que supprimé', async () => {
+  const r = await jf<{ item: { active: boolean }; deactivated: boolean }>(`/api/stock/items/${itemId}`, { method: 'DELETE' });
   assert.equal(r.status, 200);
   assert.equal(r.body.item.active, false);
+  assert.equal(r.body.deactivated, true);
   // ré-activer pour le cleanup normal (after() le supprime pour de bon)
   await jf(`/api/stock/items/${itemId}`, { method: 'PATCH', body: JSON.stringify({}) });
+});
+
+test('suppression d’un article sans historique : supprimé pour de bon', async () => {
+  const created = await jf<{ item: { id: string } }>('/api/stock/items', {
+    method: 'POST',
+    body: JSON.stringify({ name: 'Article jamais utilisé — test', unit: 'u' }),
+  });
+  assert.equal(created.status, 201);
+  const id = created.body.item.id;
+
+  const del = await jf(`/api/stock/items/${id}`, { method: 'DELETE' });
+  assert.equal(del.status, 204);
+
+  const check = await jf(`/api/stock/items/${id}`);
+  assert.equal(check.status, 404);
 });
 
 test('article multi-unités / multi-fournisseurs : sac = 25 kg, entrée en sacs, prix par fournisseur', async () => {
@@ -269,6 +285,27 @@ test('article : nom complet + marque + réf. fabricant, retrouvés par la recher
     assert.equal(upd.body.item.model, null);
   } finally {
     if (id) await prisma.stockItem.delete({ where: { id } }).catch(() => {});
+  }
+});
+
+test('article : retrouvé par la référence chez le fournisseur (pas la nôtre)', async () => {
+  const supplier = await prisma.contact.create({ data: { name: 'Four. Vector — test', normalizedName: 'four vector test', type: 'supplier' } });
+  let id = '';
+  try {
+    const c = await jf<{ item: { id: string } }>('/api/stock/items', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: 'Colle carrelage — test', unit: 'sac',
+        suppliers: [{ contactId: supplier.id, supplierRef: 'Vector 3' }],
+      }),
+    });
+    assert.equal(c.status, 201);
+    id = c.body.item.id;
+    const byRef = await jf<{ items: { id: string }[] }>('/api/stock/items?q=vector%203');
+    assert.ok(byRef.body.items.some((i) => i.id === id));
+  } finally {
+    if (id) await prisma.stockItem.delete({ where: { id } }).catch(() => {});
+    await prisma.contact.delete({ where: { id: supplier.id } }).catch(() => {});
   }
 });
 

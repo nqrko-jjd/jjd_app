@@ -69,7 +69,17 @@ stockRouter.get(
     const q = qRaw?.toLowerCase();
     const where: Record<string, unknown> = {};
     if (active !== '0') where.active = true; // par défaut : masque les articles désactivés
-    if (q) where.OR = [{ name: { contains: q, ...insensitive } }, { category: { contains: q, ...insensitive } }, { ref: { contains: q, ...insensitive } }, { brand: { contains: q, ...insensitive } }, { model: { contains: q, ...insensitive } }];
+    if (q) {
+      where.OR = [
+        { name: { contains: q, ...insensitive } },
+        { category: { contains: q, ...insensitive } },
+        { ref: { contains: q, ...insensitive } },
+        { brand: { contains: q, ...insensitive } },
+        { model: { contains: q, ...insensitive } },
+        // ex. « Vector 3 » : la référence chez le fournisseur, pas la nôtre
+        { suppliers: { some: { supplierRef: { contains: q, ...insensitive } } } },
+      ];
+    }
     const items = await prisma.stockItem.findMany({ where, orderBy: { name: 'asc' }, include: itemInclude });
     res.json({ items: items.map((i) => shapeItem(i, req.user!.role)) });
   }),
@@ -169,13 +179,28 @@ stockRouter.patch(
   }),
 );
 
-/** Désactive un article (jamais de suppression : l'historique des mouvements doit rester lisible). */
+/**
+ * Supprime un article — sauf s'il a déjà un historique (mouvements, préparation ou commande
+ * fournisseur) : dans ce cas on le désactive plutôt, pour garder ce grand livre lisible.
+ */
 stockRouter.delete(
   '/items/:id',
   requireAuth(...STOCK_MANAGE),
   asyncHandler(async (req, res) => {
-    const item = await prisma.stockItem.update({ where: { id: req.params.id }, data: { active: false } });
-    res.json({ item });
+    const id = req.params.id!;
+    const item = await prisma.stockItem.findUnique({ where: { id }, select: { id: true } });
+    if (!item) throw new HttpError(404, 'Article introuvable');
+    const [movementCount, orderLineCount, purchaseLineCount] = await Promise.all([
+      prisma.stockMovement.count({ where: { stockItemId: id } }),
+      prisma.stockOrderLine.count({ where: { stockItemId: id } }),
+      prisma.purchaseOrderLine.count({ where: { stockItemId: id } }),
+    ]);
+    if (movementCount || orderLineCount || purchaseLineCount) {
+      const deactivated = await prisma.stockItem.update({ where: { id }, data: { active: false } });
+      return res.json({ item: deactivated, deactivated: true });
+    }
+    await prisma.stockItem.delete({ where: { id } });
+    res.status(204).end();
   }),
 );
 

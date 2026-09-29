@@ -228,7 +228,7 @@ export function PlanningAssignmentModal({
   }
 
   return (
-    <div className="modal-scrim" onClick={onClose}>
+    <div className="modal-scrim">
       <div className="modal wiz" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h2>{existing ? (f.kind === 'meeting' ? 'Modifier le rendez-vous' : 'Modifier l’affectation') : duplicateFrom ? 'Dupliquer l’affectation' : 'Nouvel événement'}</h2>

@@ -47,7 +47,7 @@ export function PlanningAbsenceModal({
   }
 
   return (
-    <div className="modal-scrim" onClick={onClose}>
+    <div className="modal-scrim">
       <form className="modal" style={{ maxWidth: 460 }} onClick={(e) => e.stopPropagation()} onSubmit={(e) => { e.preventDefault(); submit(); }}>
         <div className="modal-head"><h2>{existing ? 'Modifier l’absence' : 'Congé / formation'}</h2><button type="button" className="btn ghost" onClick={onClose}>✕</button></div>
         <div className="modal-body">

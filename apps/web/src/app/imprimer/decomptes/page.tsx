@@ -52,19 +52,20 @@ function Inner() {
 
         <table className="lines">
           <thead>
-            <tr><th>Personne</th><th className="num">Jours</th><th className="num">Montant</th></tr>
+            <tr><th>Personne</th><th className="num">Jours</th><th className="num">Tarif jour</th><th className="num">Montant</th></tr>
           </thead>
           <tbody>
             {team.rows.map((r) => (
               <tr key={r.personId}>
                 <td>{r.name}</td>
                 <td className="num">{r.days}</td>
+                <td className="num">{r.days > 0 ? fmtEur(r.payoutAmount / r.days) : '—'}</td>
                 <td className="num">{fmtEur(r.payoutAmount)}</td>
               </tr>
             ))}
           </tbody>
           <tfoot>
-            <tr><td>Total</td><td className="num">{team.rows.reduce((s, r) => s + r.days, 0)}</td><td className="num">{fmtEur(team.totalPayoutAmount)}</td></tr>
+            <tr><td>Total</td><td className="num">{team.rows.reduce((s, r) => s + r.days, 0)}</td><td></td><td className="num">{fmtEur(team.totalPayoutAmount)}</td></tr>
           </tfoot>
         </table>
       </div>

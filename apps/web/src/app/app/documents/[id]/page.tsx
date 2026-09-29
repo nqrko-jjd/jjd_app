@@ -605,7 +605,7 @@ function TasksFromLinesModal({
   }
 
   return (
-    <div className="modal-scrim" onClick={onClose}>
+    <div className="modal-scrim">
       <div className="modal" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h2>Créer des tâches depuis ce devis</h2>

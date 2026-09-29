@@ -243,7 +243,7 @@ function NewOrderModal({ onClose, onCreated }: { onClose: () => void; onCreated:
   }
 
   return (
-    <div className="modal-scrim" onClick={onClose}>
+    <div className="modal-scrim">
       <form className="modal wiz" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
         <div className="modal-head">
           <h2>Nouvelle préparation de commande</h2>

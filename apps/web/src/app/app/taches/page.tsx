@@ -193,7 +193,7 @@ function TaskDetailModal({
 }) {
   const badge = dueLabel(t.dueOn, t.status);
   return (
-    <div className="modal-scrim" onClick={onClose}>
+    <div className="modal-scrim">
       <div className="modal" style={{ maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h2>Tâche{t.worksite ? ` · ${t.worksite.ref}` : ''}</h2>
@@ -281,7 +281,7 @@ function TaskFormModal({
   }
 
   return (
-    <div className="modal-scrim" onClick={onClose}>
+    <div className="modal-scrim">
       <form className="modal" style={{ maxWidth: 540 }} onClick={(e) => e.stopPropagation()} onSubmit={(e) => { e.preventDefault(); submit(false); }}>
         <div className="modal-head">
           <h2>{existing ? 'Modifier la tâche' : 'Nouvelle tâche'}</h2>

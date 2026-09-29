@@ -273,7 +273,7 @@ function TimeEntryModal({ onClose, onDone }: { onClose: () => void; onDone: () =
   }
 
   return (
-    <div className="modal-scrim" onClick={onClose}>
+    <div className="modal-scrim">
       <form className="modal wiz" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
         <div className="modal-head">
           <h2>Saisir des heures</h2>

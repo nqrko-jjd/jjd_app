@@ -744,7 +744,7 @@ function ExpenseModal({
   }
 
   return (
-    <div className="modal-scrim" onClick={onClose}>
+    <div className="modal-scrim">
       <form className="modal" style={{ maxWidth: 640 }} onClick={(e) => e.stopPropagation()} onSubmit={submit}>
         <div className="modal-head">
           <h2>{expense ? 'Modifier la dépense' : prefillFrom ? `Facture reçue — bordereau ${prefillFrom.docNumber ?? ''}` : 'Nouvelle dépense'}</h2>
@@ -991,7 +991,7 @@ function LinkSlipModal({ slip, onClose, onLinked }: { slip: Expense; onClose: ()
   }
 
   return (
-    <div className="modal-scrim" onClick={onClose}>
+    <div className="modal-scrim">
       <div className="modal" style={{ maxWidth: 560 }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h2>Lier le bordereau {slip.docNumber ?? ''} à une facture</h2>
@@ -1052,7 +1052,7 @@ function PurchaseCandidatesModal({ onClose }: { onClose: () => void }) {
   }, []);
 
   return (
-    <div className="modal-scrim" onClick={onClose}>
+    <div className="modal-scrim">
       <div className="modal" style={{ maxWidth: 680 }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h2>Articles récurrents non suivis</h2>

@@ -249,7 +249,7 @@ function EditEntryModal({ entry, onClose, onDone }: { entry: DetailEntry; onClos
   }
 
   return (
-    <div className="modal-scrim" onClick={onClose}>
+    <div className="modal-scrim">
       <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={submit} style={{ maxWidth: 440 }}>
         <div className="modal-head">
           <h2>Modifier le pointage</h2>

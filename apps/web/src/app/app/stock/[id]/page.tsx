@@ -351,7 +351,7 @@ function SupplierModal({ item, link, onClose, onDone }: { item: StockItemFull; l
 
   const f = factorOf(item, unitName || null);
   return (
-    <div className="modal-scrim" onClick={onClose}>
+    <div className="modal-scrim">
       <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
         <div className="modal-head">
           <h2>{link ? 'Modifier le fournisseur' : 'Ajouter un fournisseur'}</h2>
@@ -459,7 +459,7 @@ function MovementModal({
   }
 
   return (
-    <div className="modal-scrim" onClick={onClose}>
+    <div className="modal-scrim">
       <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
         <div className="modal-head">
           <h2>{item.name}</h2>

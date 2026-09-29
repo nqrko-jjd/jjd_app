@@ -169,7 +169,7 @@ function NewOrderModal({ onClose, onCreated }: { onClose: () => void; onCreated:
   }
 
   return (
-    <div className="modal-scrim" onClick={onClose}>
+    <div className="modal-scrim">
       <form className="modal" style={{ maxWidth: 900 }} onClick={(e) => e.stopPropagation()} onSubmit={(e) => submit(e, 'ordered')}>
         <div className="modal-head">
           <h2>Nouvelle commande fournisseur</h2>

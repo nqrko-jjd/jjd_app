@@ -113,7 +113,7 @@ export function StockItemModal({ item, onClose, onSaved }: { item?: StockItemFul
   }
 
   return (
-    <div className="modal-scrim" onClick={onClose}>
+    <div className="modal-scrim">
       <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
         <div className="modal-head">
           <h2>{item ? `Modifier ${item.name}` : 'Nouvel article'}</h2>

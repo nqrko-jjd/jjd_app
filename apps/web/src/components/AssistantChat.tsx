@@ -45,7 +45,7 @@ export function AssistantChat({ open, onClose }: { open: boolean; onClose: () =>
 
   return (
     <>
-      <div className="modal-scrim" onClick={onClose} />
+      <div className="modal-scrim" />
       <div className="assistant-panel">
         <div className="modal-head">
           <h2>Assistant IA</h2>

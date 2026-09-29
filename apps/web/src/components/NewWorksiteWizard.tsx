@@ -146,7 +146,7 @@ export function NewWorksiteWizard({
   }
 
   return (
-    <div className="modal-scrim" onClick={onClose}>
+    <div className="modal-scrim">
       <div className="modal wiz" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h2>Nouveau chantier</h2>

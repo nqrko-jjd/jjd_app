@@ -62,6 +62,11 @@ services:
       INVOICES_IMAP_PORT: ${INVOICES_IMAP_PORT:-993}
       INVOICES_IMAP_USER: ${INVOICES_IMAP_USER:-}
       INVOICES_IMAP_PASSWORD: ${INVOICES_IMAP_PASSWORD:-}
+      # Boîte mail principale (info@/david@…) — détection de demandes clients -> Pipeline, laisser vide si non utilisée
+      LEADS_IMAP_HOST: ${LEADS_IMAP_HOST:-}
+      LEADS_IMAP_PORT: ${LEADS_IMAP_PORT:-993}
+      LEADS_IMAP_USER: ${LEADS_IMAP_USER:-}
+      LEADS_IMAP_PASSWORD: ${LEADS_IMAP_PASSWORD:-}
       # Notifications Web Push (mentions @) — laisser vide si non configuré
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}

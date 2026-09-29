@@ -537,6 +537,19 @@ model CrmOpportunity {
   @@index([nextActionOn])
 }
 
+/// Trace des mails déjà passés en revue par la synchro boîte principale -> Pipeline (voir
+/// lib/lead-mailbox.ts), qu'ils aient donné une piste ou non — sert uniquement à ne jamais
+/// ré-analyser deux fois le même message (aucune marque n'est posée sur le mail lui-même :
+/// pas de \Seen, pas de déplacement, cette boîte reste celle de l'utilisateur).
+model ProcessedEmail {
+  id            String   @id @default(cuid())
+  messageId     String   @unique
+  subject       String?
+  becameLead    Boolean  @default(false)
+  opportunityId String?
+  createdAt     DateTime @default(now())
+}
+
 /// Photo jointe à une demande d'intervention (déposée via le portail avant même la création
 /// du chantier) — même schéma que ReportPhoto.
 model OpportunityPhoto {

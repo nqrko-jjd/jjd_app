@@ -3,6 +3,7 @@ import { createApp } from './app.js';
 import { env } from './env.js';
 import { prisma } from './db.js';
 import { invoiceMailboxConfigured, syncInvoiceMailbox } from './lib/invoice-mailbox.js';
+import { leadMailboxConfigured, syncLeadMailbox } from './lib/lead-mailbox.js';
 import { markOverdueInvoices, renumberFaDepositInvoices } from './lib/documents.js';
 import { backfillBankMatches } from './lib/bank-match.js';
 
@@ -109,4 +110,25 @@ if (invoiceMailboxConfigured()) {
   };
   setTimeout(runSync, 15_000);
   setInterval(runSync, 20 * 60_000);
+}
+
+/**
+ * Boîte mail principale (info@/david@…) : sans config, `leadMailboxConfigured()` renvoie
+ * false et rien ne se lance — voir lib/lead-mailbox.ts. Ne modifie jamais la boîte
+ * (pas de \Seen, pas de déplacement) : décalage de démarrage différent de la boîte factures
+ * pour ne pas les faire démarrer à la même seconde.
+ */
+if (leadMailboxConfigured()) {
+  const runLeadSync = () => {
+    syncLeadMailbox()
+      .then((stats) => {
+        if (stats.leadsCreated || stats.errors.length) {
+          // eslint-disable-next-line no-console
+          console.log(`[leads-mailbox] ${stats.messagesSeen} message(s) analysé(s), ${stats.leadsCreated} piste(s) créée(s)${stats.errors.length ? `, ${stats.errors.length} erreur(s) : ${stats.errors.join(' | ')}` : ''}`);
+        }
+      })
+      .catch((e) => console.error('[leads-mailbox] échec de synchronisation :', e.message));
+  };
+  setTimeout(runLeadSync, 30_000);
+  setInterval(runLeadSync, 20 * 60_000);
 }

@@ -88,6 +88,18 @@ export const env = {
   },
 
   /**
+   * Boîte mail principale (ex. info@/david@jjd-consult.be) — lue en IMAP en lecture seule
+   * (jamais de \Seen, jamais de déplacement, voir lib/lead-mailbox.ts) pour repérer les
+   * demandes clients et créer des pistes Pipeline "à vérifier". Sans config = désactivé.
+   */
+  leadsMailbox: {
+    host: process.env.LEADS_IMAP_HOST ?? '',
+    port: Number(process.env.LEADS_IMAP_PORT ?? 993),
+    user: process.env.LEADS_IMAP_USER ?? '',
+    password: process.env.LEADS_IMAP_PASSWORD ?? '',
+  },
+
+  /**
    * Notifications Web Push (navigateur) — ex. "tu es mentionné dans le fil de chantier X".
    * Paire de clés VAPID générée une fois (web-push generateVAPIDKeys()), jamais rotée sans
    * désabonner tout le monde. Sans clés = fonctionnalité désactivée (pas de notification).

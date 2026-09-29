@@ -15,6 +15,9 @@ const CRM_SOURCE_OPTIONS = [
   { value: 'Client existant', label: 'Client existant' },
   { value: 'Recommandation', label: 'Recommandation' },
   { value: 'Site internet', label: 'Site internet' },
+  // posée automatiquement par la détection IA sur la boîte mail — jamais choisie à la main ;
+  // listée ici pour que le formulaire d'édition l'affiche correctement (pas de valeur "orpheline").
+  { value: 'email-ia', label: '🤖 Détectée par mail (IA)' },
 ];
 
 interface Opp {
@@ -118,6 +121,11 @@ function CrmInner() {
                   <div key={o.id} className="kanban-card" style={{ cursor: 'pointer' }} onClick={() => setEditing(o)}>
                     {(o.contact?.name ?? o.acp?.name) && <div className="eyebrow-mini">{o.contact?.name ?? o.acp?.name}</div>}
                     <div className="title">{o.title}</div>
+                    {o.source === 'email-ia' && (
+                      <span className="badge plain" style={{ fontSize: '0.68rem', marginTop: '0.2rem' }} title="Créée automatiquement depuis un mail par l'IA — à vérifier avant de la traiter comme confirmée">
+                        🤖 Détectée par mail, à vérifier
+                      </span>
+                    )}
                     {(o.urgent || o.problemType || o.unitLabel) && (
                       <div className="row" style={{ gap: '0.3rem', flexWrap: 'wrap', marginTop: '0.3rem' }}>
                         {o.urgent && <span className="badge crit" style={{ fontSize: '0.68rem' }}>Urgent</span>}

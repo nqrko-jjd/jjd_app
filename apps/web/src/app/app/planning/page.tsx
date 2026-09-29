@@ -97,8 +97,22 @@ export default function PlanningPage() {
   const from = days[0]!.toISOString();
   const to = addDays(days[days.length - 1]!, 1).toISOString();
 
-  const { data: evData, loading, reload } = useApi<{ items: PlanningEv[] }>(`/api/planning?from=${from}&to=${to}`);
+  const { data: evData, loading, reload } = useApi<{ items: PlanningEv[]; googleSync: boolean }>(`/api/planning?from=${from}&to=${to}`);
   const events = evData?.items ?? [];
+  const [gcalBusy, setGcalBusy] = useState(false);
+  async function gcalBackfill() {
+    setGcalBusy(true);
+    try {
+      const r = await api<{ total: number; synced: number; errors: string[] }>('/api/planning/gcal-backfill', { method: 'POST' });
+      alert(r.total === 0
+        ? 'Tout était déjà synchronisé — rien à faire.'
+        : `${r.synced}/${r.total} événement(s) envoyé(s) vers Google Agenda.${r.errors.length ? `\n${r.errors.length} échec(s), voir logs serveur.` : ''}`);
+    } catch (e) {
+      alert(`Échec : ${(e as Error).message}`);
+    } finally {
+      setGcalBusy(false);
+    }
+  }
   const { data: peopleData, reload: reloadPeople } = useApi<{ items: PersonRow[] }>('/api/people?active=1');
   const people = useMemo(() => (peopleData?.items ?? []).filter((p) => p.active), [peopleData]);
   const { data: wsData } = useApi<{ items: WsRow[] }>(`/api/worksites?status=${WORKSITE_STATUS_OPEN.join(',')}`);
@@ -284,6 +298,11 @@ export default function PlanningPage() {
         sub="Des équipes composées pour chaque chantier, chaque jour."
         action={
           <div className="row">
+            {evData?.googleSync && (
+              <button className="btn" onClick={gcalBackfill} disabled={gcalBusy} title="Envoie vers Google Agenda les événements jamais synchronisés — ne touche pas à ceux déjà envoyés">
+                {gcalBusy ? 'Synchronisation…' : '↻ Rattraper Google Agenda'}
+              </button>
+            )}
             <button className="btn" onClick={() => setAbsenceModal({})}>+ Congé / formation</button>
             <button className="btn primary" onClick={() => openNew({ date: trackedDay })}>+ Nouvelle affectation</button>
           </div>

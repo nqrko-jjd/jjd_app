@@ -106,6 +106,36 @@ planningRouter.get(
   }),
 );
 
+/**
+ * Rattrapage historique : pousse vers Google Agenda les événements jamais synchronisés
+ * (googleEventId encore vide) — typiquement tout ce qui a été créé avant l'activation de la
+ * synchro. Ne touche JAMAIS un événement déjà synchronisé (googleEventId déjà posé) : si
+ * quelqu'un a corrigé l'horaire ou ajouté un invité directement dans Google Agenda, ce
+ * rattrapage ne l'écrase pas — seule une modification faite depuis l'appli le fait (voir
+ * syncToGoogle, appelé sur chaque création/modification normale).
+ */
+planningRouter.post(
+  '/gcal-backfill',
+  requireAuth(...OFFICE),
+  asyncHandler(async (_req, res) => {
+    if (!gcalEnabled()) throw new HttpError(422, 'Synchro Google Agenda non configurée');
+    const missing = await prisma.planningEvent.findMany({ where: { googleEventId: null }, select: { id: true } });
+    let synced = 0;
+    const errors: string[] = [];
+    for (const ev of missing) {
+      try {
+        await syncToGoogle(ev.id);
+        const check = await prisma.planningEvent.findUnique({ where: { id: ev.id }, select: { googleEventId: true } });
+        if (check?.googleEventId) synced++;
+        else errors.push(`${ev.id} : échec silencieux (voir logs serveur)`);
+      } catch (e) {
+        errors.push(`${ev.id} : ${(e as Error).message}`);
+      }
+    }
+    res.json({ total: missing.length, synced, errors });
+  }),
+);
+
 planningRouter.get(
   '/:id',
   requireAuth(...STAFF),

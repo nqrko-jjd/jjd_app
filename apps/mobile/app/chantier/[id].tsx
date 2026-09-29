@@ -13,21 +13,55 @@ const STATUS_LABEL: Record<string, string> = {
   on_hold: 'En attente', done: 'Terminé', to_invoice: 'À facturer', invoiced: 'Facturé',
   closed: 'Clôturé', cancelled: 'Abandonné',
 };
+const REQUEST_KIND_LABEL: Record<string, string> = {
+  ponctuelle: 'Intervention ponctuelle', renovation: 'Rénovation / chantier long',
+  entretien: 'Entretien / maintenance', sav: 'SAV / levée de réserves',
+};
+const CONTACT_ROLE_LABEL: Record<string, string> = {
+  demandeur: 'Demandeur', gestionnaire: 'Gestionnaire / syndic', proprietaire: 'Propriétaire',
+  locataire: 'Locataire / occupant', sur_place: 'Contact sur place', architecte: 'Architecte',
+  facturation: 'Responsable facturation',
+};
+const CONTACT_FOR_LABEL: Record<string, string> = {
+  demande: 'Demande et validation', rdv_acces: 'Rendez-vous / accès', suivi_technique: 'Suivi technique',
+  factures: 'Factures', demande_acces_suivi: 'Demande, accès et suivi',
+};
 
 interface Margin {
   quotedHt: number; invoicedHt: number; paidHt: number; materialCost: number; labourCost: number;
   vehicleCost: number;
   realMargin: number; realMarginPct: number | null; leftToInvoice: number; partnerShare: number;
 }
+interface WsContact {
+  id: string; role: string; name: string; phone: string | null; email: string | null; contactFor: string | null;
+}
+interface Ev {
+  startAt: string; note: string | null;
+  assignments: { person: { displayName: string | null; firstName: string } }[];
+}
+interface Activity { id: string; label: string; by: string | null; at: string }
 interface Detail {
   worksite: {
     ref: string; title: string; status: string; statusRaw: string | null; entity: string;
-    address: string | null; city: string | null; startedOn: string | null; endedOn: string | null;
+    address: string | null; city: string | null; box: string | null; unitLabel: string | null;
+    startedOn: string | null; endedOn: string | null;
+    description: string | null; accessNotes: string | null; requestKind: string | null;
+    billTo: string | null;
+    ownerName: string | null; ownerPhone: string | null; ownerEmail: string | null;
+    tenantName: string | null; tenantPhone: string | null; tenantPhone2: string | null; tenantEmail: string | null;
     client: { name: string } | null;
     building: { name: string; syndic: { name: string } | null } | null;
     manager: { displayName: string | null; firstName: string } | null;
+    billToContact: { name: string } | null;
+    contacts: WsContact[];
+    events: Ev[];
   };
   margin: Margin | null;
+  activity: Activity[];
+}
+
+function timeAgo(iso: string): string {
+  return new Date(iso).toLocaleDateString('fr-BE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
 
 export default function ChantierDetail() {
@@ -47,6 +81,10 @@ export default function ChantierDetail() {
 
   if (!data) return <Loading />;
   const w = data.worksite;
+  const now = new Date();
+  const nextEvent = [...w.events].filter((e) => new Date(e.startAt) >= now).sort((a, b) => +new Date(a.startAt) - +new Date(b.startAt))[0]
+    ?? w.events[0] ?? null;
+  const team = nextEvent ? [...new Set(nextEvent.assignments.map((a) => a.person.displayName || a.person.firstName))].join(', ') : null;
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ padding: 16, gap: 12 }}>
@@ -79,9 +117,60 @@ export default function ChantierDetail() {
         <Row k="Client" v={w.client?.name ?? '—'} />
         <Row k="Immeuble" v={w.building ? `${w.building.name}${w.building.syndic ? ` · ${w.building.syndic.name}` : ''}` : '—'} />
         <Row k="Chef" v={w.manager?.displayName ?? w.manager?.firstName ?? '—'} />
-        <Row k="Adresse" v={[w.address, w.city].filter(Boolean).join(', ') || '—'} />
+        <Row k="Localisation" v={[w.address, w.box && `bte ${w.box}`, w.unitLabel, w.city].filter(Boolean).join(', ') || '—'} />
+        {team && <Row k="Équipe affectée" v={team} />}
         <Row k="Début / Fin" v={`${dateBE(w.startedOn)} → ${dateBE(w.endedOn)}`} />
+        {(w.billToContact || w.billTo) && <Row k="Facturé à" v={w.billToContact?.name ?? w.billTo ?? '—'} />}
+        {w.requestKind && <Row k="Type de demande" v={REQUEST_KIND_LABEL[w.requestKind] ?? w.requestKind} />}
+        {w.accessNotes && <Row k="Accès et RDV" v={w.accessNotes} />}
       </Card>
+
+      {w.description && (
+        <Card>
+          <Label>Description</Label>
+          <Text style={{ color: T.ink }}>{w.description}</Text>
+        </Card>
+      )}
+
+      {w.contacts.length > 0 && (
+        <Card>
+          <Label>Personnes de contact</Label>
+          {w.contacts.map((c) => (
+            <Row
+              key={c.id}
+              k={CONTACT_ROLE_LABEL[c.role] ?? c.role}
+              v={`${c.name}${c.phone ? ` · ${c.phone}` : ''}${c.contactFor ? ` — ${CONTACT_FOR_LABEL[c.contactFor] ?? c.contactFor}` : ''}`}
+            />
+          ))}
+        </Card>
+      )}
+
+      {(w.ownerName || w.tenantName) && (
+        <Card>
+          {w.ownerName && <Row k="Propriétaire" v={`${w.ownerName}${w.ownerPhone ? ` · ${w.ownerPhone}` : ''}`} />}
+          {w.tenantName && <Row k="Locataire (sur place)" v={`${w.tenantName}${w.tenantPhone ? ` · ${w.tenantPhone}` : ''}${w.tenantPhone2 ? ` / ${w.tenantPhone2}` : ''}`} />}
+        </Card>
+      )}
+
+      {nextEvent && (
+        <Card>
+          <Label>Prochaine étape</Label>
+          <Text style={{ color: T.ink, fontWeight: '700' }}>{nextEvent.note || 'Intervention planifiée'}</Text>
+          <Text style={{ color: T.ink2, fontSize: 13 }}>{dateBE(nextEvent.startAt)}</Text>
+        </Card>
+      )}
+
+      {data.activity.length > 0 && (
+        <Card>
+          <Label>Dernière activité</Label>
+          {data.activity.map((a) => (
+            <View key={a.id} style={{ paddingVertical: 4 }}>
+              <Text style={{ color: T.ink }}>{a.label}</Text>
+              <Text style={{ color: T.ink3, fontSize: 11.5 }}>{a.by ? `${a.by} · ` : ''}{timeAgo(a.at)}</Text>
+            </View>
+          ))}
+        </Card>
+      )}
 
       {data.margin && user?.role !== 'worker' && (
         <Card accent={data.margin.realMargin >= 0 ? T.ok : T.crit}>

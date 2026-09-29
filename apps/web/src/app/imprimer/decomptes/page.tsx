@@ -3,8 +3,8 @@ import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 
-interface Row { personId: string; name: string; days: number; payoutAmount: number }
-interface Team { year: number; month: number; totalPayoutAmount: number; rows: Row[] }
+interface Row { personId: string; name: string; days: number; amount: number; payoutAmount: number }
+interface Team { year: number; month: number; totalAmount: number; totalPayoutAmount: number; rows: Row[] }
 
 const MONTHS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
 const fmtEur = (n: number) => new Intl.NumberFormat('fr-BE', { style: 'currency', currency: 'EUR' }).format(n);
@@ -52,20 +52,30 @@ function Inner() {
 
         <table className="lines">
           <thead>
-            <tr><th>Personne</th><th className="num">Jours</th><th className="num">Tarif jour</th><th className="num">Montant</th></tr>
+            <tr>
+              <th>Personne</th><th className="num">Jours</th>
+              <th className="num">Prix jour facturé</th><th className="num">Prix jour en main</th>
+              <th className="num">Total à facturer</th><th className="num">Total en main</th>
+            </tr>
           </thead>
           <tbody>
             {team.rows.map((r) => (
               <tr key={r.personId}>
                 <td>{r.name}</td>
                 <td className="num">{r.days}</td>
+                <td className="num">{r.days > 0 ? fmtEur(r.amount / r.days) : '—'}</td>
                 <td className="num">{r.days > 0 ? fmtEur(r.payoutAmount / r.days) : '—'}</td>
+                <td className="num">{fmtEur(r.amount)}</td>
                 <td className="num">{fmtEur(r.payoutAmount)}</td>
               </tr>
             ))}
           </tbody>
           <tfoot>
-            <tr><td>Total</td><td className="num">{team.rows.reduce((s, r) => s + r.days, 0)}</td><td></td><td className="num">{fmtEur(team.totalPayoutAmount)}</td></tr>
+            <tr>
+              <td>Total</td><td className="num">{team.rows.reduce((s, r) => s + r.days, 0)}</td>
+              <td></td><td></td>
+              <td className="num">{fmtEur(team.totalAmount)}</td><td className="num">{fmtEur(team.totalPayoutAmount)}</td>
+            </tr>
           </tfoot>
         </table>
       </div>

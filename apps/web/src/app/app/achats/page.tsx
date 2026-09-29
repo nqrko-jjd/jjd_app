@@ -27,6 +27,8 @@ interface Expense {
   categoryLabel: string | null;
   worksiteId: string | null;
   worksite: { id: string; ref: string; title: string } | null;
+  vehicleId: string | null;
+  vehicle: { id: string; code: string | null; plate: string | null; name: string | null; brand: string | null; model: string | null } | null;
   ht: number;
   vatRecup: number | null;
   ttc: number | null;
@@ -49,6 +51,7 @@ interface Meta {
   rawCategories: string[];
   suppliers: { id: string; name: string }[];
   worksites: { id: string; name: string }[];
+  vehicles: { id: string; name: string }[];
   years: number[];
 }
 
@@ -495,7 +498,7 @@ function AchatsInner() {
                     {e.source === 'email' && <span className="badge plain" style={{ marginLeft: 6 }} title="Reçue sur la boîte mail factures — à vérifier">✉️ Boîte mail</span>}
                   </td>
                   <td className="mono" style={{ fontSize: '0.82rem' }}>{e.docNumber ?? '—'}</td>
-                  <td className="mono">{e.worksite?.ref ?? '—'}</td>
+                  <td className="mono">{e.worksite?.ref ?? (e.vehicle ? `🚗 ${e.vehicle.code ?? e.vehicle.plate ?? e.vehicle.name ?? ''}` : '—')}</td>
                   <td>{e.categoryLabel ?? '—'}</td>
                   <td style={{ textAlign: 'right' }}><Money value={e.ht} /></td>
                   <td style={{ textAlign: 'right' }}><Money value={e.ttc ?? e.ht} /></td>
@@ -554,6 +557,7 @@ function ExpenseModal({
     categoryCode: (expense ?? prefillFrom)?.categoryCode ?? '',
     categoryRaw: (expense ?? prefillFrom)?.categoryRaw ?? '',
     worksiteId: (expense ?? prefillFrom)?.worksiteId ?? '',
+    vehicleId: (expense ?? prefillFrom)?.vehicleId ?? '',
     ht: expense?.ht != null ? String(expense.ht) : '',
     vatRecup: expense?.vatRecup != null ? String(expense.vatRecup) : '',
     ttc: expense?.ttc != null ? String(expense.ttc) : '',
@@ -724,6 +728,7 @@ function ExpenseModal({
       const body = {
         ...commonBody(),
         worksiteId: v.worksiteId || null,
+        vehicleId: v.vehicleId || null,
         ht: Number(v.ht || 0),
         vatRecup: v.vatRecup === '' ? null : Number(v.vatRecup),
         ttc: v.ttc === '' ? null : Number(v.ttc),
@@ -861,6 +866,15 @@ function ExpenseModal({
               />
             </div>
           )}
+          <div className="field" style={{ gridColumn: '1 / -1' }}>
+            <label>Véhicule <span className="muted" style={{ fontWeight: 400, fontSize: '0.8rem' }}> — réparation, entretien, carburant…</span></label>
+            <ComboBox
+              placeholder="— (pas lié à un véhicule)"
+              value={v.vehicleId}
+              onChange={(val) => set('vehicleId', val)}
+              options={meta.vehicles.map((c) => ({ value: c.id, label: c.name }))}
+            />
+          </div>
           <div className="field">
             <label>Montant HT *{splits && <span className="muted" style={{ fontWeight: 400, fontSize: '0.8rem' }}> (total réparti)</span>}</label>
             <input

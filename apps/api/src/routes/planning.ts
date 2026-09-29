@@ -448,6 +448,13 @@ vehiclesRouter.get(
         payments: { orderBy: { dueOn: 'asc' } },
         docs: { orderBy: [{ expiresOn: 'asc' }, { createdAt: 'desc' }] },
         repairs: { orderBy: [{ date: 'desc' }, { createdAt: 'desc' }] },
+        // factures/dépenses liées (réparations facturées par un garage, pièces…) — la preuve
+        // (PDF) et l'extraction automatique vivent déjà côté Achats, pas dupliquées ici.
+        ledgerEntries: {
+          where: { direction: { in: ['purchase', 'credit_note'] } },
+          orderBy: { date: 'desc' },
+          select: { id: true, date: true, docNumber: true, supplierName: true, ht: true, ttc: true, pdfPath: true, categoryRaw: true },
+        },
       },
     });
     if (!v) throw new HttpError(404, 'Véhicule introuvable');

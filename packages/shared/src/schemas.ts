@@ -353,6 +353,7 @@ export const expenseInput = z.object({
   docNumber: z.string().trim().nullish(),
   categoryCode: z.string().trim().nullish(),
   worksiteId: z.string().nullish(),
+  vehicleId: z.string().nullish(),
   ht: z.coerce.number(),
   vatRecup: z.coerce.number().nullish(),
   ttc: z.coerce.number().nullish(),

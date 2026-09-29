@@ -33,6 +33,7 @@ interface Detail {
     payments: { id: string; dueOn: string | null; amount: number | null; principal: number | null; interest: number | null; balance: number | null }[];
     docs: { id: string; type: string; label: string | null; number: string | null; expiresOn: string | null; fileUrl: string | null }[];
     repairs: { id: string; date: string | null; description: string | null; garage: string | null; amount: number | null; km: string | null }[];
+    ledgerEntries: { id: string; date: string | null; docNumber: string | null; supplierName: string | null; ht: number; ttc: number | null; pdfPath: string | null; categoryRaw: string | null }[];
   };
 }
 
@@ -75,6 +76,10 @@ export default function VehicleDetail({ params }: { params: Promise<{ id: string
     if (!confirm('Supprimer cette réparation ?')) return;
     await api(`/api/vehicles/${id}/repairs/${repairId}`, { method: 'DELETE' });
     reload();
+  }
+  async function viewExpensePdf(entryId: string) {
+    const url = await apiBlobUrl(`/api/finance/expenses/${entryId}/pdf`);
+    window.open(url, '_blank');
   }
   const totalRepairs = v.repairs.reduce((s, r) => s + (r.amount ?? 0), 0);
 
@@ -300,6 +305,40 @@ export default function VehicleDetail({ params }: { params: Promise<{ id: string
                     <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                       <button className="btn ghost" style={{ padding: '0.15rem 0.45rem', fontSize: '0.75rem' }} onClick={() => setRepairModal(r)}>Modifier</button>
                       <button className="btn ghost" style={{ padding: '0.15rem 0.45rem', fontSize: '0.75rem' }} onClick={() => removeRepair(r.id)} aria-label="Supprimer">✕</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <section style={{ marginBottom: '1.4rem' }}>
+        <div className="section-title">
+          Factures liées (Achats)
+          <Link href="/app/achats" className="btn" style={{ marginLeft: 'auto', padding: '0.2rem 0.7rem', fontSize: '0.8rem' }}>+ Ajouter une facture</Link>
+        </div>
+        {v.ledgerEntries.length === 0 ? (
+          <div className="card card-pad muted">
+            Aucune facture/dépense liée à ce véhicule pour l’instant. Depuis Achats & dépenses, indique ce véhicule sur une facture (réparation, entretien…) pour qu’elle apparaisse ici, avec son PDF.
+          </div>
+        ) : (
+          <div className="tbl-wrap">
+            <table className="tbl">
+              <thead><tr><th>Date</th><th>Fournisseur</th><th>N° facture</th><th>Catégorie</th><th style={{ textAlign: 'right' }}>Montant</th><th /></tr></thead>
+              <tbody>
+                {v.ledgerEntries.map((e) => (
+                  <tr key={e.id}>
+                    <td className="tnum">{formatDateBE(e.date)}</td>
+                    <td>{e.supplierName ?? '—'}</td>
+                    <td className="mono" style={{ fontSize: '0.82rem' }}>{e.docNumber ?? '—'}</td>
+                    <td>{e.categoryRaw ?? '—'}</td>
+                    <td style={{ textAlign: 'right' }}><Money value={e.ttc ?? e.ht} /></td>
+                    <td style={{ textAlign: 'right' }}>
+                      {e.pdfPath
+                        ? <button className="btn ghost" style={{ padding: '0.15rem 0.45rem', fontSize: '0.75rem' }} onClick={() => viewExpensePdf(e.id)}>📎 PDF</button>
+                        : <span className="muted" style={{ fontSize: '0.75rem' }}>Pas de PDF</span>}
                     </td>
                   </tr>
                 ))}

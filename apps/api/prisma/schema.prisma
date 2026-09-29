@@ -681,6 +681,10 @@ model LedgerEntry {
   worksiteRef   String? // R-xxx / E-xx tel qu'écrit
   worksiteId    String?
   worksite      Worksite? @relation(fields: [worksiteId], references: [id])
+  // Dépense liée à un véhicule (réparation, entretien…) plutôt qu'à un chantier — les deux sont
+  // mutuellement exclusifs en pratique mais pas contraints en base (comme worksiteId, jamais requis).
+  vehicleId     String?
+  vehicle       Vehicle?  @relation(fields: [vehicleId], references: [id])
   supplierName  String?
   contactId     String?
   contact       Contact?  @relation(fields: [contactId], references: [id])
@@ -718,6 +722,7 @@ model LedgerEntry {
   refSightings  PurchaseRefSighting[]
 
   @@index([worksiteId])
+  @@index([vehicleId])
   @@index([worksiteRef])
   @@index([direction])
   @@index([date])
@@ -1015,6 +1020,7 @@ model Vehicle {
   payments   VehiclePayment[]
   docs       VehicleDoc[]
   repairs    VehicleRepair[]
+  ledgerEntries LedgerEntry[]
 }
 
 /// Frais de réparation / entretien ponctuel (garage) — distinct des coûts fixes de revient.

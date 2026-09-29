@@ -27,6 +27,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 
 
 const inc = {
   worksite: { select: { id: true, ref: true, title: true } },
+  vehicle: { select: { id: true, code: true, plate: true, name: true, brand: true, model: true } },
   contact: { select: { id: true, name: true } },
   category: { select: { code: true, label: true } },
   createdBy: { select: { email: true } },
@@ -54,7 +55,7 @@ function resolveUpload(rel: string): string {
 
 /** Filtre commun à la liste et à l'export CSV. */
 function buildWhere(q: Record<string, string>) {
-  const { q: searchRaw, paid, worksiteId, contactId, category, from, to, year, type, linked } = q;
+  const { q: searchRaw, paid, worksiteId, vehicleId, contactId, category, from, to, year, type, linked } = q;
   // recherche insensible à la casse (y compris accents : le repli SQLite n'insensibilise que
   // l'ASCII, "café"/"CAFÉ" ne matcheraient pas sans ce passage en minuscules côté JS)
   const search = searchRaw?.toLowerCase();
@@ -77,6 +78,7 @@ function buildWhere(q: Record<string, string>) {
   if (linked === '0') and.push({ linkedInvoiceId: null });
   if (linked === '1') and.push({ NOT: { linkedInvoiceId: null } });
   if (worksiteId) and.push({ worksiteId });
+  if (vehicleId) and.push({ vehicleId });
   if (contactId) and.push({ contactId });
   if (category) and.push({ categoryRaw: category });
   if (year) and.push({ year: Number(year) });
@@ -183,7 +185,7 @@ expensesRouter.get(
   '/meta',
   requireAuth(...FIELD_OFFICE),
   asyncHandler(async (_req, res) => {
-    const [categories, rawCats, suppliers, worksites, years] = await Promise.all([
+    const [categories, rawCats, suppliers, worksites, vehicles, years] = await Promise.all([
       prisma.category.findMany({
         where: { active: true, kind: { in: ['expense', 'salary', 'tax', 'vat'] } },
         orderBy: { label: 'asc' },
@@ -206,6 +208,11 @@ expensesRouter.get(
         take: 5000,
         select: { id: true, ref: true, title: true },
       }),
+      prisma.vehicle.findMany({
+        where: { active: true },
+        orderBy: { name: 'asc' },
+        select: { id: true, code: true, plate: true, name: true, brand: true, model: true },
+      }),
       prisma.ledgerEntry.findMany({
         where: { direction: { in: ['purchase', 'credit_note'] }, year: { not: null } },
         distinct: ['year'],
@@ -218,6 +225,7 @@ expensesRouter.get(
       rawCategories: rawCats.map((c) => c.categoryRaw).filter(Boolean),
       suppliers,
       worksites: worksites.map((w) => ({ id: w.id, name: `${w.ref} · ${w.title}` })),
+      vehicles: vehicles.map((v) => ({ id: v.id, name: [v.code, v.name || `${v.brand ?? ''} ${v.model ?? ''}`.trim(), v.plate].filter(Boolean).join(' · ') })),
       years: years.map((y) => y.year).filter(Boolean),
     });
   }),
@@ -580,6 +588,7 @@ expensesRouter.post(
           ? (await prisma.category.findUnique({ where: { code: d.categoryCode }, select: { label: true } }))?.label ?? null
           : null,
         worksiteId: d.worksiteId ?? null,
+        vehicleId: d.vehicleId ?? null,
         ht: d.ht,
         vatRecup: d.vatRecup ?? null,
         ttc: d.ttc ?? null,
@@ -656,6 +665,7 @@ expensesRouter.patch(
     }
     if ('docNumber' in d) data.docNumber = d.docNumber ?? null;
     if ('worksiteId' in d) data.worksiteId = d.worksiteId ?? null;
+    if ('vehicleId' in d) data.vehicleId = d.vehicleId ?? null;
     if ('ht' in d) data.ht = d.ht;
     if ('vatRecup' in d) data.vatRecup = d.vatRecup ?? null;
     if ('ttc' in d) data.ttc = d.ttc ?? null;

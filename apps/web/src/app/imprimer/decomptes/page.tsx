@@ -6,8 +6,9 @@ import { api } from '@/lib/api';
 interface Row {
   personId: string; name: string; days: number; amount: number; payoutAmount: number;
   hourlyRate: number | null; payoutPerDay: number | null; dailyHours: number;
+  toWithhold: number; netAmount: number;
 }
-interface Team { year: number; month: number; totalAmount: number; totalPayoutAmount: number; rows: Row[] }
+interface Team { year: number; month: number; totalAmount: number; totalPayoutAmount: number; totalNetAmount: number; rows: Row[] }
 
 const MONTHS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
 const fmtEur = (n: number) => new Intl.NumberFormat('fr-BE', { style: 'currency', currency: 'EUR' }).format(n);
@@ -39,6 +40,8 @@ function Inner() {
   if (err) return <div style={{ padding: 40 }}>Erreur : {err}</div>;
   if (!team) return <div style={{ padding: 40 }}>Chargement…</div>;
 
+  const hasWithholding = team.rows.some((r) => r.toWithhold > 0);
+
   return (
     <>
       <style>{CSS}</style>
@@ -59,6 +62,8 @@ function Inner() {
               <th>Personne</th><th className="num">Jours</th>
               <th className="num">Prix jour facturé</th><th className="num">Prix jour en main</th>
               <th className="num">Total à facturer</th><th className="num">Total en main</th>
+              {hasWithholding && <th className="num">Avances / retenues</th>}
+              {hasWithholding && <th className="num">Net à payer</th>}
             </tr>
           </thead>
           <tbody>
@@ -70,6 +75,8 @@ function Inner() {
                 <td className="num">{r.payoutPerDay != null ? fmtEur(r.payoutPerDay) : (r.hourlyRate != null ? fmtEur(r.hourlyRate * r.dailyHours) : '—')}</td>
                 <td className="num">{fmtEur(r.amount)}</td>
                 <td className="num">{fmtEur(r.payoutAmount)}</td>
+                {hasWithholding && <td className="num">{r.toWithhold > 0 ? fmtEur(r.toWithhold) : '—'}</td>}
+                {hasWithholding && <td className="num">{fmtEur(r.netAmount)}</td>}
               </tr>
             ))}
           </tbody>
@@ -78,6 +85,8 @@ function Inner() {
               <td>Total</td><td className="num">{team.rows.reduce((s, r) => s + r.days, 0)}</td>
               <td></td><td></td>
               <td className="num">{fmtEur(team.totalAmount)}</td><td className="num">{fmtEur(team.totalPayoutAmount)}</td>
+              {hasWithholding && <td className="num">{fmtEur(team.totalPayoutAmount - team.totalNetAmount)}</td>}
+              {hasWithholding && <td className="num">{fmtEur(team.totalNetAmount)}</td>}
             </tr>
           </tfoot>
         </table>

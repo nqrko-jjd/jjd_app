@@ -1,5 +1,5 @@
 import React, {useSyncExternalStore} from 'react';
-function path(){return location.hash.slice(1)||'/app/planning'}
+function path(){return location.hash.slice(1)||'/app'}
 function subscribe(cb:()=>void){window.addEventListener('hashchange',cb);return()=>window.removeEventListener('hashchange',cb)}
 export function usePathname(){return useSyncExternalStore(subscribe,path).split('?')[0]}
 export function useSearchParams(){const p=useSyncExternalStore(subscribe,path);return new URLSearchParams(p.split('?')[1]||'')}

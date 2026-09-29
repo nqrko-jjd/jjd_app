@@ -752,11 +752,24 @@ p { margin: 0; }
 /* ---------------------------------------------------- bannière d'en-tête de fiche (chantier…) */
 .detail-hero {
   background: linear-gradient(115deg, var(--nav-bg-2), var(--nav-bg)); color: #fbf8ef; border-radius: var(--radius);
-  padding: 1.3rem 1.5rem; margin-bottom: 1.1rem;
+  position: relative; overflow: hidden; min-height: 190px; padding: 0; margin-bottom: 1.1rem;
 }
-.detail-hero .eyebrow { color: rgba(251, 248, 239, 0.6); margin-bottom: 0.3rem; }
-.detail-hero h1 { color: #fff; font-size: 1.55rem; margin: 0; }
-.detail-hero .sub { color: rgba(251, 248, 239, 0.78); font-size: 0.88rem; margin-top: 0.3rem; }
+.detail-hero-media { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.detail-hero-shade { position: absolute; inset: 0; background: linear-gradient(100deg, rgba(9,43,34,.97), rgba(9,43,34,.82) 54%, rgba(9,43,34,.35)); }
+.detail-hero-content { position: relative; z-index: 1; width: min(820px, 100%); padding: 30px 32px; }
+.detail-hero .eyebrow { color: #d9c591; margin-bottom: 0.45rem; }
+.detail-hero h1 { color: #fff; font-size: clamp(26px, 3vw, 36px); margin: 0; }
+.detail-hero .sub { color: rgba(233, 241, 235, .82); font-size: 0.96rem; margin-top: 0.55rem; }
+.detail-hero-tags { margin-top: 1rem; }
+.detail-hero .badge, .detail-hero .chip { color: #f1f6f2; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.16); backdrop-filter: blur(7px); }
+.worksite-detail-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 1180px) { .worksite-detail-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 620px) {
+  .detail-hero { min-height: 230px; }
+  .detail-hero-content { padding: 25px 22px; }
+  .detail-hero-content > .row:nth-child(2) { flex-wrap: wrap!important; }
+  .worksite-detail-kpis { grid-template-columns: 1fr 1fr; }
+}
 
 /* ---------------------------------------------------- onglets de page (fiche détail) */
 .page-tabs { display: flex; gap: 1.3rem; border-bottom: 1px solid var(--line); margin-bottom: 1.3rem; flex-wrap: wrap; }

@@ -2,6 +2,7 @@ import React from 'react';
 import {createRoot} from 'react-dom/client';
 import {ArrowLeft, CalendarDays, Camera, FileText, MapPin, MessageSquare, Users} from 'lucide-react';
 import {Shell} from '../apps/web/src/components/Shell';
+import Dashboard from '../apps/web/src/app/app/page';
 import Planning from '../apps/web/src/app/app/planning/page';
 import Chantiers from '../apps/web/src/app/app/chantiers/page';
 import {usePathname} from './navigation';
@@ -44,7 +45,8 @@ function WorksiteDetail({ws}:{ws:any}){
 function App(){
   const path=usePathname();
   const ws=getWorksite(path.split('/').pop()!);
-  return <><div className="preview-ribbon"><strong>Aperçu privé · données fictives</strong><span>Identité visuelle JJD · planning et chantiers</span><button onClick={()=>{if(confirm('Réinitialiser uniquement les données fictives de cet aperçu ?'))reset()}}>Réinitialiser</button></div><Shell navigationPaths={['/app/chantiers','/app/planning']}><div className="preview-tabs"><a href="#/app/planning">Planning</a><a href="#/app/chantiers">Chantiers</a></div>{path==='/app/chantiers'?<Chantiers/>:ws?<WorksiteDetail ws={ws}/>:<Planning/>}</Shell></>;
+  const known=path==='/app'||path==='/app/planning'||path==='/app/chantiers'||!!ws;
+  return <><div className="preview-ribbon"><strong>Aperçu privé · données fictives</strong><span>Identité visuelle JJD · vue d’ensemble, planning et chantiers</span><button onClick={()=>{if(confirm('Réinitialiser uniquement les données fictives de cet aperçu ?'))reset()}}>Réinitialiser</button></div><Shell navigationPaths={['/app','/app/chantiers','/app/planning']}><div className="preview-tabs"><a href="#/app">Vue d’ensemble</a><a href="#/app/planning">Planning</a><a href="#/app/chantiers">Chantiers</a></div>{path==='/app'?<Dashboard/>:path==='/app/chantiers'?<Chantiers/>:ws?<WorksiteDetail ws={ws}/>:path==='/app/planning'?<Planning/>:<section className="state"><h2>Parcours en préparation</h2><p>Cette page annexe sera reprise dans la prochaine étape de la maquette.</p><a className="btn primary" href="#/app">Retour à la vue d’ensemble</a></section>}{!known&&null}</Shell></>;
 }
 
 createRoot(document.getElementById('root')!).render(<App/>);

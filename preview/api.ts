@@ -20,7 +20,20 @@ export function getEvents(id:string){return db.events.filter((e:any)=>e.worksite
 export async function api<T=unknown>(path:string,opts:any={}):Promise<T>{
  const url=new URL(path,'https://demo.invalid'),p=url.pathname,b=opts.body,method=opts.method||'GET';let result:any;
  if(p==='/api/assistant/status')result={enabled:false};
- else if(p==='/api/messagerie/unread-count')result={internal:0,client:0};
+ else if(p==='/api/messagerie/unread-count')result={internal:3,client:1};
+ else if(p==='/api/dashboard')result={
+  kpis:{invoicedMonth:128400,invoicedPrevMonth:104800,paidMonth:86250,overdueAmount:18450,overdueCount:4,supplierOverdueAmount:7280,supplierOverdueCount:3,openWorksites:db.worksites.length,teamsOnSiteToday:3,receivableAmount:42150,quotesPendingAmount:96500,quotesPendingCount:7},
+  alerts:[
+   {kind:'overdue_invoices',severity:'critical',label:'Factures clients à relancer',count:4,amount:18450,href:'/app/documents'},
+   {kind:'to_invoice',severity:'warning',label:'Travaux réalisés à facturer',count:6,amount:32700,href:'/app/chantiers?statut=to_invoice'},
+   {kind:'quotes_follow',severity:'info',label:'Devis sans réponse depuis 7 jours',count:3,amount:46500,href:'/app/documents'},
+  ],
+  inProgress:db.worksites.filter((w:any)=>w.status==='in_progress').map((w:any)=>({id:w.id,ref:w.ref,title:w.title,city:w.city,status:w.status,client:w.client?.name,manager:w.manager?.displayName,photoThumbUrl:w.building?.photoThumbUrl??null})),
+  expiringDocs:[{id:'legal-1',person:'Miguel Santos',type:'work_permit',label:'Permis de travail',expiresOn:new Date(Date.now()+18*86400000).toISOString()}],
+  fieldToday:db.events.slice(0,3).map((e:any,i:number)=>({id:e.id,startAt:e.startAt,endAt:e.endAt,allDay:false,tentative:i===2,worksite:{id:e.worksite.id,ref:e.worksite.ref,title:e.worksite.title,city:e.worksite.city},team:['Équipe Julien','Équipe Pascal','Renfort finition'][i],people:e.assignments.map((a:any,j:number)=>({id:a.person.id,name:a.person.displayName,state:j===0?'running':j<3?'done':'none'}))})),
+ };
+ else if(p==='/api/finance/analytics')result={monthly:[['2026-04',74000],['2026-05',89500],['2026-06',97200],['2026-07',108400],['2026-08',104800],['2026-09',128400]].map(([month,invoiced])=>({month,invoiced}))};
+ else if(p==='/api/documents'&&method==='POST')result={document:{id:'demo-devis'}};
  else if(p==='/api/people')result={items:people};
  else if(p==='/api/vehicles')result={items:vehicles};
  else if(p==='/api/equipment')result={items:equipment};

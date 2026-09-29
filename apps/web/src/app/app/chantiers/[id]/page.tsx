@@ -38,7 +38,7 @@ interface Detail {
     client: { id: string; name: string } | null;
     billToContact: { id: string; name: string } | null;
     contacts: { id: string; role: string; name: string; phone: string | null; email: string | null; contactFor: string | null }[];
-    building: { id: string; name: string; syndic: { name: string } | null } | null;
+    building: { id: string; name: string; photoThumbUrl: string | null; syndic: { name: string } | null } | null;
     manager: { id: string; displayName: string | null; firstName: string } | null;
     documents: { id: string; kind: string; number: string | null; draftRef: string | null; totalHt: number; status: string; issuedOn: string | null }[];
     events: { id: string; startAt: string; endAt: string; note: string | null; vehicle: { plate: string | null } | null; assignments: { person: { displayName: string | null; firstName: string } }[] }[];
@@ -175,19 +175,26 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
         </div>
       </div>
 
-      <div className="detail-hero">
-        <div className="eyebrow">Dossier {w.ref}</div>
-        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'nowrap', gap: '1rem' }}>
-          <h1>{w.title}</h1>
-          <StatusBadge status={w.status} />
-        </div>
-        <div className="sub">{[w.address, w.box && `bte ${w.box}`, w.city].filter(Boolean).join(', ') || 'Adresse non renseignée'}</div>
-        <div className="row" style={{ marginTop: '0.7rem' }}>
-          <PriorityBadge priority={w.priority} />
-          <EntityBadge entity={w.entity} />
-          <ScopeBadge scope={w.scope} />
-          <BillingModeBadge billingMode={w.billingMode} />
-          {w.statusRaw && w.statusRaw !== w.status && <span className="chip">{w.statusRaw}</span>}
+      <div className={`detail-hero${w.building?.photoThumbUrl ? ' has-photo' : ''}`}>
+        {w.building?.photoThumbUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img className="detail-hero-media" src={w.building.photoThumbUrl} alt="" />
+        )}
+        <div className="detail-hero-shade" />
+        <div className="detail-hero-content">
+          <div className="eyebrow">Dossier {w.ref}</div>
+          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'nowrap', gap: '1rem' }}>
+            <h1>{w.title}</h1>
+            <StatusBadge status={w.status} />
+          </div>
+          <div className="sub">{[w.address, w.box && `bte ${w.box}`, w.city].filter(Boolean).join(', ') || 'Adresse non renseignée'}</div>
+          <div className="row detail-hero-tags">
+            <PriorityBadge priority={w.priority} />
+            <EntityBadge entity={w.entity} />
+            <ScopeBadge scope={w.scope} />
+            <BillingModeBadge billingMode={w.billingMode} />
+            {w.statusRaw && w.statusRaw !== w.status && <span className="chip">{w.statusRaw}</span>}
+          </div>
         </div>
       </div>
 
@@ -202,7 +209,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
       {tab === 'overview' && (
         <>
           {data.margin && (
-            <div className="kpis" style={{ marginBottom: '1.5rem' }}>
+            <div className="kpis worksite-detail-kpis" style={{ marginBottom: '1.5rem' }}>
               <Kpi ic={FileText} label="Devisé HT" value={<Money value={data.margin.quotedHt} />} sub="Montant du marché" />
               <Kpi
                 ic={Euro}

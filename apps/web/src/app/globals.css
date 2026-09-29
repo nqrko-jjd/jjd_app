@@ -1193,6 +1193,9 @@ p { margin: 0; }
 }
 .plan-grid td.selected-day { background: var(--primary-soft); }
 
+/* Vue jour du planning : grille responsive plutôt que la colonne étroite de la popup mensuelle. */
+.plan-day-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; }
+
 .plan-chip {
   width: 100%; display: block; text-align: left; border: 1px solid var(--tone-line, var(--line));
   border-left: 3px solid var(--tone-accent, var(--line-strong)); border-radius: 7px;

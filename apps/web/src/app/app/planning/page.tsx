@@ -59,7 +59,7 @@ function vehicleLabel(v: PlanVehicleRef) {
   return [v.code, [v.brand, v.model].filter(Boolean).join(' ')].filter(Boolean).join(' · ') || v.plate || '—';
 }
 
-type ViewMode = 'workers' | 'worksites' | 'resources' | 'month';
+type ViewMode = 'day' | 'workers' | 'worksites' | 'resources' | 'month';
 type Resource = { kind: 'vehicle' | 'equipment'; id: string; label: string; sub: string };
 
 export default function PlanningPage() {
@@ -92,7 +92,8 @@ export default function PlanningPage() {
 
   const weekDays = useMemo(() => daysFrom(anchor, periodWeeks * 7), [anchor, periodWeeks]);
   const monthDays = useMemo(() => monthGridDays(monthAnchor), [monthAnchor]);
-  const days = view === 'month' ? monthDays : weekDays;
+  const dayView = useMemo(() => [new Date(`${trackedDay}T00:00:00`)], [trackedDay]);
+  const days = view === 'month' ? monthDays : view === 'day' ? dayView : weekDays;
   const dayStrs = useMemo(() => days.map(toDateInput), [days]);
   const from = days[0]!.toISOString();
   const to = addDays(days[days.length - 1]!, 1).toISOString();
@@ -204,6 +205,9 @@ export default function PlanningPage() {
     setAnchor(na);
     setTrackedDay(toDateInput(new Date()));
   }
+  function shiftDay(n: number) {
+    setTrackedDay((d) => toDateInput(addDays(new Date(`${d}T00:00:00`), n)));
+  }
   function shiftMonth(n: number) {
     setMonthAnchor((m) => new Date(m.getFullYear(), m.getMonth() + n, 1));
   }
@@ -285,8 +289,11 @@ export default function PlanningPage() {
   }
 
   const monthLabel = monthAnchor.toLocaleDateString('fr-BE', { month: 'long', year: 'numeric' });
+  const dayLabel = dayView[0]!.toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' });
   const rangeLabel = view === 'month'
     ? monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1)
+    : view === 'day'
+    ? dayLabel.charAt(0).toUpperCase() + dayLabel.slice(1)
     : `${days[0]!.toLocaleDateString('fr-BE', { day: '2-digit', month: 'short' })} — ${days[days.length - 1]!.toLocaleDateString('fr-BE', { day: '2-digit', month: 'short', year: 'numeric' })}`;
   const trackedShort = new Date(`${trackedDay}T00:00:00`).toLocaleDateString('fr-BE', { weekday: 'short', day: '2-digit' });
 
@@ -319,17 +326,20 @@ export default function PlanningPage() {
 
       <div className="plan-topbar">
         <div className="plan-switch">
+          <button className={view === 'day' ? 'active' : ''} onClick={() => setView('day')}>Vue jour</button>
           <button className={view === 'workers' ? 'active' : ''} onClick={() => setView('workers')}>Ouvriers</button>
           <button className={view === 'worksites' ? 'active' : ''} onClick={() => setView('worksites')}>Chantiers</button>
           <button className={view === 'resources' ? 'active' : ''} onClick={() => setView('resources')}>Véhicules & matériel</button>
           <button className={view === 'month' ? 'active' : ''} onClick={() => setView('month')}>Vue mensuelle</button>
         </div>
         <div className="plan-period">
-          {view !== 'month' && <button type="button" className="btn plan-expand-toggle" onClick={() => setWide((w) => !w)}>{wide ? 'Réduire' : 'Agrandir le planning'}</button>}
-          <button type="button" className="btn" onClick={() => (view === 'month' ? shiftMonth(-1) : shiftWeek(-1))}>←</button>
-          <button type="button" className="btn" onClick={() => (view === 'month' ? goTodayMonth() : goToday())}>{view === 'month' ? "Aujourd'hui" : 'Cette semaine'}</button>
-          <button type="button" className="btn" onClick={() => (view === 'month' ? shiftMonth(1) : shiftWeek(1))}>→</button>
-          {view !== 'month' && (
+          {view !== 'month' && view !== 'day' && <button type="button" className="btn plan-expand-toggle" onClick={() => setWide((w) => !w)}>{wide ? 'Réduire' : 'Agrandir le planning'}</button>}
+          <button type="button" className="btn" onClick={() => (view === 'month' ? shiftMonth(-1) : view === 'day' ? shiftDay(-1) : shiftWeek(-1))}>←</button>
+          <button type="button" className="btn" onClick={() => (view === 'month' ? goTodayMonth() : view === 'day' ? setTrackedDay(toDateInput(new Date())) : goToday())}>
+            {view === 'month' ? "Aujourd'hui" : view === 'day' ? "Aujourd'hui" : 'Cette semaine'}
+          </button>
+          <button type="button" className="btn" onClick={() => (view === 'month' ? shiftMonth(1) : view === 'day' ? shiftDay(1) : shiftWeek(1))}>→</button>
+          {view !== 'month' && view !== 'day' && (
             <select className="select" value={periodWeeks} onChange={(e) => setPeriodWeeks(Number(e.target.value) as 1 | 2)}>
               <option value={1}>1 semaine</option>
               <option value={2}>2 semaines</option>
@@ -339,7 +349,7 @@ export default function PlanningPage() {
       </div>
 
       <div className="plan-filters">
-        {view !== 'month' && (
+        {view !== 'month' && view !== 'day' && (
           <label className="plan-search">
             <Search size={16} strokeWidth={2} />
             <input placeholder="Rechercher une personne ou une ressource" value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -426,6 +436,16 @@ export default function PlanningPage() {
               );
             })}
           </div>
+        </section>
+      ) : view === 'day' ? (
+        <section className="plan-board" style={{ padding: '1.2rem' }}>
+          {(() => {
+            const dayEvents = eventsFor(trackedDay, (e) => !worksiteFilter || e.worksite.id === worksiteFilter)
+              .sort((a, b) => a.startAt.localeCompare(b.startAt));
+            return dayEvents.length === 0
+              ? <p className="muted">Rien de planifié ce jour-là.</p>
+              : <div className="plan-day-list">{renderChips(trackedDay, dayEvents)}</div>;
+          })()}
         </section>
       ) : (
         <section className="plan-board">

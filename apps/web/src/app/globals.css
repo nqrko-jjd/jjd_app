@@ -1171,6 +1171,23 @@ p { margin: 0; }
 .plan-search input { border: 0; background: none; padding: 0.6rem 0; flex: 1; font: inherit; color: var(--ink); min-width: 0; }
 .plan-search input:focus { outline: none; }
 
+.plan-observation-callout {
+  width: 100%; display: grid; grid-template-columns: auto minmax(240px, 1fr) auto auto; align-items: center; gap: 0.85rem;
+  margin: -0.15rem 0 1rem; padding: 0.85rem 1rem; text-align: left; font: inherit; color: var(--ink);
+  background: color-mix(in srgb, var(--warn) 8%, var(--surface)); border: 1px solid color-mix(in srgb, var(--warn) 34%, var(--line));
+  border-radius: 13px; cursor: pointer; transition: border-color 150ms ease, transform 150ms ease, background 150ms ease;
+}
+.plan-observation-callout:hover, .plan-observation-callout.active { border-color: color-mix(in srgb, var(--warn) 62%, var(--line)); background: color-mix(in srgb, var(--warn) 12%, var(--surface)); }
+.plan-observation-callout:hover { transform: translateY(-1px); }
+.plan-observation-icon { width: 35px; height: 35px; display: inline-flex; align-items: center; justify-content: center; border-radius: 10px; color: var(--primary); background: var(--surface); border: 1px solid var(--line); }
+.plan-observation-callout strong, .plan-observation-callout small { display: block; }
+.plan-observation-callout strong { font-size: 0.88rem; color: var(--primary-ink); }
+.plan-observation-callout small { margin-top: 0.2rem; color: var(--ink-3); line-height: 1.4; }
+.plan-observation-sites { color: var(--ink-2); font-size: 0.78rem; font-weight: 600; }
+.plan-observation-action { color: var(--primary); font-size: 0.78rem; font-weight: 700; white-space: nowrap; }
+.plan-row-status { margin-top: 0.35rem; }
+.plan-row-status .badge { font-size: 0.62rem; padding: 0.18rem 0.38rem; }
+
 .plan-datebar { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin: 0.9rem 0; font-size: 0.86rem; color: var(--ink-2); flex-wrap: wrap; }
 .plan-datebar label { display: flex; align-items: center; gap: 0.5rem; }
 
@@ -1341,6 +1358,8 @@ body.plan-wide .main { max-width: none; }
 @media (max-width: 900px) {
   .plan-kpis { grid-template-columns: repeat(2, 1fr); }
   .plan-kpis > div:nth-child(2n) { border-right: none; }
+  .plan-observation-callout { grid-template-columns: auto minmax(0, 1fr); }
+  .plan-observation-sites, .plan-observation-action { grid-column: 2; }
   .plan-detail-columns { grid-template-columns: 1fr; }
   .plan-worker-picker, .plan-equipment-picker, .plan-vehicle-picker { grid-template-columns: 1fr; }
 }

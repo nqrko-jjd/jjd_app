@@ -124,6 +124,7 @@ export async function teamMonthlyStatement(year: number, month: number) {
       contractType: p.contractType,
       hourlyRate: p.hourlyRate,
       payoutPerDay: p.payoutPerDay,
+      dailyHours: p.dailyHours,
       hours: s.totalHours,
       days: s.totalDays,
       amount: s.totalAmount,

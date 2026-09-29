@@ -3,7 +3,10 @@ import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 
-interface Row { personId: string; name: string; days: number; amount: number; payoutAmount: number }
+interface Row {
+  personId: string; name: string; days: number; amount: number; payoutAmount: number;
+  hourlyRate: number | null; payoutPerDay: number | null; dailyHours: number;
+}
 interface Team { year: number; month: number; totalAmount: number; totalPayoutAmount: number; rows: Row[] }
 
 const MONTHS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
@@ -63,8 +66,8 @@ function Inner() {
               <tr key={r.personId}>
                 <td>{r.name}</td>
                 <td className="num">{r.days}</td>
-                <td className="num">{r.days > 0 ? fmtEur(r.amount / r.days) : '—'}</td>
-                <td className="num">{r.days > 0 ? fmtEur(r.payoutAmount / r.days) : '—'}</td>
+                <td className="num">{r.hourlyRate != null ? fmtEur(r.hourlyRate * r.dailyHours) : '—'}</td>
+                <td className="num">{r.payoutPerDay != null ? fmtEur(r.payoutPerDay) : (r.hourlyRate != null ? fmtEur(r.hourlyRate * r.dailyHours) : '—')}</td>
                 <td className="num">{fmtEur(r.amount)}</td>
                 <td className="num">{fmtEur(r.payoutAmount)}</td>
               </tr>

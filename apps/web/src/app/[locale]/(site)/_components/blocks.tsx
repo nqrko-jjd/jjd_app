@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import Link from 'next/link';
+import { Link } from '@/i18n/navigation';
 import { HeroImage } from './Figure';
 
 export function Eyebrow({ children }: { children: ReactNode }) {

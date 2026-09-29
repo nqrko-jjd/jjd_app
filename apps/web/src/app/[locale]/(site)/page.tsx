@@ -1,65 +1,61 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
+import { getTranslations, setRequestLocale } from 'next-intl/server';
+import { Link } from '@/i18n/navigation';
 import { Eyebrow, SectionHead, Cta, NumberCard, Steps, CtaBand } from './_components/blocks';
 import { Figure, HeroImage } from './_components/Figure';
 
-export const metadata: Metadata = {
-  title: 'JJD Consult | Maintenance, Rénovation et Projets',
-  description:
-    'Un seul partenaire pour entretenir, transformer et valoriser vos bâtiments à Bruxelles et dans le Brabant wallon.',
-};
+const em = (chunks: React.ReactNode) => <span className="s-em">{chunks}</span>;
 
-const SERVICES = [
-  {
-    n: '01', tag: 'JJD Maintenance', title: 'Maintenance',
-    baseline: 'Préserver la valeur de vos bâtiments.',
-    text: 'Un partenaire technique réactif pour entretenir, réparer et suivre vos immeubles dans la durée.',
-    points: ['Syndics & copropriétés', 'SAV pour promoteurs', 'Entreprises & bureaux', 'Interventions multitechniques'],
-    href: '/maintenance',
-  },
-  {
-    n: '02', tag: 'JJD Rénovation', title: 'Rénovation',
-    baseline: 'Transformer avec une vision d’ensemble.',
-    text: 'Des rénovations complètes coordonnées de A à Z, avec une attention constante portée à la qualité des finitions.',
-    points: ['Rénovation complète', 'Propriétés de standing', 'Intérieur & techniques', 'Terrasses, jardin & piscine'],
-    href: '/renovation',
-  },
-  {
-    n: '03', tag: 'JJD Projets', title: 'Projets',
-    baseline: 'Donner une direction claire aux projets complexes.',
-    text: 'De l’étude des possibilités à la réalisation, nous structurons les choix, le budget et les intervenants.',
-    points: ['Étude & valorisation', 'Scénarios d’aménagement', 'Budget & planification', 'Coordination générale'],
-    href: '/projets',
-  },
-];
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
+  const { locale } = await params;
+  const t = await getTranslations({ locale, namespace: 'home' });
+  return { title: t('metaTitle'), description: t('metaDescription') };
+}
 
-const AUDIENCES = [
-  { title: 'Particuliers & propriétaires', text: 'Rénovation, transformation et entretien de maisons, appartements et propriétés de standing.' },
-  { title: 'Syndics & copropriétés', text: 'Maintenance multitechnique, travaux dans les communs et projets de rénovation coordonnés.' },
-  { title: 'Promoteurs & architectes', text: 'SAV après livraison, levée de réserves, reprises et exécution de projets techniques.' },
-  { title: 'Entreprises & investisseurs', text: 'Entretien, aménagement, étude de potentiel et transformation de bâtiments professionnels ou résidentiels.' },
-];
+export default async function HomePage({ params }: { params: Promise<{ locale: string }> }) {
+  const { locale } = await params;
+  setRequestLocale(locale);
+  const t = await getTranslations('home');
 
-export default function HomePage() {
+  const SERVICES = [
+    {
+      n: '01', tag: t('service1Tag'), title: t('service1Title'), baseline: t('service1Baseline'), text: t('service1Text'),
+      points: [t('service1Point1'), t('service1Point2'), t('service1Point3'), t('service1Point4')], href: '/maintenance',
+    },
+    {
+      n: '02', tag: t('service2Tag'), title: t('service2Title'), baseline: t('service2Baseline'), text: t('service2Text'),
+      points: [t('service2Point1'), t('service2Point2'), t('service2Point3'), t('service2Point4')], href: '/renovation',
+    },
+    {
+      n: '03', tag: t('service3Tag'), title: t('service3Title'), baseline: t('service3Baseline'), text: t('service3Text'),
+      points: [t('service3Point1'), t('service3Point2'), t('service3Point3'), t('service3Point4')], href: '/projets',
+    },
+  ];
+
+  const AUDIENCES = [
+    { title: t('aud1Title'), text: t('aud1Text') },
+    { title: t('aud2Title'), text: t('aud2Text') },
+    { title: t('aud3Title'), text: t('aud3Text') },
+    { title: t('aud4Title'), text: t('aud4Text') },
+  ];
+
   return (
     <>
       {/* Hero */}
       <section className="s-hero">
         <HeroImage src="/site/jjd-villa-exterior.webp" alt="Propriété contemporaine rénovée avec terrasse et piscine" />
         <div className="s-hero-inner">
-          <Eyebrow>Maintenance • Rénovation • Projets</Eyebrow>
-          <h1>Nous prenons soin de vos bâtiments. <span className="s-em">À chaque étape.</span></h1>
-          <p className="s-lead">
-            Un seul partenaire pour entretenir, transformer et valoriser vos biens à Bruxelles et dans le Brabant wallon.
-          </p>
+          <Eyebrow>{t('heroEyebrow')}</Eyebrow>
+          <h1>{t.rich('heroTitle', { em })}</h1>
+          <p className="s-lead">{t('heroLead')}</p>
           <div className="s-hero-actions">
-            <Cta href="/contact">Échanger sur mon besoin</Cta>
+            <Cta href="/contact">{t('heroCta')}</Cta>
             <a href="tel:+3228879239" className="tel">+32 2 887 92 39</a>
           </div>
           <div className="s-hero-stats">
-            <div className="s-stat"><b>20+</b><span>ans d’expérience dans le bâtiment</span></div>
-            <div className="s-stat"><b>01</b><span>interlocuteur pour vous répondre</span></div>
-            <div className="s-stat"><b>360°</b><span>du constat à la réception</span></div>
+            <div className="s-stat"><b>20+</b><span>{t('stat1')}</span></div>
+            <div className="s-stat"><b>01</b><span>{t('stat2')}</span></div>
+            <div className="s-stat"><b>360°</b><span>{t('stat3')}</span></div>
           </div>
         </div>
       </section>
@@ -69,16 +65,11 @@ export default function HomePage() {
         <div className="s-wrap">
           <div className="s-split middle">
             <div>
-              <Eyebrow>JJD Consult</Eyebrow>
-              <h2 style={{ margin: '1rem 0 1.4rem' }}>Trois expertises. <span className="s-em">Une même exigence.</span></h2>
-              <p className="s-lead" style={{ maxWidth: '48ch' }}>
-                Un bâtiment vit, évolue et demande des réponses différentes au fil du temps.
-              </p>
+              <Eyebrow>{t('introEyebrow')}</Eyebrow>
+              <h2 style={{ margin: '1rem 0 1.4rem' }}>{t.rich('introTitle', { em })}</h2>
+              <p className="s-lead" style={{ maxWidth: '48ch' }}>{t('introLead')}</p>
             </div>
-            <p style={{ color: 'var(--s-ink-soft)' }}>
-              JJD Consult réunit la maintenance, la rénovation et la gestion de projets dans une seule structure.
-              Vous bénéficiez d’une équipe de terrain, d’une communication claire et d’un suivi adapté à chaque mission.
-            </p>
+            <p style={{ color: 'var(--s-ink-soft)' }}>{t('introText')}</p>
           </div>
         </div>
       </section>
@@ -86,10 +77,7 @@ export default function HomePage() {
       {/* Services */}
       <section className="s-section dark">
         <div className="s-wrap">
-          <SectionHead
-            eyebrow="Nos trois services"
-            title={<>À chaque besoin, <span className="s-em">le bon niveau d’accompagnement.</span></>}
-          />
+          <SectionHead eyebrow={t('servicesEyebrow')} title={t.rich('servicesTitle', { em })} />
           <div className="s-grid cols-3">
             {SERVICES.map((s) => (
               <Link key={s.n} href={s.href} className="s-card s-service">
@@ -99,7 +87,7 @@ export default function HomePage() {
                 <p style={{ fontWeight: 500, color: '#f4f1e9' }}>{s.baseline}</p>
                 <p>{s.text}</p>
                 <ul>{s.points.map((p) => <li key={p}>{p}</li>)}</ul>
-                <span className="s-link">Découvrir ce service <span>↗</span></span>
+                <span className="s-link">{t('servicesLink')} <span>↗</span></span>
               </Link>
             ))}
           </div>
@@ -110,21 +98,18 @@ export default function HomePage() {
       <section className="s-section">
         <div className="s-wrap">
           <div className="s-split middle">
-            <Figure src="/site/jjd-interior-hall.webp" alt="Intérieur haut de gamme rénové avec matériaux naturels" ratio="16 / 11" label="Rhode-Saint-Genèse" />
+            <Figure src="/site/jjd-interior-hall.webp" alt="Intérieur haut de gamme rénové avec matériaux naturels" ratio="16 / 11" label={t('refLabel')} />
             <div>
-              <Eyebrow>Référence • Rhode-Saint-Genèse</Eyebrow>
-              <h2 style={{ margin: '1rem 0 1.4rem' }}>Une propriété d’exception, <span className="s-em">pensée dans son ensemble.</span></h2>
-              <p className="s-lead" style={{ marginBottom: '1.6rem' }}>
-                Rénovation et valorisation globale d’une propriété de standing : espaces intérieurs, équipements techniques,
-                terrasses, abords, jardin, pelouse et zone piscine.
-              </p>
+              <Eyebrow>{t('refEyebrow')}</Eyebrow>
+              <h2 style={{ margin: '1rem 0 1.4rem' }}>{t.rich('refTitle', { em })}</h2>
+              <p className="s-lead" style={{ marginBottom: '1.6rem' }}>{t('refLead')}</p>
               <ul className="s-list">
-                <li>Une cohérence du dedans au dehors</li>
-                <li>Une coordination centralisée, un interlocuteur principal</li>
-                <li>Des finitions suivies de près, raccord par raccord</li>
+                <li>{t('refPoint1')}</li>
+                <li>{t('refPoint2')}</li>
+                <li>{t('refPoint3')}</li>
               </ul>
               <div style={{ marginTop: '2rem' }}>
-                <Cta href="/contact" variant="dark">Parler de mon projet</Cta>
+                <Cta href="/contact" variant="dark">{t('refCta')}</Cta>
               </div>
             </div>
           </div>
@@ -134,16 +119,13 @@ export default function HomePage() {
       {/* Méthode */}
       <section className="s-section cream2">
         <div className="s-wrap">
-          <SectionHead
-            eyebrow="Notre méthode"
-            title={<>Une organisation claire, <span className="s-em">du premier contact à la réception.</span></>}
-          />
+          <SectionHead eyebrow={t('methodEyebrow')} title={t.rich('methodTitle', { em })} />
           <Steps
             items={[
-              { title: 'Comprendre', text: 'Votre bâtiment, votre besoin, vos priorités et les contraintes visibles.' },
-              { title: 'Structurer', text: 'La solution, le devis, les intervenants et le planning adapté à la mission.' },
-              { title: 'Réaliser', text: 'Les travaux avec une coordination quotidienne et un suivi régulier.' },
-              { title: 'Contrôler', text: 'La qualité, les finitions et la clôture claire de l’intervention.' },
+              { title: t('step1Title'), text: t('step1Text') },
+              { title: t('step2Title'), text: t('step2Text') },
+              { title: t('step3Title'), text: t('step3Text') },
+              { title: t('step4Title'), text: t('step4Text') },
             ]}
           />
         </div>
@@ -152,11 +134,7 @@ export default function HomePage() {
       {/* Audiences */}
       <section className="s-section">
         <div className="s-wrap">
-          <SectionHead
-            eyebrow="À vos côtés"
-            title={<>Un service adapté <span className="s-em">à chaque interlocuteur.</span></>}
-            lead="La structure JJD Consult permet d’accompagner aussi bien un propriétaire que le gestionnaire d’un portefeuille immobilier."
-          />
+          <SectionHead eyebrow={t('audEyebrow')} title={t.rich('audTitle', { em })} lead={t('audLead')} />
           <div className="s-grid cols-2">
             {AUDIENCES.map((a) => (
               <div key={a.title} className="s-card">
@@ -173,17 +151,14 @@ export default function HomePage() {
         <div className="s-wrap">
           <div className="s-split middle">
             <div>
-              <Eyebrow>JJD Projets</Eyebrow>
-              <h2 style={{ margin: '1rem 0 1.4rem' }}>Décider <span className="s-em">avant de construire.</span></h2>
-              <p className="s-lead">
-                Vous envisagez un achat, une transformation ou plusieurs scénarios d’exploitation ? Nous analysons le
-                potentiel du bien, les travaux à prévoir et le budget nécessaire avant les grandes décisions.
-              </p>
+              <Eyebrow>{t('projEyebrow')}</Eyebrow>
+              <h2 style={{ margin: '1rem 0 1.4rem' }}>{t.rich('projTitle', { em })}</h2>
+              <p className="s-lead">{t('projLead')}</p>
               <div style={{ marginTop: '2rem' }}>
-                <Cta href="/projets">Demander une première analyse</Cta>
+                <Cta href="/projets">{t('projCta')}</Cta>
               </div>
             </div>
-            <Figure src="/site/jjd-project-team.webp" alt="Étude et préparation d’un projet de rénovation" ratio="4 / 3" label="Étude de projet" />
+            <Figure src="/site/jjd-project-team.webp" alt="Étude et préparation d’un projet de rénovation" ratio="4 / 3" label={t('projLabel')} />
           </div>
         </div>
       </section>
@@ -193,22 +168,18 @@ export default function HomePage() {
         <div className="s-wrap">
           <div className="s-split middle">
             <div>
-              <Eyebrow>Votre espace client</Eyebrow>
-              <h2 style={{ margin: '1rem 0 1.4rem' }}>Suivez vos chantiers <span className="s-em">en ligne, à tout moment.</span></h2>
-              <p className="s-lead">
-                Une rénovation qui dure des mois, un portefeuille d’immeubles à gérer, un SAV après livraison :
-                chaque client dispose d’un espace privé pour suivre l’avancement sans multiplier les appels et les
-                e-mails — un service que peu d’entrepreneurs proposent.
-              </p>
+              <Eyebrow>{t('clientEyebrow')}</Eyebrow>
+              <h2 style={{ margin: '1rem 0 1.4rem' }}>{t.rich('clientTitle', { em })}</h2>
+              <p className="s-lead">{t('clientLead')}</p>
               <div style={{ marginTop: '2rem' }}>
-                <Cta href="/portail" variant="dark">Accéder à l’espace client</Cta>
+                <Cta href="/portail" variant="dark">{t('clientCta')}</Cta>
               </div>
             </div>
             <ul className="s-list" style={{ fontSize: '1rem' }}>
-              <li>Photos et rapports d’intervention datés</li>
-              <li>Devis à valider en ligne, d’un clic</li>
-              <li>Planning des interventions de la semaine</li>
-              <li>Historique regroupé par immeuble / ACP</li>
+              <li>{t('clientPoint1')}</li>
+              <li>{t('clientPoint2')}</li>
+              <li>{t('clientPoint3')}</li>
+              <li>{t('clientPoint4')}</li>
             </ul>
           </div>
         </div>
@@ -217,25 +188,22 @@ export default function HomePage() {
       {/* Pourquoi */}
       <section className="s-section">
         <div className="s-wrap">
-          <SectionHead
-            eyebrow="Pourquoi JJD Consult"
-            title={<>Le regard du terrain. <span className="s-em">La maîtrise du suivi.</span></>}
-          />
+          <SectionHead eyebrow={t('whyEyebrow')} title={t.rich('whyTitle', { em })} />
           <div className="s-grid cols-4">
-            <NumberCard n="01" title="Entreprise familiale"><p>Une relation directe, engagée et accessible du premier contact à la réception.</p></NumberCard>
-            <NumberCard n="02" title="20 ans d’expérience"><p>Une direction technique issue du terrain, au service de décisions réalistes.</p></NumberCard>
-            <NumberCard n="03" title="Communication transparente"><p>Des priorités expliquées, des devis structurés et un suivi compréhensible.</p></NumberCard>
-            <NumberCard n="04" title="Coordination complète"><p>Un seul partenaire pour préserver la continuité entre les différents métiers.</p></NumberCard>
+            <NumberCard n="01" title={t('why1Title')}><p>{t('why1Text')}</p></NumberCard>
+            <NumberCard n="02" title={t('why2Title')}><p>{t('why2Text')}</p></NumberCard>
+            <NumberCard n="03" title={t('why3Title')}><p>{t('why3Text')}</p></NumberCard>
+            <NumberCard n="04" title={t('why4Title')}><p>{t('why4Text')}</p></NumberCard>
           </div>
         </div>
       </section>
 
       <CtaBand
-        eyebrow="Parlons de votre besoin"
-        title={<>Une intervention, une rénovation <span className="s-em">ou un projet à structurer ?</span></>}
-        text="Décrivez-nous le bâtiment, sa localisation et votre objectif. Nous vous recontactons pour déterminer la meilleure manière d’intervenir."
-        primary={{ href: '/contact', label: 'Présenter ma demande' }}
-        secondary={{ href: 'tel:+3228879239', label: 'Appeler le +32 2 887 92 39' }}
+        eyebrow={t('ctaEyebrow')}
+        title={t.rich('ctaTitle', { em })}
+        text={t('ctaText')}
+        primary={{ href: '/contact', label: t('ctaPrimary') }}
+        secondary={{ href: 'tel:+3228879239', label: t('ctaSecondary') }}
       />
     </>
   );

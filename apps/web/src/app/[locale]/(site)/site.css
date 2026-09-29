@@ -82,6 +82,10 @@
   border-bottom-width: 1.5px !important; transition: border-color 0.15s, background 0.15s;
 }
 .s-nav-portal:hover { border-color: var(--s-gold); background: rgba(0,0,0,0.02); }
+.s-lang-switch { display: flex; align-items: center; gap: 2px; font-size: 0.76rem; font-weight: 700; }
+.s-lang-switch a { padding: 4px 7px !important; border-radius: 6px; opacity: 0.5; letter-spacing: 0.02em; }
+.s-lang-switch a.active { opacity: 1; background: rgba(0,0,0,0.05); }
+.s-lang-switch a:hover { opacity: 1; }
 .s-burger { display: none; background: none; border: 0; font-size: 1.5rem; color: var(--s-ink); cursor: pointer; margin-left: auto; }
 
 @media (max-width: 900px) {

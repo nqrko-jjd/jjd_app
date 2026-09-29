@@ -1,19 +1,24 @@
 'use client';
 import { useState } from 'react';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { useTranslations, useLocale } from 'next-intl';
+import { Link, usePathname } from '@/i18n/navigation';
+import { routing } from '@/i18n/routing';
 
-const LINKS = [
-  { href: '/maintenance', label: 'Maintenance' },
-  { href: '/renovation', label: 'Rénovation' },
-  { href: '/projets', label: 'Projets' },
-  { href: '/realisations', label: 'Réalisations' },
-  { href: '/a-propos', label: 'Qui sommes-nous ?' },
-];
+const LOCALE_LABEL: Record<string, string> = { fr: 'FR', en: 'EN', nl: 'NL' };
 
 export function SiteHeader() {
+  const t = useTranslations('nav');
+  const locale = useLocale();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+
+  const LINKS = [
+    { href: '/maintenance', label: t('maintenance') },
+    { href: '/renovation', label: t('renovation') },
+    { href: '/projets', label: t('projets') },
+    { href: '/realisations', label: t('realisations') },
+    { href: '/a-propos', label: t('aPropos') },
+  ];
 
   return (
     <header className="s-nav">
@@ -35,10 +40,17 @@ export function SiteHeader() {
             </Link>
           ))}
           <a href="/portail" className="s-nav-portal" onClick={() => setOpen(false)}>
-            Espace client
+            {t('espaceClient')}
           </a>
+          <div className="s-lang-switch">
+            {routing.locales.map((l) => (
+              <Link key={l} href={pathname} locale={l} className={l === locale ? 'active' : ''}>
+                {LOCALE_LABEL[l]}
+              </Link>
+            ))}
+          </div>
           <Link href="/contact" className="s-btn-dark s-nav-cta" onClick={() => setOpen(false)}>
-            Nous contacter <span className="arr">↗</span>
+            {t('contact')} <span className="arr">↗</span>
           </Link>
         </nav>
       </div>

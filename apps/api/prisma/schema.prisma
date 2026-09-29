@@ -105,9 +105,10 @@ model Person {
   role             String   @default("worker") // foreman | team_leader | qualified_worker | worker
   contractType     String   @default("employee") // employee | subcontractor | interim
   hourlyRate       Float? // taux facturé / coûté (sert au calcul de rentabilité chantier)
-  // Taux réellement versé à la personne, si différent de hourlyRate (ex. sous-traitant facturé
-  // 17,77 €/h mais payé 16 €/h — la marge reste JJD). Vide = identique à hourlyRate.
-  payoutRate       Float?
+  // Montant réellement remis en main à la personne par jour presté, si différent du jour
+  // facturé/coûté (hourlyRate × dailyHours) — ex. sous-traitant facturé 177,77 €/jour mais
+  // remis 160 €/jour, la marge reste JJD. Vide = identique au jour facturé/coûté.
+  payoutPerDay     Float?
   dailyHours       Float    @default(10) // jour presté garanti (payé même si moins pointé sur chantier)
   phone            String?
   email            String?

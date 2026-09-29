@@ -13,7 +13,7 @@ interface Team {
   year: number; month: number; totalAmount: number; totalPayoutAmount: number; totalNetAmount: number;
   rows: {
     personId: string; name: string; photoThumbUrl: string | null; contractType: string;
-    hourlyRate: number | null; payoutRate: number | null; hours: number; days: number;
+    hourlyRate: number | null; payoutPerDay: number | null; hours: number; days: number;
     amount: number; payoutAmount: number; toWithhold: number; netAmount: number; pending: number;
   }[];
 }
@@ -66,7 +66,7 @@ export default function DecomptesPage() {
   const totalDays = rows.reduce((a, r) => a + r.days, 0);
   const pending = rows.reduce((a, r) => a + r.pending, 0);
   const hasWithholding = rows.some((r) => r.toWithhold > 0);
-  const hasPayoutDiff = rows.some((r) => r.payoutRate != null && r.payoutRate !== r.hourlyRate);
+  const hasPayoutDiff = rows.some((r) => r.payoutPerDay != null);
 
   return (
     <>
@@ -186,7 +186,7 @@ function FragmentRow({
         <td style={{ textAlign: 'right' }} className="tnum">{r.days} j</td>
         <td style={{ textAlign: 'right' }} className="tnum">{formatHours(r.hours)}</td>
         <td style={{ textAlign: 'right' }}><Money value={r.amount} /></td>
-        {showPayout && <td style={{ textAlign: 'right' }}>{r.payoutRate != null && r.payoutRate !== r.hourlyRate ? <Money value={r.payoutAmount} /> : '—'}</td>}
+        {showPayout && <td style={{ textAlign: 'right' }}>{r.payoutPerDay != null ? <Money value={r.payoutAmount} /> : '—'}</td>}
         {showWithholding && <td style={{ textAlign: 'right' }}>{r.toWithhold > 0 ? <Money value={r.toWithhold} /> : '—'}</td>}
         {showWithholding && <td style={{ textAlign: 'right', fontWeight: r.toWithhold > 0 ? 700 : 400 }}><Money value={r.netAmount} /></td>}
         <td>{r.pending > 0 && <span className="badge warn">{r.pending} à valider</span>}</td>

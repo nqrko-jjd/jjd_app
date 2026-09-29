@@ -111,18 +111,19 @@ export async function teamMonthlyStatement(year: number, month: number) {
     const s = await monthlyStatement(p.id, year, month);
     if (s.entryCount === 0) continue;
     const toWithhold = round2(p.adjustments.reduce((sum, a) => sum + a.amount, 0));
-    // Certains sous-traitants sont facturés/coûtés à un taux (hourlyRate, sert au calcul de
-    // rentabilité chantier) mais réellement payés à un autre (payoutRate, ex. -10%). Basé sur
-    // les heures garanties (jour presté déjà appliqué dans s.totalHours), pas une simple mise
-    // à l'échelle du montant coûté — le taux a pu changer en cours de mois.
-    const payoutAmount = p.payoutRate != null ? round2(s.totalHours * p.payoutRate) : s.totalAmount;
+    // Certains sous-traitants sont facturés/coûtés à un montant par jour (hourlyRate ×
+    // dailyHours, sert au calcul de rentabilité chantier) mais réellement remis en main à un
+    // autre montant par jour (payoutPerDay, ex. 160 € remis pour un jour facturé 177,77 €).
+    // Basé sur les jours prestés (s.totalDays), pas sur les heures — le montant "en main" ne
+    // dépend pas du nombre d'heures dans la journée, juste du jour lui-même.
+    const payoutAmount = p.payoutPerDay != null ? round2(s.totalDays * p.payoutPerDay) : s.totalAmount;
     rows.push({
       personId: p.id,
       name: p.displayName || `${p.firstName} ${p.lastName ?? ''}`.trim(),
       photoThumbUrl: p.photoThumbUrl,
       contractType: p.contractType,
       hourlyRate: p.hourlyRate,
-      payoutRate: p.payoutRate,
+      payoutPerDay: p.payoutPerDay,
       hours: s.totalHours,
       days: s.totalDays,
       amount: s.totalAmount,

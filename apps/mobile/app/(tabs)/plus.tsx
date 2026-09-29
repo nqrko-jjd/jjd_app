@@ -15,6 +15,7 @@ const LINKS: { href: string; label: string; ic: FeatherName; roles?: string[] }[
   { href: '/flotte', label: 'Flotte', ic: 'truck' },
   { href: '/pipeline', label: 'Pipeline commercial', ic: 'trending-up' },
   { href: '/documents', label: 'Devis & factures', ic: 'file-text', roles: ['admin', 'office'] },
+  { href: '/achats', label: 'Achats & dépenses', ic: 'shopping-bag', roles: ['admin', 'office'] },
   { href: '/decomptes', label: 'Décomptes du mois', ic: 'credit-card' },
   { href: '/controle', label: 'File de contrôle', ic: 'flag' },
 ];

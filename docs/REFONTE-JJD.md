@@ -60,3 +60,20 @@ Ne pas lancer npm run setup : il inclut db:reset.
 - Aucun changement base/API/production. Pas encore de prévisualisation validée.
 - L'environnement de test avec base et médias séparés reste à provisionner ;
   ne pas utiliser les identifiants de production ni activer les envois réels.
+
+## Aperçu isolé — premier parcours testable
+
+Commit 4f0c47e : nouvelle vue Agenda semaine dans la vraie page planning,
+conservation des vues et formulaires existants. Aperçu assemblé depuis les
+composants réels avec substitutions d'API/auth/navigation uniquement au build
+preview/build.mjs (aucune modification de l'auth/API de production).
+30 personnes fictives, 6 véhicules, 4 chantiers ; données locales au navigateur.
+CSP connect-src none, aucun appel aux services de production. Scope : planning,
+création/édition/duplication/suppression, absences, liste et création de chantiers.
+La fiche détail de chantier est un aperçu réduit explicitement signalé.
+Pas encore de nouvelles traductions backoffice, finance, portail ni validation
+Julien. Les statuts du planning sont ceux du modèle existant.
+Contrôles : TypeScript web, compilation bundle, rendu DOM + ouverture formulaires,
+CRUD API fictive. Pas de validation visuelle dans un navigateur réel à ce stade.
+Hébergement privé dédié : appgprj_6abc3fbc471c81919ffe04553d321326.
+La maquette historique n'a pas été modifiée. Aucun push GitHub effectué.

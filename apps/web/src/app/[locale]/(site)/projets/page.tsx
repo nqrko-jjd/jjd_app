@@ -1,20 +1,27 @@
 import type { Metadata } from 'next';
+import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { PageHero, SectionHead, Steps, CtaBand, Eyebrow } from '../_components/blocks';
 import { Figure } from '../_components/Figure';
 
-export const metadata: Metadata = {
-  title: 'Étude et coordination de projets | JJD Consult',
-  description:
-    'De l’analyse du potentiel d’un bien à la coordination des travaux : une feuille de route réaliste, budgétée et coordonnée.',
-};
+const em = (chunks: React.ReactNode) => <span className="s-em">{chunks}</span>;
 
-export default function ProjetsPage() {
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
+  const { locale } = await params;
+  const t = await getTranslations({ locale, namespace: 'projets' });
+  return { title: t('metaTitle'), description: t('metaDescription') };
+}
+
+export default async function ProjetsPage({ params }: { params: Promise<{ locale: string }> }) {
+  const { locale } = await params;
+  setRequestLocale(locale);
+  const t = await getTranslations({ locale, namespace: 'projets' });
+
   return (
     <>
       <PageHero
-        eyebrow="JJD Projets"
-        title={<>Décider avec méthode. <span className="s-em">Réaliser avec maîtrise.</span></>}
-        lead="Nous transformons un bâtiment à potentiel ou un projet complexe en une feuille de route réaliste, budgétée et coordonnée."
+        eyebrow={t('heroEyebrow')}
+        title={t.rich('heroTitle', { em })}
+        lead={t('heroLead')}
         image="/site/hero-projets.jpg"
       />
 
@@ -22,34 +29,27 @@ export default function ProjetsPage() {
         <div className="s-wrap">
           <div className="s-split middle">
             <div>
-              <Eyebrow>Avant les travaux</Eyebrow>
-              <h2 style={{ margin: '1rem 0 1.3rem' }}>Donner une direction claire <span className="s-em">aux bonnes décisions.</span></h2>
+              <Eyebrow>{t('introEyebrow')}</Eyebrow>
+              <h2 style={{ margin: '1rem 0 1.3rem' }}>{t.rich('introTitle', { em })}</h2>
               <p className="s-lead" style={{ maxWidth: '46ch', marginBottom: '1.1rem' }}>
-                Un projet solide commence avant le premier coup de marteau.
+                {t('introLead')}
               </p>
-              <p style={{ color: 'var(--s-ink-soft)' }}>
-                Nous analysons l’état du bien, confrontons les usages possibles, structurons les grands postes et
-                identifions les études spécialisées nécessaires. Vous avancez avec une vision plus réaliste du projet
-                et du budget.
-              </p>
+              <p style={{ color: 'var(--s-ink-soft)' }}>{t('introText')}</p>
             </div>
-            <Figure src="/site/projets-etude.jpg" alt="Étude de projet" ratio="5 / 4" label="Étude & plans" />
+            <Figure src="/site/projets-etude.jpg" alt="Étude de projet" ratio="5 / 4" label={t('introFigureLabel')} />
           </div>
         </div>
       </section>
 
       <section className="s-section cream2">
         <div className="s-wrap">
-          <SectionHead
-            eyebrow="Notre accompagnement"
-            title={<>De l’idée au chantier, <span className="s-em">une progression structurée.</span></>}
-          />
+          <SectionHead eyebrow={t('stepsEyebrow')} title={t.rich('stepsTitle', { em })} />
           <Steps
             items={[
-              { title: 'Visite & analyse', text: 'Lecture générale du bâtiment, objectifs, contraintes visibles et priorités à approfondir.' },
-              { title: 'Scénarios & valorisation', text: 'Comparaison de plusieurs organisations, usages ou niveaux de finition selon votre stratégie.' },
-              { title: 'Budget & programme', text: 'Estimation structurée des grands postes et préparation d’un programme de rénovation cohérent.' },
-              { title: 'Coordination & réalisation', text: 'Consultation des partenaires, planification, exécution et suivi des différents corps de métier.' },
+              { title: t('step1Title'), text: t('step1Text') },
+              { title: t('step2Title'), text: t('step2Text') },
+              { title: t('step3Title'), text: t('step3Text') },
+              { title: t('step4Title'), text: t('step4Text') },
             ]}
           />
         </div>
@@ -59,29 +59,25 @@ export default function ProjetsPage() {
         <div className="s-wrap">
           <div className="s-split">
             <div>
-              <Eyebrow>Étude de cas • Waterloo</Eyebrow>
-              <h2 style={{ margin: '1rem 0 1.3rem' }}>Deux bâtiments. <span className="s-em">Plusieurs scénarios.</span></h2>
-              <p className="s-lead">
-                Une maison familiale partiellement rénovée et un ancien relais de poste resté à l’état brut.
-                L’étude a permis de confronter deux logiques d’exploitation et de définir le programme de travaux
-                avant toute décision importante.
-              </p>
+              <Eyebrow>{t('caseEyebrow')}</Eyebrow>
+              <h2 style={{ margin: '1rem 0 1.3rem' }}>{t.rich('caseTitle', { em })}</h2>
+              <p className="s-lead">{t('caseLead')}</p>
             </div>
             <div className="s-panel">
-              <div className="row"><b>150 m²</b><span>Maison familiale</span></div>
-              <div className="row"><b>140 m²</b><span>Ancien relais</span></div>
-              <div className="row"><b>2</b><span>Scénarios étudiés</span></div>
+              <div className="row"><b>150 m²</b><span>{t('caseStat1Label')}</span></div>
+              <div className="row"><b>140 m²</b><span>{t('caseStat2Label')}</span></div>
+              <div className="row"><b>2</b><span>{t('caseStat3Label')}</span></div>
             </div>
           </div>
         </div>
       </section>
 
       <CtaBand
-        eyebrow="JJD Consult"
-        title={<>Vous possédez <span className="s-em">un bien à transformer ?</span></>}
-        text="Parlez-nous du bâtiment, de sa situation actuelle et de votre objectif. Nous vous aiderons à choisir le bon niveau d’étude."
-        primary={{ href: '/contact', label: 'Demander une première analyse' }}
-        secondary={{ href: 'tel:+3228879239', label: '+32 2 887 92 39' }}
+        eyebrow={t('ctaEyebrow')}
+        title={t.rich('ctaTitle', { em })}
+        text={t('ctaText')}
+        primary={{ href: '/contact', label: t('ctaPrimary') }}
+        secondary={{ href: 'tel:+3228879239', label: t('ctaSecondary') }}
       />
     </>
   );

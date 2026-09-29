@@ -1,11 +1,14 @@
 'use client';
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Eyebrow } from '../_components/blocks';
 
-const TYPES = ['Maintenance', 'Rénovation', 'Projet / étude', 'SAV promoteur', 'Autre demande'];
-
 export default function ContactPage() {
+  const t = useTranslations('contact');
   const [status, setStatus] = useState<'idle' | 'sending' | 'ok' | 'error'>('idle');
+
+  const TYPES = [t('type1'), t('type2'), t('type3'), t('type4'), t('type5')];
+  const em = (chunks: React.ReactNode) => <span className="s-em">{chunks}</span>;
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -32,12 +35,9 @@ export default function ContactPage() {
     <>
       <section className="s-hero">
         <div className="s-hero-inner" style={{ paddingBottom: 'clamp(3rem, 7vw, 5rem)' }}>
-          <Eyebrow>Contact</Eyebrow>
-          <h1 style={{ margin: '1.4rem 0 1.3rem', maxWidth: '16ch' }}>Parlons de <span className="s-em">votre bâtiment.</span></h1>
-          <p className="s-lead">
-            Une intervention, une rénovation ou un projet à structurer ? Donnez-nous les premières informations utiles
-            afin que nous puissions vous orienter correctement.
-          </p>
+          <Eyebrow>{t('eyebrow')}</Eyebrow>
+          <h1 style={{ margin: '1.4rem 0 1.3rem', maxWidth: '16ch' }}>{t.rich('heroTitle', { em })}</h1>
+          <p className="s-lead">{t('heroLead')}</p>
         </div>
       </section>
 
@@ -45,47 +45,44 @@ export default function ContactPage() {
         <div className="s-wrap">
           <div className="s-contact-grid">
             <div className="s-contact-info">
-              <div className="item"><b>Téléphone</b><a href="tel:+3228879239">+32 2 887 92 39</a></div>
-              <div className="item"><b>E-mail</b><a href="mailto:info@jjd-consult.be">info@jjd-consult.be</a></div>
-              <div className="item"><b>Zone d’intervention</b>Bruxelles, Brabant wallon et périphérie</div>
-              <div className="item"><b>Adresse</b>Gieterijstraat 49, 1601 Leeuw-Saint-Pierre</div>
-              <div className="item"><b>Déjà client ?</b><a href="/portail">Accéder à l’espace client ↗</a></div>
+              <div className="item"><b>{t('infoPhoneLabel')}</b><a href="tel:+3228879239">+32 2 887 92 39</a></div>
+              <div className="item"><b>{t('infoEmailLabel')}</b><a href="mailto:info@jjd-consult.be">info@jjd-consult.be</a></div>
+              <div className="item"><b>{t('infoZoneLabel')}</b>{t('infoZoneText')}</div>
+              <div className="item"><b>{t('infoAddressLabel')}</b>{t('infoAddressText')}</div>
+              <div className="item"><b>{t('infoClientLabel')}</b><a href="/portail">{t('infoClientLink')}</a></div>
             </div>
 
             <div>
               {status === 'ok' ? (
-                <div className="s-form-ok">
-                  Merci, votre demande est bien arrivée. Nous revenons vers vous rapidement pour convenir de la
-                  meilleure manière d’intervenir.
-                </div>
+                <div className="s-form-ok">{t('formOk')}</div>
               ) : (
                 <form className="s-form" onSubmit={submit}>
                   <div className="two">
-                    <div className="s-field"><label htmlFor="name">Nom et prénom</label><input id="name" name="name" required /></div>
-                    <div className="s-field"><label htmlFor="company">Société</label><input id="company" name="company" /></div>
+                    <div className="s-field"><label htmlFor="name">{t('labelName')}</label><input id="name" name="name" required /></div>
+                    <div className="s-field"><label htmlFor="company">{t('labelCompany')}</label><input id="company" name="company" /></div>
                   </div>
                   <div className="two">
-                    <div className="s-field"><label htmlFor="email">E-mail</label><input id="email" name="email" type="email" required /></div>
-                    <div className="s-field"><label htmlFor="phone">Téléphone</label><input id="phone" name="phone" /></div>
+                    <div className="s-field"><label htmlFor="email">{t('labelEmail')}</label><input id="email" name="email" type="email" required /></div>
+                    <div className="s-field"><label htmlFor="phone">{t('labelPhone')}</label><input id="phone" name="phone" /></div>
                   </div>
                   <div className="two">
                     <div className="s-field">
-                      <label htmlFor="type">Type de demande</label>
+                      <label htmlFor="type">{t('labelType')}</label>
                       <select id="type" name="type" defaultValue="">
-                        <option value="" disabled>Choisissez un service</option>
-                        {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                        <option value="" disabled>{t('typePlaceholder')}</option>
+                        {TYPES.map((ty) => <option key={ty} value={ty}>{ty}</option>)}
                       </select>
                     </div>
-                    <div className="s-field"><label htmlFor="location">Localisation du bâtiment</label><input id="location" name="location" /></div>
+                    <div className="s-field"><label htmlFor="location">{t('labelLocation')}</label><input id="location" name="location" /></div>
                   </div>
-                  <div className="s-field"><label htmlFor="message">Votre demande</label><textarea id="message" name="message" required /></div>
+                  <div className="s-field"><label htmlFor="message">{t('labelMessage')}</label><textarea id="message" name="message" required /></div>
                   {/* honeypot */}
                   <input type="text" name="website" tabIndex={-1} autoComplete="off" style={{ position: 'absolute', left: '-9999px' }} aria-hidden />
-                  {status === 'error' && <div className="s-form-err">Une erreur est survenue. Réessayez ou écrivez-nous à info@jjd-consult.be.</div>}
+                  {status === 'error' && <div className="s-form-err">{t('errorMsg')}</div>}
                   <button className="s-btn" type="submit" disabled={status === 'sending'}>
-                    {status === 'sending' ? 'Envoi…' : 'Envoyer ma demande'} <span className="arr">↗</span>
+                    {status === 'sending' ? t('sending') : t('submit')} <span className="arr">↗</span>
                   </button>
-                  <p className="s-form-note">Vos informations sont utilisées uniquement pour traiter votre demande.</p>
+                  <p className="s-form-note">{t('note')}</p>
                 </form>
               )}
             </div>

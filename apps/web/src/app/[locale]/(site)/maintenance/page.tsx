@@ -1,27 +1,34 @@
 import type { Metadata } from 'next';
-import { PageHero, SectionHead, Steps, CtaBand, Eyebrow, Cta } from '../_components/blocks';
+import { getTranslations, setRequestLocale } from 'next-intl/server';
+import { PageHero, SectionHead, CtaBand, Eyebrow, Cta } from '../_components/blocks';
 import { Figure } from '../_components/Figure';
 
-export const metadata: Metadata = {
-  title: 'Maintenance de bâtiments | JJD Consult',
-  description:
-    'Interventions, réparations et suivi technique multitechnique pour syndics, promoteurs et entreprises à Bruxelles et dans le Brabant wallon.',
-};
+const em = (chunks: React.ReactNode) => <span className="s-em">{chunks}</span>;
 
-const INTERVENTIONS = [
-  { title: 'Syndics & copropriétés', text: 'Parties communes, infiltrations, plomberie, électricité, peinture, égouttage et coordination de travaux.' },
-  { title: 'SAV pour promoteurs', text: 'Rendez-vous occupants, reprises de finitions, petites réparations multitechniques et clôture des dossiers.' },
-  { title: 'Entreprises & bureaux', text: 'Réparations, adaptations et entretien pour conserver des espaces fonctionnels et soignés.' },
-  { title: 'Contrats d’entretien', text: 'Visites planifiées, contrôle d’équipements, entretien des abords et rapports de suivi adaptés au bâtiment.' },
-];
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
+  const { locale } = await params;
+  const t = await getTranslations({ locale, namespace: 'maintenance' });
+  return { title: t('metaTitle'), description: t('metaDescription') };
+}
 
-export default function MaintenancePage() {
+export default async function MaintenancePage({ params }: { params: Promise<{ locale: string }> }) {
+  const { locale } = await params;
+  setRequestLocale(locale);
+  const t = await getTranslations({ locale, namespace: 'maintenance' });
+
+  const INTERVENTIONS = [
+    { title: t('int1Title'), text: t('int1Text') },
+    { title: t('int2Title'), text: t('int2Text') },
+    { title: t('int3Title'), text: t('int3Text') },
+    { title: t('int4Title'), text: t('int4Text') },
+  ];
+
   return (
     <>
       <PageHero
-        eyebrow="JJD Maintenance"
-        title={<>Des bâtiments suivis. <span className="s-em">Des demandes maîtrisées.</span></>}
-        lead="Interventions, réparations et suivi technique avec un partenaire réactif qui connaît la réalité des immeubles."
+        eyebrow={t('heroEyebrow')}
+        title={t.rich('heroTitle', { em })}
+        lead={t('heroLead')}
         image="/site/hero-maintenance.jpg"
       />
 
@@ -29,27 +36,21 @@ export default function MaintenancePage() {
         <div className="s-wrap">
           <div className="s-split middle">
             <div>
-              <Eyebrow>Maintenance multitechnique</Eyebrow>
-              <h2 style={{ margin: '1rem 0 1.3rem' }}>Un interlocuteur de terrain <span className="s-em">pour vos bâtiments.</span></h2>
+              <Eyebrow>{t('introEyebrow')}</Eyebrow>
+              <h2 style={{ margin: '1rem 0 1.3rem' }}>{t.rich('introTitle', { em })}</h2>
               <p className="s-lead" style={{ maxWidth: '46ch', marginBottom: '1.1rem' }}>
-                Centralisez davantage d’interventions sans multiplier les entreprises et les relances.
+                {t('introLead')}
               </p>
-              <p style={{ color: 'var(--s-ink-soft)' }}>
-                JJD Consult accompagne les gestionnaires et propriétaires pour les demandes ponctuelles comme pour
-                l’entretien régulier. Chaque intervention est qualifiée, organisée et suivie jusqu’à sa clôture.
-              </p>
+              <p style={{ color: 'var(--s-ink-soft)' }}>{t('introText')}</p>
             </div>
-            <Figure src="/site/maintenance-intervention.jpg" alt="Intervention de maintenance" ratio="5 / 4" label="Intervention" />
+            <Figure src="/site/maintenance-intervention.jpg" alt="Intervention de maintenance" ratio="5 / 4" label={t('introFigureLabel')} />
           </div>
         </div>
       </section>
 
       <section className="s-section cream2">
         <div className="s-wrap">
-          <SectionHead
-            eyebrow="Nos interventions"
-            title={<>Une réponse structurée, <span className="s-em">du signalement à la résolution.</span></>}
-          />
+          <SectionHead eyebrow={t('intervEyebrow')} title={t.rich('intervTitle', { em })} />
           <div className="s-grid cols-2">
             {INTERVENTIONS.map((it, i) => (
               <div key={it.title} className="s-card">
@@ -64,16 +65,13 @@ export default function MaintenancePage() {
 
       <section className="s-section">
         <div className="s-wrap">
-          <SectionHead
-            eyebrow="Notre méthode"
-            title={<>Clair pour le gestionnaire. <span className="s-em">Concret sur le terrain.</span></>}
-          />
+          <SectionHead eyebrow={t('methodEyebrow')} title={t.rich('methodTitle', { em })} />
           <ul className="s-list" style={{ fontSize: '1.05rem' }}>
-            <li>Qualification précise de la demande</li>
-            <li>Visite et constat lorsque nécessaire</li>
-            <li>Devis structuré ou intervention en régie</li>
-            <li>Coordination avec occupants et fournisseurs</li>
-            <li>Retour clair après intervention</li>
+            <li>{t('method1')}</li>
+            <li>{t('method2')}</li>
+            <li>{t('method3')}</li>
+            <li>{t('method4')}</li>
+            <li>{t('method5')}</li>
           </ul>
         </div>
       </section>
@@ -82,33 +80,29 @@ export default function MaintenancePage() {
         <div className="s-wrap">
           <div className="s-split">
             <div>
-              <Eyebrow>Espace syndic & promoteur</Eyebrow>
-              <h2 style={{ margin: '1rem 0 1.3rem' }}>Un portail dédié <span className="s-em">à vos immeubles et vos dossiers.</span></h2>
-              <p className="s-lead" style={{ maxWidth: '46ch' }}>
-                Gestionnaires et promoteurs suivent chaque intervention en ligne : photos, rapports signés, devis à
-                valider et planning de la semaine. Pour un SAV, chaque logement livré devient un dossier suivi jusqu’à
-                la levée de réserves. Les copropriétaires y accèdent en lecture pour ce qui les concerne.
-              </p>
+              <Eyebrow>{t('portalEyebrow')}</Eyebrow>
+              <h2 style={{ margin: '1rem 0 1.3rem' }}>{t.rich('portalTitle', { em })}</h2>
+              <p className="s-lead" style={{ maxWidth: '46ch' }}>{t('portalLead')}</p>
               <div style={{ marginTop: '1.8rem' }}>
-                <Cta href="/portail">Voir l’espace client</Cta>
+                <Cta href="/portail">{t('portalCta')}</Cta>
               </div>
             </div>
             <div className="s-panel">
-              <div className="row"><b>·</b><div><strong>Vue par immeuble / dossier</strong><br />Interventions en cours et historique regroupés par bâtiment ou par lot livré.</div></div>
-              <div className="row"><b>·</b><div><strong>Rapports d’intervention</strong><br />Datés, illustrés et signés sur place par l’équipe.</div></div>
-              <div className="row"><b>·</b><div><strong>Suivi des réserves</strong><br />Chaque point ouvert, traité, clôturé — visible côté promoteur comme côté occupant.</div></div>
-              <div className="row"><b>·</b><div><strong>Accès résident en lecture</strong><br />Les habitants voient l’avancement, sans les données financières.</div></div>
+              <div className="row"><b>·</b><div><strong>{t('panel1Title')}</strong><br />{t('panel1Text')}</div></div>
+              <div className="row"><b>·</b><div><strong>{t('panel2Title')}</strong><br />{t('panel2Text')}</div></div>
+              <div className="row"><b>·</b><div><strong>{t('panel3Title')}</strong><br />{t('panel3Text')}</div></div>
+              <div className="row"><b>·</b><div><strong>{t('panel4Title')}</strong><br />{t('panel4Text')}</div></div>
             </div>
           </div>
         </div>
       </section>
 
       <CtaBand
-        eyebrow="JJD Consult"
-        title={<>Un immeuble ou un portefeuille <span className="s-em">à entretenir ?</span></>}
-        text="Présentez-nous vos bâtiments et vos besoins récurrents. Nous déterminerons ensemble la formule la plus adaptée."
-        primary={{ href: '/contact', label: 'Nous contacter' }}
-        secondary={{ href: 'tel:+3228879239', label: '+32 2 887 92 39' }}
+        eyebrow={t('ctaEyebrow')}
+        title={t.rich('ctaTitle', { em })}
+        text={t('ctaText')}
+        primary={{ href: '/contact', label: t('ctaPrimary') }}
+        secondary={{ href: 'tel:+3228879239', label: t('ctaSecondary') }}
       />
     </>
   );

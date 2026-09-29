@@ -1,39 +1,44 @@
 import type { Metadata } from 'next';
+import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { PageHero, SectionHead, CtaBand } from '../_components/blocks';
 import { Figure } from '../_components/Figure';
 
-export const metadata: Metadata = {
-  title: 'Réalisations | JJD Consult',
-  description: 'Une sélection de projets : rénovation complète, étude & valorisation, aménagements extérieurs et transformations.',
-};
+const em = (chunks: React.ReactNode) => <span className="s-em">{chunks}</span>;
 
-const PROJETS = [
-  { img: 'real-1', tag: 'Rénovation complète • Rhode-Saint-Genèse', title: 'Propriété de standing', text: 'Transformation globale de la propriété : intérieur, techniques, terrasses, abords, jardin, pelouse et zone piscine.' },
-  { img: 'real-2', tag: 'Étude & valorisation • Waterloo', title: 'Maison et ancien relais de poste', text: 'Analyse du potentiel, projections 3D, comparaison de scénarios et préparation du programme de rénovation.' },
-  { img: 'real-3', tag: 'Aménagement extérieur • Projet JJD Consult', title: 'Terrasse et abords', text: 'Création d’un espace extérieur cohérent avec le bâtiment, des finitions jusqu’aux raccords avec le jardin.' },
-  { img: 'real-4', tag: 'Transformation • Avant / après', title: 'Façade et enveloppe', text: 'Modernisation de l’aspect extérieur et amélioration durable de la protection du bâtiment.' },
-  { img: 'real-5', tag: 'Rénovation intérieure • Avant / après', title: 'Escalier et circulation', text: 'Reprise complète d’un espace de passage pour retrouver une circulation plus claire et des finitions soignées.' },
-  { img: 'real-6', tag: 'Aménagement extérieur • Avant / après', title: 'Accès et allées', text: 'Réorganisation des accès et remise en état des abords pour un ensemble plus propre, pratique et durable.' },
-  { img: 'real-7', tag: 'Rénovation intérieure • Avant / après', title: 'Transformation des espaces', text: 'Redistribution, rénovation et finitions intérieures coordonnées dans une vision d’ensemble.' },
-  { img: 'real-8', tag: 'Gros œuvre • Projet JJD Consult', title: 'Structure et toiture', text: 'Travaux de structure et de couverture réalisés avec une attention particulière portée à la stabilité et à l’étanchéité.' },
-];
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
+  const { locale } = await params;
+  const t = await getTranslations({ locale, namespace: 'realisations' });
+  return { title: t('metaTitle'), description: t('metaDescription') };
+}
 
-export default function RealisationsPage() {
+export default async function RealisationsPage({ params }: { params: Promise<{ locale: string }> }) {
+  const { locale } = await params;
+  setRequestLocale(locale);
+  const t = await getTranslations({ locale, namespace: 'realisations' });
+
+  const PROJETS = [
+    { img: 'real-1', tag: t('proj1Tag'), title: t('proj1Title'), text: t('proj1Text') },
+    { img: 'real-2', tag: t('proj2Tag'), title: t('proj2Title'), text: t('proj2Text') },
+    { img: 'real-3', tag: t('proj3Tag'), title: t('proj3Title'), text: t('proj3Text') },
+    { img: 'real-4', tag: t('proj4Tag'), title: t('proj4Title'), text: t('proj4Text') },
+    { img: 'real-5', tag: t('proj5Tag'), title: t('proj5Title'), text: t('proj5Text') },
+    { img: 'real-6', tag: t('proj6Tag'), title: t('proj6Title'), text: t('proj6Text') },
+    { img: 'real-7', tag: t('proj7Tag'), title: t('proj7Title'), text: t('proj7Text') },
+    { img: 'real-8', tag: t('proj8Tag'), title: t('proj8Title'), text: t('proj8Text') },
+  ];
+
   return (
     <>
       <PageHero
-        eyebrow="Nos réalisations"
-        title={<>Des réponses différentes. <span className="s-em">Une même exigence.</span></>}
-        lead="Rénovation, maintenance ou projet : nous adaptons l’organisation et les équipes à la réalité de chaque bâtiment."
+        eyebrow={t('heroEyebrow')}
+        title={t.rich('heroTitle', { em })}
+        lead={t('heroLead')}
         image="/site/hero-realisations.jpg"
       />
 
       <section className="s-section">
         <div className="s-wrap">
-          <SectionHead
-            eyebrow="Sélection de projets"
-            title={<>Du projet d’exception <span className="s-em">à l’intervention quotidienne.</span></>}
-          />
+          <SectionHead eyebrow={t('selectionEyebrow')} title={t.rich('selectionTitle', { em })} />
           <div className="s-grid cols-3">
             {PROJETS.map((p) => (
               <article key={p.title} className="s-real">
@@ -47,17 +52,17 @@ export default function RealisationsPage() {
             ))}
           </div>
           <p className="s-form-note" style={{ marginTop: '2.5rem' }}>
-            Certaines références sont présentées de manière anonymisée afin de respecter la confidentialité de nos clients et partenaires.
+            {t('confidentialityNote')}
           </p>
         </div>
       </section>
 
       <CtaBand
-        eyebrow="JJD Consult"
-        title={<>Votre projet pourrait être <span className="s-em">le prochain.</span></>}
-        text="Expliquez-nous votre besoin et le niveau d’accompagnement recherché. Nous vous proposerons une première approche adaptée."
-        primary={{ href: '/contact', label: 'Nous contacter' }}
-        secondary={{ href: 'tel:+3228879239', label: '+32 2 887 92 39' }}
+        eyebrow={t('ctaEyebrow')}
+        title={t.rich('ctaTitle', { em })}
+        text={t('ctaText')}
+        primary={{ href: '/contact', label: t('ctaPrimary') }}
+        secondary={{ href: 'tel:+3228879239', label: t('ctaSecondary') }}
       />
     </>
   );

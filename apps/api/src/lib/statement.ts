@@ -111,25 +111,33 @@ export async function teamMonthlyStatement(year: number, month: number) {
     const s = await monthlyStatement(p.id, year, month);
     if (s.entryCount === 0) continue;
     const toWithhold = round2(p.adjustments.reduce((sum, a) => sum + a.amount, 0));
+    // Certains sous-traitants sont facturés/coûtés à un taux (hourlyRate, sert au calcul de
+    // rentabilité chantier) mais réellement payés à un autre (payoutRate, ex. -10%). Basé sur
+    // les heures garanties (jour presté déjà appliqué dans s.totalHours), pas une simple mise
+    // à l'échelle du montant coûté — le taux a pu changer en cours de mois.
+    const payoutAmount = p.payoutRate != null ? round2(s.totalHours * p.payoutRate) : s.totalAmount;
     rows.push({
       personId: p.id,
       name: p.displayName || `${p.firstName} ${p.lastName ?? ''}`.trim(),
       photoThumbUrl: p.photoThumbUrl,
       contractType: p.contractType,
       hourlyRate: p.hourlyRate,
+      payoutRate: p.payoutRate,
       hours: s.totalHours,
       days: s.totalDays,
       amount: s.totalAmount,
+      payoutAmount,
       // avances/dettes non réglées -> à déduire de ce paiement (simple repère, pas soustrait
       // automatiquement des rapports de marge/consolidé, qui restent basés sur le pointage réel)
       toWithhold,
-      netAmount: round2(s.totalAmount - toWithhold),
+      netAmount: round2(payoutAmount - toWithhold),
       pending: s.pendingCount,
     });
   }
   return {
     year, month, rows,
     totalAmount: round2(rows.reduce((a, r) => a + r.amount, 0)),
+    totalPayoutAmount: round2(rows.reduce((a, r) => a + r.payoutAmount, 0)),
     totalNetAmount: round2(rows.reduce((a, r) => a + r.netAmount, 0)),
   };
 }

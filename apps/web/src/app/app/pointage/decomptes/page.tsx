@@ -10,8 +10,12 @@ import { formatHours, WORKER_CONTRACT_LABEL } from '@jjd/shared';
 import { Wallet, Users, Clock, AlertTriangle } from 'lucide-react';
 
 interface Team {
-  year: number; month: number; totalAmount: number; totalNetAmount: number;
-  rows: { personId: string; name: string; photoThumbUrl: string | null; contractType: string; hourlyRate: number | null; hours: number; days: number; amount: number; toWithhold: number; netAmount: number; pending: number }[];
+  year: number; month: number; totalAmount: number; totalPayoutAmount: number; totalNetAmount: number;
+  rows: {
+    personId: string; name: string; photoThumbUrl: string | null; contractType: string;
+    hourlyRate: number | null; payoutRate: number | null; hours: number; days: number;
+    amount: number; payoutAmount: number; toWithhold: number; netAmount: number; pending: number;
+  }[];
 }
 interface DetailEntry {
   id: string; date: string | null; worksiteId: string | null; worksiteRef: string | null; worksiteTitle: string | null;
@@ -62,6 +66,7 @@ export default function DecomptesPage() {
   const totalDays = rows.reduce((a, r) => a + r.days, 0);
   const pending = rows.reduce((a, r) => a + r.pending, 0);
   const hasWithholding = rows.some((r) => r.toWithhold > 0);
+  const hasPayoutDiff = rows.some((r) => r.payoutRate != null && r.payoutRate !== r.hourlyRate);
 
   return (
     <>
@@ -76,7 +81,12 @@ export default function DecomptesPage() {
         eyebrow="Suivi du temps"
         title="Décomptes du mois"
         sub="Heures validées par personne — base des paiements"
-        action={<Link href="/app/pointage" className="btn">← Validation</Link>}
+        action={(
+          <>
+            <Link href={`/imprimer/decomptes?year=${y}&month=${m}`} target="_blank" className="btn">Imprimer</Link>
+            <Link href="/app/pointage" className="btn">← Validation</Link>
+          </>
+        )}
       />
 
       <div className="row" style={{ marginBottom: '1rem' }}>
@@ -118,6 +128,7 @@ export default function DecomptesPage() {
                 <th></th><th>Personne</th><th>Contrat</th><th style={{ textAlign: 'right' }}>Taux</th>
                 <th style={{ textAlign: 'right' }}>Jours</th>
                 <th style={{ textAlign: 'right' }}>Heures</th><th style={{ textAlign: 'right' }}>Montant</th>
+                {hasPayoutDiff && <th style={{ textAlign: 'right' }}>À verser</th>}
                 {hasWithholding && <th style={{ textAlign: 'right' }}>À retenir</th>}
                 {hasWithholding && <th style={{ textAlign: 'right' }}>Net</th>}
                 <th></th>
@@ -132,6 +143,7 @@ export default function DecomptesPage() {
                   onToggle={() => toggle(r.personId)}
                   detail={detail[r.personId]}
                   showWithholding={hasWithholding}
+                  showPayout={hasPayoutDiff}
                   onEdit={(entry) => setEditing({ personId: r.personId, entry })}
                   onDelete={(entryId) => deleteEntry(r.personId, entryId)}
                 />
@@ -143,7 +155,8 @@ export default function DecomptesPage() {
                 <td style={{ textAlign: 'right' }}>{totalDays} j</td>
                 <td style={{ textAlign: 'right' }}>{formatHours(totalHours)}</td>
                 <td style={{ textAlign: 'right' }}><Money value={data.totalAmount} /></td>
-                {hasWithholding && <td style={{ textAlign: 'right' }}><Money value={data.totalAmount - data.totalNetAmount} /></td>}
+                {hasPayoutDiff && <td style={{ textAlign: 'right' }}><Money value={data.totalPayoutAmount} /></td>}
+                {hasWithholding && <td style={{ textAlign: 'right' }}><Money value={data.totalPayoutAmount - data.totalNetAmount} /></td>}
                 {hasWithholding && <td style={{ textAlign: 'right' }}><Money value={data.totalNetAmount} /></td>}
                 <td></td>
               </tr>
@@ -158,9 +171,9 @@ export default function DecomptesPage() {
 const miniBtn: React.CSSProperties = { padding: '0.15rem 0.4rem', fontSize: '0.78rem', lineHeight: 1 };
 
 function FragmentRow({
-  r, open, onToggle, detail, showWithholding, onEdit, onDelete,
+  r, open, onToggle, detail, showWithholding, showPayout, onEdit, onDelete,
 }: {
-  r: Team['rows'][number]; open: boolean; onToggle: () => void; detail?: Detail; showWithholding: boolean;
+  r: Team['rows'][number]; open: boolean; onToggle: () => void; detail?: Detail; showWithholding: boolean; showPayout: boolean;
   onEdit: (entry: DetailEntry) => void; onDelete: (entryId: string) => void;
 }) {
   return (
@@ -173,6 +186,7 @@ function FragmentRow({
         <td style={{ textAlign: 'right' }} className="tnum">{r.days} j</td>
         <td style={{ textAlign: 'right' }} className="tnum">{formatHours(r.hours)}</td>
         <td style={{ textAlign: 'right' }}><Money value={r.amount} /></td>
+        {showPayout && <td style={{ textAlign: 'right' }}>{r.payoutRate != null && r.payoutRate !== r.hourlyRate ? <Money value={r.payoutAmount} /> : '—'}</td>}
         {showWithholding && <td style={{ textAlign: 'right' }}>{r.toWithhold > 0 ? <Money value={r.toWithhold} /> : '—'}</td>}
         {showWithholding && <td style={{ textAlign: 'right', fontWeight: r.toWithhold > 0 ? 700 : 400 }}><Money value={r.netAmount} /></td>}
         <td>{r.pending > 0 && <span className="badge warn">{r.pending} à valider</span>}</td>

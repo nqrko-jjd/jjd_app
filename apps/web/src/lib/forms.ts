@@ -103,6 +103,7 @@ export const PERSON_FIELDS: FieldDef[] = [
   { name: 'specialties', label: 'Spécialités (séparées par des virgules)', type: 'tags', full: true, placeholder: 'maçon, carreleur, électricien…' },
   { name: 'contractType', label: 'Contrat', type: 'select', options: WORKER_CONTRACT_TYPES.map((c) => ({ value: c, label: WORKER_CONTRACT_LABEL[c] })) },
   { name: 'hourlyRate', label: 'Taux horaire (€)', type: 'number' },
+  { name: 'payoutRate', label: 'Taux réellement versé (€, si différent)', type: 'number', placeholder: 'Laisser vide si identique au taux horaire' },
   { name: 'dailyHours', label: 'Heures payées par jour presté', type: 'number', placeholder: '10' },
   { name: 'phone', label: 'Téléphone' },
   { name: 'email', label: 'E-mail' },

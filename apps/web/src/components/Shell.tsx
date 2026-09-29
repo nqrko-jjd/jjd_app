@@ -109,7 +109,7 @@ const NAV: Group[] = [
   },
 ];
 
-export function Shell({ children }: { children: React.ReactNode }) {
+export function Shell({ children, navigationPaths }: { children: React.ReactNode; navigationPaths?: string[] }) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const [open, setOpen] = useState(false);
@@ -134,7 +134,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     return () => clearInterval(t);
   }, [isStaff, reloadUnread]);
 
-  const visible = (i: Item) => !i.roles || (user && i.roles.includes(user.role));
+  const visible = (i: Item) => (!navigationPaths || navigationPaths.includes(i.href)) && (!i.roles || !!(user && i.roles.includes(user.role)));
   const isWorker = user?.role === 'worker';
   const isForeman = user?.role === 'foreman';
   const isStorekeeper = user?.role === 'storekeeper';

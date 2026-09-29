@@ -1,4 +1,5 @@
 'use client';
+import { PlanningAgenda } from '@/components/PlanningAgenda';
 import { SkeletonRows } from '@/components/States';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -59,12 +60,12 @@ function vehicleLabel(v: PlanVehicleRef) {
   return [v.code, [v.brand, v.model].filter(Boolean).join(' ')].filter(Boolean).join(' · ') || v.plate || '—';
 }
 
-type ViewMode = 'day' | 'workers' | 'worksites' | 'resources' | 'month';
+type ViewMode = 'agenda' | 'day' | 'workers' | 'worksites' | 'resources' | 'month';
 type Resource = { kind: 'vehicle' | 'equipment'; id: string; label: string; sub: string };
 
 export default function PlanningPage() {
-  const [view, setView] = useState<ViewMode>('workers');
-  const [periodWeeks, setPeriodWeeks] = useState<1 | 2>(2);
+  const [view, setView] = useState<ViewMode>('agenda');
+  const [periodWeeks, setPeriodWeeks] = useState<1 | 2>(1);
   const [anchor, setAnchor] = useState(() => mondayOf(new Date()));
   const [monthAnchor, setMonthAnchor] = useState(() => startOfMonth(new Date()));
   const [trackedDay, setTrackedDay] = useState(() => toDateInput(new Date()));
@@ -326,6 +327,7 @@ export default function PlanningPage() {
 
       <div className="plan-topbar">
         <div className="plan-switch">
+          <button className={view === 'agenda' ? 'active' : ''} onClick={() => setView('agenda')}>Agenda semaine</button>
           <button className={view === 'day' ? 'active' : ''} onClick={() => setView('day')}>Vue jour</button>
           <button className={view === 'workers' ? 'active' : ''} onClick={() => setView('workers')}>Ouvriers</button>
           <button className={view === 'worksites' ? 'active' : ''} onClick={() => setView('worksites')}>Chantiers</button>
@@ -381,7 +383,9 @@ export default function PlanningPage() {
         </label>
       </div>
 
-      {loading && !evData ? <SkeletonRows /> : view === 'month' ? (
+      {loading && !evData ? <SkeletonRows /> : view === 'agenda' ? (
+        <PlanningAgenda days={weekDays} events={events.filter(e => (!worksiteFilter || e.worksite.id === worksiteFilter) && (!search || [e.title,e.worksite.title,e.worksite.ref,...e.assignments.map(a=>a.person.displayName||a.person.firstName)].join(' ').toLowerCase().includes(search.toLowerCase())))} onOpen={setDetailEv} onNew={date=>openNew({date})} onMove={moveEventToDay} />
+      ) : view === 'month' ? (
         <section className="plan-board plan-month-board">
           <div className="plan-month-weekdays">
             {['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map((d) => <div key={d}>{d}</div>)}

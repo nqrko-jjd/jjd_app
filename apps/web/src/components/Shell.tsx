@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutGrid, Building2, CalendarDays, ListChecks, Clock, TrendingUp, FileText, Wallet,
   BarChart3, Euro, Warehouse, Contact, Users, Truck, Wrench, Package, ScanLine, Flag, Settings, ExternalLink,
-  MessageSquare, ClipboardList, type LucideIcon,
+  MessageSquare, ClipboardList, Search, ChevronDown, X, Menu, type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useApi } from '@/lib/use-api';
@@ -114,6 +114,15 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
   const [open, setOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [navQuery, setNavQuery] = useState('');
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+  useEffect(() => { setOpen(false); setNavQuery(''); setExpandedGroups({}); }, [pathname]);
+  useEffect(() => {
+    if (!open) return;
+    const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setOpen(false); };
+    document.addEventListener('keydown', close);
+    return () => document.removeEventListener('keydown', close);
+  }, [open]);
   const bureau = user?.role === 'admin' || user?.role === 'office';
   const { data: assistant } = useApi<{ enabled: boolean }>(bureau ? '/api/assistant/status' : null);
   const isStaff = !!user && user.role !== 'client' && user.role !== 'storekeeper';
@@ -139,16 +148,21 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const current =
     nav.flatMap((g) => g.items).find((i) => isActive(i.href))?.label ?? 'JJD App';
 
+  const normalize = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const matchesQuery = (item: Item) => normalize(item.label).includes(normalize(navQuery.trim()));
+  const hasResults = nav.some(group => group.items.some(item => visible(item) && matchesQuery(item)));
+
   return (
     <div className="shell">
       <header className="topbar">
-        <button className="burger" aria-label="Menu" onClick={() => setOpen(true)}>≡</button>
+        <button className="burger" aria-label="Ouvrir le menu" aria-expanded={open} aria-controls="app-navigation" onClick={() => setOpen(true)}><Menu size={20} /></button>
         <span className="topbar-title">{current}</span>
         <span className="brand-mini"><span className="mark"><img src="/brand/icon-white.png" alt="" /></span>JJD</span>
       </header>
 
       {open && <div className="scrim" onClick={() => setOpen(false)} />}
-      <nav className={`sidebar${open ? ' open' : ''}`}>
+      <nav id="app-navigation" aria-label="Navigation principale" className={`sidebar${open ? ' open' : ''}`}>
+        <button className="nav-close" aria-label="Fermer le menu" onClick={() => setOpen(false)}><X size={20} /></button>
         <div className="brand"><span className="mark"><img src="/brand/icon-white.png" alt="" /></span>JJD Consult</div>
         <div className="org-card">
           <span className="mark"><img src="/brand/icon-white.png" alt="" /></span>
@@ -157,12 +171,21 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <div className="org-role">{user ? (ROLE_LABEL[user.role] ?? user.role) : '—'}</div>
           </div>
         </div>
-        {nav.map((g) => {
-          const items = g.items.filter(visible);
+        <label className="nav-search">
+          <Search size={16} aria-hidden="true" />
+          <input aria-label="Rechercher une page" placeholder="Rechercher une page…" value={navQuery} onChange={event => setNavQuery(event.target.value)} />
+        </label>
+        {!hasResults && <p className="nav-empty" role="status">Aucune page trouvée.</p>}
+        {nav.map((g, index) => {
+          const items = g.items.filter(visible).filter(matchesQuery);
+          const expanded = !!navQuery.trim() || (expandedGroups[g.title] ?? (items.some(item => isActive(item.href)) || index === 0));
           if (!items.length) return null;
           return (
             <div key={g.title}>
-              <div className="sect">{g.title}</div>
+              <button type="button" className="sect nav-group-toggle" aria-expanded={expanded} aria-controls={`nav-group-${index}`} onClick={() => setExpandedGroups(previous => ({ ...previous, [g.title]: !expanded }))}>
+                {g.title}<ChevronDown size={14} className={expanded ? 'expanded' : ''} />
+              </button>
+              <div id={`nav-group-${index}`} hidden={!expanded}>
               {items.map((i) => (
                 i.ext ? (
                   <a
@@ -181,6 +204,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
                   <Link
                     key={i.href}
                     href={i.href}
+                    aria-current={isActive(i.href) ? 'page' : undefined}
                     className={`navlink${isActive(i.href) ? ' active' : ''}`}
                     onClick={() => setOpen(false)}
                   >
@@ -190,6 +214,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
                   </Link>
                 )
               ))}
+              </div>
             </div>
           );
         })}

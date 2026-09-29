@@ -315,7 +315,11 @@ timesheetRouter.get(
         person: { select: { displayName: true, firstName: true, photoThumbUrl: true } },
         worksite: { select: { ref: true, title: true } },
       },
-      take: 300,
+      // Pas de vraie pagination sur cette page — un plafond bas coupait silencieusement les
+      // pointages les plus récents dès que le retard de validation dépassait la limite
+      // (les plus anciens, triés en premier, remplissaient tout le quota). Large marge de
+      // sécurité plutôt qu'une vraie borne métier.
+      take: 3000,
     });
     res.json({ items });
   }),

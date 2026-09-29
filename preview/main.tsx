@@ -59,12 +59,13 @@ function WorksiteDetail({ws}:{ws:any}){
 }
 
 function WorksiteFinance({ws,finance}:{ws:any;finance:any}){
+  const [invoiceOpen,setInvoiceOpen]=useState(false);
   const euro=(n:number)=>n.toLocaleString('fr-BE',{style:'currency',currency:'EUR',maximumFractionDigits:0});
   const marginPct=finance.quoted?Math.round(finance.forecastMargin/finance.quoted*100):0;
   return <div className="preview-finance">
     <section className="preview-finance-head">
       <div><span className="eyebrow">SYNTHÈSE DU CHANTIER</span><h2>Du terrain à la facture</h2><p>Les données déjà saisies dans les heures, achats et documents sont regroupées ici. Aucun double encodage.</p></div>
-      <button className="btn primary" onClick={()=>alert('Maquette : un brouillon de facture serait créé avec les éléments sélectionnés.')}><Receipt size={17}/>Préparer une facture</button>
+      <button className="btn primary" onClick={()=>setInvoiceOpen(true)}><Receipt size={17}/>Préparer une facture</button>
     </section>
     <div className="preview-finance-kpis">
       <article className="hero"><span><FileText size={17}/>Marché HT</span><strong>{euro(finance.quoted)}</strong><small>{ws.billingMode==='regie'?'Régie valorisée à ce jour':'Devis accepté'}</small></article>
@@ -91,6 +92,50 @@ function WorksiteFinance({ws,finance}:{ws:any;finance:any}){
       <div className="preview-panel-head"><div><span className="eyebrow">DOCUMENTS COMMERCIAUX</span><h2>Devis, états d’avancement &amp; factures</h2></div><button className="btn">Voir tous les documents</button></div>
       <div className="preview-doc-row"><span className="badge ok">Accepté</span><div><strong>Devis {ws.ref.replace('DEMO','D2026')}</strong><small>Marché initial · conditions et cahier des charges</small></div><strong>{euro(finance.quoted)}</strong><button>Ouvrir</button></div>
       {finance.invoiced>0&&<div className="preview-doc-row"><span className="badge primary">Envoyé</span><div><strong>État d’avancement n°1</strong><small>Facture liée et suivi de l’encaissement</small></div><strong>{euro(finance.invoiced)}</strong><button>Ouvrir</button></div>}
+    </section>
+    {invoiceOpen&&<InvoicePreparationModal ws={ws} finance={finance} onClose={()=>setInvoiceOpen(false)}/>}
+  </div>;
+}
+
+function InvoicePreparationModal({ws,finance,onClose}:{ws:any;finance:any;onClose:()=>void}){
+  const euro=(n:number)=>n.toLocaleString('fr-BE',{style:'currency',currency:'EUR',maximumFractionDigits:0});
+  const [kind,setKind]=useState(ws.billingMode==='regie'?'regie':'progress');
+  const [progress,setProgress]=useState(25);
+  const [picked,setPicked]=useState({labour:true,purchases:true,equipment:true});
+  const amounts={labour:Math.round(finance.labour*1.38),purchases:Math.round(finance.purchases*1.15),equipment:Math.round((finance.equipment+finance.subcontracting)*1.25)};
+  const regieTotal=(Object.keys(picked) as (keyof typeof picked)[]).reduce((sum,key)=>sum+(picked[key]?amounts[key]:0),0);
+  const progressTotal=Math.max(0,Math.min(finance.leftToInvoice,Math.round(finance.quoted*progress/100)));
+  const total=kind==='progress'?progressTotal:kind==='deposit'?Math.round(finance.quoted*.3):kind==='balance'?finance.leftToInvoice:regieTotal;
+  const toggle=(key:keyof typeof picked)=>setPicked(v=>({...v,[key]:!v[key]}));
+  return <div className="preview-invoice-scrim" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)onClose()}}>
+    <section className="preview-invoice-modal" role="dialog" aria-modal="true" aria-labelledby="invoice-title">
+      <header><div><span className="eyebrow">{ws.ref} · BROUILLON</span><h2 id="invoice-title">Préparer la facturation</h2><p>Les montants viennent du chantier. Rien n’est envoyé au client à cette étape.</p></div><button className="btn ghost" onClick={onClose} aria-label="Fermer">✕</button></header>
+      <div className="preview-invoice-body">
+        <section>
+          <div className="preview-invoice-step"><span>1</span><div><strong>Choisir le type de facturation</strong><small>Le parcours s’adapte au contrat du chantier.</small></div></div>
+          <div className="preview-invoice-types">
+            {[['regie','Régie / décompte','Heures, achats et matériel réellement utilisés'],['progress','État d’avancement','Pourcentage du devis accepté'],['deposit','Acompte 30 %','Avant ou au démarrage du chantier'],['balance','Solde','Tout ce qui reste à facturer']].map(x=><button key={x[0]} className={kind===x[0]?'active':''} onClick={()=>setKind(x[0])}><strong>{x[1]}</strong><small>{x[2]}</small></button>)}
+          </div>
+          {kind==='regie'?<>
+            <div className="preview-invoice-step"><span>2</span><div><strong>Sélectionner les éléments</strong><small>Coût interne visible pour contrôle, prix de vente proposé à droite.</small></div></div>
+            <div className="preview-invoice-lines">
+              <label><input type="checkbox" checked={picked.labour} onChange={()=>toggle('labour')}/><span><strong>Main-d’œuvre validée</strong><small>{finance.hours} h · coût interne {euro(finance.labour)}</small></span><b>{euro(amounts.labour)}</b></label>
+              <label><input type="checkbox" checked={picked.purchases} onChange={()=>toggle('purchases')}/><span><strong>Achats &amp; matériaux</strong><small>{finance.purchaseCount} achats · coût interne {euro(finance.purchases)}</small></span><b>{euro(amounts.purchases)}</b></label>
+              <label><input type="checkbox" checked={picked.equipment} onChange={()=>toggle('equipment')}/><span><strong>Matériel &amp; sous-traitance</strong><small>Coût interne {euro(finance.equipment+finance.subcontracting)}</small></span><b>{euro(amounts.equipment)}</b></label>
+            </div>
+          </>:kind==='progress'?<>
+            <div className="preview-invoice-step"><span>2</span><div><strong>Définir l’avancement à facturer</strong><small>Le cumul ne peut pas dépasser le montant du devis.</small></div></div>
+            <div className="preview-progress-input"><input type="range" min="5" max="100" step="5" value={progress} onChange={e=>setProgress(Number(e.target.value))}/><strong>{progress}%</strong><span>{euro(progressTotal)} pour cet état</span></div>
+          </>:<div className="preview-invoice-info"><CheckCircle2 size={19}/><span>{kind==='deposit'?'Acompte calculé à 30 % du devis accepté.':'Le solde reprend le montant du marché qui n’a pas encore été facturé.'}</span></div>}
+        </section>
+        <aside>
+          <span className="eyebrow">RÉCAPITULATIF</span><h3>{kind==='regie'?'Décompte en régie':kind==='progress'?`État d’avancement · ${progress}%`:kind==='deposit'?'Facture d’acompte':'Facture de solde'}</h3>
+          <dl><div><dt>Client</dt><dd>{ws.client?.name}</dd></div><div><dt>Chantier</dt><dd>{ws.title}</dd></div><div><dt>Déjà facturé</dt><dd>{euro(finance.invoiced)}</dd></div><div><dt>Après ce brouillon</dt><dd>{euro(finance.invoiced+total)}</dd></div></dl>
+          <div className="preview-invoice-total"><span>Total HT proposé</span><strong>{euro(total)}</strong><small>TVA et conditions reprises dans la fiche client</small></div>
+          <label className="preview-invoice-note"><span>Note interne</span><textarea placeholder="Point à vérifier avant validation…"/></label>
+        </aside>
+      </div>
+      <footer><button className="btn" onClick={onClose}>Annuler</button><button className="btn primary" onClick={()=>{alert(`Maquette : brouillon de ${euro(total)} créé pour validation interne.`);onClose()}}>Créer le brouillon · {euro(total)}</button></footer>
     </section>
   </div>;
 }

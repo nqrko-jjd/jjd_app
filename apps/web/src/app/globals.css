@@ -397,6 +397,8 @@ p { margin: 0; }
 }
 .kpi .value.neg { color: var(--crit); }
 .kpi .sub { font-size: 0.75rem; color: var(--ink-2); }
+.kpi-link { text-decoration: none; color: inherit; cursor: pointer; transition: border-color 0.12s, box-shadow 0.12s, transform 0.12s; }
+.kpi-link:hover { border-color: var(--primary-line); box-shadow: 0 8px 24px rgba(20, 60, 45, 0.09); transform: translateY(-1px); }
 /* alerte financière : aplat crème et liseré or discrets (pas un bloc beige appuyé) */
 .kpi.warn { border-color: #eee2d0; background: #fffaf2; }
 .kpi.warn .ic { background: rgba(152, 101, 63, 0.14); color: #98653f; }

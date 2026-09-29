@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import Link from 'next/link';
 import type { LucideIcon } from 'lucide-react';
 import {
   WORKSITE_STATUS_LABEL, WORKSITE_PRIORITY_LABEL, WORKSITE_SCOPE_LABEL, WORKSITE_BILLING_MODE_LABEL,
@@ -10,14 +11,17 @@ export { formatEur, formatDateBE };
 
 /** Tuile KPI standard (grille `.kpis`) — icône à droite du libellé, sous-texte toujours
  * rempli (fournir un texte de repli plutôt que de laisser `sub` vide), comme la maquette. */
-export function Kpi({ ic: Ic, label, value, sub, hero, warn, neg, history }: {
+export function Kpi({ ic: Ic, label, value, sub, hero, warn, neg, history, href }: {
   ic: LucideIcon; label: string; value: ReactNode; sub?: string; hero?: boolean; warn?: boolean; neg?: boolean;
   /** Petit historique en barres (ex. 6 derniers mois) affiché dans la tuile ; la dernière barre = période en cours. */
   history?: { label: string; value: number }[];
+  /** Si fourni, la tuile entière devient un lien (ex. vers la liste filtrée correspondante). */
+  href?: string;
 }) {
   const max = history ? Math.max(1, ...history.map((h) => Math.abs(h.value))) : 1;
-  return (
-    <div className={`kpi${hero ? ' hero' : ''}${warn ? ' warn' : ''}`}>
+  const className = `kpi${hero ? ' hero' : ''}${warn ? ' warn' : ''}${href ? ' kpi-link' : ''}`;
+  const content = (
+    <>
       <div className="kpi-head">
         <div className="label">{label}</div>
         <span className="ic"><Ic size={16} strokeWidth={2} /></span>
@@ -34,8 +38,9 @@ export function Kpi({ ic: Ic, label, value, sub, hero, warn, neg, history }: {
           ))}
         </div>
       )}
-    </div>
+    </>
   );
+  return href ? <Link href={href} className={className}>{content}</Link> : <div className={className}>{content}</div>;
 }
 
 const STATUS_TONE: Partial<Record<WorksiteStatus, string>> = {

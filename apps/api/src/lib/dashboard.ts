@@ -64,7 +64,9 @@ export async function bureauDashboard() {
   const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const in30 = new Date(now.getTime() + 30 * DAY);
 
-  const ACTIVE_STATUS = ['scheduled', 'in_progress', 'on_hold'];
+  // "Chantiers en cours" = statut in_progress uniquement — pas "planifié" (pas encore démarré)
+  // ni "en attente" (matériel, accord client…), même si le chantier n'est pas clôturé.
+  const ACTIVE_STATUS = ['in_progress'];
 
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const todayEnd = new Date(todayStart.getTime() + DAY);

@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
-import { View, ScrollView, StyleSheet, RefreshControl } from 'react-native';
+import { View, ScrollView, StyleSheet, RefreshControl, Pressable } from 'react-native';
 import { Text } from '@/lib/AppText';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { apiGet } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { Feather } from '@expo/vector-icons';
@@ -17,6 +17,7 @@ const TODAY = new Date().toLocaleDateString('fr-BE', { weekday: 'long', day: 'nu
 
 export default function Dashboard() {
   const { person } = useSession();
+  const router = useRouter();
   const [data, setData] = useState<Dash | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -58,7 +59,12 @@ export default function Dashboard() {
           value={eur(data.kpis.paidMonth)}
           sub={data.kpis.invoicedMonth ? `${Math.round((data.kpis.paidMonth / data.kpis.invoicedMonth) * 100)} % du montant facturé` : undefined}
         />
-        <Kpi icon="home" label="Chantiers ouverts" value={String(data.kpis.openWorksites)} />
+        <Kpi
+          icon="home"
+          label="Chantiers en cours"
+          value={String(data.kpis.openWorksites)}
+          onPress={() => router.push('/chantiers?status=in_progress' as never)}
+        />
       </View>
 
       <View style={[s.kpi, s.kpiWarn]}>
@@ -88,9 +94,12 @@ export default function Dashboard() {
   );
 }
 
-function Kpi({ icon, label, value, sub }: { icon: keyof typeof Feather.glyphMap; label: string; value: string; sub?: string }) {
+function Kpi({
+  icon, label, value, sub, onPress,
+}: { icon: keyof typeof Feather.glyphMap; label: string; value: string; sub?: string; onPress?: () => void }) {
+  const Wrap = onPress ? Pressable : View;
   return (
-    <View style={s.kpi}>
+    <Wrap style={s.kpi} onPress={onPress}>
       <View style={s.kpiHead}>
         <Text style={s.kpiLabel}>{label}</Text>
         <View style={s.kpiIcon}>
@@ -99,7 +108,7 @@ function Kpi({ icon, label, value, sub }: { icon: keyof typeof Feather.glyphMap;
       </View>
       <Text style={s.kpiValue}>{value}</Text>
       {sub && <Text style={s.kpiSub}>{sub}</Text>}
-    </View>
+    </Wrap>
   );
 }
 

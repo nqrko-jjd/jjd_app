@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { View, TextInput, Pressable, FlatList, StyleSheet, ScrollView } from 'react-native';
 import { Text } from '@/lib/AppText';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { apiGet } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { Badge, Muted, eur } from '@/lib/ui';
@@ -22,20 +22,19 @@ const TONE: Record<string, 'ok' | 'warn' | 'crit' | undefined> = {
   in_progress: undefined, done: 'ok', invoiced: 'ok', closed: 'ok', to_invoice: 'warn', on_hold: 'warn', cancelled: 'crit',
 };
 
-const OPEN_STATUSES = ['lead', 'to_plan', 'scheduled', 'in_progress', 'on_hold'];
-
 const FILTERS = [
   { key: 'all', label: 'Tous', test: () => true },
-  { key: 'open', label: 'En cours', test: (it: WS) => OPEN_STATUSES.includes(it.status) },
+  { key: 'open', label: 'En cours', test: (it: WS) => it.status === 'in_progress' },
   { key: 'to_invoice', label: 'À facturer', test: (it: WS) => it.status === 'to_invoice' },
 ] as const;
 
 export default function Chantiers() {
   const router = useRouter();
+  const { status: statusParam } = useLocalSearchParams<{ status?: string }>();
   const { user } = useSession();
   const worker = user?.role === 'worker';
   const [q, setQ] = useState('');
-  const [filter, setFilter] = useState<(typeof FILTERS)[number]['key']>('all');
+  const [filter, setFilter] = useState<(typeof FILTERS)[number]['key']>(statusParam === 'in_progress' ? 'open' : 'all');
   const [items, setItems] = useState<WS[]>([]);
 
   const load = useCallback(async () => {

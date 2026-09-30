@@ -50,6 +50,7 @@ export interface DocFull {
   totalVat: number;
   totalTtc: number;
   paidAmount: number;
+  paidOn: string | null;
   vatRate: number | null;
   structuredComm: string | null;
   peppolStatus: string | null;

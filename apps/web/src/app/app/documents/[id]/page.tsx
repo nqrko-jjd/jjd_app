@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api, apiBlobUrl } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
-import { formatEur } from '@/lib/ui';
+import { formatEur, formatDateBE } from '@/lib/ui';
 import { DocStatusBadge, DOC_KIND_LABEL, type DocFull, type DocLine } from '@/lib/doc-ui';
 import { ContactPicker } from '@/components/ContactPicker';
 import { AssigneePicker } from '@/components/AssigneePicker';
@@ -162,7 +162,16 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
     router.push('/app/documents');
   }
 
-  const worksiteOpts: WsPickerOption[] = (pick?.worksites ?? []).map(wsToPicker);
+  // /api/meta/pickers n'expose que les chantiers actifs (non archivés) — un document déjà lié
+  // à un chantier depuis archivé doit quand même pouvoir afficher son libellé dans le champ,
+  // sinon il paraît "sans chantier" alors que le lien existe bel et bien en base.
+  const worksiteOpts: WsPickerOption[] = (() => {
+    const base = (pick?.worksites ?? []).map(wsToPicker);
+    if (doc.worksite && !base.some((w) => w.id === doc.worksite!.id)) {
+      base.push({ id: doc.worksite.id, ref: doc.worksite.ref, title: doc.worksite.title, city: null });
+    }
+    return base;
+  })();
   const isQuote = doc.kind === 'quote';
   const isInvoiceLike = doc.kind === 'invoice' || doc.kind === 'deposit_invoice';
   const remaining = Math.max(0, totals.totalTtc - doc.paidAmount);
@@ -513,13 +522,27 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
                 <div className="doc-recap-row" key={rate}><span>TVA {Math.round(Number(rate) * 100)}%</span><span>{formatEur(b.vat)}</span></div>
               ))}
               {isInvoiceLike && doc.paidAmount > 0 && (
-                <div className="doc-recap-row"><span>Acompte déjà réglé</span><span>− {formatEur(doc.paidAmount)}</span></div>
+                <div className="doc-recap-row"><span>{doc.status === 'paid' ? 'Réglé' : 'Acompte déjà réglé'}</span><span>− {formatEur(doc.paidAmount)}</span></div>
               )}
               {isInvoiceLike && (
                 <div className="doc-recap-row strong"><span>Reste à payer</span><span>{formatEur(remaining)}</span></div>
               )}
               {doc.structuredComm && <div className="doc-recap-row" style={{ marginTop: '0.3rem' }}><span>Communication</span><span className="mono" style={{ fontSize: '0.78rem' }}>{doc.structuredComm}</span></div>}
             </div>
+
+            {isInvoiceLike && locked && (
+              <div className={doc.status === 'paid' ? 'doc-recap-paid ok' : doc.status === 'partial' ? 'doc-recap-paid warn' : 'doc-recap-paid'}>
+                {doc.status === 'paid' && (
+                  <span>✓ Payée intégralement{doc.paidOn ? ` le ${formatDateBE(doc.paidOn)}` : ''}</span>
+                )}
+                {doc.status === 'partial' && (
+                  <span>◐ Paiement partiel — {formatEur(doc.paidAmount)} reçu{doc.paidOn ? ` (dernier le ${formatDateBE(doc.paidOn)})` : ''}, {formatEur(remaining)} restant</span>
+                )}
+                {doc.status !== 'paid' && doc.status !== 'partial' && (
+                  <span>Aucun paiement enregistré — {formatEur(remaining)} dû</span>
+                )}
+              </div>
+            )}
 
             {dirty && <div className="doc-recap-dirty">Modifications non enregistrées</div>}
 

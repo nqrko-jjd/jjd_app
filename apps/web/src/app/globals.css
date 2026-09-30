@@ -1739,6 +1739,13 @@ body.plan-wide .main { max-width: none; }
 .doc-recap-actions .btn { width: 100%; justify-content: center; }
 .doc-recap-dirty { font-size: 0.6875rem; color: var(--warn); margin-top: 0.7rem; padding-top: 1rem; border-top: 1px solid var(--line); text-align: left; font-weight: 400; }
 
+.doc-recap-paid {
+  font-size: 0.78rem; font-weight: 600; margin-top: 0.9rem; padding: 0.55rem 0.7rem;
+  border-radius: var(--radius-sm); background: var(--surface-2); color: var(--ink-2);
+}
+.doc-recap-paid.ok { background: var(--ok-soft); color: var(--ok); }
+.doc-recap-paid.warn { background: var(--warn-soft); color: var(--warn); }
+
 /* ---------------------------------------------------- scan (gâchette / caméra) */
 .scan-bar {
   display: flex; align-items: center; gap: 0.6rem;

@@ -314,6 +314,9 @@ function DocumentsInner() {
                   <Link href={`/app/documents/${d.id}`} className="mono doc-item-num">{d.number ?? d.draftRef ?? '—'}</Link>
                   {d.originalPdf && <span title="PDF d’origine disponible">📄</span>}
                   {!d.number && <span className="badge plain">{DOC_KIND_LABEL[d.kind]}</span>}
+                  {d.worksite
+                    ? <span className="chip" title="Chantier lié">🏗 {d.worksite.ref}</span>
+                    : <span className="chip" style={{ color: 'var(--ink-3)', borderStyle: 'dashed' }} title="Aucun chantier lié">Sans chantier</span>}
                   {d.source === 'ai-draft' && <span className="badge warn" title="Créé par l'assistant IA — à vérifier avant validation">✨ IA</span>}
                   <DocStatusBadge status={d.status} />
                   <span className="doc-item-amount"><Money value={d.totalTtc} /></span>
@@ -329,7 +332,7 @@ function DocumentsInner() {
                 </div>
                 <div className="doc-item-title">{d.title || DOC_KIND_LABEL[d.kind]}</div>
                 <div className="doc-item-meta">
-                  <span>{[d.contact?.name, d.worksite?.ref].filter(Boolean).join(' · ') || '—'}</span>
+                  <span>{d.contact?.name || '—'}</span>
                   <span>Échéance : {d.dueOn ? formatDateBE(d.dueOn) : '—'}</span>
                 </div>
               </div>

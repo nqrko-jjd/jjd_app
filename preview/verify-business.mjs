@@ -12,6 +12,16 @@ try {
  const db={worksites:[0,1,2,3].map(i=>({id:'w'+i,ref:'DEMO-'+i,title:'Chantier '+i,address:'Adresse',city:'Bruxelles',client:{id:'c'+i,name:'Client Démo'},status:i===3?'on_hold':'in_progress',building:{id:'b'+i,name:'Immeuble '+i},quotedHt:18000,invoicedHt:4000})),events:[]};
  const people=['José','Miguel','Rui'].map((displayName,i)=>({id:'p'+i,displayName}));
  const api=(p,m='GET',b)=>businessApi(p,m,b,db,people);
+ const photo=api('/api/worksites/w0/thread').messages.find(m=>m.kind==='photo');
+ assert(photo&&!photo.sharedWithClient);
+ assert(!api('/preview-portal/worksites/w0').photos.some(p=>p.id===photo.id));
+ api('/api/worksites/w0/thread/messages/'+photo.id+'/share','PATCH',{shared:true});
+ assert(api('/api/worksites/w0/thread/client').messages.some(m=>m.id===photo.id));
+ assert(api('/preview-portal/worksites/w0').photos.some(p=>p.id===photo.id));
+ assert.throws(()=>api('/api/worksites/w1/thread/messages/'+photo.id+'/share','PATCH',{shared:true}));
+ api('/api/worksites/w0/thread/messages/'+photo.id+'/share','PATCH',{shared:false});
+ assert(!api('/preview-portal/worksites/w0').photos.some(p=>p.id===photo.id));
+ assert(!api('/api/worksites/w0/thread/client').messages.some(m=>m.id===photo.id));
  const costBefore=api('/api/worksites/w0').margin.labourCost;
  const hourEntry=api('/api/timesheet/entries','POST',{personId:'p0',worksiteId:'w0',date:'2026-09-30',hours:4,task:'Recette heures'}).entry;
  assert.equal(hourEntry.status,'submitted');

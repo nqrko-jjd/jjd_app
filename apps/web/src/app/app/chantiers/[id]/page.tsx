@@ -8,7 +8,7 @@ import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { PageHead, StatusBadge, PriorityBadge, EntityBadge, ScopeBadge, BillingModeBadge, Money, formatDateBE, Kpi } from '@/lib/ui';
 import { FormModal, toDateInput, type FieldDef } from '@/components/FormModal';
-import { ChantierThread } from '@/components/ChantierThread';
+import MessagingWorkspace from '@/components/MessagingWorkspace';
 import { WorksiteTasks } from '@/components/WorksiteTasks';
 import { WorksiteLabourDetail } from '@/components/WorksiteLabourDetail';
 import { WorksiteProfitability } from '@/components/WorksiteProfitability';
@@ -73,7 +73,6 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
   const [editing, setEditing] = useState(false);
   const [invoicing, setInvoicing] = useState<string | null>(null);
   const [tab, setTab] = useState<'overview' | 'tasks' | 'finances' | 'photos' | 'discussion'>('overview');
-  const [threadOpen, setThreadOpen] = useState(false);
 
   if (loading) return <SkeletonRows />;
   if (!data) {
@@ -463,24 +462,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
         </>
       )}
 
-      {tab === 'discussion' && (
-        threadOpen ? <ChantierThread worksiteId={w.id} /> : (
-          <div className="card card-pad thread-teaser">
-            <div className="eyebrow">Équipe interne · {w.ref}</div>
-            <h3>Le fil du chantier</h3>
-            <p>Photos, consignes et nouvelles de l’équipe, regroupées au même endroit.</p>
-            <div className="row" style={{ gap: '0.6rem' }}>
-              <button className="btn primary" onClick={() => setThreadOpen(true)}>
-                <MessageSquare size={15} strokeWidth={2} /> Ouvrir la discussion →
-              </button>
-              <Link href={`/app/messagerie?worksite=${w.id}&audience=internal`} className="btn ghost">
-                Ouvrir dans la messagerie →
-              </Link>
-            </div>
-            <span className="hint">Échanges clients conservés dans un espace distinct.</span>
-          </div>
-        )
-      )}
+      {tab === 'discussion' && <MessagingWorkspace key={w.id} worksiteId={w.id}/>}
     </>
   );
 }

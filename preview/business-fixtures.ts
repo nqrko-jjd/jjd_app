@@ -2,6 +2,7 @@
 import {officeFixtures} from './office-fixtures';
 import {taskFixtures} from './task-fixtures';
 import {timeFixtures,ensureTimeEntries} from './time-fixtures';
+import {threadFixtures,sharedMedia} from './thread-fixtures';
 import {computeWorksiteMargin,computeDocTotals,CRM_STAGES} from '@jjd/shared';
 const key='jjd-business-fixtures-v1';
 const contact={id:'supplier1',type:'supplier',name:'Fournisseur Démo',email:'fournisseur@example.test',phone:null,onAccount:true,customerNumber:'DEMO'};
@@ -13,6 +14,7 @@ const need=(x:any)=>{if(!x)throw Error('Élément introuvable dans cet aperçu.'
 export function resetBusiness(){localStorage.removeItem(key)}
 export function businessApi(path:string,method:string,b:any,db:any,people:any[]):any{
  const u=new URL(path,'https://demo.invalid'),p=u.pathname,parts=p.split('/');
+ const threadResult=threadFixtures(p,method,b,state,db,people,save);if(threadResult!==undefined)return threadResult;
  const timeResult=timeFixtures(p,method,b,u,state,db,people,save);if(timeResult!==undefined)return timeResult;
  const taskResult=taskFixtures(p,method,b,u,state,db,people,save);if(taskResult!==undefined)return taskResult;
  if(p.startsWith('/api/worksites/')&&p.includes('/thread')&&method!=='GET'&&!(method==='POST'&&p.endsWith('/messages')))throw Error('Le partage de fichiers et les actions avancées ne sont pas connectés dans cet aperçu. Aucun message client envoyé.');
@@ -32,7 +34,7 @@ export function businessApi(path:string,method:string,b:any,db:any,people:any[])
   if(route==='/dashboard')return {greeting:{name:promoter?'Promoteur Démo':'Syndic Démo',isSyndic:!promoter,access:'full'},singleProject:null,portfolio,kpis:{buildings:portfolio.length,interventionsActive:visible.length,quotesToValidate:0,urgent:visible.filter((w:any)=>w.priority==='urgent').length},urgentItems:[],recentInterventions:visible.map((w:any)=>({...w,building:w.building.name,invoiceStatus:null})),weekPlanning:{days:[]},quotesToValidate:[],recentDocuments:[]};
   if(route==='/planning')return {items:db.events.filter((e:any)=>visible.some((w:any)=>w.id===e.worksite?.id)).map((e:any)=>({...e,worksiteId:e.worksite.id,worksiteRef:e.worksite.ref,worksiteTitle:e.worksite.title,building:e.worksite.building?.name,people:e.assignments.map((a:any)=>a.person.displayName),team:null}))};
   if(route==='/requests'&&method==='POST'){const building=need(allowed.find((x:any)=>x.id===b.buildingId));const id=uid();db.worksites.push({id,ref:'DEMO-'+(db.worksites.length+101),title:b.title,status:'lead',demoNew:true,priority:b.urgency==='urgent'?'urgent':'normal',scope:'intervention',entity:'jjd',description:b.details,city:building.city,address:building.address,building:{id:building.id,name:building.name,photoThumbUrl:building.photoThumbUrl},client:{id:'demo-client',name:promoter?'Promoteur Démo':'Syndic Démo'},quotedHt:0,invoicedHt:0,manager:null});localStorage.setItem('jjd-isolated-preview-v3',JSON.stringify(db));return {id,reference:'DEMO-'+(db.worksites.length+100)};}
-  if(route.startsWith('/worksites/')){const id=route.split('/')[2];const w=need(visible.find((w:any)=>w.id===id));const thread=id+'-client';state.threads[thread]??=[];if(method==='POST'&&route.endsWith('/messages')){state.threads[thread].push({id:uid(),body:b.body,kind:'text',authorName:'Client Démo',fromClient:true,createdAt:new Date().toISOString()});save();}return {worksite:w,manager:{name:'Julien',phone:null},quotes:[],invoices:[],photos:[],reports:[],messages:state.threads[thread],threadClosed:false,threadId:thread,access:'full'};}
+  if(route.startsWith('/worksites/')){const id=route.split('/')[2];const w=need(visible.find((w:any)=>w.id===id));const thread=id+'-client';state.threads[thread]??=[];if(method==='POST'&&route.endsWith('/messages')){state.threads[thread].push({id:uid(),body:b.body,kind:'text',authorName:'Client Démo',fromClient:true,createdAt:new Date().toISOString()});save();}const media=sharedMedia(state,id);return {worksite:w,manager:{name:'Julien',phone:null},quotes:[],invoices:[],photos:media.map((m:any)=>({id:m.id,url:m.fileUrl,thumbUrl:m.thumbUrl,caption:m.body,createdAt:m.createdAt,video:m.kind==='video'})),reports:[],messages:[...state.threads[thread],...media].sort((a:any,b:any)=>a.createdAt.localeCompare(b.createdAt)),threadClosed:false,threadId:thread,access:'full'};}
   if(route.startsWith('/messages'))return {items:[]};
   if(route==='/quotes'||route==='/documents')return {items:[]};
   throw Error('Ce document n’est pas disponible dans les données de démonstration.');

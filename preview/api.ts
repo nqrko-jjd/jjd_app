@@ -72,6 +72,7 @@ export async function api<T=unknown>(path:string,opts:any={}):Promise<T>{
 }
 export async function apiBlobUrl():Promise<string>{throw new Error('Export non disponible dans cet aperçu')}
 export async function apiUpload<T>(path:string,form:FormData):Promise<T>{
+ if(/^\/api\/worksites\/[^/]+\/thread\/photos$/.test(path)){const file=form.get('file');if(!(file instanceof File)||!['image/png','image/jpeg','image/webp','image/gif'].includes(file.type))throw Error('Choisissez une image JPG, PNG, WebP ou GIF.');if(file.size>2*1024*1024)throw Error('Limite de démonstration : 2 Mo par image.');const photoData=await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));reader.onerror=()=>reject(Error('Lecture impossible'));reader.readAsDataURL(file);});return api<T>(path,{method:'POST',body:{photoData}});}
  if(/^\/api\/buildings\/[^/]+\/photo$/.test(path)){const file=form.get('file');if(!(file instanceof File)||!file.type.startsWith('image/'))throw Error('Choisissez une image.');if(file.size>2*1024*1024)throw Error('Limite de démonstration : image de 2 Mo maximum.');const photoData=await new Promise<string>((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result));r.onerror=()=>reject(Error('Lecture impossible'));r.readAsDataURL(file);});return api<T>(path,{method:'POST',body:{photoData}});}
  throw new Error('Cet import n’est pas activé dans l’aperçu. Aucun fichier réel envoyé.');
 }

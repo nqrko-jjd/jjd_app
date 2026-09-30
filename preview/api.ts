@@ -1,3 +1,4 @@
+import {businessApi,resetBusiness} from './business-fixtures';
 export class ApiError extends Error {constructor(public status:number,message:string){super(message)}}
 export const setToken=()=>{};
 const key='jjd-isolated-preview-v3';
@@ -12,12 +13,20 @@ const defaults={worksites:[['Résidence des Tilleuls','Uccle','Syndic Exemple','
 let db:any;
 try{db=JSON.parse(localStorage.getItem(key)||'null')}catch{}
 if(!db){db=defaults;for(let d=0;d<5;d++)for(let w=0;w<3;w++) db.events.push(hydrate({id:`e${d}-${w}`,worksiteId:'w'+w,title:['Diagnostic fuite et remise en état','Préparation des murs','Finitions du lot 12'][w],startAt:iso(d,w===0?8:7),endAt:iso(d,w===0?12:17),personIds:[w*4,w*4+1,w*4+2,w*4+3].map(n=>'p'+n),vehicles:[{vehicleId:'v'+w,driverPersonId:d===2&&w===1?null:'p'+w*4}],equipmentIds:[equipment[w].id],kind:'intervention',status:d===4?'tentative':'confirmed',tasksNote:'Protéger les lieux\nRéaliser les travaux prévus\nAjouter les photos de fin de journée',departureFrom:'Dépôt',departureAt:iso(d,6),accessNote:'Contacter la personne sur place avant l’arrivée.'}));}
+// Add examples of several missions per building without overwriting prior demo edits.
+if(!db.portfolioDemoV1){
+ for(const [id,parent,title,status] of [['w4','w0','Séchage du plafond · appartement 2A','on_hold'],['w5','w0','Curage des évacuations · communs','done'],['w6','w2','SAV finitions · lot 7','to_plan']]){
+  if(!db.worksites.some((w:any)=>w.id===id)){const base=db.worksites.find((w:any)=>w.id===parent);if(base)db.worksites.push({...base,id,ref:'DEMO-'+(101+Number(id.slice(1))),title,status,priority:'normal',scope:'intervention',quotedHt:2400,invoicedHt:status==='done'?2400:0});}
+ }
+ db.portfolioDemoV1=true;localStorage.setItem(key,JSON.stringify(db));
+}
 function save(){localStorage.setItem(key,JSON.stringify(db))}
 function hydrate(b:any,old:any={}){const x={allDay:false,team:null,consumables:[],leadPerson:null,driverPerson:null,meetingOnSite:true,meetingAddress:null,meetingBox:null,meetingPostalCode:null,meetingCity:null,note:null,materialsNote:null,...old,...b};return {...x,worksite:b.worksiteId?db.worksites.find((w:any)=>w.id===b.worksiteId):old.worksite,assignments:b.personIds?b.personIds.map((id:string)=>({person:people.find(p=>p.id===id)})):old.assignments||[],vehicles:b.vehicles?b.vehicles.map((v:any)=>v.vehicle?v:{vehicle:vehicles.find(x=>x.id===v.vehicleId),driver:people.find(p=>p.id===v.driverPersonId)||null}):old.vehicles||[],equipment:b.equipmentIds?b.equipmentIds.map((id:string)=>({equipment:equipment.find(e=>e.id===id)})):old.equipment||[]};}
-export function reset(){localStorage.removeItem(key);location.reload()}
+export function reset(){resetBusiness();localStorage.removeItem(key);location.reload()}
 export function getWorksite(id:string){return db.worksites.find((w:any)=>w.id===id)}
 export function getEvents(id:string){return db.events.filter((e:any)=>e.worksite.id===id)}
 export async function api<T=unknown>(path:string,opts:any={}):Promise<T>{
+ const business=businessApi(path,opts.method||'GET',opts.body,db,people);if(business!==undefined)return business as T;
  const url=new URL(path,'https://demo.invalid'),p=url.pathname,b=opts.body,method=opts.method||'GET';let result:any;
  if(p==='/api/assistant/status')result={enabled:false};
  else if(p==='/api/messagerie/unread-count')result={internal:3,client:1};

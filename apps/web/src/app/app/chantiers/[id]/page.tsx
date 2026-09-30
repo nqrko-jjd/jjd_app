@@ -178,12 +178,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
         </div>
       </div>
 
-      <div className={`detail-hero${w.building?.photoThumbUrl ? ' has-photo' : ''}`}>
-        {w.building?.photoThumbUrl && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img className="detail-hero-media" src={w.building.photoThumbUrl} alt="" />
-        )}
-        <div className="detail-hero-shade" />
+      <div className="detail-hero worksite-reference-hero">
         <div className="detail-hero-content">
           <div className="eyebrow">Dossier {w.ref}</div>
           <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'nowrap', gap: '1rem' }}>
@@ -201,10 +196,11 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
         </div>
       </div>
 
+      {w.building?.photoThumbUrl && <details className="worksite-building-photo"><summary>Voir le bâtiment · {w.building.name}</summary><img src={w.building.photoThumbUrl} alt={w.building.name}/><Link href={`/app/immeubles/${w.building.id}`}>Ouvrir la fiche immeuble</Link></details>}
       <div className="page-tabs">
         <button className={`page-tab${tab === 'overview' ? ' active' : ''}`} onClick={() => setTab('overview')}>Vue d’ensemble</button>
         <button className={`page-tab${tab === 'tasks' ? ' active' : ''}`} onClick={() => setTab('tasks')}>Tâches</button>
-        <button className={`page-tab${tab === 'finances' ? ' active' : ''}`} onClick={() => setTab('finances')}>Finances</button>
+        <button className={`page-tab${tab === 'finances' ? ' active' : ''}`} onClick={() => setTab('finances')}>Finances & rentabilité</button>
         <button className={`page-tab${tab === 'photos' ? ' active' : ''}`} onClick={() => setTab('photos')}>Photos &amp; rapports <span className="n">{w.reports.length}</span></button>
         <button className={`page-tab${tab === 'discussion' ? ' active' : ''}`} onClick={() => setTab('discussion')}>Discussion</button>
       </div>
@@ -222,16 +218,16 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
               />
               <Kpi
                 ic={TrendingUp}
-                label="Marge réelle"
+                label="Encaissé − coûts"
                 value={<Money value={data.margin.realMargin} sign />}
-                sub={data.margin.realMarginPct != null ? `${data.margin.realMarginPct} % du marché` : 'Non calculable'}
+                sub={data.margin.realMarginPct != null ? `${data.margin.realMarginPct} % de l’encaissé` : 'Non calculable'}
                 neg={data.margin.realMargin < 0}
               />
               <Kpi
                 ic={CheckCircle2}
                 label="Avancement"
                 value={`${WORKSITE_PROGRESS_PCT[w.status as keyof typeof WORKSITE_PROGRESS_PCT] ?? 0}%`}
-                sub="Travaux réalisés"
+                sub="Repère selon le statut"
               />
             </div>
           )}

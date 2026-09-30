@@ -1,0 +1,35 @@
+import {build} from 'esbuild';
+import {createRequire} from 'node:module';
+import {mkdtemp,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+const dir=await mkdtemp(path.join(tmpdir(),'jjd-fixture-check-'));
+try {
+ await build({entryPoints:['preview/business-fixtures.ts'],bundle:true,platform:'node',format:'cjs',outfile:path.join(dir,'fixtures.cjs')});
+ const store={};globalThis.localStorage={getItem:k=>store[k]||null,setItem:(k,v)=>store[k]=v};
+ const {businessApi}=createRequire(import.meta.url)(path.join(dir,'fixtures.cjs'));
+ const db={worksites:[0,1,2,3].map(i=>({id:'w'+i,ref:'DEMO-'+i,title:'Chantier '+i,address:'Adresse',city:'Bruxelles',client:{id:'c'+i,name:'Client Démo'},status:i===3?'on_hold':'in_progress',building:{id:'b'+i,name:'Immeuble '+i},quotedHt:18000,invoicedHt:4000})),events:[]};
+ const people=['José','Miguel','Rui'].map((displayName,i)=>({id:'p'+i,displayName}));
+ const api=(p,m='GET',b)=>businessApi(p,m,b,db,people);
+ assert.equal(api('/api/buildings/b0').building.worksites[0].id,'w0');
+ assert.equal(api('/preview-portal/buildings').buildings.length,2);
+ assert.throws(()=>api('/preview-portal/worksites/w1'));
+ const w=api('/api/worksites/w0');assert.equal(w.margin.labour.reduce((s,r)=>s+r.amount,0),w.margin.labourCost);
+ api('/api/purchasing/orders/po1/receive','POST',{lines:[{lineId:'pol1',qty:4}]});
+ assert.equal(api('/api/purchasing/orders/po1').order.status,'partial');assert.equal(api('/api/stock/items/s1').item.qty,16);
+ assert.throws(()=>api('/api/purchasing/orders/po1/receive','POST',{lines:[{lineId:'pol1',qty:100}]}));
+ api('/api/stock-orders/prep1/lines/pl1/picked','POST',{pickedQty:16});api('/api/stock-orders/prep1/lines/pl2/picked','POST',{pickedQty:3});
+ api('/api/stock-orders/prep1/complete','POST',{allowShort:false});assert.equal(api('/api/stock/items/s1').item.qty,0);
+ assert.throws(()=>api('/api/stock-orders/prep1/complete','POST',{allowShort:true}));
+ api('/api/materiel/loans','POST',{code:'MAT-001',worksiteId:'w0'});assert.equal(api('/api/materiel/units/MAT-001').unit.state,'ON_SITE');
+ api('/api/materiel/returns','POST',{code:'MAT-001',storageLocation:'A-01'});assert.equal(api('/api/materiel/units/MAT-001').unit.state,'AVAILABLE');
+ const doc=api('/api/documents','POST',{kind:'invoice',worksiteId:'w0',contactId:'c0'}).document;
+ api('/api/documents/'+doc.id,'PATCH',{worksiteId:'w0',contactId:'c0',lines:[{kind:'item',label:'Test',qty:3,unitPriceHt:100,discountPct:0,vatRate:.21}]});assert.equal(api('/api/documents/'+doc.id).document.totalTtc,363);
+ assert.throws(()=>api('/api/documents/'+doc.id+'/send','POST',{}));
+ api('/api/worksites/w0/thread/messages','POST',{body:'Interne uniquement'});
+ assert(!JSON.stringify(api('/preview-portal/worksites/w0')).includes('Interne uniquement'));
+ const request=api('/preview-portal/requests','POST',{buildingId:'b0',title:'Fuite test',urgency:'normal',details:'Démonstration'});
+ assert(api('/preview-portal/buildings').buildings.find(b=>b.id==='b0').worksites.some(w=>w.id===request.id));
+ console.log('PASS: hierarchy, client scoping, labour totals, partial receipts, stock, duplicate guards, equipment, invoice totals, disabled sending, separate threads and client request.');
+} finally {await rm(dir,{recursive:true,force:true})}

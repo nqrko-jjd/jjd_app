@@ -173,7 +173,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
       <div className="row" style={{ justifyContent: 'space-between', marginBottom: '0.9rem' }}>
         <Link href="/app/documents" className="btn ghost">← Devis & factures</Link>
       </div>
-      <div className="detail-hero">
+      <div className="detail-hero document-reference-heading">
         <div className="eyebrow">{DOC_KIND_LABEL[doc.kind]}</div>
         <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'nowrap', gap: '1rem' }}>
           <h1>{doc.number ?? doc.draftRef ?? `Nouveau·elle ${DOC_KIND_LABEL[doc.kind].toLowerCase()}`}</h1>

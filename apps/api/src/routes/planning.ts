@@ -563,7 +563,7 @@ vehiclesRouter.post(
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
     const data = vehicleRepairInput.parse({ ...req.body, vehicleId: req.params.id });
-    await validateRepairInvoice(data.ledgerEntryId, req.params.id);
+    await validateRepairInvoice(data.ledgerEntryId, req.params.id!);
     const repair = await prisma.vehicleRepair.create({ data });
     res.status(201).json({ repair });
   }),
@@ -574,7 +574,7 @@ vehiclesRouter.patch(
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
     const data = vehicleRepairInput.omit({ vehicleId: true }).partial().parse(req.body);
-    await validateRepairInvoice(data.ledgerEntryId, req.params.id);
+    await validateRepairInvoice(data.ledgerEntryId, req.params.id!);
     const repair = await prisma.vehicleRepair.update({
       where: { id: req.params.repairId, vehicleId: req.params.id },
       data,

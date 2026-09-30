@@ -60,14 +60,16 @@ function newContact(): WizContact {
 
 export function NewWorksiteWizard({
   people,
+  initialBuilding,
   onClose,
   onCreated,
 }: {
   people: { id: string; name: string }[];
+  initialBuilding?: { id: string; name: string; address?: string | null; postalCode?: string | null; city?: string | null };
   onClose: () => void;
   onCreated: () => void;
 }) {
-  const [v, setV] = useState<WizState>(EMPTY);
+  const [v, setV] = useState<WizState>(() => initialBuilding ? { ...EMPTY, buildingId: initialBuilding.id, buildingLabel: initialBuilding.name, address: initialBuilding.address ?? '', postalCode: initialBuilding.postalCode ?? '', city: initialBuilding.city ?? '' } : EMPTY);
   const [step, setStep] = useState(0);
   const [maxStep, setMaxStep] = useState(0);
   const [error, setError] = useState<string | null>(null);

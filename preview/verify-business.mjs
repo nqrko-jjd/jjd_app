@@ -31,5 +31,19 @@ try {
  assert(!JSON.stringify(api('/preview-portal/worksites/w0')).includes('Interne uniquement'));
  const request=api('/preview-portal/requests','POST',{buildingId:'b0',title:'Fuite test',urgency:'normal',details:'Démonstration'});
  assert(api('/preview-portal/buildings').buildings.find(b=>b.id==='b0').worksites.some(w=>w.id===request.id));
+ const createdBuilding=api('/api/buildings','POST',{name:'Immeuble Test',address:'Rue Exemple 1',city:'Uccle',postalCode:'1180'}).building;
+ const createdWorksite=api('/api/worksites','POST',{title:'Intervention test',buildingId:createdBuilding.id,clientId:'c0',city:'Uccle',address:'Rue Exemple 1'});
+ assert.equal(api('/api/buildings/'+createdBuilding.id).building.worksites[0].id,createdWorksite.id);
+ assert.equal(api('/api/worksites/'+createdWorksite.id).margin.labourCost,0);
+ api('/api/buildings/b0/contacts','POST',{name:'Contact test',role:'concierge'});
+ let bc=api('/api/buildings/b0').building.contacts.find(c=>c.name==='Contact test');assert(bc);
+ api('/api/buildings/b0/contacts/'+bc.id,'PATCH',{name:'Contact corrigé'});
+ assert(api('/api/buildings/b0').building.contacts.some(c=>c.name==='Contact corrigé'));
+ api('/api/buildings/b0/contacts/'+bc.id,'DELETE');assert(!api('/api/buildings/b0').building.contacts.some(c=>c.id===bc.id));
+ api('/api/buildings/b0/units','POST',{label:'Lot Test',contactId:'c0',occupantKind:'tenant'});
+ assert.equal(api('/api/buildings/b0').building.units.find(u=>u.label==='Lot Test').contact.name,'Client Démo');
+ assert.equal(api('/api/buildings/b0/portal-access','POST',{email:'test@example.test',access:'limited'}).simulated,true);
+ assert.equal(api('/api/buildings/b0/portal-users').users[0].portalAccess,'limited');
+ api('/api/buildings/b0/photo','POST',{photoData:'data:image/png;base64,DEMO'});assert.equal(api('/api/buildings/b0').building.photoUrl,'data:image/png;base64,DEMO');
  console.log('PASS: hierarchy, client scoping, labour totals, partial receipts, stock, duplicate guards, equipment, invoice totals, disabled sending, separate threads and client request.');
 } finally {await rm(dir,{recursive:true,force:true})}

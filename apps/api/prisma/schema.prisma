@@ -506,6 +506,8 @@ model Worksite {
 
 /// Opportunité commerciale — le pipeline CRM.
 model CrmOpportunity {
+  requestBrief Json?
+  portalRequestKey String? @unique
   id             String    @id @default(cuid())
   title          String
   stage          String    @default("new") // new | to_qualify | visit_scheduled | quote_sent | follow_up | won | lost

@@ -301,3 +301,28 @@ test('portail : un compte Promoteur voit tous ses projets (portefeuille), pas ce
     await prisma.promoter.deleteMany({ where: { id: { in: [matexi.id, autrePromoteur.id] } } });
   }
 });
+
+
+test('structured requests: scoped context, contacts, PDF ownership, persisted brief and retry deduplication', async () => {
+  const building = await prisma.contact.create({ data: { name: 'Request test building', normalizedName: 'request test building', kind: 'acp', syndicId, source: 'test' } });
+  const person = await prisma.contact.create({ data: { name: 'Known person', normalizedName: 'known person request', phone: '010000000', linkedAcpId: building.id, source: 'test' } });
+  const foreign = await prisma.contact.create({ data: { name: 'Other building', normalizedName: 'other request building', kind: 'acp', source: 'test' } });
+  const h = { ...auth(), 'content-type': 'application/json' };
+  const context = await (await fetch(`${base}/api/portal/requests/context?buildingId=${building.id}`, { headers: auth() })).json();
+  assert(context.contacts.some((c: {id: string}) => c.id === person.id));
+  assert.equal((await fetch(`${base}/api/portal/requests/context?buildingId=${foreign.id}`, { headers: auth() })).status, 403);
+  const form = new FormData();form.append('file',new Blob(['%PDF-1.4 test fixture'],{type:'application/pdf'}),'report.pdf');
+  const upload = await fetch(`${base}/api/portal/requests/attachments`, { method: 'POST', headers: auth(), body: form });
+  assert.equal(upload.status, 201);const attachment = await upload.json();
+  const payload = { requestKey: crypto.randomUUID(), buildingId: building.id, title: 'Repeated water damage', requestBrief: { units: [{ label: 'D02', purpose: 'affected' }, { label: 'D03', purpose: 'suspected_origin' }], contacts: [{ contactId: person.id, name: 'Do not trust this name', role: 'unknown', unitLabel: 'D02', phone2: '020000000' }], repeated: true, history: 'Previous episode in August', goals: ['report','moisture'], attachments: [attachment] } };
+  const post = (p: unknown) => fetch(`${base}/api/portal/requests`, { method: 'POST', headers: h, body: JSON.stringify(p) });
+  assert.equal((await post({...payload,buildingId:foreign.id})).status,403);
+  assert.equal((await post({...payload,requestBrief:{...payload.requestBrief,contacts:[{contactId:foreign.id,name:'Foreign'}]}})).status,403);
+  assert.equal((await post({...payload,requestBrief:{...payload.requestBrief,attachments:[{...attachment,token:'forged'}]}})).status,400);
+  const first=await post(payload);assert.equal(first.status,201);const created=await first.json();
+  const retry=await (await post(payload)).json();assert.equal(retry.id,created.id);
+  const opp=await prisma.crmOpportunity.findUniqueOrThrow({where:{id:created.id}});const brief=opp.requestBrief as any;
+  assert.equal(brief.contacts[0].name,person.name);assert.equal(brief.contacts[0].phone,person.phone);assert.equal(brief.contacts[0].phone2,'020000000');assert.equal(brief.units.length,2);assert.equal(brief.attachments[0].token,undefined);assert.equal(opp.worksiteId,null);
+  const list=await (await fetch(`${base}/api/portal/requests`,{headers:auth()})).json();assert(list.items.some((r:{id:string})=>r.id===created.id));
+  await prisma.crmOpportunity.delete({where:{id:created.id}});await prisma.contact.delete({where:{id:person.id}});await prisma.contact.deleteMany({where:{id:{in:[building.id,foreign.id]}}});
+});

@@ -37,12 +37,15 @@ export default function PortalInterventions() {
   if (status) params.set('status', status);
   if (q) params.set('q', q);
   const { data, error, reload } = usePortalApi<{ items: WS[] }>(me ? `/interventions?${params}` : null);
+  const requests = usePortalApi<{ items: { id: string; reference: string; title: string; building: string | null; createdAt: string; statusLabel: string }[] }>('/requests');
   const items = data?.items ?? null;
 
   if (loading || !me) return null;
 
   return (
     <PortalShell title="Interventions" subtitle="Toutes les interventions de votre portefeuille">
+      {requests.error && <ErrorState message="Impossible de charger vos demandes reçues." onRetry={requests.reload}/>}
+      {!!requests.data?.items.length && <section className="p-card p-card-pad p-request-inbox"><div className="p-request-section-head"><h2>Vos demandes transmises</h2><Link className="p-btn-line" href="/portail/demande">Nouvelle demande</Link></div><p className="p-note">Une demande est examinée par JJD avant d’être planifiée en intervention.</p>{requests.data.items.filter(r => !q || `${r.title} ${r.reference} ${r.building ?? ''}`.toLowerCase().includes(q.toLowerCase())).map(r => <div key={r.id} className="p-request-status"><div><strong>{r.title}</strong><span>{r.reference} · {r.building} · {fdate(r.createdAt)}</span></div><span className="p-dot gold">{r.statusLabel}</span></div>)}</section>}
       <div className="p-filters" style={{ alignItems: 'center' }}>
         <div className="p-seg">
           {STATUS_VIEWS.map((v) => (

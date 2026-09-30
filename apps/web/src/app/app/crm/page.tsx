@@ -7,9 +7,12 @@ import { api } from '@/lib/api';
 import { PageHead, Money, formatDateBE, stageLabel } from '@/lib/ui';
 import { FormModal, type FieldDef } from '@/components/FormModal';
 import { CRM_STAGES, INTERVENTION_PROBLEM_TYPES, INTERVENTION_PROBLEM_TYPE_LABEL } from '@jjd/shared';
+import { RequestBriefCard } from '@/components/RequestBriefCard';
+import type { RequestBrief } from '@jjd/shared';
 import { Plus } from 'lucide-react';
 
 const CRM_SOURCE_OPTIONS = [
+  { value: 'portail', label: 'Portail client' },
   { value: 'Appel', label: 'Appel' },
   { value: 'E-mail', label: 'E-mail' },
   { value: 'Client existant', label: 'Client existant' },
@@ -21,6 +24,7 @@ const CRM_SOURCE_OPTIONS = [
 ];
 
 interface Opp {
+  requestBrief?: RequestBrief | null;
   id: string; title: string; stage: string; estimatedValue: number | null;
   source: string | null; nextActionOn: string | null; nextActionNote: string | null;
   contact: { name: string } | null;
@@ -45,6 +49,7 @@ function CrmInner() {
   const { data, loading, error, reload } = useApi<{ columns: { stage: string; items: Opp[] }[] }>('/api/crm');
   const [creating, setCreating] = useState(sp.get('new') === '1');
   const [editing, setEditing] = useState<Opp | null>(null);
+  const [viewing, setViewing] = useState<Opp | null>(null);
   const [actionError, setActionError] = useState('');
   const [moving, setMoving] = useState<string | null>(null);
 
@@ -85,6 +90,7 @@ function CrmInner() {
         sub="Suivi des demandes jusqu'au devis"
         action={<button className="btn primary" onClick={() => setCreating(true)}><Plus size={15} strokeWidth={2} /> Nouvelle opportunité</button>}
       />
+      {viewing && <div className="modal-scrim"><div className="modal wiz" role="dialog" aria-modal="true" aria-label="Demande client"><div className="modal-head"><h2>{viewing.title}</h2><button className="btn ghost" onClick={() => setViewing(null)} aria-label="Fermer">✕</button></div><div className="wiz-body"><p className="wiz-note">Informations déclarées par le client · à vérifier avant de planifier et de confirmer la facturation.</p><p style={{ whiteSpace: 'pre-wrap' }}>{viewing.note}</p>{viewing.requestBrief && <RequestBriefCard brief={viewing.requestBrief}/>}<p><strong>Accès :</strong> {viewing.accessNotes || 'À préciser'}</p><p><strong>Passage souhaité :</strong> {viewing.visitPreference || 'À convenir'}</p><div className="request-images">{viewing.photos.map(p => <a key={p.id} href={p.url} target="_blank" rel="noreferrer"><img src={p.thumbUrl ?? p.url} alt="Photo transmise par le client"/></a>)}</div></div><div className="modal-foot"><button className="btn" onClick={() => setViewing(null)}>Fermer</button><button className="btn primary" onClick={() => { setEditing(viewing); setViewing(null); }}>Qualifier la demande</button></div></div></div>}
       {creating && (
         <FormModal
           title="Nouvelle opportunité"
@@ -125,7 +131,7 @@ function CrmInner() {
                 return (
                   <div key={o.id} className="kanban-card" aria-busy={moving===o.id}>
                     {(o.contact?.name ?? o.acp?.name) && <div className="eyebrow-mini">{o.contact?.name ?? o.acp?.name}</div>}
-                    <button type="button" className="crm-card-title" onClick={() => setEditing(o)}>{o.title}</button>
+                    <button type="button" className="crm-card-title" onClick={() => o.requestBrief ? setViewing(o) : setEditing(o)}>{o.title}</button>
                     {o.source === 'email-ia' && (
                       <span className="badge plain" style={{ fontSize: '0.68rem', marginTop: '0.2rem' }} title="Créée automatiquement depuis un mail par l'IA — à vérifier avant de la traiter comme confirmée">
                         🤖 Détectée par mail, à vérifier
@@ -142,6 +148,7 @@ function CrmInner() {
                         {o.unitLabel && <span className="badge" style={{ fontSize: '0.68rem' }}>{o.unitLabel}</span>}
                       </div>
                     )}
+                    {o.requestBrief && <button className="btn" onClick={() => setViewing(o)}>Lire la demande complète</button>}
                     {o.estimatedValue != null && <div className="amount"><Money value={o.estimatedValue} /></div>}
                     {o.nextActionOn && (
                       <div className={overdue ? 'badge crit' : 'badge'} style={{ marginTop: '0.4rem', fontSize: '0.7rem' }}>

@@ -2,9 +2,11 @@
 import { Suspense, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Check, AlertTriangle } from 'lucide-react';
+import { Check, AlertTriangle, Building2, Plus, FileText, X }  from 'lucide-react';
 import { portalApi, portalUpload, usePortalGuard } from '@/lib/portal';
 import { PortalShell } from '../PortalShell';
+import { RequestBriefCard } from '@/components/RequestBriefCard';
+import { REQUEST_GOALS, REQUEST_ROLES, REQUEST_LOCATIONS, type RequestBrief, requestBriefInput } from '@jjd/shared';
 import { INTERVENTION_PROBLEM_TYPES, INTERVENTION_PROBLEM_TYPE_LABEL, type InterventionProblemType } from '@jjd/shared';
 
 const TYPE_ICON: Record<InterventionProblemType, string> = {
@@ -21,6 +23,7 @@ const URGENCIES: { key: Urgency; label: string; hint: string }[] = [
 ];
 
 interface Building { id: string; name: string; address: string }
+interface RequestContext { units: { label: string }[]; contacts: { id: string; name: string; phone: string; email: string }[]; worksites: { id: string; ref: string; title: string }[] }
 interface Photo { url: string; thumbUrl: string | null }
 type FieldKey = 'buildingId' | 'problemType' | 'title';
 /** Un champ obligatoire manquant : le champ + l'étape où le corriger (nommés dans le bandeau). */
@@ -47,11 +50,14 @@ function DemandeInner() {
     problemType: '' as InterventionProblemType | '',
     details: '',
     urgency: 'normal' as Urgency,
-    onSiteContactName: '',
-    onSiteContactPhone: '',
     accessNotes: '',
     visitPreference: '',
   });
+  const [brief, setBrief] = useState<RequestBrief>(() => requestBriefInput.parse({}));
+  const [context, setContext] = useState<RequestContext>({ units: [], contacts: [], worksites: [] });
+  const [contextLoading, setContextLoading] = useState(false);
+  const [buildingError, setBuildingError] = useState('');
+  const [requestKey] = useState(() => crypto.randomUUID());
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [uploading, setUploading] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -61,8 +67,30 @@ function DemandeInner() {
   const cardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (me?.isSyndic) portalApi<{ buildings: Building[] }>('/buildings').then((r) => setBuildings(r.buildings)).catch(() => {});
+    if (!me) return;
+    let live = true;
+    portalApi<{ buildings: Building[] }>('/buildings').then(r => {
+      if (!live) return; setBuildings(r.buildings); setBuildingError('');
+      if (r.buildings.length === 1) setF(prev => ({ ...prev, buildingId: prev.buildingId || r.buildings[0].id }));
+    }).catch(() => { if (live) setBuildingError('Impossible de charger vos immeubles. Rechargez la page pour réessayer.'); });
+    return () => { live = false; };
   }, [me]);
+  useEffect(() => {
+    let live = true; setContext({ units: [], contacts: [], worksites: [] });
+    if (!f.buildingId) { setContextLoading(false); return; }
+    setContextLoading(true);
+    portalApi<RequestContext>(`/requests/context?buildingId=${encodeURIComponent(f.buildingId)}`).then(r => { if (live) setContext(r); }).catch(() => { if (live) setFailure('Préremplissage indisponible. Vous pouvez décrire les lieux et renseigner les contacts manuellement.'); }).finally(() => { if (live) setContextLoading(false); });
+    return () => { live = false; };
+  }, [f.buildingId]);
+  function changeBuilding(id: string) {
+    setF(prev => ({ ...prev, buildingId: id, unitLabel: '' }));
+    setBrief(prev => ({ ...prev, units: [], contacts: [], relatedWorksiteId: null }));
+    setBlocked(null);
+  }
+  const patchBrief = (patch: Partial<RequestBrief>) => setBrief(prev => ({ ...prev, ...patch }));
+  function patchContact(index: number, patch: Partial<RequestBrief['contacts'][number]>) {
+    setBrief(prev => ({ ...prev, contacts: prev.contacts.map((c, i) => i === index ? { ...c, ...patch } : c) }));
+  }
 
   // à chaque changement d'étape, on remonte en haut de la carte (mobile : le formulaire est long)
   // (uniquement si le haut de la carte est sorti de l'écran, jamais au premier affichage)
@@ -76,12 +104,12 @@ function DemandeInner() {
   if (loading || !me) return null;
 
   const selectedBuilding = buildings.find((b) => b.id === f.buildingId) ?? null;
-  const needsBuilding = me.isSyndic && buildings.length > 0;
+  const needsBuilding = !!(me.isSyndic || me.isPromoter || buildings.length);
 
   /** Champs obligatoires manquants pour les étapes jusqu'à `upTo` (dans l'ordre du parcours). */
   function missing(upTo: number): Blocker[] {
     const out: Blocker[] = [];
-    if (upTo >= 1 && needsBuilding && !f.buildingId) out.push({ field: 'buildingId', label: 'Immeuble concerné', step: 1 });
+    if (upTo >= 1 && needsBuilding && !buildings.some(b => b.id === f.buildingId)) out.push({ field: 'buildingId', label: 'Immeuble concerné', step: 1 });
     if (upTo >= 2 && f.problemType === '') out.push({ field: 'problemType', label: 'Type de problème', step: 2 });
     if (upTo >= 2 && f.title.trim().length < 3) out.push({ field: 'title', label: 'Objet de la demande (3 caractères minimum)', step: 2 });
     return out;
@@ -97,23 +125,35 @@ function DemandeInner() {
 
   async function addPhotos(files: FileList | null) {
     if (!files?.length) return;
+    let pdfCount = brief.attachments.length;
     setUploading(true);
     setFailure(null);
     try {
       for (const file of Array.from(files)) {
+        if (file.size > 15 * 1024 * 1024) throw new Error('Fichier trop volumineux : 15 Mo maximum.');
+        if (file.type === 'application/pdf') {
+          if (pdfCount >= 8) throw new Error('Limite de 8 PDF par demande.');
+          const fd = new FormData(); fd.append('file', file);
+          const attachment = await portalUpload<RequestBrief['attachments'][number]>('/requests/attachments', fd);
+          setBrief(prev => ({ ...prev, attachments: [...prev.attachments, attachment] })); pdfCount++; continue;
+        }
         const fd = new FormData();
         fd.append('file', file);
         const p = await portalUpload<Photo>('/requests/photos', fd);
         setPhotos((prev) => [...prev, p]);
       }
-    } catch {
-      setFailure('Une photo n’a pas pu être envoyée. Vérifiez sa taille (image uniquement) puis réessayez.');
+    } catch (e) {
+      setFailure(e instanceof Error ? e.message : 'Fichier non envoyé. Réessayez.');
     } finally {
       setUploading(false);
     }
   }
 
   async function submit() {
+    if (busy || uploading) return;
+    if (brief.contacts.some(c => !c.name.trim())) { setFailure('Renseignez le nom de chaque personne ou retirez la ligne vide.'); setStep(3); return; }
+    if (brief.contacts.some(c => c.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(c.email))) { setFailure('Vérifiez les adresses e-mail des personnes à joindre.'); setStep(3); return; }
+    if (brief.units.some(u => !u.label.trim())) { setFailure('Renseignez chaque appartement ou retirez la ligne vide.'); setStep(1); return; }
     const first = missing(3)[0];
     if (first) { setBlocked(first); return; }
     setBusy(true);
@@ -122,23 +162,25 @@ function DemandeInner() {
       const r = await portalApi<{ id: string; reference: string }>('/requests', {
         method: 'POST',
         body: {
+          requestKey,
+          requestBrief: brief,
           title: f.title.trim(),
           buildingId: f.buildingId || null,
-          unitLabel: f.unitLabel.trim() || null,
+          unitLabel: brief.units.length ? brief.units.map(u => u.label).join(', ') : f.unitLabel.trim() || null,
           details: f.details.trim() || null,
           urgency: f.urgency,
           urgent: f.urgency === 'urgent',
           problemType: f.problemType || null,
-          onSiteContactName: f.onSiteContactName.trim() || null,
-          onSiteContactPhone: f.onSiteContactPhone.trim() || null,
+          onSiteContactName: brief.contacts[0]?.name || null,
+          onSiteContactPhone: brief.contacts[0]?.phone || null,
           accessNotes: f.accessNotes.trim() || null,
           visitPreference: f.visitPreference.trim() || null,
           photos,
         },
       });
       setDone({ reference: r.reference ?? '' });
-    } catch {
-      setFailure('La demande n’a pas pu être envoyée. Vos informations sont conservées : réessayez dans un instant.');
+    } catch (e) {
+      setFailure(e instanceof Error ? e.message : 'Envoi impossible. Vos informations sont conservées.');
     } finally {
       setBusy(false);
     }
@@ -150,7 +192,7 @@ function DemandeInner() {
   return (
     <PortalShell title="Nouvelle demande d’intervention" subtitle="Décrivez le besoin, nous revenons vers vous">
       <Link href="/portail/accueil" className="p-back">← Retour</Link>
-      <div style={{ maxWidth: 640 }}>
+      <div className="p-request-layout">
         {done ? (
           <div className="p-card p-card-pad">
             <div className="p-done" role="status">
@@ -185,6 +227,7 @@ function DemandeInner() {
                 {blocked.step !== step && <button type="button" className="p-btn-line" onClick={() => { setStep(blocked.step); }}>Aller à l’étape {blocked.step}</button>}
               </div>
             )}
+            {buildingError && <div className="p-banner warn" role="alert">{buildingError}</div>}
             {failure && (
               <div className="p-banner warn" role="alert">
                 <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: 2 }} />
@@ -197,20 +240,25 @@ function DemandeInner() {
                 {needsBuilding ? (
                   <div className="p-field">
                     <label htmlFor="dem-building">Immeuble concerné *</label>
-                    <select id="dem-building" className={`p-select${fieldErr('buildingId') ? ' error' : ''}`} value={f.buildingId} onChange={(e) => { setF({ ...f, buildingId: e.target.value }); setBlocked(null); }}>
+                    <select id="dem-building" className={`p-select${fieldErr('buildingId') ? ' error' : ''}`} value={f.buildingId} onChange={(e) => changeBuilding(e.target.value)}>
                       <option value="">Choisir un immeuble…</option>
                       {buildings.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
                     </select>
+                    {(brief.units.length > 0 || brief.contacts.length > 0) && <p className="p-note">Changer d’immeuble réinitialise les appartements et les personnes sélectionnées.</p>}
                     {fieldErr('buildingId') && <span className="p-field-error">Choisissez l’immeuble concerné pour continuer.</span>}
                     {selectedBuilding?.address && <p className="p-note" style={{ marginTop: '0.2rem' }}>📍 {selectedBuilding.address}</p>}
                   </div>
                 ) : (
                   <p className="p-note">Cette demande concerne : <strong>{me.scopeLabel ?? me.label}</strong></p>
                 )}
-                <div className="p-field">
-                  <label htmlFor="dem-unit">Lot, appartement ou zone précise</label>
-                  <input id="dem-unit" className="p-input" value={f.unitLabel} onChange={(e) => setF({ ...f, unitLabel: e.target.value })} placeholder="ex. Appartement 3B, local technique, hall d’entrée…" />
-                </div>
+                <div className="p-request-section-head"><h2>Appartements ou zones concernés</h2><button className="p-btn-line" type="button" onClick={() => patchBrief({ units: [...brief.units, { label: '', purpose: 'affected' }] })}><Plus size={16}/> Ajouter une zone</button></div>
+                <p className="p-note">Un même problème peut concerner plusieurs logements. L’origine signalée sera vérifiée sur place.</p>
+                {contextLoading && <p role="status" className="p-note">Chargement des informations de l’immeuble…</p>}
+                <datalist id="known-units">{context.units.map((u, i) => <option key={i} value={u.label}/>)}</datalist>
+                {brief.units.map((unit, i) => <div className="p-request-unit" key={i}><input className="p-input" aria-label={`Appartement ou zone ${i + 1}`} list="known-units" value={unit.label} placeholder="D02, hall, toiture…" onChange={e => patchBrief({ units: brief.units.map((u, j) => j === i ? { ...u, label: e.target.value } : u) })}/><select className="p-select" aria-label={`Situation de la zone ${i + 1}`} value={unit.purpose} onChange={e => patchBrief({ units: brief.units.map((u, j) => j === i ? { ...u, purpose: e.target.value as typeof u.purpose } : u) })}>{Object.entries(REQUEST_LOCATIONS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select><button className="p-btn-line" aria-label="Retirer la zone" onClick={() => patchBrief({ units: brief.units.filter((_, j) => j !== i) })}><X size={16}/></button></div>)}
+                {!brief.units.length && <p className="p-request-empty">Précisez les logements si vous les connaissez, ou continuez pour décrire le problème.</p>}
+                <div className="p-field"><label htmlFor="dem-reference">Votre référence de dossier / sinistre</label><input id="dem-reference" className="p-input" value={brief.clientReference} onChange={e => patchBrief({ clientReference: e.target.value })} placeholder="Facultatif · ex. SIN 2026-03"/></div>
+
               </>
             )}
 
@@ -247,8 +295,13 @@ function DemandeInner() {
                     ))}
                   </div>
                 </div>
+                <div className="p-field"><label className="p-request-check"><input type="checkbox" checked={brief.repeated} onChange={e => patchBrief({ repeated: e.target.checked })}/> Ce problème s’est déjà produit</label></div>
+                {brief.repeated && <div className="p-field"><label htmlFor="dem-history">Dates et interventions précédentes</label><textarea id="dem-history" className="p-textarea" rows={3} value={brief.history} onChange={e => patchBrief({ history: e.target.value })} placeholder="Dates connues, réparations déjà tentées, évolution…"/>{context.worksites.length > 0 && <><label htmlFor="dem-related">Dossier JJD déjà connu</label><select id="dem-related" className="p-select" value={brief.relatedWorksiteId ?? ''} onChange={e => patchBrief({ relatedWorksiteId: e.target.value || null })}><option value="">Aucun / je ne sais pas</option>{context.worksites.map(w => <option key={w.id} value={w.id}>{w.ref} · {w.title}</option>)}</select></>}</div>}
+                <div className="p-field"><label htmlFor="dem-measures">Mesures déjà prises</label><textarea id="dem-measures" className="p-textarea" rows={2} value={brief.measures} onChange={e => patchBrief({ measures: e.target.value })} placeholder="Ex. eau coupée, protection installée, aucune pour le moment…"/></div>
+                <fieldset className="p-request-goals"><legend>Qu’attendez-vous de notre passage ?</legend>{Object.entries(REQUEST_GOALS).map(([key, label]) => <label key={key} className="p-request-check"><input type="checkbox" checked={brief.goals.includes(key as keyof typeof REQUEST_GOALS)} onChange={e => patchBrief({ goals: e.target.checked ? [...brief.goals, key as keyof typeof REQUEST_GOALS] : brief.goals.filter(g => g !== key) })}/>{label}</label>)}</fieldset>
                 <div className="p-field">
-                  <label>Photos</label>
+                  <label>Photos et documents PDF</label>
+                  <p className="p-note">Photos du problème, rapport précédent, plan… 15 Mo maximum par fichier.</p>
                   <div className="p-photo-grid">
                     {photos.map((p, i) => (
                       <div key={i} className="p-photo-thumb">
@@ -258,26 +311,26 @@ function DemandeInner() {
                       </div>
                     ))}
                     <label className="p-photo-add">
-                      {uploading ? '…' : '+'}
-                      <input type="file" accept="image/*" multiple hidden disabled={uploading} onChange={(e) => addPhotos(e.target.files)} />
+                      {uploading ? 'Envoi…' : '+'}
+                      <input type="file" accept="image/*,application/pdf" multiple hidden disabled={uploading} onChange={(e) => { void addPhotos(e.target.files); e.target.value = ''; }} />
                     </label>
                   </div>
-                </div>
+                </div>                <div className="p-request-files">{brief.attachments.map((a, i) => <div key={i}><FileText size={18}/><span>{a.name}</span><button className="p-btn-line" aria-label={`Retirer ${a.name}`} onClick={() => patchBrief({ attachments: brief.attachments.filter((_, j) => j !== i) })}><X size={16}/></button></div>)}</div>
+
               </>
             )}
 
             {step === 3 && (
               <>
-                <div className="p-field-2col">
-                  <div className="p-field">
-                    <label htmlFor="dem-cname">Personne sur place</label>
-                    <input id="dem-cname" className="p-input" value={f.onSiteContactName} onChange={(e) => setF({ ...f, onSiteContactName: e.target.value })} placeholder="Nom" />
-                  </div>
-                  <div className="p-field">
-                    <label htmlFor="dem-cphone">Téléphone</label>
-                    <input id="dem-cphone" className="p-input" inputMode="tel" value={f.onSiteContactPhone} onChange={(e) => setF({ ...f, onSiteContactPhone: e.target.value })} placeholder="0470 00 00 00" />
-                  </div>
-                </div>
+                <div className="p-request-section-head"><h2>Personnes à joindre</h2><button className="p-btn-line" onClick={() => patchBrief({ contacts: [...brief.contacts, { name: '', phone: '', phone2: '', email: '', role: 'unknown', unitLabel: '' }] })}><Plus size={16}/> Ajouter une personne</button></div>
+                <p className="p-note">Choisissez une personne connue ou renseignez un nouvel interlocuteur. Les nouvelles coordonnées seront vérifiées par JJD.</p>
+                {brief.contacts.map((c, i) => <section className="p-request-person" key={i}>
+                  <div className="p-request-section-head"><strong>Contact {i + 1}</strong><button className="p-btn-line" onClick={() => patchBrief({ contacts: brief.contacts.filter((_, j) => j !== i) })}>Retirer</button></div>
+                  {!!context.contacts.length && <div className="p-field"><label htmlFor={`person-known-${i}`}>Personne connue de l’immeuble</label><select id={`person-known-${i}`} className="p-select" value={c.contactId ?? ''} onChange={e => { const person = context.contacts.find(p => p.id === e.target.value); patchContact(i, person ? { contactId: person.id, name: person.name, phone: person.phone, email: person.email } : { contactId: null }); }}><option value="">Nouvelle personne / coordonnées à confirmer</option>{context.contacts.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>}
+                  {c.contactId ? <p className="p-request-empty"><strong>{c.name}</strong><br/>{[c.phone,c.email].filter(Boolean).join(' · ') || 'Coordonnées à confirmer'}<br/><span>Pour communiquer des coordonnées différentes, choisissez « Nouvelle personne / coordonnées à confirmer ».</span></p> : <div className="p-field-2col"><div className="p-field"><label htmlFor={`person-name-${i}`}>Nom</label><input id={`person-name-${i}`} className="p-input" value={c.name} onChange={e => patchContact(i, { name: e.target.value })}/></div><div className="p-field"><label htmlFor={`person-phone-${i}`}>Téléphone</label><input id={`person-phone-${i}`} type="tel" className="p-input" value={c.phone} onChange={e => patchContact(i, { phone: e.target.value })}/></div><div className="p-field"><label htmlFor={`person-email-${i}`}>E-mail</label><input id={`person-email-${i}`} type="email" className="p-input" value={c.email} onChange={e => patchContact(i, { email: e.target.value })}/></div></div>}
+                  <div className="p-field-2col"><div className="p-field"><label htmlFor={`person-role-${i}`}>Rôle</label><select id={`person-role-${i}`} className="p-select" value={c.role} onChange={e => patchContact(i, { role: e.target.value as typeof c.role })}>{Object.entries(REQUEST_ROLES).map(([key,label]) => <option key={key} value={key}>{label}</option>)}</select></div><div className="p-field"><label htmlFor={`person-lot-${i}`}>Appartement / lot</label><input id={`person-lot-${i}`} className="p-input" value={c.unitLabel} onChange={e => patchContact(i, { unitLabel: e.target.value })} placeholder="D02, D03…"/></div><div className="p-field"><label htmlFor={`person-phone2-${i}`}>Autre téléphone (facultatif)</label><input id={`person-phone2-${i}`} type="tel" className="p-input" value={c.phone2} onChange={e => patchContact(i, { phone2: e.target.value })}/></div></div>
+                </section>)}
+                {!brief.contacts.length && <p className="p-request-empty">Vous pouvez transmettre la demande sans contact sur place. JJD vous recontactera pour organiser l’accès.</p>}
                 <div className="p-field">
                   <label htmlFor="dem-access">Consignes d’accès</label>
                   <textarea id="dem-access" className="p-textarea" rows={3} value={f.accessNotes} onChange={(e) => setF({ ...f, accessNotes: e.target.value })} placeholder="Code, clé chez le concierge, étage…" />
@@ -293,7 +346,7 @@ function DemandeInner() {
               <>
                 <div style={{ margin: '0.5rem 0 0' }}>
                   {selectedBuilding && <div className="p-recap-row"><span className="k">Immeuble</span><span className="v">{selectedBuilding.name}</span>{edit(1)}</div>}
-                  <div className="p-recap-row"><span className="k">Lot / zone</span><span className="v">{f.unitLabel || '—'}</span>{edit(1)}</div>
+                  <div className="p-recap-row"><span className="k">Lot / zone</span><span className="v">{brief.units.map(u => u.label).join(', ') || 'À préciser'}</span>{edit(1)}</div>
                   <div className="p-recap-row"><span className="k">Type</span><span className="v">{f.problemType ? `${TYPE_ICON[f.problemType]} ${INTERVENTION_PROBLEM_TYPE_LABEL[f.problemType]}` : '—'}</span>{edit(2)}</div>
                   <div className="p-recap-row"><span className="k">Objet</span><span className="v">{f.title}</span>{edit(2)}</div>
                   <div className="p-recap-row"><span className="k">Description</span><span className="v">{f.details || '—'}</span>{edit(2)}</div>
@@ -312,20 +365,21 @@ function DemandeInner() {
                     ) : <span className="v">Aucune</span>}
                     {edit(2)}
                   </div>
-                  <div className="p-recap-row"><span className="k">Contact sur place</span><span className="v">{f.onSiteContactName ? `${f.onSiteContactName}${f.onSiteContactPhone ? ` · ${f.onSiteContactPhone}` : ''}` : '—'}</span>{edit(3)}</div>
+
                   <div className="p-recap-row"><span className="k">Accès</span><span className="v">{f.accessNotes || '—'}</span>{edit(3)}</div>
                   <div className="p-recap-row"><span className="k">Préférence de passage</span><span className="v">{f.visitPreference || '—'}</span>{edit(3)}</div>
                 </div>
-                <p className="p-notice">JJD Consult reçoit votre demande par e-mail et revient vers vous. Vous en suivrez l’avancement dans « Interventions » dès qu’une intervention est créée.</p>
+                <RequestBriefCard brief={brief}/>
+                <p className="p-notice">JJD vérifie la demande, les personnes à joindre et les modalités d’intervention avant de planifier. Vous retrouvez votre demande dans « Interventions ». Les responsabilités et le destinataire de facturation restent à confirmer.</p>
               </>
             )}
 
             <div className="p-wizard-nav">
               {step > 1 ? <button className="p-btn-line" onClick={() => { setBlocked(null); setStep((s) => s - 1); }}>← Précédent</button> : <span />}
               {step < 4 ? (
-                <button className="p-btn-primary" onClick={goNext}>Suivant →</button>
+                <button className="p-btn-primary" disabled={uploading || !!buildingError} onClick={goNext}>Suivant →</button>
               ) : (
-                <button className="p-btn-primary" disabled={busy} onClick={submit}>{busy ? 'Envoi…' : 'Envoyer la demande'}</button>
+                <button className="p-btn-primary" disabled={busy || uploading || !!buildingError} onClick={submit}>{busy ? 'Envoi…' : 'Envoyer la demande'}</button>
               )}
             </div>
           </div>

@@ -77,7 +77,17 @@ try {
  api('/api/worksites/w0/thread/messages','POST',{body:'Interne uniquement'});
  assert(!JSON.stringify(api('/preview-portal/worksites/w0')).includes('Interne uniquement'));
  const request=api('/preview-portal/requests','POST',{buildingId:'b0',title:'Fuite test',urgency:'normal',details:'Démonstration'});
- assert(api('/preview-portal/buildings').buildings.find(b=>b.id==='b0').worksites.some(w=>w.id===request.id));
+ assert(!db.worksites.some(w=>w.id===request.id));
+ assert(api('/preview-portal/requests').items.some(r=>r.id===request.id));
+ assert(api('/api/crm').columns.find(c=>c.stage==='new').items.some(o=>o.id===request.id));
+ const context=api('/preview-portal/requests/context?buildingId=b0');
+ assert(context.contacts.length>0);assert.throws(()=>api('/preview-portal/requests/context?buildingId=b2'));
+ const structured={requestKey:'request-test-key',buildingId:'b0',title:'Fuite plusieurs lots',requestBrief:{units:[{label:'D02',purpose:'affected'},{label:'D03',purpose:'suspected_origin'}],contacts:[{contactId:context.contacts[0].id,name:'Ancien nom',role:'unknown',unitLabel:'D02'}],goals:['report','moisture'],attachments:[{url:'data:application/pdf;base64,JVBERi0xLjQ=',name:'rapport.pdf',mime:'application/pdf'}]}};
+ const sent=api('/preview-portal/requests','POST',structured);
+ assert.equal(api('/preview-portal/requests','POST',structured).id,sent.id);
+ const received=api('/api/crm').columns.find(c=>c.stage==='new').items.find(o=>o.id===sent.id);
+ assert.equal(received.requestBrief.units.length,2);assert.equal(received.requestBrief.attachments.length,1);assert.equal(received.requestBrief.contacts[0].name,context.contacts[0].name);
+ assert.throws(()=>api('/preview-portal/requests','POST',{...structured,requestKey:'bad-link',requestBrief:{contacts:[{contactId:'c2',name:'Outside'}]}}));
  const createdBuilding=api('/api/buildings','POST',{name:'Immeuble Test',address:'Rue Exemple 1',city:'Uccle',postalCode:'1180'}).building;
  const createdWorksite=api('/api/worksites','POST',{title:'Intervention test',buildingId:createdBuilding.id,clientId:'c0',city:'Uccle',address:'Rue Exemple 1'});
  assert.equal(api('/api/buildings/'+createdBuilding.id).building.worksites[0].id,createdWorksite.id);

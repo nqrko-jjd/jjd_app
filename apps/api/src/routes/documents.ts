@@ -190,11 +190,11 @@ documentsRouter.get(
     if (['invoiced', 'collected', 'overdue', 'receivable', 'quotes'].includes(dashboard)) {
       where.source = { not: 'demo' };
       where.kind = dashboard === 'quotes' ? 'quote' : { in: ['invoice', 'deposit_invoice'] };
-      if (dashboard === 'invoiced' || dashboard === 'collected') {
-        const now = new Date();
-        where.issuedOn = { gte: new Date(now.getFullYear(), now.getMonth(), 1) };
-      }
-      if (dashboard === 'collected') where.status = 'paid';
+      const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+      if (dashboard === 'invoiced') where.issuedOn = { gte: monthStart };
+      // Encaissé = argent reçu ce mois-ci : filtre sur la date de paiement (paidOn), pas
+      // la date d'émission — même correctif que le calcul du tableau de bord (2026-09-30).
+      if (dashboard === 'collected') { where.paidOn = { gte: monthStart }; where.status = 'paid'; }
       if (dashboard === 'overdue') where.status = 'overdue';
       if (dashboard === 'receivable') where.status = { in: ['sent', 'partial', 'overdue'] };
       if (dashboard === 'quotes') where.status = 'sent';

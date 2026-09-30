@@ -17,7 +17,7 @@ export function DepotFrame({ children }: { children: ReactNode }) {
     { href: '/app/stock/preparations', label: 'Préparations', icon: ClipboardList, visible: prepare },
     { href: '/app/stock/commandes', label: 'Commandes fournisseurs', icon: Truck, visible: manage },
     { href: '/app/stock/scan', label: 'Scan & mouvements', icon: ScanLine, visible: manage || role === 'foreman' || role === 'worker' },
-    { href: '/app/materiel', label: 'Matériel', icon: Wrench, visible: true },
+    { href: '/app/materiel', label: 'Outils & consommables', icon: Wrench, visible: true },
   ].filter(x => x.visible);
   const active = links.filter(x => pathname === x.href || pathname.startsWith(`${x.href}/`)).sort((a,b)=>b.href.length-a.href.length)[0]?.href;
   return <div className="depot-ui"><nav className="depot-ui-nav" aria-label="Stock et logistique">{links.map(({href,label,icon:Icon})=><Link href={href} key={href} aria-current={href===active?'page':undefined}><Icon size={20}/><span>{label}</span></Link>)}</nav><div className="depot-ui-content">{children}</div></div>;

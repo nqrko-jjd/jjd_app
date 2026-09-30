@@ -531,13 +531,14 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
             </div>
 
             {isInvoiceLike && locked && (
-              <div className={doc.status === 'paid' ? 'doc-recap-paid ok' : doc.status === 'partial' ? 'doc-recap-paid warn' : 'doc-recap-paid'}>
+              <div className={doc.status === 'paid' ? (doc.hasBankMatch ? 'doc-recap-paid ok' : 'doc-recap-paid warn') : doc.status === 'partial' ? 'doc-recap-paid warn' : 'doc-recap-paid'}>
                 {doc.status === 'paid' && (
                   <span>
-                    ✓ Payée intégralement
+                    {doc.hasBankMatch ? '✓ Payée intégralement' : '⚠ Marquée payée'}
                     {doc.paidOn && (
                       <> le <Link href={`/app/finances/banque?documentId=${id}`} style={{ textDecoration: 'underline' }}>{formatDateBE(doc.paidOn)}</Link></>
                     )}
+                    {!doc.hasBankMatch && ' — aucune transaction bancaire retrouvée, date non confirmée'}
                   </span>
                 )}
                 {doc.status === 'partial' && (
@@ -547,6 +548,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
                       <> (dernier le <Link href={`/app/finances/banque?documentId=${id}`} style={{ textDecoration: 'underline' }}>{formatDateBE(doc.paidOn)}</Link>)</>
                     )}
                     , {formatEur(remaining)} restant
+                    {!doc.hasBankMatch && ' — aucune transaction bancaire retrouvée'}
                   </span>
                 )}
                 {doc.status !== 'paid' && doc.status !== 'partial' && (

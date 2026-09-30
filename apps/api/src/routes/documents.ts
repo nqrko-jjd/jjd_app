@@ -244,7 +244,14 @@ documentsRouter.get(
     const doc = await prisma.document.findUnique({ where: { id: req.params.id }, include: docInclude });
     if (!doc) throw new HttpError(404, 'Document introuvable');
     const company = await getCompany();
-    res.json({ document: doc, company });
+    // Une facture "payée" peut n'avoir aucun vrai rapprochement bancaire derrière (import
+    // historique où le paiement exact n'a jamais été retrouvé) — la date affichée n'est alors
+    // qu'un artefact d'import, pas confirmée. Le signaler plutôt que de laisser croire que
+    // c'est fiable — voir le lien vers /finances/banque?documentId= côté web.
+    const bankMatchCount = await prisma.bankTransactionMatch.count({
+      where: { OR: [{ documentId: doc.id }, { ledgerEntry: { documentId: doc.id } }] },
+    });
+    res.json({ document: { ...doc, hasBankMatch: bankMatchCount > 0 }, company });
   }),
 );
 

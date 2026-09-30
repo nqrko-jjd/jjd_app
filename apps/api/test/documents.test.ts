@@ -47,7 +47,9 @@ const auth = () => ({ authorization: `Bearer ${token}`, 'content-type': 'applica
 test('dashboard : liens filtrés factures, encaissements et devis', async () => {
   const issuedOn = new Date();
   for (const status of ['paid','overdue','partial','sent','draft']) {
-    await prisma.document.create({data:{kind:'invoice',source:'manual',worksiteId:wsId,status,issuedOn:status==='draft'?null:issuedOn,totalHt:100,totalTtc:121}});
+    // "collected" filtre sur paidOn (date de paiement réelle), pas issuedOn — voir le
+    // correctif du 2026-09-30 (montant encaissé sous-compté car basé sur la date d'émission).
+    await prisma.document.create({data:{kind:'invoice',source:'manual',worksiteId:wsId,status,issuedOn:status==='draft'?null:issuedOn,paidOn:status==='paid'?issuedOn:null,totalHt:100,totalTtc:121}});
   }
   await prisma.document.create({data:{kind:'quote',source:'manual',worksiteId:wsId,status:'sent',totalHt:500}});
   for (const [metric, count] of [['invoiced',4],['collected',1],['overdue',1],['receivable',3],['quotes',1]] as const) {

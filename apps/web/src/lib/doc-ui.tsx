@@ -51,6 +51,7 @@ export interface DocFull {
   totalTtc: number;
   paidAmount: number;
   paidOn: string | null;
+  hasBankMatch: boolean;
   vatRate: number | null;
   structuredComm: string | null;
   peppolStatus: string | null;

@@ -189,8 +189,20 @@ function BanqueInner() {
       />
 
       {documentFilter && (
-        <div className="card card-pad" style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.7rem' }}>
-          <span>Filtré : transaction(s) ayant réglé cette facture{data ? ` (${data.totalCount})` : ''}.</span>
+        <div
+          className="card card-pad"
+          style={{
+            marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.7rem',
+            ...(data && data.totalCount === 0 ? { background: 'var(--warn-soft)', color: 'var(--warn)' } : {}),
+          }}
+        >
+          {!data ? (
+            <span>Recherche de la transaction ayant réglé cette facture…</span>
+          ) : data.totalCount === 0 ? (
+            <span>⚠ Aucune transaction bancaire trouvée pour cette facture — la date affichée sur la facture n'est donc pas confirmée par un rapprochement réel (souvent un import historique dont on n'a pas retrouvé le paiement exact).</span>
+          ) : (
+            <span>Filtré : {data.totalCount} transaction(s) ayant réglé cette facture.</span>
+          )}
           <button type="button" className="btn" onClick={() => setDocumentFilter(null)}>Retirer le filtre</button>
         </div>
       )}

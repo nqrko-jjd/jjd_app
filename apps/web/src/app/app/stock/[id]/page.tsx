@@ -1,5 +1,6 @@
 'use client';
-import { Warehouse, Layers, AlertTriangle, Package } from 'lucide-react';
+import styles from './stock-detail.module.css';
+import { Warehouse, Package, ArrowDownLeft, ArrowUpRight, MapPin } from 'lucide-react';
 import { SkeletonRows, EmptyState } from '@/components/States';
 import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -7,7 +8,7 @@ import { useRouter } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { Money, formatDateBE, formatEur, Kpi } from '@/lib/ui';
+import { Money, formatDateBE, formatEur } from '@/lib/ui';
 import { ComboBox } from '@/components/ComboBox';
 import { ContactPicker } from '@/components/ContactPicker';
 import { ScanInput } from '@/components/ScanInput';
@@ -54,7 +55,8 @@ export default function StockDetail({ params }: { params: Promise<{ id: string }
     `/api/stock/movements?stockItemId=${id}&page=${page}&pageSize=${pageSize}`,
   );
   const { data: purchaseHistory } = useApi<{ items: PurchaseSighting[] }>(`/api/stock/items/${id}/purchase-history`);
-  const [moving, setMoving] = useState(false);
+  const [moving, setMoving] = useState<'in' | 'out' | 'adjustment' | null>(null);
+  const [tab, setTab] = useState<'movements' | 'suppliers' | 'labels'>('movements');
   const [editing, setEditing] = useState(false);
   const [supplierModal, setSupplierModal] = useState<'new' | StockSupplierLink | null>(null);
   const [bcUnit, setBcUnit] = useState('');
@@ -113,7 +115,7 @@ export default function StockDetail({ params }: { params: Promise<{ id: string }
   return (
     <>
       {moving && meta && (
-        <MovementModal item={item} meta={meta} onClose={() => setMoving(false)} onDone={() => { setMoving(false); reload(); reloadMoves(); }} />
+        <MovementModal item={item} meta={meta} initialType={moving} onClose={() => setMoving(null)} onDone={() => { setMoving(null); reload(); reloadMoves(); }} />
       )}
       {editing && <StockItemModal item={item} onClose={() => setEditing(false)} onSaved={() => reload()} />}
       {supplierModal && (
@@ -125,50 +127,55 @@ export default function StockDetail({ params }: { params: Promise<{ id: string }
         />
       )}
 
-      <div className="row" style={{ justifyContent: 'space-between', marginBottom: '0.9rem', flexWrap: 'wrap' }}>
-        <Link href="/app/stock" className="btn ghost">← Stock</Link>
-        {canManage && (
-          <div className="row">
-            <button className="btn" onClick={() => setEditing(true)}>Modifier l’article</button>
-            <button className="btn" style={{ color: 'var(--crit)' }} onClick={removeItem}>Supprimer</button>
+      <div className={styles.page}>
+        <div className={styles.topline}>
+          <Link href="/app/stock" className="btn ghost">← Stock matériaux</Link>
+          {canManage && <button className="btn" onClick={() => setEditing(true)}>Modifier l’article</button>}
+        </div>
+        <section className={styles.hero}>
+          <div className={styles.identity}>
+            <span className={styles.eyebrow}>{[item.ref, item.category].filter(Boolean).join(' · ') || 'ARTICLE DU STOCK'}</span>
+            <h1>{item.name}</h1>
+            {(item.brand || item.model) && <p>{[item.brand, item.model].filter(Boolean).join(' · ')}</p>}
+            <span className={`badge ${!item.active ? 'plain' : item.qty <= 0 ? 'crit' : item.low ? 'warn' : 'ok'}`}>
+              {!item.active ? 'Article désactivé' : item.qty <= 0 ? 'Rupture de stock' : item.low ? 'À réapprovisionner' : 'En stock'}
+            </span>
           </div>
-        )}
-      </div>
-
-      <div className="row" style={{ alignItems: 'flex-start', gap: '1.2rem', flexWrap: 'wrap' }}>
-      {(item.photoUrl || canManage) && (
-        <div style={{ width: 240, flexShrink: 0 }}>
-          <PhotoHeader basePath={`/api/stock/items/${item.id}`} photoUrl={item.photoUrl} alt={item.name} editable={canManage} onChange={reload} />
-        </div>
-      )}
-      <div className="detail-hero" style={{ flex: 1, minWidth: 280 }}>
-        <div className="eyebrow">{[item.ref, [item.brand, item.model].filter(Boolean).join(' '), item.category].filter(Boolean).join(' · ') || 'Stock de matériaux'}</div>
-        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'nowrap', gap: '1rem' }}>
-          <h1>{item.name}</h1>
-          <span className={`badge ${item.low ? 'crit' : 'ok'}`}>{item.low ? 'À réapprovisionner' : 'Disponible'}</span>
-        </div>
-        <div className="sub">{fmtQty(item.qty)} {item.unit} en stock{inBig}{item.location ? ` · 📍 rack ${item.location}` : ''}</div>
-      </div>
-      </div>
-
-      <div className="kpis" style={{ margin: '1.4rem 0' }}>
-        <Kpi ic={Package} label="Quantité en stock" value={`${fmtQty(item.qty)} ${item.unit}`} sub={bigUnit && bigUnit.factor > 1 ? `≈ ${fmtQty(item.qty / bigUnit.factor)} ${bigUnit.name}` : (item.category ?? 'Article suivi')} hero />
-        <Kpi ic={Layers} label="Valeur" value={<Money value={item.value} />} sub={item.avgCost != null ? `Coût moyen ${formatEur(item.avgCost)} / ${item.unit}` : 'Coût moyen non défini'} />
-        <Kpi
-          ic={AlertTriangle}
-          label="Seuil d’alerte"
-          value={item.minQty != null ? `${fmtQty(item.minQty)} ${item.unit}` : '—'}
-          sub={item.low ? 'Sous le seuil' : 'Au-dessus du seuil'}
-          warn={item.low}
-        />
-      </div>
-
-      {canMove && (
-        <div className="row" style={{ marginBottom: '1.6rem' }}>
-          <button className="btn primary" onClick={() => setMoving(true)}>+ Mouvement</button>
-        </div>
-      )}
-
+          <div className={styles.quantity}>
+            <span>Quantité en stock</span>
+            <strong>{fmtQty(item.qty)} <small>{item.unit}</small></strong>
+            {inBig && <span>{inBig.trim()}</span>}
+          </div>
+          {canMove && <div className={styles.actions}>
+            <button className="btn primary" disabled={!meta} onClick={() => setMoving('in')}><ArrowDownLeft size={18} /> Entrer du stock</button>
+            <button className="btn" disabled={!meta} onClick={() => setMoving('out')}><ArrowUpRight size={18} /> Sortir vers un chantier</button>
+            <button className="btn ghost" disabled={!meta} onClick={() => setMoving('adjustment')}>Corriger l’inventaire</button>
+          </div>}
+        </section>
+        <div className={styles.layout}>
+          <aside className={styles.sidebar}>
+            {(item.photoUrl || canManage) && <div className={styles.photo}><PhotoHeader basePath={`/api/stock/items/${item.id}`} photoUrl={item.photoUrl} alt={item.name} fallback={<Package size={44} />} editable={canManage} onChange={reload} /></div>}
+            <section className={styles.card}>
+              <h2>Repères du dépôt</h2>
+              <dl>
+                {item.location && <div><dt><MapPin size={15} /> Emplacement</dt><dd>{item.location}</dd></div>}
+                <div><dt>Unité de stock</dt><dd>{item.unit}</dd></div>
+                {item.minQty != null && <div><dt>Seuil d’alerte</dt><dd>{fmtQty(item.minQty)} {item.unit}</dd></div>}
+                {item.avgCost != null && <><div><dt>Coût moyen HT</dt><dd><Money value={item.avgCost} /> / {item.unit}</dd></div><div><dt>Valeur du stock</dt><dd><Money value={item.value} /></dd></div></>}
+              </dl>
+              {item.low && <p className={styles.alert}>Le stock est sous le seuil de réapprovisionnement.</p>}
+              {item.note && <div className={styles.note}><h3>Note sur l’article</h3><p>{item.note}</p></div>}
+            </section>
+            {canManage && <details className={styles.manage}><summary>Gestion de l’article</summary><p>Les articles avec un historique sont désactivés plutôt que supprimés.</p><button className="btn" style={{ color: 'var(--crit)' }} onClick={removeItem}>Supprimer l’article</button></details>}
+          </aside>
+          <section className={styles.content}>
+            <nav className={styles.tabs} aria-label="Détails de l’article">
+              <button type="button" aria-pressed={tab === 'movements'} onClick={() => setTab('movements')}>Mouvements</button>
+              <button type="button" aria-pressed={tab === 'suppliers'} onClick={() => setTab('suppliers')}>Fournisseurs & achats{item.suppliers.length > 0 && <span>{item.suppliers.length}</span>}</button>
+              <button type="button" aria-pressed={tab === 'labels'} onClick={() => setTab('labels')}>Étiquettes & unités</button>
+            </nav>
+            <div className={styles.panel}>
+            {tab === 'labels' && <>
       <div className="section-title">
         Unités
         <span className="hint">unité de stock : {item.unit}</span>
@@ -217,6 +224,8 @@ export default function StockDetail({ params }: { params: Promise<{ id: string }
         )}
       </div>
 
+            </>}
+            {tab === 'suppliers' && <>
       <div className="section-title">
         Fournisseurs <span className="hint">{item.suppliers.length}</span>
         {canManage && <button className="btn" style={{ marginLeft: 'auto', padding: '0.2rem 0.6rem', fontSize: '0.78rem' }} onClick={() => setSupplierModal('new')}>+ Ajouter</button>}
@@ -285,6 +294,8 @@ export default function StockDetail({ params }: { params: Promise<{ id: string }
         </div>
       )}
 
+            </>}
+            {tab === 'movements' && <>
       <div className="section-title">Historique des mouvements</div>
       {!moves && <SkeletonRows />}
       {moves && moves.items.length === 0 && <div className="empty">Aucun mouvement.</div>}
@@ -310,6 +321,11 @@ export default function StockDetail({ params }: { params: Promise<{ id: string }
         </div>
       )}
       {moves && <PaginationBar page={moves.page} totalPages={moves.totalPages} pageSize={pageSize} onPage={setPage} onPageSize={(s) => { setPageSize(s); setPage(1); }} sizes={[30, 100, 200, PAGE_SIZE_ALL]} />}
+            </>}
+            </div>
+          </section>
+        </div>
+      </div>
     </>
   );
 }
@@ -401,11 +417,11 @@ function SupplierModal({ item, link, onClose, onDone }: { item: StockItemFull; l
 /* ------------------------------------------------------------- modale mouvement */
 
 function MovementModal({
-  item, meta, onClose, onDone,
+  item, meta, initialType, onClose, onDone,
 }: {
-  item: StockItemFull; meta: Meta; onClose: () => void; onDone: () => void;
+  item: StockItemFull; meta: Meta; initialType: 'in' | 'out' | 'adjustment'; onClose: () => void; onDone: () => void;
 }) {
-  const [type, setType] = useState<'in' | 'out' | 'adjustment'>('in');
+  const [type, setType] = useState<'in' | 'out' | 'adjustment'>(initialType);
   const [unit, setUnit] = useState('');
   const [qty, setQty] = useState('');
   const [unitCost, setUnitCost] = useState('');

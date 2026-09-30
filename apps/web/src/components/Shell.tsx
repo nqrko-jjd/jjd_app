@@ -224,7 +224,7 @@ export function Shell({ children, navigationPaths }: { children: React.ReactNode
         </div>
       </nav>
 
-      <main className={`main${isWorker ? ' has-bottom-tabs' : ''}`}>{children}</main>
+      <main className={`main${(isWorker || bureau) ? ' has-bottom-tabs' : ''}`}>{children}</main>
 
       {isWorker && (
         <nav className="bottom-tabs worker">
@@ -239,6 +239,11 @@ export function Shell({ children, navigationPaths }: { children: React.ReactNode
           ))}
         </nav>
       )}
+
+      {bureau && <nav className="bottom-tabs worker admin" aria-label="Navigation mobile administration">
+        {[{href:'/app',label:'Accueil',ic:LayoutGrid},{href:'/app/chantiers',label:'Chantiers',ic:Building2},{href:'/app/planning',label:'Planning',ic:CalendarDays},{href:'/app/messagerie',label:'Messages',ic:MessageSquare}].filter(visible).map(i=><Link key={i.href} href={i.href} aria-current={isActive(i.href)?'page':undefined} className={`bottom-tab${isActive(i.href)?' active':''}`}><i.ic size={20}/>{i.label}</Link>)}
+        <button className="bottom-tab" aria-expanded={open} aria-controls="app-navigation" onClick={()=>setOpen(true)}><Menu size={20}/>Plus</button>
+      </nav>}
 
       {assistant?.enabled && !chatOpen && (
         <button type="button" className="assistant-fab" title="Assistant IA" aria-label="Ouvrir l'assistant IA" onClick={() => setChatOpen(true)}>

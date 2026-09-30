@@ -10,6 +10,7 @@ import { DocStatusBadge, DOC_KIND_LABEL, type DocFull, type DocLine } from '@/li
 import { ContactPicker } from '@/components/ContactPicker';
 import { AssigneePicker } from '@/components/AssigneePicker';
 import { WorksitePicker, type WsPickerOption } from '@/components/WorksitePicker';
+import { DocumentDelivery } from '@/components/DocumentDelivery';
 import { RichText } from '@/components/RichText';
 import { computeDocTotals, VAT_RATES } from '@jjd/shared';
 
@@ -447,17 +448,14 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
           </div>
           </div>
 
+          <DocumentDelivery doc={doc} busy={!!busy} onExternal={() => act('/send', { confirmedExternal: true })} onError={setMsg} />
+
           {/* Actions secondaires */}
           <section className="doc-card">
             <div className="section-title">Autres actions</div>
             <div className="row" style={{ gap: '0.5rem', flexWrap: 'wrap' }}>
               {locked && isInvoiceLike && doc.status !== 'paid' && (
                 <button className="btn" disabled={!!busy} onClick={() => act('/mark-paid', {})}>Marquer payée</button>
-              )}
-              {locked && (
-                <button className="btn" disabled={!!busy} onClick={() => act('/send', { peppol: isInvoiceLike })}>
-                  {isInvoiceLike ? 'Envoyer (Peppol)' : 'Marquer envoyé'}
-                </button>
               )}
               {isQuote && (
                 <button className="btn" disabled={!!busy} onClick={() => act('/convert', {})}>Convertir en facture</button>
@@ -497,12 +495,6 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
               )}
               {!locked && <button className="btn" style={{ marginLeft: 'auto', color: 'var(--crit)' }} onClick={del}>Supprimer</button>}
             </div>
-            {isInvoiceLike && (
-              <p className="hint" style={{ marginTop: '0.7rem' }}>
-                La transmission Peppol réelle n’est pas encore active — TrustUp reste l’émetteur officiel tant que la conformité
-                e-facturation n’est pas validée. « Envoyer » met le document en file et le marque envoyé.
-              </p>
-            )}
           </section>
         </div>
 

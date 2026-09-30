@@ -30,6 +30,7 @@ jobs:
           script: |
             set -e
             cd "${{ secrets.VPS_PATH }}"
+            bash deploy/backup.sh
             git fetch origin main
             git reset --hard origin/main
             docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build

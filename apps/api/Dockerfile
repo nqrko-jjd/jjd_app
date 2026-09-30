@@ -58,5 +58,5 @@ EXPOSE 4100
 HEALTHCHECK --interval=30s --timeout=5s --start-period=25s \
   CMD curl -fsS http://localhost:4100/health || exit 1
 
-# Aligne le schéma sur Postgres (db push) puis démarre l'API.
-CMD ["sh", "-c", "npm run db:deploy && node dist/src/index.js"]
+# Refuse les changements destructifs et ne lance aucun seed au démarrage.
+CMD ["sh", "-c", "npm run db:deploy:safe && node dist/src/index.js"]

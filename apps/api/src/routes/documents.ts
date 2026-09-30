@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { validateExternalDeliveryRequest, externalDeliveryState } from '../lib/document-delivery.js';
 import path from 'node:path';
 import { createReadStream, existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { zipSync } from 'fflate';
@@ -596,35 +597,32 @@ documentsRouter.post(
 );
 
 /**
- * Envoi. Pour l'instant : marque envoyé + met la file Peppol à "queued".
- * La transmission réelle via point d'accès Peppol sera branchée au lot 6bis
- * (TrustUp reste l'émetteur officiel tant que la conformité n'est pas validée).
+ * Enregistrement d'un envoi effectué hors JJD. Aucun transport n'est simulé.
+ * Peppol reste bloqué tant qu'un connecteur validé n'est pas installé.
  */
 documentsRouter.post(
   '/:id/send',
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
+    validateExternalDeliveryRequest(req.body);
     let doc = await prisma.document.findUnique({ where: { id: req.params.id } });
     if (!doc) throw new HttpError(404, 'Document introuvable');
-    if (!doc.lockedAt) doc = await issueDocument(doc.id);
-    const isInvoice = doc.kind === 'invoice' || doc.kind === 'deposit_invoice' || doc.kind === 'credit_note';
+    const delivery = externalDeliveryState(doc);
+    if (delivery.alreadyRecorded) return res.json({ document: doc, note: 'L’envoi est déjà enregistré.' });
     const updated = await prisma.document.update({
       where: { id: doc.id },
       data: {
-        status: 'sent',
+        status: delivery.status,
         sentAt: new Date(),
-        peppolStatus: isInvoice && req.body?.peppol ? 'queued' : doc.peppolStatus,
       },
       include: docInclude,
     });
     await prisma.auditLog.create({
-      data: { actorId: req.user!.id, action: 'send', entity: 'document', entityId: doc.id, meta: { peppol: !!req.body?.peppol } },
+      data: { actorId: req.user!.id, action: 'send', entity: 'document', entityId: doc.id, meta: { channel: 'external', confirmedExternal: true } },
     });
     res.json({
       document: updated,
-      note: req.body?.peppol
-        ? 'Mis en file Peppol. Transmission réelle non encore active — à confirmer via TrustUp.'
-        : `${DOC_KIND_LABEL[doc.kind]} marqué envoyé.`,
+      note: `${DOC_KIND_LABEL[doc.kind]} : envoi externe enregistré. Aucun document transmis par JJD.`,
     });
   }),
 );

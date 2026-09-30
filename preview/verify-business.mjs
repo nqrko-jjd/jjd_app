@@ -45,5 +45,12 @@ try {
  assert.equal(api('/api/buildings/b0/portal-access','POST',{email:'test@example.test',access:'limited'}).simulated,true);
  assert.equal(api('/api/buildings/b0/portal-users').users[0].portalAccess,'limited');
  api('/api/buildings/b0/photo','POST',{photoData:'data:image/png;base64,DEMO'});assert.equal(api('/api/buildings/b0').building.photoUrl,'data:image/png;base64,DEMO');
+ const unmatched=api('/api/finance/bank?matched=0').items[0];assert(unmatched);
+ const candidate=api('/api/finance/bank/'+unmatched.id+'/suggestions').items[0];assert(candidate);
+ api('/api/finance/bank/'+unmatched.id+'/matches','POST',{ledgerId:candidate.id});
+ assert.throws(()=>api('/api/finance/bank/'+unmatched.id+'/matches','POST',{ledgerId:candidate.id}));
+ const matched=api('/api/finance/bank?matched=1').items.find(t=>t.id===unmatched.id);assert.equal(matched.matches[0].ledgerEntry.id,candidate.id);
+ api('/api/finance/bank/'+unmatched.id+'/matches/'+matched.matches[0].id,'DELETE');
+ assert(api('/api/finance/bank?matched=0').items.some(t=>t.id===unmatched.id));
  console.log('PASS: hierarchy, client scoping, labour totals, partial receipts, stock, duplicate guards, equipment, invoice totals, disabled sending, separate threads and client request.');
 } finally {await rm(dir,{recursive:true,force:true})}

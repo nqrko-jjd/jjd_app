@@ -72,6 +72,28 @@ export function businessApi(path:string,method:string,b:any,db:any,people:any[])
    save();return {order:orderView(o)};
   }
  }
+ // Real finance screens, using isolated examples only.
+ if(p==='/api/ponto/status')return {configured:false,connected:false,redirectUri:'',accounts:[]};
+ if(p==='/api/finance/years')return {years:[2026]};
+ if(p==='/api/finance/consolidated'){
+  const revenue=(state.docs||[]).filter((d:any)=>d.kind==='invoice'&&d.lockedAt).reduce((sum:number,d:any)=>sum+d.totalHt,0);
+  const expenses=state.expenses.reduce((sum:number,e:any)=>sum+e.ht,0);
+  return {revenue:{total:revenue,net:revenue,creditNotes:0,byEntity:{jjd:revenue}},expenses:{total:expenses,sections:[{key:'materials',label:'Achats de démonstration',total:expenses,lines:[{label:'Matériaux',amount:expenses}]}]},labour:0,result:revenue-expenses,margin:revenue?(revenue-expenses)/revenue:null};
+ }
+ if(p==='/api/finance/ledger-sync/gaps')return {items:[],missingCount:0,matchableCount:0};
+ if(p.startsWith('/api/finance/bank')){
+  state.bank??=state.expenses.slice(0,2).map((e:any,i:number)=>({id:'bank-demo-'+i,bookingDate:'2026-09-29',bank:i?'ING':'Belfius',counterpartyName:e.supplierName,description:'Paiement de démonstration',amount:-e.ttc,communication:e.docNumber,matchConfidence:i?null:'manual',matches:i?[]:[{id:'bank-match-1',ledgerEntry:e,document:null}]}));
+  const hydrateBank=(t:any)=>({...t,matches:t.matches.map((m:any)=>({...m,ledgerEntry:m.ledgerEntry?state.expenses.find((e:any)=>e.id===m.ledgerEntry.id):null}))});
+  if(p==='/api/finance/bank'&&method==='GET'){
+   const items=state.bank.map(hydrateBank).filter((t:any)=>(u.searchParams.get('matched')==='0'?!t.matches.length:u.searchParams.get('matched')==='1'?!!t.matches.length:true)&&(!u.searchParams.get('bank')||t.bank===u.searchParams.get('bank'))&&(!u.searchParams.get('q')||JSON.stringify(t).toLowerCase().includes(u.searchParams.get('q')!.toLowerCase())));
+   return {items,total:state.bank.length,matched:state.bank.filter((t:any)=>t.matches.length).length,byBank:['Belfius','ING'].map(bank=>({bank,_count:1})),page:1,totalPages:1,totalCount:items.length};
+  }
+  const t=need(state.bank.find((t:any)=>t.id===parts[4]));
+  if(parts[5]==='suggestions')return {remaining:Math.abs(t.amount)-t.matches.reduce((sum:number,m:any)=>sum+(m.ledgerEntry?.ttc||0),0),items:state.expenses.filter((e:any)=>!state.bank.some((tx:any)=>tx.matches.some((m:any)=>m.ledgerEntry?.id===e.id))).map((e:any)=>({id:e.id,kind:'ledger',label:e.docNumber+' · '+e.supplierName,amount:e.ttc,date:e.date,direction:'purchase',worksiteRef:e.worksite?.ref}))};
+  if(parts[5]==='matches'&&method==='POST'){const e=need(state.expenses.find((e:any)=>e.id===b.ledgerId));if(state.bank.some((tx:any)=>tx.matches.some((m:any)=>m.ledgerEntry?.id===e.id)))throw Error('Cette dépense est déjà rapprochée.');t.matches.push({id:uid(),ledgerEntry:e,document:null});t.matchConfidence='manual';e.paid=true;e.paymentStatus='paid';save();return {ok:true};}
+  if(parts[5]==='matches'&&method==='DELETE'){const m=need(t.matches.find((m:any)=>m.id===parts[6]));const e=state.expenses.find((e:any)=>e.id===m.ledgerEntry?.id);if(e){e.paid=false;e.paymentStatus='unpaid';}t.matches=t.matches.filter((m:any)=>m.id!==parts[6]);save();return {ok:true};}
+  throw Error('Import ou connexion bancaire indisponible dans cet aperçu isolé.');
+ }
  if(p==='/api/finance/expenses/meta')return {categories:[{code:'materials',label:'Matériaux',kind:'purchase'}],rawCategories:['Matériaux'],suppliers:[contact],worksites:db.worksites.map((w:any)=>({id:w.id,name:w.ref+' · '+w.title})),vehicles:[],years:[2026]};
  if(p==='/api/finance/expenses/mailbox-status')return {configured:false};
  if(p==='/api/finance/expenses'){

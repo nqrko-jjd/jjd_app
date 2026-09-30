@@ -4,15 +4,15 @@ import { Fragment, Suspense, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
-import { api, apiUpload } from '@/lib/api';
+import { api, apiUpload, apiBlobUrl } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { PageHead, Money, formatDateBE } from '@/lib/ui';
 import { PaginationBar } from '@/components/PaginationBar';
 
 interface Match {
   id: string;
-  ledgerEntry: { docNumber: string | null; supplierName: string | null; direction: string; ttc: number | null; ht: number; worksite: { ref: string } | null } | null;
-  document: { number: string | null; kind: string; totalTtc: number | null; contact: { name: string } | null; worksite: { ref: string } | null } | null;
+  ledgerEntry: { id: string; docNumber: string | null; supplierName: string | null; direction: string; ttc: number | null; ht: number; worksite: { ref: string } | null } | null;
+  document: { id: string; number: string | null; kind: string; totalTtc: number | null; contact: { name: string } | null; worksite: { ref: string } | null } | null;
 }
 interface Tx {
   id: string; bookingDate: string | null; bank: string | null; counterpartyName: string | null;
@@ -280,11 +280,15 @@ function BanqueInner() {
                       ) : (
                         <div className="grid" style={{ gap: '0.25rem' }}>
                           {t.matches.map((m) => (
-                            <div key={m.id} className="row" style={{ gap: '0.4rem', alignItems: 'center', flexWrap: 'nowrap' }}>
+                            <div key={m.id} className="bank-match-card">
                               <span className={`badge ${t.matchConfidence === 'strong' ? 'ok' : t.matchConfidence === 'good' ? 'warn' : 'plain'}`}>
                                 {CONF_LABEL[t.matchConfidence ?? ''] ?? 'lié'}
                               </span>
-                              <span className="muted" style={{ flex: 1, minWidth: 0 }}>{matchLabel(m)}</span>
+                              <div className="bank-match-document"><strong>{matchLabel(m)}</strong><div className="row">
+                                {m.document && <Link className="bank-document-link" href={`/app/documents/${m.document.id}`}>Ouvrir la facture</Link>}
+                                {m.ledgerEntry && <Link className="bank-document-link" href={`/app/achats?q=${encodeURIComponent(m.ledgerEntry.docNumber || m.ledgerEntry.supplierName || '')}`}>Voir l’achat</Link>}
+                                <button className="bank-document-link" onClick={async()=>{try {const url=await apiBlobUrl(m.document?`/api/documents/${m.document.id}/pdf`:`/api/finance/expenses/${m.ledgerEntry!.id}/pdf`);window.open(url,'_blank','noopener');}catch(e){setFlash((e as Error).message);}}}>Voir le justificatif</button>
+                              </div></div>
                               <span className="tnum" style={{ fontSize: '0.76rem', whiteSpace: 'nowrap' }}><Money value={matchAmount(m)} /></span>
                               <button
                                 className="btn ghost"

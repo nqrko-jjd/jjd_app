@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useApi } from '@/lib/use-api';
+import { CompanionLauncher } from './CompanionLauncher';
 import { AssistantChat } from './AssistantChat';
 
 type Item = { href: string; label: string; ic: LucideIcon; roles?: string[]; ext?: boolean; noBottomTab?: boolean };
@@ -245,11 +246,7 @@ export function Shell({ children, navigationPaths }: { children: React.ReactNode
         <button className="bottom-tab" aria-expanded={open} aria-controls="app-navigation" onClick={()=>setOpen(true)}><Menu size={20}/>Plus</button>
       </nav>}
 
-      {assistant?.enabled && !chatOpen && (
-        <button type="button" className="assistant-fab" title="Assistant IA" aria-label="Ouvrir l'assistant IA" onClick={() => setChatOpen(true)}>
-          ✨
-        </button>
-      )}
+      {user && user.role!=='client' && !chatOpen && <CompanionLauncher onOpenConnected={assistant?.enabled ? () => setChatOpen(true) : undefined} />}
       {assistant?.enabled && <AssistantChat open={chatOpen} onClose={() => setChatOpen(false)} />}
     </div>
   );

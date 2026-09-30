@@ -16,6 +16,7 @@ import { DOC_STATUS_LABEL } from '@jjd/shared';
 interface Row {
   id: string; kind: string; number: string | null; draftRef: string | null; status: string;
   title: string | null; issuedOn: string | null; dueOn: string | null; totalTtc: number; paidAmount: number;
+  paidOn: string | null;
   originalPdf: string | null; source: string | null;
   worksite: { ref: string } | null; contact: { name: string } | null;
 }
@@ -319,6 +320,9 @@ function DocumentsInner() {
                     : <span className="chip" style={{ color: 'var(--ink-3)', borderStyle: 'dashed' }} title="Aucun chantier lié">Sans chantier</span>}
                   {d.source === 'ai-draft' && <span className="badge warn" title="Créé par l'assistant IA — à vérifier avant validation">✨ IA</span>}
                   <DocStatusBadge status={d.status} />
+                  {(d.status === 'paid' || d.status === 'partial') && d.paidOn && (
+                    <span className="muted" style={{ fontSize: '0.76rem' }}>le {formatDateBE(d.paidOn)}</span>
+                  )}
                   <span className="doc-item-amount"><Money value={d.totalTtc} /></span>
                   <button
                     type="button"

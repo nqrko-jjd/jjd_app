@@ -7,9 +7,12 @@ import { api } from '@/lib/api';
 import { PageHead, Money, formatDateBE, stageLabel } from '@/lib/ui';
 import { FormModal, type FieldDef } from '@/components/FormModal';
 import { CRM_STAGES, INTERVENTION_PROBLEM_TYPES, INTERVENTION_PROBLEM_TYPE_LABEL } from '@jjd/shared';
+import { RequestBriefCard } from '@/components/RequestBriefCard';
+import type { RequestBrief } from '@jjd/shared';
 import { Plus } from 'lucide-react';
 
 const CRM_SOURCE_OPTIONS = [
+  { value: 'portail', label: 'Portail client' },
   { value: 'Appel', label: 'Appel' },
   { value: 'E-mail', label: 'E-mail' },
   { value: 'Client existant', label: 'Client existant' },
@@ -21,6 +24,7 @@ const CRM_SOURCE_OPTIONS = [
 ];
 
 interface Opp {
+  requestBrief?: RequestBrief | null;
   id: string; title: string; stage: string; estimatedValue: number | null;
   source: string | null; nextActionOn: string | null; nextActionNote: string | null;
   contact: { name: string } | null;
@@ -45,10 +49,16 @@ function CrmInner() {
   const { data, loading, error, reload } = useApi<{ columns: { stage: string; items: Opp[] }[] }>('/api/crm');
   const [creating, setCreating] = useState(sp.get('new') === '1');
   const [editing, setEditing] = useState<Opp | null>(null);
+  const [viewing, setViewing] = useState<Opp | null>(null);
+  const [actionError, setActionError] = useState('');
+  const [moving, setMoving] = useState<string | null>(null);
 
   async function move(id: string, stage: string) {
-    await api(`/api/crm/${id}`, { method: 'PATCH', body: { stage } });
-    reload();
+    if(moving)return;
+    setMoving(id);setActionError('');
+    try { await api(`/api/crm/${id}`, { method: 'PATCH', body: { stage } }); reload(); }
+    catch(e){setActionError(e instanceof Error?e.message:'Impossible de changer l’étape.');}
+    finally{setMoving(null);}
   }
 
   const stages = CRM_STAGES.filter((s) => s !== 'won' && s !== 'lost');
@@ -80,6 +90,7 @@ function CrmInner() {
         sub="Suivi des demandes jusqu'au devis"
         action={<button className="btn primary" onClick={() => setCreating(true)}><Plus size={15} strokeWidth={2} /> Nouvelle opportunité</button>}
       />
+      {viewing && <div className="modal-scrim"><div className="modal wiz" role="dialog" aria-modal="true" aria-label="Demande client"><div className="modal-head"><h2>{viewing.title}</h2><button className="btn ghost" onClick={() => setViewing(null)} aria-label="Fermer">✕</button></div><div className="wiz-body"><p className="wiz-note">Informations déclarées par le client · à vérifier avant de planifier et de confirmer la facturation.</p><p style={{ whiteSpace: 'pre-wrap' }}>{viewing.note}</p>{viewing.requestBrief && <RequestBriefCard brief={viewing.requestBrief}/>}<p><strong>Accès :</strong> {viewing.accessNotes || 'À préciser'}</p><p><strong>Passage souhaité :</strong> {viewing.visitPreference || 'À convenir'}</p><div className="request-images">{viewing.photos.map(p => <a key={p.id} href={p.url} target="_blank" rel="noreferrer"><img src={p.thumbUrl ?? p.url} alt="Photo transmise par le client"/></a>)}</div></div><div className="modal-foot"><button className="btn" onClick={() => setViewing(null)}>Fermer</button><button className="btn primary" onClick={() => { setEditing(viewing); setViewing(null); }}>Qualifier la demande</button></div></div></div>}
       {creating && (
         <FormModal
           title="Nouvelle opportunité"
@@ -105,9 +116,10 @@ function CrmInner() {
         />
       )}
       {loading && <SkeletonRows />}
+      {actionError && <p className="state error" role="alert">{actionError}</p>}
       {error && !loading && <ErrorState message={error} onRetry={reload} />}
       {data && (
-        <div className="kanban">
+        <div className="kanban crm-board">
           {data.columns.map((col) => {
             const total = col.items.reduce((s, o) => s + (o.estimatedValue ?? 0), 0);
             return (
@@ -115,12 +127,11 @@ function CrmInner() {
               <h3>{stageLabel(col.stage)}<span>{col.items.length}</span></h3>
               {total > 0 && <div className="total"><Money value={total} /></div>}
               {col.items.map((o) => {
-                const idx = stages.indexOf(col.stage as (typeof stages)[number]);
                 const overdue = o.nextActionOn && new Date(o.nextActionOn).getTime() < Date.now();
                 return (
-                  <div key={o.id} className="kanban-card" style={{ cursor: 'pointer' }} onClick={() => setEditing(o)}>
+                  <div key={o.id} className="kanban-card" aria-busy={moving===o.id}>
                     {(o.contact?.name ?? o.acp?.name) && <div className="eyebrow-mini">{o.contact?.name ?? o.acp?.name}</div>}
-                    <div className="title">{o.title}</div>
+                    <button type="button" className="crm-card-title" onClick={() => o.requestBrief ? setViewing(o) : setEditing(o)}>{o.title}</button>
                     {o.source === 'email-ia' && (
                       <span className="badge plain" style={{ fontSize: '0.68rem', marginTop: '0.2rem' }} title="Créée automatiquement depuis un mail par l'IA — à vérifier avant de la traiter comme confirmée">
                         🤖 Détectée par mail, à vérifier
@@ -137,6 +148,7 @@ function CrmInner() {
                         {o.unitLabel && <span className="badge" style={{ fontSize: '0.68rem' }}>{o.unitLabel}</span>}
                       </div>
                     )}
+                    {o.requestBrief && <button className="btn" onClick={() => setViewing(o)}>Lire la demande complète</button>}
                     {o.estimatedValue != null && <div className="amount"><Money value={o.estimatedValue} /></div>}
                     {o.nextActionOn && (
                       <div className={overdue ? 'badge crit' : 'badge'} style={{ marginTop: '0.4rem', fontSize: '0.7rem' }}>
@@ -152,12 +164,7 @@ function CrmInner() {
                         {o.photos.length > 3 && <span className="muted" style={{ fontSize: '0.72rem', alignSelf: 'center' }}>+{o.photos.length - 3}</span>}
                       </div>
                     )}
-                    <div className="row" style={{ marginTop: '0.5rem', gap: '0.3rem' }}>
-                      {idx > 0 && <button className="btn" style={{ padding: '0.2rem 0.4rem', fontSize: '0.75rem' }} onClick={(e) => { e.stopPropagation(); move(o.id, stages[idx - 1]!); }}>←</button>}
-                      {idx < stages.length - 1 && <button className="btn" style={{ padding: '0.2rem 0.4rem', fontSize: '0.75rem' }} onClick={(e) => { e.stopPropagation(); move(o.id, stages[idx + 1]!); }}>→</button>}
-                      <button className="btn" style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }} onClick={(e) => { e.stopPropagation(); move(o.id, 'won'); }}>Gagné</button>
-                      <button className="btn" style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }} onClick={(e) => { e.stopPropagation(); move(o.id, 'lost'); }}>Perdu</button>
-                    </div>
+                    <label className="crm-stage-label">Étape<select className="select" aria-label={`Étape : ${o.title}`} disabled={moving!==null} value={o.stage} onChange={e=>move(o.id,e.target.value)}>{CRM_STAGES.map(stage=><option key={stage} value={stage}>{stageLabel(stage)}</option>)}</select></label>
                   </div>
                 );
               })}

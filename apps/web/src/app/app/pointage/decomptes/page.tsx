@@ -13,7 +13,7 @@ interface Team {
   year: number; month: number; totalAmount: number; totalPayoutAmount: number; totalNetAmount: number;
   rows: {
     personId: string; name: string; photoThumbUrl: string | null; contractType: string;
-    hourlyRate: number | null; payoutPerDay: number | null; hours: number; days: number;
+    actualHours: number; guaranteeHours: number; guaranteeAmount: number; hourlyRate: number | null; payoutPerDay: number | null; hours: number; days: number;
     amount: number; payoutAmount: number; toWithhold: number; netAmount: number; pending: number;
   }[];
 }
@@ -22,7 +22,7 @@ interface DetailEntry {
   hours: number | null; amount: number | null; task: string | null; status: string;
 }
 interface Detail {
-  totalHours: number; totalAmount: number;
+  totalHours: number; totalAmount: number; actualHours: number; guaranteeHours: number; guaranteeAmount: number;
   byWorksite: { ref: string; title: string; hours: number; amount: number; days: number }[];
   entries: DetailEntry[];
 }
@@ -37,6 +37,7 @@ export default function DecomptesPage() {
   const [open, setOpen] = useState<string | null>(null);
   const [detail, setDetail] = useState<Record<string, Detail>>({});
   const [editing, setEditing] = useState<{ personId: string; entry: DetailEntry } | null>(null);
+  const [actionError, setActionError] = useState('');
 
   function shift(delta: number) {
     const d = new Date(y, m - 1 + delta, 1);
@@ -44,8 +45,11 @@ export default function DecomptesPage() {
     setOpen(null); setDetail({});
   }
   async function loadDetail(personId: string) {
+    setActionError('');
+    try {
     const d = await api<Detail>(`/api/statements/${personId}?year=${y}&month=${m}`);
     setDetail((x) => ({ ...x, [personId]: d }));
+    } catch(e){setOpen(null);setActionError(e instanceof Error?e.message:'Impossible de charger ce décompte.');}
   }
   async function toggle(personId: string) {
     if (open === personId) { setOpen(null); return; }
@@ -57,8 +61,10 @@ export default function DecomptesPage() {
   }
   async function deleteEntry(personId: string, entryId: string) {
     if (!confirm('Supprimer ce pointage ? Cette action est irréversible.')) return;
+    try {
     await api(`/api/timesheet/entries/${entryId}`, { method: 'DELETE' });
     await refreshAfterChange(personId);
+    } catch(e){setActionError(e instanceof Error?e.message:'Suppression impossible.');}
   }
 
   const rows = data?.rows ?? [];
@@ -80,7 +86,7 @@ export default function DecomptesPage() {
       <PageHead
         eyebrow="Suivi du temps"
         title="Décomptes du mois"
-        sub="Heures validées par personne — base des paiements"
+        sub="Temps réellement pointé et base rémunérée, présentés séparément"
         action={(
           <>
             <Link href={`/imprimer/decomptes?year=${y}&month=${m}`} target="_blank" className="btn">Imprimer</Link>
@@ -101,16 +107,18 @@ export default function DecomptesPage() {
             ic={Wallet}
             label="Total net à payer"
             value={<Money value={data.totalNetAmount} />}
-            sub={hasWithholding ? `dont ${formatEur(data.totalAmount - data.totalNetAmount)} de retenues` : 'Aucune retenue'}
+            sub={hasWithholding ? `dont ${formatEur(data.totalPayoutAmount - data.totalNetAmount)} de retenues` : 'Aucune retenue'}
             hero
           />
           <Kpi ic={Users} label="Personnes" value={rows.length} sub="Ont pointé ce mois-ci" />
-          <Kpi ic={Clock} label="Heures" value={formatHours(totalHours)} sub={`${formatHours(totalHours / rows.length)} / personne`} />
+          <Kpi ic={Clock} label="Heures rémunérées" value={formatHours(totalHours)} sub={`${formatHours(rows.reduce((sum,r)=>sum+(r.actualHours??r.hours),0))} réellement pointées et validées`} />
           <Kpi ic={AlertTriangle} label="À valider" value={pending} sub={pending > 0 ? 'Pointages en attente' : 'Tout est validé'} warn={pending > 0} />
         </div>
       )}
 
+      <div className="card card-pad" style={{marginBottom:20}}><strong>Deux compteurs, une seule saisie</strong><p className="muted" style={{marginBottom:0}}>Les pointages gardent le temps réel sur chantier. La base rémunérée applique la garantie journalière de la fiche ouvrier (10 h par défaut), une seule fois par jour, tous chantiers confondus. Les pointages en attente sont exclus des sommes à payer. Les montants historiques importés sont conservés.</p></div>
       {loading && <SkeletonRows />}
+      {actionError && <p className="state error" role="alert">{actionError}</p>}
 
       {error && !loading && <ErrorState message={error} onRetry={reload} />}
       {data && rows.length === 0 && <EmptyState
@@ -127,7 +135,7 @@ export default function DecomptesPage() {
               <tr>
                 <th></th><th>Personne</th><th>Contrat</th><th style={{ textAlign: 'right' }}>Taux</th>
                 <th style={{ textAlign: 'right' }}>Jours</th>
-                <th style={{ textAlign: 'right' }}>Heures</th><th style={{ textAlign: 'right' }}>Montant</th>
+                <th style={{ textAlign: 'right' }}>Pointées</th><th style={{ textAlign: 'right' }}>Rémunérées</th><th style={{ textAlign: 'right' }}>Montant</th>
                 {hasPayoutDiff && <th style={{ textAlign: 'right' }}>À verser</th>}
                 {hasWithholding && <th style={{ textAlign: 'right' }}>À retenir</th>}
                 {hasWithholding && <th style={{ textAlign: 'right' }}>Net</th>}
@@ -153,6 +161,7 @@ export default function DecomptesPage() {
               <tr style={{ fontWeight: 700 }}>
                 <td colSpan={4}>Total</td>
                 <td style={{ textAlign: 'right' }}>{totalDays} j</td>
+                <td style={{ textAlign: 'right' }}>{formatHours(rows.reduce((sum,r)=>sum+(r.actualHours??r.hours),0))}</td>
                 <td style={{ textAlign: 'right' }}>{formatHours(totalHours)}</td>
                 <td style={{ textAlign: 'right' }}><Money value={data.totalAmount} /></td>
                 {hasPayoutDiff && <td style={{ textAlign: 'right' }}><Money value={data.totalPayoutAmount} /></td>}
@@ -184,6 +193,7 @@ function FragmentRow({
         <td>{WORKER_CONTRACT_LABEL[r.contractType as keyof typeof WORKER_CONTRACT_LABEL] ?? r.contractType}</td>
         <td style={{ textAlign: 'right' }}>{r.hourlyRate != null ? <Money value={r.hourlyRate} /> : '—'}</td>
         <td style={{ textAlign: 'right' }} className="tnum">{r.days} j</td>
+        <td style={{ textAlign: 'right' }} className="tnum">{formatHours(r.actualHours??r.hours)}</td>
         <td style={{ textAlign: 'right' }} className="tnum">{formatHours(r.hours)}</td>
         <td style={{ textAlign: 'right' }}><Money value={r.amount} /></td>
         {showPayout && <td style={{ textAlign: 'right' }}>{r.payoutPerDay != null ? <Money value={r.payoutAmount} /> : '—'}</td>}
@@ -191,6 +201,7 @@ function FragmentRow({
         {showWithholding && <td style={{ textAlign: 'right', fontWeight: r.toWithhold > 0 ? 700 : 400 }}><Money value={r.netAmount} /></td>}
         <td>{r.pending > 0 && <span className="badge warn">{r.pending} à valider</span>}</td>
       </tr>
+      {open && detail && detail.guaranteeHours > 0 && <tr><td colSpan={9 + Number(showWithholding)*2 + Number(showPayout)} style={{background:'#f2f5ed',padding:16}}>Complément de garantie : <strong>{formatHours(detail.guaranteeHours)}</strong> · <Money value={detail.guaranteeAmount} />. Ce complément ne modifie pas les pointages et n’est pas encore réparti automatiquement entre les chantiers.</td></tr>}
       {open && detail && detail.entries.map((e) => (
         <tr key={e.id} style={{ background: 'var(--surface-2)' }}>
           <td></td>
@@ -199,8 +210,11 @@ function FragmentRow({
             {e.task && <span className="muted"> · {e.task}</span>}
           </td>
           <td className="muted" style={{ textAlign: 'right', fontSize: '0.82rem' }}>{formatDateBE(e.date)}</td>
+          <td></td>
           <td style={{ textAlign: 'right', fontSize: '0.85rem' }} className="tnum">{formatHours(e.hours)}</td>
+          <td></td>
           <td style={{ textAlign: 'right', fontSize: '0.85rem' }}><Money value={e.amount} /></td>
+          {showPayout && <td></td>}
           {showWithholding && <td></td>}
           {showWithholding && <td></td>}
           <td onClick={(ev) => ev.stopPropagation()}>

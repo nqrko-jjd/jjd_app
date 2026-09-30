@@ -10,11 +10,11 @@ import { DocStatusBadge, DOC_KIND_LABEL, type DocFull, type DocLine } from '@/li
 import { ContactPicker } from '@/components/ContactPicker';
 import { AssigneePicker } from '@/components/AssigneePicker';
 import { WorksitePicker, type WsPickerOption } from '@/components/WorksitePicker';
+import { DocumentDelivery } from '@/components/DocumentDelivery';
 import { RichText } from '@/components/RichText';
 import { computeDocTotals, VAT_RATES } from '@jjd/shared';
 
 /** Un <br> ou une balise vide compte comme "rien" — l'utilisateur n'a en réalité rien tapé. */
-const isEmptyHtml = (h: string | null | undefined) => !h || !h.replace(/<[^>]*>/g, '').trim();
 
 type Picker = {
   clients: { id: string; name: string }[];
@@ -173,7 +173,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
       <div className="row" style={{ justifyContent: 'space-between', marginBottom: '0.9rem' }}>
         <Link href="/app/documents" className="btn ghost">← Devis & factures</Link>
       </div>
-      <div className="detail-hero">
+      <div className="detail-hero document-reference-heading">
         <div className="eyebrow">{DOC_KIND_LABEL[doc.kind]}</div>
         <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'nowrap', gap: '1rem' }}>
           <h1>{doc.number ?? doc.draftRef ?? `Nouveau·elle ${DOC_KIND_LABEL[doc.kind].toLowerCase()}`}</h1>
@@ -298,17 +298,17 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
                   (le .tbl-wrap défile alors horizontalement) que de devenir illisible. Les icônes
                   d'action (déplacer/dupliquer/supprimer) sont empilées à la verticale plutôt qu'à
                   l'horizontale pour tenir dans une colonne étroite. */}
-              <table className="tbl" style={{ tableLayout: 'fixed', width: '100%', minWidth: 800 }}>
+              <table className="tbl document-lines-table" style={{ tableLayout: 'fixed', width: '100%', minWidth: 1060 }}>
                 <thead>
                   <tr>
                     <th style={{ width: 32 }}></th>
                     <th>Désignation</th>
-                    <th style={{ width: 60, textAlign: 'right' }}>Qté</th>
-                    <th style={{ width: 80 }}>Unité</th>
-                    <th style={{ width: 86, textAlign: 'right' }}>Prix HT</th>
-                    {showDiscount && <th style={{ width: 56, textAlign: 'right' }}>Rem.%</th>}
-                    <th style={{ width: 64 }}>TVA %</th>
-                    <th style={{ width: 92, textAlign: 'right' }}>Total HT</th>
+                    <th style={{ width: 104, textAlign: 'right' }}>Quantité</th>
+                    <th style={{ width: 100 }}>Unité</th>
+                    <th style={{ width: 122, textAlign: 'right' }}>Prix HT</th>
+                    {showDiscount && <th style={{ width: 100, textAlign: 'right' }}>Rem.%</th>}
+                    <th style={{ width: 94 }}>TVA %</th>
+                    <th style={{ width: 120, textAlign: 'right' }}>Total HT</th>
                     <th style={{ width: 34 }}></th>
                   </tr>
                 </thead>
@@ -335,9 +335,8 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
                                 placeholder="Description détaillée (optionnel) — Entrée pour aller à la ligne"
                                 value={l.description ?? ''}
                                 onChange={(v) => setLine(i, { description: v })}
-                                onBlur={() => { if (isEmptyHtml(l.description)) toggleDesc(i); }}
                                 autoFocus
-                                minHeight={20}
+                                minHeight={140}
                               />
                             </div>
                           ) : (
@@ -349,7 +348,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
                       </td>
                       {l.kind === 'item' ? (
                         <>
-                          <td><input className="input" type="number" step="any" style={{ textAlign: 'right' }} value={l.qty} onChange={(e) => setLine(i, { qty: Number(e.target.value) })} /></td>
+                          <td><input aria-label={`Quantité ligne ${i + 1}`} className="input" type="number" step="any" style={{ textAlign: 'right' }} value={l.qty} onChange={(e) => setLine(i, { qty: Number(e.target.value) })} /></td>
                           <td>
                             <select className="select" value={l.unit ?? ''} onChange={(e) => setLine(i, { unit: e.target.value })}>
                               <option value="">—</option>
@@ -363,7 +362,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
                           )}
                           <td>
                             <select className="select" value={l.vatRate} onChange={(e) => setLine(i, { vatRate: Number(e.target.value) })}>
-                              {VAT_RATES.map((r) => <option key={r} value={r}>{Math.round(r * 100)}%</option>)}
+                              {VAT_RATES.map((r) => <option key={r} value={r}>{r === 0 ? 'Cocontractant' : r === 0.06 ? '6 % · rénovation' : `${Math.round(r * 100)} %`}</option>)}
                             </select>
                           </td>
                           <td style={{ textAlign: 'right' }} className="tnum">
@@ -447,17 +446,14 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
           </div>
           </div>
 
+          <DocumentDelivery doc={doc} busy={!!busy} onExternal={() => act('/send', { confirmedExternal: true })} onError={setMsg} />
+
           {/* Actions secondaires */}
           <section className="doc-card">
             <div className="section-title">Autres actions</div>
             <div className="row" style={{ gap: '0.5rem', flexWrap: 'wrap' }}>
               {locked && isInvoiceLike && doc.status !== 'paid' && (
                 <button className="btn" disabled={!!busy} onClick={() => act('/mark-paid', {})}>Marquer payée</button>
-              )}
-              {locked && (
-                <button className="btn" disabled={!!busy} onClick={() => act('/send', { peppol: isInvoiceLike })}>
-                  {isInvoiceLike ? 'Envoyer (Peppol)' : 'Marquer envoyé'}
-                </button>
               )}
               {isQuote && (
                 <button className="btn" disabled={!!busy} onClick={() => act('/convert', {})}>Convertir en facture</button>
@@ -497,12 +493,6 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
               )}
               {!locked && <button className="btn" style={{ marginLeft: 'auto', color: 'var(--crit)' }} onClick={del}>Supprimer</button>}
             </div>
-            {isInvoiceLike && (
-              <p className="hint" style={{ marginTop: '0.7rem' }}>
-                La transmission Peppol réelle n’est pas encore active — TrustUp reste l’émetteur officiel tant que la conformité
-                e-facturation n’est pas validée. « Envoyer » met le document en file et le marque envoyé.
-              </p>
-            )}
           </section>
         </div>
 

@@ -91,7 +91,7 @@ export default function MaterielDetail({ params }: { params: Promise<{ id: strin
   if (!p) {
     return error
       ? <ErrorState message={error} onRetry={reload} />
-      : <EmptyState icon={Wrench} title="Outil introuvable" text="Cet outil n’existe plus ou a été retiré du parc. Retournez au matériel." action={<Link href="/app/materiel" className="btn primary">Retour au matériel</Link>} />;
+      : <EmptyState icon={Wrench} title="Outil introuvable" text="Cet outil n’existe plus ou a été retiré du parc. Retournez à la liste des outils." action={<Link href="/app/materiel" className="btn primary">Retour aux outils</Link>} />;
   }
 
   const specs = Object.entries(p.specs ?? {});
@@ -100,11 +100,11 @@ export default function MaterielDetail({ params }: { params: Promise<{ id: strin
   return (
     <>
       <div className="row" style={{ justifyContent: 'space-between', marginBottom: '0.9rem', flexWrap: 'wrap' }}>
-        <Link href="/app/materiel" className="btn ghost">← Matériel</Link>
+        <Link href="/app/materiel" className="btn ghost">← Outils & consommables</Link>
       </div>
 
       <div className="detail-hero">
-        <div className="eyebrow">{p.category ?? 'Matériel'}</div>
+        <div className="eyebrow">{p.category ?? 'Outil'}</div>
         <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'nowrap', gap: '1rem' }}>
           <h1>{p.name}</h1>
           <span className={`badge ${p.available > 0 ? 'ok' : 'crit'}`}>{p.available > 0 ? 'Disponible' : 'Indisponible'}</span>

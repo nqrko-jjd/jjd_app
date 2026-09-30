@@ -1,19 +1,20 @@
 'use client';
+import { PlanningAgenda } from '@/components/PlanningAgenda';
 import { SkeletonRows } from '@/components/States';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
-import { PageHead } from '@/lib/ui';
+import { PageHead, StatusBadge } from '@/lib/ui';
 import { PlanningAssignmentModal } from '@/components/PlanningAssignmentModal';
 import { PlanningEventDetail } from '@/components/PlanningEventDetail';
 import { PlanningAbsenceModal } from '@/components/PlanningAbsenceModal';
-import { WORKSITE_STATUS_OPEN, ABSENCE_KIND_LABEL, PERSON_ROLE_LABEL } from '@jjd/shared';
-import { Search, Truck, Wrench } from 'lucide-react';
+import { WORKSITE_STATUS_OPEN, WORKSITE_STATUS_LABEL, ABSENCE_KIND_LABEL, PERSON_ROLE_LABEL } from '@jjd/shared';
+import { Eye, Search, Truck, Wrench } from 'lucide-react';
 import type { PlanningEv, PlanAbsence, PlanVehicleRef } from '@/components/planningTypes';
 
 interface PersonRow { id: string; displayName: string | null; firstName: string; role: string; specialties?: unknown; active: boolean; phone?: string | null }
-interface WsRow { id: string; ref: string; title: string; city: string | null }
+interface WsRow { id: string; ref: string; title: string; city: string | null; status: string }
 interface EquipRow { id: string; name: string }
 interface VehicleRow extends PlanVehicleRef { status: string; excludedFromPlanning: boolean }
 
@@ -59,12 +60,12 @@ function vehicleLabel(v: PlanVehicleRef) {
   return [v.code, [v.brand, v.model].filter(Boolean).join(' ')].filter(Boolean).join(' · ') || v.plate || '—';
 }
 
-type ViewMode = 'day' | 'workers' | 'worksites' | 'resources' | 'month';
+type ViewMode = 'agenda' | 'day' | 'workers' | 'worksites' | 'resources' | 'month';
 type Resource = { kind: 'vehicle' | 'equipment'; id: string; label: string; sub: string };
 
 export default function PlanningPage() {
-  const [view, setView] = useState<ViewMode>('workers');
-  const [periodWeeks, setPeriodWeeks] = useState<1 | 2>(2);
+  const [view, setView] = useState<ViewMode>('agenda');
+  const [periodWeeks, setPeriodWeeks] = useState<1 | 2>(1);
   const [anchor, setAnchor] = useState(() => mondayOf(new Date()));
   const [monthAnchor, setMonthAnchor] = useState(() => startOfMonth(new Date()));
   const [trackedDay, setTrackedDay] = useState(() => toDateInput(new Date()));
@@ -72,6 +73,7 @@ export default function PlanningPage() {
   const [search, setSearch] = useState('');
   const [specialtyFilter, setSpecialtyFilter] = useState('');
   const [worksiteFilter, setWorksiteFilter] = useState('');
+  const [worksiteStatusFilter, setWorksiteStatusFilter] = useState('');
   const [onlyFree, setOnlyFree] = useState(false);
   const [wide, setWide] = useState(false);
 
@@ -118,6 +120,13 @@ export default function PlanningPage() {
   const people = useMemo(() => (peopleData?.items ?? []).filter((p) => p.active), [peopleData]);
   const { data: wsData } = useApi<{ items: WsRow[] }>(`/api/worksites?status=${WORKSITE_STATUS_OPEN.join(',')}`);
   const worksitesActive = useMemo(() => [...(wsData?.items ?? [])].sort((a, b) => a.ref.localeCompare(b.ref)), [wsData]);
+  const worksiteStatusCounts = useMemo(() => worksitesActive.reduce<Record<string, number>>((counts, w) => {
+    counts[w.status] = (counts[w.status] ?? 0) + 1;
+    return counts;
+  }, {}), [worksitesActive]);
+  const statusFilteredWorksites = useMemo(() => worksitesActive.filter((w) => !worksiteStatusFilter || w.status === worksiteStatusFilter), [worksitesActive, worksiteStatusFilter]);
+  const statusFilteredWorksiteIds = useMemo(() => new Set(statusFilteredWorksites.map((w) => w.id)), [statusFilteredWorksites]);
+  const observationWorksites = useMemo(() => worksitesActive.filter((w) => w.status === 'on_hold'), [worksitesActive]);
   const { data: vehData } = useApi<{ items: VehicleRow[] }>('/api/vehicles');
   const vehicles = useMemo(() => (vehData?.items ?? []).filter((v) => v.status !== 'sold' && v.status !== 'retired' && !v.excludedFromPlanning), [vehData]);
   const { data: equipData } = useApi<{ items: EquipRow[] }>('/api/equipment');
@@ -235,29 +244,35 @@ export default function PlanningPage() {
 
   const q = search.trim().toLowerCase();
 
+  function eventMatchesWorksiteFilters(e: PlanningEv) {
+    if (worksiteFilter && e.worksite.id !== worksiteFilter) return false;
+    if (worksiteStatusFilter && !statusFilteredWorksiteIds.has(e.worksite.id)) return false;
+    return true;
+  }
+
   const workerRows = useMemo(() => people.filter((p) => {
     if (q && !personLabel(p).toLowerCase().includes(q) && !specialtyLabel(p).toLowerCase().includes(q)) return false;
     if (specialtyFilter && specialtyLabel(p) !== specialtyFilter) return false;
-    if (worksiteFilter && !events.some((e) => e.worksite.id === worksiteFilter && e.assignments.some((a) => a.person.id === p.id))) return false;
+    if ((worksiteFilter || worksiteStatusFilter) && !events.some((e) => eventMatchesWorksiteFilters(e) && e.assignments.some((a) => a.person.id === p.id))) return false;
     if (onlyFree) {
       const affected = peopleIdsByDay.get(trackedDay)?.has(p.id);
       const absent = absentIdsByDay.get(trackedDay)?.has(p.id);
       if (affected || absent) return false;
     }
     return true;
-  }), [people, q, specialtyFilter, worksiteFilter, events, onlyFree, peopleIdsByDay, absentIdsByDay, trackedDay]);
+  }), [people, q, specialtyFilter, worksiteFilter, worksiteStatusFilter, statusFilteredWorksiteIds, events, onlyFree, peopleIdsByDay, absentIdsByDay, trackedDay]);
 
-  const worksiteRows = useMemo(() => worksitesActive.filter((w) => {
+  const worksiteRows = useMemo(() => statusFilteredWorksites.filter((w) => {
     if (q && !w.ref.toLowerCase().includes(q) && !w.title.toLowerCase().includes(q) && !(w.city ?? '').toLowerCase().includes(q)) return false;
     if (worksiteFilter && w.id !== worksiteFilter) return false;
     return true;
-  }), [worksitesActive, q, worksiteFilter]);
+  }), [statusFilteredWorksites, q, worksiteFilter]);
 
   const resourceRows = useMemo(() => resources.filter((r) => {
     if (q && !r.label.toLowerCase().includes(q)) return false;
-    if (worksiteFilter && !events.some((e) => e.worksite.id === worksiteFilter && (r.kind === 'vehicle' ? e.vehicles.some((v) => v.vehicle.id === r.id) : e.equipment.some((x) => x.equipment.id === r.id)))) return false;
+    if ((worksiteFilter || worksiteStatusFilter) && !events.some((e) => eventMatchesWorksiteFilters(e) && (r.kind === 'vehicle' ? e.vehicles.some((v) => v.vehicle.id === r.id) : e.equipment.some((x) => x.equipment.id === r.id)))) return false;
     return true;
-  }), [resources, q, worksiteFilter, events]);
+  }), [resources, q, worksiteFilter, worksiteStatusFilter, statusFilteredWorksiteIds, events]);
 
   function openNew(prefill?: { worksiteId?: string; date?: string; personId?: string; vehicleId?: string; equipmentId?: string }) {
     setAssignmentModal({ existing: null, prefill });
@@ -325,12 +340,12 @@ export default function PlanningPage() {
       </div>
 
       <div className="plan-topbar">
-        <div className="plan-switch">
-          <button className={view === 'day' ? 'active' : ''} onClick={() => setView('day')}>Vue jour</button>
-          <button className={view === 'workers' ? 'active' : ''} onClick={() => setView('workers')}>Ouvriers</button>
-          <button className={view === 'worksites' ? 'active' : ''} onClick={() => setView('worksites')}>Chantiers</button>
-          <button className={view === 'resources' ? 'active' : ''} onClick={() => setView('resources')}>Véhicules & matériel</button>
-          <button className={view === 'month' ? 'active' : ''} onClick={() => setView('month')}>Vue mensuelle</button>
+        <div className="plan-switch" role="group" aria-label="Affichage du planning">
+          <button className={view === 'day' ? 'active' : ''} onClick={() => setView('day')}>Jour</button>
+          <button className={view === 'agenda' && periodWeeks === 1 ? 'active' : ''} onClick={() => { setView('agenda'); setPeriodWeeks(1); }}>Semaine</button>
+          <button className={view === 'agenda' && periodWeeks === 2 ? 'active' : ''} onClick={() => { setView('agenda'); setPeriodWeeks(2); }}>2 semaines</button>
+          <button className={view === 'month' ? 'active' : ''} onClick={() => setView('month')}>Mois</button>
+          <button className={view === 'worksites' ? 'active' : ''} onClick={() => { setView('worksites'); setPeriodWeeks(1); }}>Suivi des chantiers</button>
         </div>
         <div className="plan-period">
           {view !== 'month' && view !== 'day' && <button type="button" className="btn plan-expand-toggle" onClick={() => setWide((w) => !w)}>{wide ? 'Réduire' : 'Agrandir le planning'}</button>}
@@ -339,20 +354,17 @@ export default function PlanningPage() {
             {view === 'month' ? "Aujourd'hui" : view === 'day' ? "Aujourd'hui" : 'Cette semaine'}
           </button>
           <button type="button" className="btn" onClick={() => (view === 'month' ? shiftMonth(1) : view === 'day' ? shiftDay(1) : shiftWeek(1))}>→</button>
-          {view !== 'month' && view !== 'day' && (
-            <select className="select" value={periodWeeks} onChange={(e) => setPeriodWeeks(Number(e.target.value) as 1 | 2)}>
-              <option value={1}>1 semaine</option>
-              <option value={2}>2 semaines</option>
-            </select>
-          )}
-        </div>
-      </div>
-
-      <div className="plan-filters">
+          <details className="plan-filter-menu" onKeyDown={(e) => { if (e.key === 'Escape') { e.currentTarget.open = false; e.currentTarget.querySelector('summary')?.focus(); } }}>
+            <summary className="btn" title="Recherche et filtres du planning">
+              Filtres{(search || worksiteStatusFilter || worksiteFilter) && <span className="plan-filter-count">{Number(Boolean(search)) + Number(Boolean(worksiteStatusFilter)) + Number(Boolean(worksiteFilter))}</span>}
+              {worksiteStatusFilter && <span className="plan-filter-active">{WORKSITE_STATUS_LABEL[worksiteStatusFilter as keyof typeof WORKSITE_STATUS_LABEL]}</span>}
+              <span aria-hidden="true">⌄</span>
+            </summary>
+      <div className="plan-filter-panel">
         {view !== 'month' && view !== 'day' && (
           <label className="plan-search">
             <Search size={16} strokeWidth={2} />
-            <input placeholder="Rechercher une personne ou une ressource" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <input aria-label="Rechercher dans le planning" placeholder="Rechercher un chantier, une équipe…" value={search} onChange={(e) => setSearch(e.target.value)} />
           </label>
         )}
         {view === 'workers' && (
@@ -361,9 +373,15 @@ export default function PlanningPage() {
             {specialtyOptions.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
         )}
-        <select className="select" value={worksiteFilter} onChange={(e) => setWorksiteFilter(e.target.value)}>
+        <select className="select" aria-label="Filtrer les chantiers par statut" value={worksiteStatusFilter} onChange={(e) => { setWorksiteStatusFilter(e.target.value); setWorksiteFilter(''); }}>
+          <option value="">Tous les statuts · {worksitesActive.length}</option>
+          {WORKSITE_STATUS_OPEN.map((status) => worksiteStatusCounts[status] ? (
+            <option key={status} value={status}>{WORKSITE_STATUS_LABEL[status]} · {worksiteStatusCounts[status]}</option>
+          ) : null)}
+        </select>
+        <select className="select" aria-label="Filtrer par chantier" value={worksiteFilter} onChange={(e) => setWorksiteFilter(e.target.value)}>
           <option value="">Tous les chantiers</option>
-          {worksitesActive.map((w) => <option key={w.id} value={w.id}>{w.ref} · {w.city}</option>)}
+          {statusFilteredWorksites.map((w) => <option key={w.id} value={w.id}>{w.ref} · {w.title}</option>)}
         </select>
         {view === 'workers' && (
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem' }}>
@@ -371,7 +389,30 @@ export default function PlanningPage() {
             Libres le {trackedShort}
           </label>
         )}
+        <button type="button" className="btn ghost" onClick={() => { setSearch(''); setWorksiteStatusFilter(''); setWorksiteFilter(''); setSpecialtyFilter(''); setOnlyFree(false); }}>Réinitialiser les filtres</button>
       </div>
+          </details>
+
+        </div>
+      </div>
+
+
+
+      {observationWorksites.length > 0 && (
+        <button
+          type="button"
+          className={`plan-observation-callout${worksiteStatusFilter === 'on_hold' ? ' active' : ''}`}
+          onClick={() => { setWorksiteStatusFilter('on_hold'); setWorksiteFilter(''); setView('worksites'); }}
+        >
+          <span className="plan-observation-icon"><Eye size={18} strokeWidth={2} /></span>
+          <span>
+            <strong>{observationWorksites.length} chantier{observationWorksites.length > 1 ? 's' : ''} à garder sous observation</strong>
+            <small>Séchage, contrôle ou attente terrain : les dossiers restent visibles jusqu’à la reprise.</small>
+          </span>
+          <span className="plan-observation-sites">{observationWorksites.slice(0, 3).map((w) => w.ref).join(' · ')}</span>
+          <span className="plan-observation-action">Voir et planifier →</span>
+        </button>
+      )}
 
       <div className="plan-datebar">
         <strong>{rangeLabel}</strong>
@@ -381,7 +422,9 @@ export default function PlanningPage() {
         </label>
       </div>
 
-      {loading && !evData ? <SkeletonRows /> : view === 'month' ? (
+      {loading && !evData ? <SkeletonRows /> : view === 'agenda' ? (
+        <PlanningAgenda days={weekDays} events={events.filter(e => eventMatchesWorksiteFilters(e) && (!search || [e.title,e.worksite.title,e.worksite.ref,...e.assignments.map(a=>a.person.displayName||a.person.firstName)].join(' ').toLowerCase().includes(search.toLowerCase())))} onOpen={setDetailEv} onNew={date=>openNew({date})} onMove={moveEventToDay} />
+      ) : view === 'month' ? (
         <section className="plan-board plan-month-board">
           <div className="plan-month-weekdays">
             {['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map((d) => <div key={d}>{d}</div>)}
@@ -391,7 +434,7 @@ export default function PlanningPage() {
               const ds = toDateInput(d);
               const outside = d.getMonth() !== monthAnchor.getMonth();
               const isToday = sameDate(ds, toDateInput(new Date()));
-              const dayEvents = eventsFor(ds, (e) => !worksiteFilter || e.worksite.id === worksiteFilter)
+              const dayEvents = eventsFor(ds, eventMatchesWorksiteFilters)
                 .sort((a, b) => a.startAt.localeCompare(b.startAt));
               const shown = dayEvents.slice(0, 3);
               const extra = dayEvents.length - shown.length;
@@ -440,7 +483,7 @@ export default function PlanningPage() {
       ) : view === 'day' ? (
         <section className="plan-board" style={{ padding: '1.2rem' }}>
           {(() => {
-            const dayEvents = eventsFor(trackedDay, (e) => !worksiteFilter || e.worksite.id === worksiteFilter)
+            const dayEvents = eventsFor(trackedDay, eventMatchesWorksiteFilters)
               .sort((a, b) => a.startAt.localeCompare(b.startAt));
             return dayEvents.length === 0
               ? <p className="muted">Rien de planifié ce jour-là.</p>
@@ -510,6 +553,7 @@ export default function PlanningPage() {
                       <div>
                         <strong><Link href={`/app/chantiers/${w.id}`}>{w.ref}</Link></strong>
                         <div className="plan-row-sub">{w.title}{w.city ? ` · ${w.city}` : ''}</div>
+                        <div className="plan-row-status"><StatusBadge status={w.status} /></div>
                       </div>
                     </th>
                     {dayStrs.map((ds) => {
@@ -611,7 +655,7 @@ export default function PlanningPage() {
               <button className="btn ghost" onClick={() => setDayAgenda(null)} aria-label="Fermer">✕</button>
             </div>
             <div className="modal-body" style={{ display: 'block', maxHeight: '72vh', overflowY: 'auto' }}>
-              {renderChips(dayAgenda, eventsFor(dayAgenda, (e) => !worksiteFilter || e.worksite.id === worksiteFilter).sort((a, b) => a.startAt.localeCompare(b.startAt)))}
+              {renderChips(dayAgenda, eventsFor(dayAgenda, eventMatchesWorksiteFilters).sort((a, b) => a.startAt.localeCompare(b.startAt)))}
             </div>
           </div>
         </div>

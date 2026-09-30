@@ -273,7 +273,7 @@ contactsRouter.delete(
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
     const id = req.params.id as string;
-    const [worksites, acpWorksites, opportunities, acpOpportunities, documents, ledgerEntries, buildingContacts, buildingUnits, residents, portalUsers] = await Promise.all([
+    const [worksites, acpWorksites, opportunities, acpOpportunities, documents, ledgerEntries, buildingContacts, buildingUnits, residents, portalUsers, worksiteContactLinks] = await Promise.all([
       prisma.worksite.count({ where: { clientId: id } }),
       prisma.worksite.count({ where: { acpId: id } }),
       prisma.crmOpportunity.count({ where: { contactId: id } }),
@@ -284,8 +284,9 @@ contactsRouter.delete(
       prisma.buildingUnit.count({ where: { contactId: id } }),
       prisma.contact.count({ where: { linkedAcpId: id } }),
       prisma.user.count({ where: { residentOfId: id } }),
+      prisma.worksiteContact.count({ where: { contactId: id } }),
     ]);
-    const refs = worksites + acpWorksites + opportunities + acpOpportunities + documents + ledgerEntries + buildingContacts + buildingUnits + residents + portalUsers;
+    const refs = worksites + acpWorksites + opportunities + acpOpportunities + documents + ledgerEntries + buildingContacts + buildingUnits + residents + portalUsers + worksiteContactLinks;
     if (refs > 0) {
       throw new HttpError(409, `Ce contact est encore lié à des données (${refs} référence${refs > 1 ? 's' : ''} : chantiers, opportunités, devis/factures, achats, résidents, comptes portail…) — impossible de le supprimer.`);
     }

@@ -23,10 +23,15 @@ import {
 import { readXlsx, cell, type SheetData } from '../src/lib/xlsx-read.js';
 import { extractSyndic, guessClientKind, DedupeMap, str, num, looksLikeRef } from './lib/import-helpers.js';
 
+// Historical reset importer: opt-in only, and never on a production runtime.
+if (process.env.NODE_ENV === 'production' || !process.argv.includes('--allow-destructive-initial-import')) {
+  throw new Error('Import complet désactivé : il supprime les données historiques. Utilisez npm run sync après comparaison et sauvegarde. Pour une base locale vierge uniquement, ajoutez --allow-destructive-initial-import.');
+}
+const importArgs = process.argv.slice(2).filter(arg => arg !== '--allow-destructive-initial-import');
 const prisma = new PrismaClient();
 const here = path.dirname(fileURLToPath(import.meta.url));
 const defaultFile = path.resolve(here, '../../../data-import/calculs-rentabilite.xlsx');
-const file = process.argv[2] ? path.resolve(process.argv[2]) : defaultFile;
+const file = importArgs[0] ? path.resolve(importArgs[0]) : defaultFile;
 
 type Sev = 'info' | 'warning' | 'error';
 const issues: { entity: string; sheet: string; rowRef: string; severity: Sev; message: string; rawData?: unknown }[] = [];

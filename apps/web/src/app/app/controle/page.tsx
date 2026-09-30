@@ -1,90 +1,50 @@
 'use client';
-import { SkeletonRows, ErrorState } from '@/components/States';
-import { useState } from 'react';
+import {SkeletonRows,ErrorState} from '@/components/States';
+import {useState} from 'react';
 import Link from 'next/link';
-import { useApi } from '@/lib/use-api';
-import { api } from '@/lib/api';
-import { PageHead } from '@/lib/ui';
+import {useApi} from '@/lib/use-api';
+import {api} from '@/lib/api';
+import {PageHead} from '@/lib/ui';
+import {AlertTriangle,ShieldAlert,Info,CheckCircle2,Search,ClipboardCheck} from 'lucide-react';
 
-interface Issue {
-  id: string; entity: string; sheet: string | null; rowRef: string | null;
-  severity: string; message: string; resolved: boolean;
-  link: { label: string; href: string } | null;
-}
+interface Issue {id:string;entity:string;sheet:string|null;rowRef:string|null;severity:string;message:string;resolved:boolean;link:{label:string;href:string}|null}
+const ENTITY_LABEL:Record<string,string>={worksite:'Chantiers',ledger:'Finances',time_entry:'Pointage',contact:'Contacts',person:'Équipe'};
+const PRIORITIES=[{key:'error',label:'À corriger en priorité',tone:'crit',icon:ShieldAlert},{key:'warning',label:'À vérifier',tone:'warn',icon:AlertTriangle},{key:'info',label:'À compléter',tone:'plain',icon:Info}];
 
-const ENTITY_LABEL: Record<string, string> = {
-  worksite: 'Chantiers', ledger: 'Grand livre', time_entry: 'Pointage',
-  contact: 'Contacts', person: 'Personnes',
-};
-
-export default function ControlePage() {
-  const [resolved, setResolved] = useState('0');
-  const [entity, setEntity] = useState('');
-  const params = new URLSearchParams({ resolved });
-  if (entity) params.set('entity', entity);
-  const { data, loading, error, reload } = useApi<{ items: Issue[]; openBySeverity: Record<string, number> }>(`/api/imports/issues?${params}`);
-
-  async function resolve(id: string) {
-    await api(`/api/imports/issues/${id}`, { method: 'PATCH', body: { resolved: true } });
-    reload();
-  }
-
-  return (
-    <>
-      <PageHead
-        eyebrow="Administration"
-        title="File de contrôle"
-        sub="Données de l'import qui demandent une vérification manuelle"
-      />
-      <div className="card card-pad muted" style={{ marginBottom: '1rem', fontSize: '0.85rem' }}>
-        Ces lignes viennent de l'import initial du fichier Excel — la « Ligne » indique où c'était dans ce fichier,
-        que vous n'avez pas à rouvrir : utilisez le bouton « Ouvrir →/Chercher →» pour aller directement corriger
-        la donnée correspondante dans l'app (fiche chantier, contact, ouvrier…). « Traité » masque juste la ligne
-        ici, ça ne modifie rien tout seul.
-      </div>
-      {data && (
-        <div className="row" style={{ marginBottom: '1rem' }}>
-          <span className="badge crit">{data.openBySeverity.error ?? 0} erreurs</span>
-          <span className="badge warn">{data.openBySeverity.warning ?? 0} avertissements</span>
-          <span className="badge">{data.openBySeverity.info ?? 0} infos</span>
-          <span style={{ flex: 1 }} />
-          <select className="select" style={{ maxWidth: 180 }} value={entity} onChange={(e) => setEntity(e.target.value)}>
-            <option value="">Toutes catégories</option>
-            {Object.entries(ENTITY_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-          </select>
-          <select className="select" style={{ maxWidth: 150 }} value={resolved} onChange={(e) => setResolved(e.target.value)}>
-            <option value="0">À traiter</option>
-            <option value="1">Traités</option>
-          </select>
-        </div>
-      )}
-      {loading && <SkeletonRows />}
-      {error && !loading && <ErrorState message={error} onRetry={reload} />}
-      {data && data.items.length === 0 && <div className="card card-pad muted">Rien à traiter ici.</div>}
-      {data && data.items.length > 0 && (
-        <div className="tbl-wrap">
-          <table className="tbl">
-            <thead><tr><th>Sévérité</th><th>Catégorie</th><th>Message</th><th></th><th></th></tr></thead>
-            <tbody>
-              {data.items.map((i) => (
-                <tr key={i.id}>
-                  <td><span className={`badge ${i.severity === 'error' ? 'crit' : i.severity === 'warning' ? 'warn' : ''}`}>{i.severity}</span></td>
-                  <td>{ENTITY_LABEL[i.entity] ?? i.entity}</td>
-                  <td>{i.message}</td>
-                  <td>
-                    {i.link && (
-                      <Link href={i.link.href} className="btn ghost" style={{ padding: '0.2rem 0.5rem', fontSize: '0.78rem' }}>
-                        {i.link.label} →
-                      </Link>
-                    )}
-                  </td>
-                  <td>{!i.resolved && <button className="btn" style={{ padding: '0.2rem 0.5rem', fontSize: '0.78rem' }} onClick={() => resolve(i.id)}>Traité</button>}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </>
-  );
+export default function ControlePage(){
+ const [resolved,setResolved]=useState('0'),[entity,setEntity]=useState(''),[severity,setSeverity]=useState(''),[q,setQ]=useState('');
+ const [actionError,setActionError]=useState<string|null>(null),[busy,setBusy]=useState<string|null>(null),[lastDone,setLastDone]=useState<string|null>(null);
+ const params=new URLSearchParams({resolved});if(entity)params.set('entity',entity);if(severity)params.set('severity',severity);
+ const {data,loading,error,reload}=useApi<{items:Issue[];openBySeverity:Record<string,number>}>(`/api/imports/issues?${params}`);
+ async function resolve(id:string,value=true){
+  if(busy)return;setBusy(id);setActionError(null);
+  try{await api(`/api/imports/issues/${id}`,{method:'PATCH',body:{resolved:value}});setLastDone(value?id:null);reload();}
+  catch(e){setActionError(e instanceof Error?e.message:'Modification impossible.');}finally{setBusy(null);}
+ }
+ const items=(data?.items||[]).filter(i=>`${i.message} ${ENTITY_LABEL[i.entity]||i.entity} ${i.link?.label||''}`.toLocaleLowerCase().includes(q.toLocaleLowerCase().trim()));
+ const groups=Object.entries(ENTITY_LABEL).concat([...new Set(items.map(i=>i.entity))].filter(k=>!ENTITY_LABEL[k]).map(k=>[k,k]));
+ const rank=(i:Issue)=>({error:0,warning:1,info:2}[i.severity]??3);
+ return <>
+  <PageHead eyebrow="Administration" title="File de contrôle" sub="Les points à vérifier, avec un accès direct aux fiches concernées."/>
+  <div className="control-priorities">
+   {PRIORITIES.map(p=><button key={p.key} className={`control-priority ${p.tone}${severity===p.key&&resolved==='0'?' selected':''}`} aria-pressed={severity===p.key&&resolved==='0'} onClick={()=>{setResolved('0');setSeverity(severity===p.key?'':p.key);}}><p.icon size={22}/><span><strong>{data?.openBySeverity[p.key]??'—'}</strong><span>{p.label}</span></span></button>)}
+  </div>
+  <div className="control-workspace">
+   <section className="control-queue" aria-label="Contrôles">
+    <div className="control-toolbar">
+     <div className="control-view-tabs"><button className={resolved==='0'?'active':''} onClick={()=>setResolved('0')}>À traiter</button><button className={resolved==='1'?'active':''} onClick={()=>setResolved('1')}>Traités</button></div>
+     <label className="control-search"><Search size={18}/><input aria-label="Rechercher un contrôle" placeholder="Rechercher une anomalie, un dossier…" value={q} onChange={e=>setQ(e.target.value)}/></label>
+     <select className="select" aria-label="Catégorie" value={entity} onChange={e=>setEntity(e.target.value)}><option value="">Toutes les catégories</option>{Object.entries(ENTITY_LABEL).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select>
+    </div>
+    {severity&&<div className="control-active-filter"><span>Priorité : {PRIORITIES.find(p=>p.key===severity)?.label}</span><button className="btn ghost" onClick={()=>setSeverity('')}>Toutes les priorités</button></div>}
+    {actionError&&<p className="state error" role="alert">{actionError}</p>}
+    {lastDone&&<div className="control-feedback" role="status"><CheckCircle2 size={18}/><span>Contrôle classé comme traité.</span><button className="btn ghost" disabled={!!busy} onClick={()=>resolve(lastDone,false)}>Annuler</button></div>}
+    {loading&&<SkeletonRows/>}
+    {error&&!loading&&<ErrorState message={error} onRetry={reload}/>}
+    {!loading&&data&&items.length===0&&<div className="control-empty"><ClipboardCheck size={36}/><h2>{resolved==='1'?'Aucun contrôle traité ici':'Aucun point à traiter ici'}</h2><p>{q||entity||severity?'Essayez une autre recherche ou retirez les filtres.':'Les contrôles disponibles apparaîtront dans cette liste.'}</p>{(q||entity||severity)&&<button className="btn" onClick={()=>{setQ('');setEntity('');setSeverity('');}}>Réinitialiser les filtres</button>}</div>}
+    {!loading&&groups.map(([key,label])=>{const rows=items.filter(i=>i.entity===key).sort((a,b)=>rank(a)-rank(b));return rows.length>0&&<section key={key} className="control-group"><h2>{label}<span>{rows.length}</span></h2>{rows.map(i=>{const priority=PRIORITIES.find(p=>p.key===i.severity)||PRIORITIES[2]!;const Icon=priority.icon;return <article className={`control-card ${priority.tone}`} key={i.id}><div className={`control-card-icon ${priority.tone}`}><Icon size={22}/></div><div className="control-card-content"><span className={`badge ${i.resolved?'ok':priority.tone}`}>{i.resolved?'Traité':priority.label}</span><h3>{i.message}</h3>{(i.sheet||i.rowRef)&&<details><summary>Voir l’origine du contrôle</summary><p>{i.sheet||'Import'}{i.rowRef?` · ligne ${i.rowRef}`:''}</p></details>}<div className="control-card-actions">{i.link?<Link className="btn primary" href={i.link.href}>{i.link.label}</Link>:<span className="muted">Aucune fiche liée à ce contrôle.</span>}<button className="btn ghost" disabled={!!busy} onClick={()=>resolve(i.id,!i.resolved)}>{busy===i.id?'Enregistrement…':i.resolved?'Remettre à traiter':'Marquer comme traité'}</button></div></div></article>})}</section>})}
+   </section>
+   <aside className="control-guide"><span className="eyebrow">Votre contrôle</span><h2>Une anomalie,<br/>une action claire.</h2><ol><li><strong>Ouvrir la fiche</strong><span>Retrouvez le contact, chantier ou pointage concerné.</span></li><li><strong>Corriger ou vérifier</strong><span>Contrôlez l’information dans son contexte.</span></li><li><strong>Classer le contrôle</strong><span>Marquez-le comme traité quand la vérification est terminée.</span></li></ol><p>« Traité » classe l’alerte. Cette action ne modifie pas les données de la fiche.</p></aside>
+  </div>
+ </>;
 }

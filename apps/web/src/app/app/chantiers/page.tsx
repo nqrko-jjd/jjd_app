@@ -11,6 +11,7 @@ import { ContextMenu, useContextMenu, openActions, type MenuItem } from '@/compo
 import { PaginationBar } from '@/components/PaginationBar';
 import { useSort, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
+import { ArrowRight, Building2, LayoutGrid, List, MapPin, UserRound } from 'lucide-react';
 import {
   WORKSITE_STATUS_LABEL, WORKSITE_STATUSES, WORKSITE_PRIORITIES, WORKSITE_PRIORITY_LABEL,
   WORKSITE_SCOPES, WORKSITE_SCOPE_LABEL, WORKSITE_BILLING_MODES, WORKSITE_BILLING_MODE_LABEL,
@@ -38,6 +39,7 @@ interface WS {
   city: string | null; quotedHt: number | null; invoicedHt: number; endedOn: string | null;
   client: { name: string } | null;
   manager: { displayName: string | null; firstName: string } | null;
+  building?: { id: string; name: string; photoThumbUrl: string | null } | null;
 }
 
 export default function ChantiersPage() {
@@ -58,6 +60,7 @@ function ChantiersInner() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(100);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [view, setView] = useState<'cards' | 'list'>('cards');
   const ctx = useContextMenu<WS>();
 
   useEffect(() => { setPage(1); setSelected(new Set()); }, [q, status, kind]);
@@ -196,7 +199,7 @@ function ChantiersInner() {
         </div>
       )}
       <div className="filter-bar">
-        <input className="input" style={{ maxWidth: 300 }} placeholder="Rechercher (réf, titre, ville)…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input className="input worksite-search" placeholder="Rechercher un chantier, une référence, une ville…" value={q} onChange={(e) => setQ(e.target.value)} />
         {q && <button className="btn ghost" onClick={() => setQ('')}>Effacer la recherche</button>}
         {kind === 'project' && (
           <div className="bulk">
@@ -216,12 +219,74 @@ function ChantiersInner() {
             </select>
           </div>
         )}
+        <div className="worksite-view-switch" role="group" aria-label="Présentation des chantiers">
+          <button type="button" className={view === 'cards' ? 'active' : ''} onClick={() => setView('cards')} aria-label="Vue en cartes" title="Vue en cartes"><LayoutGrid size={17} /></button>
+          <button type="button" className={view === 'list' ? 'active' : ''} onClick={() => setView('list')} aria-label="Vue en liste" title="Vue en liste"><List size={18} /></button>
+        </div>
       </div>
 
       {loading && <SkeletonRows />}
 
       {error && !loading && <ErrorState message={error} onRetry={reload} />}
-      {data && (
+      {data && view === 'cards' && kind === 'project' && (
+        <div className="worksite-card-grid">
+          {sort.rows.map((w, index) => {
+            const progress = WORKSITE_PROGRESS_PCT[w.status as WorksiteStatus] ?? 0;
+            const manager = w.manager?.displayName ?? w.manager?.firstName ?? 'À attribuer';
+            return (
+              <article
+                key={w.id}
+                className={`worksite-card${ctx.menu?.row.id === w.id ? ' ctx-target' : ''}`}
+                onClick={rowNav(`/app/chantiers/${w.id}`, (h) => router.push(h))}
+                onContextMenu={(e) => ctx.open(e, w)}
+              >
+                <div className={`worksite-card-media visual-${index % 4}`}>
+                  {w.building?.photoThumbUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={w.building.photoThumbUrl} alt="" />
+                  ) : (
+                    <div className="worksite-card-fallback" aria-hidden="true"><Building2 size={37} strokeWidth={1.35} /></div>
+                  )}
+                  <label className="worksite-select" onClick={(e) => e.stopPropagation()}>
+                    <input type="checkbox" checked={selected.has(w.id)} onChange={() => toggleSelected(w.id)} aria-label={`Sélectionner ${w.title}`} />
+                  </label>
+                  <div className="worksite-card-status"><StatusBadge status={w.status} /></div>
+                </div>
+                <div className="worksite-card-body">
+                  <div className="worksite-card-ref">
+                    <span>{w.ref}</span>
+                    {w.priority !== 'normal' && w.priority !== 'low' && <span className={`priority-dot ${w.priority}`}>{WORKSITE_PRIORITY_LABEL[w.priority as keyof typeof WORKSITE_PRIORITY_LABEL]}</span>}
+                  </div>
+                  <h2>{w.title}</h2>
+                  <p className="worksite-card-client">{w.client?.name ?? w.building?.name ?? 'Client à préciser'}</p>
+                  <div className="worksite-card-meta">
+                    <span><MapPin size={15} />{w.city ?? 'Adresse à compléter'}</span>
+                    <span><UserRound size={15} />{manager}</span>
+                  </div>
+                  <div className="worksite-progress">
+                    <div><span>Avancement</span><strong>{progress}%</strong></div>
+                    <div className="progress-bar"><div className="progress-fill" style={{ width: `${progress}%` }} /></div>
+                  </div>
+                  <div className="worksite-card-foot">
+                    <div>
+                      <span>{w.scope ? WORKSITE_SCOPE_LABEL[w.scope as keyof typeof WORKSITE_SCOPE_LABEL] : 'Type à préciser'}</span>
+                      {w.billingMode && <small>{WORKSITE_BILLING_MODE_LABEL[w.billingMode as keyof typeof WORKSITE_BILLING_MODE_LABEL]}</small>}
+                    </div>
+                    <div className="worksite-card-amount">
+                      <small>Facturé HT</small>
+                      <strong><Money value={w.invoicedHt} /></strong>
+                    </div>
+                    <ArrowRight className="worksite-card-arrow" size={19} />
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+          {sort.rows.length === 0 && <div className="state worksite-empty"><Building2 size={30} /><h3>Aucun chantier trouvé</h3><p>Modifiez votre recherche ou choisissez un autre statut.</p></div>}
+          <div className="worksite-card-pagination"><PaginationBar page={data.page} totalPages={data.totalPages} pageSize={pageSize} onPage={setPage} onPageSize={(s) => { setPageSize(s); setPage(1); }} /></div>
+        </div>
+      )}
+      {data && (view === 'list' || kind !== 'project') && (
         <div className="list-card">
         <div className="tbl-wrap">
           <table className="tbl tbl-compact">

@@ -3,6 +3,8 @@ import path from 'node:path';
 import { createReadStream, existsSync } from 'node:fs';
 import { nanoid } from 'nanoid';
 import { z } from 'zod';
+import jwt from 'jsonwebtoken';
+import { requestBriefInput } from '@jjd/shared';
 import multer from 'multer';
 import {
   WORKSITE_STATUS_LABEL, WORKSITE_PRIORITY_LABEL, DOC_KIND_LABEL, WORKSITE_PROGRESS_PCT,
@@ -15,7 +17,7 @@ import { env } from '../env.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { sendMail } from '../lib/mail.js';
 import { attachPortalUser, requirePortal, signPortalToken, worksiteScope, buildingScope, portalFull, type PortalUser } from '../lib/portal.js';
-import { UPLOADS_DIR, storeImage } from '../lib/media.js';
+import { UPLOADS_DIR, storeImage, storeFile } from '../lib/media.js';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 
@@ -652,6 +654,34 @@ portalRouter.post('/quotes/:id/decline', requirePortal, asyncHandler((req, res) 
 
 /* ----------------------------------------------- demande de nouvelle intervention */
 
+portalRouter.get('/requests/context', requirePortal, asyncHandler(async (req, res) => {
+  const u = req.portalUser!;
+  const id = String(req.query.buildingId ?? '');
+  const building = await prisma.contact.findFirst({ where: { AND: [buildingScope(u), { id }] }, include: {
+    acpKeyContacts: { include: { contact: true } }, acpUnits: { include: { contact: true } }, residents: true,
+    acpWorksites: { where: worksiteScope(u), select: { id: true, ref: true, title: true }, orderBy: { updatedAt: 'desc' }, take: 50 },
+  } });
+  if (!building) throw new HttpError(403, 'Immeuble non accessible.');
+  const canPrefill = !!(u.syndicId || u.promoterId);
+  const persons = canPrefill ? [...building.acpKeyContacts.map(r => r.contact), ...building.acpUnits.map(r => r.contact), ...building.residents].filter((c): c is NonNullable<typeof c> => !!c) : [];
+  res.json({ units: canPrefill ? building.acpUnits.map(r => ({ label: r.label })) : [], contacts: persons.filter((c, i) => persons.findIndex(p => p.id === c.id) === i).map(c => ({ id: c.id, name: c.name, phone: c.phone ?? '', email: c.email ?? '' })), worksites: building.acpWorksites });
+}));
+
+portalRouter.get('/requests', requirePortal, asyncHandler(async (req, res) => {
+  const u = req.portalUser!;
+  const buildings = await prisma.contact.findMany({ where: buildingScope(u), select: { id: true } });
+  const rows = await prisma.crmOpportunity.findMany({ where: { source: 'portail', OR: [{ acpId: { in: buildings.map(b => b.id) } }, ...(u.contactId ? [{ contactId: u.contactId }] : [])] }, orderBy: { createdAt: 'desc' }, take: 200, include: { acp: { select: { name: true } } } });
+  res.json({ items: rows.filter(r => (u.syndicId || u.promoterId) || (r.requestBrief as { requesterId?: string } | null)?.requesterId === u.id).map(r => ({ id: r.id, title: r.title, reference: `INT-${r.createdAt.getFullYear()}-${r.id.slice(-5).toUpperCase()}`, building: r.acp?.name ?? null, createdAt: r.createdAt, statusLabel: r.worksiteId ? 'Intervention créée' : r.stage === 'new' ? 'Reçue · à examiner' : r.stage === 'lost' ? 'Clôturée' : 'En cours d’étude' })) });
+}));
+
+portalRouter.post('/requests/attachments', requirePortal, upload.single('file'), asyncHandler(async (req, res) => {
+  const file = req.file;
+  if (!file || file.mimetype !== 'application/pdf' || file.buffer.subarray(0, 5).toString() !== '%PDF-') throw new HttpError(422, 'Choisissez un fichier PDF valide (15 Mo maximum).');
+  const url = storeFile(file.buffer, 'document.pdf', 'request-documents');
+  const token = jwt.sign({ kind: 'request-pdf', url }, env.jwtSecret, { subject: req.portalUser!.id, expiresIn: '24h' });
+  res.status(201).json({ url, name: file.originalname.slice(0, 255), mime: 'application/pdf', token });
+}));
+
 /** Upload d'une photo pendant le parcours "Nouvelle demande" (étape Problème) — l'opportunité
  *  n'existe pas encore à ce stade, donc pas d'attache immédiate : le client reçoit juste
  *  l'URL, à renvoyer dans la liste `photos` du POST /requests final. */
@@ -673,6 +703,8 @@ portalRouter.post(
     const u = req.portalUser!;
     const input = z.object({
       title: z.string().trim().min(3),
+      requestKey: z.string().uuid().optional(),
+      requestBrief: requestBriefInput.optional(),
       buildingId: z.string().nullish(),
       unitLabel: z.string().trim().nullish(),
       details: z.string().trim().nullish(),
@@ -686,12 +718,36 @@ portalRouter.post(
       visitPreference: z.string().trim().nullish(),
       photos: z.array(z.object({ url: z.string(), thumbUrl: z.string().nullish() })).default([]),
     }).parse(req.body);
+    // Scope checks apply to every submitted ID, not only to the UI picker.
+    if (input.buildingId && !await prisma.contact.findFirst({ where: { AND: [buildingScope(u), { id: input.buildingId }] } })) throw new HttpError(403, 'Immeuble non accessible.');
+    if (input.requestBrief?.relatedWorksiteId && !await prisma.worksite.findFirst({ where: { AND: [worksiteScope(u), { id: input.requestBrief.relatedWorksiteId, acpId: input.buildingId ?? null }] } })) throw new HttpError(403, 'Dossier non accessible pour cet immeuble.');
+    const key = input.requestKey ? `${u.id}:${input.requestKey}` : null;
+    if (key) {
+      const existing = await prisma.crmOpportunity.findUnique({ where: { portalRequestKey: key } });
+      if (existing) { res.status(201).json({ id: existing.id, reference: `INT-${existing.createdAt.getFullYear()}-${existing.id.slice(-5).toUpperCase()}` }); return; }
+    }
+    if (input.requestBrief) {
+      for (const c of input.requestBrief.contacts) {
+        if (!c.contactId) continue;
+        if (!input.buildingId || !(u.syndicId || u.promoterId)) throw new HttpError(403, 'Contact non accessible.');
+        const allowed = await prisma.contact.findFirst({ where: { id: c.contactId, OR: [{ linkedAcpId: input.buildingId }, { buildingContacts: { some: { acpId: input.buildingId } } }, { buildingUnits: { some: { acpId: input.buildingId } } }] } });
+        if (!allowed) throw new HttpError(403, 'Contact non accessible pour cet immeuble.');
+        c.name = allowed.name; c.phone = allowed.phone ?? ''; c.email = allowed.email ?? '';
+      }
+      for (const file of input.requestBrief.attachments) {
+        try { const claim = jwt.verify(file.token ?? '', env.jwtSecret) as { sub: string; kind: string; url: string }; if (claim.sub !== u.id || claim.kind !== 'request-pdf' || claim.url !== file.url) throw Error(); }
+        catch { throw new HttpError(400, 'Pièce jointe invalide ou expirée. Ajoutez le PDF à nouveau.'); }
+        delete file.token;
+      }
+    }
     const urgency = input.urgency ?? (input.urgent ? 'urgent' : 'normal');
     const isUrgent = urgency === 'urgent';
 
     const opp = await prisma.crmOpportunity.create({
       data: {
         title: input.title,
+        portalRequestKey: key,
+        requestBrief: input.requestBrief ? { ...input.requestBrief, requesterId: u.id } : { requesterId: u.id },
         stage: 'new',
         contactId: u.contactId,
         acpId: input.buildingId ?? null,
@@ -724,10 +780,11 @@ portalRouter.post(
         input.accessNotes ? `Accès : ${input.accessNotes}` : null,
         input.visitPreference ? `Préférence de passage : ${input.visitPreference}` : null,
         input.photos.length ? `${input.photos.length} photo(s) jointe(s)` : null,
+        input.requestBrief ? 'La demande structurée complète (contacts, lots, historique, documents attendus) est disponible dans le Pipeline JJD.' : null,
         urgency === 'soon' ? '\nÀ traiter cette semaine' : null,
         isUrgent ? '\n⚠️ URGENT' : null,
       ].filter(Boolean).join('\n'),
-    );
+    ).catch((error: unknown) => console.error('Notification demande portail non envoyée', error));
     // référence lisible, dérivée de l'id (stable, rien à stocker) : INT-2026-AB12C
     const reference = `INT-${opp.createdAt.getFullYear()}-${opp.id.slice(-5).toUpperCase()}`;
     res.status(201).json({ id: opp.id, reference });

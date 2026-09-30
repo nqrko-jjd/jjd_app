@@ -477,7 +477,7 @@ vehiclesRouter.get(
         fines: { orderBy: { date: 'desc' }, take: 50 },
         payments: { orderBy: { dueOn: 'asc' } },
         docs: { orderBy: [{ expiresOn: 'asc' }, { createdAt: 'desc' }] },
-        repairs: { orderBy: [{ date: 'desc' }, { createdAt: 'desc' }] },
+        repairs: { include: { ledgerEntry: true }, orderBy: [{ date: 'desc' }, { createdAt: 'desc' }] },
         // factures/dépenses liées (réparations facturées par un garage, pièces…) — la preuve
         // (PDF) et l'extraction automatique vivent déjà côté Achats, pas dupliquées ici.
         ledgerEntries: {
@@ -488,7 +488,7 @@ vehiclesRouter.get(
       },
     });
     if (!v) throw new HttpError(404, 'Véhicule introuvable');
-    res.json({ vehicle: { ...v, costPerKm: vehicleCostPerKm(v), costBreakdown: await vehicleCostBreakdown(v.id) } });
+    res.json({ vehicle: { ...v, ledgerEntries: [...new Map([...v.ledgerEntries, ...v.repairs.flatMap(r => r.ledgerEntry ? [r.ledgerEntry] : [])].map(e => [e.id, e])).values()], costPerKm: vehicleCostPerKm(v), costBreakdown: await vehicleCostBreakdown(v.id) } });
   }),
 );
 
@@ -551,11 +551,19 @@ vehiclesRouter.get(
 
 /* ---------------------------------------------------- réparations véhicule (garage, hors coûts fixes) */
 
+async function validateRepairInvoice(ledgerEntryId: string | null | undefined, vehicleId: string) {
+  if (!ledgerEntryId) return;
+  const entry = await prisma.ledgerEntry.findUnique({ where: { id: ledgerEntryId } });
+  if (!entry || entry.direction !== 'purchase') throw new HttpError(400, 'Sélectionnez une facture d’achat valide.');
+  if (entry.vehicleId && entry.vehicleId !== vehicleId) throw new HttpError(400, 'Cette facture est affectée à un autre véhicule.');
+}
+
 vehiclesRouter.post(
   '/:id/repairs',
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
     const data = vehicleRepairInput.parse({ ...req.body, vehicleId: req.params.id });
+    await validateRepairInvoice(data.ledgerEntryId, req.params.id!);
     const repair = await prisma.vehicleRepair.create({ data });
     res.status(201).json({ repair });
   }),
@@ -566,8 +574,9 @@ vehiclesRouter.patch(
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
     const data = vehicleRepairInput.omit({ vehicleId: true }).partial().parse(req.body);
+    await validateRepairInvoice(data.ledgerEntryId, req.params.id!);
     const repair = await prisma.vehicleRepair.update({
-      where: { id: req.params.repairId },
+      where: { id: req.params.repairId, vehicleId: req.params.id },
       data,
     });
     res.json({ repair });

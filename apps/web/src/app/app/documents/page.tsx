@@ -73,6 +73,11 @@ function DocumentsInner() {
   useEffect(() => { setPage(1); }, [tab, status, q, sort]);
 
   const params = new URLSearchParams();
+  const dashboard = sp.get('dashboard') || '';
+  const dashboardLabels: Record<string, string> = { invoiced: 'Facturé ce mois', collected: 'Encaissé ce mois', overdue: 'Factures clients en retard', receivable: 'Factures restant à encaisser', quotes: 'Devis envoyés en attente' };
+  if (dashboardLabels[dashboard]) params.set('dashboard', dashboard);
+  const worksiteId = sp.get('worksiteId');
+  if (worksiteId) params.set('worksiteId', worksiteId);
   if (active.kind) params.set('kind', active.kind);
   if (active.scope) params.set('scope', active.scope);
   if (status && active.kind) params.set('status', status);
@@ -127,7 +132,7 @@ function DocumentsInner() {
   async function create(kind: string) {
     setBusy(true);
     try {
-      const { document } = await api<{ document: { id: string } }>('/api/documents', { method: 'POST', body: { kind } });
+      const { document } = await api<{ document: { id: string } }>('/api/documents', { method: 'POST', body: { kind, ...(worksiteId ? { worksiteId } : {}), ...(sp.get('billingContactId') ? { contactId: sp.get('billingContactId') } : {}) } });
       router.push(`/app/documents/${document.id}`);
     } finally {
       setBusy(false);
@@ -222,7 +227,9 @@ function DocumentsInner() {
         }
       />
 
-      {dash && (active.kind === 'quote' || active.kind === 'invoice') && (
+      {dashboardLabels[dashboard] && <div className="worksite-context-banner"><span><strong>{dashboardLabels[dashboard]}</strong>{dashboard === 'collected' && <small style={{display:'block'}}>Définition actuelle : factures émises ce mois et marquées payées, hors encaissements partiels.</small>}</span><Link href="/app" className="btn ghost">Retour au dashboard</Link><Link href={`/app/documents?kind=${active.kind || 'invoice'}`} className="btn ghost">Retirer le filtre</Link></div>}
+      {worksiteId && <div className="worksite-context-banner"><span>Documents filtrés pour ce chantier</span><Link href={`/app/chantiers/${encodeURIComponent(worksiteId)}`} className="btn ghost">Retour au chantier</Link><Link href="/app/documents" className="btn ghost">Tous les documents</Link></div>}
+      {dash && !worksiteId && (active.kind === 'quote' || active.kind === 'invoice') && (
         <div className="panel doc-stats" style={{ marginBottom: '1rem' }}>
           {active.kind === 'quote' && (
             <>
@@ -243,7 +250,7 @@ function DocumentsInner() {
       <div className="row" style={{ marginBottom: '1rem', gap: '0.4rem', flexWrap: 'wrap' }}>
         <div className="seg">
           {TABS.map((t) => (
-            <button key={t.key} className={tab === t.key ? 'on' : ''} onClick={() => { setTab(t.key); setStatus(''); setSelected(new Set()); }}>
+            <button key={t.key} className={tab === t.key ? 'on' : ''} onClick={() => { setTab(t.key); setStatus(''); setSelected(new Set()); if (dashboard) router.push(`/app/documents${t.kind ? `?kind=${t.kind}` : ''}`); }}>
               {t.label}{tab === t.key && data ? ` · ${data.totalCount}` : ''}
             </button>
           ))}

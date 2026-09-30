@@ -44,6 +44,40 @@ after(async () => {
 
 const auth = () => ({ authorization: `Bearer ${token}`, 'content-type': 'application/json' });
 
+test('dashboard : liens filtrés factures, encaissements et devis', async () => {
+  const issuedOn = new Date();
+  for (const status of ['paid','overdue','partial','sent','draft']) {
+    await prisma.document.create({data:{kind:'invoice',source:'manual',worksiteId:wsId,status,issuedOn:status==='draft'?null:issuedOn,totalHt:100,totalTtc:121}});
+  }
+  await prisma.document.create({data:{kind:'quote',source:'manual',worksiteId:wsId,status:'sent',totalHt:500}});
+  for (const [metric, count] of [['invoiced',4],['collected',1],['overdue',1],['receivable',3],['quotes',1]] as const) {
+    const response = await fetch(`${base}/api/documents?worksiteId=${wsId}&dashboard=${metric}`,{headers:auth()});
+    assert.equal(response.status,200);
+    const result = await response.json();
+    assert.equal(result.items.length,count,metric);
+  }
+});
+
+test('Peppol absent : aucun envoi, verrouillage ou numéro créé', async () => {
+  const doc = await prisma.document.create({data:{kind:'invoice',source:'manual',worksiteId:wsId,draftRef:'PEPPOL-SAFETY'}});
+  const response = await fetch(`${base}/api/documents/${doc.id}/send`,{method:'POST',headers:auth(),body:JSON.stringify({peppol:true})});
+  assert.equal(response.status,503);
+  const after = await prisma.document.findUniqueOrThrow({where:{id:doc.id}});
+  assert.equal(after.number,null);assert.equal(after.lockedAt,null);assert.equal(after.sentAt,null);assert.equal(after.peppolStatus,null);assert.equal(after.status,'draft');
+});
+
+test('Envoi externe : confirmation obligatoire et facture payée conservée', async () => {
+  const doc = await prisma.document.create({data:{kind:'invoice',source:'manual',worksiteId:wsId,status:'paid',lockedAt:new Date(),number:'TEST-EXTERNAL-SEND'}});
+  const send = (body: unknown) => fetch(`${base}/api/documents/${doc.id}/send`,{method:'POST',headers:auth(),body:JSON.stringify(body)});
+  assert.equal((await send({})).status,422);
+  assert.equal((await send({confirmedExternal:true})).status,200);
+  const first = await prisma.document.findUniqueOrThrow({where:{id:doc.id}});
+  assert.equal(first.status,'paid');assert.ok(first.sentAt);assert.equal(first.peppolStatus,null);
+  assert.equal((await send({confirmedExternal:true})).status,200);
+  const again = await prisma.document.findUniqueOrThrow({where:{id:doc.id}});
+  assert.equal(again.sentAt!.getTime(),first.sentAt!.getTime());
+});
+
 test('devis : création brouillon -> totaux TVA ventilés', async () => {
   const r = await fetch(`${base}/api/documents`, {
     method: 'POST',

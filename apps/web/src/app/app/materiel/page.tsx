@@ -179,10 +179,11 @@ export default function MaterielPage() {
   if (status && !status.enabled) {
     return (
       <>
-        <PageHead eyebrow="Ressources" title="Matériel" />
+        <PageHead eyebrow="Ressources" title="Outils & consommables" />
         <div className="card card-pad">
-          Le parc partagé avec Bricoloc n’est pas configuré (<code>BRICOLOC_API_KEY</code> dans{' '}
-          <code>apps/api/.env</code>).
+          <h2>Connexion Bricoloc désactivée</h2>
+          <p>Les outils et consommables partagés seront disponibles une fois la connexion activée par l’administration.</p>
+          <p className="muted">Dans l’environnement de test, cette connexion reste coupée pour ne pas modifier le stock réel Bricoloc. Le stock de matériaux JJD reste accessible séparément.</p>
         </div>
       </>
     );
@@ -190,7 +191,7 @@ export default function MaterielPage() {
 
   return (
     <>
-      <PageHead eyebrow="Ressources" title="Matériel" sub="Parc partagé avec Bricoloc — scan à la sortie et au retour" />
+      <PageHead eyebrow="Ressources" title="Outils & consommables" sub="Parc partagé avec Bricoloc — scan à la sortie et au retour" />
 
       <div className="seg" style={{ marginBottom: '1rem' }}>
         <button className={tab === 'outils' ? 'on' : ''} onClick={() => setTab('outils')}>Outils</button>

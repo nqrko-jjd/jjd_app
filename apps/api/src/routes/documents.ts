@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { validateExternalDeliveryRequest, externalDeliveryState } from '../lib/document-delivery.js';
 import path from 'node:path';
 import { createReadStream, existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { zipSync } from 'fflate';
@@ -184,6 +185,20 @@ documentsRouter.get(
     if (contactId) where.contactId = contactId;
     if (scope === 'drafts') where.lockedAt = null;
     if (scope === 'issued') where.lockedAt = { not: null };
+    // Same definitions as the dashboard totals; no changes to amounts or statuses.
+    const dashboard = String(req.query.dashboard || '');
+    if (['invoiced', 'collected', 'overdue', 'receivable', 'quotes'].includes(dashboard)) {
+      where.source = { not: 'demo' };
+      where.kind = dashboard === 'quotes' ? 'quote' : { in: ['invoice', 'deposit_invoice'] };
+      if (dashboard === 'invoiced' || dashboard === 'collected') {
+        const now = new Date();
+        where.issuedOn = { gte: new Date(now.getFullYear(), now.getMonth(), 1) };
+      }
+      if (dashboard === 'collected') where.status = 'paid';
+      if (dashboard === 'overdue') where.status = 'overdue';
+      if (dashboard === 'receivable') where.status = { in: ['sent', 'partial', 'overdue'] };
+      if (dashboard === 'quotes') where.status = 'sent';
+    }
     if (q) {
       where.OR = [
         { number: { contains: q, ...insensitive } },
@@ -596,35 +611,32 @@ documentsRouter.post(
 );
 
 /**
- * Envoi. Pour l'instant : marque envoyé + met la file Peppol à "queued".
- * La transmission réelle via point d'accès Peppol sera branchée au lot 6bis
- * (TrustUp reste l'émetteur officiel tant que la conformité n'est pas validée).
+ * Enregistrement d'un envoi effectué hors JJD. Aucun transport n'est simulé.
+ * Peppol reste bloqué tant qu'un connecteur validé n'est pas installé.
  */
 documentsRouter.post(
   '/:id/send',
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
+    validateExternalDeliveryRequest(req.body);
     let doc = await prisma.document.findUnique({ where: { id: req.params.id } });
     if (!doc) throw new HttpError(404, 'Document introuvable');
-    if (!doc.lockedAt) doc = await issueDocument(doc.id);
-    const isInvoice = doc.kind === 'invoice' || doc.kind === 'deposit_invoice' || doc.kind === 'credit_note';
+    const delivery = externalDeliveryState(doc);
+    if (delivery.alreadyRecorded) return res.json({ document: doc, note: 'L’envoi est déjà enregistré.' });
     const updated = await prisma.document.update({
       where: { id: doc.id },
       data: {
-        status: 'sent',
+        status: delivery.status,
         sentAt: new Date(),
-        peppolStatus: isInvoice && req.body?.peppol ? 'queued' : doc.peppolStatus,
       },
       include: docInclude,
     });
     await prisma.auditLog.create({
-      data: { actorId: req.user!.id, action: 'send', entity: 'document', entityId: doc.id, meta: { peppol: !!req.body?.peppol } },
+      data: { actorId: req.user!.id, action: 'send', entity: 'document', entityId: doc.id, meta: { channel: 'external', confirmedExternal: true } },
     });
     res.json({
       document: updated,
-      note: req.body?.peppol
-        ? 'Mis en file Peppol. Transmission réelle non encore active — à confirmer via TrustUp.'
-        : `${DOC_KIND_LABEL[doc.kind]} marqué envoyé.`,
+      note: `${DOC_KIND_LABEL[doc.kind]} : envoi externe enregistré. Aucun document transmis par JJD.`,
     });
   }),
 );

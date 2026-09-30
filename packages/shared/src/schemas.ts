@@ -81,6 +81,8 @@ export type BuildingContactInput = z.infer<typeof buildingContactInput>;
 export type BuildingUnitInput = z.infer<typeof buildingUnitInput>;
 
 export const worksiteContactInput = z.object({
+  unitLabel: z.string().trim().nullish(),
+  contactId: z.string().nullish(),
   role: z.enum(WORKSITE_CONTACT_ROLES).default('sur_place'),
   name: nonEmpty,
   phone: z.string().trim().nullish(),
@@ -171,6 +173,7 @@ export const vehicleDocInput = z.object({
 
 /** Frais de réparation / entretien ponctuel (garage) — distinct des coûts fixes de revient (fiche véhicule). */
 export const vehicleRepairInput = z.object({
+  ledgerEntryId: nonEmpty.nullish(),
   vehicleId: nonEmpty,
   date: z.coerce.date().nullish(),
   description: z.string().trim().nullish(),

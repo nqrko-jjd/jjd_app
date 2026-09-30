@@ -86,6 +86,7 @@ function buildWhere(q: Record<string, string>) {
   if (to) and.push({ date: { lte: new Date(to) } });
   if (paid === '1') and.push({ paymentStatus: { equals: 'Payé' } });
   if (paid === '0') and.push({ NOT: { paymentStatus: { equals: 'Payé' } } });
+  if (q.overdue === '1') and.push({ direction: 'purchase', dueDate: { not: null, lt: new Date() }, NOT: { paymentStatus: 'Payé' } });
   if (search) {
     and.push({
       OR: [

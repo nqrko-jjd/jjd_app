@@ -83,12 +83,17 @@ export default function TachesPage() {
   const [creating, setCreating] = useState(false);
   const [detail, setDetail] = useState<Task | null>(null);
   const [editing, setEditing] = useState<Task | null>(null);
+  const [actionError, setActionError] = useState('');
 
   const tasks = data?.items ?? [];
   const open = tasks.filter((t) => t.status !== 'done');
   const done = tasks.filter((t) => t.status === 'done');
 
-  const patch = (id: string, body: Record<string, unknown>) => api(`/api/tasks/${id}`, { method: 'PATCH', body }).then(reload);
+  const patch = async (id: string, body: Record<string, unknown>) => {
+    setActionError('');
+    try { await api(`/api/tasks/${id}`, { method: 'PATCH', body }); reload(); return true; }
+    catch(e){setActionError(e instanceof Error?e.message:'Impossible de modifier la tâche.');return false;}
+  };
 
   function Row({ t }: { t: Task }) {
     const badge = dueLabel(t.dueOn, t.status);
@@ -125,6 +130,7 @@ export default function TachesPage() {
         sub="Les prochaines actions et les responsables."
         action={<button className="btn primary" onClick={() => setCreating(true)}>+ Nouvelle tâche</button>}
       />
+      {actionError && <p className="state error" role="alert">{actionError}</p>}
       <div className="page-tabs">
         {VIEWS.map((v) => (
           <button key={v.key} className={`page-tab${view === v.key ? ' active' : ''}`} onClick={() => setView(v.key)}>{v.label}</button>
@@ -152,13 +158,10 @@ export default function TachesPage() {
           onClose={() => setDetail(null)}
           onToggleChecklistItem={async (idx) => {
             const next = (detail.checklist ?? []).map((c, i) => (i === idx ? { ...c, done: !c.done } : c));
-            await api(`/api/tasks/${detail.id}`, { method: 'PATCH', body: { checklist: next } });
-            setDetail({ ...detail, checklist: next });
-            reload();
+            if(await patch(detail.id, { checklist: next }))setDetail({ ...detail, checklist: next });
           }}
           onToggleDone={async () => {
-            await patch(detail.id, { status: detail.status === 'done' ? 'todo' : 'done' });
-            setDetail(null);
+            if(await patch(detail.id, { status: detail.status === 'done' ? 'todo' : 'done' }))setDetail(null);
           }}
           onEdit={() => { setEditing(detail); setDetail(null); }}
         />

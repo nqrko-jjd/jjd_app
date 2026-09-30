@@ -85,6 +85,9 @@ export function RichText({
       <div
         ref={ref}
         className="input rt-edit"
+        role="textbox"
+        aria-label={placeholder}
+        aria-multiline="true"
         contentEditable
         suppressContentEditableWarning
         data-placeholder={placeholder}

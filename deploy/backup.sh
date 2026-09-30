@@ -1,44 +1,27 @@
 #!/usr/bin/env bash
-# Sauvegarde JJD : dump PostgreSQL + archive des médias (photos, PDF).
-#
-# Lancé automatiquement chaque semaine par .github/workflows/backup.yml (SSH
-# sur le VPS, mêmes secrets que le déploiement) — peut aussi être exécuté à la
-# main sur le VPS : `cd /opt/jjd && bash deploy/backup.sh`.
-#
-# Écrit dans backups/ à la racine du dépôt — non versionné (.gitignore), donc
-# jamais touché par le `git reset --hard` du déploiement, mais sur le même
-# volume disque que le reste. Conserve 45 jours (~6 sauvegardes hebdomadaires)
-# puis purge automatiquement les plus anciennes.
+# Database + media checkpoint. Published filenames appear only after verification.
 set -euo pipefail
-cd "$(dirname "$0")/.."   # racine du dépôt (VPS_PATH)
-
+cd "$(dirname "$0")/.."
 BACKUP_DIR="$(pwd)/backups"
 RETENTION_DAYS=45
-DATE=$(date +%F)
-
-# récupère POSTGRES_USER / POSTGRES_DB (valeurs par défaut si non définies)
+BACKUP_STAMP=$(date -u +%Y-%m-%dT%H-%M-%SZ)-$$
 if [ -f .env.production ]; then
   set -a
-  # shellcheck disable=SC1091
   source .env.production
   set +a
 fi
-
 mkdir -p "$BACKUP_DIR"
-
-echo "→ dump base de données…"
-docker compose -f docker-compose.prod.yml --env-file .env.production \
-  exec -T db pg_dump -U "${POSTGRES_USER:-jjd}" "${POSTGRES_DB:-jjd}" \
-  | gzip > "$BACKUP_DIR/jjd-db-$DATE.sql.gz"
-
-echo "→ archive des médias (photos, PDF)…"
-docker run --rm -v jjd_uploads:/u -v "$BACKUP_DIR":/b alpine \
-  tar czf "/b/jjd-uploads-$DATE.tar.gz" -C /u .
-
-echo "→ purge des sauvegardes de plus de ${RETENTION_DAYS} jours…"
-find "$BACKUP_DIR" -name 'jjd-db-*.sql.gz' -mtime "+${RETENTION_DAYS}" -delete
-find "$BACKUP_DIR" -name 'jjd-uploads-*.tar.gz' -mtime "+${RETENTION_DAYS}" -delete
-
-echo "→ terminé. Contenu de $BACKUP_DIR :"
-du -sh "$BACKUP_DIR"/* 2>/dev/null || true
-echo "   total : $(du -sh "$BACKUP_DIR" | cut -f1)"
+umask 077
+BACKUP_TMP=$(mktemp -d "$BACKUP_DIR/.pending-XXXXXX")
+trap 'rm -rf "$BACKUP_TMP"' EXIT
+COMPOSE=(docker compose -f docker-compose.prod.yml --env-file .env.production)
+"${COMPOSE[@]}" exec -T db pg_dump -U "${POSTGRES_USER:-jjd}" "${POSTGRES_DB:-jjd}" | gzip > "$BACKUP_TMP/db.sql.gz"
+gzip -t "$BACKUP_TMP/db.sql.gz"
+# Read the exact volume mounted by the API, not a guessed Docker volume name.
+"${COMPOSE[@]}" exec -T api tar czf - -C /repo/apps/api/uploads . > "$BACKUP_TMP/uploads.tar.gz"
+tar tzf "$BACKUP_TMP/uploads.tar.gz" >/dev/null
+mv "$BACKUP_TMP/db.sql.gz" "$BACKUP_DIR/jjd-db-$BACKUP_STAMP.sql.gz"
+mv "$BACKUP_TMP/uploads.tar.gz" "$BACKUP_DIR/jjd-uploads-$BACKUP_STAMP.tar.gz"
+(cd "$BACKUP_DIR" && sha256sum "jjd-db-$BACKUP_STAMP.sql.gz" "jjd-uploads-$BACKUP_STAMP.tar.gz" > "jjd-$BACKUP_STAMP.sha256")
+find "$BACKUP_DIR" -type f \( -name 'jjd-db-*.sql.gz' -o -name 'jjd-uploads-*.tar.gz' -o -name 'jjd-*.sha256' \) -mtime "+$RETENTION_DAYS" -delete
+printf 'Sauvegarde vérifiée : %s\n' "$BACKUP_STAMP"

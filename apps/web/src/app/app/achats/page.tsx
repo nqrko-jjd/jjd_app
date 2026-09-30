@@ -1,6 +1,7 @@
 'use client';
 import { SkeletonRows, ErrorState, EmptyState } from '@/components/States';
 import { Suspense, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
 import { api, apiUpload, apiBlobUrl } from '@/lib/api';
@@ -86,7 +87,7 @@ function AchatsInner() {
   const sp = useSearchParams();
   const [q, setQ] = useState(sp.get('q') ?? '');
   const [paid, setPaid] = useState(sp.get('paid') ?? '');
-  const [worksiteId, setWorksiteId] = useState('');
+  const [worksiteId, setWorksiteId] = useState(sp.get('worksiteId') ?? '');
   const [contactId, setContactId] = useState('');
   const [category, setCategory] = useState('');
   const [year, setYear] = useState('');
@@ -106,6 +107,7 @@ function AchatsInner() {
   useEffect(() => { setPage(1); }, [q, paid, worksiteId, contactId, category, year, type, linked]);
 
   const params = new URLSearchParams();
+  if (sp.get('overdue') === '1') params.set('overdue', '1');
   if (q) params.set('q', q);
   if (paid) params.set('paid', paid);
   if (worksiteId) params.set('worksiteId', worksiteId);
@@ -342,6 +344,7 @@ function AchatsInner() {
         }
       />
 
+      {sp.get('overdue') === '1' && <div className="worksite-context-banner"><strong>Factures fournisseurs échues et non payées</strong><Link href="/app" className="btn ghost">Retour au dashboard</Link><Link href="/app/achats" className="btn ghost">Retirer le filtre</Link></div>}
       <div className="kpis" style={{ marginBottom: '1.2rem' }}>
         <Kpi
           ic={Wallet}

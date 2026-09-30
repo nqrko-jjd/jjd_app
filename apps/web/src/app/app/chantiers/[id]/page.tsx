@@ -1,4 +1,5 @@
 'use client';
+import { ContactsDialog } from '@/components/ContactRoleEditor';
 import { HardHat } from 'lucide-react';
 import { SkeletonRows, EmptyState, ErrorState } from '@/components/States';
 import { use, useState } from 'react';
@@ -8,8 +9,11 @@ import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { PageHead, StatusBadge, PriorityBadge, EntityBadge, ScopeBadge, BillingModeBadge, Money, formatDateBE, Kpi } from '@/lib/ui';
 import { FormModal, toDateInput, type FieldDef } from '@/components/FormModal';
-import { ChantierThread } from '@/components/ChantierThread';
+import MessagingWorkspace from '@/components/MessagingWorkspace';
 import { WorksiteTasks } from '@/components/WorksiteTasks';
+import { WorksiteLabourDetail } from '@/components/WorksiteLabourDetail';
+import { WorksiteProfitability } from '@/components/WorksiteProfitability';
+import { WorksiteFinanceSummary } from '@/components/WorksiteFinanceSummary';
 import { CollapsibleSection } from '@/components/CollapsibleSection';
 import { StackedBar, ProgressBars } from '@/lib/charts';
 import {
@@ -27,7 +31,7 @@ interface Detail {
   worksite: {
     id: string; ref: string; title: string; status: string; priority: string; statusRaw: string | null;
     scope: string | null; billingMode: string | null; requestKind: string | null;
-    entity: string; address: string | null; box: string | null; city: string | null; unitLabel: string | null; billTo: string | null;
+    postalCode: string | null; entity: string; address: string | null; box: string | null; city: string | null; unitLabel: string | null; billTo: string | null;
     lat: number | null; lng: number | null; geoSetAt: string | null;
     startedOn: string | null; endedOn: string | null; quotedHt: number | null; quoteRef: string | null; description: string | null;
     accessNotes: string | null;
@@ -37,8 +41,8 @@ interface Detail {
     tenantName: string | null; tenantPhone: string | null; tenantPhone2: string | null; tenantEmail: string | null;
     client: { id: string; name: string } | null;
     billToContact: { id: string; name: string } | null;
-    contacts: { id: string; role: string; name: string; phone: string | null; email: string | null; contactFor: string | null }[];
-    building: { id: string; name: string; syndic: { name: string } | null } | null;
+    contacts: { unitLabel?: string | null; contactId?: string | null; id: string; role: string; name: string; phone: string | null; email: string | null; contactFor: string | null }[];
+    building: { id: string; name: string; photoThumbUrl: string | null; syndic: { name: string } | null } | null;
     manager: { id: string; displayName: string | null; firstName: string } | null;
     documents: { id: string; kind: string; number: string | null; draftRef: string | null; totalHt: number; status: string; issuedOn: string | null }[];
     events: { id: string; startAt: string; endAt: string; note: string | null; vehicle: { plate: string | null } | null; assignments: { person: { displayName: string | null; firstName: string } }[] }[];
@@ -67,10 +71,10 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
     buildings: { id: string; name: string }[];
     people: { id: string; name: string }[];
   }>('/api/meta/pickers');
+  const [editingContacts, setEditingContacts] = useState(false);
   const [editing, setEditing] = useState(false);
   const [invoicing, setInvoicing] = useState<string | null>(null);
   const [tab, setTab] = useState<'overview' | 'tasks' | 'finances' | 'photos' | 'discussion'>('overview');
-  const [threadOpen, setThreadOpen] = useState(false);
 
   if (loading) return <SkeletonRows />;
   if (!data) {
@@ -106,7 +110,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
 
   const editFields: FieldDef[] = [
     { name: 'title', label: 'Intitulé', required: true, full: true },
-    { name: 'clientId', label: 'Client / Immeuble', type: 'contact', full: true },
+    { name: 'clientId', label: 'Client / donneur d’ordre', type: 'contact', full: true },
     { name: 'buildingId', label: 'Immeuble / ACP / projet', type: 'contact', contactKindFilter: ['acp', 'developer'], placeholder: 'Chercher un immeuble / ACP / projet…', full: true },
     { name: 'managerId', label: 'Chef de chantier', type: 'select', options: (pick?.people ?? []).map((p) => ({ value: p.id, label: p.name })) },
     { name: 'entity', label: 'Entité', type: 'select', options: ENTITIES.map((e) => ({ value: e, label: ENTITY_LABEL[e] })) },
@@ -131,19 +135,13 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
     { name: 'billingCadence', label: 'Rythme de facturation', type: 'select', options: WORKSITE_BILLING_CADENCES.map((c) => ({ value: c, label: WORKSITE_BILLING_CADENCE_LABEL[c] })) },
     { name: 'billingConditions', label: 'Conditions convenues', type: 'textarea', full: true },
     { name: 'accessNotes', label: 'Accès et prise de rendez-vous', type: 'textarea', full: true },
-    { name: 'statusRaw', label: 'Statut d’origine (ancien fichier Excel)' },
     { name: 'description', label: 'Description', type: 'textarea', full: true },
-    { name: 'ownerName', label: 'Propriétaire — nom' },
-    { name: 'ownerPhone', label: 'Propriétaire — téléphone' },
-    { name: 'ownerEmail', label: 'Propriétaire — e-mail' },
-    { name: 'tenantName', label: 'Locataire — nom' },
-    { name: 'tenantPhone', label: 'Locataire — téléphone' },
-    { name: 'tenantPhone2', label: 'Locataire — téléphone 2' },
-    { name: 'tenantEmail', label: 'Locataire — e-mail' },
+
   ];
 
   return (
     <>
+      {editingContacts && <ContactsDialog title="Personnes de contact du chantier" initial={w.contacts} onClose={() => setEditingContacts(false)} onSave={async contacts => { await api(`/api/worksites/${id}`, { method: 'PATCH', body: { contacts } }); reload(); }}/>}
       {editing && (
         <FormModal
           title={`Modifier ${w.ref}`}
@@ -151,7 +149,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
           initial={{
             title: w.title, clientId: w.client?.id ?? '', buildingId: w.building?.id ?? '', managerId: w.manager?.id ?? '',
             entity: w.entity, status: w.status, priority: w.priority, scope: w.scope, billingMode: w.billingMode, requestKind: w.requestKind,
-            address: w.address, box: w.box, city: w.city, unitLabel: w.unitLabel,
+            address: w.address, box: w.box, postalCode: w.postalCode, city: w.city, unitLabel: w.unitLabel,
             startedOn: toDateInput(w.startedOn), endedOn: toDateInput(w.endedOn),
             quotedHt: w.quotedHt, quoteRef: w.quoteRef, billToContactId: w.billToContact?.id ?? '', statusRaw: w.statusRaw, description: w.description,
             billToAttn: w.billToAttn, billToEmail: w.billToEmail, clientRef: w.clientRef,
@@ -175,26 +173,29 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
         </div>
       </div>
 
-      <div className="detail-hero">
-        <div className="eyebrow">Dossier {w.ref}</div>
-        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'nowrap', gap: '1rem' }}>
-          <h1>{w.title}</h1>
-          <StatusBadge status={w.status} />
-        </div>
-        <div className="sub">{[w.address, w.box && `bte ${w.box}`, w.city].filter(Boolean).join(', ') || 'Adresse non renseignée'}</div>
-        <div className="row" style={{ marginTop: '0.7rem' }}>
-          <PriorityBadge priority={w.priority} />
-          <EntityBadge entity={w.entity} />
-          <ScopeBadge scope={w.scope} />
-          <BillingModeBadge billingMode={w.billingMode} />
-          {w.statusRaw && w.statusRaw !== w.status && <span className="chip">{w.statusRaw}</span>}
+      <div className="detail-hero worksite-reference-hero">
+        <div className="detail-hero-content">
+          <div className="eyebrow">Dossier {w.ref}</div>
+          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'nowrap', gap: '1rem' }}>
+            <h1>{w.title}</h1>
+            <StatusBadge status={w.status} />
+          </div>
+          <div className="sub">{[w.address, w.box && `bte ${w.box}`, w.city].filter(Boolean).join(', ') || 'Adresse non renseignée'}</div>
+          <div className="row detail-hero-tags">
+            <PriorityBadge priority={w.priority} />
+            <EntityBadge entity={w.entity} />
+            <ScopeBadge scope={w.scope} />
+            <BillingModeBadge billingMode={w.billingMode} />
+            {w.statusRaw && w.statusRaw !== w.status && <span className="chip">{w.statusRaw}</span>}
+          </div>
         </div>
       </div>
 
+      {w.building?.photoThumbUrl && <details className="worksite-building-photo"><summary>Voir le bâtiment · {w.building.name}</summary><img src={w.building.photoThumbUrl} alt={w.building.name}/><Link href={`/app/immeubles/${w.building.id}`}>Ouvrir la fiche immeuble</Link></details>}
       <div className="page-tabs">
         <button className={`page-tab${tab === 'overview' ? ' active' : ''}`} onClick={() => setTab('overview')}>Vue d’ensemble</button>
         <button className={`page-tab${tab === 'tasks' ? ' active' : ''}`} onClick={() => setTab('tasks')}>Tâches</button>
-        <button className={`page-tab${tab === 'finances' ? ' active' : ''}`} onClick={() => setTab('finances')}>Finances</button>
+        <button className={`page-tab${tab === 'finances' ? ' active' : ''}`} onClick={() => setTab('finances')}>Finances & rentabilité</button>
         <button className={`page-tab${tab === 'photos' ? ' active' : ''}`} onClick={() => setTab('photos')}>Photos &amp; rapports <span className="n">{w.reports.length}</span></button>
         <button className={`page-tab${tab === 'discussion' ? ' active' : ''}`} onClick={() => setTab('discussion')}>Discussion</button>
       </div>
@@ -202,7 +203,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
       {tab === 'overview' && (
         <>
           {data.margin && (
-            <div className="kpis" style={{ marginBottom: '1.5rem' }}>
+            <div className="kpis worksite-detail-kpis" style={{ marginBottom: '1.5rem' }}>
               <Kpi ic={FileText} label="Devisé HT" value={<Money value={data.margin.quotedHt} />} sub="Montant du marché" />
               <Kpi
                 ic={Euro}
@@ -212,16 +213,16 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
               />
               <Kpi
                 ic={TrendingUp}
-                label="Marge réelle"
+                label="Encaissé − coûts"
                 value={<Money value={data.margin.realMargin} sign />}
-                sub={data.margin.realMarginPct != null ? `${data.margin.realMarginPct} % du marché` : 'Non calculable'}
+                sub={data.margin.realMarginPct != null ? `${data.margin.realMarginPct} % de l’encaissé` : 'Non calculable'}
                 neg={data.margin.realMargin < 0}
               />
               <Kpi
                 ic={CheckCircle2}
                 label="Avancement"
                 value={`${WORKSITE_PROGRESS_PCT[w.status as keyof typeof WORKSITE_PROGRESS_PCT] ?? 0}%`}
-                sub="Travaux réalisés"
+                sub="Repère selon le statut"
               />
             </div>
           )}
@@ -255,15 +256,15 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
                 </div>
               </div>
 
-              {w.contacts.length > 0 && (
+              {(
                 <div className="card card-pad" style={{ marginBottom: '1rem' }}>
-                  <div className="section-title" style={{ marginTop: 0 }}>Personnes de contact</div>
+                  <div className="wiz-section-head"><div className="section-title" style={{ marginTop: 0 }}>Personnes de contact</div><button className="btn" onClick={() => setEditingContacts(true)}>Gérer les contacts</button></div>{w.contacts.length === 0 && <p className="muted">Ajoutez les personnes à joindre pour les rendez-vous et le suivi.</p>}
                   <div className="info-grid">
                     {w.contacts.map((c) => (
                       <Info
                         key={c.id}
                         label={WORKSITE_CONTACT_ROLE_LABEL[c.role as keyof typeof WORKSITE_CONTACT_ROLE_LABEL] ?? c.role}
-                        value={`${c.name}${c.phone ? ` · ${c.phone}` : ''}${c.email ? ` · ${c.email}` : ''}${c.contactFor ? ` — ${WORKSITE_CONTACT_FOR_LABEL[c.contactFor as keyof typeof WORKSITE_CONTACT_FOR_LABEL] ?? c.contactFor}` : ''}`}
+                        value={<span>{c.contactId ? <Link href={`/app/contacts/${c.contactId}`}>{c.name}</Link> : c.name}{`${c.unitLabel ? ` · ${c.unitLabel}` : ''}${c.phone ? ` · ${c.phone}` : ''}${c.email ? ` · ${c.email}` : ''}${c.contactFor ? ` — ${WORKSITE_CONTACT_FOR_LABEL[c.contactFor as keyof typeof WORKSITE_CONTACT_FOR_LABEL] ?? c.contactFor}` : ''}`}</span>}
                       />
                     ))}
                   </div>
@@ -271,19 +272,20 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
               )}
 
               {(w.ownerName || w.tenantName) && (
-                <div className="card card-pad" style={{ marginBottom: '1rem' }}>
+                <details className="card card-pad" style={{ marginBottom: '1rem' }}>
+                  <summary>Anciennes coordonnées · conservées</summary><p className="wiz-hint">Rattachez les personnes dans « Gérer les contacts ». Ces informations restent disponibles pour vérification.</p>
                   <div className="info-grid">
                     {w.ownerName && (
-                      <Info label="Propriétaire" value={`${w.ownerName}${w.ownerPhone ? ` · ${w.ownerPhone}` : ''}${w.ownerEmail ? ` · ${w.ownerEmail}` : ''}`} />
+                      <Info label="Propriétaire · coordonnées historiques" value={`${w.ownerName}${w.ownerPhone ? ` · ${w.ownerPhone}` : ''}${w.ownerEmail ? ` · ${w.ownerEmail}` : ''}`} />
                     )}
                     {w.tenantName && (
                       <Info
-                        label="Locataire (contact terrain)"
+                        label="Locataire · coordonnées historiques"
                         value={`${w.tenantName}${w.tenantPhone ? ` · ${w.tenantPhone}` : ''}${w.tenantPhone2 ? ` / ${w.tenantPhone2}` : ''}${w.tenantEmail ? ` · ${w.tenantEmail}` : ''}`}
                       />
                     )}
                   </div>
-                </div>
+                </details>
               )}
 
               {w.description && (
@@ -333,34 +335,11 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
 
       {tab === 'finances' && (
         <>
+          {data.margin && <WorksiteFinanceSummary margin={data.margin} worksiteId={w.id} billingName={w.billToContact?.name ?? w.billTo ?? w.client?.name ?? 'Non renseigné'} billingContactId={w.billToContact?.id ?? (w.billTo ? null : w.client?.id)} labour={data.margin.labour} documentCount={w.documents.length} />}
           {data.margin && (
             <>
-              <div className="kpi-group" style={{ marginTop: 0 }}>Marché &amp; encaissements</div>
-              <div className="kpis">
-                <Kpi ic={FileText} label="Devisé HT" value={<Money value={data.margin.quotedHt} />} sub="Montant du marché" hero />
-                <Kpi ic={Euro} label="Facturé HT" value={<Money value={data.margin.invoicedHt} />} sub={data.margin.quotedHt > 0 ? `${Math.round((data.margin.invoicedHt / data.margin.quotedHt) * 100)} % du marché` : 'Rien facturé'} />
-                <Kpi ic={Wallet} label="Encaissé HT" value={<Money value={data.margin.paidHt} />} sub={data.margin.invoicedHt > 0 ? `${Math.round((data.margin.paidHt / data.margin.invoicedHt) * 100)} % du facturé` : 'Rien encaissé'} />
-              </div>
-              <div className="kpi-group">Coûts</div>
-              <div className="kpis">
-                <Kpi ic={FileText} label="Coût matériaux" value={<Money value={data.margin.materialCost} />} sub="Achats rattachés" />
-                <Kpi ic={CheckCircle2} label="Coût main-d'œuvre" value={<Money value={data.margin.labourCost} />} sub="Pointages inclus" />
-                <Kpi
-                  ic={Fuel}
-                  label="Coût véhicule"
-                  value={<Money value={data.margin.vehicleCost} />}
-                  sub={data.margin.transport.trips.length
-                    ? `${data.margin.transport.trips.length} j · fixe ${data.margin.transport.fixedCost.toFixed(0)} € + route ${data.margin.transport.fuelCost.toFixed(0)} €`
-                    : 'Aucun trajet imputé'}
-                />
-              </div>
-              <div className="kpi-group">Résultat</div>
-              <div className="kpis" style={{ marginBottom: '1.5rem' }}>
-                <Kpi ic={TrendingUp} label="Marge réelle" value={<Money value={data.margin.realMargin} sign />} sub={data.margin.realMarginPct != null ? `${data.margin.realMarginPct} % du marché` : 'Non calculable'} neg={data.margin.realMargin < 0} />
-                <Kpi ic={TrendingUp} label="Marge hypothétique" value={<Money value={data.margin.forecastMargin} sign />} sub="Devisé − coûts engagés" neg={data.margin.forecastMargin < 0} />
-                <Kpi ic={Percent} label="Reste à facturer" value={<Money value={data.margin.leftToInvoice} />} sub="Sur le devisé HT" />
-                {data.margin.partnerShare > 0 && <Kpi ic={Percent} label="Part GT (33 %)" value={<Money value={data.margin.partnerShare} />} sub="Apporteur d'affaire" />}
-              </div>
+              <WorksiteProfitability quoted={data.margin.quotedHt} invoiced={data.margin.invoicedHt} paid={data.margin.paidHt} totalCost={data.margin.totalCost} costs={[{label:'Main-d’œuvre',amount:data.margin.labourCost},{label:'Achats / matériaux',amount:data.margin.materialCost},{label:'Transport',amount:data.margin.vehicleCost}]} />
+              {data.margin.partnerShare > 0 && <Kpi ic={Percent} label="Part GT (33 %)" value={<Money value={data.margin.partnerShare} />} sub="Apporteur d'affaire" />}
               <TransportDetail t={data.margin.transport} />
               <div className="chart-2col" style={{ marginBottom: '1.5rem' }}>
                 {data.margin.totalCost > 0 && (
@@ -390,7 +369,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
                   </div>
                 )}
               </div>
-              <LabourDetail rows={data.margin.labour} />
+              <WorksiteLabourDetail rows={data.margin.labour} />
             </>
           )}
 
@@ -422,7 +401,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
                 </table>
               </div>
             )}
-            <Link href="/app/documents" className="btn" style={{ marginTop: '0.7rem', padding: '0.2rem 0.6rem', fontSize: '0.78rem' }}>Tous les documents →</Link>
+            <Link href={`/app/documents?worksiteId=${encodeURIComponent(w.id)}`} className="btn" style={{ marginTop: '0.7rem' }}>Documents de ce chantier</Link>
           </CollapsibleSection>
 
           <WorksiteExpenses worksiteId={w.id} />
@@ -480,24 +459,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
         </>
       )}
 
-      {tab === 'discussion' && (
-        threadOpen ? <ChantierThread worksiteId={w.id} /> : (
-          <div className="card card-pad thread-teaser">
-            <div className="eyebrow">Équipe interne · {w.ref}</div>
-            <h3>Le fil du chantier</h3>
-            <p>Photos, consignes et nouvelles de l’équipe, regroupées au même endroit.</p>
-            <div className="row" style={{ gap: '0.6rem' }}>
-              <button className="btn primary" onClick={() => setThreadOpen(true)}>
-                <MessageSquare size={15} strokeWidth={2} /> Ouvrir la discussion →
-              </button>
-              <Link href={`/app/messagerie?worksite=${w.id}&audience=internal`} className="btn ghost">
-                Ouvrir dans la messagerie →
-              </Link>
-            </div>
-            <span className="hint">Échanges clients conservés dans un espace distinct.</span>
-          </div>
-        )
-      )}
+      {tab === 'discussion' && <MessagingWorkspace key={w.id} worksiteId={w.id}/>}
     </>
   );
 }
@@ -714,36 +676,6 @@ function TransportDetail({ t }: { t: NonNullable<Detail['margin']>['transport'] 
                 <td style={{ textAlign: 'right' }}><Money value={tr.fuelCost} /></td>
                 <td style={{ textAlign: 'right' }}><Money value={tr.fixedCost} /></td>
                 <td style={{ textAlign: 'right' }}><Money value={tr.cost} /></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </CollapsibleSection>
-  );
-}
-
-function LabourDetail({ rows }: { rows: NonNullable<Detail['margin']>['labour'] }) {
-  if (!rows.length) return null;
-  const totalHours = rows.reduce((s, r) => s + r.hours, 0);
-  const totalAmount = rows.reduce((s, r) => s + r.amount, 0);
-  const days = new Set(rows.map((r) => r.date)).size;
-  return (
-    <CollapsibleSection
-      title="Détail main-d'œuvre"
-      summary={`${days} jour${days > 1 ? 's' : ''} · ${formatHours(totalHours)} · ${new Intl.NumberFormat('fr-BE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(totalAmount)}`}
-    >
-      <div className="tbl-wrap">
-        <table className="tbl">
-          <thead><tr><th>Date</th><th>Ouvrier</th><th style={{ textAlign: 'right' }}>Heures</th><th style={{ textAlign: 'right' }}>Montant</th><th></th></tr></thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={`${r.date}|${r.personId}`}>
-                <td className="tnum">{formatDateBE(r.date)}</td>
-                <td>{r.personName}</td>
-                <td className="tnum" style={{ textAlign: 'right' }}>{formatHours(r.hours)}</td>
-                <td style={{ textAlign: 'right' }}><Money value={r.amount} /></td>
-                <td>{r.pending && <span className="badge warn" style={{ fontSize: '0.72rem' }}>à valider</span>}</td>
               </tr>
             ))}
           </tbody>

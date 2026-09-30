@@ -99,3 +99,27 @@ test('PATCH /api/worksites/:id : portée/facturation (informatif, modifiable à 
   assert.equal(body.worksite.scope, 'long_term');
   assert.equal(body.worksite.billingMode, 'devis');
 });
+
+
+test('linked worksite contacts follow directory edits while legacy coordinates survive', async () => {
+  const person = await prisma.contact.create({ data: { name: 'Resident link test', normalizedName: 'resident link test', phone: '010000000', source: 'test' } });
+  const headers = { authorization: `Bearer ${officeToken}`, 'content-type': 'application/json' };
+  const patch = await fetch(`${base}/api/worksites/${worksiteId}`, { method: 'PATCH', headers, body: JSON.stringify({ contacts: [{ contactId: person.id, name: 'Outdated', role: 'locataire', unitLabel: 'D02', contactFor: 'rdv_acces' }] }) });
+  assert.equal(patch.status, 200);
+  await prisma.contact.update({ where: { id: person.id }, data: { phone: '020000000' } });
+  const detail = await (await fetch(`${base}/api/worksites/${worksiteId}`, { headers })).json();
+  assert.equal(detail.worksite.contacts[0].phone, '020000000');
+  assert.equal(detail.worksite.contacts[0].name, person.name);
+  assert.equal(detail.worksite.contacts[0].unitLabel, 'D02');
+  const field = await (await fetch(`${base}/api/worksites/${worksiteId}/field`, { headers: { authorization: `Bearer ${workerToken}` } })).json();
+  assert.equal(field.contacts[0].phone, '020000000');
+  const bad = await fetch(`${base}/api/worksites/${worksiteId}`, { method: 'PATCH', headers, body: JSON.stringify({ contacts: [{ contactId: 'missing-person', name: 'Unknown', role: 'locataire' }] }) });
+  assert.equal(bad.status, 400);
+  assert.equal(await prisma.worksiteContact.count({ where: { worksiteId, contactId: person.id } }), 1);
+  const removal = await fetch(`${base}/api/contacts/${person.id}`, { method: 'DELETE', headers });
+  assert.equal(removal.status, 409);
+  await prisma.contact.delete({ where: { id: person.id } });
+  const retained = await prisma.worksiteContact.findFirstOrThrow({ where: { worksiteId } });
+  assert.equal(retained.contactId, null);
+  assert.equal(retained.name, person.name);
+});

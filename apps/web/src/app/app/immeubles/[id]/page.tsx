@@ -1,5 +1,5 @@
 'use client';
-import { Building2 } from 'lucide-react';
+import { Building2, MapPin, Plus, Clock3, Search } from 'lucide-react';
 import { SkeletonRows, EmptyState, ErrorState } from '@/components/States';
 import { use, useState } from 'react';
 import Link from 'next/link';
@@ -8,6 +8,8 @@ import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { PageHead, StatusBadge, Money, formatDateBE } from '@/lib/ui';
 import { FormModal, type FieldDef } from '@/components/FormModal';
+import { ContactsDialog } from '@/components/ContactRoleEditor';
+import { NewWorksiteWizard } from '@/components/NewWorksiteWizard';
 import { PhotoHeader } from '@/components/PhotoHeader';
 import { BUILDING_FIELDS } from '@/lib/forms';
 import {
@@ -15,7 +17,7 @@ import {
 } from '@jjd/shared';
 
 interface BContact {
-  id: string; role: string; name: string; phone: string | null; email: string | null; note: string | null;
+  id: string; contactId?: string | null; role: string; name: string; phone: string | null; email: string | null; note: string | null;
   contact: { id: string; name: string } | null;
 }
 interface BUnit {
@@ -42,14 +44,6 @@ interface Detail {
   };
 }
 
-const BUILDING_CONTACT_FIELDS: FieldDef[] = [
-  { name: 'role', label: 'Rôle', type: 'select', options: BUILDING_CONTACT_ROLES.map((r) => ({ value: r, label: BUILDING_CONTACT_ROLE_LABEL[r] })) },
-  { name: 'name', label: 'Nom', required: true, full: true },
-  { name: 'phone', label: 'Téléphone' },
-  { name: 'email', label: 'E-mail' },
-  { name: 'note', label: 'Note', type: 'textarea', full: true },
-];
-
 const UNIT_FIELDS: FieldDef[] = [
   { name: 'label', label: 'Lot / appartement', required: true, placeholder: 'C1, Lot 12, 2A…' },
   { name: 'floor', label: 'Étage', placeholder: '1er étage, RdC…' },
@@ -63,9 +57,13 @@ export default function ImmeubleDetail({ params }: { params: Promise<{ id: strin
   const { id } = use(params);
   const router = useRouter();
   const { data, loading, error, reload } = useApi<Detail>(`/api/buildings/${id}`);
-  const { data: pick } = useApi<{ syndics: { id: string; name: string }[]; promoters: { id: string; name: string }[] }>('/api/meta/pickers');
+  const { data: pick } = useApi<{ syndics: { id: string; name: string }[]; promoters: { id: string; name: string }[]; people: { id: string; name: string }[] }>('/api/meta/pickers');
   const [modal, setModal] = useState<null | { kind: 'building' | 'contact' | 'unit'; row?: BContact | BUnit }>(null);
 
+  const [tab, setTab] = useState<'overview' | 'worksites' | 'contacts' | 'units' | 'info' | 'portal'>('overview');
+  const [status, setStatus] = useState('all');
+  const [query, setQuery] = useState('');
+  const [creatingWorksite, setCreatingWorksite] = useState(false);
   if (loading) return <SkeletonRows />;
   if (!data) {
     return error
@@ -74,6 +72,11 @@ export default function ImmeubleDetail({ params }: { params: Promise<{ id: strin
   }
   const b = data.building;
 
+  const closed = new Set(['done', 'closed', 'invoiced', 'cancelled']);
+  const active = b.worksites.filter(w => !closed.has(w.status));
+  const waiting = b.worksites.filter(w => w.status === 'on_hold');
+  const filtered = b.worksites.filter(w => (status === 'all' || (status === 'active' ? !closed.has(w.status) : status === 'closed' ? closed.has(w.status) : w.status === 'on_hold')) && `${w.ref} ${w.title}`.toLowerCase().includes(query.toLowerCase()));
+  function showWorksites(filter: string) { setStatus(filter); setQuery(''); setTab('worksites'); }
   const closeAndReload = () => { setModal(null); reload(); };
 
   async function removeBuilding() {
@@ -92,16 +95,32 @@ export default function ImmeubleDetail({ params }: { params: Promise<{ id: strin
         <Link href="/app/immeubles" className="btn ghost">← Immeubles</Link>
         <div className="row">
           <button className="btn" onClick={() => setModal({ kind: 'building' })}>Modifier</button>
-          <button className="btn" onClick={removeBuilding}>Supprimer</button>
+          {tab === 'info' && <button className="btn" onClick={removeBuilding}>Supprimer</button>}
+          <button className="btn primary" onClick={() => setCreatingWorksite(true)}><Plus size={17}/>Nouvelle intervention</button>
         </div>
       </div>
 
-      <div className="detail-hero">
-        <div className="eyebrow">Immeuble</div>
-        <h1>{b.name}</h1>
-        <div className="sub">{[b.address, b.box && `bte ${b.box}`, [b.postalCode, b.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') || 'Adresse non renseignée'}</div>
+      <header className="building-hub-header">
+        <div className="building-hub-cover">{b.photoUrl ? <img src={b.photoUrl} alt={b.name}/> : <Building2 size={48}/>}</div>
+        <div className="building-hub-heading"><div className="eyebrow">{b.promoter ? 'PROJET PROMOTEUR' : b.syndic ? 'IMMEUBLE · COPROPRIÉTÉ' : 'IMMEUBLE / PROJET'}{b.reference ? ` · ${b.reference}` : ''}</div><h1>{b.name}</h1><p><MapPin size={16}/>{[b.address, b.box && `bte ${b.box}`, [b.postalCode, b.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') || 'Adresse non renseignée'}</p><div className="row">{(b.syndic || b.promoter) && <span className="badge">{b.syndic?.name ?? b.promoter?.name}</span>}{b.lotCount != null && <span className="badge plain">{b.lotCount} lots</span>}</div></div>
+      </header>
+      <div className="building-hub-stats">
+        <button onClick={() => showWorksites('active')}><span>Dossiers ouverts</span><strong>{active.length}</strong><small>Interventions et chantiers</small></button>
+        <button className={waiting.length ? 'attention' : ''} onClick={() => showWorksites('waiting')}><span>En attente / observation</span><strong>{waiting.length}</strong><small>À garder dans le suivi</small></button>
+        <button onClick={() => setTab('units')}><span>Lots renseignés</span><strong>{b.units.length}{b.lotCount != null && <small> / {b.lotCount}</small>}</strong><small>Occupants et accès</small></button>
+        <button onClick={() => setTab('contacts')}><span>Contacts du bâtiment</span><strong>{b.contacts.length + b.linkedContacts.length}</strong><small>Gestion, conseil, concierge</small></button>
       </div>
-
+      <nav className="building-hub-tabs" aria-label="Sections de l’immeuble">{([['overview', 'Vue d’ensemble'], ['worksites', 'Interventions & chantiers'], ['contacts', 'Contacts'], ['units', 'Lots & occupants'], ['info', 'Fiche & accès'], ['portal', 'Accès clients']] as const).map(([key,label]) => <button key={key} className={tab === key ? 'active' : ''} aria-pressed={tab === key} onClick={() => setTab(key)}>{label}</button>)}</nav>
+      {tab === 'overview' && <div className="building-hub-overview">
+        <section className="card building-hub-panel"><div className="building-hub-panel-head"><div><span className="eyebrow">SUIVI DES TRAVAUX</span><h2>Ce qui se passe ici</h2></div><button className="btn ghost" onClick={() => showWorksites('all')}>Tous les dossiers</button></div>
+          {waiting.length > 0 && <button className="building-hub-watch" onClick={() => showWorksites('waiting')}><Clock3 size={20}/><span><strong>{waiting.length} dossier{waiting.length > 1 ? 's' : ''} en attente / observation</strong><small>Retrouvez les consignes avant de programmer la reprise.</small></span></button>}
+          {(active.length ? active : b.worksites).slice(0,5).map(w => <Link className="building-hub-case" href={`/app/chantiers/${w.id}`} key={w.id}><span className="building-hub-case-icon"><Building2 size={20}/></span><div><small>{w.ref}</small><strong>{w.title}</strong><small>{w.manager?.displayName ?? w.manager?.firstName ?? 'Responsable à définir'}</small></div><StatusBadge status={w.status}/></Link>)}
+          {!b.worksites.length && <div className="building-hub-empty"><Building2 size={28}/><h3>Aucun dossier pour le moment</h3><p>Créez la première intervention avec l’adresse déjà renseignée.</p><button className="btn primary" onClick={() => setCreatingWorksite(true)}>Créer une intervention</button></div>}
+        </section>
+        <aside><section className="card building-hub-panel"><div className="building-hub-panel-head"><div><span className="eyebrow">SUR PLACE</span><h2>Les interlocuteurs</h2></div><button className="btn ghost" onClick={() => setTab('contacts')}>Gérer</button></div>{b.contacts.slice(0,3).map(c => <div className="building-hub-person" key={c.id}><span>{c.name.split(' ').filter(Boolean).slice(0,2).map(n=>n[0]).join('')}</span><div><strong>{c.name}</strong><small>{BUILDING_CONTACT_ROLE_LABEL[c.role as keyof typeof BUILDING_CONTACT_ROLE_LABEL] ?? c.role}</small>{c.phone && <a href={`tel:${c.phone}`}>{c.phone}</a>}</div></div>)}{!b.contacts.length && <p className="muted">Ajoutez le concierge, le président ou le gestionnaire.</p>}<button className="btn" onClick={() => setModal({kind:'contact'})}><Plus size={16}/>Ajouter un contact</button></section>
+        <section className="card building-hub-panel building-hub-access"><span className="eyebrow">AVANT LE PASSAGE</span><h2>Accès au bâtiment</h2><p>{b.accessNote || 'Les consignes d’accès ne sont pas encore renseignées.'}</p>{b.digicode && <div><small>Digicode</small><strong>{b.digicode}</strong></div>}<button className="btn ghost" onClick={() => setTab('info')}>Consulter la fiche</button></section></aside>
+      </div>}
+      {tab === 'info' && <section className="card building-hub-panel">
       <PhotoHeader
         basePath={`/api/buildings/${b.id}`}
         photoUrl={b.photoUrl}
@@ -125,6 +144,9 @@ export default function ImmeubleDetail({ params }: { params: Promise<{ id: strin
         </div>
       )}
 
+      {b.note && <div className="building-hub-note"><h2>Notes du bâtiment</h2><p style={{whiteSpace:'pre-wrap'}}>{b.note}</p></div>}
+      </section>}
+      {tab === 'contacts' && <section className="building-hub-section">
       {/* Contacts clés */}
       <div className="section-title">
         Contacts clés <span className="hint">{b.contacts.length}</span>
@@ -171,6 +193,8 @@ export default function ImmeubleDetail({ params }: { params: Promise<{ id: strin
         </div>
       )}
 
+      </section>}
+      {tab === 'units' && <section className="building-hub-section">
       {/* Lots & occupants */}
       <div className="section-title">
         Lots &amp; occupants <span className="hint">{b.units.length}</span>
@@ -215,19 +239,20 @@ export default function ImmeubleDetail({ params }: { params: Promise<{ id: strin
         </div>
       )}
 
-      {/* Accès portail */}
-      <PortalAccessSection buildingId={id} />
-
+      </section>}
+      {tab === 'portal' && <section className="building-hub-section"><PortalAccessSection buildingId={id}/></section>}
+      {tab === 'worksites' && <section className="building-hub-section">
+      <div className="building-hub-filter"><label><Search size={18}/><input className="input" placeholder="Rechercher un dossier…" value={query} onChange={e => setQuery(e.target.value)}/></label><div className="msg-filter-chips">{[['all','Tous'],['active','Ouverts'],['waiting','En attente / observation'],['closed','Terminés / clôturés']].map(([key,label]) => <button key={key} className={status===key?'on':''} onClick={() => setStatus(key)}>{label}</button>)}</div></div>
       {/* Interventions */}
-      <div className="section-title">Interventions <span className="hint">{b.worksites.length}</span></div>
-      {b.worksites.length === 0 ? (
-        <div className="card card-pad muted">Aucune intervention.</div>
+      <div className="section-title">Interventions <span className="hint">{filtered.length}</span></div>
+      {filtered.length === 0 ? (
+        <div className="card card-pad muted">Aucun dossier ne correspond à cette sélection.</div>
       ) : (
         <div className="tbl-wrap">
           <table className="tbl">
             <thead><tr><th>Réf</th><th>Objet</th><th>Chef</th><th>Statut</th><th>Devis / factures</th><th style={{ textAlign: 'right' }}>Devisé</th><th>Fin</th></tr></thead>
             <tbody>
-              {b.worksites.map((w) => (
+              {filtered.map((w) => (
                 <tr key={w.id}>
                   <td className="mono">{w.ref}</td>
                   <td><Link href={`/app/chantiers/${w.id}`}>{w.title}</Link></td>
@@ -247,6 +272,8 @@ export default function ImmeubleDetail({ params }: { params: Promise<{ id: strin
         </div>
       )}
 
+      </section>}
+      {creatingWorksite && <NewWorksiteWizard people={pick?.people ?? []} initialBuilding={b} onClose={() => setCreatingWorksite(false)} onCreated={() => {setCreatingWorksite(false);setTab('worksites');setStatus('all');reload();}}/>}
       {modal?.kind === 'building' && (
         <FormModal
           title="Modifier l’immeuble"
@@ -256,19 +283,10 @@ export default function ImmeubleDetail({ params }: { params: Promise<{ id: strin
           onSubmit={async (v) => { await api(`/api/buildings/${id}`, { method: 'PATCH', body: v }); closeAndReload(); }}
         />
       )}
-      {modal?.kind === 'contact' && (
-        <FormModal
-          title={modal.row ? 'Modifier le contact' : 'Nouveau contact'}
-          fields={BUILDING_CONTACT_FIELDS}
-          initial={(modal.row as unknown as Record<string, unknown>) ?? { role: 'concierge' }}
-          onClose={() => setModal(null)}
-          onSubmit={async (v) => {
-            const path = modal.row ? `/api/buildings/${id}/contacts/${(modal.row as BContact).id}` : `/api/buildings/${id}/contacts`;
-            await api(path, { method: modal.row ? 'PATCH' : 'POST', body: v });
-            closeAndReload();
-          }}
-        />
-      )}
+      {modal?.kind === 'contact' && <ContactsDialog building title={modal.row ? 'Modifier la personne de contact' : 'Ajouter une personne de contact'} initial={modal.row ? [modal.row as BContact] : []} onClose={() => setModal(null)} onSave={async ([person]) => {
+        const path = modal.row ? `/api/buildings/${id}/contacts/${modal.row.id}` : `/api/buildings/${id}/contacts`;
+        await api(path, { method: modal.row ? 'PATCH' : 'POST', body: person }); closeAndReload();
+      }}/>}
       {modal?.kind === 'unit' && (
         <FormModal
           title={modal.row ? 'Modifier le lot' : 'Nouveau lot'}
@@ -297,9 +315,9 @@ function PortalAccessSection({ buildingId }: { buildingId: string }) {
   async function add() {
     if (!email.trim()) return;
     try {
-      await api(`/api/buildings/${buildingId}/portal-access`, { method: 'POST', body: { email: email.trim(), access } });
+      const result = await api<{ simulated?: boolean }>(`/api/buildings/${buildingId}/portal-access`, { method: 'POST', body: { email: email.trim(), access } });
       setEmail('');
-      setMsg('Accès créé. La personne se connecte sur /portail avec cet e-mail (lien magique).');
+      setMsg(result?.simulated ? 'Simulation enregistrée : aucun accès réel créé et aucun e-mail envoyé.' : 'Accès créé. La personne se connecte sur /portail avec cet e-mail (lien magique).');
       reload();
     } catch (e) {
       setMsg((e as Error).message);

@@ -322,6 +322,7 @@ model Contact {
   acpOpportunities CrmOpportunity[]  @relation("CrmOpportunityAcp")
   documents        Document[]
   ledgerEntries    LedgerEntry[]
+  worksiteContactLinks WorksiteContact[] @relation("WorksiteContactPerson")
   buildingContacts BuildingContact[] @relation("BuildingContactPerson")
   buildingUnits    BuildingUnit[]    @relation("BuildingUnitOccupant")
   acpKeyContacts   BuildingContact[] @relation("AcpKeyContact")
@@ -376,6 +377,9 @@ model BuildingContact {
 /// client facturé (Worksite.client) et des contacts fixes de l'immeuble (BuildingContact) :
 /// propre au dossier, saisi à l'ouverture, peut être plusieurs personnes différentes.
 model WorksiteContact {
+  unitLabel String?
+  contactId String?
+  contact Contact? @relation("WorksiteContactPerson", fields: [contactId], references: [id], onDelete: SetNull)
   id         String   @id @default(cuid())
   role       String // demandeur | gestionnaire | proprietaire | locataire | sur_place | architecte | facturation
   name       String
@@ -502,6 +506,8 @@ model Worksite {
 
 /// Opportunité commerciale — le pipeline CRM.
 model CrmOpportunity {
+  requestBrief Json?
+  portalRequestKey String? @unique
   id             String    @id @default(cuid())
   title          String
   stage          String    @default("new") // new | to_qualify | visit_scheduled | quote_sent | follow_up | won | lost
@@ -684,6 +690,7 @@ model PriceItem {
 /// Ligne du grand livre = une ligne de l'onglet "Facture" du fichier.
 /// C'est la granularité qui alimente la marge réelle (matériaux) et le CA.
 model LedgerEntry {
+  vehicleRepairs VehicleRepair[]
   id            String    @id @default(cuid())
   date          DateTime?
   dueDate       DateTime? // échéance (facture d'achat)
@@ -1039,6 +1046,8 @@ model Vehicle {
 
 /// Frais de réparation / entretien ponctuel (garage) — distinct des coûts fixes de revient.
 model VehicleRepair {
+  ledgerEntryId String?
+  ledgerEntry LedgerEntry? @relation(fields: [ledgerEntryId], references: [id], onDelete: SetNull)
   id          String    @id @default(cuid())
   vehicleId   String
   vehicle     Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)

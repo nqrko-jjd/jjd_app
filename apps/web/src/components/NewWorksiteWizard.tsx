@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { api } from '@/lib/api';
 import { AddressAutocomplete } from './AddressAutocomplete';
 import { ContactPicker } from './ContactPicker';
+import { ContactRoleEditor, type RoleContact } from './ContactRoleEditor';
 import {
   WORKSITE_REQUEST_KINDS, WORKSITE_REQUEST_KIND_LABEL,
   WORKSITE_PRIORITIES, WORKSITE_PRIORITY_LABEL,
@@ -14,7 +15,7 @@ import {
 
 const STEPS = ['Demande & lieu', 'Client & contacts', 'Travail & facturation', 'Récapitulatif'] as const;
 
-interface WizContact { role: string; name: string; phone: string; email: string; contactFor: string }
+type WizContact = RoleContact;
 
 interface WizState {
   requestKind: string;
@@ -70,6 +71,7 @@ export function NewWorksiteWizard({
   onCreated: () => void;
 }) {
   const [v, setV] = useState<WizState>(() => initialBuilding ? { ...EMPTY, buildingId: initialBuilding.id, buildingLabel: initialBuilding.name, address: initialBuilding.address ?? '', postalCode: initialBuilding.postalCode ?? '', city: initialBuilding.city ?? '' } : EMPTY);
+  const [contactPending, setContactPending] = useState<Record<number, boolean>>({});
   const [step, setStep] = useState(0);
   const [maxStep, setMaxStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -91,7 +93,7 @@ export function NewWorksiteWizard({
       for (let i = 0; i < v.contacts.length; i++) {
         const c = v.contacts[i]!;
         if (!c.name.trim()) return `Contact ${i + 1} : indiquez un nom.`;
-        if (!c.phone.trim() && !c.email.trim()) return `Contact ${i + 1} : ajoutez un téléphone ou un e-mail.`;
+        if (!(c.phone ?? '').trim() && !(c.email ?? '').trim()) return `Contact ${i + 1} : ajoutez un téléphone ou un e-mail.`;
       }
     }
     return null;
@@ -126,7 +128,7 @@ export function NewWorksiteWizard({
         clientId: v.clientId || null,
         contacts: v.contacts
           .filter((c) => c.name.trim())
-          .map((c) => ({ role: c.role, name: c.name.trim(), phone: c.phone.trim() || null, email: c.email.trim() || null, contactFor: c.contactFor || null })),
+          .map((c) => ({ contactId: c.contactId || null, unitLabel: c.unitLabel || null, role: c.role, name: c.name.trim(), phone: (c.phone ?? '').trim() || null, email: (c.email ?? '').trim() || null, contactFor: c.contactFor || null })),
         accessNotes: v.accessNotes.trim() || null,
         billingMode: v.billingMode || null,
         quoteRef: v.quoteRef.trim() || null,
@@ -161,7 +163,7 @@ export function NewWorksiteWizard({
                 key={label}
                 type="button"
                 className={i === step ? 'active' : ''}
-                disabled={i > maxStep}
+                disabled={i > maxStep || Object.values(contactPending).some(Boolean)}
                 onClick={() => goTo(i)}
               >
                 <span className="wiz-step-num">{i + 1}</span>
@@ -258,7 +260,7 @@ export function NewWorksiteWizard({
               </div>
               <div className="wiz-section-head full">
                 <strong>Personnes de contact</strong>
-                <button type="button" className="btn ghost" onClick={() => patch({ contacts: [...v.contacts, newContact()] })}>＋ Ajouter</button>
+                <button type="button" className="btn ghost" disabled={Object.values(contactPending).some(Boolean)} onClick={() => patch({ contacts: [...v.contacts, newContact()] })}>＋ Ajouter</button>
               </div>
               {v.contacts.length === 0 && (
                 <div className="wiz-hint full">Ajoutez le gestionnaire, le propriétaire ou l’occupant à joindre. Vous pouvez compléter les contacts plus tard.</div>
@@ -267,34 +269,9 @@ export function NewWorksiteWizard({
                 <section className="wiz-contact full" key={i}>
                   <div className="wiz-section-head">
                     <strong>Contact {i + 1}</strong>
-                    <button type="button" className="btn ghost" onClick={() => patch({ contacts: v.contacts.filter((_, idx) => idx !== i) })}>Retirer</button>
+                    <button type="button" className="btn ghost" disabled={Object.values(contactPending).some(Boolean)} onClick={() => patch({ contacts: v.contacts.filter((_, idx) => idx !== i) })}>Retirer</button>
                   </div>
-                  <div className="wiz-grid">
-                    <div className="field">
-                      <label>Rôle</label>
-                      <select className="select" value={c.role} onChange={(e) => patchContact(i, { role: e.target.value })}>
-                        {WORKSITE_CONTACT_ROLES.map((r) => <option key={r} value={r}>{WORKSITE_CONTACT_ROLE_LABEL[r]}</option>)}
-                      </select>
-                    </div>
-                    <div className="field">
-                      <label>Nom *</label>
-                      <input className="input" value={c.name} onChange={(e) => patchContact(i, { name: e.target.value })} />
-                    </div>
-                    <div className="field">
-                      <label>Téléphone</label>
-                      <input className="input" type="tel" value={c.phone} onChange={(e) => patchContact(i, { phone: e.target.value })} />
-                    </div>
-                    <div className="field">
-                      <label>E-mail</label>
-                      <input className="input" type="email" value={c.email} onChange={(e) => patchContact(i, { email: e.target.value })} />
-                    </div>
-                  </div>
-                  <div className="field">
-                    <label>À contacter pour</label>
-                    <select className="select" value={c.contactFor} onChange={(e) => patchContact(i, { contactFor: e.target.value })}>
-                      {WORKSITE_CONTACT_FOR.map((f) => <option key={f} value={f}>{WORKSITE_CONTACT_FOR_LABEL[f]}</option>)}
-                    </select>
-                  </div>
+                  <ContactRoleEditor onPending={pending => setContactPending(prev => ({ ...prev, [i]: pending }))} value={c} onChange={(next) => patchContact(i, next)} />
                 </section>
               ))}
               <div className="field full">
@@ -413,11 +390,11 @@ export function NewWorksiteWizard({
         </div>
         <div className="modal-foot">
           <button type="button" className="btn" onClick={onClose}>Annuler</button>
-          {step > 0 && <button type="button" className="btn" onClick={goBack}>← Retour</button>}
+          {step > 0 && <button type="button" className="btn" disabled={Object.values(contactPending).some(Boolean)} onClick={goBack}>← Retour</button>}
           {step < STEPS.length - 1 ? (
-            <button type="button" className="btn primary" onClick={goNext}>Continuer →</button>
+            <button type="button" className="btn primary" disabled={Object.values(contactPending).some(Boolean)} onClick={goNext}>Continuer →</button>
           ) : (
-            <button type="button" className="btn primary" disabled={busy} onClick={submit}>{busy ? 'Création…' : 'Créer le chantier'}</button>
+            <button type="button" className="btn primary" disabled={busy || Object.values(contactPending).some(Boolean)} onClick={submit}>{busy ? 'Création…' : 'Créer le chantier'}</button>
           )}
         </div>
       </div>

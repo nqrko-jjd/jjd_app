@@ -92,6 +92,13 @@ try {
  assert.equal(api('/api/buildings/b0/portal-access','POST',{email:'test@example.test',access:'limited'}).simulated,true);
  assert.equal(api('/api/buildings/b0/portal-users').users[0].portalAccess,'limited');
  api('/api/buildings/b0/photo','POST',{photoData:'data:image/png;base64,DEMO'});assert.equal(api('/api/buildings/b0').building.photoUrl,'data:image/png;base64,DEMO');
+ const linked=api('/api/contacts','POST',{name:'Personne liée',type:'client',kind:'individual',phone:'010000000'}).contact;
+ api('/api/buildings/b0/contacts','POST',{name:linked.name,contactId:linked.id,role:'concierge',phone:linked.phone});
+ db.worksites[0].contacts=[{id:'linked-row',name:linked.name,contactId:linked.id,phone:linked.phone,role:'locataire',unitLabel:'D02'}];
+ api('/api/contacts/'+linked.id,'PATCH',{phone:'020000000'});
+ assert.equal(api('/api/worksites/w0').worksite.contacts[0].phone,'020000000');
+ assert.equal(api('/api/worksites/w0').worksite.contacts[0].unitLabel,'D02');
+ assert.equal(api('/api/buildings/b0').building.contacts.find(c=>c.contactId===linked.id).phone,'020000000');
  const unmatched=api('/api/finance/bank?matched=0').items[0];assert(unmatched);
  const candidate=api('/api/finance/bank/'+unmatched.id+'/suggestions').items[0];assert(candidate);
  api('/api/finance/bank/'+unmatched.id+'/matches','POST',{ledgerId:candidate.id});

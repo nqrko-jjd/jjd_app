@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { currentContact, contactSnapshot } from '../lib/linked-contact.js';
 import { buildingInput, buildingContactInput, buildingUnitInput, normalizeName } from '@jjd/shared';
 import { prisma } from '../db.js';
 import { insensitive } from '../lib/search.js';
@@ -46,7 +47,7 @@ buildingsRouter.get(
       include: {
         syndic: true,
         promoter: true,
-        acpKeyContacts: { orderBy: [{ position: 'asc' }, { createdAt: 'asc' }], include: { contact: { select: { id: true, name: true } } } },
+        acpKeyContacts: { orderBy: [{ position: 'asc' }, { createdAt: 'asc' }], include: { contact: { select: { id: true, name: true, phone: true, email: true } } } },
         residents: {
           orderBy: { name: 'asc' },
           select: { id: true, name: true, type: true, kind: true, phone: true, email: true },
@@ -66,7 +67,7 @@ buildingsRouter.get(
     });
     if (!building || !ACP_KINDS.includes(building.kind ?? '')) throw new HttpError(404, 'Immeuble introuvable');
     const { acpKeyContacts, acpUnits, acpWorksites, residents, ...rest } = building;
-    res.json({ building: { ...rest, contacts: acpKeyContacts, units: acpUnits, worksites: await withQuotedFromDocuments(acpWorksites), linkedContacts: residents } });
+    res.json({ building: { ...rest, contacts: acpKeyContacts.map(currentContact), units: acpUnits, worksites: await withQuotedFromDocuments(acpWorksites), linkedContacts: residents } });
   }),
 );
 
@@ -185,7 +186,7 @@ buildingsRouter.post(
   '/:id/contacts',
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
-    const data = buildingContactInput.parse(req.body);
+    const data = await contactSnapshot(buildingContactInput.parse(req.body));
     const count = await prisma.buildingContact.count({ where: { acpId: req.params.id } });
     const contact = await prisma.buildingContact.create({
       data: {
@@ -207,7 +208,7 @@ buildingsRouter.patch(
   '/:id/contacts/:cid',
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
-    const data = buildingContactInput.partial().parse(req.body);
+    const data = await contactSnapshot(buildingContactInput.partial().parse(req.body));
     const contact = await prisma.buildingContact.update({
       where: { id: req.params.cid },
       data: { ...data, email: data.email === undefined ? undefined : data.email || null },

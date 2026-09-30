@@ -322,6 +322,7 @@ model Contact {
   acpOpportunities CrmOpportunity[]  @relation("CrmOpportunityAcp")
   documents        Document[]
   ledgerEntries    LedgerEntry[]
+  worksiteContactLinks WorksiteContact[] @relation("WorksiteContactPerson")
   buildingContacts BuildingContact[] @relation("BuildingContactPerson")
   buildingUnits    BuildingUnit[]    @relation("BuildingUnitOccupant")
   acpKeyContacts   BuildingContact[] @relation("AcpKeyContact")
@@ -376,6 +377,9 @@ model BuildingContact {
 /// client facturé (Worksite.client) et des contacts fixes de l'immeuble (BuildingContact) :
 /// propre au dossier, saisi à l'ouverture, peut être plusieurs personnes différentes.
 model WorksiteContact {
+  unitLabel String?
+  contactId String?
+  contact Contact? @relation("WorksiteContactPerson", fields: [contactId], references: [id], onDelete: SetNull)
   id         String   @id @default(cuid())
   role       String // demandeur | gestionnaire | proprietaire | locataire | sur_place | architecte | facturation
   name       String

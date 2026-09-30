@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { currentContact, contactSnapshot } from '../lib/linked-contact.js';
 import multer from 'multer';
 import {
   worksiteInput, WORKSITE_STATUSES, WORKSITE_STATUS_LABEL, WORKSITE_PRIORITIES, WORKSITE_PRIORITY_LABEL,
@@ -313,7 +314,7 @@ worksitesRouter.get(
         acp: { include: { syndic: true } },
         manager: true,
         billToContact: true,
-        contacts: { orderBy: { position: 'asc' } },
+        contacts: { orderBy: { position: 'asc' }, include: { contact: { select: { id: true, name: true, phone: true, email: true } } } },
         documents: { orderBy: { issuedOn: 'desc' } },
         events: { orderBy: { startAt: 'desc' }, take: 20, include: { assignments: { include: { person: true } }, vehicle: true } },
         reports: { orderBy: { date: 'desc' }, include: { photos: true, author: { select: { email: true } } } },
@@ -350,7 +351,7 @@ worksitesRouter.get(
     ].sort((a, b) => b.at.getTime() - a.at.getTime()).slice(0, 6);
 
     const { acp, ...wsRest } = (await withQuotedFromDocuments([ws]))[0]!;
-    const shaped = { ...wsRest, building: acp };
+    const shaped = { ...wsRest, contacts: ws.contacts.map(currentContact), building: acp };
     res.json({ worksite: isWorker ? { ...shaped, documents: [] } : shaped, margin, activity: isWorker ? [] : activity });
   }),
 );
@@ -364,10 +365,11 @@ worksitesRouter.get(
       where: { id: req.params.id },
       include: {
         client: { select: { name: true, phone: true } },
+        contacts: { orderBy: { position: 'asc' }, include: { contact: { select: { id: true, name: true, phone: true, email: true } } } },
         acp: {
           select: {
             name: true, address: true, postalCode: true, city: true, digicode: true, accessNote: true,
-            acpKeyContacts: { orderBy: { position: 'asc' }, select: { role: true, name: true, phone: true } },
+            acpKeyContacts: { orderBy: { position: 'asc' }, include: { contact: { select: { name: true, phone: true, email: true } } } },
           },
         },
         manager: { select: { displayName: true, firstName: true, phone: true } },
@@ -398,9 +400,10 @@ worksitesRouter.get(
       building: ws.acp
         ? {
             name: ws.acp.name, digicode: ws.acp.digicode, accessNote: ws.acp.accessNote,
-            contacts: ws.acp.acpKeyContacts,
+            contacts: ws.acp.acpKeyContacts.map(currentContact),
           }
         : null,
+      contacts: ws.contacts.map(currentContact),
       client: ws.client,
       manager: ws.manager ? { name: ws.manager.displayName || ws.manager.firstName, phone: ws.manager.phone } : null,
       owner: ws.ownerName ? { name: ws.ownerName, phone: ws.ownerPhone, email: ws.ownerEmail } : null,
@@ -440,6 +443,7 @@ worksitesRouter.post(
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
     const data = worksiteInput.parse(req.body);
+    if (data.contacts) data.contacts = await Promise.all(data.contacts.map(contactSnapshot));
     const ref = await nextWorksiteRef();
     const acpId = data.buildingId ?? (data.clientId ? await deriveBuildingFromClient(data.clientId) : null);
     const ws = await prisma.worksite.create({
@@ -534,6 +538,7 @@ worksitesRouter.patch(
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
     const { buildingId: buildingIdInput, contacts: contactsInput, ...data } = worksiteInput.partial().parse(req.body);
+    const linkedContacts = contactsInput ? await Promise.all(contactsInput.map(contactSnapshot)) : contactsInput;
     let acpId: string | null | undefined = buildingIdInput;
     if (data.clientId && acpId === undefined) {
       const existing = await prisma.worksite.findUnique({ where: { id: req.params.id }, select: { acpId: true } });
@@ -549,7 +554,7 @@ worksitesRouter.patch(
         // les listes — chantiers, messagerie…) ; le désarchivage suit si on rouvre le dossier.
         ...(data.status ? { archived: data.status === 'closed' } : {}),
         ...(contactsInput !== undefined
-          ? { contacts: { deleteMany: {}, create: (contactsInput ?? []).map((c, i) => ({ ...c, position: i })) } }
+          ? { contacts: { deleteMany: {}, create: (linkedContacts ?? []).map((c, i) => ({ ...c, position: i })) } }
           : {}),
       },
     });

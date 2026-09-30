@@ -1,4 +1,5 @@
 'use client';
+import { ContactsDialog } from '@/components/ContactRoleEditor';
 import { HardHat } from 'lucide-react';
 import { SkeletonRows, EmptyState, ErrorState } from '@/components/States';
 import { use, useState } from 'react';
@@ -30,7 +31,7 @@ interface Detail {
   worksite: {
     id: string; ref: string; title: string; status: string; priority: string; statusRaw: string | null;
     scope: string | null; billingMode: string | null; requestKind: string | null;
-    entity: string; address: string | null; box: string | null; city: string | null; unitLabel: string | null; billTo: string | null;
+    postalCode: string | null; entity: string; address: string | null; box: string | null; city: string | null; unitLabel: string | null; billTo: string | null;
     lat: number | null; lng: number | null; geoSetAt: string | null;
     startedOn: string | null; endedOn: string | null; quotedHt: number | null; quoteRef: string | null; description: string | null;
     accessNotes: string | null;
@@ -40,7 +41,7 @@ interface Detail {
     tenantName: string | null; tenantPhone: string | null; tenantPhone2: string | null; tenantEmail: string | null;
     client: { id: string; name: string } | null;
     billToContact: { id: string; name: string } | null;
-    contacts: { id: string; role: string; name: string; phone: string | null; email: string | null; contactFor: string | null }[];
+    contacts: { unitLabel?: string | null; contactId?: string | null; id: string; role: string; name: string; phone: string | null; email: string | null; contactFor: string | null }[];
     building: { id: string; name: string; photoThumbUrl: string | null; syndic: { name: string } | null } | null;
     manager: { id: string; displayName: string | null; firstName: string } | null;
     documents: { id: string; kind: string; number: string | null; draftRef: string | null; totalHt: number; status: string; issuedOn: string | null }[];
@@ -70,6 +71,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
     buildings: { id: string; name: string }[];
     people: { id: string; name: string }[];
   }>('/api/meta/pickers');
+  const [editingContacts, setEditingContacts] = useState(false);
   const [editing, setEditing] = useState(false);
   const [invoicing, setInvoicing] = useState<string | null>(null);
   const [tab, setTab] = useState<'overview' | 'tasks' | 'finances' | 'photos' | 'discussion'>('overview');
@@ -108,7 +110,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
 
   const editFields: FieldDef[] = [
     { name: 'title', label: 'Intitulé', required: true, full: true },
-    { name: 'clientId', label: 'Client / Immeuble', type: 'contact', full: true },
+    { name: 'clientId', label: 'Client / donneur d’ordre', type: 'contact', full: true },
     { name: 'buildingId', label: 'Immeuble / ACP / projet', type: 'contact', contactKindFilter: ['acp', 'developer'], placeholder: 'Chercher un immeuble / ACP / projet…', full: true },
     { name: 'managerId', label: 'Chef de chantier', type: 'select', options: (pick?.people ?? []).map((p) => ({ value: p.id, label: p.name })) },
     { name: 'entity', label: 'Entité', type: 'select', options: ENTITIES.map((e) => ({ value: e, label: ENTITY_LABEL[e] })) },
@@ -133,19 +135,13 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
     { name: 'billingCadence', label: 'Rythme de facturation', type: 'select', options: WORKSITE_BILLING_CADENCES.map((c) => ({ value: c, label: WORKSITE_BILLING_CADENCE_LABEL[c] })) },
     { name: 'billingConditions', label: 'Conditions convenues', type: 'textarea', full: true },
     { name: 'accessNotes', label: 'Accès et prise de rendez-vous', type: 'textarea', full: true },
-    { name: 'statusRaw', label: 'Statut d’origine (ancien fichier Excel)' },
     { name: 'description', label: 'Description', type: 'textarea', full: true },
-    { name: 'ownerName', label: 'Propriétaire — nom' },
-    { name: 'ownerPhone', label: 'Propriétaire — téléphone' },
-    { name: 'ownerEmail', label: 'Propriétaire — e-mail' },
-    { name: 'tenantName', label: 'Locataire — nom' },
-    { name: 'tenantPhone', label: 'Locataire — téléphone' },
-    { name: 'tenantPhone2', label: 'Locataire — téléphone 2' },
-    { name: 'tenantEmail', label: 'Locataire — e-mail' },
+
   ];
 
   return (
     <>
+      {editingContacts && <ContactsDialog title="Personnes de contact du chantier" initial={w.contacts} onClose={() => setEditingContacts(false)} onSave={async contacts => { await api(`/api/worksites/${id}`, { method: 'PATCH', body: { contacts } }); reload(); }}/>}
       {editing && (
         <FormModal
           title={`Modifier ${w.ref}`}
@@ -153,7 +149,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
           initial={{
             title: w.title, clientId: w.client?.id ?? '', buildingId: w.building?.id ?? '', managerId: w.manager?.id ?? '',
             entity: w.entity, status: w.status, priority: w.priority, scope: w.scope, billingMode: w.billingMode, requestKind: w.requestKind,
-            address: w.address, box: w.box, city: w.city, unitLabel: w.unitLabel,
+            address: w.address, box: w.box, postalCode: w.postalCode, city: w.city, unitLabel: w.unitLabel,
             startedOn: toDateInput(w.startedOn), endedOn: toDateInput(w.endedOn),
             quotedHt: w.quotedHt, quoteRef: w.quoteRef, billToContactId: w.billToContact?.id ?? '', statusRaw: w.statusRaw, description: w.description,
             billToAttn: w.billToAttn, billToEmail: w.billToEmail, clientRef: w.clientRef,
@@ -260,15 +256,15 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
                 </div>
               </div>
 
-              {w.contacts.length > 0 && (
+              {(
                 <div className="card card-pad" style={{ marginBottom: '1rem' }}>
-                  <div className="section-title" style={{ marginTop: 0 }}>Personnes de contact</div>
+                  <div className="wiz-section-head"><div className="section-title" style={{ marginTop: 0 }}>Personnes de contact</div><button className="btn" onClick={() => setEditingContacts(true)}>Gérer les contacts</button></div>{w.contacts.length === 0 && <p className="muted">Ajoutez les personnes à joindre pour les rendez-vous et le suivi.</p>}
                   <div className="info-grid">
                     {w.contacts.map((c) => (
                       <Info
                         key={c.id}
                         label={WORKSITE_CONTACT_ROLE_LABEL[c.role as keyof typeof WORKSITE_CONTACT_ROLE_LABEL] ?? c.role}
-                        value={`${c.name}${c.phone ? ` · ${c.phone}` : ''}${c.email ? ` · ${c.email}` : ''}${c.contactFor ? ` — ${WORKSITE_CONTACT_FOR_LABEL[c.contactFor as keyof typeof WORKSITE_CONTACT_FOR_LABEL] ?? c.contactFor}` : ''}`}
+                        value={<span>{c.contactId ? <Link href={`/app/contacts/${c.contactId}`}>{c.name}</Link> : c.name}{`${c.unitLabel ? ` · ${c.unitLabel}` : ''}${c.phone ? ` · ${c.phone}` : ''}${c.email ? ` · ${c.email}` : ''}${c.contactFor ? ` — ${WORKSITE_CONTACT_FOR_LABEL[c.contactFor as keyof typeof WORKSITE_CONTACT_FOR_LABEL] ?? c.contactFor}` : ''}`}</span>}
                       />
                     ))}
                   </div>
@@ -276,19 +272,20 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
               )}
 
               {(w.ownerName || w.tenantName) && (
-                <div className="card card-pad" style={{ marginBottom: '1rem' }}>
+                <details className="card card-pad" style={{ marginBottom: '1rem' }}>
+                  <summary>Anciennes coordonnées · conservées</summary><p className="wiz-hint">Rattachez les personnes dans « Gérer les contacts ». Ces informations restent disponibles pour vérification.</p>
                   <div className="info-grid">
                     {w.ownerName && (
-                      <Info label="Propriétaire" value={`${w.ownerName}${w.ownerPhone ? ` · ${w.ownerPhone}` : ''}${w.ownerEmail ? ` · ${w.ownerEmail}` : ''}`} />
+                      <Info label="Propriétaire · coordonnées historiques" value={`${w.ownerName}${w.ownerPhone ? ` · ${w.ownerPhone}` : ''}${w.ownerEmail ? ` · ${w.ownerEmail}` : ''}`} />
                     )}
                     {w.tenantName && (
                       <Info
-                        label="Locataire (contact terrain)"
+                        label="Locataire · coordonnées historiques"
                         value={`${w.tenantName}${w.tenantPhone ? ` · ${w.tenantPhone}` : ''}${w.tenantPhone2 ? ` / ${w.tenantPhone2}` : ''}${w.tenantEmail ? ` · ${w.tenantEmail}` : ''}`}
                       />
                     )}
                   </div>
-                </div>
+                </details>
               )}
 
               {w.description && (

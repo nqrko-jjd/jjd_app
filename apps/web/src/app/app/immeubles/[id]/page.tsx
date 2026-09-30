@@ -8,6 +8,7 @@ import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { PageHead, StatusBadge, Money, formatDateBE } from '@/lib/ui';
 import { FormModal, type FieldDef } from '@/components/FormModal';
+import { ContactsDialog } from '@/components/ContactRoleEditor';
 import { NewWorksiteWizard } from '@/components/NewWorksiteWizard';
 import { PhotoHeader } from '@/components/PhotoHeader';
 import { BUILDING_FIELDS } from '@/lib/forms';
@@ -16,7 +17,7 @@ import {
 } from '@jjd/shared';
 
 interface BContact {
-  id: string; role: string; name: string; phone: string | null; email: string | null; note: string | null;
+  id: string; contactId?: string | null; role: string; name: string; phone: string | null; email: string | null; note: string | null;
   contact: { id: string; name: string } | null;
 }
 interface BUnit {
@@ -42,14 +43,6 @@ interface Detail {
     }[];
   };
 }
-
-const BUILDING_CONTACT_FIELDS: FieldDef[] = [
-  { name: 'role', label: 'Rôle', type: 'select', options: BUILDING_CONTACT_ROLES.map((r) => ({ value: r, label: BUILDING_CONTACT_ROLE_LABEL[r] })) },
-  { name: 'name', label: 'Nom', required: true, full: true },
-  { name: 'phone', label: 'Téléphone' },
-  { name: 'email', label: 'E-mail' },
-  { name: 'note', label: 'Note', type: 'textarea', full: true },
-];
 
 const UNIT_FIELDS: FieldDef[] = [
   { name: 'label', label: 'Lot / appartement', required: true, placeholder: 'C1, Lot 12, 2A…' },
@@ -290,19 +283,10 @@ export default function ImmeubleDetail({ params }: { params: Promise<{ id: strin
           onSubmit={async (v) => { await api(`/api/buildings/${id}`, { method: 'PATCH', body: v }); closeAndReload(); }}
         />
       )}
-      {modal?.kind === 'contact' && (
-        <FormModal
-          title={modal.row ? 'Modifier le contact' : 'Nouveau contact'}
-          fields={BUILDING_CONTACT_FIELDS}
-          initial={(modal.row as unknown as Record<string, unknown>) ?? { role: 'concierge' }}
-          onClose={() => setModal(null)}
-          onSubmit={async (v) => {
-            const path = modal.row ? `/api/buildings/${id}/contacts/${(modal.row as BContact).id}` : `/api/buildings/${id}/contacts`;
-            await api(path, { method: modal.row ? 'PATCH' : 'POST', body: v });
-            closeAndReload();
-          }}
-        />
-      )}
+      {modal?.kind === 'contact' && <ContactsDialog building title={modal.row ? 'Modifier la personne de contact' : 'Ajouter une personne de contact'} initial={modal.row ? [modal.row as BContact] : []} onClose={() => setModal(null)} onSave={async ([person]) => {
+        const path = modal.row ? `/api/buildings/${id}/contacts/${modal.row.id}` : `/api/buildings/${id}/contacts`;
+        await api(path, { method: modal.row ? 'PATCH' : 'POST', body: person }); closeAndReload();
+      }}/>}
       {modal?.kind === 'unit' && (
         <FormModal
           title={modal.row ? 'Modifier le lot' : 'Nouveau lot'}

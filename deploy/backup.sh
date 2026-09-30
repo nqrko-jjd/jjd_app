@@ -1,16 +1,27 @@
 #!/usr/bin/env bash
 # Database + media checkpoint. Published filenames appear only after verification.
+#
+# Au plus une sauvegarde complète par jour (UTC) : le déploiement l'appelle à
+# chaque push sur main, et plusieurs pushes le même jour ne doivent pas
+# multiplier les ~4 Go de médias à chaque fois (vécu le 2026-09-30 : 16
+# sauvegardes en une journée, disque VPS à 99%). BACKUP_FORCE=1 force quand
+# même une sauvegarde fraîche (ex. juste avant une migration risquée).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 BACKUP_DIR="$(pwd)/backups"
 RETENTION_DAYS=45
-BACKUP_STAMP=$(date -u +%Y-%m-%dT%H-%M-%SZ)-$$
+TODAY=$(date -u +%Y-%m-%d)
+BACKUP_STAMP="${TODAY}T$(date -u +%H-%M-%SZ)-$$"
 if [ -f .env.production ]; then
   set -a
   source .env.production
   set +a
 fi
 mkdir -p "$BACKUP_DIR"
+if [ "${BACKUP_FORCE:-0}" != "1" ] && ls "$BACKUP_DIR"/jjd-db-"${TODAY}"T*.sql.gz >/dev/null 2>&1; then
+  echo "→ Sauvegarde déjà faite aujourd'hui ($TODAY) — rien à faire (BACKUP_FORCE=1 pour forcer)."
+  exit 0
+fi
 umask 077
 BACKUP_TMP=$(mktemp -d "$BACKUP_DIR/.pending-XXXXXX")
 trap 'rm -rf "$BACKUP_TMP"' EXIT

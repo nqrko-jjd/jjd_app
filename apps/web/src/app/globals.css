@@ -2288,3 +2288,11 @@ body.plan-wide .main { max-width: none; }
 .request-person span { color:#526559; font-size:14px; }
 .request-images { display:flex; flex-wrap:wrap; gap:10px; }
 .request-images img { width:140px; height:100px; object-fit:cover; border-radius:10px; }
+
+.fleet-card-info { display:grid; grid-template-columns:1fr 1fr; gap:14px; padding:0 18px 18px; }
+.fleet-card-info > div { display:flex; flex-direction:column; gap:4px; min-width:0; }
+.fleet-card-info span, .fleet-next span { font-size:12px; color:var(--ink-2); line-height:1.5; }
+.fleet-card-info strong { font-size:15px; overflow-wrap:anywhere; }
+.fleet-card-info .fleet-due { color:#a45721; }
+.fleet-next { display:flex; flex-direction:column; gap:5px; margin:0 18px 16px; padding:12px; background:var(--primary-soft); border-radius:12px; }
+.fleet-next strong { font-size:14px; line-height:1.5; }

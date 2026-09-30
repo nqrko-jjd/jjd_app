@@ -1,10 +1,12 @@
+import {vehicles,fleetApi,fleetDocument,resetFleet} from './fleet-fixtures';
+export { vehicles } from './fleet-fixtures';
 import {businessApi,resetBusiness} from './business-fixtures';
 export class ApiError extends Error {constructor(public status:number,message:string){super(message)}}
 export const setToken=()=>{};
 const key='jjd-isolated-preview-v3';
 const names=['José','Miguel','Paulo','Rui','André','Tiago','Lucas','Manuel','Bruno','Pedro','Antoine','Marc','Hugo','Arthur','Noah','Louis','Adam','Tom','Enzo','Léo','Gabriel','Oscar','Victor','Nicolas','Maxime','Alex','Samuel','Daniel','David','Julien'];
 export const people=names.map((name,i)=>({id:'p'+i,displayName:name,firstName:name,role:i===29?'foreman':'worker',specialties:[['Peinture','Plomberie','Rénovation'][i%3]],active:true,phone:null}));
-export const vehicles=Array.from({length:6},(_,i)=>({id:'v'+i,code:'V'+(i+1),plate:'DEMO-'+(i+1),brand:i%2?'Ford':'Renault',model:i%2?'Transit':'Trafic',seats:i===0?3:6,status:'active',excludedFromPlanning:false}));
+
 export const equipment=[{id:'eq1',name:'Déboucheur électrique'},{id:'eq2',name:'Échafaudage roulant'},{id:'eq3',name:'Airless peinture'}];
 const monday=new Date();monday.setHours(0,0,0,0);monday.setDate(monday.getDate()-((monday.getDay()+6)%7));
 const iso=(n:number,h:number)=>{const d=new Date(monday);d.setDate(d.getDate()+n);d.setHours(h);return d.toISOString()};
@@ -22,7 +24,7 @@ if(!db.portfolioDemoV1){
 }
 function save(){localStorage.setItem(key,JSON.stringify(db))}
 function hydrate(b:any,old:any={}){const x={allDay:false,team:null,consumables:[],leadPerson:null,driverPerson:null,meetingOnSite:true,meetingAddress:null,meetingBox:null,meetingPostalCode:null,meetingCity:null,note:null,materialsNote:null,...old,...b};return {...x,worksite:b.worksiteId?db.worksites.find((w:any)=>w.id===b.worksiteId):old.worksite,assignments:b.personIds?b.personIds.map((id:string)=>({person:people.find(p=>p.id===id)})):old.assignments||[],vehicles:b.vehicles?b.vehicles.map((v:any)=>v.vehicle?v:{vehicle:vehicles.find(x=>x.id===v.vehicleId),driver:people.find(p=>p.id===v.driverPersonId)||null}):old.vehicles||[],equipment:b.equipmentIds?b.equipmentIds.map((id:string)=>({equipment:equipment.find(e=>e.id===id)})):old.equipment||[]};}
-export function reset(){resetBusiness();localStorage.removeItem(key);location.reload()}
+export function reset(){resetFleet();resetBusiness();localStorage.removeItem(key);location.reload()}
 export function getWorksite(id:string){return db.worksites.find((w:any)=>w.id===id)}
 export function getEvents(id:string){return db.events.filter((e:any)=>e.worksite.id===id)}
 function dashboardKpis(){
@@ -33,6 +35,7 @@ function dashboardKpis(){
  return {invoicedMonth:total(rows('invoiced'),'totalHt'),invoicedPrevMonth:0,paidMonth:total(rows('collected'),'totalHt'),overdueAmount:overdue.reduce((s:number,d:any)=>s+Math.max(0,d.totalTtc-d.paidAmount),0),overdueCount:overdue.length,supplierOverdueAmount:total(suppliers,'ttc'),supplierOverdueCount:suppliers.length,openWorksites:db.worksites.filter((w:any)=>w.status==='in_progress').length,teamsOnSiteToday:3,receivableAmount:receivable.reduce((s:number,d:any)=>s+Math.max(0,d.totalTtc-d.paidAmount),0),quotesPendingAmount:total(quotes,'totalHt'),quotesPendingCount:quotes.length};
 }
 export async function api<T=unknown>(path:string,opts:any={}):Promise<T>{
+ const fleet=fleetApi(path,opts.method||'GET',opts.body);if(fleet!==undefined)return fleet as T;
  const business=businessApi(path,opts.method||'GET',opts.body,db,people);if(business!==undefined)return business as T;
  const url=new URL(path,'https://demo.invalid'),p=url.pathname,b=opts.body,method=opts.method||'GET';let result:any;
  if(p==='/api/assistant/status')result={enabled:false};
@@ -59,7 +62,7 @@ export async function api<T=unknown>(path:string,opts:any={}):Promise<T>{
  else if(p==='/api/worksites'&&method==='GET'){let items=db.worksites.filter((w:any)=>(!url.searchParams.get('q')||JSON.stringify(w).toLowerCase().includes(url.searchParams.get('q')!.toLowerCase()))&&(!url.searchParams.get('status')||url.searchParams.get('status')!.split(',').includes(w.status)));result={items,totalCount:items.length,page:1,pageSize:100,totalPages:1};}
  else if(p==='/api/worksites'&&method==='POST'){result={...defaults.worksites[0],...b,id:crypto.randomUUID(),ref:'DEMO-'+(db.worksites.length+101),client:db.worksites.map((w:any)=>w.client).find((c:any)=>c.id===b.clientId)||null};db.worksites.push(result);save();}
  else if(p.startsWith('/api/worksites/')&&method==='PATCH'){result=db.worksites.find((w:any)=>w.id===p.split('/').pop());Object.assign(result,b);save();}
- else if(p==='/api/planning'&&method==='GET')result={items:db.events.filter((e:any)=>(!url.searchParams.get('from')||e.endAt>url.searchParams.get('from')!)&&(!url.searchParams.get('to')||e.startAt<url.searchParams.get('to')!)),googleSync:false};
+ else if(p==='/api/planning'&&method==='GET')result={items:db.events.map((e:any)=>({...e,vehicles:e.vehicles.map((a:any)=>({...a,vehicle:vehicles.find(v=>v.id===a.vehicle.id)||a.vehicle}))})).filter((e:any)=>(!url.searchParams.get('from')||e.endAt>url.searchParams.get('from')!)&&(!url.searchParams.get('to')||e.startAt<url.searchParams.get('to')!)),googleSync:false};
  else if(p==='/api/planning'&&method==='POST'){result=hydrate({...b,id:crypto.randomUUID()});db.events.push(result);save();}
  else if(p.startsWith('/api/planning/')&&method==='PATCH'){const i=db.events.findIndex((e:any)=>e.id===p.split('/').pop());result=hydrate(b,db.events[i]);db.events[i]=result;save();}
  else if(p.startsWith('/api/planning/')&&method==='DELETE'){db.events=db.events.filter((e:any)=>e.id!==p.split('/').pop());save();result={ok:true};}
@@ -70,8 +73,10 @@ export async function api<T=unknown>(path:string,opts:any={}):Promise<T>{
  else throw new ApiError(400,'Cette action ne fait pas partie de ce premier aperçu. Aucun service réel n’a été contacté.');
  return result as T;
 }
-export async function apiBlobUrl():Promise<string>{throw new Error('Export non disponible dans cet aperçu')}
+export async function apiBlobUrl(path:string):Promise<string>{if(/^\/api\/vehicles\/[^/]+\/docs\/[^/]+\/file$/.test(path))return fleetDocument(path);throw new Error('Export non disponible dans cet aperçu')}
 export async function apiUpload<T>(path:string,form:FormData):Promise<T>{
+ if(/^\/api\/vehicles\/[^/]+\/(photo|docs\/[^/]+\/file)$/.test(path)){const file=form.get('file');if(!(file instanceof File)||!['application/pdf','image/png','image/jpeg','image/webp'].includes(file.type)||(path.endsWith('/photo')&&!file.type.startsWith('image/')))throw Error('Choisissez une image ou un PDF.');if(file.size>2*1024*1024)throw Error('Limite de maquette : 2 Mo par fichier.');const data=await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));reader.onerror=()=>reject(Error('Lecture impossible'));reader.readAsDataURL(file);});return api<T>(path,{method:'POST',body:path.endsWith('/photo')?{photoData:data}:{fileData:data}});}
+
  if(/^\/api\/worksites\/[^/]+\/thread\/photos$/.test(path)){const file=form.get('file');if(!(file instanceof File)||!['image/png','image/jpeg','image/webp','image/gif'].includes(file.type))throw Error('Choisissez une image JPG, PNG, WebP ou GIF.');if(file.size>2*1024*1024)throw Error('Limite de démonstration : 2 Mo par image.');const photoData=await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));reader.onerror=()=>reject(Error('Lecture impossible'));reader.readAsDataURL(file);});return api<T>(path,{method:'POST',body:{photoData}});}
  if(/^\/api\/buildings\/[^/]+\/photo$/.test(path)){const file=form.get('file');if(!(file instanceof File)||!file.type.startsWith('image/'))throw Error('Choisissez une image.');if(file.size>2*1024*1024)throw Error('Limite de démonstration : image de 2 Mo maximum.');const photoData=await new Promise<string>((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result));r.onerror=()=>reject(Error('Lecture impossible'));r.readAsDataURL(file);});return api<T>(path,{method:'POST',body:{photoData}});}
  throw new Error('Cet import n’est pas activé dans l’aperçu. Aucun fichier réel envoyé.');

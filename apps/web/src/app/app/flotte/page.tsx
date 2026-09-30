@@ -23,6 +23,7 @@ const NEW_VEHICLE_FIELDS: FieldDef[] = [
   { name: 'plate', label: 'Plaque' },
   { name: 'type', label: 'Type', placeholder: 'Camionette, Moto, Clark, Voiture…' },
   { name: 'status', label: 'Statut', type: 'select', required: true, options: VEHICLE_STATUSES.map((s) => ({ value: s, label: VEHICLE_STATUS_LABEL[s] })) },
+  { name: 'seats', label: 'Places assises (conducteur compris)', type: 'number' },
   { name: 'fuel', label: 'Carburant' },
   { name: 'driver', label: 'Conducteur' },
   { name: 'depot', label: 'Dépôt' },
@@ -59,6 +60,7 @@ export default function FlottePage() {
   const soon = Date.now() + 30 * 86400000;
   const ctx = useContextMenu<Vehicle>();
   const [mode, setMode] = useViewMode('flotte');
+  const [actionError, setActionError] = useState('');
   const [creating, setCreating] = useState(false);
 
   // ── Disponibilités — quel véhicule est libre / affecté / indisponible à une date donnée.
@@ -87,8 +89,10 @@ export default function FlottePage() {
       const vehicleEvents = events
         .filter((e) => e.vehicles.some((x) => x.vehicle.id === v.id))
         .sort((a, b) => a.startAt.localeCompare(b.startAt));
-      const todayEvent = vehicleEvents.find((e) => toDateInput(new Date(e.startAt)) === day);
-      const nextEvent = vehicleEvents.find((e) => toDateInput(new Date(e.startAt)) >= day);
+      const dayStart = new Date(`${day}T00:00:00`).getTime();
+      const dayEnd = new Date(`${addDaysStr(day, 1)}T00:00:00`).getTime();
+      const todayEvent = vehicleEvents.find((e) => new Date(e.startAt).getTime() < dayEnd && new Date(e.endAt).getTime() > dayStart);
+      const nextEvent = todayEvent ?? vehicleEvents.find((e) => new Date(e.startAt).getTime() >= dayStart);
       map.set(v.id, { status: todayEvent ? 'assigned' : 'available', nextEvent });
     }
     return map;
@@ -104,8 +108,9 @@ export default function FlottePage() {
   );
 
   async function setStatus(id: string, status: string) {
-    await api(`/api/vehicles/${id}`, { method: 'PATCH', body: { status } });
-    reload();
+    setActionError('');
+    try { await api(`/api/vehicles/${id}`, { method: 'PATCH', body: { status } }); reload(); }
+    catch (e) { setActionError(e instanceof Error ? e.message : 'Impossible de modifier le statut.'); }
   }
 
   function rowMenu(v: Vehicle): MenuItem[] {
@@ -134,7 +139,7 @@ export default function FlottePage() {
     monthlyPayment: (v: Vehicle) => v.monthlyPayment,
     nextInspection: (v: Vehicle) => (v.nextInspection ? new Date(v.nextInspection) : null),
   };
-  const colFilter = useColumnFilter<Vehicle>(mode === 'list' ? vehiclesAll : filteredFleet, vehicleAccessors);
+  const colFilter = useColumnFilter<Vehicle>(mode === 'list' && statusFilter === 'all' ? vehiclesAll : filteredFleet, vehicleAccessors);
   const sort = useSort<Vehicle>(colFilter.rows, vehicleAccessors);
 
   return (
@@ -167,7 +172,7 @@ export default function FlottePage() {
       <PageHead
         eyebrow="Ressources"
         title="Flotte"
-        sub={data ? `${vehiclesAll.filter((v) => v.status === 'active').length} véhicules actifs · clic droit pour les actions rapides` : undefined}
+        sub={data ? `${vehiclesAll.filter((v) => v.status === 'active').length} véhicules actifs · disponibilités, places et suivi` : undefined}
         action={
           <div className="row">
             <button className="btn" onClick={() => setAssignmentModal({ prefill: { date: day } })}><CalendarPlus size={15} strokeWidth={2} /> Nouvelle affectation</button>
@@ -201,6 +206,7 @@ export default function FlottePage() {
         <button className={statusFilter === 'unavailable' ? 'on' : ''} onClick={() => setStatusFilter('unavailable')}>Indisponible</button>
       </div>
 
+      {actionError && <p className="wiz-error" role="alert">{actionError}</p>}
       {loading && <SkeletonRows />}
 
       {error && !loading && <ErrorState message={error} onRetry={reload} />}
@@ -227,7 +233,11 @@ export default function FlottePage() {
                   <span className={`badge ${badgeTone}`}>{badgeLabel}</span>
                 </div>
                 <div className="avail-card-name">{vehicleLabel(v)}</div>
+                <div className="fleet-card-info"><div><span>Places, conducteur compris</span><strong>{v.seats ?? 'À préciser'}</strong></div><div><span>Conducteur habituel</span><strong>{v.driver || 'À affecter'}</strong></div><div><span>Contrôle technique</span><strong className={v.nextInspection && new Date(v.nextInspection).getTime() < soon ? 'fleet-due' : ''}>{formatDateBE(v.nextInspection)}</strong></div></div>
+                {info?.nextEvent && <div className="fleet-next"><span>Prochaine affectation</span><strong>{info.nextEvent.worksite.ref} · {info.nextEvent.worksite.title}</strong><span>{formatDateBE(info.nextEvent.startAt)}</span></div>}
+
                 <div className="avail-card-actions">
+                  {!v.excludedFromPlanning && status !== 'unavailable' && <button className="btn" onClick={() => setAssignmentModal({ prefill: { vehicleId: v.id, date: day } })}>Affecter</button>}
                   <Link href={`/app/flotte/${v.id}`} className="btn primary" style={{ flex: 1, justifyContent: 'center' }}>Ouvrir →</Link>
                 </div>
               </div>

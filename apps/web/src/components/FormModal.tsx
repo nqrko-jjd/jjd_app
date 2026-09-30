@@ -2,6 +2,7 @@
 import { useEffect, useId, useState } from 'react';
 import { AddressAutocomplete } from './AddressAutocomplete';
 import { ContactPicker } from './ContactPicker';
+import { api } from '@/lib/api';
 
 export interface FieldDef {
   name: string;
@@ -28,6 +29,10 @@ export interface FieldDef {
    *  d'une ou plusieurs catégories (ex. `['acp', 'developer']` pour ne chercher que des
    *  immeubles/projets). */
   contactKindFilter?: string[];
+  /** Pour un champ `type: 'contact'` (ex. immeuble lié) : quand on choisit un contact, préremplit
+   *  ces champs avec son adresse — seulement s'ils sont encore vides, pour ne jamais écraser une
+   *  adresse déjà saisie à la main (ex. un lot précis dans un grand immeuble). */
+  fillAddressFrom?: { address?: string; postalCode?: string; city?: string };
 }
 
 export function FormModal({
@@ -155,7 +160,23 @@ export function FormModal({
                   value={(v[f.name] as string) ?? ''}
                   typeFilter={f.contactTypeFilter ?? 'client'}
                   kindFilter={f.contactKindFilter}
-                  onChange={(cid) => setV((prev) => ({ ...prev, [f.name]: cid }))}
+                  onChange={(cid) => {
+                    setV((prev) => ({ ...prev, [f.name]: cid }));
+                    if (cid && f.fillAddressFrom) {
+                      const fill = f.fillAddressFrom;
+                      api<{ contact: { address: string | null; postalCode: string | null; city: string | null } }>(`/api/contacts/${cid}`)
+                        .then(({ contact }) => {
+                          setV((prev) => {
+                            const next = { ...prev };
+                            if (fill.address && !prev[fill.address] && contact.address) next[fill.address] = contact.address;
+                            if (fill.postalCode && !prev[fill.postalCode] && contact.postalCode) next[fill.postalCode] = contact.postalCode;
+                            if (fill.city && !prev[fill.city] && contact.city) next[fill.city] = contact.city;
+                            return next;
+                          });
+                        })
+                        .catch(() => {});
+                    }
+                  }}
                   placeholder={f.placeholder}
                   required={f.required}
                 />

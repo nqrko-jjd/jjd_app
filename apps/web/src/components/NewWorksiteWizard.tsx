@@ -201,7 +201,24 @@ export function NewWorksiteWizard({
                 <label>Rattacher à un immeuble / projet existant (facultatif)</label>
                 <ContactPicker
                   value={v.buildingId}
-                  onChange={(id, label) => patch({ buildingId: id, buildingLabel: label })}
+                  onChange={(id, label) => {
+                    patch({ buildingId: id, buildingLabel: label });
+                    // Préremplit l'adresse depuis l'immeuble choisi — seulement si elle est
+                    // encore vide, pour ne jamais écraser une adresse déjà saisie (ex. un lot
+                    // précis dans un grand immeuble).
+                    if (id) {
+                      api<{ contact: { address: string | null; postalCode: string | null; city: string | null } }>(`/api/contacts/${id}`)
+                        .then(({ contact }) => {
+                          setV((prev) => ({
+                            ...prev,
+                            address: prev.address || contact.address || prev.address,
+                            postalCode: prev.postalCode || contact.postalCode || prev.postalCode,
+                            city: prev.city || contact.city || prev.city,
+                          }));
+                        })
+                        .catch(() => {});
+                    }
+                  }}
                   kindFilter={['acp', 'developer']}
                   placeholder="Chercher un immeuble / ACP / projet…"
                 />

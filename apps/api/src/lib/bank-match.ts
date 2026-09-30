@@ -8,6 +8,7 @@
  */
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../db.js';
+import { syncLedgerEntryForDocument } from './documents.js';
 
 export interface TxLite {
   id: string;
@@ -26,6 +27,7 @@ export interface LedgerLite {
   bankComm: string | null;
   supplierName: string | null;
   contactName: string | null;
+  documentId: string | null;
 }
 
 const digits = (s: string | null | undefined) => (s ?? '').replace(/\D/g, '');
@@ -116,13 +118,14 @@ export async function autoMatchAll(
   const ledgerRows = await prisma.ledgerEntry.findMany({
     select: {
       id: true, ttc: true, ht: true, date: true, direction: true, bankComm: true,
-      supplierName: true, contact: { select: { name: true } },
+      supplierName: true, contact: { select: { name: true } }, documentId: true,
     },
   });
   const ledgers: LedgerLite[] = ledgerRows.map((l) => ({
     id: l.id, ttc: l.ttc, ht: l.ht, date: l.date, direction: l.direction, bankComm: l.bankComm,
-    supplierName: l.supplierName, contactName: l.contact?.name ?? null,
+    supplierName: l.supplierName, contactName: l.contact?.name ?? null, documentId: l.documentId,
   }));
+  const documentIdByLedger = new Map(ledgers.map((l) => [l.id, l.documentId]));
 
   // index montant (au centime) + index communication structurée -> lookup O(1)
   const byAmount = new Map<number, LedgerLite[]>();
@@ -153,24 +156,57 @@ export async function autoMatchAll(
   // date de la transaction (pour poser paidOn sur l'écriture rapprochée)
   const txDate = new Map(txs.map((t) => [t.id, t.bookingDate]));
 
-  // écriture par lots : transaction bancaire + statut « payé » de l'écriture liée
+  // Écritures synchronisées depuis une facture de vente (LedgerEntry.documentId non nul,
+  // voir syncLedgerEntryForDocument) : la FACTURE est la source de vérité, pas le grand
+  // livre. La marquer payée directement ici (sans passer par le Document) désynchronise
+  // durablement facture et grand livre — c'est exactement le bug remonté le 2026-09-30
+  // (facture restée « envoyée » malgré un rapprochement bancaire réussi).
+  const docUpdates = updates.filter((u) => documentIdByLedger.get(u.ledgerId));
+  const ledgerOnlyUpdates = updates.filter((u) => !documentIdByLedger.get(u.ledgerId));
+
+  const docTotals = docUpdates.length
+    ? new Map(
+        (
+          await prisma.document.findMany({
+            where: { id: { in: docUpdates.map((u) => documentIdByLedger.get(u.ledgerId)!) } },
+            select: { id: true, totalTtc: true },
+          })
+        ).map((d) => [d.id, d.totalTtc]),
+      )
+    : new Map<string, number>();
+
+  // écriture par lots : transactions bancaires + statut « payé » des écritures non liées à une facture
   for (let i = 0; i < updates.length; i += 100) {
-    await prisma.$transaction(
-      updates.slice(i, i + 100).flatMap((u) => [
-        prisma.bankTransactionMatch.create({
-          data: { bankTransactionId: u.id, ledgerEntryId: u.ledgerId },
-        }),
-        prisma.bankTransaction.update({
-          where: { id: u.id },
-          data: { matchConfidence: u.confidence, matchedAt: now },
-        }),
-        prisma.ledgerEntry.update({
-          where: { id: u.ledgerId },
-          data: { paymentStatus: 'Payé', paidOn: txDate.get(u.id) ?? now },
-        }),
-      ]),
-    );
+    const batch = updates.slice(i, i + 100);
+    await prisma.$transaction([
+      ...batch.map((u) =>
+        prisma.bankTransactionMatch.create({ data: { bankTransactionId: u.id, ledgerEntryId: u.ledgerId } }),
+      ),
+      ...batch.map((u) =>
+        prisma.bankTransaction.update({ where: { id: u.id }, data: { matchConfidence: u.confidence, matchedAt: now } }),
+      ),
+      ...ledgerOnlyUpdates
+        .filter((u) => batch.includes(u))
+        .map((u) =>
+          prisma.ledgerEntry.update({
+            where: { id: u.ledgerId },
+            data: { paymentStatus: 'Payé', paidOn: txDate.get(u.id) ?? now },
+          }),
+        ),
+    ]);
   }
+
+  // factures de vente : on passe par le Document puis on répercute sur le grand livre
+  // (syncLedgerEntryForDocument), au lieu d'écrire directement dans LedgerEntry.
+  for (const u of docUpdates) {
+    const documentId = documentIdByLedger.get(u.ledgerId)!;
+    await prisma.document.update({
+      where: { id: documentId },
+      data: { status: 'paid', paidAmount: docTotals.get(documentId) ?? 0, paidOn: txDate.get(u.id) ?? now },
+    });
+    await syncLedgerEntryForDocument(documentId);
+  }
+
   const strong = updates.filter((u) => u.confidence === 'strong').length;
   return { strong, good: updates.length - strong, scanned: txs.length };
 }

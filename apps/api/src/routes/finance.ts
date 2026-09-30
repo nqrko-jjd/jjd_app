@@ -466,6 +466,9 @@ financeRouter.post(
         where: { id: documentId },
         data: { status: 'paid', paidAmount: doc?.totalTtc ?? 0, paidOn: tx.bookingDate ?? new Date() },
       });
+      // Répercute sur l'écriture du grand livre synchronisée — sinon elle reste « Non payé »
+      // malgré la facture marquée payée (utilisé par Analyse / CA encaissé par chantier).
+      await syncLedgerEntryForDocument(documentId);
     }
 
     await prisma.bankTransaction.update({ where: { id: tx.id }, data: { matchConfidence: 'manual', matchedAt: new Date() } });
@@ -487,6 +490,7 @@ financeRouter.delete(
     }
     if (m.documentId) {
       await prisma.document.update({ where: { id: m.documentId }, data: { status: 'sent', paidAmount: 0, paidOn: null } }).catch(() => {});
+      await syncLedgerEntryForDocument(m.documentId).catch(() => {});
     }
 
     const remaining = await prisma.bankTransactionMatch.count({ where: { bankTransactionId: req.params.id } });

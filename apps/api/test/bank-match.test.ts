@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { prisma } from '../src/db.js';
 import { pickMatch, autoMatchAll, type LedgerLite } from '../src/lib/bank-match.js';
 import { normalizeStructuredComm, normalizePontoTx } from '../src/lib/ponto.js';
+import { syncLedgerEntryForDocument } from '../src/lib/documents.js';
 
 const L = (o: Partial<LedgerLite>): LedgerLite => ({
   id: 'x', ttc: null, ht: 0, date: null, direction: 'sale', bankComm: null,
@@ -105,4 +106,39 @@ test('autoMatchAll : lie la comm structurée (strong) et le montant+nom (good)',
 
   const unmatched = await prisma.bankTransaction.findFirst({ where: { source: 'test', counterpartyName: 'Inconnu' }, include: { matches: true } });
   assert.equal(unmatched?.matches.length, 0);
+});
+
+/* --- régression : une facture de vente rapprochée automatiquement doit passer
+   « payée » (pas seulement son écriture de grand livre synchronisée) --- */
+test('autoMatchAll : une facture de vente rapprochée passe "paid", pas seulement son écriture', async () => {
+  const doc = await prisma.document.create({
+    data: {
+      kind: 'invoice', number: 'F-BM-TEST-1', status: 'sent',
+      issuedOn: new Date('2026-06-01'), lockedAt: new Date('2026-06-01'),
+      totalHt: 1000, totalVat: 210, totalTtc: 1210, paidAmount: 0,
+      source: 'test',
+    },
+  });
+  await syncLedgerEntryForDocument(doc.id);
+
+  const tx = await prisma.bankTransaction.create({
+    data: { amount: 1210, bookingDate: new Date('2026-06-05'), structuredComm: null, counterpartyName: null, side: 'in', source: 'test' },
+  });
+
+  try {
+    await autoMatchAll({ txFilter: { id: tx.id } });
+
+    const updatedDoc = await prisma.document.findUnique({ where: { id: doc.id } });
+    assert.equal(updatedDoc?.status, 'paid', 'la facture doit passer "paid", pas rester "sent"');
+    assert.equal(updatedDoc?.paidAmount, 1210);
+    assert.ok(updatedDoc?.paidOn);
+
+    const ledger = await prisma.ledgerEntry.findUnique({ where: { documentId: doc.id } });
+    assert.equal(ledger?.paymentStatus, 'Payé', 'le grand livre doit aussi refléter le paiement');
+  } finally {
+    await prisma.bankTransactionMatch.deleteMany({ where: { bankTransactionId: tx.id } });
+    await prisma.bankTransaction.delete({ where: { id: tx.id } });
+    await prisma.ledgerEntry.deleteMany({ where: { documentId: doc.id } });
+    await prisma.document.delete({ where: { id: doc.id } });
+  }
 });

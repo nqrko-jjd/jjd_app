@@ -10,6 +10,7 @@ import { PageHead, StatusBadge, PriorityBadge, EntityBadge, ScopeBadge, BillingM
 import { FormModal, toDateInput, type FieldDef } from '@/components/FormModal';
 import { ChantierThread } from '@/components/ChantierThread';
 import { WorksiteTasks } from '@/components/WorksiteTasks';
+import { WorksiteFinanceSummary } from '@/components/WorksiteFinanceSummary';
 import { CollapsibleSection } from '@/components/CollapsibleSection';
 import { StackedBar, ProgressBars } from '@/lib/charts';
 import {
@@ -340,32 +341,13 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
 
       {tab === 'finances' && (
         <>
+          {data.margin && <WorksiteFinanceSummary margin={data.margin} worksiteId={w.id} billingName={w.billToContact?.name ?? w.billTo ?? w.client?.name ?? 'Non renseigné'} billingContactId={w.billToContact?.id ?? (w.billTo ? null : w.client?.id)} labour={data.margin.labour} documentCount={w.documents.length} />}
           {data.margin && (
             <>
-              <div className="kpi-group" style={{ marginTop: 0 }}>Marché &amp; encaissements</div>
-              <div className="kpis">
-                <Kpi ic={FileText} label="Devisé HT" value={<Money value={data.margin.quotedHt} />} sub="Montant du marché" hero />
-                <Kpi ic={Euro} label="Facturé HT" value={<Money value={data.margin.invoicedHt} />} sub={data.margin.quotedHt > 0 ? `${Math.round((data.margin.invoicedHt / data.margin.quotedHt) * 100)} % du marché` : 'Rien facturé'} />
-                <Kpi ic={Wallet} label="Encaissé HT" value={<Money value={data.margin.paidHt} />} sub={data.margin.invoicedHt > 0 ? `${Math.round((data.margin.paidHt / data.margin.invoicedHt) * 100)} % du facturé` : 'Rien encaissé'} />
-              </div>
-              <div className="kpi-group">Coûts</div>
-              <div className="kpis">
-                <Kpi ic={FileText} label="Coût matériaux" value={<Money value={data.margin.materialCost} />} sub="Achats rattachés" />
-                <Kpi ic={CheckCircle2} label="Coût main-d'œuvre" value={<Money value={data.margin.labourCost} />} sub="Pointages inclus" />
-                <Kpi
-                  ic={Fuel}
-                  label="Coût véhicule"
-                  value={<Money value={data.margin.vehicleCost} />}
-                  sub={data.margin.transport.trips.length
-                    ? `${data.margin.transport.trips.length} j · fixe ${data.margin.transport.fixedCost.toFixed(0)} € + route ${data.margin.transport.fuelCost.toFixed(0)} €`
-                    : 'Aucun trajet imputé'}
-                />
-              </div>
-              <div className="kpi-group">Résultat</div>
+              <div className="kpi-group">Résultat &amp; rentabilité</div>
               <div className="kpis" style={{ marginBottom: '1.5rem' }}>
                 <Kpi ic={TrendingUp} label="Marge réelle" value={<Money value={data.margin.realMargin} sign />} sub={data.margin.realMarginPct != null ? `${data.margin.realMarginPct} % du marché` : 'Non calculable'} neg={data.margin.realMargin < 0} />
                 <Kpi ic={TrendingUp} label="Marge hypothétique" value={<Money value={data.margin.forecastMargin} sign />} sub="Devisé − coûts engagés" neg={data.margin.forecastMargin < 0} />
-                <Kpi ic={Percent} label="Reste à facturer" value={<Money value={data.margin.leftToInvoice} />} sub="Sur le devisé HT" />
                 {data.margin.partnerShare > 0 && <Kpi ic={Percent} label="Part GT (33 %)" value={<Money value={data.margin.partnerShare} />} sub="Apporteur d'affaire" />}
               </div>
               <TransportDetail t={data.margin.transport} />
@@ -429,7 +411,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
                 </table>
               </div>
             )}
-            <Link href="/app/documents" className="btn" style={{ marginTop: '0.7rem', padding: '0.2rem 0.6rem', fontSize: '0.78rem' }}>Tous les documents →</Link>
+            <Link href={`/app/documents?worksiteId=${encodeURIComponent(w.id)}`} className="btn" style={{ marginTop: '0.7rem' }}>Documents de ce chantier</Link>
           </CollapsibleSection>
 
           <WorksiteExpenses worksiteId={w.id} />

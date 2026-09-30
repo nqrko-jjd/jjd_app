@@ -298,17 +298,17 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
                   (le .tbl-wrap défile alors horizontalement) que de devenir illisible. Les icônes
                   d'action (déplacer/dupliquer/supprimer) sont empilées à la verticale plutôt qu'à
                   l'horizontale pour tenir dans une colonne étroite. */}
-              <table className="tbl" style={{ tableLayout: 'fixed', width: '100%', minWidth: 800 }}>
+              <table className="tbl document-lines-table" style={{ tableLayout: 'fixed', width: '100%', minWidth: 1060 }}>
                 <thead>
                   <tr>
                     <th style={{ width: 32 }}></th>
                     <th>Désignation</th>
-                    <th style={{ width: 60, textAlign: 'right' }}>Qté</th>
-                    <th style={{ width: 80 }}>Unité</th>
-                    <th style={{ width: 86, textAlign: 'right' }}>Prix HT</th>
-                    {showDiscount && <th style={{ width: 56, textAlign: 'right' }}>Rem.%</th>}
-                    <th style={{ width: 64 }}>TVA %</th>
-                    <th style={{ width: 92, textAlign: 'right' }}>Total HT</th>
+                    <th style={{ width: 104, textAlign: 'right' }}>Quantité</th>
+                    <th style={{ width: 100 }}>Unité</th>
+                    <th style={{ width: 122, textAlign: 'right' }}>Prix HT</th>
+                    {showDiscount && <th style={{ width: 100, textAlign: 'right' }}>Rem.%</th>}
+                    <th style={{ width: 94 }}>TVA %</th>
+                    <th style={{ width: 120, textAlign: 'right' }}>Total HT</th>
                     <th style={{ width: 34 }}></th>
                   </tr>
                 </thead>
@@ -349,7 +349,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
                       </td>
                       {l.kind === 'item' ? (
                         <>
-                          <td><input className="input" type="number" step="any" style={{ textAlign: 'right' }} value={l.qty} onChange={(e) => setLine(i, { qty: Number(e.target.value) })} /></td>
+                          <td><input aria-label={`Quantité ligne ${i + 1}`} className="input" type="number" step="any" style={{ textAlign: 'right' }} value={l.qty} onChange={(e) => setLine(i, { qty: Number(e.target.value) })} /></td>
                           <td>
                             <select className="select" value={l.unit ?? ''} onChange={(e) => setLine(i, { unit: e.target.value })}>
                               <option value="">—</option>

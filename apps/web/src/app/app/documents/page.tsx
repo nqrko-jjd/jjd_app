@@ -73,6 +73,8 @@ function DocumentsInner() {
   useEffect(() => { setPage(1); }, [tab, status, q, sort]);
 
   const params = new URLSearchParams();
+  const worksiteId = sp.get('worksiteId');
+  if (worksiteId) params.set('worksiteId', worksiteId);
   if (active.kind) params.set('kind', active.kind);
   if (active.scope) params.set('scope', active.scope);
   if (status && active.kind) params.set('status', status);
@@ -127,7 +129,7 @@ function DocumentsInner() {
   async function create(kind: string) {
     setBusy(true);
     try {
-      const { document } = await api<{ document: { id: string } }>('/api/documents', { method: 'POST', body: { kind } });
+      const { document } = await api<{ document: { id: string } }>('/api/documents', { method: 'POST', body: { kind, ...(worksiteId ? { worksiteId } : {}), ...(sp.get('billingContactId') ? { contactId: sp.get('billingContactId') } : {}) } });
       router.push(`/app/documents/${document.id}`);
     } finally {
       setBusy(false);
@@ -222,7 +224,8 @@ function DocumentsInner() {
         }
       />
 
-      {dash && (active.kind === 'quote' || active.kind === 'invoice') && (
+      {worksiteId && <div className="worksite-context-banner"><span>Documents filtrés pour ce chantier</span><Link href={`/app/chantiers/${encodeURIComponent(worksiteId)}`} className="btn ghost">Retour au chantier</Link><Link href="/app/documents" className="btn ghost">Tous les documents</Link></div>}
+      {dash && !worksiteId && (active.kind === 'quote' || active.kind === 'invoice') && (
         <div className="panel doc-stats" style={{ marginBottom: '1rem' }}>
           {active.kind === 'quote' && (
             <>

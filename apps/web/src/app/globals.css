@@ -1936,6 +1936,34 @@ body.plan-wide .main { max-width: none; }
 @media(max-width:1100px) { .preview-worksite-stats { grid-template-columns: repeat(2,1fr); } .preview-worksite-layout { grid-template-columns: 1fr; } .preview-finance-kpis { grid-template-columns: repeat(2,minmax(0,1fr)); } .preview-finance-grid { grid-template-columns: 1fr; } }
 @media(max-width:700px) { .preview-worksite-tabs { width: 100%; } .preview-worksite-tabs button { flex: 1; justify-content: center; padding-inline: .65rem; } .preview-worksite-tabs button span { display: none; } .preview-finance-head { align-items: stretch; flex-direction: column; } .preview-finance-kpis { grid-template-columns: 1fr 1fr; } .preview-billable-row { grid-template-columns: auto 1fr auto; } .preview-billable-row button { grid-column: 2; justify-self: start; } .preview-doc-row { grid-template-columns: auto 1fr auto; } .preview-doc-row button { grid-column: 2; justify-self: start; } .preview-invoice-scrim { padding: 0; } .preview-invoice-modal { width: 100vw; max-height: 100dvh; min-height: 100dvh; border-radius: 0; } .preview-invoice-body { grid-template-columns: 1fr; } .preview-invoice-body > aside { border-left: 0; border-top: 1px solid var(--line); } .preview-invoice-types { grid-template-columns: 1fr; } .preview-invoice-modal > footer { flex-direction: column-reverse; } .preview-invoice-modal > footer .btn { width: 100%; } }
 
+.worksite-finance-summary { margin-bottom: 1.5rem; }
+.worksite-finance-heading { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:1.5rem; border-radius:18px; background:linear-gradient(125deg,var(--primary-ink),var(--primary)); color:white; }
+.worksite-finance-heading .eyebrow { color:var(--gold); }
+.worksite-finance-heading h2 { color:white; margin:.3rem 0; }
+.worksite-finance-heading p { color:#d8e6df; margin:0; }
+.worksite-finance-totals { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:.85rem; margin:1rem 0; }
+.worksite-finance-totals article { padding:1.25rem; background:var(--surface); border:1px solid var(--line); border-radius:14px; min-width:0; }
+.worksite-finance-totals article.remaining { background:var(--gold-soft); border-color:var(--gold); }
+.worksite-finance-totals span { font-size:.875rem; color:var(--ink-2); }
+.worksite-finance-totals strong { display:block; font-size:1.5rem; margin:.45rem 0; overflow-wrap:anywhere; }
+.worksite-finance-totals small { display:block; font-size:.8rem; line-height:1.5; color:var(--ink-2); }
+.worksite-finance-costs { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.85rem; }
+.worksite-finance-costs article { display:flex; gap:.75rem; align-items:flex-start; padding:1rem; border:1px solid var(--line); border-radius:13px; background:var(--surface); }
+.worksite-finance-costs article > svg { color:var(--primary); flex-shrink:0; }
+.worksite-finance-costs div { flex:1; }
+.worksite-finance-costs strong,.worksite-finance-costs span,.worksite-finance-costs small,.worksite-finance-costs a { display:block; }
+.worksite-finance-costs span { margin:.3rem 0; color:var(--ink-2); font-size:.875rem; }
+.worksite-finance-costs small { color:var(--ink-2); font-size:.8rem; }
+.worksite-finance-costs a { color:var(--primary); font-size:.875rem; }
+.worksite-finance-costs b { font-variant-numeric:tabular-nums; }
+.worksite-finance-check,.worksite-context-banner { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:.8rem; padding:1rem; margin:1rem 0; background:var(--primary-soft); border-radius:12px; font-size:.875rem; }
+.document-lines-table .input,.document-lines-table .select { width:100%; min-width:0; padding:.65rem .45rem; font-size:.875rem; min-height:42px; }
+.document-lines-table td { vertical-align:top; padding:.65rem .5rem; }
+.document-lines-table input[type=number] { font-variant-numeric:tabular-nums; }
+@media(max-width:1100px) { .worksite-finance-costs { grid-template-columns:1fr; } }
+@media(max-width:700px) { .worksite-finance-heading { flex-direction:column; align-items:stretch; } .worksite-finance-totals { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(max-width:380px) { .worksite-finance-totals { grid-template-columns:1fr; } }
+
 /* Pages administratives enrichies de l'aperçu privé. */
 .preview-page-title { display: flex; align-items: flex-end; justify-content: space-between; gap: 1.5rem; margin-bottom: 1.4rem; }
 .preview-page-title h1 { margin: .25rem 0 .35rem; color: var(--primary-ink); font-size: clamp(1.8rem,3vw,2.55rem); }

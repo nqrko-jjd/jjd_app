@@ -60,7 +60,7 @@ export default function VehicleDetail({ params }: { params: Promise<{ id: string
       : <EmptyState icon={Truck} title="Véhicule introuvable" text="Ce véhicule n’existe plus ou a été supprimé. Retournez à la flotte." action={<Link href="/app/flotte" className="btn primary">Retour à la flotte</Link>} />;
   }
   const v = data.vehicle;
-  const ins = v.insurances[0];
+
   const nextPay = v.payments.find((p) => p.dueOn && new Date(p.dueOn).getTime() >= Date.now());
 
   async function removeDoc(docId: string) {
@@ -173,63 +173,70 @@ export default function VehicleDetail({ params }: { params: Promise<{ id: string
         <button className="btn" onClick={() => setEditing(true)}>Modifier</button>
       </div>
 
-      <div className="detail-hero">
-        <div className="eyebrow">Véhicule</div>
-        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'nowrap', gap: '1rem' }}>
-          <h1>{[v.brand, v.model].filter(Boolean).join(' ')}</h1>
-          <div className="row" style={{ gap: '0.4rem' }}>
-            {v.excludedFromPlanning && <span className="badge plain">Hors planning</span>}
-            <VehicleStatusBadge status={v.status} />
+      <div className="vehicle-sheet">
+      <section className="vehicle-cover">
+        <div className="vehicle-cover-copy">
+          <div className="eyebrow">Flotte · fiche véhicule</div>
+          <h1>{[v.brand, v.model].filter(Boolean).join(' ') || v.code || 'Véhicule'}</h1>
+          <div className="vehicle-identity">
+            {v.plate && <PlateBE plate={v.plate} size={78} />}
+            {[v.code, v.type].filter(Boolean).join(' · ')}
+          </div>
+          <div className="row"><VehicleStatusBadge status={v.status} />{v.excludedFromPlanning && <span className="badge plain">Hors planning</span>}</div>
+          <div className="vehicle-essentials">
+            {present(v.driver) && <Info label="Conducteur habituel" value={v.driver} />}
+            {present(v.seats) && <Info label="Capacité" value={`${v.seats} places`} />}
+            {present(v.depot) && <Info label="Dépôt" value={v.depot} />}
+            {present(v.km) && <Info label="Kilométrage" value={`${v.km} km`} />}
           </div>
         </div>
-        <div className="sub">{`${v.plate ?? 'sans plaque'} · ${v.code ?? ''} · ${v.type ?? ''}`}</div>
+        <div className="vehicle-photo"><PhotoHeader
+          basePath={`/api/vehicles/${v.id}`} photoUrl={v.photoUrl}
+          alt={[v.brand, v.model].filter(Boolean).join(' ')}
+          fallback={<Truck size={64} strokeWidth={1.2} />} onChange={reload}
+        /></div>
+      </section>
+      <div className="vehicle-actions">
+        <button className="btn primary" onClick={() => setRepairModal('new')}>+ Enregistrer un entretien</button>
+        <button className="btn" onClick={() => setAddingDoc(true)}>+ Ajouter un document</button>
+        <Link href="/app/achats" className="btn ghost">Achats & dépenses ↗</Link>
       </div>
-      <PhotoHeader
-        basePath={`/api/vehicles/${v.id}`}
-        photoUrl={v.photoUrl}
-        alt={[v.brand, v.model].filter(Boolean).join(' ')}
-        fallback={v.plate ? <PlateBE plate={v.plate} size={78} /> : <Truck size={40} strokeWidth={1.6} />}
-        onChange={reload}
-      />
-      <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', marginBottom: '1.4rem' }}>
-        <Info label="Conducteur" value={v.driver ?? '—'} />
-        <Info label="Places" value={v.seats ?? '—'} />
-        <Info label="Carburant" value={v.fuel ?? '—'} />
-        <Info label="Km" value={v.km ?? '—'} />
-        <Info label="1re mise en circ." value={formatDateBE(v.firstRegistration)} />
-        <Info label="Contrôle technique" value={formatDateBE(v.nextInspection)} />
-        <Info label="VIN" value={<span className="mono" style={{ fontSize: '0.8rem' }}>{v.vin ?? '—'}</span>} />
-        <Info label="Taxe circ. / BIV" value={`${v.circulationTax ? `${v.circulationTax} €` : '—'} / ${v.biv ? `${v.biv} €` : '—'}`} />
-        <Info label="Équipements" value={v.equipment ?? '—'} />
-        <Info label="Dépôt" value={v.depot ?? '—'} />
-      </div>
-
-      <CostSection v={v} />
-
-      <section className="card card-pad" style={{ marginBottom: '1.4rem' }}>
-        <h2 style={{ marginBottom: '0.6rem' }}>Assurance</h2>
-        {ins ? (
-          <div className="row" style={{ gap: '2rem' }}>
-            <span>{ins.provider} <span className="muted">· contrat {ins.contractNumber ?? '—'}</span></span>
-            <span><Money value={ins.monthlyAmount} />/mois</span>
-            <span className="muted"><Money value={ins.annualAmount} />/an · {ins.paymentMode ?? ''}</span>
+      <div className="vehicle-overview">
+        <section className="vehicle-panel">
+          <div className="eyebrow">Au quotidien</div><h2>Repères du véhicule</h2>
+          <div className="vehicle-facts">
+            {present(v.nextInspection) && <Info label="Prochain contrôle technique" value={<span className={new Date(v.nextInspection!).getTime() < Date.now() + 30 * 86400000 ? 'badge crit' : ''}>{formatDateBE(v.nextInspection)}</span>} />}
+            {present(v.fuel) && <Info label="Carburant" value={v.fuel} />}
+            {present(v.firstRegistration) && <Info label="Première mise en circulation" value={formatDateBE(v.firstRegistration)} />}
+            {present(v.vin) && <Info label="Numéro de châssis (VIN)" value={v.vin} />}
+            {present(v.equipment) && <Info label="Équipements à bord" value={v.equipment} />}
           </div>
-        ) : <span className="muted">Aucune assurance enregistrée.</span>}
-      </section>
-
-      <section className="card card-pad" style={{ marginBottom: '1.4rem' }}>
-        <h2 style={{ marginBottom: '0.6rem' }}>Acquisition — {v.acquisitionMode ?? '?'}</h2>
-        <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
-          <Info label="Date d'achat" value={formatDateBE(v.purchaseDate)} />
-          <Info label="Prix HTVA" value={<Money value={v.purchasePriceHt} />} />
-          <Info label="Montant financé" value={<Money value={v.financedAmount} />} />
-          <Info label="Mensualité" value={<Money value={v.monthlyPayment} />} />
-          <Info label="Acompte" value={<Money value={v.downPayment} />} />
-          <Info label="Valeur résiduelle" value={<Money value={v.residualValue} />} />
-          <Info label="Durée / Fin" value={`${v.financeMonths ?? '—'} mois · ${formatDateBE(v.financeEndOn)}`} />
-          <Info label="Organisme" value={`${v.financeCompany ?? '—'} ${v.financeContract ? `(${v.financeContract})` : ''}`} />
+          {v.note && <div className="vehicle-note"><strong>À savoir</strong><p>{v.note}</p></div>}
+          {![v.nextInspection, v.fuel, v.firstRegistration, v.vin, v.equipment, v.note].some(present) && <button className="btn ghost" onClick={() => setEditing(true)}>Compléter les informations</button>}
+        </section>
+        <CostSection v={v} />
+      </div>
+      {(v.insurances.some(i => Object.values(i).some(present)) || [v.acquisitionMode,v.purchaseDate,v.purchasePriceHt,v.financedAmount,v.monthlyPayment,v.downPayment,v.residualValue,v.financeMonths,v.financeEndOn,v.financeCompany,v.financeContract,v.circulationTax,v.biv].some(present)) &&
+      <details className="vehicle-fold">
+        <summary><span><strong>Assurance & financement</strong><small>Contrats, acquisition et taxes</small></span><span className="vehicle-fold-hint">Détails</span></summary>
+        <div className="vehicle-fold-body">
+          {v.insurances.filter(i => Object.values(i).some(present)).map((ins, index) => <section key={index} className="vehicle-subsection"><h3>Assurance{ins.provider ? ` · ${ins.provider}` : ''}</h3><div className="vehicle-facts">
+            {present(ins.contractNumber) && <Info label="Contrat" value={ins.contractNumber} />}
+            {present(ins.monthlyAmount) && <Info label="Mensualité" value={<Money value={ins.monthlyAmount} />} />}
+            {present(ins.annualAmount) && <Info label="Montant annuel" value={<Money value={ins.annualAmount} />} />}
+            {present(ins.paymentMode) && <Info label="Paiement" value={ins.paymentMode} />}
+          </div></section>)}
+          <div className="vehicle-facts">
+            {present(v.acquisitionMode) && <Info label="Acquisition" value={v.acquisitionMode} />}
+            {present(v.purchaseDate) && <Info label="Date d’achat" value={formatDateBE(v.purchaseDate)} />}
+            {([['Prix HTVA',v.purchasePriceHt],['Montant financé',v.financedAmount],['Mensualité',v.monthlyPayment],['Acompte',v.downPayment],['Valeur résiduelle',v.residualValue],['Taxe de circulation',v.circulationTax],['BIV',v.biv]] as const).filter(([,value]) => present(value)).map(([label,value]) => <Info key={label} label={label} value={<Money value={value} />} />)}
+            {present(v.financeMonths) && <Info label="Durée" value={`${v.financeMonths} mois`} />}
+            {present(v.financeEndOn) && <Info label="Fin du financement" value={formatDateBE(v.financeEndOn)} />}
+            {present(v.financeCompany) && <Info label="Organisme" value={v.financeCompany} />}
+            {present(v.financeContract) && <Info label="Référence du contrat" value={v.financeContract} />}
+          </div>
         </div>
-      </section>
+      </details>}
 
       {v.payments.length > 0 && (
         <section style={{ marginBottom: '1.4rem' }}>
@@ -253,6 +260,7 @@ export default function VehicleDetail({ params }: { params: Promise<{ id: string
         </section>
       )}
 
+      {v.docs.length > 0 && (
       <section style={{ marginBottom: '1.4rem' }}>
         <div className="section-title">
           Documents
@@ -282,7 +290,9 @@ export default function VehicleDetail({ params }: { params: Promise<{ id: string
           </div>
         )}
       </section>
+      )}
 
+      {v.repairs.length > 0 && (
       <section style={{ marginBottom: '1.4rem' }}>
         <div className="section-title">
           Réparations{v.repairs.length > 0 && ` — ${totalRepairs.toLocaleString('fr-BE', { maximumFractionDigits: 0 })} €`}
@@ -313,7 +323,9 @@ export default function VehicleDetail({ params }: { params: Promise<{ id: string
           </div>
         )}
       </section>
+      )}
 
+      {v.ledgerEntries.length > 0 && (
       <section style={{ marginBottom: '1.4rem' }}>
         <div className="section-title">
           Factures liées (Achats)
@@ -347,6 +359,7 @@ export default function VehicleDetail({ params }: { params: Promise<{ id: string
           </div>
         )}
       </section>
+      )}
 
       {v.fines.length > 0 && (
         <section>
@@ -368,6 +381,7 @@ export default function VehicleDetail({ params }: { params: Promise<{ id: string
           </div>
         </section>
       )}
+      </div>
     </>
   );
 }
@@ -408,45 +422,33 @@ function Info({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
+function present(value: unknown) { return value !== null && value !== undefined && value !== ''; }
+
 function CostSection({ v }: { v: Detail['vehicle'] }) {
   const conso = v.fuelConsoL100 ?? 0;
   const price = v.fuelPricePerL ?? 0;
   const extra = v.costPerKmExtra ?? 0;
   const perKm = conso > 0 && price > 0 ? (conso / 100) * price + extra : extra > 0 ? extra : null;
   const b = v.costBreakdown;
-  const configured = v.fuelConsoL100 != null || v.fuelPricePerL != null || v.costPerKmExtra != null
-    || v.parkingMonthly != null || v.otherMonthly != null;
-
-  return (
-    <section className="card card-pad" style={{ marginBottom: '1.4rem' }}>
-      <h2 style={{ marginBottom: '0.3rem' }}>Coût de revient — imputé aux chantiers</h2>
-      <p className="muted" style={{ fontSize: '0.85rem', marginTop: 0 }}>
-        Les jours où ce véhicule est planifié sur un chantier, on impute : un aller-retour dépôt ↔ chantier
-        (carburant + usure) + une quote-part journalière des coûts fixes. Réglages dans « Modifier ».
-      </p>
-
-      {!configured && <p className="muted" style={{ fontSize: '0.85rem' }}>Pas encore réglé — clique « Modifier » ci-dessus.</p>}
-
-      <div className="info-grid" style={{ marginTop: '0.6rem' }}>
-        <Info label="Consommation" value={v.fuelConsoL100 != null ? `${v.fuelConsoL100} L/100 km` : '—'} />
-        <Info label="Prix carburant" value={v.fuelPricePerL != null ? `${v.fuelPricePerL} €/L` : '—'} />
-        <Info label="Coût/km supplémentaire" value={v.costPerKmExtra != null ? <Money value={v.costPerKmExtra} /> : '—'} />
-        <Info label="Parking / garage" value={v.parkingMonthly != null ? <><Money value={v.parkingMonthly} />/mois</> : '—'} />
-        <Info label="Autres frais fixes" value={v.otherMonthly != null ? <><Money value={v.otherMonthly} />/mois</> : '—'} />
+  const configured = [v.fuelConsoL100,v.fuelPricePerL,v.costPerKmExtra,v.parkingMonthly,v.otherMonthly].some(present) || (b?.fixed.monthly ?? 0) > 0;
+  if (!configured) return null;
+  return <section className="vehicle-panel vehicle-cost">
+    <div className="eyebrow">Budget véhicule</div><h2>Coût de revient</h2>
+    <div className="vehicle-cost-totals">
+      {b && <div><span>Frais fixes / mois</span><strong><Money value={b.fixed.monthly} /></strong></div>}
+      {perKm != null && <div><span>Carburant + usure</span><strong>{perKm.toFixed(3)} <small>€/km</small></strong></div>}
+    </div>
+    {b && <p className="vehicle-cost-caption">Soit <strong><Money value={b.fixed.perDay} /></strong> de frais fixes par jour de chantier.</p>}
+    <details className="vehicle-cost-detail"><summary>Comprendre le calcul</summary>
+      <p className="muted">Chaque jour planifié : un aller-retour dépôt–chantier (carburant et usure), plus la quote-part des frais fixes. Réglages dans « Modifier ».</p>
+      <div className="vehicle-facts">
+        {present(v.fuelConsoL100) && <Info label="Consommation" value={`${v.fuelConsoL100} L/100 km`} />}
+        {present(v.fuelPricePerL) && <Info label="Prix carburant" value={`${v.fuelPricePerL} €/L`} />}
+        {present(v.costPerKmExtra) && <Info label="Supplément / km" value={<Money value={v.costPerKmExtra} />} />}
+        {present(v.parkingMonthly) && <Info label="Parking / mois" value={<Money value={v.parkingMonthly} />} />}
+        {present(v.otherMonthly) && <Info label="Autres frais / mois" value={<Money value={v.otherMonthly} />} />}
+        {b && <><Info label="Assurance / mois" value={<Money value={b.fixed.insurance} />} /><Info label="Financement / mois" value={<Money value={b.fixed.financing} />} /><Info label="Taxe + BIV / mois" value={<Money value={b.fixed.tax} />} /><Info label="Base de répartition" value={`${b.workDaysPerYear} jours ouvrés / an`} /></>}
       </div>
-
-      {b && (
-        <div className="info-grid" style={{ marginTop: '1rem' }}>
-          <Info label="Assurance /mois" value={<Money value={b.fixed.insurance} />} />
-          <Info label="Financement /mois" value={<Money value={b.fixed.financing} />} />
-          <Info label="Taxe + BIV /mois" value={<Money value={b.fixed.tax} />} />
-          <Info label="Parking + autres /mois" value={<Money value={b.fixed.parking + b.fixed.other} />} />
-          <Info label="Total fixe /mois" value={<strong><Money value={b.fixed.monthly} /></strong>} />
-          <Info label="Coût fixe / jour de chantier" value={<strong><Money value={b.fixed.perDay} /></strong>} />
-          <Info label="Carburant + usure" value={perKm != null ? `${perKm.toFixed(3)} €/km` : '—'} />
-          <Info label="Base de répartition" value={`${b.workDaysPerYear} j ouvrés / an`} />
-        </div>
-      )}
-    </section>
-  );
+    </details>
+  </section>;
 }

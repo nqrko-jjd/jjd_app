@@ -68,10 +68,42 @@ export function mapNominatimHit(h: NominatimSearchHit): AddressHit {
   return { label, street, postalCode: a.postcode ?? '', city, lat: Number(h.lat), lng: Number(h.lon) };
 }
 
-/** Suggestions d'adresse au fil de la frappe (type-ahead), biaisées Belgique. */
+interface PhotonHit {
+  properties: {
+    street?: string; housenumber?: string; postcode?: string;
+    city?: string; town?: string; village?: string; name?: string;
+  };
+  geometry: { coordinates: [number, number] }; // [lon, lat]
+}
+
+/** Transforme un résultat Photon en suggestion utilisable — même forme que mapNominatimHit. */
+export function mapPhotonHit(h: PhotonHit): AddressHit {
+  const p = h.properties;
+  const street = [p.street, p.housenumber].filter(Boolean).join(' ') || p.name || '';
+  const city = p.city || p.town || p.village || '';
+  const short = [street, [p.postcode, city].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+  return { label: short || street || city, street, postalCode: p.postcode ?? '', city, lat: h.geometry.coordinates[1], lng: h.geometry.coordinates[0] };
+}
+
+/**
+ * Suggestions d'adresse au fil de la frappe (type-ahead), biaisées Belgique — via Photon
+ * (Komoot, basé sur OpenStreetMap comme Nominatim), qui tolère les fautes/variantes
+ * orthographiques ("Elizabeth" trouve "Albert-Elisabeth") contrairement à la recherche texte
+ * stricte de Nominatim. Repli sur Nominatim si Photon est indisponible ou sans résultat.
+ */
 export async function searchAddresses(query: string, limit = 6): Promise<AddressHit[]> {
   const q = query.trim();
   if (q.length < 3) return [];
+  try {
+    const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(`${q} Belgique`)}&limit=${limit}&lang=fr`;
+    const r = await fetch(url, { headers: { 'User-Agent': 'JJD-App/1.0 (info@jjd-consult.be)' }, signal: AbortSignal.timeout(5000) });
+    if (r.ok) {
+      const body = (await r.json()) as { features: PhotonHit[] };
+      if (body.features?.length) return body.features.map(mapPhotonHit);
+    }
+  } catch {
+    /* Photon indisponible — repli Nominatim ci-dessous */
+  }
   const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&countrycodes=be&limit=${limit}&${ACCEPT_LANGUAGE}&q=${encodeURIComponent(q)}`;
   const r = await throttledFetch(url);
   if (!r.ok) return [];

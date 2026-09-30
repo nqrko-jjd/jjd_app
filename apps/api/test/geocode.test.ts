@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mapNominatimHit } from '../src/lib/geocode.js';
+import { mapNominatimHit, mapPhotonHit } from '../src/lib/geocode.js';
 
 test('mapNominatimHit : rue + numéro + code postal + ville extraits du détail Nominatim', () => {
   const hit = mapNominatimHit({
@@ -43,4 +43,27 @@ test('mapNominatimHit : label court "rue, code postal ville" plutôt que le disp
 test('mapNominatimHit : sans rue/ville structurées, repli sur display_name pour le label', () => {
   const hit = mapNominatimHit({ lat: '50.1', lon: '4.2', display_name: 'Belgique' });
   assert.equal(hit.label, 'Belgique');
+});
+
+test('mapPhotonHit : rue + numéro + code postal + ville extraits du détail Photon', () => {
+  const hit = mapPhotonHit({
+    properties: { street: 'Avenue Albert-Elisabeth', housenumber: '66', postcode: '1200', city: 'Woluwe-Saint-Lambert' },
+    geometry: { coordinates: [4.402417, 50.8406129] },
+  });
+  assert.equal(hit.street, 'Avenue Albert-Elisabeth 66');
+  assert.equal(hit.postalCode, '1200');
+  assert.equal(hit.city, 'Woluwe-Saint-Lambert');
+  assert.equal(hit.lat, 50.8406129);
+  assert.equal(hit.lng, 4.402417);
+  assert.equal(hit.label, 'Avenue Albert-Elisabeth 66, 1200 Woluwe-Saint-Lambert');
+});
+
+test('mapPhotonHit : town/village en repli quand city absente', () => {
+  const hit = mapPhotonHit({ properties: { street: 'Rue Test', village: 'Waterloo', postcode: '1410' }, geometry: { coordinates: [4.5, 50.5] } });
+  assert.equal(hit.city, 'Waterloo');
+});
+
+test('mapPhotonHit : sans rue, repli sur le nom du lieu', () => {
+  const hit = mapPhotonHit({ properties: { name: 'Grand-Place', city: 'Bruxelles' }, geometry: { coordinates: [4.35, 50.85] } });
+  assert.equal(hit.street, 'Grand-Place');
 });

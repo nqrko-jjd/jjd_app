@@ -354,15 +354,17 @@ export default function PlanningPage() {
             {view === 'month' ? "Aujourd'hui" : view === 'day' ? "Aujourd'hui" : 'Cette semaine'}
           </button>
           <button type="button" className="btn" onClick={() => (view === 'month' ? shiftMonth(1) : view === 'day' ? shiftDay(1) : shiftWeek(1))}>→</button>
-
-        </div>
-      </div>
-
-      <div className="plan-filters">
+          <details className="plan-filter-menu" onKeyDown={(e) => { if (e.key === 'Escape') { e.currentTarget.open = false; e.currentTarget.querySelector('summary')?.focus(); } }}>
+            <summary className="btn" title="Recherche et filtres du planning">
+              Filtres{(search || worksiteStatusFilter || worksiteFilter) && <span className="plan-filter-count">{Number(Boolean(search)) + Number(Boolean(worksiteStatusFilter)) + Number(Boolean(worksiteFilter))}</span>}
+              {worksiteStatusFilter && <span className="plan-filter-active">{WORKSITE_STATUS_LABEL[worksiteStatusFilter as keyof typeof WORKSITE_STATUS_LABEL]}</span>}
+              <span aria-hidden="true">⌄</span>
+            </summary>
+      <div className="plan-filter-panel">
         {view !== 'month' && view !== 'day' && (
           <label className="plan-search">
             <Search size={16} strokeWidth={2} />
-            <input placeholder="Rechercher un chantier, une équipe…" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <input aria-label="Rechercher dans le planning" placeholder="Rechercher un chantier, une équipe…" value={search} onChange={(e) => setSearch(e.target.value)} />
           </label>
         )}
         {view === 'workers' && (
@@ -377,9 +379,9 @@ export default function PlanningPage() {
             <option key={status} value={status}>{WORKSITE_STATUS_LABEL[status]} · {worksiteStatusCounts[status]}</option>
           ) : null)}
         </select>
-        <select className="select" value={worksiteFilter} onChange={(e) => setWorksiteFilter(e.target.value)}>
+        <select className="select" aria-label="Filtrer par chantier" value={worksiteFilter} onChange={(e) => setWorksiteFilter(e.target.value)}>
           <option value="">Tous les chantiers</option>
-          {statusFilteredWorksites.map((w) => <option key={w.id} value={w.id}>{w.ref} · {w.city}</option>)}
+          {statusFilteredWorksites.map((w) => <option key={w.id} value={w.id}>{w.ref} · {w.title}</option>)}
         </select>
         {view === 'workers' && (
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem' }}>
@@ -387,7 +389,14 @@ export default function PlanningPage() {
             Libres le {trackedShort}
           </label>
         )}
+        <button type="button" className="btn ghost" onClick={() => { setSearch(''); setWorksiteStatusFilter(''); setWorksiteFilter(''); setSpecialtyFilter(''); setOnlyFree(false); }}>Réinitialiser les filtres</button>
       </div>
+          </details>
+
+        </div>
+      </div>
+
+
 
       {observationWorksites.length > 0 && (
         <button

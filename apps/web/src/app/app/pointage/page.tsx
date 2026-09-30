@@ -30,15 +30,18 @@ export default function PointagePage() {
   const [openPerson, setOpenPerson] = useState<string | null>(null);
 
   async function act(id: string, action: 'approve' | 'reject') {
-    await api(`/api/timesheet/entries/${id}/${action}`, { method: 'POST' });
-    reload();
+    try { await api(`/api/timesheet/entries/${id}/${action}`, { method: 'POST' }); reload(); }
+    catch(e){setFlash({tone:'crit',text:e instanceof Error?e.message:'Impossible de modifier le pointage.'});}
   }
   async function approveAll() {
+    try {
     const r = await api<{ approved: number }>('/api/timesheet/entries/approve-all', { method: 'POST' });
     setFlash({ tone: 'success', text: `${r.approved} pointage(s) validé(s).` });
     reload();
+    } catch(e){setFlash({tone:'crit',text:e instanceof Error?e.message:'Validation impossible.'});}
   }
   async function approvePerson(name: string, entries: Pending[]) {
+    try {
     // les lignes « hors zone » restent à contrôler une par une, comme pour « Tout valider »
     const ids = entries.filter((e) => !e.geoFlag).map((e) => e.id);
     const skipped = entries.length - ids.length;
@@ -48,6 +51,7 @@ export default function PointagePage() {
       text: `${name} : ${ids.length} pointage(s) validé(s)${skipped ? ` — ${skipped} hors zone laissé(s) à contrôler` : ''}.`,
     });
     reload();
+    } catch(e){reload();setFlash({tone:'crit',text:e instanceof Error?e.message:'Certaines lignes n’ont pas pu être validées. Vérifiez les lignes restantes.'});}
   }
 
   const items = data?.items ?? [];
@@ -82,7 +86,7 @@ export default function PointagePage() {
       {flash && (
         <Banner
           tone={flash.tone}
-          title={flash.tone === 'success' ? 'Terminé' : 'Import impossible'}
+          title={flash.tone === 'success' ? 'Terminé' : 'Action à vérifier'}
           onClose={() => setFlash(null)}
           action={flash.tone === 'success' ? <Link href="/app/pointage/decomptes">Voir le décompte</Link> : undefined}
         >
@@ -251,6 +255,7 @@ function TimeEntryModal({ onClose, onDone }: { onClose: () => void; onDone: () =
     if (hours <= 0) { setErr('Le créneau ne laisse aucune heure de travail une fois la pause déduite.'); return; }
     setBusy(true);
     setErr(null);
+    const savedIds: string[] = [];
     try {
       for (const personId of personIds) {
         await api('/api/timesheet/entries', {
@@ -264,10 +269,12 @@ function TimeEntryModal({ onClose, onDone }: { onClose: () => void; onDone: () =
             note: note.trim() || null,
           },
         });
+        savedIds.push(personId);
       }
       onDone();
     } catch (e2) {
-      setErr((e2 as Error).message ?? 'Erreur');
+      setPersonIds(ids=>ids.filter(id=>!savedIds.includes(id)));
+      setErr(`${savedIds.length ? `${savedIds.length} pointage(s) enregistré(s). Seules les personnes restantes sont sélectionnées. ` : ''}${(e2 as Error).message ?? 'Erreur'}`);
       setBusy(false);
     }
   }

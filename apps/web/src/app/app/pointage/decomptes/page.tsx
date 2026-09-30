@@ -37,6 +37,7 @@ export default function DecomptesPage() {
   const [open, setOpen] = useState<string | null>(null);
   const [detail, setDetail] = useState<Record<string, Detail>>({});
   const [editing, setEditing] = useState<{ personId: string; entry: DetailEntry } | null>(null);
+  const [actionError, setActionError] = useState('');
 
   function shift(delta: number) {
     const d = new Date(y, m - 1 + delta, 1);
@@ -44,8 +45,11 @@ export default function DecomptesPage() {
     setOpen(null); setDetail({});
   }
   async function loadDetail(personId: string) {
+    setActionError('');
+    try {
     const d = await api<Detail>(`/api/statements/${personId}?year=${y}&month=${m}`);
     setDetail((x) => ({ ...x, [personId]: d }));
+    } catch(e){setOpen(null);setActionError(e instanceof Error?e.message:'Impossible de charger ce décompte.');}
   }
   async function toggle(personId: string) {
     if (open === personId) { setOpen(null); return; }
@@ -57,8 +61,10 @@ export default function DecomptesPage() {
   }
   async function deleteEntry(personId: string, entryId: string) {
     if (!confirm('Supprimer ce pointage ? Cette action est irréversible.')) return;
+    try {
     await api(`/api/timesheet/entries/${entryId}`, { method: 'DELETE' });
     await refreshAfterChange(personId);
+    } catch(e){setActionError(e instanceof Error?e.message:'Suppression impossible.');}
   }
 
   const rows = data?.rows ?? [];
@@ -111,6 +117,7 @@ export default function DecomptesPage() {
       )}
 
       {loading && <SkeletonRows />}
+      {actionError && <p className="state error" role="alert">{actionError}</p>}
 
       {error && !loading && <ErrorState message={error} onRetry={reload} />}
       {data && rows.length === 0 && <EmptyState

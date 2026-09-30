@@ -12,6 +12,17 @@ try {
  const db={worksites:[0,1,2,3].map(i=>({id:'w'+i,ref:'DEMO-'+i,title:'Chantier '+i,address:'Adresse',city:'Bruxelles',client:{id:'c'+i,name:'Client Démo'},status:i===3?'on_hold':'in_progress',building:{id:'b'+i,name:'Immeuble '+i},quotedHt:18000,invoicedHt:4000})),events:[]};
  const people=['José','Miguel','Rui'].map((displayName,i)=>({id:'p'+i,displayName}));
  const api=(p,m='GET',b)=>businessApi(p,m,b,db,people);
+ const costBefore=api('/api/worksites/w0').margin.labourCost;
+ const hourEntry=api('/api/timesheet/entries','POST',{personId:'p0',worksiteId:'w0',date:'2026-09-30',hours:4,task:'Recette heures'}).entry;
+ assert.equal(hourEntry.status,'submitted');
+ assert.equal(api('/api/worksites/w0').margin.labourCost,costBefore+100);
+ api('/api/timesheet/entries/'+hourEntry.id+'/approve','POST');
+ assert(!api('/api/timesheet/pending').items.some(e=>e.id===hourEntry.id));
+ assert(api('/api/statements/p0?year=2026&month=9').entries.some(e=>e.id===hourEntry.id&&e.status==='approved'));
+ api('/api/timesheet/entries/approve-all','POST');
+ assert(api('/api/timesheet/pending').items.every(e=>e.geoFlag));
+ api('/api/timesheet/entries/'+hourEntry.id,'DELETE');
+ assert.equal(api('/api/worksites/w0').margin.labourCost,costBefore);
  const task=api('/api/tasks','POST',{title:'Recette tâche commune',worksiteId:'w0',assigneeIds:['p0'],checklist:[{label:'Contrôler',done:false}]}).task;
  assert(api('/api/worksites/w0/tasks').items.some(t=>t.id===task.id));
  api('/api/tasks/'+task.id,'PATCH',{worksiteId:'w1',assigneeIds:['p1'],status:'done',checklist:[{label:'Contrôler',done:true}]});

@@ -1,0 +1,35 @@
+name: Statut environnement de test
+
+# Affiche la branche/commit actuellement déployés sur /opt/jjd-test et l'état
+# des conteneurs, sans rien modifier. Utilise la même clé SSH restreinte que
+# deploy-test.yml (voir ce fichier pour le détail de la sécurité).
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  status:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Préparer la clé SSH dédiée (test uniquement)
+        env:
+          TEST_SSH_KEY: ${{ secrets.JJD_TEST_SSH_KEY }}
+          TEST_HOST: ${{ secrets.JJD_TEST_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$TEST_SSH_KEY" > ~/.ssh/jjd_test_deploy
+          chmod 600 ~/.ssh/jjd_test_deploy
+          printf '%s ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIlHHQGGqyKKptWREMbgfjmQP2lCvMNlkPd9+BgsYA9J\n' "$TEST_HOST" > ~/.ssh/known_hosts
+
+      - name: Lire le statut sur /opt/jjd-test
+        env:
+          TEST_USER: ${{ secrets.JJD_TEST_USER }}
+          TEST_HOST: ${{ secrets.JJD_TEST_HOST }}
+        run: |
+          set -eo pipefail
+          ssh -i ~/.ssh/jjd_test_deploy \
+              -o StrictHostKeyChecking=yes \
+              -o ConnectTimeout=15 \
+              "${TEST_USER}@${TEST_HOST}" \
+              -- "status" | tee "$GITHUB_STEP_SUMMARY"

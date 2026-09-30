@@ -1,0 +1,61 @@
+name: Déploiement environnement de test
+
+# Déploie une branche ou une PR sur l'environnement de test isolé
+# (/opt/jjd-test sur le VPS) — jamais sur la production (/opt/jjd, intouchée
+# par ce workflow). Voir docs/deploiement-test.md pour le fonctionnement
+# complet : sécurité, garde-fou de schéma, préservation des données.
+#
+# Prérequis VPS (déjà en place) : /opt/jjd-test cloné, .env.test et
+# docker-compose.test.yml présents (jamais modifiés par ce workflow), base et
+# médias de test déjà restaurés, /opt/jjd-test-deploy.sh exécutable.
+#
+# Secrets dédiés (distincts de ceux du déploiement production) :
+#   JJD_TEST_HOST, JJD_TEST_USER, JJD_TEST_SSH_KEY
+# La clé JJD_TEST_SSH_KEY est restreinte côté VPS (authorized_keys,
+# `command=/opt/jjd-test-deploy.sh`) : quoi que ce workflow envoie, seul ce
+# script peut s'exécuter — aucun accès à la production même en cas de fuite.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branche à déployer, ou pr-<numéro> pour une pull request (ex: redesign/stock-detail ou pr-2)"
+        required: true
+        type: string
+
+concurrency:
+  group: deploy-jjd-test
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Préparer la clé SSH dédiée (test uniquement)
+        env:
+          TEST_SSH_KEY: ${{ secrets.JJD_TEST_SSH_KEY }}
+          TEST_HOST: ${{ secrets.JJD_TEST_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$TEST_SSH_KEY" > ~/.ssh/jjd_test_deploy
+          chmod 600 ~/.ssh/jjd_test_deploy
+          # Clé d'hôte du VPS épinglée (non secrète, vérifiée le 2026-09-30).
+          printf '%s ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIlHHQGGqyKKptWREMbgfjmQP2lCvMNlkPd9+BgsYA9J\n' "$TEST_HOST" > ~/.ssh/known_hosts
+
+      - name: Déployer la référence demandée sur /opt/jjd-test
+        env:
+          # Indirection par variable d'environnement : l'entrée utilisateur
+          # (ref) n'est jamais interpolée directement dans le script shell,
+          # pour éviter toute injection côté runner GitHub.
+          REF: ${{ inputs.ref }}
+          TEST_USER: ${{ secrets.JJD_TEST_USER }}
+          TEST_HOST: ${{ secrets.JJD_TEST_HOST }}
+        run: |
+          set -eo pipefail
+          echo "Référence demandée : $REF"
+          ssh -i ~/.ssh/jjd_test_deploy \
+              -o StrictHostKeyChecking=yes \
+              -o ConnectTimeout=15 \
+              "${TEST_USER}@${TEST_HOST}" \
+              -- "$REF" | tee "$GITHUB_STEP_SUMMARY"

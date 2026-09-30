@@ -123,10 +123,12 @@ export function FormModal({
               ) : f.type === 'textarea' ? (
                 <textarea id={f.name} className="input" rows={3} value={(v[f.name] as string) ?? ''} onChange={(e) => setV({ ...v, [f.name]: e.target.value })} placeholder={f.placeholder} />
               ) : f.type === 'select' ? (
-                <select id={f.name} className="select" value={(v[f.name] as string) ?? ''} onChange={(e) => setV({ ...v, [f.name]: e.target.value })}>
+                <div><select id={f.name} className="select" value={(v[f.name] as string) ?? ''} onChange={(e) => setV({ ...v, [f.name]: e.target.value })}>
                   <option value="">—</option>
                   {(f.options ?? []).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
+                {f.action && <button type="button" className="btn" style={{marginTop:8}} disabled={!!actionBusy} onClick={() => runAction(f)}>{actionBusy === f.name ? '…' : f.action.label}</button>}
+                {actionErr && f.action && <span role="alert" className="muted">{actionErr}</span>}</div>
               ) : f.type === 'address' ? (
                 <AddressAutocomplete
                   id={f.name}

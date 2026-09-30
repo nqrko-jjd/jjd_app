@@ -80,3 +80,21 @@ test('planning : plusieurs véhicules, un conducteur différent par véhicule', 
   assert.equal(after1.event.vehicles[0].vehicle.id, v2);
   assert.equal(after1.event.vehicles[0].driver, null);
 });
+
+test('entretien : facture existante, validation et déliaison sans duplication', async () => {
+ const entry=await prisma.ledgerEntry.create({data:{direction:'purchase',docNumber:'TEST-ENTRETIEN',ht:100,ttc:121}});
+ const wrong=await prisma.ledgerEntry.create({data:{direction:'purchase',vehicleId:v2,ht:10}});
+ const request=(url:string,method:string,body:unknown)=>fetch(base+url,{method,headers:{...auth(),'content-type':'application/json'},body:JSON.stringify(body)});
+ try {
+  const count=await prisma.ledgerEntry.count();
+  const created=await request(`/api/vehicles/${v1}/repairs`,'POST',{description:'Vidange',amount:121,ledgerEntryId:entry.id});
+  assert.equal(created.status,201);const {repair}=await created.json();
+  const detail=await (await fetch(`${base}/api/vehicles/${v1}`,{headers:auth()})).json();
+  assert.equal(detail.vehicle.repairs.find((r:any)=>r.id===repair.id).ledgerEntry.docNumber,'TEST-ENTRETIEN');
+  assert.equal(await prisma.ledgerEntry.count(),count);
+  assert.equal((await request(`/api/vehicles/${v1}/repairs`,'POST',{ledgerEntryId:wrong.id})).status,400);
+  assert.equal((await request(`/api/vehicles/${v1}/repairs`,'POST',{ledgerEntryId:'missing'})).status,400);
+  assert.equal((await request(`/api/vehicles/${v1}/repairs/${repair.id}`,'PATCH',{ledgerEntryId:null})).status,200);
+  assert.equal((await prisma.vehicleRepair.findUnique({where:{id:repair.id}}))?.ledgerEntryId,null);
+ } finally {await prisma.ledgerEntry.deleteMany({where:{id:{in:[entry.id,wrong.id]}}});}
+});

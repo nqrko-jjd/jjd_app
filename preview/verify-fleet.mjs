@@ -19,6 +19,15 @@ try {
  const updated=(await api('/api/planning')).items.find(e=>e.id===event.id);assert.equal(updated.vehicles[0].vehicle.seats,4);assert.equal(updated.vehicles[0].vehicle.status,'repair');
  const base='/api/vehicles/'+vehicle.id;
  await api(base+'/repairs',{method:'POST',body:{description:'Test entretien',amount:100}});
+ const expense=(await api('/api/finance/expenses')).items[0];
+ const repair=(await api(base)).vehicle.repairs[0];
+ const beforeCount=(await api('/api/finance/expenses')).items.length;
+ await api(base+'/repairs/'+repair.id,{method:'PATCH',body:{ledgerEntryId:expense.id}});
+ assert.equal((await api(base)).vehicle.repairs[0].ledgerEntry.docNumber,expense.docNumber);
+ assert.equal((await api('/api/finance/expenses')).items.length,beforeCount);
+ await assert.rejects(()=>api(base+'/repairs',{method:'POST',body:{ledgerEntryId:'missing'}}));
+ await api(base+'/repairs/'+repair.id,{method:'PATCH',body:{ledgerEntryId:null}});
+ assert.equal((await api(base)).vehicle.repairs[0].ledgerEntry,null);
  const {doc}=await api(base+'/docs',{method:'POST',body:{type:'inspection',label:'Test contrôle'}});
  await api(base+'/docs/'+doc.id+'/file',{method:'POST',body:{fileData:'data:application/pdf;base64,JVBERi0xLjQ='}});
  const detail=(await api(base)).vehicle;assert.equal(detail.repairs.length,1);assert(detail.docs[0].fileUrl);

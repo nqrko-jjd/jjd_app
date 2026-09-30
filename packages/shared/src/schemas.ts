@@ -173,6 +173,7 @@ export const vehicleDocInput = z.object({
 
 /** Frais de réparation / entretien ponctuel (garage) — distinct des coûts fixes de revient (fiche véhicule). */
 export const vehicleRepairInput = z.object({
+  ledgerEntryId: nonEmpty.nullish(),
   vehicleId: nonEmpty,
   date: z.coerce.date().nullish(),
   description: z.string().trim().nullish(),

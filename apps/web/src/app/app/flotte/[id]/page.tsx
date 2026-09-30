@@ -32,12 +32,13 @@ interface Detail {
     fines: { id: string; date: string | null; type: string | null; amount: number | null; status: string | null }[];
     payments: { id: string; dueOn: string | null; amount: number | null; principal: number | null; interest: number | null; balance: number | null }[];
     docs: { id: string; type: string; label: string | null; number: string | null; expiresOn: string | null; fileUrl: string | null }[];
-    repairs: { id: string; date: string | null; description: string | null; garage: string | null; amount: number | null; km: string | null }[];
+    repairs: Repair[];
     ledgerEntries: { id: string; date: string | null; docNumber: string | null; supplierName: string | null; ht: number; ttc: number | null; pdfPath: string | null; categoryRaw: string | null }[];
   };
 }
 
-interface Repair { id: string; date: string | null; description: string | null; garage: string | null; amount: number | null; km: string | null }
+interface Purchase { id: string; docNumber: string | null; supplierName: string | null; date: string | null; ttc: number | null; ht: number; direction?: string; vehicleId?: string | null; pdfPath?: string | null; hasPdf?: boolean }
+interface Repair { ledgerEntryId?: string | null; ledgerEntry?: Purchase | null; id: string; date: string | null; description: string | null; garage: string | null; amount: number | null; km: string | null }
 
 const REPAIR_FIELDS: FieldDef[] = [
   { name: 'date', label: 'Date', type: 'date' },
@@ -137,20 +138,7 @@ export default function VehicleDetail({ params }: { params: Promise<{ id: string
         />
       )}
       {repairModal && (
-        <FormModal
-          title={repairModal === 'new' ? 'Nouvelle réparation' : 'Modifier la réparation'}
-          fields={REPAIR_FIELDS}
-          initial={repairModal === 'new' ? {} : {
-            date: toDateInput(repairModal.date), description: repairModal.description, garage: repairModal.garage,
-            amount: repairModal.amount, km: repairModal.km,
-          }}
-          onClose={() => setRepairModal(null)}
-          onSubmit={async (body) => {
-            const path = repairModal === 'new' ? `/api/vehicles/${id}/repairs` : `/api/vehicles/${id}/repairs/${(repairModal as Repair).id}`;
-            await api(path, { method: repairModal === 'new' ? 'POST' : 'PATCH', body });
-            reload();
-          }}
-        />
+        <RepairInvoiceModal vehicleId={id} repair={repairModal} onClose={() => setRepairModal(null)} onSaved={reload} />
       )}
       {editing && (
         <FormModal
@@ -303,13 +291,14 @@ export default function VehicleDetail({ params }: { params: Promise<{ id: string
         ) : (
           <div className="tbl-wrap">
             <table className="tbl">
-              <thead><tr><th>Date</th><th>Réparation</th><th>Garage</th><th>Km</th><th style={{ textAlign: 'right' }}>Montant</th><th /></tr></thead>
+              <thead><tr><th>Date</th><th>Réparation</th><th>Garage</th><th>Facture d’achat</th><th>Km</th><th style={{ textAlign: 'right' }}>Montant</th><th /></tr></thead>
               <tbody>
                 {v.repairs.map((r) => (
                   <tr key={r.id}>
                     <td className="tnum">{formatDateBE(r.date)}</td>
                     <td>{r.description ?? '—'}</td>
                     <td>{r.garage ?? '—'}</td>
+                    <td>{r.ledgerEntry ? <div><Link href={`/app/achats?q=${encodeURIComponent(r.ledgerEntry.docNumber || r.ledgerEntry.supplierName || '')}`} className="link">{r.ledgerEntry.docNumber || 'Facture liée'}</Link><div className="muted">{r.ledgerEntry.supplierName}</div>{(r.ledgerEntry.pdfPath || r.ledgerEntry.hasPdf) && <button className="btn ghost" onClick={() => viewExpensePdf(r.ledgerEntry!.id)}>Voir le PDF</button>}</div> : <button className="btn ghost" onClick={() => setRepairModal(r)}>Lier une facture</button>}</td>
                     <td className="tnum">{r.km ?? '—'}</td>
                     <td style={{ textAlign: 'right' }}><Money value={r.amount} /></td>
                     <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
@@ -451,4 +440,20 @@ function CostSection({ v }: { v: Detail['vehicle'] }) {
       </div>
     </details>
   </section>;
+}
+
+function RepairInvoiceModal({vehicleId, repair, onClose, onSaved}: {vehicleId: string; repair: 'new' | Repair; onClose: () => void; onSaved: () => void}) {
+  const [query, setQuery] = useState('');
+  const {data, loading, error} = useApi<{items: Purchase[]}>(`/api/finance/expenses?q=${encodeURIComponent(query)}&pageSize=100`);
+  const current = repair === 'new' ? null : repair.ledgerEntry;
+  const choices = [...(current ? [current] : []), ...(data?.items || [])].filter((e,i,all) => all.findIndex(x=>x.id===e.id)===i && (!e.direction || e.direction==='purchase') && (!e.vehicleId || e.vehicleId===vehicleId));
+  return <FormModal title={repair === 'new' ? 'Enregistrer un entretien' : 'Modifier l’entretien'}
+    fields={[...REPAIR_FIELDS.map(f => f.name === 'amount' ? {...f,label:'Coût de cet entretien (€ TTC)'} : f),
+      {name:'invoiceSearch',label:'Rechercher une facture d’achat',placeholder:'Fournisseur ou numéro de facture',full:true,action:{label:'Rechercher',run:async value=>{setQuery(value);return {}}}},
+      {name:'ledgerEntryId',label:error ? 'Factures indisponibles — réessayez la recherche' : loading ? 'Chargement des factures…' : `Facture liée (facultatif) · ${choices.length} résultat(s)`,type:'select',full:true,
+       options:[{value:'',label:'Sans facture pour le moment'},...choices.map(e=>({value:e.id,label:[e.docNumber,e.supplierName,formatDateBE(e.date),`${(e.ttc ?? e.ht).toLocaleString('fr-BE')} € TTC`].filter(Boolean).join(' · ')}))],
+       action:{label:'Reprendre fournisseur et montant',run:async value=>{const e=choices.find(e=>e.id===value);if(!e)throw Error('Choisissez une facture.');return {garage:e.supplierName,amount:e.ttc ?? e.ht};}}}
+    ]}
+    initial={repair==='new'?{}:{...repair,date:toDateInput(repair.date)}} onClose={onClose}
+    onSubmit={async values=>{const {invoiceSearch,...body}=values;await api(`/api/vehicles/${vehicleId}/repairs${repair==='new'?'':`/${repair.id}`}`,{method:repair==='new'?'POST':'PATCH',body});onSaved();}} />;
 }

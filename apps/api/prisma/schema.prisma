@@ -690,6 +690,7 @@ model PriceItem {
 /// Ligne du grand livre = une ligne de l'onglet "Facture" du fichier.
 /// C'est la granularité qui alimente la marge réelle (matériaux) et le CA.
 model LedgerEntry {
+  vehicleRepairs VehicleRepair[]
   id            String    @id @default(cuid())
   date          DateTime?
   dueDate       DateTime? // échéance (facture d'achat)
@@ -1045,6 +1046,8 @@ model Vehicle {
 
 /// Frais de réparation / entretien ponctuel (garage) — distinct des coûts fixes de revient.
 model VehicleRepair {
+  ledgerEntryId String?
+  ledgerEntry LedgerEntry? @relation(fields: [ledgerEntryId], references: [id], onDelete: SetNull)
   id          String    @id @default(cuid())
   vehicleId   String
   vehicle     Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)

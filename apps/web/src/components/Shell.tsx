@@ -224,7 +224,7 @@ export function Shell({ children, navigationPaths }: { children: React.ReactNode
         </div>
       </nav>
 
-      <main className={`main${(isWorker || bureau) ? ' has-bottom-tabs' : ''}`}>{children}</main>
+      <main className={`main${(isWorker || bureau) ? ' has-bottom-tabs' : ''}${pathname==='/app/messagerie'?' messaging-main':''}`}>{children}</main>
 
       {isWorker && (
         <nav className="bottom-tabs worker">

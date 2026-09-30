@@ -6,7 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
 import { api, apiUpload } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { PageHead, Avatar } from '@/lib/ui';
+import { Avatar } from '@/lib/ui';
 import { Search, Paperclip, Send, Building2, ArrowLeft, Mic, Square } from 'lucide-react';
 import { useVoiceRecorder } from '@/lib/useVoiceRecorder';
 import { useMentionInput, splitMentions } from '@/lib/useMentionInput';
@@ -71,6 +71,29 @@ function MessagerieInner({worksiteId}: {worksiteId?: string}) {
   const push = usePushNotifications();
   const fileRef = useRef<HTMLInputElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const workspaceRef=useRef<HTMLDivElement>(null);
+  const bodyRef=useRef<HTMLDivElement>(null);
+  const composerRef=useRef<HTMLTextAreaElement>(null);
+  const nearBottom=useRef(true);
+  const lastScrollThread=useRef('');
+  const [newBelow,setNewBelow]=useState(false);
+
+  useEffect(()=>{
+    if(worksiteId)return;
+    const update=()=>{
+      const el=workspaceRef.current;if(!el)return;
+      const viewport=window.visualViewport;
+      const bottom=(viewport?.height||window.innerHeight)+(viewport?.offsetTop||0);
+      const nav=document.querySelector('.bottom-tabs');
+      const navRect=nav?.getBoundingClientRect();
+      const limit=navRect&&navRect.height>0?Math.min(bottom,navRect.top):bottom;
+      el.style.height=`${Math.max(180,limit-el.getBoundingClientRect().top-8)}px`;
+    };
+    update();window.addEventListener('resize',update);window.visualViewport?.addEventListener('resize',update);window.visualViewport?.addEventListener('scroll',update);
+    return()=>{window.removeEventListener('resize',update);window.visualViewport?.removeEventListener('resize',update);window.visualViewport?.removeEventListener('scroll',update);};
+  },[worksiteId]);
+
+  useEffect(()=>{const el=composerRef.current;if(el){el.style.height='auto';el.style.height=`${Math.min(el.scrollHeight,144)}px`;}},[text,tab]);
 
   const { data: listData, reload: reloadList } = useApi<{ items: ThreadItem[] }>(
     `/api/messagerie/threads?audience=${audience}${filter === 'archived' ? '&archived=1' : ''}`,
@@ -109,7 +132,12 @@ function MessagerieInner({worksiteId}: {worksiteId?: string}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected, audience, filter]);
 
-  useEffect(() => { endRef.current?.scrollIntoView(); }, [messages.length]);
+  function latest(){const el=bodyRef.current;if(el)el.scrollTop=el.scrollHeight;nearBottom.current=true;setNewBelow(false);}
+  useEffect(() => {
+    if(!messages.length||tab!=='chat')return;
+    if(lastScrollThread.current!==draftKey||nearBottom.current){latest();lastScrollThread.current=draftKey;}
+    else setNewBelow(true);
+  }, [messages.length,draftKey,tab]);
 
   // marque comme lu à l'ouverture / dès qu'un nouveau message arrive pendant la lecture
   useEffect(() => {
@@ -151,6 +179,7 @@ function MessagerieInner({worksiteId}: {worksiteId?: string}) {
       else if (selected?.kind === 'worksite' && audience === 'client') await api(`/api/worksites/${selected.worksiteId}/thread/client/messages`, { method: 'POST', body: { body: text.trim() } });
       else if (selected?.kind === 'worksite') await api(`/api/worksites/${selected.worksiteId}/thread/messages`, { method: 'POST', body: { body: text.trim() } });
       setText('');
+      nearBottom.current=true;
       reloadConvo();
       reloadList();
     } catch (e) {
@@ -202,24 +231,8 @@ function MessagerieInner({worksiteId}: {worksiteId?: string}) {
     : null;
 
   return (
-    <>
+    <div ref={workspaceRef} className={worksiteId?'msg-workspace embedded':'msg-workspace full'}>
       {actionError && <div className="card card-pad" role="alert" style={{borderColor:'var(--crit)',marginBottom:'1rem'}}>{actionError}</div>}
-      {!worksiteId && <PageHead
-        eyebrow="Rester en lien"
-        title="Messagerie"
-        sub="Toute l’équipe. Chaque chantier. Un même endroit."
-        action={push.supported && (
-          <button
-            type="button"
-            className="btn ghost"
-            disabled={push.busy}
-            onClick={() => (push.enabled ? push.disable() : push.enable())}
-            title={push.enabled ? 'Désactiver les notifications' : 'Activer les notifications (être prévenu quand on te mentionne)'}
-          >
-            {push.enabled ? <Bell size={17} strokeWidth={2} /> : <BellOff size={17} strokeWidth={2} />}
-          </button>
-        )}
-      />}
       {worksiteId && <div className="worksite-discussion-head">
         <div><h3>Discussion du chantier</h3><p>Le même fil que dans la messagerie. Les photos restent internes tant que vous ne les partagez pas.</p></div>
         <Link className="btn" href={`/app/messagerie?worksite=${worksiteId}&audience=${audience}`}>Ouvrir la messagerie</Link>
@@ -231,6 +244,7 @@ function MessagerieInner({worksiteId}: {worksiteId?: string}) {
 
       <div className={`msg-layout${selected ? ' has-selection' : ''}${worksiteId?' msg-embedded':''}`}>
         {!worksiteId && <aside className="msg-list">
+          <div className="msg-list-heading"><h1>Discussions</h1>{push.supported&&<button type="button" className="btn ghost" disabled={push.busy} onClick={()=>push.enabled?push.disable():push.enable()} aria-label={push.enabled?'Désactiver les notifications':'Activer les notifications'}>{push.enabled?<Bell size={20}/>:<BellOff size={20}/>}</button>}</div>
           {isOffice && (
             <div className="msg-audience-tabs">
               <button className={audience === 'internal' ? 'active' : ''} onClick={() => { setAudience('internal'); setSelected(null); }}>Équipe interne</button>
@@ -344,7 +358,7 @@ function MessagerieInner({worksiteId}: {worksiteId?: string}) {
                 )
               ) : (
               <>
-              <div className="msg-body">
+              <div className="msg-body" ref={bodyRef} onScroll={()=>{const el=bodyRef.current;if(el){nearBottom.current=el.scrollHeight-el.scrollTop-el.clientHeight<90;if(nearBottom.current)setNewBelow(false);}}}>
                 {messages.length === 0 && <p className="muted" style={{ margin: 'auto' }}>{conversationLoading?'Chargement de la conversation…':conversationError?'Conversation indisponible.':'Aucun message. Lancez la conversation ci-dessous.'}</p>}
                 {messages.map((m) => {
                   if (m.kind === 'status') {
@@ -382,6 +396,7 @@ function MessagerieInner({worksiteId}: {worksiteId?: string}) {
                 })}
                 <div ref={endRef} />
               </div>
+              {newBelow&&<button className="msg-new-messages" onClick={latest}>Nouveaux messages · Revenir en bas</button>}
 
               <div className="msg-composer">
                 {audience === 'internal' && (
@@ -408,7 +423,10 @@ function MessagerieInner({worksiteId}: {worksiteId?: string}) {
                     ))}
                   </div>
                 )}
-                <input
+                <textarea
+                  ref={composerRef}
+                  rows={1}
+                  aria-label="Votre message"
                   className="input"
                   style={{ flex: 1 }}
                   placeholder="Écrire un message… (@ pour mentionner)"
@@ -416,14 +434,14 @@ function MessagerieInner({worksiteId}: {worksiteId?: string}) {
                   onChange={(e) => mention.onChange(e.target.value, e.target.selectionStart ?? e.target.value.length)}
                   onKeyDown={(e) => {
                     if (e.key === 'Escape' && mention.open) { mention.close(); return; }
-                    if (e.key === 'Enter' && !e.shiftKey) {
+                    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && window.matchMedia('(pointer: fine)').matches) {
                       e.preventDefault();
                       if (mention.open) mention.pick(mention.options[0]!);
                       else send();
                     }
                   }}
                 />
-                <button type="button" className="btn primary msg-send" onClick={send} disabled={busy || !text.trim()}>
+                <button type="button" className="btn primary msg-send" aria-label="Envoyer le message" onClick={send} disabled={busy || !text.trim()}>
                   <Send size={16} strokeWidth={2} />
                 </button>
               </div>
@@ -433,6 +451,6 @@ function MessagerieInner({worksiteId}: {worksiteId?: string}) {
           )}
         </section>
       </div>
-    </>
+    </div>
   );
 }

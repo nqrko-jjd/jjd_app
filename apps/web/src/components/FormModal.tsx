@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { AddressAutocomplete } from './AddressAutocomplete';
 import { ContactPicker } from './ContactPicker';
 
@@ -46,6 +46,7 @@ export function FormModal({
   onClose: () => void;
   onSubmit: (values: Record<string, unknown>) => Promise<void>;
 }) {
+  const titleId = useId();
   const [v, setV] = useState<Record<string, unknown>>(() => ({ ...initial }));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -104,11 +105,12 @@ export function FormModal({
 
   return (
     <div className="modal-scrim">
-      <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
+      <form className="modal" role="dialog" aria-modal="true" aria-labelledby={titleId} onClick={(e) => e.stopPropagation()} onSubmit={submit}>
         <div className="modal-head">
-          <h2>{title}</h2>
+          <div className="modal-heading"><span className="modal-eyebrow">JJD · Gestion</span><h2 id={titleId}>{title}</h2></div>
           <button type="button" className="btn ghost" onClick={onClose} aria-label="Fermer">✕</button>
         </div>
+        <p className="modal-form-guide">Complétez les informations ci-dessous.{fields.some((f) => f.required) && <span> Les champs marqués * sont obligatoires.</span>}</p>
         <div className="modal-body">
           {fields.map((f) => (
             <div className="field" key={f.name} style={f.full ? { gridColumn: '1 / -1' } : undefined}>

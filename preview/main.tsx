@@ -7,6 +7,8 @@ import Planning from '../apps/web/src/app/app/planning/page';
 import Chantiers from '../apps/web/src/app/app/chantiers/page';
 import {usePathname} from './navigation';
 import {getWorksite,getEvents,reset} from './api';
+import {SecondaryPage} from './secondary';
+import {MessagingPage} from './messages';
 import '../apps/web/src/app/globals.css';
 
 function WorksiteDetail({ws}:{ws:any}){
@@ -143,8 +145,10 @@ function InvoicePreparationModal({ws,finance,onClose}:{ws:any;finance:any;onClos
 function App(){
   const path=usePathname();
   const ws=getWorksite(path.split('/').pop()!);
-  const known=path==='/app'||path==='/app/planning'||path==='/app/chantiers'||!!ws;
-  return <><div className="preview-ribbon"><strong>Aperçu privé · données fictives</strong><span>Identité visuelle JJD · vue d’ensemble, planning et chantiers</span><button onClick={()=>{if(confirm('Réinitialiser uniquement les données fictives de cet aperçu ?'))reset()}}>Réinitialiser</button></div><Shell navigationPaths={['/app','/app/chantiers','/app/planning']}><div className="preview-tabs"><a href="#/app">Vue d’ensemble</a><a href="#/app/planning">Planning</a><a href="#/app/chantiers">Chantiers</a></div>{path==='/app'?<Dashboard/>:path==='/app/chantiers'?<Chantiers/>:ws?<WorksiteDetail ws={ws}/>:path==='/app/planning'?<Planning/>:<section className="state"><h2>Parcours en préparation</h2><p>Cette page annexe sera reprise dans la prochaine étape de la maquette.</p><a className="btn primary" href="#/app">Retour à la vue d’ensemble</a></section>}{!known&&null}</Shell></>;
+  const secondary=<SecondaryPage path={path}/>;
+  const navigationPaths=['/app','/app/chantiers','/app/planning','/app/messagerie','/app/documents','/app/achats','/app/analyse','/app/immeubles','/app/contacts','/app/equipe','/app/controle'];
+  const known=navigationPaths.includes(path)||!!ws;
+  return <><div className="preview-ribbon"><strong>Aperçu privé · données fictives</strong><span>Identité visuelle JJD · parcours administratifs et terrain</span><button onClick={()=>{if(confirm('Réinitialiser uniquement les données fictives de cet aperçu ?'))reset()}}>Réinitialiser</button></div><Shell navigationPaths={navigationPaths}><div className="preview-tabs"><a href="#/app">Vue d’ensemble</a><a href="#/app/planning">Planning</a><a href="#/app/chantiers">Chantiers</a><a href="#/app/messagerie">Messagerie</a><a href="#/app/documents">Facturation</a><a href="#/app/achats">Achats</a></div>{path==='/app'?<Dashboard/>:path==='/app/chantiers'?<Chantiers/>:ws?<WorksiteDetail ws={ws}/>:path==='/app/planning'?<Planning/>:path==='/app/messagerie'?<MessagingPage/>:secondary??<section className="state"><h2>Parcours en préparation</h2><p>Cette page annexe sera reprise dans la prochaine étape de la maquette.</p><a className="btn primary" href="#/app">Retour à la vue d’ensemble</a></section>}{!known&&null}</Shell></>;
 }
 
 createRoot(document.getElementById('root')!).render(<App/>);

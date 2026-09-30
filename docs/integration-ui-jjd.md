@@ -74,3 +74,13 @@ La branche n’est PAS une autorisation de mise en production : recette navigate
 
 Vérification finale de ce lot : build Next.js complet réussi (50 pages statiques générées et routes dynamiques compilées), typecheck partagé/API/web réussi, 17 tests partagés et 3 tests de transmission réussis. Rendu serveur de 30 parcours de l’aperçu et tests des relations/stock/bâtiments/rapprochements fictifs réussis. Le test de sauvegarde avec Docker simulé confirme les archives/empreintes et l’absence de publication d’une sauvegarde incomplète en cas d’échec du dump ; il ne remplace pas un essai de restauration de la vraie base.
 Les écrans réels Finances, Banque et Grand livre sont également exposés dans l’aperçu avec fixtures locales. Les connexions, imports bancaires et justificatifs réels y restent indisponibles.
+
+## Livraison complémentaire du 30 septembre
+
+Cette section remplace les réserves précédentes concernant les écrans secondaires : Contacts (liste/fiche), Équipe (liste/fiche), Analyse, Contrôle et Messagerie utilisent maintenant les pages réelles dans l’aperçu, avec des adaptateurs strictement locaux. Les opérations externes restent explicitement désactivées ; la création d’une personne de démonstration ne constitue pas une création de compte ni une affectation au planning.
+
+Analyse distingue facturé, encaissé et rentabilité par chantier. Contrôle filtre les anomalies par gravité et explique la différence entre correction et classement. La messagerie conserve le texte en cas d’erreur et affiche les échecs au lieu de les masquer.
+
+Recette automatisée : `node scripts/test-release.mjs` crée une base SQLite temporaire indépendante, ignore les fichiers `.env` et exécute 112 tests API. Les droits ouvriers/clients, les stocks, les factures, le planning et le rapprochement sont couverts. Deux tests supplémentaires garantissent le refus Peppol sans mutation et la confirmation externe idempotente sans perte du statut payé. Typecheck complet et build Next réussis. Les tests des fixtures locales passent également.
+
+Avant bascule réelle : sauvegarder PostgreSQL et les médias, restaurer cette sauvegarde sur une instance isolée, effectuer la recette navigateur avec les profils réels, puis déployer la branche validée. Ne pas réimporter les fichiers Excel. Ne pas lancer d’envoi réel depuis la recette. Conserver le SHA précédent pour le retour du code ; ne pas restaurer aveuglément une ancienne base si de nouvelles écritures ont eu lieu. L’accès à l’environnement de production et la validation de sa restauration restent requis. Aucun transport Peppol actif n’est livré.

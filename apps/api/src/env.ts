@@ -5,10 +5,10 @@ import path from 'node:path';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '..');
 const envPath = path.join(root, '.env');
-if (!existsSync(envPath) && existsSync(path.join(root, '.env.example'))) {
+if (process.env.JJD_SKIP_ENV_FILE !== '1' && !existsSync(envPath) && existsSync(path.join(root, '.env.example'))) {
   copyFileSync(path.join(root, '.env.example'), envPath);
 }
-if (existsSync(envPath)) {
+if (process.env.JJD_SKIP_ENV_FILE !== '1' && existsSync(envPath)) {
   for (const line of readFileSync(envPath, 'utf8').split('\n')) {
     const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
     if (m && m[1] && process.env[m[1]] === undefined) {

@@ -12,6 +12,15 @@ try {
  const db={worksites:[0,1,2,3].map(i=>({id:'w'+i,ref:'DEMO-'+i,title:'Chantier '+i,address:'Adresse',city:'Bruxelles',client:{id:'c'+i,name:'Client Démo'},status:i===3?'on_hold':'in_progress',building:{id:'b'+i,name:'Immeuble '+i},quotedHt:18000,invoicedHt:4000})),events:[]};
  const people=['José','Miguel','Rui'].map((displayName,i)=>({id:'p'+i,displayName}));
  const api=(p,m='GET',b)=>businessApi(p,m,b,db,people);
+ assert.equal(api('/api/imports/issues?severity=warning').items.length,1);
+ api('/api/imports/issues/issue1','PATCH',{resolved:true});
+ assert.equal(api('/api/imports/issues?severity=warning').items.length,0);
+ assert.equal(api('/api/imports/issues?resolved=1').items[0].id,'issue1');
+ api('/api/people/p0','PATCH',{hourlyRate:29});
+ assert.equal(api('/api/people/p0').person.hourlyRate,29);
+ assert.equal(api('/api/messagerie/threads').items?.[0]?.title ?? api('/api/messagerie/threads').threads?.[0]?.title,'Général JJD');
+ api('/api/messagerie/general/messages','POST',{body:'Message interne de recette'});
+ assert(!JSON.stringify(api('/preview-portal/worksites/w0')).includes('Message interne de recette'));
  assert.equal(api('/api/buildings/b0').building.worksites[0].id,'w0');
  assert.equal(api('/preview-portal/buildings').buildings.length,2);
  assert.throws(()=>api('/preview-portal/worksites/w1'));

@@ -62,6 +62,7 @@ function MessagerieInner() {
   const [tab, setTab] = useState<'chat' | 'gallery'>('chat');
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const mention = useMentionInput(text, setText);
   const push = usePushNotifications();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -73,14 +74,16 @@ function MessagerieInner() {
   const items = listData?.items ?? [];
 
   // deep-link : /app/messagerie?worksite=<id>&audience=internal
+  const requestedWorksite = sp.get('worksite');
+  const requestedAudience = sp.get('audience');
   useEffect(() => {
-    const wsId = sp.get('worksite');
+    const wsId = requestedWorksite;
     if (wsId) {
-      setAudience(sp.get('audience') === 'client' ? 'client' : 'internal');
+      setAudience(requestedAudience === 'client' ? 'client' : 'internal');
       setSelected({ kind: 'worksite', worksiteId: wsId, threadId: wsId });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [requestedWorksite, requestedAudience]);
 
   const generalPath = selected?.kind === 'general' ? '/api/messagerie/general' : null;
   const worksitePath = selected?.kind === 'worksite'
@@ -124,12 +127,16 @@ function MessagerieInner() {
 
   async function toggleShare(m: Msg) {
     if (selected?.kind !== 'worksite') return;
-    await api(`/api/worksites/${selected.worksiteId}/thread/messages/${m.id}/share`, { method: 'PATCH', body: { shared: !m.sharedWithClient } });
-    reloadConvo();
+    setActionError(null);
+    try {
+      await api(`/api/worksites/${selected.worksiteId}/thread/messages/${m.id}/share`, { method: 'PATCH', body: { shared: !m.sharedWithClient } });
+      reloadConvo();
+    } catch (e) { setActionError((e as Error).message); }
   }
 
   async function send() {
-    if (!text.trim()) return;
+    if (!text.trim() || !selected || busy) return;
+    setActionError(null);
     setBusy(true);
     try {
       if (selected?.kind === 'general') await api('/api/messagerie/general/messages', { method: 'POST', body: { body: text.trim() } });
@@ -138,6 +145,8 @@ function MessagerieInner() {
       setText('');
       reloadConvo();
       reloadList();
+    } catch (e) {
+      setActionError((e as Error).message);
     } finally {
       setBusy(false);
     }
@@ -153,6 +162,8 @@ function MessagerieInner() {
       await apiUpload(path, fd);
       reloadConvo();
       reloadList();
+    } catch (e) {
+      setActionError((e as Error).message);
     } finally {
       setBusy(false);
     }
@@ -168,6 +179,8 @@ function MessagerieInner() {
       await apiUpload(path, fd);
       reloadConvo();
       reloadList();
+    } catch (e) {
+      setActionError((e as Error).message);
     } finally {
       setBusy(false);
     }
@@ -182,6 +195,7 @@ function MessagerieInner() {
 
   return (
     <>
+      {actionError && <div className="card card-pad" role="alert" style={{borderColor:'var(--crit)',marginBottom:'1rem'}}>{actionError}</div>}
       <PageHead
         eyebrow="Rester en lien"
         title="Messagerie"

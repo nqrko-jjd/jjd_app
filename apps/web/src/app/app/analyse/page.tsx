@@ -40,7 +40,7 @@ export default function AnalysePage() {
       <PageHead
         eyebrow="Pilotage"
         title="Analyse"
-        sub="Chiffres clés, tendances et répartitions"
+        sub="Activité facturée, encaissements et coûts sur la période sélectionnée"
         action={
           <div className="row">
             <select className="select" value={entity} onChange={(e) => setEntity(e.target.value)} style={{ maxWidth: 150 }}>
@@ -64,7 +64,7 @@ export default function AnalysePage() {
         <>
           <div className="chart-tiles">
             <TrendTile label="CA net" value={formatEur(data.totals.revenue)} delta={pct(data.totals.revenue, data.prev.revenue)} deltaSuffix="%" sub={`${data.range.months} mois`} />
-            <TrendTile label="Résultat" value={formatEur(data.totals.result)} delta={pct(data.totals.result, data.prev.result)} deltaSuffix="%" />
+            <TrendTile label="Résultat calculé" value={formatEur(data.totals.result)} delta={pct(data.totals.result, data.prev.result)} deltaSuffix="%" />
             <TrendTile
               label="Marge"
               value={data.totals.marginPct != null ? `${data.totals.marginPct} %` : '—'}
@@ -73,6 +73,12 @@ export default function AnalysePage() {
             />
             <TrendTile label="Encaissé" value={formatEur(data.totals.collected)} delta={pct(data.totals.collected, data.prev.collected)} deltaSuffix="%" />
             <TrendTile label="Heures pointées" value={data.totals.hours.toLocaleString('fr-BE')} delta={pct(data.totals.hours, data.prev.hours)} deltaSuffix="%" />
+          </div>
+
+          <div className="analysis-guide">
+            <div><strong>Facturé</strong><p>Le chiffre d’affaires n’est pas le solde disponible en banque.</p></div>
+            <div><strong>Encaissé</strong><p>Les règlements sont à contrôler dans le <Link href="/app/finances/banque">rapprochement bancaire</Link>.</p></div>
+            <div><strong>Par chantier</strong><p>Retrouvez les heures, achats et marges dans la <Link href="/app/chantiers">fiche du chantier</Link>.</p></div>
           </div>
 
           <div className="section-title">CA, dépenses &amp; résultat <span className="hint">par mois</span></div>

@@ -20,13 +20,17 @@ const ENTITY_LABEL: Record<string, string> = {
 export default function ControlePage() {
   const [resolved, setResolved] = useState('0');
   const [entity, setEntity] = useState('');
+  const [severity, setSeverity] = useState('');
+  const [actionError, setActionError] = useState<string | null>(null);
   const params = new URLSearchParams({ resolved });
   if (entity) params.set('entity', entity);
+  if (severity) params.set('severity', severity);
   const { data, loading, error, reload } = useApi<{ items: Issue[]; openBySeverity: Record<string, number> }>(`/api/imports/issues?${params}`);
 
   async function resolve(id: string) {
-    await api(`/api/imports/issues/${id}`, { method: 'PATCH', body: { resolved: true } });
-    reload();
+    setActionError(null);
+    try { await api(`/api/imports/issues/${id}`, { method: 'PATCH', body: { resolved: true } }); reload(); }
+    catch (e) { setActionError((e as Error).message); }
   }
 
   return (
@@ -37,17 +41,19 @@ export default function ControlePage() {
         sub="Données de l'import qui demandent une vérification manuelle"
       />
       <div className="card card-pad muted" style={{ marginBottom: '1rem', fontSize: '0.85rem' }}>
-        Ces lignes viennent de l'import initial du fichier Excel — la « Ligne » indique où c'était dans ce fichier,
-        que vous n'avez pas à rouvrir : utilisez le bouton « Ouvrir →/Chercher →» pour aller directement corriger
-        la donnée correspondante dans l'app (fiche chantier, contact, ouvrier…). « Traité » masque juste la ligne
-        ici, ça ne modifie rien tout seul.
+        Ouvrez la fiche liée pour corriger la donnée, puis marquez le contrôle comme traité.
+        Cette dernière action classe l’alerte ; elle ne corrige pas la donnée à votre place.
       </div>
+      {actionError && <p role="alert" className="badge crit">{actionError}</p>}
       {data && (
         <div className="row" style={{ marginBottom: '1rem' }}>
           <span className="badge crit">{data.openBySeverity.error ?? 0} erreurs</span>
           <span className="badge warn">{data.openBySeverity.warning ?? 0} avertissements</span>
           <span className="badge">{data.openBySeverity.info ?? 0} infos</span>
           <span style={{ flex: 1 }} />
+          <select className="select" aria-label="Sévérité du contrôle" style={{ maxWidth: 180 }} value={severity} onChange={e=>setSeverity(e.target.value)}>
+            <option value="">Toutes priorités</option><option value="error">Erreurs</option><option value="warning">Avertissements</option><option value="info">Informations</option>
+          </select>
           <select className="select" style={{ maxWidth: 180 }} value={entity} onChange={(e) => setEntity(e.target.value)}>
             <option value="">Toutes catégories</option>
             {Object.entries(ENTITY_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
@@ -68,7 +74,7 @@ export default function ControlePage() {
             <tbody>
               {data.items.map((i) => (
                 <tr key={i.id}>
-                  <td><span className={`badge ${i.severity === 'error' ? 'crit' : i.severity === 'warning' ? 'warn' : ''}`}>{i.severity}</span></td>
+                  <td><span className={`badge ${i.severity === 'error' ? 'crit' : i.severity === 'warning' ? 'warn' : ''}`}>{{error:'Erreur',warning:'À vérifier',info:'Information'}[i.severity]??i.severity}</span></td>
                   <td>{ENTITY_LABEL[i.entity] ?? i.entity}</td>
                   <td>{i.message}</td>
                   <td>

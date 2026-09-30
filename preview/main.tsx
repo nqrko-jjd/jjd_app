@@ -31,7 +31,7 @@ import PortalPlanning from '../apps/web/src/app/portail/planning/page';
 import PortalDocuments from '../apps/web/src/app/portail/documents/page';
 import PortalQuotes from '../apps/web/src/app/portail/devis/page';
 import PortalMessages from '../apps/web/src/app/portail/messages/page';
-import '../apps/web/src/app/portail/portal.css';
+import PortalLayout from '../apps/web/src/app/portail/layout';
 import {Shell} from '../apps/web/src/components/Shell';
 import Dashboard from '../apps/web/src/app/app/page';
 import TasksPage from '../apps/web/src/app/app/taches/page';
@@ -89,7 +89,7 @@ function App(){
   if(path==='/app/materiel')business=<EquipmentPage/>;
   else if(path.startsWith('/app/materiel/'))business=<EquipmentDetail key={id} params={params}/>;
   if((path.startsWith('/app/stock')||path.startsWith('/app/materiel'))&&business)business=<DepotFrame>{business}</DepotFrame>;
-  if(path.startsWith('/portail')){const page=path==='/portail/immeubles'?<PortalBuildings/>:path.startsWith('/portail/immeuble/')?<PortalBuilding key={id} params={params}/>:path.startsWith('/portail/chantier/')?<PortalWorksite key={id} params={params}/>:path==='/portail/demande'?<PortalRequest/>:path==='/portail/interventions'?<PortalInterventions/>:path==='/portail/planning'?<PortalPlanning/>:path==='/portail/documents'?<PortalDocuments/>:path==='/portail/devis'?<PortalQuotes/>:path==='/portail/messages'?<PortalMessages/>:<PortalHome/>;return <><div className="preview-ribbon"><strong>Portail client · données fictives</strong><a href="#/app/immeubles">Retour administration</a><select aria-label="Profil client de démonstration" value={localStorage.getItem('jjd-preview-client-profile')||'syndic'} onChange={e=>{localStorage.setItem('jjd-preview-client-profile',e.target.value);location.hash='/portail/immeubles';location.reload();}}><option value="syndic">Syndic</option><option value="promoter">Promoteur</option></select></div><Suspense fallback={<p>Chargement…</p>}>{page}</Suspense></>;}
+  if(path.startsWith('/portail')){const page=path==='/portail/immeubles'?<PortalBuildings/>:path.startsWith('/portail/immeuble/')?<PortalBuilding key={id} params={params}/>:path.startsWith('/portail/chantier/')?<PortalWorksite key={id} params={params}/>:path==='/portail/demande'?<PortalRequest/>:path==='/portail/interventions'?<PortalInterventions/>:path==='/portail/planning'?<PortalPlanning/>:path==='/portail/documents'?<PortalDocuments/>:path==='/portail/devis'?<PortalQuotes/>:path==='/portail/messages'?<PortalMessages/>:<PortalHome/>;return <><div className="preview-ribbon"><strong>Portail client · données fictives</strong><a href="#/app/immeubles">Retour administration</a><select aria-label="Profil client de démonstration" value={localStorage.getItem('jjd-preview-client-profile')||'syndic'} onChange={e=>{localStorage.setItem('jjd-preview-client-profile',e.target.value);location.hash='/portail/immeubles';location.reload();}}><option value="syndic">Syndic</option><option value="promoter">Promoteur</option></select></div><PortalLayout><Suspense fallback={<p>Chargement…</p>}>{page}</Suspense></PortalLayout></>;}
   const navigationPaths=['/app','/app/chantiers','/app/planning','/app/taches','/app/crm','/app/messagerie','/app/documents','/app/achats','/app/analyse','/app/finances','/app/immeubles','/app/contacts','/app/equipe','/app/controle','/app/stock','/app/stock/preparations','/app/stock/commandes','/app/stock/scan','/app/materiel'];
   const known=navigationPaths.includes(path)||!!ws;
   navigationPaths.push('/app/pointage');

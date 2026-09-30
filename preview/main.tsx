@@ -1,12 +1,14 @@
 import React, {useMemo, useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {ArrowLeft, CalendarDays, Camera, CheckCircle2, Clock3, Euro, FileText, MapPin, MessageSquare, Receipt, ShoppingCart, TrendingUp, Users, Wallet} from 'lucide-react';
+import {WorksiteLabourDetail, type LabourRow} from '../apps/web/src/components/WorksiteLabourDetail';
+import {WorksiteProfitability} from '../apps/web/src/components/WorksiteProfitability';
 import {Shell} from '../apps/web/src/components/Shell';
 import Dashboard from '../apps/web/src/app/app/page';
 import Planning from '../apps/web/src/app/app/planning/page';
 import Chantiers from '../apps/web/src/app/app/chantiers/page';
 import {usePathname} from './navigation';
-import {getWorksite,getEvents,reset} from './api';
+import {getWorksite,getEvents,reset,people} from './api';
 import {SecondaryPage} from './secondary';
 import {MessagingPage} from './messages';
 import '../apps/web/src/app/globals.css';
@@ -17,13 +19,25 @@ function WorksiteDetail({ws}:{ws:any}){
   const finance=useMemo(()=>{
     const index=Math.max(0,Number(String(ws.id).replace(/\D/g,''))||0);
     const labour=6850+index*1375;
+    const hours=137+index*28;
+    const pendingHours=14+index*3;
+    // Fictional recorded time, deliberately independent of planning assignments.
+    const labourRows:LabourRow[]=Array.from({length:20},(_,i)=>{
+      const person=people[(index*4+i%4)%people.length];
+      const base=Math.floor(hours/20*4)/4;
+      const rowHours=i===19?hours-19*base:base;
+      const baseAmount=Math.round(labour/hours*base*100)/100;
+      const amount=i===19?labour-19*baseAmount:baseAmount;
+      return {date:`2026-09-${String(21+Math.floor(i/4)).padStart(2,'0')}`,personId:person.id,personName:person.displayName,hours:rowHours,amount:Math.round(amount*100)/100,pending:false};
+    });
+    [0,1].forEach(i=>{const person=people[(index*4+i)%people.length];labourRows.push({date:'2026-09-28',personId:person.id,personName:person.displayName,hours:pendingHours/2,amount:Math.round(pendingHours/2*labour/hours*100)/100,pending:true});});
     const purchases=4320+index*980;
     const equipment=780+index*210;
     const subcontracting=index%2?2450:0;
     const totalCost=labour+purchases+equipment+subcontracting;
     const quoted=Number(ws.quotedHt||0);
     const invoiced=Number(ws.invoicedHt||0);
-    return {labour,purchases,equipment,subcontracting,totalCost,quoted,invoiced,paid:Math.round(invoiced*.72),leftToInvoice:Math.max(0,quoted-invoiced),forecastMargin:quoted-totalCost,hours:137+index*28,pendingHours:14+index*3,purchaseCount:8+index*2};
+    return {labour,purchases,equipment,subcontracting,totalCost,quoted,invoiced,paid:Math.round(invoiced*.72),leftToInvoice:Math.max(0,quoted-invoiced),forecastMargin:quoted-totalCost,labourRows,hours,pendingHours,purchaseCount:8+index*2};
   },[ws]);
   return <>
     <a className="btn ghost preview-back" href="#/app/chantiers"><ArrowLeft size={17}/>Tous les chantiers</a>
@@ -45,7 +59,7 @@ function WorksiteDetail({ws}:{ws:any}){
     </div>
     <nav className="preview-worksite-tabs" aria-label="Sections du chantier">
       <button className={tab==='overview'?'active':''} onClick={()=>setTab('overview')}>Vue opérationnelle</button>
-      <button className={tab==='finances'?'active':''} onClick={()=>setTab('finances')}>Finances &amp; facturation <span>{finance.leftToInvoice.toLocaleString('fr-BE')} € à facturer</span></button>
+      <button className={tab==='finances'?'active':''} onClick={()=>setTab('finances')}>Finances &amp; rentabilité <span>{finance.leftToInvoice.toLocaleString('fr-BE')} € à facturer</span></button>
     </nav>
     {tab==='overview'?<div className="preview-worksite-layout">
       <section className="card preview-worksite-panel">
@@ -53,6 +67,7 @@ function WorksiteDetail({ws}:{ws:any}){
         {events.slice(0,4).map((e:any)=><div className="preview-event-row" key={e.id}><div className="preview-event-date"><strong>{new Date(e.startAt).getDate()}</strong><span>{new Date(e.startAt).toLocaleDateString('fr-BE',{month:'short'})}</span></div><div><strong>{e.title}</strong><p>{new Date(e.startAt).toLocaleTimeString('fr-BE',{hour:'2-digit',minute:'2-digit'})}–{new Date(e.endAt).toLocaleTimeString('fr-BE',{hour:'2-digit',minute:'2-digit'})} · {e.assignments.length} personnes · {e.vehicles[0]?.vehicle?.model}</p></div><span className="badge ok">Confirmé</span></div>)}
       </section>
       <aside className="preview-worksite-side">
+        <section className="card preview-worksite-panel"><span className="eyebrow">RENTABILITÉ</span><h2>{finance.forecastMargin.toLocaleString('fr-BE')} €</h2><p className="muted">Vendu − coûts engagés à ce jour. Coûts restants non déduits.</p><button className="btn primary" onClick={()=>setTab('finances')}>Voir la rentabilité</button></section>
         <section className="card preview-worksite-panel"><span className="eyebrow">ACCÈS RAPIDE</span><div className="preview-quick-links"><button><MessageSquare size={18}/><span><strong>Conversation</strong><small>Photos et échanges du chantier</small></span></button><button><Camera size={18}/><span><strong>Photos</strong><small>Ajouter l’avancement du jour</small></span></button><button><FileText size={18}/><span><strong>Documents</strong><small>Devis, rapports et factures</small></span></button><button><Users size={18}/><span><strong>Contacts</strong><small>Client et personnes sur place</small></span></button></div></section>
         <section className="card preview-worksite-panel"><span className="eyebrow">PROCHAINE ACTION</span><h2>Préparer l’équipe</h2><p className="muted">Vérifier le véhicule, le matériel et l’accès avant le départ du dépôt.</p><a className="btn primary" href="#/app/planning">Modifier l’affectation</a></section>
       </aside>
@@ -76,10 +91,11 @@ function WorksiteFinance({ws,finance}:{ws:any;finance:any}){
       <article className="attention"><span><Receipt size={17}/>Reste à facturer</span><strong>{euro(finance.leftToInvoice)}</strong><small>Base disponible à contrôler</small></article>
       <article><span><TrendingUp size={17}/>Marge prévue</span><strong>{euro(finance.forecastMargin)}</strong><small>{marginPct}% après coûts engagés</small></article>
     </div>
+    <WorksiteProfitability quoted={finance.quoted} invoiced={finance.invoiced} paid={finance.paid} totalCost={finance.totalCost} costs={[{label:'Main-d’œuvre validée',amount:finance.labour},{label:'Achats & matériaux',amount:finance.purchases},{label:'Matériel / véhicules',amount:finance.equipment},{label:'Sous-traitance',amount:finance.subcontracting}]}><p className="muted">{finance.pendingHours} h restent à valider, hors coûts ci-dessus. Données fictives.</p></WorksiteProfitability>
     <div className="preview-finance-grid">
       <section className="card preview-finance-card">
         <div className="preview-panel-head"><div><span className="eyebrow">BASE DE FACTURATION</span><h2>Éléments à contrôler</h2></div><span className="badge warn">3 vérifications</span></div>
-        <div className="preview-billable-row"><span className="preview-finance-icon"><Clock3 size={18}/></span><div><strong>Main-d’œuvre</strong><p>{finance.hours} h validées · {finance.pendingHours} h encore à valider</p></div><strong>{euro(finance.labour)}</strong><button>Voir les heures</button></div>
+        <div className="preview-billable-row"><span className="preview-finance-icon"><Clock3 size={18}/></span><div><strong>Main-d’œuvre</strong><p>{finance.hours} h validées · {finance.pendingHours} h encore à valider</p></div><strong>{euro(finance.labour)}</strong><button onClick={()=>{const el=document.getElementById('worksite-labour');el?.scrollIntoView({behavior:'smooth'});el?.focus({preventScroll:true});}}>Voir les heures</button></div>
         <div className="preview-billable-row"><span className="preview-finance-icon"><ShoppingCart size={18}/></span><div><strong>Achats &amp; matériaux</strong><p>{finance.purchaseCount} achats liés · 2 justificatifs à vérifier</p></div><strong>{euro(finance.purchases)}</strong><button>Voir les achats</button></div>
         <div className="preview-billable-row"><span className="preview-finance-icon"><Receipt size={18}/></span><div><strong>Matériel &amp; sous-traitance</strong><p>Locations, consommables et prestations externes</p></div><strong>{euro(finance.equipment+finance.subcontracting)}</strong><button>Voir le détail</button></div>
         <div className="preview-finance-ready"><CheckCircle2 size={19}/><div><strong>{euro(finance.leftToInvoice)} peuvent être préparés</strong><small>Le brouillon reste soumis au contrôle final de Julien avant envoi.</small></div></div>
@@ -90,6 +106,7 @@ function WorksiteFinance({ws,finance}:{ws:any;finance:any}){
         <div className="preview-cost-footer"><span>Marge prévisionnelle</span><strong>{euro(finance.forecastMargin)} · {marginPct}%</strong></div>
       </aside>
     </div>
+    <WorksiteLabourDetail rows={finance.labourRows} demo/>
     <section className="card preview-finance-card">
       <div className="preview-panel-head"><div><span className="eyebrow">DOCUMENTS COMMERCIAUX</span><h2>Devis, états d’avancement &amp; factures</h2></div><button className="btn">Voir tous les documents</button></div>
       <div className="preview-doc-row"><span className="badge ok">Accepté</span><div><strong>Devis {ws.ref.replace('DEMO','D2026')}</strong><small>Marché initial · conditions et cahier des charges</small></div><strong>{euro(finance.quoted)}</strong><button>Ouvrir</button></div>

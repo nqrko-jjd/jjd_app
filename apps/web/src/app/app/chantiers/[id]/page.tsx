@@ -10,6 +10,8 @@ import { PageHead, StatusBadge, PriorityBadge, EntityBadge, ScopeBadge, BillingM
 import { FormModal, toDateInput, type FieldDef } from '@/components/FormModal';
 import { ChantierThread } from '@/components/ChantierThread';
 import { WorksiteTasks } from '@/components/WorksiteTasks';
+import { WorksiteLabourDetail } from '@/components/WorksiteLabourDetail';
+import { WorksiteProfitability } from '@/components/WorksiteProfitability';
 import { WorksiteFinanceSummary } from '@/components/WorksiteFinanceSummary';
 import { CollapsibleSection } from '@/components/CollapsibleSection';
 import { StackedBar, ProgressBars } from '@/lib/charts';
@@ -344,12 +346,8 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
           {data.margin && <WorksiteFinanceSummary margin={data.margin} worksiteId={w.id} billingName={w.billToContact?.name ?? w.billTo ?? w.client?.name ?? 'Non renseigné'} billingContactId={w.billToContact?.id ?? (w.billTo ? null : w.client?.id)} labour={data.margin.labour} documentCount={w.documents.length} />}
           {data.margin && (
             <>
-              <div className="kpi-group">Résultat &amp; rentabilité</div>
-              <div className="kpis" style={{ marginBottom: '1.5rem' }}>
-                <Kpi ic={TrendingUp} label="Marge réelle" value={<Money value={data.margin.realMargin} sign />} sub={data.margin.realMarginPct != null ? `${data.margin.realMarginPct} % du marché` : 'Non calculable'} neg={data.margin.realMargin < 0} />
-                <Kpi ic={TrendingUp} label="Marge hypothétique" value={<Money value={data.margin.forecastMargin} sign />} sub="Devisé − coûts engagés" neg={data.margin.forecastMargin < 0} />
-                {data.margin.partnerShare > 0 && <Kpi ic={Percent} label="Part GT (33 %)" value={<Money value={data.margin.partnerShare} />} sub="Apporteur d'affaire" />}
-              </div>
+              <WorksiteProfitability quoted={data.margin.quotedHt} invoiced={data.margin.invoicedHt} paid={data.margin.paidHt} totalCost={data.margin.totalCost} costs={[{label:'Main-d’œuvre',amount:data.margin.labourCost},{label:'Achats / matériaux',amount:data.margin.materialCost},{label:'Transport',amount:data.margin.vehicleCost}]} />
+              {data.margin.partnerShare > 0 && <Kpi ic={Percent} label="Part GT (33 %)" value={<Money value={data.margin.partnerShare} />} sub="Apporteur d'affaire" />}
               <TransportDetail t={data.margin.transport} />
               <div className="chart-2col" style={{ marginBottom: '1.5rem' }}>
                 {data.margin.totalCost > 0 && (
@@ -379,7 +377,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
                   </div>
                 )}
               </div>
-              <LabourDetail rows={data.margin.labour} />
+              <WorksiteLabourDetail rows={data.margin.labour} />
             </>
           )}
 
@@ -703,36 +701,6 @@ function TransportDetail({ t }: { t: NonNullable<Detail['margin']>['transport'] 
                 <td style={{ textAlign: 'right' }}><Money value={tr.fuelCost} /></td>
                 <td style={{ textAlign: 'right' }}><Money value={tr.fixedCost} /></td>
                 <td style={{ textAlign: 'right' }}><Money value={tr.cost} /></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </CollapsibleSection>
-  );
-}
-
-function LabourDetail({ rows }: { rows: NonNullable<Detail['margin']>['labour'] }) {
-  if (!rows.length) return null;
-  const totalHours = rows.reduce((s, r) => s + r.hours, 0);
-  const totalAmount = rows.reduce((s, r) => s + r.amount, 0);
-  const days = new Set(rows.map((r) => r.date)).size;
-  return (
-    <CollapsibleSection
-      title="Détail main-d'œuvre"
-      summary={`${days} jour${days > 1 ? 's' : ''} · ${formatHours(totalHours)} · ${new Intl.NumberFormat('fr-BE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(totalAmount)}`}
-    >
-      <div className="tbl-wrap">
-        <table className="tbl">
-          <thead><tr><th>Date</th><th>Ouvrier</th><th style={{ textAlign: 'right' }}>Heures</th><th style={{ textAlign: 'right' }}>Montant</th><th></th></tr></thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={`${r.date}|${r.personId}`}>
-                <td className="tnum">{formatDateBE(r.date)}</td>
-                <td>{r.personName}</td>
-                <td className="tnum" style={{ textAlign: 'right' }}>{formatHours(r.hours)}</td>
-                <td style={{ textAlign: 'right' }}><Money value={r.amount} /></td>
-                <td>{r.pending && <span className="badge warn" style={{ fontSize: '0.72rem' }}>à valider</span>}</td>
               </tr>
             ))}
           </tbody>

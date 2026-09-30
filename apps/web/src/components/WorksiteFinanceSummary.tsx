@@ -1,3 +1,4 @@
+'use client';
 import Link from 'next/link';
 import { Clock3, FileText, Fuel, ShoppingCart } from 'lucide-react';
 import type { WorksiteMargin } from '@jjd/shared';
@@ -28,7 +29,7 @@ export function WorksiteFinanceSummary({ margin, worksiteId, billingName, billin
         <article className="remaining"><span>Reste à facturer HT</span><strong><Money value={margin.leftToInvoice} /></strong><small>{margin.leftToInvoice < 0 ? 'Dépassement du marché à vérifier' : 'Solde du marché, pas un avancement validé'}</small></article>
       </div>
       <div className="worksite-finance-costs">
-        <article><Clock3 size={21} /><div><strong>Main-d’œuvre</strong><span>{formatHours(hours)} enregistrées</span><small>{pendingHours > 0 ? `${formatHours(pendingHours)} à valider` : 'Aucune heure en attente'}</small></div><b><Money value={margin.labourCost} /></b></article>
+        <article><Clock3 size={21} /><div><strong>Main-d’œuvre</strong><span>{formatHours(hours)} enregistrées</span><small>{pendingHours > 0 ? `${formatHours(pendingHours)} sur journées à contrôler` : 'Aucune heure en attente'}</small><button className="btn ghost" onClick={()=>{const el=document.getElementById('worksite-labour');el?.scrollIntoView({behavior:'smooth'});el?.focus({preventScroll:true});}}>Voir les heures par jour</button></div><b><Money value={margin.labourCost} /></b></article>
         <article><ShoppingCart size={21} /><div><strong>Achats / matériaux</strong><span>Coût imputé au chantier</span><Link href={`/app/achats?worksiteId=${encodeURIComponent(worksiteId)}`}>Consulter les achats</Link></div><b><Money value={margin.materialCost} /></b></article>
         <article><Fuel size={21} /><div><strong>Transport</strong><span>Trajets et véhicules imputés</span><small>Calcul existant conservé</small></div><b><Money value={margin.vehicleCost} /></b></article>
       </div>

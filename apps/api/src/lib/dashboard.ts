@@ -82,8 +82,11 @@ export async function bureauDashboard() {
     prisma.document.aggregate({
       where: { kind: { in: ['invoice', 'deposit_invoice'] }, issuedOn: { gte: prevMonthStart, lt: monthStart }, source: { not: 'demo' } }, _sum: { totalHt: true },
     }),
+    // Encaissé = argent réellement reçu ce mois-ci : filtre sur la date de paiement
+    // (paidOn), pas la date d'émission — une facture peut être émise un mois et payée
+    // un autre. Bug corrigé le 2026-09-30 (filtrait par erreur sur issuedOn).
     prisma.document.aggregate({
-      where: { kind: { in: ['invoice', 'deposit_invoice'] }, status: 'paid', issuedOn: { gte: monthStart }, source: { not: 'demo' } }, _sum: { totalHt: true },
+      where: { kind: { in: ['invoice', 'deposit_invoice'] }, status: 'paid', paidOn: { gte: monthStart }, source: { not: 'demo' } }, _sum: { totalHt: true },
     }),
     prisma.document.findMany({ where: { kind: { in: ['invoice', 'deposit_invoice'] }, status: 'overdue', source: { not: 'demo' } } }),
     prisma.document.findMany({ where: { kind: { in: ['invoice', 'deposit_invoice'] }, status: { in: ['sent', 'partial', 'overdue'] }, source: { not: 'demo' } } }),

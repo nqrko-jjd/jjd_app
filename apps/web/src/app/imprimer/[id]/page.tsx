@@ -3,7 +3,7 @@ import { use, useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { formatEur, formatDateBE } from '@/lib/ui';
 import { DOC_KIND_LABEL, type DocFull, type Company } from '@/lib/doc-ui';
-import { computeDocTotals, vatLegalNotes } from '@jjd/shared';
+import { computeDocTotals, vatLegalNotes, DOCUMENT_LOGO, DOCUMENT_TERMS } from '@jjd/shared';
 
 export default function PrintDocument({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -52,13 +52,7 @@ export default function PrintDocument({ params }: { params: Promise<{ id: string
       </div>
       <div className="sheet">
         <header className="head">
-          <div className="brand">
-            <span className="mark"><img src="/brand/icon-mono.png" alt="" /></span>
-            <div className="brand-text">
-              <div className="brand-name">JJD Consult</div>
-              <div className="brand-tag">Maintenance · Rénovation · Gestion de projets</div>
-            </div>
-          </div>
+          <div className="brand"><img className="document-logo" src={DOCUMENT_LOGO} alt="JJD Consult" /></div>
           <div className="doc-box">
             <div className="doc-title">{title} <span className="doc-ref">{ref}</span></div>
             <div className="doc-dates">
@@ -121,7 +115,7 @@ export default function PrintDocument({ params }: { params: Promise<{ id: string
                   <td className="c-num c-qty">{l.qty}{l.unit && <span className="unit"> {l.unit}</span>}</td>
                   <td className="c-num">{formatEur(l.unitPriceHt)}</td>
                   {hasDiscount && <td className="c-num">{l.discountPct ? `${l.discountPct}%` : '—'}</td>}
-                  <td className="c-num">{Math.round(l.vatRate * 100)}%</td>
+                  <td className="c-num">{l.vatRate === 0 ? 'Autoliqu.' : `${Math.round(l.vatRate * 100)}%`}</td>
                   <td className="c-num">{formatEur(ht)}</td>
                 </tr>
               );
@@ -134,7 +128,7 @@ export default function PrintDocument({ params }: { params: Promise<{ id: string
             <tbody>
               <tr><td>Total HT</td><td>{formatEur(totals.totalHt)}</td></tr>
               {Object.entries(totals.vatBreakdown).map(([rate, b]) => (
-                <tr key={rate}><td>TVA {Math.round(Number(rate) * 100)}%</td><td>{formatEur(b.vat)}</td></tr>
+                <tr key={rate}>{Number(rate) === 0 ? <td colSpan={2}>TVA : autoliquidation</td> : <><td>TVA {Math.round(Number(rate) * 100)}%</td><td>{formatEur(b.vat)}</td></>}</tr>
               ))}
               <tr className="grand"><td>Total TTC</td><td>{formatEur(totals.totalTtc)}</td></tr>
             </tbody>
@@ -154,11 +148,22 @@ export default function PrintDocument({ params }: { params: Promise<{ id: string
           {d.terms || (d.kind === 'quote' ? co.quoteTerms : co.invoiceTerms)}
         </footer>
       </div>
+      {(d.kind === 'invoice' || d.kind === 'deposit_invoice') && <section className="sheet general-terms">
+        <h1>Conditions générales JJD Consult SRL</h1>
+        {DOCUMENT_TERMS.map((text, i) => <p key={i}>{text}</p>)}
+      </section>}
     </>
   );
 }
 
 const CSS = `
+
+  .document-logo { display:block; width:220px; height:auto; object-fit:contain; }
+  .sheet.general-terms { break-before:page; font-size:10px; line-height:1.45; column-count:2; column-gap:24px; }
+  .general-terms h1 { column-span:all; font-size:17px; color:#173f34; margin:0 0 18px; }
+  .general-terms p { margin:0 0 10px; orphans:3; widows:3; }
+  .intro, .desc, .ln-label { white-space:pre-wrap; overflow-wrap:anywhere; }
+  .pay, .totals, .head { break-inside:avoid; }
   @page { size: A4; margin: 16mm; }
   /* sinon Chrome/Firefox n'impriment les couleurs de fond (bandeau vert, encadrés…) que si
      l'utilisateur coche "Graphiques d'arrière-plan" dans la boîte de dialogue d'impression —

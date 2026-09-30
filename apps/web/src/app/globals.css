@@ -339,7 +339,7 @@ p { margin: 0; }
 .field textarea.input { resize: vertical; font: inherit; }
 
 /* ---------------------------------------------------- texte enrichi (lignes devis/factures) */
-.rt-edit { font: inherit; line-height: 1.35; cursor: text; white-space: pre-wrap; }
+.rt-edit { font: inherit; line-height: 1.6; cursor: text; white-space: pre-wrap; resize: vertical; overflow: auto; min-height: 44px; max-width: 100%; }
 .rt-edit:empty:before { content: attr(data-placeholder); color: var(--ink-3); }
 .rt-edit ul, .rt-edit ol { margin: 2px 0; padding-left: 20px; }
 .rt-toolbar {

@@ -9,7 +9,8 @@
  * apt dans l'image Docker — voir apps/api/Dockerfile).
  */
 import puppeteer from 'puppeteer-core';
-import { computeDocTotals, formatEur, formatDateBE, DOC_KIND_LABEL, vatLegalNotes, type DocLineLike } from '@jjd/shared';
+import { sanitizeLineHtml } from './sanitize.js';
+import { computeDocTotals, formatEur, formatDateBE, DOC_KIND_LABEL, vatLegalNotes, DOCUMENT_LOGO, DOCUMENT_TERMS, type DocLineLike } from '@jjd/shared';
 import type { Company } from './documents.js';
 import { renderEpcQrDataUrl, isValidBelgianIban } from './epc-qr.js';
 
@@ -46,7 +47,7 @@ function esc(s: string | null | undefined): string {
 /** Construit le HTML imprimable d'un devis/facture/avoir — inspiré de la présentation TrustUp
  *  (bandeau de marque, bloc "Émetteur"/"Adressé à" en 2 colonnes, en-tête de tableau et total
  *  TTC en couleur pleine) mais avec la charte JJD (vert `#173f34` / or `#c5a35d`). */
-async function buildHtml(d: PdfDoc, co: Company): Promise<string> {
+export async function buildHtml(d: PdfDoc, co: Company): Promise<string> {
   const totals = computeDocTotals(d.lines);
   const title = DOC_KIND_LABEL[d.kind] ?? d.kind;
   const ref = d.number ?? d.draftRef ?? '';
@@ -60,25 +61,25 @@ async function buildHtml(d: PdfDoc, co: Company): Promise<string> {
   const colspan = hasDiscount ? 6 : 5;
 
   const rows = d.lines.map((l) => {
-    if (l.kind === 'section') return `<tr class="ln-section"><td colspan="${colspan}">${esc(l.label)}</td></tr>`;
-    if (l.kind === 'text') return `<tr class="ln-text"><td colspan="${colspan}">${esc(l.label)}</td></tr>`;
+    if (l.kind === 'section') return `<tr class="ln-section"><td colspan="${colspan}">${sanitizeLineHtml(l.label)}</td></tr>`;
+    if (l.kind === 'text') return `<tr class="ln-text"><td colspan="${colspan}">${sanitizeLineHtml(l.label)}</td></tr>`;
     const qty = l.qty ?? 0;
     const pu = l.unitPriceHt ?? 0;
     const disc = l.discountPct ?? 0;
     const vat = l.vatRate ?? 0;
     const ht = qty * pu * (1 - disc / 100);
     return `<tr>
-      <td><div class="ln-label">${esc(l.label)}</div>${l.description ? `<div class="desc">${esc(l.description)}</div>` : ''}</td>
+      <td><div class="ln-label">${sanitizeLineHtml(l.label)}</div>${l.description ? `<div class="desc">${sanitizeLineHtml(l.description)}</div>` : ''}</td>
       <td class="c-num c-qty">${qty}${l.unit ? ` <span class="unit">${esc(l.unit)}</span>` : ''}</td>
       <td class="c-num">${formatEur(pu)}</td>
       ${hasDiscount ? `<td class="c-num">${disc ? `${disc}%` : '—'}</td>` : ''}
-      <td class="c-num">${Math.round(vat * 100)}%</td>
+      <td class="c-num">${vat === 0 ? 'Autoliqu.' : `${Math.round(vat * 100)}%`}</td>
       <td class="c-num">${formatEur(ht)}</td>
     </tr>`;
   }).join('');
 
   const vatRows = Object.entries(totals.vatBreakdown)
-    .map(([rate, b]) => `<tr><td>TVA ${Math.round(Number(rate) * 100)}%</td><td>${formatEur(b.vat)}</td></tr>`)
+    .map(([rate, b]) => Number(rate) === 0 ? `<tr><td colspan="2">TVA : autoliquidation</td></tr>` : `<tr><td>TVA ${Math.round(Number(rate) * 100)}%</td><td>${formatEur(b.vat)}</td></tr>`)
     .join('');
   // mention légale spécifique (taux réduit 6% habitation, autoliquidation 0%…), une fois par taux présent
   const vatNotes = vatLegalNotes(d.lines.filter((l) => l.kind === 'item').map((l) => l.vatRate))
@@ -113,13 +114,7 @@ async function buildHtml(d: PdfDoc, co: Company): Promise<string> {
   return `<!doctype html><html><head><meta charset="utf-8"><style>${CSS}</style></head><body>
     <div class="sheet">
       <header class="head">
-        <div class="brand">
-          <span class="mark">J</span>
-          <div class="brand-text">
-            <div class="brand-name">JD Consult</div>
-            <div class="brand-tag">Maintenance · Rénovation · Gestion de projets</div>
-          </div>
-        </div>
+        <div class="brand"><img class="document-logo" src="${DOCUMENT_LOGO}" alt="JJD Consult" /></div>
         <div class="doc-box">
           <div class="doc-title">${esc(title)} <span class="doc-ref">${esc(ref)}</span></div>
           <div class="doc-dates">${dateLines}</div>
@@ -166,10 +161,18 @@ async function buildHtml(d: PdfDoc, co: Company): Promise<string> {
       ${payBlock}
       <footer class="terms">${esc(d.terms || (d.kind === 'quote' ? co.quoteTerms : co.invoiceTerms))}</footer>
     </div>
+    ${isInvoiceLike ? `<section class="sheet general-terms"><h1>Conditions générales JJD Consult SRL</h1>${DOCUMENT_TERMS.map(text => `<p>${esc(text)}</p>`).join('')}</section>` : ''}
   </body></html>`;
 }
 
 const CSS = `
+
+  .document-logo { display:block; width:220px; height:auto; object-fit:contain; }
+  .sheet.general-terms { break-before:page; font-size:10px; line-height:1.45; column-count:2; column-gap:24px; }
+  .general-terms h1 { column-span:all; font-size:17px; color:#173f34; margin:0 0 18px; }
+  .general-terms p { margin:0 0 10px; orphans:3; widows:3; }
+  .intro, .desc, .ln-label { white-space:pre-wrap; overflow-wrap:anywhere; }
+  .pay, .totals, .head { break-inside:avoid; }
   @page { size: A4; margin: 16mm; }
   /* déjà forcé côté serveur par printBackground: true (page.pdf ci-dessous) — gardé ici en
      miroir de la page d'impression web, dont le rendu navigateur en dépend vraiment. */

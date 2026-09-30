@@ -15,7 +15,6 @@ import { RichText } from '@/components/RichText';
 import { computeDocTotals, VAT_RATES } from '@jjd/shared';
 
 /** Un <br> ou une balise vide compte comme "rien" — l'utilisateur n'a en réalité rien tapé. */
-const isEmptyHtml = (h: string | null | undefined) => !h || !h.replace(/<[^>]*>/g, '').trim();
 
 type Picker = {
   clients: { id: string; name: string }[];
@@ -336,9 +335,8 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
                                 placeholder="Description détaillée (optionnel) — Entrée pour aller à la ligne"
                                 value={l.description ?? ''}
                                 onChange={(v) => setLine(i, { description: v })}
-                                onBlur={() => { if (isEmptyHtml(l.description)) toggleDesc(i); }}
                                 autoFocus
-                                minHeight={20}
+                                minHeight={140}
                               />
                             </div>
                           ) : (
@@ -364,7 +362,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
                           )}
                           <td>
                             <select className="select" value={l.vatRate} onChange={(e) => setLine(i, { vatRate: Number(e.target.value) })}>
-                              {VAT_RATES.map((r) => <option key={r} value={r}>{Math.round(r * 100)}%</option>)}
+                              {VAT_RATES.map((r) => <option key={r} value={r}>{r === 0 ? 'Cocontractant' : r === 0.06 ? '6 % · rénovation' : `${Math.round(r * 100)} %`}</option>)}
                             </select>
                           </td>
                           <td style={{ textAlign: 'right' }} className="tnum">

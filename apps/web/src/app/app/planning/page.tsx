@@ -340,13 +340,12 @@ export default function PlanningPage() {
       </div>
 
       <div className="plan-topbar">
-        <div className="plan-switch">
-          <button className={view === 'agenda' ? 'active' : ''} onClick={() => setView('agenda')}>Agenda semaine</button>
-          <button className={view === 'day' ? 'active' : ''} onClick={() => setView('day')}>Vue jour</button>
-          <button className={view === 'workers' ? 'active' : ''} onClick={() => setView('workers')}>Ouvriers</button>
-          <button className={view === 'worksites' ? 'active' : ''} onClick={() => setView('worksites')}>Chantiers</button>
-          <button className={view === 'resources' ? 'active' : ''} onClick={() => setView('resources')}>Véhicules & matériel</button>
-          <button className={view === 'month' ? 'active' : ''} onClick={() => setView('month')}>Vue mensuelle</button>
+        <div className="plan-switch" role="group" aria-label="Affichage du planning">
+          <button className={view === 'day' ? 'active' : ''} onClick={() => setView('day')}>Jour</button>
+          <button className={view === 'agenda' && periodWeeks === 1 ? 'active' : ''} onClick={() => { setView('agenda'); setPeriodWeeks(1); }}>Semaine</button>
+          <button className={view === 'agenda' && periodWeeks === 2 ? 'active' : ''} onClick={() => { setView('agenda'); setPeriodWeeks(2); }}>2 semaines</button>
+          <button className={view === 'month' ? 'active' : ''} onClick={() => setView('month')}>Mois</button>
+          <button className={view === 'worksites' ? 'active' : ''} onClick={() => { setView('worksites'); setPeriodWeeks(1); }}>Suivi des chantiers</button>
         </div>
         <div className="plan-period">
           {view !== 'month' && view !== 'day' && <button type="button" className="btn plan-expand-toggle" onClick={() => setWide((w) => !w)}>{wide ? 'Réduire' : 'Agrandir le planning'}</button>}
@@ -355,12 +354,7 @@ export default function PlanningPage() {
             {view === 'month' ? "Aujourd'hui" : view === 'day' ? "Aujourd'hui" : 'Cette semaine'}
           </button>
           <button type="button" className="btn" onClick={() => (view === 'month' ? shiftMonth(1) : view === 'day' ? shiftDay(1) : shiftWeek(1))}>→</button>
-          {view !== 'month' && view !== 'day' && (
-            <select className="select" value={periodWeeks} onChange={(e) => setPeriodWeeks(Number(e.target.value) as 1 | 2)}>
-              <option value={1}>1 semaine</option>
-              <option value={2}>2 semaines</option>
-            </select>
-          )}
+
         </div>
       </div>
 
@@ -368,7 +362,7 @@ export default function PlanningPage() {
         {view !== 'month' && view !== 'day' && (
           <label className="plan-search">
             <Search size={16} strokeWidth={2} />
-            <input placeholder="Rechercher une personne ou une ressource" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <input placeholder="Rechercher un chantier, une équipe…" value={search} onChange={(e) => setSearch(e.target.value)} />
           </label>
         )}
         {view === 'workers' && (

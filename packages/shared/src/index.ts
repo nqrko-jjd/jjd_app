@@ -9,3 +9,6 @@ export * from './schemas.js';
 
 export * from "./request-brief.js";
 export * from './paid-time.js';
+
+export * from './document-brand.js';
+export * from './document-terms.js';

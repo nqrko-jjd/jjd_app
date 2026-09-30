@@ -413,6 +413,8 @@ p { margin: 0; }
 .kpi.hero .label { color: var(--nav-fg); }
 .kpi.hero .sub { color: var(--nav-fg); }
 .kpi.hero .value.neg { color: #ffb4a8; }
+.kpi-link:focus-visible{outline:3px solid var(--gold, #b8954e);outline-offset:4px}
+.kpi-detail{display:block;margin-top:12px;font-size:.8rem;font-weight:600;color:inherit;opacity:.8}
 
 /* ---------------------------------------------------- panneau partagé (2 colonnes bureau) */
 /* un seul panneau par bloc, avec en-tête et lignes séparées par des traits discrets — pas une

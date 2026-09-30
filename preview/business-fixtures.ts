@@ -47,7 +47,32 @@ export function businessApi(path:string,method:string,b:any,db:any,people:any[])
  if(p.startsWith('/api/documents')){
   const base=(kind='quote')=>({id:uid(),kind,number:null,draftRef:'DÉMO-'+((state.docs?.length||0)+1),status:'draft',source:'manual',title:'Travaux de remise en état',intro:null,terms:null,note:null,issuedOn:null,dueOn:null,validUntil:null,totalHt:0,totalVat:0,totalTtc:0,paidAmount:0,vatRate:null,structuredComm:null,peppolStatus:null,originalPdf:null,sentAt:null,acceptedOn:null,lockedAt:null,billingName:null,billingVat:null,billingAddress:null,billingEmail:null,customerRef:null,contact:contacts()[0],worksite:ws('w0'),parent:null,children:[],lines:[]});
   if(!state.docs){const lines=[{kind:'section',label:'Remise en état',qty:0,unitPriceHt:0,discountPct:0,vatRate:0},{kind:'item',label:'Préparation et peinture des supports',description:'Protection, préparation du support et deux couches de finition.',qty:32,unit:'m²',unitPriceHt:38,discountPct:0,vatRate:.21}];state.docs=[{...base(),id:'doc1',lines,...computeDocTotals(lines)},{...base('invoice'),id:'doc2',title:'Intervention · décompte',lines:[{kind:'item',label:'Main-d’œuvre intervention',qty:2,unit:'jour',unitPriceHt:500,discountPct:0,vatRate:.21}],...computeDocTotals([{kind:'item',qty:2,unitPriceHt:500,vatRate:.21}])}];}
-  if(p==='/api/documents'){if(method==='POST'){const d={...base(b.kind),worksite:b.worksiteId?ws(b.worksiteId):null,contact:b.contactId?contacts().find((c:any)=>c.id===b.contactId):null};state.docs.push(d);save();return {document:d};}const items=state.docs.filter((d:any)=>(!u.searchParams.get('kind')||d.kind===u.searchParams.get('kind'))&&(!u.searchParams.get('worksiteId')||d.worksite?.id===u.searchParams.get('worksiteId'))&&(!u.searchParams.get('q')||JSON.stringify(d).toLowerCase().includes(u.searchParams.get('q')!.toLowerCase())));return {items,page:1,pageSize:30,totalPages:1,totalCount:items.length};}
+  if(!state.dashboardDetailsV1){
+   const date=new Date();date.setDate(1);const issuedOn=date.toISOString();
+   for(const [i,status] of ['paid','overdue','partial','sent'].entries()){
+    const lines=[{kind:'item',label:'Travaux de démonstration',qty:2,unit:'jour',unitPriceHt:500+i*100,discountPct:0,vatRate:.21}];
+    const totals=computeDocTotals(lines);
+    state.docs.push({...base('invoice'),id:'detail-invoice-'+i,number:'DÉMO-F-'+(101+i),status,issuedOn,lockedAt:issuedOn,dueOn:issuedOn,lines,...totals,paidAmount:status==='paid'?totals.totalTtc:status==='partial'?500:0});
+   }
+   state.docs.push({...base('quote'),id:'detail-quote',number:'DÉMO-D-101',status:'sent',issuedOn,lockedAt:issuedOn,lines:[{kind:'item',label:'Remise en état complète',qty:1,unit:'forfait',unitPriceHt:3600,discountPct:0,vatRate:.21}],totalHt:3600,totalVat:756,totalTtc:4356});
+   state.dashboardDetailsV1=true;save();
+  }
+  if(p==='/api/documents'){
+   if(method==='POST'){const d={...base(b.kind),worksite:b.worksiteId?ws(b.worksiteId):null,contact:b.contactId?contacts().find((c:any)=>c.id===b.contactId):null};state.docs.push(d);save();return {document:d};}
+   const metric=u.searchParams.get('dashboard'),now=new Date(),start=new Date(now.getFullYear(),now.getMonth(),1);
+   const items=state.docs.filter((d:any)=>{
+    const kind=u.searchParams.get('kind');
+    if(kind&&(kind==='invoice'?!['invoice','deposit_invoice'].includes(d.kind):d.kind!==kind))return false;
+    if(u.searchParams.get('status')&&d.status!==u.searchParams.get('status'))return false;
+    if(u.searchParams.get('worksiteId')&&d.worksite?.id!==u.searchParams.get('worksiteId'))return false;
+    if(u.searchParams.get('q')&&!JSON.stringify(d).toLowerCase().includes(u.searchParams.get('q')!.toLowerCase()))return false;
+    if(metric==='invoiced'||metric==='collected')return !!d.issuedOn&&new Date(d.issuedOn)>=start&&(metric!=='collected'||d.status==='paid');
+    if(metric==='overdue')return d.status==='overdue';
+    if(metric==='receivable')return ['sent','partial','overdue'].includes(d.status);
+    if(metric==='quotes')return d.kind==='quote'&&d.status==='sent';
+    return true;
+   });return {items,page:1,pageSize:100,totalPages:1,totalCount:items.length};
+  }
   const d=need(state.docs.find((d:any)=>d.id===parts[3]));if(parts.length===4){if(method==='PATCH'){Object.assign(d,b,{worksite:b.worksiteId?ws(b.worksiteId):null,contact:b.contactId?contacts().find((c:any)=>c.id===b.contactId):null});Object.assign(d,computeDocTotals(d.lines));save();}if(method==='DELETE'){state.docs=state.docs.filter((x:any)=>x.id!==d.id);save();return {ok:true};}return {document:d};}
   if(parts[4]==='duplicate'){const copy={...structuredClone(d),id:uid(),draftRef:'COPIE-DÉMO',number:null,status:'draft'};state.docs.push(copy);save();return {document:copy};}
   throw Error('Aucun envoi, émission officielle ou paiement réel depuis la maquette. Vous pouvez modifier et enregistrer le brouillon de démonstration.');
@@ -109,7 +134,7 @@ export function businessApi(path:string,method:string,b:any,db:any,people:any[])
  if(p==='/api/finance/expenses/mailbox-status')return {configured:false};
  if(p==='/api/finance/expenses'){
   if(method==='POST'){const e={...state.expenses[0],...b,id:uid(),hasPdf:false,worksite:b.worksiteId?ws(b.worksiteId):null};state.expenses.push(e);save();return {expense:e};}
-  const items=state.expenses.filter((e:any)=>(!u.searchParams.get('worksiteId')||e.worksiteId===u.searchParams.get('worksiteId'))&&(!u.searchParams.get('q')||JSON.stringify(e).toLowerCase().includes(u.searchParams.get('q')!.toLowerCase()))&&(!u.searchParams.get('paid')||e.paid===(u.searchParams.get('paid')==='1')));return {items,totals:{count:items.length,ht:items.reduce((s:number,e:any)=>s+e.ht,0),ttc:items.reduce((s:number,e:any)=>s+e.ttc,0),unpaidTtc:items.filter((e:any)=>!e.paid).reduce((s:number,e:any)=>s+e.ttc,0),pendingSlips:0,overdueCount:0,overdueTtc:0},page:1,pageSize:100,totalPages:1};
+  const items=state.expenses.filter((e:any)=>(u.searchParams.get('overdue')!=='1'||(e.direction==='purchase'&&!e.paid&&e.dueDate&&new Date(e.dueDate)<new Date()))&&(!u.searchParams.get('worksiteId')||e.worksiteId===u.searchParams.get('worksiteId'))&&(!u.searchParams.get('q')||JSON.stringify(e).toLowerCase().includes(u.searchParams.get('q')!.toLowerCase()))&&(!u.searchParams.get('paid')||e.paid===(u.searchParams.get('paid')==='1')));return {items,totals:{count:items.length,ht:items.reduce((s:number,e:any)=>s+e.ht,0),ttc:items.reduce((s:number,e:any)=>s+e.ttc,0),unpaidTtc:items.filter((e:any)=>!e.paid).reduce((s:number,e:any)=>s+e.ttc,0),pendingSlips:0,overdueCount:0,overdueTtc:0},page:1,pageSize:100,totalPages:1};
  }
  if(p.startsWith('/api/finance/expenses/')){const e=need(state.expenses.find((e:any)=>e.id===parts[4]));if(p.endsWith('/bank-suggestions'))return {items:[]};if(p.endsWith('/paid')){e.paid=b.paid;e.paymentStatus=b.paid?'paid':'unpaid';}else if(method==='PATCH')Object.assign(e,b,{worksite:b.worksiteId?ws(b.worksiteId):e.worksite});else if(method==='DELETE')state.expenses=state.expenses.filter((x:any)=>x.id!==e.id);save();return {expense:{...e,bankMatches:[]}};}
 

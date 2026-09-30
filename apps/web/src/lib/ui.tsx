@@ -40,7 +40,7 @@ export function Kpi({ ic: Ic, label, value, sub, hero, warn, neg, history, href 
       )}
     </>
   );
-  return href ? <Link href={href} className={className}>{content}</Link> : <div className={className}>{content}</div>;
+  return href ? <Link href={href} className={className} title={`Voir le détail : ${label}`}>{content}<span className="kpi-detail">Voir le détail</span></Link> : <div className={className}>{content}</div>;
 }
 
 const STATUS_TONE: Partial<Record<WorksiteStatus, string>> = {

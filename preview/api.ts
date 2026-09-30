@@ -25,13 +25,20 @@ function hydrate(b:any,old:any={}){const x={allDay:false,team:null,consumables:[
 export function reset(){resetBusiness();localStorage.removeItem(key);location.reload()}
 export function getWorksite(id:string){return db.worksites.find((w:any)=>w.id===id)}
 export function getEvents(id:string){return db.events.filter((e:any)=>e.worksite.id===id)}
+function dashboardKpis(){
+ const rows=(metric:string,kind='invoice')=>businessApi(`/api/documents?kind=${kind}&dashboard=${metric}`,'GET',null,db,people).items;
+ const total=(items:any[],field:string)=>items.reduce((sum:number,d:any)=>sum+Number(d[field]||0),0);
+ const overdue=rows('overdue'),receivable=rows('receivable'),quotes=rows('quotes','quote');
+ const suppliers=businessApi('/api/finance/expenses?paid=0&overdue=1','GET',null,db,people).items;
+ return {invoicedMonth:total(rows('invoiced'),'totalHt'),invoicedPrevMonth:0,paidMonth:total(rows('collected'),'totalHt'),overdueAmount:overdue.reduce((s:number,d:any)=>s+Math.max(0,d.totalTtc-d.paidAmount),0),overdueCount:overdue.length,supplierOverdueAmount:total(suppliers,'ttc'),supplierOverdueCount:suppliers.length,openWorksites:db.worksites.filter((w:any)=>w.status==='in_progress').length,teamsOnSiteToday:3,receivableAmount:receivable.reduce((s:number,d:any)=>s+Math.max(0,d.totalTtc-d.paidAmount),0),quotesPendingAmount:total(quotes,'totalHt'),quotesPendingCount:quotes.length};
+}
 export async function api<T=unknown>(path:string,opts:any={}):Promise<T>{
  const business=businessApi(path,opts.method||'GET',opts.body,db,people);if(business!==undefined)return business as T;
  const url=new URL(path,'https://demo.invalid'),p=url.pathname,b=opts.body,method=opts.method||'GET';let result:any;
  if(p==='/api/assistant/status')result={enabled:false};
  else if(p==='/api/messagerie/unread-count')result={internal:3,client:1};
  else if(p==='/api/dashboard')result={
-  kpis:{invoicedMonth:128400,invoicedPrevMonth:104800,paidMonth:86250,overdueAmount:18450,overdueCount:4,supplierOverdueAmount:7280,supplierOverdueCount:3,openWorksites:db.worksites.length,teamsOnSiteToday:3,receivableAmount:42150,quotesPendingAmount:96500,quotesPendingCount:7},
+  kpis:dashboardKpis(),
   alerts:[
    {kind:'overdue_invoices',severity:'critical',label:'Factures clients à relancer',count:4,amount:18450,href:'/app/documents'},
    {kind:'to_invoice',severity:'warning',label:'Travaux réalisés à facturer',count:6,amount:32700,href:'/app/chantiers?statut=to_invoice'},

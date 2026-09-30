@@ -185,6 +185,20 @@ documentsRouter.get(
     if (contactId) where.contactId = contactId;
     if (scope === 'drafts') where.lockedAt = null;
     if (scope === 'issued') where.lockedAt = { not: null };
+    // Same definitions as the dashboard totals; no changes to amounts or statuses.
+    const dashboard = String(req.query.dashboard || '');
+    if (['invoiced', 'collected', 'overdue', 'receivable', 'quotes'].includes(dashboard)) {
+      where.source = { not: 'demo' };
+      where.kind = dashboard === 'quotes' ? 'quote' : { in: ['invoice', 'deposit_invoice'] };
+      if (dashboard === 'invoiced' || dashboard === 'collected') {
+        const now = new Date();
+        where.issuedOn = { gte: new Date(now.getFullYear(), now.getMonth(), 1) };
+      }
+      if (dashboard === 'collected') where.status = 'paid';
+      if (dashboard === 'overdue') where.status = 'overdue';
+      if (dashboard === 'receivable') where.status = { in: ['sent', 'partial', 'overdue'] };
+      if (dashboard === 'quotes') where.status = 'sent';
+    }
     if (q) {
       where.OR = [
         { number: { contains: q, ...insensitive } },

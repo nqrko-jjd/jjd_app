@@ -12,6 +12,10 @@ try {
  const db={worksites:[0,1,2,3].map(i=>({id:'w'+i,ref:'DEMO-'+i,title:'Chantier '+i,address:'Adresse',city:'Bruxelles',client:{id:'c'+i,name:'Client Démo'},status:i===3?'on_hold':'in_progress',building:{id:'b'+i,name:'Immeuble '+i},quotedHt:18000,invoicedHt:4000})),events:[]};
  const people=['José','Miguel','Rui'].map((displayName,i)=>({id:'p'+i,displayName}));
  const api=(p,m='GET',b)=>businessApi(p,m,b,db,people);
+ assert(api('/api/documents?kind=invoice&dashboard=overdue').items.every(d=>d.status==='overdue'));
+ assert.equal(api('/api/documents?kind=invoice&dashboard=collected').items[0].status,'paid');
+ assert.equal(api('/api/documents?kind=invoice&dashboard=receivable').items.length,3);
+ assert.equal(api('/api/documents?kind=quote&dashboard=quotes').items.length,1);
  assert.equal(api('/api/imports/issues?severity=warning').items.length,1);
  api('/api/imports/issues/issue1','PATCH',{resolved:true});
  assert.equal(api('/api/imports/issues?severity=warning').items.length,0);

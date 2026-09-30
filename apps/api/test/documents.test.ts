@@ -44,6 +44,20 @@ after(async () => {
 
 const auth = () => ({ authorization: `Bearer ${token}`, 'content-type': 'application/json' });
 
+test('dashboard : liens filtrés factures, encaissements et devis', async () => {
+  const issuedOn = new Date();
+  for (const status of ['paid','overdue','partial','sent','draft']) {
+    await prisma.document.create({data:{kind:'invoice',source:'manual',worksiteId:wsId,status,issuedOn:status==='draft'?null:issuedOn,totalHt:100,totalTtc:121}});
+  }
+  await prisma.document.create({data:{kind:'quote',source:'manual',worksiteId:wsId,status:'sent',totalHt:500}});
+  for (const [metric, count] of [['invoiced',4],['collected',1],['overdue',1],['receivable',3],['quotes',1]] as const) {
+    const response = await fetch(`${base}/api/documents?worksiteId=${wsId}&dashboard=${metric}`,{headers:auth()});
+    assert.equal(response.status,200);
+    const result = await response.json();
+    assert.equal(result.items.length,count,metric);
+  }
+});
+
 test('Peppol absent : aucun envoi, verrouillage ou numéro créé', async () => {
   const doc = await prisma.document.create({data:{kind:'invoice',source:'manual',worksiteId:wsId,draftRef:'PEPPOL-SAFETY'}});
   const response = await fetch(`${base}/api/documents/${doc.id}/send`,{method:'POST',headers:auth(),body:JSON.stringify({peppol:true})});

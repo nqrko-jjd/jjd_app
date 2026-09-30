@@ -533,6 +533,7 @@ export default function DashboardPage() {
             <Kpi
               ic={BarChart3}
               label="Facturé ce mois"
+              href="/app/documents?kind=invoice&dashboard=invoiced"
               value={<Money value={data.kpis.invoicedMonth} />}
               sub={monthTrend(data.kpis.invoicedMonth, data.kpis.invoicedPrevMonth) ?? 'Pas encore assez d’historique pour comparer'}
               hero
@@ -541,6 +542,7 @@ export default function DashboardPage() {
             <Kpi
               ic={Wallet}
               label="Encaissé ce mois"
+              href="/app/documents?kind=invoice&dashboard=collected"
               value={<Money value={data.kpis.paidMonth} />}
               sub={data.kpis.invoicedMonth > 0 ? `${Math.round((data.kpis.paidMonth / data.kpis.invoicedMonth) * 100)} % du montant facturé` : 'Aucune facture ce mois-ci'}
             />
@@ -551,16 +553,17 @@ export default function DashboardPage() {
               sub={data.kpis.teamsOnSiteToday > 0 ? `${data.kpis.teamsOnSiteToday} équipe${data.kpis.teamsOnSiteToday > 1 ? 's' : ''} sur le terrain aujourd’hui` : 'Aucune équipe sur le terrain aujourd’hui'}
               href="/app/chantiers?statut=in_progress"
             />
-            <Kpi ic={Flag} label="Impayés" value={<Money value={data.kpis.overdueAmount} />} sub={`${data.kpis.overdueCount} facture${data.kpis.overdueCount > 1 ? 's' : ''} en retard`} warn />
+            <Kpi ic={Flag} label="Impayés" href="/app/documents?kind=invoice&dashboard=overdue" value={<Money value={data.kpis.overdueAmount} />} sub={`${data.kpis.overdueCount} facture${data.kpis.overdueCount > 1 ? 's' : ''} en retard`} warn />
             <Kpi
               ic={CreditCard}
               label="Fournisseurs en retard"
+              href="/app/achats?paid=0&overdue=1"
               value={<Money value={data.kpis.supplierOverdueAmount} />}
               sub={data.kpis.supplierOverdueCount > 0 ? `${data.kpis.supplierOverdueCount} facture${data.kpis.supplierOverdueCount > 1 ? 's' : ''} échue${data.kpis.supplierOverdueCount > 1 ? 's' : ''}` : 'Tout est à jour'}
               warn={data.kpis.supplierOverdueCount > 0}
             />
-            <Kpi ic={FileText} label="Devis en attente" value={<Money value={data.kpis.quotesPendingAmount} />} sub={`${data.kpis.quotesPendingCount} devis envoyés`} />
-            <Kpi ic={Clock} label="À encaisser" value={<Money value={data.kpis.receivableAmount} />} sub="factures émises non payées" />
+            <Kpi ic={FileText} label="Devis en attente" href="/app/documents?kind=quote&dashboard=quotes" value={<Money value={data.kpis.quotesPendingAmount} />} sub={`${data.kpis.quotesPendingCount} devis envoyés`} />
+            <Kpi ic={Clock} label="À encaisser" href="/app/documents?kind=invoice&dashboard=receivable" value={<Money value={data.kpis.receivableAmount} />} sub="factures émises non payées" />
           </div>
 
           <div className="split" style={{ margin: '1.8rem 0 0.8rem' }}>
@@ -633,4 +636,3 @@ export default function DashboardPage() {
     </>
   );
 }
-

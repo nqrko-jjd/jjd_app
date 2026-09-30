@@ -34,6 +34,8 @@ import PortalMessages from '../apps/web/src/app/portail/messages/page';
 import '../apps/web/src/app/portail/portal.css';
 import {Shell} from '../apps/web/src/components/Shell';
 import Dashboard from '../apps/web/src/app/app/page';
+import TasksPage from '../apps/web/src/app/app/taches/page';
+import CrmPage from '../apps/web/src/app/app/crm/page';
 import Planning from '../apps/web/src/app/app/planning/page';
 import Chantiers from '../apps/web/src/app/app/chantiers/page';
 import {usePathname} from './navigation';
@@ -54,6 +56,8 @@ function App(){
   const ws=path.startsWith('/app/chantiers/')?getWorksite(id):null;
   let business:React.ReactNode=null;
   if(path==='/app/contacts')business=<ContactsPage/>;
+  else if(path==='/app/taches')business=<TasksPage/>;
+  else if(path==='/app/crm')business=<CrmPage/>;
   else if(path.startsWith('/app/contacts/'))business=<ContactPage key={id} params={params}/>;
   else if(path==='/app/equipe')business=<TeamPage/>;
   else if(path.startsWith('/app/equipe/'))business=<PersonPage key={id} params={params}/>;
@@ -80,7 +84,7 @@ function App(){
   else if(path.startsWith('/app/materiel/'))business=<EquipmentDetail key={id} params={params}/>;
   if((path.startsWith('/app/stock')||path.startsWith('/app/materiel'))&&business)business=<DepotFrame>{business}</DepotFrame>;
   if(path.startsWith('/portail')){const page=path==='/portail/immeubles'?<PortalBuildings/>:path.startsWith('/portail/immeuble/')?<PortalBuilding key={id} params={params}/>:path.startsWith('/portail/chantier/')?<PortalWorksite key={id} params={params}/>:path==='/portail/demande'?<PortalRequest/>:path==='/portail/interventions'?<PortalInterventions/>:path==='/portail/planning'?<PortalPlanning/>:path==='/portail/documents'?<PortalDocuments/>:path==='/portail/devis'?<PortalQuotes/>:path==='/portail/messages'?<PortalMessages/>:<PortalHome/>;return <><div className="preview-ribbon"><strong>Portail client · données fictives</strong><a href="#/app/immeubles">Retour administration</a><select aria-label="Profil client de démonstration" value={localStorage.getItem('jjd-preview-client-profile')||'syndic'} onChange={e=>{localStorage.setItem('jjd-preview-client-profile',e.target.value);location.hash='/portail/immeubles';location.reload();}}><option value="syndic">Syndic</option><option value="promoter">Promoteur</option></select></div><Suspense fallback={<p>Chargement…</p>}>{page}</Suspense></>;}
-  const navigationPaths=['/app','/app/chantiers','/app/planning','/app/messagerie','/app/documents','/app/achats','/app/analyse','/app/finances','/app/immeubles','/app/contacts','/app/equipe','/app/controle','/app/stock','/app/stock/preparations','/app/stock/commandes','/app/stock/scan','/app/materiel'];
+  const navigationPaths=['/app','/app/chantiers','/app/planning','/app/taches','/app/crm','/app/messagerie','/app/documents','/app/achats','/app/analyse','/app/finances','/app/immeubles','/app/contacts','/app/equipe','/app/controle','/app/stock','/app/stock/preparations','/app/stock/commandes','/app/stock/scan','/app/materiel'];
   const known=navigationPaths.includes(path)||!!ws;
   return <><div className="preview-ribbon"><strong>Aperçu privé · données fictives</strong><span>Écrans du site · visuel de la maquette validée</span><a href="#/portail/immeubles">Tester le portail client</a><button onClick={()=>{if(confirm('Réinitialiser uniquement les données fictives de cet aperçu ?'))reset()}}>Réinitialiser</button></div><Shell navigationPaths={navigationPaths}><Suspense fallback={<div className="state">Chargement de la fiche…</div>}>{business??(path==='/app'?<Dashboard/>:path==='/app/chantiers'?<Chantiers/>:ws?<WorksitePage key={id} params={params}/>:path==='/app/planning'?<Planning/>:path==='/app/messagerie'?<MessagingPage/>:<section className="state"><h2>Parcours en préparation</h2><p>Cette page annexe sera reprise dans la prochaine étape de la maquette.</p><a className="btn primary" href="#/app">Retour à la vue d’ensemble</a></section>)}</Suspense>{!known&&null}</Shell></>;
 }

@@ -77,6 +77,8 @@ Les écrans réels Finances, Banque et Grand livre sont également exposés dans
 
 ## Livraison complémentaire du 30 septembre
 
+Lot suivant : tâches et suivi commercial désormais routés sur les pages réelles dans la maquette. Adaptateur de tâches commun à la liste générale et aux fiches chantier : création, affectations, déplacement vers un autre chantier, checklist, achèvement et suppression locaux. Le CRM simule la création, l’édition et les changements d’étape ; « gagné » ne crée pas automatiquement de chantier (même comportement que le changement d’étape existant). Aucun agent IA, e-mail ou notification réelle lancé. Titres du pipeline utilisables au clavier et sélecteur d’étape explicite ; erreurs de modification visibles. Typecheck web et tests des fixtures réussis.
+
 Cette section remplace les réserves précédentes concernant les écrans secondaires : Contacts (liste/fiche), Équipe (liste/fiche), Analyse, Contrôle et Messagerie utilisent maintenant les pages réelles dans l’aperçu, avec des adaptateurs strictement locaux. Les opérations externes restent explicitement désactivées ; la création d’une personne de démonstration ne constitue pas une création de compte ni une affectation au planning.
 
 Analyse distingue facturé, encaissé et rentabilité par chantier. Contrôle filtre les anomalies par gravité et explique la différence entre correction et classement. La messagerie conserve le texte en cas d’erreur et affiche les échecs au lieu de les masquer.

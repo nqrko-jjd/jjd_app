@@ -914,6 +914,7 @@ p { margin: 0; }
 .login-card { width: 100%; max-width: 372px; box-shadow: var(--shadow-lg); }
 
 /* ---------------------------------------------------- kanban */
+.crm-board{scroll-snap-type:x proximity}.crm-board .kanban-col{min-width:290px;scroll-snap-align:start;padding:16px}.crm-board .kanban-col h3{font-size:.875rem;letter-spacing:.02em;text-transform:none;color:var(--ink)}.crm-board .kanban-card{padding:18px;border-radius:14px}.crm-card-title{display:block;width:100%;text-align:left;font:inherit;font-weight:700;font-size:1rem;color:var(--ink);background:none;border:0;padding:6px 0;cursor:pointer;line-height:1.45}.crm-card-title:hover{text-decoration:underline;text-underline-offset:3px}.crm-card-title:focus-visible{outline:2px solid var(--primary);outline-offset:4px}.crm-stage-label{display:grid;gap:6px;margin-top:16px;font-size:.8rem;color:var(--ink-2)}.crm-stage-label select{width:100%;min-height:40px}.crm-board .kanban-card .eyebrow-mini{font-size:.8rem;text-transform:none;letter-spacing:0}
 .kanban { display: flex; gap: 0.9rem; overflow-x: auto; padding-bottom: 0.5rem; }
 .kanban-col { min-width: 264px; flex: 1; background: var(--surface-2); border-radius: var(--radius); padding: 0.7rem; }
 .kanban-col h3 {

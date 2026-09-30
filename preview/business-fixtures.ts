@@ -1,6 +1,7 @@
 /* Isolated API fixtures for the REAL application screens. No production connection. */
 import {officeFixtures} from './office-fixtures';
-import {computeWorksiteMargin,computeDocTotals} from '@jjd/shared';
+import {taskFixtures} from './task-fixtures';
+import {computeWorksiteMargin,computeDocTotals,CRM_STAGES} from '@jjd/shared';
 const key='jjd-business-fixtures-v1';
 const contact={id:'supplier1',type:'supplier',name:'Fournisseur Démo',email:'fournisseur@example.test',phone:null,onAccount:true,customerNumber:'DEMO'};
 const seeds:any={stock:[['s1','Enduit de finition 25 kg','sac',12,'filler-bags.png'],['s2','Film de protection','rouleau',8,null],['s3','Ruban de masquage','rouleau',24,null]].map(([id,name,unit,qty,img],i)=>({id,name,unit,qty,ref:`JJD-00${i+1}`,brand:null,model:null,category:'Finitions',minQty:5,avgCost:18,value:Number(qty)*18,low:false,active:true,photoUrl:img?`/demo/jjd/${img}`:null,photoThumbUrl:img?`/demo/jjd/${img}`:null,description:'Article de démonstration',location:'A-02',units:[],barcodes:[{id:`bc${i}`,code:`JJD-00${i+1}`,unitName:null}],suppliers:[{id:`sp${i}`,contactId:'supplier1',contact,supplierRef:`REF-${i}`,price:18,unitName:null,preferred:true}]})),preps:[{id:'prep1',ref:'PREP-024',worksiteId:'w1',status:'to_prepare',neededOn:'2026-10-01',note:'À emporter au départ du dépôt',lines:[{id:'pl1',stockItemId:'s1',qty:16,pickedQty:0,unitName:null},{id:'pl2',stockItemId:'s2',qty:3,pickedQty:0,unitName:null}]}],orders:[{id:'po1',ref:'CF-041',contactId:'supplier1',worksiteId:'w1',status:'ordered',expectedOn:'2026-09-30',orderedOn:'2026-09-28',note:'Complément pour la préparation PREP-024',supplierRef:'DEMO-FOUR-041',lines:[{id:'pol1',stockItemId:'s1',qty:10,receivedQty:0,price:18,unitName:null}]}],moves:[],buildingEdits:{},tasks:{},threads:{}};
@@ -11,6 +12,7 @@ const need=(x:any)=>{if(!x)throw Error('Élément introuvable dans cet aperçu.'
 export function resetBusiness(){localStorage.removeItem(key)}
 export function businessApi(path:string,method:string,b:any,db:any,people:any[]):any{
  const u=new URL(path,'https://demo.invalid'),p=u.pathname,parts=p.split('/');
+ const taskResult=taskFixtures(p,method,b,u,state,db,people,save);if(taskResult!==undefined)return taskResult;
  if(p.startsWith('/api/worksites/')&&p.includes('/thread')&&method!=='GET'&&!(method==='POST'&&p.endsWith('/messages')))throw Error('Le partage de fichiers et les actions avancées ne sont pas connectés dans cet aperçu. Aucun message client envoyé.');
  const office=officeFixtures(p,method,b,u,state,db,people,save);if(office!==undefined)return office;
  const ws=(id:string)=>db.worksites.find((w:any)=>w.id===id);
@@ -43,6 +45,22 @@ export function businessApi(path:string,method:string,b:any,db:any,people:any[])
   if(method==='DELETE'){if(db.worksites.some((w:any)=>w.client?.id===c.id))throw Error('Ce contact est utilisé par un chantier.');state.deletedContacts??=[];state.deletedContacts.push(c.id);save();return {ok:true};}
   const purchases=state.expenses.filter((e:any)=>e.contactId===c.id);
   return {contact:{...c,...edit,contactPersons:edit.contactPersons||[],worksites:db.worksites.filter((w:any)=>w.client?.id===c.id),purchases,purchaseBalance:[],purchaseSummary:{count:purchases.length,ht:purchases.reduce((s:number,e:any)=>s+e.ht,0),ttc:purchases.reduce((s:number,e:any)=>s+e.ttc,0),balance:purchases.filter((e:any)=>!e.paid).reduce((s:number,e:any)=>s+e.ttc,0)}}};
+ }
+ if(p==='/api/crm'||p.startsWith('/api/crm/')){
+  state.opportunities??=[
+   {id:'opp-demo-1',title:'Rénover une salle de bains',stage:'new',contactId:'c1',estimatedValue:18500,source:'Appel',nextActionOn:new Date().toISOString(),nextActionNote:'Préciser les attentes et convenir d’une visite',urgent:false,photos:[]},
+   {id:'opp-demo-2',title:'Étanchéité des terrasses communes',stage:'to_qualify',contactId:'c0',estimatedValue:null,source:'Client existant',nextActionOn:null,nextActionNote:'Obtenir les plans et surfaces',urgent:false,photos:[]},
+   {id:'opp-demo-3',title:'Finitions après réception · nouveau lot',stage:'quote_sent',contactId:'c2',estimatedValue:4200,source:'E-mail',nextActionOn:null,nextActionNote:'Attendre le retour sur le devis',urgent:false,photos:[]}
+  ];
+  const hydrate=(o:any)=>({note:null,problemType:null,unitLabel:null,onSiteContactName:null,onSiteContactPhone:null,accessNotes:null,visitPreference:null,...o,contact:contacts().find((c:any)=>c.id===o.contactId)||null,acp:contacts().find((c:any)=>c.id===o.acpId)||null});
+  if(method==='POST'&&p==='/api/crm'){
+   if(!b.title?.trim())throw Error('Indiquez l’objet de la demande.');
+   if(b.stage&&!CRM_STAGES.includes(b.stage))throw Error('Étape invalide.');
+   const opportunity={...b,id:uid(),stage:b.stage||'new',photos:[]};state.opportunities.push(opportunity);save();return {opportunity:hydrate(opportunity)};
+  }
+  if(method==='PATCH'&&parts.length===4){const opportunity=need(state.opportunities.find((o:any)=>o.id===parts[3]));if(b.stage&&!CRM_STAGES.includes(b.stage))throw Error('Étape invalide.');Object.assign(opportunity,b);save();return {opportunity:hydrate(opportunity)};}
+  if(method!=='GET')throw Error('Cette action n’est pas connectée dans la démonstration.');
+  return {columns:CRM_STAGES.filter(s=>s!=='won'&&s!=='lost').map(stage=>({stage,items:state.opportunities.filter((o:any)=>o.stage===stage).map(hydrate)}))};
  }
  if(p.startsWith('/api/documents')){
   const base=(kind='quote')=>({id:uid(),kind,number:null,draftRef:'DÉMO-'+((state.docs?.length||0)+1),status:'draft',source:'manual',title:'Travaux de remise en état',intro:null,terms:null,note:null,issuedOn:null,dueOn:null,validUntil:null,totalHt:0,totalVat:0,totalTtc:0,paidAmount:0,vatRate:null,structuredComm:null,peppolStatus:null,originalPdf:null,sentAt:null,acceptedOn:null,lockedAt:null,billingName:null,billingVat:null,billingAddress:null,billingEmail:null,customerRef:null,contact:contacts()[0],worksite:ws('w0'),parent:null,children:[],lines:[]});

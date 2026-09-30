@@ -16,7 +16,7 @@ import { DOC_STATUS_LABEL } from '@jjd/shared';
 interface Row {
   id: string; kind: string; number: string | null; draftRef: string | null; status: string;
   title: string | null; issuedOn: string | null; dueOn: string | null; totalTtc: number; paidAmount: number;
-  paidOn: string | null;
+  paidOn: string | null; createdAt: string;
   originalPdf: string | null; source: string | null;
   worksite: { ref: string } | null; contact: { name: string } | null;
 }
@@ -337,7 +337,7 @@ function DocumentsInner() {
                 <div className="doc-item-title">{d.title || DOC_KIND_LABEL[d.kind]}</div>
                 <div className="doc-item-meta">
                   <span>{d.contact?.name || '—'}</span>
-                  <span>Échéance : {d.dueOn ? formatDateBE(d.dueOn) : '—'}</span>
+                  <span>Créée le {formatDateBE(d.createdAt)} · Échéance : {d.dueOn ? formatDateBE(d.dueOn) : '—'}</span>
                 </div>
               </div>
             </div>

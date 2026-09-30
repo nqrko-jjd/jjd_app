@@ -69,12 +69,17 @@ function BanqueInner() {
   const [pageSize, setPageSize] = useState(100);
   const [busy, setBusy] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
+  // Arrivée depuis la fiche d'une facture ("payée le …", cliquable) : ne montre que les
+  // transactions qui l'ont réglée, prioritaire sur le filtre "matched" habituel.
+  const [documentFilter, setDocumentFilter] = useState<string | null>(null);
+  useEffect(() => { setDocumentFilter(sp.get('documentId')); }, [sp]);
 
-  useEffect(() => { setPage(1); }, [q, bank, matched]);
+  useEffect(() => { setPage(1); }, [q, bank, matched, documentFilter]);
 
   const qs = new URLSearchParams({ matched, page: String(page), pageSize: String(pageSize) });
   if (q) qs.set('q', q);
   if (bank) qs.set('bank', bank);
+  if (documentFilter) qs.set('documentId', documentFilter);
   const { data, loading, error, reload } = useApi<{
     items: Tx[]; matched: number; total: number; byBank: { bank: string | null; _count: number }[];
     page: number; totalPages: number; totalCount: number;
@@ -182,6 +187,13 @@ function BanqueInner() {
         sub={data ? `${data.matched} / ${data.total} transactions rapprochées · page ${data.page}/${data.totalPages}` : undefined}
         action={<Link href="/app/finances" className="btn">← Finances</Link>}
       />
+
+      {documentFilter && (
+        <div className="card card-pad" style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.7rem' }}>
+          <span>Filtré : transaction(s) ayant réglé cette facture{data ? ` (${data.totalCount})` : ''}.</span>
+          <button type="button" className="btn" onClick={() => setDocumentFilter(null)}>Retirer le filtre</button>
+        </div>
+      )}
 
       <div className="card card-pad" style={{ marginBottom: '1rem' }}>
         <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.7rem' }}>

@@ -241,11 +241,16 @@ financeRouter.get(
   '/bank',
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
-    const { matched, q: qRaw, from, bank, page: pageStr, pageSize: pageSizeStr } = req.query as Record<string, string>;
+    const { matched, q: qRaw, from, bank, documentId, page: pageStr, pageSize: pageSizeStr } = req.query as Record<string, string>;
     const q = qRaw?.toLowerCase();
     const and: Record<string, unknown>[] = [];
-    if (matched === '1') and.push({ matches: { some: {} } });
-    if (matched === '0') and.push({ matches: { none: {} } });
+    // Retrouver la transaction qui a réglé une facture précise (lien direct depuis sa fiche) —
+    // prioritaire sur `matched`, puisqu'une facture rapprochée est par définition "matched".
+    // Le rapprochement peut viser directement le Document (rapprochement manuel), ou son
+    // écriture de grand livre synchronisée (rapprochement automatique) — les deux comptent.
+    if (documentId) and.push({ matches: { some: { OR: [{ documentId }, { ledgerEntry: { documentId } }] } } });
+    else if (matched === '1') and.push({ matches: { some: {} } });
+    else if (matched === '0') and.push({ matches: { none: {} } });
     if (from) and.push({ bookingDate: { gte: new Date(from) } });
     if (bank) and.push({ bank });
     if (q) and.push({ OR: [{ counterpartyName: { contains: q, ...insensitive } }, { description: { contains: q, ...insensitive } }, { communication: { contains: q, ...insensitive } }] });

@@ -533,10 +533,21 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
             {isInvoiceLike && locked && (
               <div className={doc.status === 'paid' ? 'doc-recap-paid ok' : doc.status === 'partial' ? 'doc-recap-paid warn' : 'doc-recap-paid'}>
                 {doc.status === 'paid' && (
-                  <span>✓ Payée intégralement{doc.paidOn ? ` le ${formatDateBE(doc.paidOn)}` : ''}</span>
+                  <span>
+                    ✓ Payée intégralement
+                    {doc.paidOn && (
+                      <> le <Link href={`/app/finances/banque?documentId=${id}`} style={{ textDecoration: 'underline' }}>{formatDateBE(doc.paidOn)}</Link></>
+                    )}
+                  </span>
                 )}
                 {doc.status === 'partial' && (
-                  <span>◐ Paiement partiel — {formatEur(doc.paidAmount)} reçu{doc.paidOn ? ` (dernier le ${formatDateBE(doc.paidOn)})` : ''}, {formatEur(remaining)} restant</span>
+                  <span>
+                    ◐ Paiement partiel — {formatEur(doc.paidAmount)} reçu
+                    {doc.paidOn && (
+                      <> (dernier le <Link href={`/app/finances/banque?documentId=${id}`} style={{ textDecoration: 'underline' }}>{formatDateBE(doc.paidOn)}</Link>)</>
+                    )}
+                    , {formatEur(remaining)} restant
+                  </span>
                 )}
                 {doc.status !== 'paid' && doc.status !== 'partial' && (
                   <span>Aucun paiement enregistré — {formatEur(remaining)} dû</span>

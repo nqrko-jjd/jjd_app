@@ -3,8 +3,16 @@
  * du grand livre (LedgerEntry — ventes et achats).
  *
  *  - « strong » : communication structurée identique
- *  - « good »   : même montant (± 2 c) + date proche (± 10 j) + sens cohérent,
+ *  - « good »   : même montant (± 2 c) + date proche (± 45 j) + sens cohérent,
  *                 et une seule écriture candidate
+ *
+ * La date comparée est celle de l'écriture (émission de la facture pour une vente),
+ * pas la date de paiement réelle — donc la fenêtre doit couvrir des délais de
+ * paiement normaux (30 jours net + quelques jours), pas seulement un paiement
+ * immédiat. 10 j ratait des cas réels payés en temps normal (ex. facture émise le
+ * 13/08, payée le 26/08 — 13 j, hors fenêtre). Les retards extrêmes (plusieurs mois)
+ * restent hors de portée d'un rapprochement automatique fiable et passent par le
+ * rapprochement manuel.
  */
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../db.js';
@@ -69,7 +77,7 @@ export function pickMatch(tx: TxLite, candidates: LedgerLite[]): { ledgerId: str
   const near = ledgers.filter((l) => {
     if (!sideMatches(tx, l)) return false;
     if (Math.abs(amountOf(l) - amt) > 0.02) return false;
-    if (tx.bookingDate && l.date && Math.abs(tx.bookingDate.getTime() - l.date.getTime()) > 10 * DAY) return false;
+    if (tx.bookingDate && l.date && Math.abs(tx.bookingDate.getTime() - l.date.getTime()) > 45 * DAY) return false;
     return true;
   });
   if (near.length === 1) return { ledgerId: near[0]!.id, confidence: 'good' };

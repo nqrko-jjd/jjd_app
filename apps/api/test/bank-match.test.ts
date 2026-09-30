@@ -50,6 +50,18 @@ test('pickMatch : montant+date+sens, candidat unique -> good', () => {
   assert.deepEqual(m, { ledgerId: 'buy', confidence: 'good' });
 });
 
+test('pickMatch : délai de paiement normal (13 j) -> trouvé (régression Cedrimo, facture 13/08 payée 26/08)', () => {
+  const tx = { id: 'b4', amount: 6776.37, bookingDate: new Date('2026-08-26'), structuredComm: null, counterpartyName: null, side: 'in' as const };
+  const m = pickMatch(tx, [L({ id: 'inv', direction: 'sale', ttc: 6776.37, date: new Date('2026-08-13') })]);
+  assert.deepEqual(m, { ledgerId: 'inv', confidence: 'good' });
+});
+
+test('pickMatch : retard extrême (> 45 j) -> hors fenêtre, pas de correspondance automatique', () => {
+  const tx = { id: 'b5', amount: 524.7, bookingDate: new Date('2026-08-26'), structuredComm: null, counterpartyName: null, side: 'in' as const };
+  const m = pickMatch(tx, [L({ id: 'old-inv', direction: 'sale', ttc: 524.7, date: new Date('2026-04-30') })]);
+  assert.equal(m, null);
+});
+
 test('pickMatch : plusieurs candidats -> départage par nom, sinon null', () => {
   const base = { id: 'b3', amount: 1000, bookingDate: new Date('2026-05-10'), structuredComm: null, side: 'in' as const };
   const cands = [

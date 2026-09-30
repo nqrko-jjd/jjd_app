@@ -56,9 +56,30 @@ test('pickMatch : délai de paiement normal (13 j) -> trouvé (régression Cedri
   assert.deepEqual(m, { ledgerId: 'inv', confidence: 'good' });
 });
 
-test('pickMatch : retard extrême (> 45 j) -> hors fenêtre, pas de correspondance automatique', () => {
+test('pickMatch : retard extrême (> 45 j), pas de nom de contrepartie -> pas de correspondance automatique', () => {
   const tx = { id: 'b5', amount: 524.7, bookingDate: new Date('2026-08-26'), structuredComm: null, counterpartyName: null, side: 'in' as const };
   const m = pickMatch(tx, [L({ id: 'old-inv', direction: 'sale', ttc: 524.7, date: new Date('2026-04-30') })]);
+  assert.equal(m, null);
+});
+
+test('pickMatch : retard extrême (102 j) mais montant unique + nom cohérent -> trouvé (régression ACP Stade 11)', () => {
+  const tx = { id: 'b6', amount: 8469.4, bookingDate: new Date('2026-07-10'), structuredComm: null, counterpartyName: 'ACP STADE 11', side: 'in' as const };
+  const m = pickMatch(tx, [L({ id: 'stade11', direction: 'sale', ttc: 8469.4, date: new Date('2026-03-30'), contactName: 'ACP Stade 11' })]);
+  assert.deepEqual(m, { ledgerId: 'stade11', confidence: 'good' });
+});
+
+test('pickMatch : retard extrême + montant unique mais nom différent -> pas de correspondance (coïncidence de montant)', () => {
+  const tx = { id: 'b7', amount: 8469.4, bookingDate: new Date('2026-07-10'), structuredComm: null, counterpartyName: 'Un Tiers Sans Rapport', side: 'in' as const };
+  const m = pickMatch(tx, [L({ id: 'other', direction: 'sale', ttc: 8469.4, date: new Date('2026-03-30'), contactName: 'ACP Stade 11' })]);
+  assert.equal(m, null);
+});
+
+test('pickMatch : retard extrême + montant non unique (plusieurs candidats) -> pas de correspondance', () => {
+  const tx = { id: 'b8', amount: 8469.4, bookingDate: new Date('2026-07-10'), structuredComm: null, counterpartyName: 'ACP STADE 11', side: 'in' as const };
+  const m = pickMatch(tx, [
+    L({ id: 'stade11-a', direction: 'sale', ttc: 8469.4, date: new Date('2026-03-30'), contactName: 'ACP Stade 11' }),
+    L({ id: 'stade11-b', direction: 'sale', ttc: 8469.4, date: new Date('2026-01-15'), contactName: 'ACP Stade 11' }),
+  ]);
   assert.equal(m, null);
 });
 

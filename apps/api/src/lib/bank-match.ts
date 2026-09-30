@@ -4,15 +4,21 @@
  *
  *  - « strong » : communication structurée identique
  *  - « good »   : même montant (± 2 c) + date proche (± 45 j) + sens cohérent,
- *                 et une seule écriture candidate
+ *                 et une seule écriture candidate — ou, à défaut, même montant
+ *                 (unique dans tout le grand livre) + sens + nom de contrepartie
+ *                 cohérent, sans limite de date (voir ci-dessous)
  *
  * La date comparée est celle de l'écriture (émission de la facture pour une vente),
  * pas la date de paiement réelle — donc la fenêtre doit couvrir des délais de
  * paiement normaux (30 jours net + quelques jours), pas seulement un paiement
  * immédiat. 10 j ratait des cas réels payés en temps normal (ex. facture émise le
- * 13/08, payée le 26/08 — 13 j, hors fenêtre). Les retards extrêmes (plusieurs mois)
- * restent hors de portée d'un rapprochement automatique fiable et passent par le
- * rapprochement manuel.
+ * 13/08, payée le 26/08 — 13 j, hors fenêtre). Élargi à 45 j, puis complété par un
+ * dernier recours sans limite de date : certaines factures historiques (import
+ * TrustUp) ont été payées plusieurs mois après leur émission (ex. ACP Stade 11,
+ * 102 j) — largement hors de toute fenêtre raisonnable. Dans ce cas, un montant
+ * très spécifique et unique dans tout le grand livre, combiné à un nom de
+ * contrepartie qui correspond, suffit à lever l'ambiguïté sans risque réel de
+ * faux positif.
  */
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../db.js';
@@ -88,6 +94,21 @@ export function pickMatch(tx: TxLite, candidates: LedgerLite[]): { ledgerId: str
       (l) => nameOverlap(tx.counterpartyName!, l.supplierName ?? '') || nameOverlap(tx.counterpartyName!, l.contactName ?? ''),
     );
     if (byName.length === 1) return { ledgerId: byName[0]!.id, confidence: 'good' };
+  }
+
+  // 4. montant + sens + nom, sans limite de date — paiements très en retard (> 45 j) où
+  // la date de l'écriture (émission de la facture, souvent un artefact d'import historique)
+  // n'a jamais reflété une vraie date de paiement. Restreint à une correspondance de montant
+  // UNIQUE dans tout le grand livre + nom de contrepartie cohérent, pour limiter le risque de
+  // faux positif malgré l'absence de filtre sur la date.
+  if (tx.counterpartyName) {
+    const sameAmount = ledgers.filter((l) => sideMatches(tx, l) && Math.abs(amountOf(l) - amt) <= 0.02);
+    if (sameAmount.length === 1) {
+      const l = sameAmount[0]!;
+      if (nameOverlap(tx.counterpartyName, l.supplierName ?? '') || nameOverlap(tx.counterpartyName, l.contactName ?? '')) {
+        return { ledgerId: l.id, confidence: 'good' };
+      }
+    }
   }
   return null;
 }

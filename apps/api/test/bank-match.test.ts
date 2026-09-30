@@ -83,6 +83,12 @@ test('pickMatch : retard extrême + montant non unique (plusieurs candidats) -> 
   assert.equal(m, null);
 });
 
+test('pickMatch : sens de transaction inconnu (side manquant à l\'import) -> jamais de correspondance (régression : paiement client 110€ faussement matché à un achat Apok sans rapport, même montant)', () => {
+  const tx = { id: 'b9', amount: 110, bookingDate: new Date('2026-03-30'), structuredComm: null, counterpartyName: 'M Bernard Bassem', side: null };
+  const m = pickMatch(tx, [L({ id: 'apok', direction: 'purchase', ttc: 110, date: new Date('2026-03-04'), supplierName: 'Apok' })]);
+  assert.equal(m, null);
+});
+
 test('pickMatch : plusieurs candidats -> départage par nom, sinon null', () => {
   const base = { id: 'b3', amount: 1000, bookingDate: new Date('2026-05-10'), structuredComm: null, side: 'in' as const };
   const cands = [

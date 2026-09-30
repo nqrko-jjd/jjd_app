@@ -60,6 +60,12 @@ export function nameOverlap(a: string, b: string): boolean {
 }
 
 function sideMatches(tx: TxLite, l: LedgerLite): boolean {
+  // Sens de transaction inconnu (import incomplet) : `!== 'out'` et `!== 'in'` sont
+  // tous les deux vrais pour null, donc un achat ET une vente passaient le filtre à
+  // tort — repéré via un faux rapprochement (paiement client matché à un achat sans
+  // rapport, tous deux à 110€, le sens de la transaction n'ayant jamais été importé).
+  // Sans le sens, impossible de confirmer la cohérence : on écarte plutôt que deviner.
+  if (!tx.side) return false;
   if (l.direction === 'sale') return tx.side !== 'out'; // encaissement
   if (l.direction === 'purchase') return tx.side !== 'in'; // décaissement
   return true; // note de crédit : les deux sens possibles

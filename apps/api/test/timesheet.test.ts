@@ -199,3 +199,21 @@ test('planning : création sans clé Google (dégradation OK)', async () => {
   assert.equal(event.worksite.id, worksiteId);
   await prisma.planningEvent.delete({ where: { id: event.id } });
 });
+
+test('décompte : temps effectif distinct de la garantie, attente exclue et historique préservé', async () => {
+ const {monthlyStatement}=await import('../src/lib/statement.js');
+ const ids:string[]=[];
+ try {
+  for(const input of [
+   {date:'2027-01-02',hours:2,amount:40,status:'approved',source:'app'},
+   {date:'2027-01-02',hours:3,amount:60,status:'approved',source:'app'},
+   {date:'2027-01-03',hours:8,amount:160,status:'submitted',source:'app'},
+   {date:'2027-01-04',hours:4,amount:80,status:'approved',source:'xlsx'},
+  ]){const e=await prisma.timeEntry.create({data:{...input,date:new Date(input.date),personId:testPersonId,worksiteId,rateUsed:20}});ids.push(e.id);}
+  const result=await monthlyStatement(testPersonId,2027,1);
+  assert.equal(result.actualHours,9);assert.equal(result.totalHours,14);
+  assert.equal(result.totalAmount,280);assert.equal(result.guaranteeAmount,100);
+  assert.equal(result.pendingCount,1);assert.equal(result.totalDays,2);
+  assert.equal((await prisma.timeEntry.findUnique({where:{id:ids[0]}}))?.hours,2);
+ } finally {await prisma.timeEntry.deleteMany({where:{id:{in:ids}}});}
+});

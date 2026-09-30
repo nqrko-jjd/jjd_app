@@ -1,3 +1,4 @@
+import { computePaidTime } from '@jjd/shared';
 /** Fictitious hours only. Production calculations and payroll rules stay in the API. */
 export function ensureTimeEntries(state:any,db:any,people:any[],save:()=>void){
  if(state.timeEntries)return;
@@ -41,9 +42,10 @@ export function timeFixtures(p:string,method:string,b:any,u:URL,state:any,db:any
   if(id){
    const entries=period.filter((e:any)=>e.personId===id).map((e:any)=>{const w=db.worksites.find((w:any)=>w.id===e.worksiteId);return {...e,worksiteRef:w?.ref||null,worksiteTitle:w?.title||null}});
    const approved=entries.filter((e:any)=>e.status==='approved');
-   return {totalHours:total(approved,'hours'),totalAmount:total(approved,'amount'),entries,byWorksite:[...new Set(approved.map((e:any)=>e.worksiteId))].map(wid=>{const rows=approved.filter((e:any)=>e.worksiteId===wid),w=db.worksites.find((w:any)=>w.id===wid);return {ref:w?.ref||'Sans chantier',title:w?.title||'',hours:total(rows,'hours'),amount:total(rows,'amount'),days:total(rows,'hours')/8}})};
+   const pay=computePaidTime(entries,person(id).dailyHours??10,person(id).hourlyRate??25);
+   return {totalHours:pay.paidHours,totalAmount:pay.paidAmount,actualHours:pay.actualHours,guaranteeHours:pay.guaranteeHours,guaranteeAmount:pay.guaranteeAmount,entries,byWorksite:[...new Set(approved.map((e:any)=>e.worksiteId))].map(wid=>{const rows=approved.filter((e:any)=>e.worksiteId===wid),w=db.worksites.find((w:any)=>w.id===wid);return {ref:w?.ref||'Sans chantier',title:w?.title||'',hours:total(rows,'hours'),amount:total(rows,'amount'),days:total(rows,'hours')/8}})};
   }
-  const rows=[...new Set(period.map((e:any)=>e.personId))].map(id=>{const worker=person(String(id)),all=period.filter((e:any)=>e.personId===id),approved=all.filter((e:any)=>e.status==='approved'),amount=total(approved,'amount'),hours=total(approved,'hours');return {personId:id,name:worker.displayName||worker.firstName,photoThumbUrl:null,contractType:'subcontractor',hourlyRate:worker.hourlyRate??25,dailyHours:8,payoutPerDay:null,hours,days:hours/8,amount,payoutAmount:amount,toWithhold:0,netAmount:amount,pending:all.filter((e:any)=>e.status==='submitted').length}});
+  const rows=[...new Set(period.map((e:any)=>e.personId))].map(id=>{const worker=person(String(id)),all=period.filter((e:any)=>e.personId===id),pay=computePaidTime(all,worker.dailyHours??10,worker.hourlyRate??25);return {personId:id,name:worker.displayName||worker.firstName,photoThumbUrl:null,contractType:worker.contractType??'subcontractor',hourlyRate:worker.hourlyRate??25,dailyHours:worker.dailyHours??10,payoutPerDay:null,hours:pay.paidHours,actualHours:pay.actualHours,guaranteeHours:pay.guaranteeHours,guaranteeAmount:pay.guaranteeAmount,days:pay.days,amount:pay.paidAmount,payoutAmount:pay.paidAmount,toWithhold:0,netAmount:pay.paidAmount,pending:pay.pendingCount}});
   return {year,month,rows,totalAmount:total(rows,'amount'),totalPayoutAmount:total(rows,'payoutAmount'),totalNetAmount:total(rows,'netAmount')};
  }
  throw Error('Ce parcours terrain n’est pas encore connecté dans la démonstration.');

@@ -1,5 +1,5 @@
 import { prisma } from '../db.js';
-import { round2 } from '@jjd/shared';
+import { round2, computePaidTime } from '@jjd/shared';
 import { worksiteMargin } from './worksite-margin.js';
 
 const dayKey = (d: Date) => d.toISOString().slice(0, 10);
@@ -28,34 +28,14 @@ export async function monthlyStatement(personId: string, year: number, month: nu
   const dailyHours = person?.dailyHours ?? 10;
   const defaultRate = person?.hourlyRate ?? null;
 
-  // jour presté garanti : regroupe les pointages "app" (pas l'import xlsx) par jour
-  const byDay = new Map<string, { hours: number; amount: number; rate: number | null }>();
-  for (const e of entries) {
-    if (e.source === 'xlsx' || !e.date) continue;
-    const key = dayKey(e.date);
-    const row = byDay.get(key) ?? { hours: 0, amount: 0, rate: null };
-    row.hours += e.hours ?? 0;
-    row.amount += e.amount ?? 0;
-    row.rate = row.rate ?? e.rateUsed ?? null;
-    byDay.set(key, row);
-  }
-  let floorHoursAdded = 0;
-  let floorAmountAdded = 0;
-  for (const row of byDay.values()) {
-    const rate = row.rate ?? defaultRate;
-    if (!rate) continue; // pas de taux connu -> impossible de garantir un montant
-    const flooredHours = Math.max(row.hours, dailyHours);
-    const flooredAmount = Math.max(row.amount, round2(dailyHours * rate));
-    floorHoursAdded += flooredHours - row.hours;
-    floorAmountAdded += flooredAmount - row.amount;
-  }
-
+  const pay = computePaidTime(entries, dailyHours, defaultRate);
   const byWorksite = new Map<string, { ref: string; title: string; hours: number; amount: number; days: number }>();
   const workedDays = new Set<string>();
   let totalHours = 0;
   let totalAmount = 0;
   let pending = 0;
   for (const e of entries) {
+    if (e.status === 'submitted') { pending++; continue; }
     totalHours += e.hours ?? 0;
     totalAmount += e.amount ?? 0;
     if (e.status === 'submitted') pending++;
@@ -67,18 +47,21 @@ export async function monthlyStatement(personId: string, year: number, month: nu
     row.days += 1;
     byWorksite.set(key, row);
   }
-  totalHours += floorHoursAdded;
-  totalAmount += floorAmountAdded;
+  totalHours = pay.paidHours;
+  totalAmount = pay.paidAmount;
 
   return {
     personId,
     year,
     month,
+    actualHours: pay.actualHours,
+    guaranteeHours: pay.guaranteeHours,
+    guaranteeAmount: pay.guaranteeAmount,
     totalHours: round2(totalHours),
     totalAmount: round2(totalAmount),
     totalDays: workedDays.size,
     dailyHoursGuarantee: dailyHours,
-    guaranteeApplied: floorAmountAdded > 0.01,
+    guaranteeApplied: pay.guaranteeHours > 0,
     pendingCount: pending,
     entryCount: entries.length,
     worksiteCount: byWorksite.size,
@@ -126,6 +109,9 @@ export async function teamMonthlyStatement(year: number, month: number) {
       payoutPerDay: p.payoutPerDay,
       dailyHours: p.dailyHours,
       hours: s.totalHours,
+      actualHours: s.actualHours,
+      guaranteeHours: s.guaranteeHours,
+      guaranteeAmount: s.guaranteeAmount,
       days: s.totalDays,
       amount: s.totalAmount,
       payoutAmount,

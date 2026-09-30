@@ -4,7 +4,7 @@ import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 
 interface Row {
-  personId: string; name: string; days: number; amount: number; payoutAmount: number;
+  actualHours: number; hours: number; personId: string; name: string; days: number; amount: number; payoutAmount: number;
   hourlyRate: number | null; payoutPerDay: number | null; dailyHours: number;
   toWithhold: number; netAmount: number;
 }
@@ -60,7 +60,7 @@ function Inner() {
           <thead>
             <tr>
               <th>Personne</th><th className="num">Jours</th>
-              <th className="num">Prix jour facturé</th><th className="num">Prix jour en main</th>
+              <th className="num">H pointées</th><th className="num">H rémunérées</th><th className="num">Prix jour facturé</th><th className="num">Prix jour en main</th>
               <th className="num">Total à facturer</th><th className="num">Total en main</th>
               {hasWithholding && <th className="num">Avances / retenues</th>}
               {hasWithholding && <th className="num">Net à payer</th>}
@@ -70,7 +70,7 @@ function Inner() {
             {team.rows.map((r) => (
               <tr key={r.personId}>
                 <td>{r.name}</td>
-                <td className="num">{r.days}</td>
+                <td className="num">{r.days}</td><td className="num">{r.actualHours ?? r.hours}</td><td className="num">{r.hours}</td>
                 <td className="num">{r.hourlyRate != null ? fmtEur(r.hourlyRate * r.dailyHours) : '—'}</td>
                 <td className="num">{r.payoutPerDay != null ? fmtEur(r.payoutPerDay) : (r.hourlyRate != null ? fmtEur(r.hourlyRate * r.dailyHours) : '—')}</td>
                 <td className="num">{fmtEur(r.amount)}</td>
@@ -83,7 +83,7 @@ function Inner() {
           <tfoot>
             <tr>
               <td>Total</td><td className="num">{team.rows.reduce((s, r) => s + r.days, 0)}</td>
-              <td></td><td></td>
+              <td className="num">{team.rows.reduce((s,r)=>s+(r.actualHours??r.hours),0)}</td><td className="num">{team.rows.reduce((s,r)=>s+r.hours,0)}</td><td></td><td></td>
               <td className="num">{fmtEur(team.totalAmount)}</td><td className="num">{fmtEur(team.totalPayoutAmount)}</td>
               {hasWithholding && <td className="num">{fmtEur(team.totalPayoutAmount - team.totalNetAmount)}</td>}
               {hasWithholding && <td className="num">{fmtEur(team.totalNetAmount)}</td>}

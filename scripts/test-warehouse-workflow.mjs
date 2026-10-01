@@ -162,7 +162,6 @@ try {
     await destination.fill('Chantier test');
     const quantity = page.getByRole('spinbutton', { name: 'Quantité de Raccord cuivre' });
     await quantity.fill('0.5');
-    await quantity.press('Enter');
     await page.getByRole('button', { name: /Valider la sortie/ }).click();
     await waitFor(() => state.movements.length === 1, 'departure missing');
     assert.equal(state.movements[0].qty, 0.5);

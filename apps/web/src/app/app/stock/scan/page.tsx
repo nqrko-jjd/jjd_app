@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
+import { useAuth } from '@/lib/auth';
 import { api, ApiError } from '@/lib/api';
 import { PageHead, Thumb } from '@/lib/ui';
 import { ArrowDownToLine, ArrowUpFromLine, Undo2, MapPin } from 'lucide-react';
@@ -60,6 +61,9 @@ function ScanPanel({
 }: {
   items: StockItem[]; meta: Meta; onDone: () => void;
 }) {
+  const { user } = useAuth();
+  const canReceiveOrder = ['admin', 'office', 'storekeeper'].includes(user?.role ?? '');
+  const canPrepare = canReceiveOrder || user?.role === 'foreman';
   const [action, setAction] = useState<'in' | 'out' | 'return'>('out');
   const [catalogType, setCatalogType] = useState<CatalogType>('materiaux');
   const [worksiteId, setWorksiteId] = useState('');
@@ -380,7 +384,7 @@ function ScanPanel({
         <div className="scan-station-foot"><span className="muted">Ajustez les quantités directement dans le lot.</span><details><summary>Options</summary><label className="scan-ask"><input type="checkbox" disabled={busy || scanning > 0} checked={askQty} onChange={(e) => toggleAsk(e.target.checked)} /> Ouvrir la quantité à chaque scan</label></details></div>
         {lastScan && <div className="scan-last" role="status">✓ {lastScan}</div>}
       </div>
-      <div className="scan-linked-flow">{action === 'in' ? <Link href="/app/stock/commandes">Livraison d’une commande fournisseur →</Link> : action === 'out' ? <Link href="/app/stock/preparations">Préparer une liste chantier existante →</Link> : <span className="muted">La zone reste active pour les retours suivants.</span>}</div>
+      <div className="scan-linked-flow">{action === 'in' && canReceiveOrder ? <Link href="/app/stock/commandes">Livraison d’une commande fournisseur →</Link> : action === 'out' && canPrepare ? <Link href="/app/stock/preparations">Préparer une liste chantier existante →</Link> : action === 'return' ? <span className="muted">La zone reste active pour les retours suivants.</span> : null}</div>
       {needsLocation && (
         <div className="scan-zone-needed" role="status">
           <strong>Choisissez la zone de rangement des outils ci-dessus, ou scannez son étiquette.</strong>

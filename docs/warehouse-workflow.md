@@ -4,7 +4,7 @@ Le scan libre fonctionne par lot : action et chantier choisis avant le premier a
 
 Une étiquette de zone s'applique aux prochaines lectures et aux lignes sans zone. Les lignes déjà rangées ailleurs conservent leur emplacement. Le même produit dans deux zones reste sur deux lignes. Les références de racks renvoyées par l'API sont reconnues, même sans préfixe BRZ/RACK.
 
-Les scans sont résolus en séquence pour conserver l'ordre zone/article et éviter les écritures concurrentes de préparation depuis un même écran. Les corrections Zebra/DataWedge (focus synchrone et clavier masqué) sont conservées. Pendant la validation, le lecteur et les corrections sont bloqués.
+Les scans sont résolus en séquence pour conserver l'ordre zone/article et éviter les écritures concurrentes de préparation depuis un même écran. Les corrections Zebra/DataWedge (focus synchrone et clavier masqué) sont conservées. Une rafale de scan arrivant dans le champ de quantité est routée vers le lecteur au lieu d'être enregistrée comme une quantité. Pendant la validation, le lecteur et les corrections sont bloqués.
 
 La préparation chantier montre les articles restant à préparer, avec une action Tout préparer. Les articles prêts sont accessibles via Voir les prêts ; les champs manuels sont ouverts par Ajuster. Les scans enregistrent la préparation ; seul Terminer déclenche la sortie de stock, selon l'API existante.
 

@@ -35,6 +35,8 @@ const SORTS: { key: string; label: string }[] = [
   { key: 'contact_asc', label: 'Client (A→Z)' },
   { key: 'worksite_asc', label: 'Chantier (A→Z)' },
   { key: 'dueOn_asc', label: 'Échéance (proche d’abord)' },
+  { key: 'paidOn_desc', label: 'Date de paiement (récent d’abord)' },
+  { key: 'paidOn_asc', label: 'Date de paiement (ancien d’abord)' },
   { key: 'totalTtc_desc', label: 'Montant (élevé d’abord)' },
   { key: 'totalTtc_asc', label: 'Montant (faible d’abord)' },
 ];

@@ -283,3 +283,67 @@ export async function profitShare(_year?: number) {
     m7: { worksites: totals.m7!.worksites, profit: round2(totals.m7!.profit), details: detailsByEntity.m7 },
   };
 }
+
+/**
+ * Prévisionnel « reste à facturer » — devis explicitement marqués "accepté", nets du
+ * montant déjà facturé (factures émises − notes de crédit) sur le même chantier. Sert à
+ * estimer le chiffre d'affaires qui va encore rentrer sur du travail déjà acté, pour
+ * anticiper les dépenses de fin d'année (éviter un bénéfice taxable trop élevé).
+ * Choix assumé le 2026-10-01 : seul le statut du DEVIS compte (pas celui du chantier,
+ * moins fiable — ex. chantier "planifié" avec un devis resté "envoyé").
+ */
+export async function forecastReceivable() {
+  const [acceptedQuotes, invoices, creditNotes, worksites] = await Promise.all([
+    prisma.document.findMany({
+      where: { kind: 'quote', status: 'accepted', source: { not: 'demo' } },
+      select: { id: true, worksiteId: true, totalHt: true },
+    }),
+    prisma.document.findMany({
+      where: { kind: { in: ['invoice', 'deposit_invoice'] }, status: { not: 'draft' }, source: { not: 'demo' } },
+      select: { worksiteId: true, totalHt: true, parentId: true },
+    }),
+    prisma.document.findMany({
+      where: { kind: 'credit_note', status: { not: 'draft' }, source: { not: 'demo' } },
+      select: { worksiteId: true, totalHt: true },
+    }),
+    prisma.worksite.findMany({ where: { kind: 'project', source: { not: 'demo' } }, select: { id: true, ref: true, title: true } }),
+  ]);
+  const worksiteLabel = new Map(worksites.map((w) => [w.id, { ref: w.ref, title: w.title }]));
+
+  const invoicedByWorksite = new Map<string, number>();
+  const invoicedByParent = new Map<string, number>();
+  for (const inv of invoices) {
+    if (inv.worksiteId) invoicedByWorksite.set(inv.worksiteId, (invoicedByWorksite.get(inv.worksiteId) ?? 0) + inv.totalHt);
+    if (inv.parentId) invoicedByParent.set(inv.parentId, (invoicedByParent.get(inv.parentId) ?? 0) + inv.totalHt);
+  }
+  for (const cn of creditNotes) {
+    if (cn.worksiteId) invoicedByWorksite.set(cn.worksiteId, (invoicedByWorksite.get(cn.worksiteId) ?? 0) - cn.totalHt);
+  }
+
+  const quotedByWorksite = new Map<string, number>();
+  const orphanQuotes: { id: string; totalHt: number }[] = [];
+  for (const q of acceptedQuotes) {
+    if (q.worksiteId) quotedByWorksite.set(q.worksiteId, (quotedByWorksite.get(q.worksiteId) ?? 0) + q.totalHt);
+    else orphanQuotes.push({ id: q.id, totalHt: q.totalHt });
+  }
+
+  const items: { worksiteId: string | null; ref: string; title: string; quotedHt: number; invoicedHt: number; remaining: number }[] = [];
+  for (const [worksiteId, quotedHt] of quotedByWorksite) {
+    const invoicedHt = invoicedByWorksite.get(worksiteId) ?? 0;
+    const remaining = round2(Math.max(0, quotedHt - invoicedHt));
+    if (remaining <= 0.01) continue;
+    const label = worksiteLabel.get(worksiteId);
+    items.push({ worksiteId, ref: label?.ref ?? '—', title: label?.title ?? '—', quotedHt: round2(quotedHt), invoicedHt: round2(invoicedHt), remaining });
+  }
+  // Devis accepté pas (encore) rattaché à un chantier : on ne peut rapprocher que les
+  // factures directement issues de ce devis (lien de filiation parentId), pas par chantier.
+  for (const q of orphanQuotes) {
+    const invoicedHt = invoicedByParent.get(q.id) ?? 0;
+    const remaining = round2(Math.max(0, q.totalHt - invoicedHt));
+    if (remaining <= 0.01) continue;
+    items.push({ worksiteId: null, ref: '—', title: 'Devis sans chantier lié', quotedHt: round2(q.totalHt), invoicedHt: round2(invoicedHt), remaining });
+  }
+  items.sort((a, b) => b.remaining - a.remaining);
+
+  return { total: round2(items.reduce((s, i) => s + i.remaining, 0)), items };
+}

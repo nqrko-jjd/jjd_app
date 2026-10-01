@@ -11,7 +11,7 @@ import { rowNav } from '@/lib/rowNav';
 import { LEGAL_DOC_LABEL, WORKSITE_STATUS_LABEL, WORKSITE_PROGRESS_PCT, type WorksiteStatus } from '@jjd/shared';
 import {
   BarChart3, Wallet, Building2, Flag, FileText, Clock, MessageSquare, Users,
-  Search, Bell, ChevronRight, AlertTriangle, Receipt, Mail, Phone, ShieldAlert, ShieldCheck, Truck, HardHat, CreditCard, type LucideIcon,
+  Search, Bell, ChevronRight, AlertTriangle, Receipt, Mail, Phone, ShieldAlert, ShieldCheck, Truck, HardHat, CreditCard, TrendingUp, type LucideIcon,
 } from 'lucide-react';
 
 interface TodayEv {
@@ -319,6 +319,7 @@ interface Dashboard {
     overdueCount: number; supplierOverdueAmount: number; supplierOverdueCount: number;
     openWorksites: number; teamsOnSiteToday: number;
     receivableAmount: number; quotesPendingAmount: number; quotesPendingCount: number;
+    forecastAmount: number; forecastCount: number;
   };
   alerts: { kind: string; severity: string; label: string; count: number; amount?: number; href: string }[];
   inProgress: { id: string; ref: string; title: string; city: string | null; status: string; client: string | null; manager: string | null; photoThumbUrl: string | null }[];
@@ -564,6 +565,13 @@ export default function DashboardPage() {
             />
             <Kpi ic={FileText} label="Devis en attente" href="/app/documents?kind=quote&dashboard=quotes" value={<Money value={data.kpis.quotesPendingAmount} />} sub={`${data.kpis.quotesPendingCount} devis envoyés`} />
             <Kpi ic={Clock} label="À encaisser" href="/app/documents?kind=invoice&dashboard=receivable" value={<Money value={data.kpis.receivableAmount} />} sub="factures émises non payées" />
+            <Kpi
+              ic={TrendingUp}
+              label="Prévisionnel à facturer"
+              href="/app/finances#previsionnel"
+              value={<Money value={data.kpis.forecastAmount} />}
+              sub={data.kpis.forecastCount > 0 ? `${data.kpis.forecastCount} chantier${data.kpis.forecastCount > 1 ? 's' : ''} sur devis acceptés` : 'Rien de restant sur les devis acceptés'}
+            />
           </div>
 
           <div className="split" style={{ margin: '1.8rem 0 0.8rem' }}>

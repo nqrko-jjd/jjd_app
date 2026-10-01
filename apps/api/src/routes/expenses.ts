@@ -59,22 +59,28 @@ function buildWhere(q: Record<string, string>) {
   // recherche insensible à la casse (y compris accents : le repli SQLite n'insensibilise que
   // l'ASCII, "café"/"CAFÉ" ne matcheraient pas sans ce passage en minuscules côté JS)
   const search = searchRaw?.toLowerCase();
-  // achats + notes de crédit d'achat (une NC de vente réduit le CA, pas une dépense) + bordereaux
-  // (preuve d'enlèvement/paiement reçue avant la facture — voir linkedInvoiceId).
-  // categoryRaw peut être NULL (saisie manuelle sans catégorie) : NOT{contains} exclurait
-  // alors la ligne (NULL n'est ni "contient" ni "ne contient pas" en SQL) -> OR explicite.
-  const and: Record<string, unknown>[] = [
-    {
+  const and: Record<string, unknown>[] = [];
+  if (type) {
+    // Filtre explicite (purchase | sale | credit_note | delivery_slip) : direction telle quelle,
+    // sans l'exclusion "vente" ci-dessous — sert notamment la file de contrôle à retrouver une
+    // écriture de vente orpheline, invisible dans la vue achats par défaut (direction toujours
+    // exclue de ce tableau tant qu'on ne la demande pas explicitement).
+    and.push({ direction: type });
+  } else {
+    // Vue par défaut : achats + notes de crédit d'achat (une NC de vente réduit le CA, pas une
+    // dépense) + bordereaux (preuve d'enlèvement/paiement reçue avant la facture — voir
+    // linkedInvoiceId). categoryRaw peut être NULL (saisie manuelle sans catégorie) :
+    // NOT{contains} exclurait alors la ligne (NULL n'est ni "contient" ni "ne contient pas" en
+    // SQL) -> OR explicite.
+    and.push({
       OR: [
         { direction: 'purchase' },
         { direction: 'delivery_slip' },
         { direction: 'credit_note', OR: [{ categoryRaw: null }, { NOT: { categoryRaw: { contains: 'vente' } } }] },
       ],
-    },
-  ];
-  // type = purchase | credit_note | delivery_slip (déjà un sous-ensemble du OR ci-dessus, jamais
-  // contradictoire) ; linked = 0/1 ne s'applique qu'aux bordereaux (linkedInvoiceId)
-  if (type) and.push({ direction: type });
+    });
+  }
+  // linked = 0/1 ne s'applique qu'aux bordereaux (linkedInvoiceId)
   if (linked === '0') and.push({ linkedInvoiceId: null });
   if (linked === '1') and.push({ NOT: { linkedInvoiceId: null } });
   if (worksiteId) and.push({ worksiteId });

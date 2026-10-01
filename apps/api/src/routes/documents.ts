@@ -218,6 +218,7 @@ documentsRouter.get(
       : sort === 'contact' ? [{ contact: { name: sortDir } }]
       : sort === 'worksite' ? [{ worksite: { ref: sortDir } }]
       : sort === 'dueOn' ? [{ dueOn: sortDir }]
+      : sort === 'paidOn' ? [{ paidOn: sortDir }]
       : sort === 'totalTtc' ? [{ totalTtc: sortDir }]
       : [{ issuedOn: sortDir }, { createdAt: sortDir }];
     const [items, totalCount] = await Promise.all([

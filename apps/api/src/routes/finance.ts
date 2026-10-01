@@ -5,7 +5,7 @@ import { prisma } from '../db.js';
 import { insensitive } from '../lib/search.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, requirePartner, OFFICE } from '../lib/auth.js';
-import { consolidatedPnl, profitShare } from '../lib/consolidated.js';
+import { consolidatedPnl, profitShare, forecastReceivable } from '../lib/consolidated.js';
 import { analytics } from '../lib/analytics.js';
 import { autoMatchAll } from '../lib/bank-match.js';
 import { parseBankCsv, decodeCsvBuffer, type ParsedBankRow } from '../lib/bank-csv.js';
@@ -95,6 +95,15 @@ financeRouter.get(
   asyncHandler(async (req, res) => {
     const year = req.query.year ? Number(req.query.year) : undefined;
     res.json(await profitShare(year));
+  }),
+);
+
+/** Prévisionnel — devis acceptés pas encore totalement facturés, par chantier. */
+financeRouter.get(
+  '/forecast',
+  requireAuth(...OFFICE),
+  asyncHandler(async (_req, res) => {
+    res.json(await forecastReceivable());
   }),
 );
 

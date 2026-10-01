@@ -15,6 +15,8 @@ interface Pnl {
   margin: number | null;
 }
 interface ProfitDetail { id: string; ref: string; title: string; sell: number; buy: number; labour: number; transport: number; profit: number }
+interface ForecastItem { worksiteId: string | null; ref: string; title: string; quotedHt: number; invoicedHt: number; remaining: number }
+interface Forecast { total: number; items: ForecastItem[] }
 interface Share {
   jjd: { worksites: number; profit: number; david: number; julien: number };
   tonton: {
@@ -38,6 +40,7 @@ export default function FinancesPage() {
   if (entity) qs.set('entity', entity);
   const { data } = useApi<Pnl>(`/api/finance/consolidated?${qs}`);
   const { data: share } = useApi<Share>(user?.isPartner ? '/api/finance/profit-share' : null);
+  const { data: forecast } = useApi<Forecast>('/api/finance/forecast');
   const [openSec, setOpenSec] = useState<string | null>(null);
   const [showTontonDetail, setShowTontonDetail] = useState(false);
 
@@ -146,6 +149,46 @@ export default function FinancesPage() {
               <tfoot><tr><td>Total dépenses</td><td style={{ textAlign: 'right' }}><Money value={data.expenses.total} /></td></tr></tfoot>
             </table>
           </div>
+
+          {forecast && forecast.items.length > 0 && (
+            <div id="previsionnel" style={{ marginBottom: '1.6rem' }}>
+              <div className="section-title">
+                Prévisionnel — reste à facturer sur devis acceptés
+                <span className="hint">travail déjà acté, pas encore totalement facturé</span>
+              </div>
+              <div className="card card-pad muted" style={{ marginBottom: '0.8rem', fontSize: '0.85rem' }}>
+                Seuls les devis explicitement marqués « accepté » comptent. Un chantier démarré dont le
+                devis est resté « envoyé » n'apparaît pas ici tant que son statut n'est pas corrigé.
+              </div>
+              <div className="tbl-wrap">
+                <table className="tbl">
+                  <thead>
+                    <tr>
+                      <th>Chantier</th>
+                      <th style={{ textAlign: 'right' }}>Devis accepté HT</th>
+                      <th style={{ textAlign: 'right' }}>Déjà facturé HT</th>
+                      <th style={{ textAlign: 'right' }}>Reste à facturer</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {forecast.items.map((it) => (
+                      <tr key={it.worksiteId ?? it.title}>
+                        <td>
+                          {it.worksiteId ? <Link href={`/app/chantiers/${it.worksiteId}`}>{it.ref}</Link> : it.ref} <span className="muted">{it.title}</span>
+                        </td>
+                        <td style={{ textAlign: 'right' }}><Money value={it.quotedHt} /></td>
+                        <td style={{ textAlign: 'right' }}><Money value={it.invoicedHt} /></td>
+                        <td style={{ textAlign: 'right', fontWeight: 600 }}><Money value={it.remaining} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr><td>Total</td><td /><td /><td style={{ textAlign: 'right' }}><Money value={forecast.total} /></td></tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          )}
 
           {user?.isPartner && share && (
             <>

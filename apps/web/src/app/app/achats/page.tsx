@@ -91,7 +91,7 @@ function AchatsInner() {
   const [contactId, setContactId] = useState('');
   const [category, setCategory] = useState('');
   const [year, setYear] = useState('');
-  const [type, setType] = useState(''); // '' | purchase | credit_note | delivery_slip
+  const [type, setType] = useState(sp.get('type') ?? ''); // '' | purchase | sale | credit_note | delivery_slip
   const [linked, setLinked] = useState(''); // '' | 0 | 1 — ne s'applique qu'aux bordereaux
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(100);
@@ -252,6 +252,16 @@ function AchatsInner() {
 
 
   function rowMenu(e: Expense): MenuItem[] {
+    // Écriture de vente historique isolée (visible ici seulement via le filtre "Factures de
+    // vente", pour la retrouver depuis la file de contrôle) : ce formulaire est pensé pour les
+    // achats (fournisseur, catégories d'achat…) — pas encore de vraie fiche pour ces lignes, on
+    // évite donc d'ouvrir un formulaire qui ré-enregistrerait la ligne en "achat" par erreur.
+    if (e.direction === 'sale') {
+      return [
+        ...(e.hasPdf ? [{ label: 'Voir la pièce jointe', onClick: () => viewPdf(e.id) }] : []),
+        { label: 'Écriture de vente historique — non éditable depuis ce tableau', onClick: () => {}, disabled: true },
+      ];
+    }
     const slipActions: MenuItem[] = e.direction === 'delivery_slip'
       ? e.linkedInvoiceId
         ? [{ label: `Délier de la facture ${e.linkedInvoice?.docNumber ?? ''}`, onClick: () => unlinkSlip(e) }]
@@ -396,7 +406,8 @@ function AchatsInner() {
         <select className="select" style={{ maxWidth: 180 }} value={type} onChange={(e) => { setType(e.target.value); if (e.target.value !== 'delivery_slip') setLinked(''); }}>
           <option value="">Tous les types</option>
           <option value="purchase">Factures d’achat</option>
-          <option value="credit_note">Notes de crédit</option>
+          <option value="sale">Factures de vente (écritures isolées)</option>
+          <option value="credit_note">Notes de crédit (achat + vente)</option>
           <option value="delivery_slip">Bordereaux</option>
         </select>
         {type === 'delivery_slip' && (
@@ -470,7 +481,7 @@ function AchatsInner() {
                 <tr
                   key={e.id}
                   className={`row-link${ctx.menu?.row.id === e.id ? ' ctx-target' : ''}`}
-                  onClick={rowNav('', () => setEdit(e))}
+                  onClick={rowNav('', () => { if (e.direction !== 'sale') setEdit(e); })}
                   onContextMenu={(ev) => ctx.open(ev, e)}
                 >
                   <td onClick={(ev) => ev.stopPropagation()}>
@@ -553,7 +564,7 @@ function ExpenseModal({
   const [v, setV] = useState({
     date: toDateInput(expense?.date ?? new Date().toISOString()),
     dueDate: toDateInput(expense?.dueDate ?? null),
-    direction: (prefillFrom ? 'purchase' : expense?.direction === 'credit_note' ? 'credit_note' : expense?.direction === 'delivery_slip' ? 'delivery_slip' : 'purchase') as 'purchase' | 'credit_note' | 'delivery_slip',
+    direction: (prefillFrom ? 'purchase' : expense?.direction === 'credit_note' ? 'credit_note' : expense?.direction === 'delivery_slip' ? 'delivery_slip' : expense?.direction === 'sale' ? 'sale' : 'purchase') as 'purchase' | 'sale' | 'credit_note' | 'delivery_slip',
     supplierName: (expense ?? prefillFrom)?.contactId ? '' : ((expense ?? prefillFrom)?.supplierName ?? ''),
     contactId: (expense ?? prefillFrom)?.contactId ?? '',
     docNumber: expense?.docNumber ?? '',

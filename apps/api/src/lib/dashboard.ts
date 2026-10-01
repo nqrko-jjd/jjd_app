@@ -1,5 +1,6 @@
 import { prisma } from '../db.js';
 import { round2 } from '@jjd/shared';
+import { forecastReceivable } from './consolidated.js';
 
 const DAY = 86_400_000;
 
@@ -74,7 +75,7 @@ export async function bureauDashboard() {
   const [
     invoicedMonth, invoicedPrevMonth, paidMonth, overdue, receivable, quotesPending, worksitesToInvoice,
     expiringDocs, ctExpiring, activeCount, activeWorksites,
-    crmNextActions, todayEvents, supplierOverdue,
+    crmNextActions, todayEvents, supplierOverdue, forecast,
   ] = await Promise.all([
     prisma.document.aggregate({
       where: { kind: { in: ['invoice', 'deposit_invoice'] }, issuedOn: { gte: monthStart }, source: { not: 'demo' } }, _sum: { totalHt: true },
@@ -120,6 +121,7 @@ export async function bureauDashboard() {
       where: { direction: 'purchase', dueDate: { not: null, lt: now }, NOT: { paymentStatus: 'Payé' } },
       select: { ht: true, ttc: true },
     }),
+    forecastReceivable(),
   ]);
 
   const teamsOnSiteToday = new Set(todayEvents.map((e) => e.teamId).filter((id): id is string => !!id)).size;
@@ -163,6 +165,8 @@ export async function bureauDashboard() {
       receivableAmount,
       quotesPendingAmount,
       quotesPendingCount: quotesPending.length,
+      forecastAmount: forecast.total,
+      forecastCount: forecast.items.length,
     },
     alerts,
     fieldToday,

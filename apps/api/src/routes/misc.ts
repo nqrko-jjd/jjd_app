@@ -114,7 +114,15 @@ async function resolveIssueLink(entity: string, rawData: unknown): Promise<{ lab
     if (w) return { label: 'Ouvrir le chantier', href: `/app/chantiers/${w.id}` };
   }
   if (entity === 'ledger' && typeof d.ref === 'string') {
-    return { label: 'Chercher dans Achats', href: `/app/achats?q=${encodeURIComponent(d.ref)}` };
+    // Une écriture "Facture de vente" (ou une note de crédit, vente ou achat confondus) est
+    // invisible dans la vue achats par défaut (direction exclue tant qu'elle n'est pas demandée
+    // explicitement, cf. buildWhere dans expenses.ts) — sans ce paramètre le lien ne retrouvait
+    // jamais rien pour ces cas, même quand la ligne existait bel et bien.
+    const typeRaw = typeof d.typeRaw === 'string' ? d.typeRaw.toLowerCase() : '';
+    const type = typeRaw.includes('vente') ? 'sale' : typeRaw.includes('crédit') || typeRaw.includes('credit') ? 'credit_note' : '';
+    const params = new URLSearchParams({ q: d.ref });
+    if (type) params.set('type', type);
+    return { label: 'Chercher dans Achats', href: `/app/achats?${params}` };
   }
   if (entity === 'time_entry' && typeof d.workerName === 'string') {
     return { label: 'Chercher l’ouvrier', href: `/app/equipe?q=${encodeURIComponent(d.workerName)}` };

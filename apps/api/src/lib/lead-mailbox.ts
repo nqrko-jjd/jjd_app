@@ -151,12 +151,12 @@ interface SyncStats {
 }
 
 /**
- * Relit un mail précis (par Message-ID) pour l'afficher à l'écran — "voir le mail d'origine"
- * depuis une suggestion. Lecture seule comme le reste de cette boîte (pas de \Seen posé) ; ne
- * dépend d'aucune donnée stockée en base (le texte du mail n'est jamais persisté, seul le
+ * Relit un mail précis (par Message-ID) depuis la boîte — "voir le mail d'origine" depuis une
+ * suggestion, ou en extraire une pièce jointe. Lecture seule comme le reste de cette boîte (pas
+ * de \Seen posé) ; ne dépend d'aucune donnée stockée en base (jamais persisté, uniquement le
  * résultat de l'extraction l'est).
  */
-export async function fetchMailSource(messageId: string): Promise<{ subject: string; from: string; receivedAt: Date | null; text: string } | null> {
+async function fetchParsedMessage(messageId: string) {
   if (!mailSuggestionsConfigured()) return null;
   const client = new ImapFlow({
     host: env.leadsMailbox.host,
@@ -174,19 +174,37 @@ export async function fetchMailSource(messageId: string): Promise<{ subject: str
       if (!uid) return null;
       const msg = (await client.fetchOne(String(uid), { source: true, envelope: true }, { uid: true })) as FetchMessageObject | false;
       if (!msg || !msg.source) return null;
-      const parsed = await simpleParser(msg.source);
-      return {
-        subject: parsed.subject ?? '',
-        from: parsed.from?.text ?? '',
-        receivedAt: parsed.date ?? null,
-        text: (parsed.text || parsed.html || '').toString(),
-      };
+      return await simpleParser(msg.source);
     } finally {
       lock.release();
     }
   } finally {
     await client.logout().catch(() => client.close());
   }
+}
+
+export async function fetchMailSource(messageId: string): Promise<{
+  subject: string; from: string; receivedAt: Date | null; text: string;
+  attachments: { index: number; filename: string; contentType: string; size: number }[];
+} | null> {
+  const parsed = await fetchParsedMessage(messageId);
+  if (!parsed) return null;
+  return {
+    subject: parsed.subject ?? '',
+    from: parsed.from?.text ?? '',
+    receivedAt: parsed.date ?? null,
+    text: (parsed.text || parsed.html || '').toString(),
+    attachments: (parsed.attachments ?? []).map((a, index) => ({
+      index, filename: a.filename ?? `pièce-jointe-${index + 1}`, contentType: a.contentType, size: a.size,
+    })),
+  };
+}
+
+export async function fetchMailAttachment(messageId: string, index: number): Promise<{ filename: string; contentType: string; content: Buffer } | null> {
+  const parsed = await fetchParsedMessage(messageId);
+  const att = parsed?.attachments?.[index];
+  if (!att) return null;
+  return { filename: att.filename ?? `pièce-jointe-${index + 1}`, contentType: att.contentType, content: att.content };
 }
 
 /**

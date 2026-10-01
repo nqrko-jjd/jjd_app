@@ -8,7 +8,7 @@ import { Router } from 'express';
 import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, OFFICE } from '../lib/auth.js';
-import { MAIL_SUGGESTION_KINDS, type MailExtraction, fetchMailSource } from '../lib/lead-mailbox.js';
+import { MAIL_SUGGESTION_KINDS, type MailExtraction, fetchMailSource, fetchMailAttachment } from '../lib/lead-mailbox.js';
 
 export const mailSuggestionsRouter = Router();
 
@@ -51,6 +51,23 @@ mailSuggestionsRouter.get(
     const source = await fetchMailSource(s.messageId);
     if (!source) throw new HttpError(404, 'Mail introuvable sur le serveur (déplacé, supprimé, ou boîte indisponible).');
     res.json(source);
+  }),
+);
+
+/** Télécharge/affiche une pièce jointe du mail d'origine (à la demande, jamais stockée). */
+mailSuggestionsRouter.get(
+  '/:id/attachment/:index',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const s = await prisma.mailSuggestion.findUnique({ where: { id: req.params.id } });
+    if (!s) throw new HttpError(404, 'Suggestion introuvable');
+    const index = Number(req.params.index);
+    if (!Number.isInteger(index) || index < 0) throw new HttpError(422, 'Index invalide');
+    const att = await fetchMailAttachment(s.messageId, index);
+    if (!att) throw new HttpError(404, 'Pièce jointe introuvable (mail déplacé/supprimé, ou index invalide).');
+    res.setHeader('Content-Type', att.contentType || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `inline; filename="${att.filename.replace(/[^\w.-]/g, '_')}"`);
+    res.send(att.content);
   }),
 );
 

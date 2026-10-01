@@ -3,11 +3,17 @@ import { SkeletonRows, EmptyState } from '@/components/States';
 import { useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
-import { api } from '@/lib/api';
+import { api, apiBlobUrl } from '@/lib/api';
 import { PageHead, formatDateBE } from '@/lib/ui';
 import { WorksitePicker, type WsPickerOption } from '@/components/WorksitePicker';
 import { INTERVENTION_PROBLEM_TYPES, INTERVENTION_PROBLEM_TYPE_LABEL } from '@jjd/shared';
-import { Mail, Sparkles } from 'lucide-react';
+import { Mail, Sparkles, Paperclip } from 'lucide-react';
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} o`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} Ko`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
+}
 
 type Kind = 'lead' | 'appointment' | 'worksite_note' | 'payment_reminder' | 'other';
 
@@ -146,7 +152,22 @@ export default function BoiteIaPage() {
 }
 
 function MailSource({ id }: { id: string }) {
-  const { data, loading, error } = useApi<{ subject: string; from: string; receivedAt: string | null; text: string }>(`/api/mail-suggestions/${id}/source`);
+  const { data, loading, error } = useApi<{
+    subject: string; from: string; receivedAt: string | null; text: string;
+    attachments: { index: number; filename: string; contentType: string; size: number }[];
+  }>(`/api/mail-suggestions/${id}/source`);
+  const [openErr, setOpenErr] = useState<string | null>(null);
+
+  async function openAttachment(index: number) {
+    setOpenErr(null);
+    try {
+      const url = await apiBlobUrl(`/api/mail-suggestions/${id}/attachment/${index}`);
+      window.open(url, '_blank', 'noopener');
+    } catch (e) {
+      setOpenErr((e as Error).message);
+    }
+  }
+
   return (
     <div style={{ marginTop: '0.7rem', padding: '0.7rem 0.9rem', background: 'var(--surface-2)', borderRadius: 8, fontSize: '0.84rem' }}>
       {loading && 'Chargement du mail…'}
@@ -155,6 +176,16 @@ function MailSource({ id }: { id: string }) {
         <>
           <div className="muted" style={{ marginBottom: '0.5rem' }}>{data.from} · {formatDateBE(data.receivedAt)} · {data.subject}</div>
           <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', maxHeight: 320, overflowY: 'auto', margin: 0 }}>{data.text}</pre>
+          {data.attachments.length > 0 && (
+            <div className="row" style={{ gap: '0.4rem', flexWrap: 'wrap', marginTop: '0.6rem', paddingTop: '0.6rem', borderTop: '1px solid var(--line)' }}>
+              {data.attachments.map((a) => (
+                <button key={a.index} type="button" className="btn ghost" style={{ fontSize: '0.78rem' }} onClick={() => openAttachment(a.index)}>
+                  <Paperclip size={13} style={{ marginRight: 4 }} />{a.filename} <span className="muted">({formatSize(a.size)})</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {openErr && <p className="state error" style={{ marginTop: '0.4rem' }}>{openErr}</p>}
         </>
       )}
     </div>

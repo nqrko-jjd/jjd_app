@@ -498,6 +498,7 @@ model Worksite {
   stockOrders    StockOrder[]    @relation("StockOrderWorksite")
   purchaseOrders PurchaseOrder[] @relation("PurchaseOrderWorksite")
   contacts       WorksiteContact[]
+  mailSuggestions MailSuggestion[]
 
   @@index([status])
   @@index([entity])
@@ -543,17 +544,37 @@ model CrmOpportunity {
   @@index([nextActionOn])
 }
 
-/// Trace des mails déjà passés en revue par la synchro boîte principale -> Pipeline (voir
-/// lib/lead-mailbox.ts), qu'ils aient donné une piste ou non — sert uniquement à ne jamais
-/// ré-analyser deux fois le même message (aucune marque n'est posée sur le mail lui-même :
-/// pas de \Seen, pas de déplacement, cette boîte reste celle de l'utilisateur).
-model ProcessedEmail {
-  id            String   @id @default(cuid())
-  messageId     String   @unique
+/// Trace des mails déjà passés en revue par la synchro boîte principale (voir
+/// lib/lead-mailbox.ts) — sert à la fois à ne jamais ré-analyser deux fois le même message
+/// (aucune marque n'est posée sur le mail lui-même : pas de \Seen, pas de déplacement, cette
+/// boîte reste celle de l'utilisateur) et, quand `kind` n'est pas nul, de "boîte IA" à trier :
+/// une suggestion pré-remplie (piste commerciale, rendez-vous, note de chantier, rappel de
+/// paiement, ou "autre" en secours pour ce qui ne rentre dans aucune case) à valider ou
+/// rejeter avant qu'un vrai enregistrement ne soit créé. `kind` nul = mail analysé et jugé
+/// sans action à proposer (newsletter, spam, réponse dans un fil déjà vu...).
+model MailSuggestion {
+  id            String    @id @default(cuid())
+  messageId     String    @unique
   subject       String?
-  becameLead    Boolean  @default(false)
+  fromAddress   String?
+  receivedAt    DateTime?
+  // jamais écrasé par une ré-analyse : utilisé pour ne pas re-proposer un mail déjà classé
+  becameLead    Boolean   @default(false)
   opportunityId String?
-  createdAt     DateTime @default(now())
+  kind          String? // lead | appointment | worksite_note | payment_reminder | other | null
+  summary       String?
+  extracted     Json?
+  worksiteId    String?
+  worksite      Worksite? @relation(fields: [worksiteId], references: [id])
+  status        String? // pending | applied | dismissed — null si kind est null
+  resultRef     String? // id de l'enregistrement créé à la validation (PlanningEvent, message de fil...)
+  resolvedNote  String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([kind, status])
+  @@index([worksiteId])
+  @@map("ProcessedEmail")
 }
 
 /// Photo jointe à une demande d'intervention (déposée via le portail avant même la création

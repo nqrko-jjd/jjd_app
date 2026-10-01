@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutGrid, Building2, CalendarDays, ListChecks, Clock, TrendingUp, FileText, Wallet,
   BarChart3, Euro, Warehouse, Contact, Users, Truck, Wrench, Package, ScanLine, Flag, Settings, ExternalLink,
-  MessageSquare, ClipboardList, Search, ChevronDown, ChevronLeft, ChevronRight, X, Menu, LogOut, type LucideIcon,
+  MessageSquare, ClipboardList, Search, ChevronDown, ChevronLeft, ChevronRight, X, Menu, LogOut, Sparkles, type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useApi } from '@/lib/use-api';
@@ -79,6 +79,7 @@ const NAV: Group[] = [
     title: 'Commercial & finances',
     items: [
       { href: '/app/crm', label: 'Pipeline', ic: TrendingUp },
+      { href: '/app/boite-ia', label: 'Boîte IA', ic: Sparkles, roles: ['admin', 'office'] },
       { href: '/app/documents', label: 'Devis & factures', ic: FileText, roles: ['admin', 'office'] },
       { href: '/app/achats', label: 'Achats / Dépenses', ic: Wallet, roles: ['admin', 'office'] },
       { href: '/app/analyse', label: 'Analyse', ic: BarChart3, roles: ['admin', 'office'] },
@@ -136,6 +137,7 @@ export function Shell({ children, navigationPaths }: { children: React.ReactNode
   const isStaff = !!user && user.role !== 'client' && user.role !== 'storekeeper';
   const { data: unread, reload: reloadUnread } = useApi<{ internal: number; client: number }>(isStaff ? '/api/messagerie/unread-count' : null);
   const unreadTotal = (unread?.internal ?? 0) + (unread?.client ?? 0);
+  const { data: mailBox } = useApi<{ total: number }>(bureau ? '/api/mail-suggestions/counts' : null);
   useEffect(() => {
     if (!isStaff) return;
     const t = setInterval(reloadUnread, 20000);
@@ -220,6 +222,7 @@ export function Shell({ children, navigationPaths }: { children: React.ReactNode
                     <span className="ic"><i.ic size={16} strokeWidth={2} /></span>
                     <span className="lbl">{i.label}</span>
                     {i.href === '/app/messagerie' && unreadTotal > 0 && <span className="nav-badge">{unreadTotal}</span>}
+                    {i.href === '/app/boite-ia' && !!mailBox?.total && <span className="nav-badge">{mailBox.total}</span>}
                   </Link>
                 )
               ))}

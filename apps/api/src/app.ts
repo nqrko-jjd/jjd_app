@@ -11,6 +11,7 @@ import { contactsRouter } from './routes/contacts.js';
 import { buildingsRouter } from './routes/buildings.js';
 import { peopleRouter } from './routes/people.js';
 import { crmRouter } from './routes/crm.js';
+import { mailSuggestionsRouter } from './routes/mail-suggestions.js';
 import { dashboardRouter, metaRouter, importsRouter } from './routes/misc.js';
 import { planningRouter, teamsRouter, vehiclesRouter, equipmentRouter, consumablesRouter, absencesRouter } from './routes/planning.js';
 import { timesheetRouter, statementsRouter } from './routes/timesheet.js';
@@ -62,6 +63,7 @@ export function createApp() {
   app.use('/api/buildings', buildingsRouter);
   app.use('/api/people', peopleRouter);
   app.use('/api/crm', crmRouter);
+  app.use('/api/mail-suggestions', mailSuggestionsRouter);
   app.use('/api/finance/expenses', expensesRouter);
   app.use('/api/finance', financeRouter);
   app.use('/api/ponto', pontoRouter);

@@ -438,11 +438,12 @@ function ScanPanel({
                   ) : (
                     <span className="stock-qty-stepper">
                       <button type="button" onClick={() => setQty(line.key, line.qty - 1)} aria-label={`Diminuer la quantité de ${line.name}`}>−</button>
-                      <input
-                        type="number" min={0.001} step="any"
+                      <ScanQuantity
                         value={line.qty}
-                        onChange={(e) => setQty(line.key, Number(e.target.value))}
-                        aria-label={`Quantité de ${line.name}`}
+                        label={`Quantité de ${line.name}`}
+                        onCommit={(qty) => setQty(line.key, qty)}
+                        onBarcode={handleScan}
+                        onScanReady={() => scanRef.current?.focus()}
                       />
                       <button type="button" onClick={() => setQty(line.key, line.qty + 1)} aria-label={`Augmenter la quantité de ${line.name}`}>＋</button>
                       <button type="button" className="remove" onClick={() => removeLine(line.key)}>Retirer</button>
@@ -521,6 +522,58 @@ function ScanPanel({
 }
 
 const fmtN = (n: number) => new Intl.NumberFormat('fr-BE', { maximumFractionDigits: 2 }).format(n);
+
+
+/** A terminal can inject its next barcode while a manual quantity still has focus.
+ * Keep edits local until settled, and route scanner bursts without writing them as quantities. */
+function ScanQuantity({ value, label, onCommit, onBarcode, onScanReady }: {
+  value: number; label: string; onCommit: (qty: number) => void;
+  onBarcode: (code: string) => void; onScanReady: () => void;
+}) {
+  const [draft, setDraft] = useState(String(value));
+  const raw = useRef(String(value));
+  const keys = useRef<{ text: string; times: number[] }>({ text: '', times: [] });
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const lastBarcode = useRef({ text: '', at: 0 });
+  useEffect(() => { raw.current = String(value); setDraft(String(value)); }, [value]);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  function finish() {
+    clearTimeout(timer.current);
+    const burst = keys.current;
+    const fast = burst.times.length >= 4 && (burst.times[burst.times.length - 1]! - burst.times[0]!) / (burst.times.length - 1) < 80;
+    const barcode = fast && burst.text.length >= 4 && (/[^0-9.,]/.test(burst.text) || burst.text.length >= 8);
+    keys.current = { text: '', times: [] };
+    if (barcode) {
+      const code = burst.text;
+      raw.current = String(value); setDraft(String(value));
+      const now = Date.now();
+      if (code !== lastBarcode.current.text || now - lastBarcode.current.at >= 700) {
+        lastBarcode.current = { text: code, at: now }; onBarcode(code);
+      }
+      return;
+    }
+    const qty = Number(raw.current.replace(',', '.'));
+    if (Number.isFinite(qty) && qty > 0) onCommit(qty);
+    else { raw.current = String(value); setDraft(String(value)); }
+  }
+  return <input
+    type="text" role="spinbutton" inputMode="decimal" aria-valuemin={0.001} aria-valuenow={value}
+    value={draft} aria-label={label}
+    onFocus={(e) => { keys.current = { text: '', times: [] }; e.currentTarget.select(); }}
+    onChange={(e) => { raw.current = e.target.value; setDraft(e.target.value); clearTimeout(timer.current); timer.current = setTimeout(finish, 240); }}
+    onBlur={finish}
+    onKeyDown={(e) => {
+      if (e.key === 'Enter') { e.preventDefault(); finish(); onScanReady(); return; }
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        e.preventDefault(); const next = Math.max(0.001, value + (e.key === 'ArrowUp' ? 1 : -1)); onCommit(next); return;
+      }
+      if (e.key.length !== 1 || e.ctrlKey || e.metaKey || e.altKey) return;
+      const now = Date.now(), burst = keys.current;
+      if (!burst.times.length || now - burst.times[burst.times.length - 1]! > 300) { burst.text = ''; burst.times = []; }
+      burst.text += e.key; burst.times.push(now);
+    }}
+  />;
+}
 
 /** Fenêtre ouverte par un scan : quantité (et conditionnement) à entrer / sortir, puis « Ajouter au panier ». Entrée = valider. */
 function QtyDialog({ item, initialUnit, action, rack, onCancel, onConfirm, onRescan, onNext }: {

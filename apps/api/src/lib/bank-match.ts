@@ -22,7 +22,36 @@
  */
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../db.js';
+import { round2 } from '@jjd/shared';
 import { syncLedgerEntryForDocument } from './documents.js';
+
+/**
+ * Recalcule `paidAmount`/`status`/`paidOn` d'une facture de vente à partir des
+ * transactions bancaires RÉELLEMENT rapprochées (directement, ou via son écriture
+ * de grand livre synchronisée) — jamais en écrasant avec le total de la facture.
+ * Appelé après chaque ajout/retrait manuel de rapprochement : un paiement peut être
+ * réparti sur plusieurs transactions (acompte + solde en plusieurs fois), il ne faut
+ * donc ni marquer "payé" dès le premier rapprochement partiel, ni perdre les autres
+ * paiements déjà liés quand on en retire un.
+ */
+export async function recomputeDocumentPayment(documentId: string) {
+  const doc = await prisma.document.findUnique({ where: { id: documentId }, select: { totalTtc: true, status: true } });
+  if (!doc) return;
+  // Statuts qui ne relèvent pas du cycle paiement (jamais touchés ici).
+  if (doc.status === 'credited' || doc.status === 'declined' || doc.status === 'draft') return;
+
+  const matches = await prisma.bankTransactionMatch.findMany({
+    where: { OR: [{ documentId }, { ledgerEntry: { documentId } }] },
+    select: { bankTransaction: { select: { amount: true, bookingDate: true } } },
+  });
+  const paidAmount = round2(matches.reduce((s, m) => s + Math.abs(m.bankTransaction.amount ?? 0), 0));
+  const bookingDates = matches.map((m) => m.bankTransaction.bookingDate).filter((d): d is Date => !!d).sort((a, b) => b.getTime() - a.getTime());
+  const paidOn = bookingDates[0] ?? null;
+  const status = matches.length === 0 ? 'sent' : paidAmount + 0.01 >= doc.totalTtc ? 'paid' : 'partial';
+
+  await prisma.document.update({ where: { id: documentId }, data: { status, paidAmount, paidOn } });
+  await syncLedgerEntryForDocument(documentId);
+}
 
 export interface TxLite {
   id: string;

@@ -8,6 +8,7 @@ import { api, apiUpload, apiBlobUrl } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { PageHead, Money, formatDateBE } from '@/lib/ui';
 import { PaginationBar } from '@/components/PaginationBar';
+import { FormModal } from '@/components/FormModal';
 
 interface Match {
   id: string;
@@ -78,8 +79,11 @@ function BanqueInner() {
   const [bank, setBank] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(100);
+  const [sort, setSort] = useState('bookingDate');
+  const [dir, setDir] = useState<'asc' | 'desc'>('desc');
   const [busy, setBusy] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
+  const [editTx, setEditTx] = useState<Tx | null>(null);
   // Arrivée depuis la fiche d'une facture ("payée le …", cliquable) : ne montre que les
   // transactions qui l'ont réglée, prioritaire sur le filtre "matched" habituel.
   const [documentFilter, setDocumentFilter] = useState<string | null>(null);
@@ -87,7 +91,7 @@ function BanqueInner() {
 
   useEffect(() => { setPage(1); }, [q, bank, matched, documentFilter]);
 
-  const qs = new URLSearchParams({ matched, page: String(page), pageSize: String(pageSize) });
+  const qs = new URLSearchParams({ matched, page: String(page), pageSize: String(pageSize), sort, dir });
   if (q) qs.set('q', q);
   if (bank) qs.set('bank', bank);
   if (documentFilter) qs.set('documentId', documentFilter);
@@ -120,6 +124,19 @@ function BanqueInner() {
   }
   async function removeMatch(txId: string, matchId: string) {
     await api(`/api/finance/bank/${txId}/matches/${matchId}`, { method: 'DELETE' });
+    reload();
+  }
+  function toggleSort(key: string) {
+    if (sort === key) setDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else { setSort(key); setDir(key === 'amount' ? 'desc' : 'asc'); }
+  }
+  function sortIndicator(key: string) {
+    if (sort !== key) return '';
+    return dir === 'asc' ? ' ▲' : ' ▼';
+  }
+  async function saveTx(id: string, values: Record<string, unknown>) {
+    await api(`/api/finance/bank/${id}`, { method: 'PATCH', body: values });
+    setEditTx(null);
     reload();
   }
   async function connect() {
@@ -299,7 +316,18 @@ function BanqueInner() {
       {data && (
         <div className="tbl-wrap">
           <table className="tbl">
-            <thead><tr><th>Date</th><th>Banque</th><th>Contrepartie</th><th>Communication</th><th style={{ textAlign: 'right' }}>Montant</th><th>Rapprochement</th><th></th></tr></thead>
+            <thead>
+              <tr>
+                <th style={{ cursor: 'pointer' }} onClick={() => toggleSort('bookingDate')}>Date{sortIndicator('bookingDate')}</th>
+                <th style={{ cursor: 'pointer' }} onClick={() => toggleSort('bank')}>Banque{sortIndicator('bank')}</th>
+                <th style={{ cursor: 'pointer' }} onClick={() => toggleSort('counterparty')}>Contrepartie{sortIndicator('counterparty')}</th>
+                <th>Communication</th>
+                <th style={{ textAlign: 'right', cursor: 'pointer' }} onClick={() => toggleSort('amount')}>Montant{sortIndicator('amount')}</th>
+                <th>Rapprochement</th>
+                <th></th>
+                <th></th>
+              </tr>
+            </thead>
             <tbody>
               {data.items.map((t) => (
                 <Fragment key={t.id}>
@@ -349,10 +377,15 @@ function BanqueInner() {
                         {openTx === t.id ? 'Fermer' : t.matches.length ? '+ Ajouter' : 'Rapprocher'}
                       </button>
                     </td>
+                    <td>
+                      <button className="btn ghost" style={{ padding: '0.2rem 0.5rem', fontSize: '0.76rem' }} onClick={() => setEditTx(t)} title="Corriger cette ligne (date, banque, montant, communication…)">
+                        Modifier
+                      </button>
+                    </td>
                   </tr>
                   {openTx === t.id && (
                     <tr>
-                      <td colSpan={7} style={{ background: 'var(--surface-2)', padding: '0.8rem 0.9rem' }}>
+                      <td colSpan={8} style={{ background: 'var(--surface-2)', padding: '0.8rem 0.9rem' }}>
                         <div className="row" style={{ marginBottom: '0.6rem', gap: '0.5rem', alignItems: 'center' }}>
                           <div className="eyebrow" style={{ margin: 0 }}>{manualQ.trim() ? 'Recherche' : 'Factures proposées (achat & vente)'}</div>
                           {!manualQ.trim() && sugg && t.matches.length > 0 && (
@@ -402,6 +435,30 @@ function BanqueInner() {
 
       {data && (
         <PaginationBar page={data.page} totalPages={data.totalPages} pageSize={pageSize} onPage={setPage} onPageSize={(s) => { setPageSize(s); setPage(1); }} />
+      )}
+
+      {editTx && (
+        <FormModal
+          title="Corriger une transaction bancaire"
+          initial={{
+            bookingDate: editTx.bookingDate ? editTx.bookingDate.slice(0, 10) : '',
+            bank: editTx.bank ?? '',
+            counterpartyName: editTx.counterpartyName ?? '',
+            communication: editTx.communication ?? '',
+            description: editTx.description ?? '',
+            amount: editTx.amount ?? '',
+          }}
+          fields={[
+            { name: 'bookingDate', label: 'Date', type: 'date', required: true },
+            { name: 'bank', label: 'Banque' },
+            { name: 'counterpartyName', label: 'Contrepartie' },
+            { name: 'amount', label: 'Montant (négatif = sortie)', type: 'number', required: true },
+            { name: 'communication', label: 'Communication', full: true },
+            { name: 'description', label: 'Description / libellé brut', type: 'textarea', full: true },
+          ]}
+          onClose={() => setEditTx(null)}
+          onSubmit={(values) => saveTx(editTx.id, values)}
+        />
       )}
     </>
   );

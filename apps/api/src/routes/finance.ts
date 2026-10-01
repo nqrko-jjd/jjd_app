@@ -250,7 +250,7 @@ financeRouter.get(
   '/bank',
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
-    const { matched, q: qRaw, from, bank, documentId, page: pageStr, pageSize: pageSizeStr } = req.query as Record<string, string>;
+    const { matched, q: qRaw, from, bank, documentId, page: pageStr, pageSize: pageSizeStr, sort, dir } = req.query as Record<string, string>;
     const q = qRaw?.toLowerCase();
     const and: Record<string, unknown>[] = [];
     // Retrouver la transaction qui a réglé une facture précise (lien direct depuis sa fiche) —
@@ -267,10 +267,16 @@ financeRouter.get(
 
     const page = Math.max(1, Math.trunc(Number(pageStr)) || 1);
     const pageSize = Math.min(5000, Math.max(20, Math.trunc(Number(pageSizeStr)) || 100));
+    const sortDir: 'asc' | 'desc' = dir === 'asc' ? 'asc' : 'desc';
+    const orderBy: Record<string, unknown> =
+      sort === 'bank' ? { bank: sortDir }
+      : sort === 'counterparty' ? { counterpartyName: sortDir }
+      : sort === 'amount' ? { amount: sortDir }
+      : { bookingDate: sortDir };
 
     const [items, filteredCount, stats, total, done] = await Promise.all([
       prisma.bankTransaction.findMany({
-        where, orderBy: { bookingDate: 'desc' },
+        where, orderBy,
         skip: (page - 1) * pageSize, take: pageSize,
         include: {
           account: { select: { label: true, iban: true } },
@@ -293,6 +299,37 @@ financeRouter.get(
       byBank: stats, matched: done, total,
       page, pageSize, totalCount: filteredCount, totalPages: Math.max(1, Math.ceil(filteredCount / pageSize)),
     });
+  }),
+);
+
+/**
+ * Correction manuelle d'une transaction importée (date, banque, contrepartie, communication,
+ * montant…) — en attendant Ponto (flux bancaire live), c'est le seul moyen de rattraper une
+ * erreur d'import (CSV/PDF/capture d'écran) sans tout réimporter.
+ */
+financeRouter.patch(
+  '/bank/:id',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const existing = await prisma.bankTransaction.findUnique({ where: { id: req.params.id } });
+    if (!existing) throw new HttpError(404, 'Transaction introuvable');
+    const b = req.body as Record<string, unknown>;
+    const data: Record<string, unknown> = {};
+    if ('bookingDate' in b) data.bookingDate = parseLooseDate(b.bookingDate);
+    if ('valueDate' in b) data.valueDate = parseLooseDate(b.valueDate);
+    if ('bank' in b) data.bank = typeof b.bank === 'string' ? b.bank.trim() || null : null;
+    if ('counterpartyName' in b) data.counterpartyName = typeof b.counterpartyName === 'string' ? b.counterpartyName.trim() || null : null;
+    if ('counterpartyAccount' in b) data.counterpartyAccount = typeof b.counterpartyAccount === 'string' ? b.counterpartyAccount.trim() || null : null;
+    if ('description' in b) data.description = typeof b.description === 'string' ? b.description.trim() || null : null;
+    if ('communication' in b) data.communication = typeof b.communication === 'string' ? b.communication.trim() || null : null;
+    if ('amount' in b) {
+      const amount = parseAmount(b.amount);
+      if (amount == null) throw new HttpError(422, 'Montant invalide');
+      data.amount = amount;
+      data.side = amount < 0 ? 'out' : 'in';
+    }
+    const updated = await prisma.bankTransaction.update({ where: { id: existing.id }, data });
+    res.json({ transaction: updated });
   }),
 );
 

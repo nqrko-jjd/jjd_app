@@ -20,10 +20,10 @@ const poSeed = () => ({
   lines: items.map((it, i) => ({ id: 'l' + i, stockItemId: it.id, unitName: null, qty: i ? 1 : 2, price: 12, receivedQty: 0, stockItem: it })),
 });
 let checked = 0;
-async function setup(width, role = 'storekeeper') {
+async function setup(width, role = 'storekeeper', toolsEnabled = false) {
   const context = await browser.newContext({ viewport: { width, height: 1000 }, isMobile: width < 600, hasTouch: width < 1000 });
   const page = await context.newPage();
-  const state = { movements: [], movementAttempts: 0, failAt: 0, prep: prepSeed(), po: poSeed(), receiving: [], prepWrites: 0, inFlight: 0, maxInFlight: 0, errors: [] };
+  const state = { movements: [], movementAttempts: 0, failAt: 0, prep: prepSeed(), po: poSeed(), receiving: [], prepWrites: 0, inFlight: 0, maxInFlight: 0, errors: [], loans: [], returns: [], toolState: 'AVAILABLE' };
   page.on('pageerror', e => state.errors.push(e.message));
   await context.route('https://fonts.**', route => route.abort());
   await context.route('**/jjd-api/**', async route => {
@@ -32,7 +32,13 @@ async function setup(width, role = 'storekeeper') {
     const body = req.postData() ? JSON.parse(req.postData()) : {};
     let data = { items: [] }, status = 200;
     if (path === '/api/auth/me') data = { user: { id: 'u1', email: 'warehouse@example.test', role, isPartner: false, locale: 'fr', personId: null }, person: null };
-    else if (path === '/api/assistant/status' || path === '/api/materiel/status') data = { enabled: false, previewAllowed: false };
+    else if (path === '/api/assistant/status') data = { enabled: false, previewAllowed: false };
+    else if (path === '/api/materiel/status') data = { enabled: toolsEnabled };
+    else if (path === '/api/materiel/stock') data = { products: [{ id: 't1', name: 'Perceuse', brand: null, model: null, image: null, total: 1, available: 1, onSite: 0, units: [{ assetTag: 'TOOL-001', state: state.toolState, storageLocation: 'A01', chantier: null }] }] };
+    else if (path === '/api/materiel/consumables') data = { consumables: [] };
+    else if (path === '/api/materiel/units/TOOL-001') data = { unit: { assetTag: 'TOOL-001', state: state.toolState }, product: { id: 't1', name: 'Perceuse' } };
+    else if (path === '/api/materiel/loans') { state.loans.push(body); state.toolState = 'ON_SITE'; data = { ok: true }; }
+    else if (path === '/api/materiel/returns') { state.returns.push(body); state.toolState = 'AVAILABLE'; data = { ok: true }; }
     else if (path === '/api/stock/meta') data = { worksites: [{ id: 'w1', name: 'Chantier test' }], categories: [] };
     else if (path === '/api/stock/items') data = { items };
     else if (path === '/api/stock/locations') data = { items: [{ code: 'A01' }, { code: 'B02' }] };
@@ -200,6 +206,31 @@ try {
     assert.equal(state.receiving[0].lines.length, 2);
     assert.ok(await page.locator('.rack-bar').innerText().then(t => t.includes('C03')));
     assert.deepEqual(state.errors, []); checked += 6;
+    await context.close();
+  }
+
+  {
+    const { page, context, state } = await setup(768, 'storekeeper', true);
+    await page.goto(base + '/app/stock/scan');
+    await page.getByRole('textbox', { name: 'Champ de scan' }).waitFor();
+    await page.waitForTimeout(200);
+    await scan(page, 'TOOL-001');
+    await page.locator('.stock-basket-line .name').getByText('Perceuse', { exact: true }).waitFor();
+    await page.waitForTimeout(750); await scan(page, 'TOOL-001');
+    await page.getByText('Cet exemplaire est déjà dans le panier.', { exact: true }).waitFor();
+    assert.equal(await page.locator('.stock-basket-line').count(), 1, 'a physical tool must not be duplicated');
+    await page.getByPlaceholder('chercher un chantier').fill('Chantier test');
+    await page.getByRole('button', { name: /Valider la sortie/ }).click();
+    await waitFor(() => state.loans.length === 1, 'tool loan missing');
+    await page.getByText('1 mouvement enregistré.', { exact: true }).waitFor();
+    assert.equal(state.loans[0].worksiteId, 'w1');
+    await page.getByRole('button', { name: 'Retourner', exact: true }).click();
+    await scan(page, 'BRZ-A01'); await scan(page, 'TOOL-001');
+    await page.locator('.stock-basket-line .name').getByText('Perceuse', { exact: true }).waitFor();
+    await page.getByRole('button', { name: /Valider le retour/ }).click();
+    await waitFor(() => state.returns.length === 1, 'tool return missing');
+    assert.equal(state.returns[0].storageLocation, 'A01');
+    assert.deepEqual(state.errors, []); checked += 4;
     await context.close();
   }
   console.log('Warehouse workflow: ' + checked + ' checks passed (390px / 768px / 1440px, mocked API only).');

@@ -266,7 +266,9 @@ export function Shell({ children, navigationPaths }: { children: React.ReactNode
         <button className="bottom-tab" aria-expanded={open} aria-controls="app-navigation" onClick={()=>setOpen(true)}><Menu size={20}/>Plus</button>
       </nav>}
 
-      {assistant?.previewAllowed && <CompanionLauncher />}
+      {/* Sur Messagerie, la bulle (coin bas-droit) chevauche le composeur de la messagerie
+          d'équipe en mobile — déjà plein écran sur cette page, pas besoin de la bulle en plus. */}
+      {assistant?.previewAllowed && pathname !== '/app/messagerie' && <CompanionLauncher />}
     </div>
   );
 }

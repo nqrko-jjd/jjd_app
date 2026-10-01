@@ -1356,6 +1356,11 @@ model StockItem {
   photoThumbUrl String?
   location  String? // dernier rack où l'article a été rangé (scan de l'étiquette du rack à l'entrée)
   unit      String // unité de base du stock ("kg" | "m²" | "u" | "L" | …) — les quantités sont stockées dans cette unité
+  // Unité affichée en priorité sur les écrans de consultation (ex. "sac") à la place de l'unité
+  // de base — un article compté/mouvementé en kg se vend et se compte au quotidien en sacs ou
+  // palettes ; null = unité de base (comportement d'avant). Doit être `unit` ou le nom d'une
+  // des `units` ci-dessous (vérifié côté API).
+  displayUnitName String?
   category  String?
   minQty    Float? // seuil d'alerte réappro
   qty       Float    @default(0)

@@ -412,6 +412,10 @@ export const stockItemInput = z.object({
   category: z.string().trim().nullish(),
   minQty: z.coerce.number().min(0).nullish(),
   units: z.array(stockItemUnitInput).optional(), // unités alternatives (remplace la liste si fournie)
+  // unité affichée en priorité (ex. "sac") au lieu de l'unité de base (ex. "kg") sur les écrans
+  // de consultation — vide/absent = unité de base, comme avant. Doit être l'unité de base ou
+  // l'un des `units` ci-dessus.
+  displayUnitName: z.string().trim().nullish(),
   suppliers: z.array(stockSupplierInput).optional(), // fournisseurs à lier dès la création (plusieurs, un prix par conditionnement)
 });
 

@@ -11,6 +11,7 @@ export interface StockSupplierLink {
 }
 export interface StockItemFull {
   id: string; ref: string | null; name: string; brand: string | null; model: string | null; note: string | null; unit: string;
+  displayUnitName: string | null;
   category: string | null; minQty: number | null; qty: number; avgCost: number | null; value: number; low: boolean; active: boolean;
   photoUrl: string | null; photoThumbUrl: string | null; location?: string | null;
   units: StockUnit[]; suppliers: StockSupplierLink[];
@@ -24,6 +25,7 @@ export function StockItemModal({ item, onClose, onSaved }: { item?: StockItemFul
   const [v, setV] = useState({
     name: item?.name ?? '', ref: item?.ref ?? '', brand: item?.brand ?? '', model: item?.model ?? '', category: item?.category ?? '',
     unit: item?.unit ?? '', minQty: item?.minQty != null ? String(item.minQty) : '', note: item?.note ?? '',
+    displayUnitName: item?.displayUnitName ?? '',
   });
   const [photo, setPhoto] = useState<File | null>(null);
   const photoPreview = useMemo(() => (photo ? URL.createObjectURL(photo) : null), [photo]);
@@ -84,6 +86,7 @@ export function StockItemModal({ item, onClose, onSaved }: { item?: StockItemFul
         minQty: v.minQty === '' ? null : Number(v.minQty),
         ...(v.ref.trim() ? { ref: v.ref.trim() } : {}),
         units: units.filter((u) => u.name.trim()).map((u) => ({ name: u.name.trim(), factor: factorOfUnit(u.name) })),
+        displayUnitName: unitNames.includes(v.displayUnitName) ? v.displayUnitName : null,
         ...(item ? {} : {
           suppliers: suppliers.filter((x) => x.contactId).map((x, i) => ({
             contactId: x.contactId, supplierRef: x.supplierRef || null, unitName: x.unitName || null,
@@ -191,6 +194,17 @@ export function StockItemModal({ item, onClose, onSaved }: { item?: StockItemFul
             <button type="button" className="btn" style={{ alignSelf: 'flex-start' }} onClick={() => setUnits([...units, { name: '', qty: '', per: null }])}>+ Ajouter un conditionnement</button>
             {units.length > 0 && <span className="muted" style={{ fontSize: '0.78rem' }}>Le stock est compté en <strong>{v.unit || 'unité de base'}</strong>. Chaque ligne se définit par rapport à l’unité choisie à droite : « 1 palette = 42 sac » se règle en choisissant « sac ».</span>}
           </div>
+
+          {unitNames.length > 0 && (
+            <div className="field" style={{ gridColumn: '1 / -1' }}>
+              <label htmlFor="si-display-unit">Unité affichée en priorité</label>
+              <select id="si-display-unit" className="select" value={unitNames.includes(v.displayUnitName) ? v.displayUnitName : ''} onChange={(e) => set('displayUnitName', e.target.value)}>
+                <option value="">{v.unit || 'unité de base'} (par défaut)</option>
+                {unitNames.map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+              <span className="muted" style={{ fontSize: '0.75rem' }}>Ce que vous voyez en premier sur la fiche (ex. « sacs » plutôt que « kg ») — le stock reste compté en {v.unit || 'unité de base'} en coulisses.</span>
+            </div>
+          )}
 
           {!item && (
             <div className="field" style={{ gridColumn: '1 / -1' }}>

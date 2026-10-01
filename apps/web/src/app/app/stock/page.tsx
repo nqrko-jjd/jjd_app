@@ -15,7 +15,15 @@ import { ViewToggle, useViewMode } from '@/components/ViewToggle';
 interface StockItem {
   id: string; ref: string | null; brand: string | null; model: string | null; name: string; unit: string; category: string | null;
   minQty: number | null; qty: number; avgCost: number | null; value: number; low: boolean; active: boolean; photoThumbUrl: string | null;
+  displayUnitName: string | null; units: { name: string; factor: number }[];
 }
+
+/** Quantité affichée pour une ligne : son unité "préférée" (ex. sac) si réglée, sinon l'unité de base. */
+function displayQty(it: StockItem): { qty: number; unit: string } {
+  const pu = it.displayUnitName ? it.units.find((u) => u.name.toLowerCase() === it.displayUnitName!.toLowerCase()) : null;
+  return pu ? { qty: it.qty / pu.factor, unit: pu.name } : { qty: it.qty, unit: it.unit };
+}
+const fmtQty = (n: number) => new Intl.NumberFormat('fr-BE', { maximumFractionDigits: 2 }).format(n);
 
 export default function StockPage() {
   const router = useRouter();
@@ -126,7 +134,7 @@ export default function StockPage() {
                   {it.low && <span className="badge warn" style={{ marginLeft: 6, fontSize: '0.68rem' }}>bas</span>}
                 </div>
                 <div className="gallery-sub">
-                  {[it.ref, [it.brand, it.model].filter(Boolean).join(' ') || it.category].filter(Boolean).join(' · ') || '—'} · {it.qty} {it.unit}
+                  {[it.ref, [it.brand, it.model].filter(Boolean).join(' ') || it.category].filter(Boolean).join(' · ') || '—'} · {fmtQty(displayQty(it).qty)} {displayQty(it).unit}
                 </div>
               </div>
               <div className="row" style={{ padding: '0 0.85rem 0.7rem', justifyContent: 'space-between' }}>
@@ -165,7 +173,7 @@ export default function StockPage() {
                     </span>
                   </td>
                   <td>{it.category ?? '—'}</td>
-                  <td className="tnum">{it.qty} {it.unit}</td>
+                  <td className="tnum">{fmtQty(displayQty(it).qty)} {displayQty(it).unit}</td>
                   <td style={{ textAlign: 'right' }}><Money value={it.value} /></td>
                 </tr>
               ))}

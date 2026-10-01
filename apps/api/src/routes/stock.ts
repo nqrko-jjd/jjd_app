@@ -51,6 +51,13 @@ async function nextItemRef(): Promise<string> {
   throw new HttpError(500, 'Impossible d’attribuer une référence');
 }
 
+/** L'unité affichée en priorité doit être l'unité de base ou l'un des conditionnements définis. */
+function checkDisplayUnit(base: string, units: { name: string }[], displayUnitName: string | null | undefined) {
+  if (!displayUnitName) return;
+  const ok = sameName(displayUnitName, base) || units.some((u) => sameName(u.name, displayUnitName));
+  if (!ok) throw new HttpError(422, `Unité affichée « ${displayUnitName} » inconnue pour cet article — choisissez l’unité de base ou un conditionnement déjà défini.`);
+}
+
 /** Valide les unités alternatives : noms distincts, différents de l'unité de base. */
 function checkUnits(base: string, units: { name: string; factor: number }[]) {
   const seen = new Set<string>([base.trim().toLowerCase()]);
@@ -133,6 +140,7 @@ stockRouter.post(
   asyncHandler(async (req, res) => {
     const d = stockItemInput.parse(req.body);
     checkUnits(d.unit, d.units ?? []);
+    checkDisplayUnit(d.unit, d.units ?? [], d.displayUnitName);
     const ref = d.ref || (await nextItemRef());
     if (await prisma.stockItem.findUnique({ where: { ref }, select: { id: true } })) throw new HttpError(409, `La référence ${ref} existe déjà`);
     // fournisseurs liés dès la création : un prix par (fournisseur, conditionnement), un seul « préféré »
@@ -159,7 +167,7 @@ stockRouter.post(
     const item = await prisma.stockItem.create({
       data: {
         ref, name: d.name, unit: d.unit, brand: d.brand ?? null, model: d.model ?? null, note: d.note ?? null,
-        category: d.category ?? null, minQty: d.minQty ?? null,
+        category: d.category ?? null, minQty: d.minQty ?? null, displayUnitName: d.displayUnitName ?? null,
         units: { create: (d.units ?? []).map((u, i) => ({ name: u.name, factor: u.factor, position: i })) },
         suppliers: { create: supplierRows },
       },
@@ -174,7 +182,7 @@ stockRouter.patch(
   requireAuth(...STOCK_MANAGE),
   asyncHandler(async (req, res) => {
     const d = stockItemInput.partial().parse(req.body);
-    const current = await prisma.stockItem.findUnique({ where: { id: req.params.id }, include: { suppliers: true } });
+    const current = await prisma.stockItem.findUnique({ where: { id: req.params.id }, include: { suppliers: true, units: true } });
     if (!current) throw new HttpError(404, 'Article introuvable');
     const base = d.unit ?? current.unit;
     if (d.units) {
@@ -183,6 +191,7 @@ stockRouter.patch(
       const inUse = current.suppliers.find((s) => s.unitName && !same(s.unitName, base) && !kept.has(s.unitName.trim().toLowerCase()));
       if (inUse) throw new HttpError(409, `L’unité « ${inUse.unitName} » est utilisée par un fournisseur — retirez-la d’abord de sa ligne`);
     }
+    if (d.displayUnitName !== undefined) checkDisplayUnit(base, d.units ?? current.units ?? [], d.displayUnitName);
     if (d.ref && d.ref !== current.ref) {
       const clash = await prisma.stockItem.findUnique({ where: { ref: d.ref }, select: { id: true } });
       if (clash) throw new HttpError(409, `La référence ${d.ref} existe déjà`);
@@ -203,6 +212,7 @@ stockRouter.patch(
           note: d.note === undefined ? undefined : (d.note ?? null),
           category: d.category === undefined ? undefined : (d.category ?? null),
           minQty: d.minQty === undefined ? undefined : (d.minQty ?? null),
+          displayUnitName: d.displayUnitName === undefined ? undefined : (d.displayUnitName ?? null),
         },
         include: itemInclude,
       });

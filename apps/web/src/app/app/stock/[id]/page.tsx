@@ -73,7 +73,15 @@ export default function StockDetail({ params }: { params: Promise<{ id: string }
   }
 
   const bigUnit = item.units.length ? [...item.units].sort((a, b) => b.factor - a.factor)[0]! : null;
-  const inBig = bigUnit && bigUnit.factor > 1 ? ` (≈ ${fmtQty(item.qty / bigUnit.factor)} ${bigUnit.name})` : '';
+  // Unité affichée en priorité (ex. « sac ») si réglée sur la fiche, sinon l'unité de base (kg)
+  // comme avant — le stock reste compté en unité de base en coulisses, c'est purement l'affichage.
+  const primaryUnit = item.displayUnitName ? item.units.find((u) => u.name.toLowerCase() === item.displayUnitName!.toLowerCase()) ?? null : null;
+  const primaryQty = primaryUnit ? item.qty / primaryUnit.factor : item.qty;
+  const primaryUnitName = primaryUnit ? primaryUnit.name : item.unit;
+  // à côté du principal : la plus grande autre unité définie (palette), sinon l'unité de base si on affiche déjà en sac
+  const altUnit = bigUnit && bigUnit.factor > (primaryUnit?.factor ?? 1) ? bigUnit : null;
+  const altText = altUnit ? `≈ ${fmtQty(item.qty / altUnit.factor)} ${altUnit.name}` : primaryUnit ? `${fmtQty(item.qty)} ${item.unit}` : null;
+  const inBig = altText ? ` (${altText})` : '';
 
   async function addBarcode(code: string) {
     setBcMsg(null);
@@ -147,12 +155,12 @@ export default function StockDetail({ params }: { params: Promise<{ id: string }
           <h1>{item.name}</h1>
           <span className={`badge ${item.low ? 'crit' : 'ok'}`}>{item.low ? 'À réapprovisionner' : 'Disponible'}</span>
         </div>
-        <div className="sub">{fmtQty(item.qty)} {item.unit} en stock{inBig}{item.location ? ` · 📍 rack ${item.location}` : ''}</div>
+        <div className="sub">{fmtQty(primaryQty)} {primaryUnitName} en stock{inBig}{item.location ? ` · 📍 rack ${item.location}` : ''}</div>
       </div>
       </div>
 
       <div className="kpis" style={{ margin: '1.4rem 0' }}>
-        <Kpi ic={Package} label="Quantité en stock" value={`${fmtQty(item.qty)} ${item.unit}`} sub={bigUnit && bigUnit.factor > 1 ? `≈ ${fmtQty(item.qty / bigUnit.factor)} ${bigUnit.name}` : (item.category ?? 'Article suivi')} hero />
+        <Kpi ic={Package} label="Quantité en stock" value={`${fmtQty(primaryQty)} ${primaryUnitName}`} sub={altText ?? (item.category ?? 'Article suivi')} hero />
         <Kpi ic={Layers} label="Valeur" value={<Money value={item.value} />} sub={item.avgCost != null ? `Coût moyen ${formatEur(item.avgCost)} / ${item.unit}` : 'Coût moyen non défini'} />
         <Kpi
           ic={AlertTriangle}
@@ -467,7 +475,15 @@ function MovementModal({
         </div>
         <div className="modal-body">
           <div style={{ gridColumn: '1 / -1' }}>
-            <div className="muted" style={{ marginBottom: '0.8rem' }}>Stock actuel : <strong>{fmtQty(item.qty)} {item.unit}</strong></div>
+            {(() => {
+              const pu = item.displayUnitName ? item.units.find((u) => u.name.toLowerCase() === item.displayUnitName!.toLowerCase()) : null;
+              return (
+                <div className="muted" style={{ marginBottom: '0.8rem' }}>
+                  Stock actuel : <strong>{fmtQty(pu ? item.qty / pu.factor : item.qty)} {pu ? pu.name : item.unit}</strong>
+                  {pu && <span> ({fmtQty(item.qty)} {item.unit})</span>}
+                </div>
+              );
+            })()}
             <div className="seg">
               <button type="button" className={type === 'in' ? 'on' : ''} onClick={() => setType('in')}>Entrée</button>
               <button type="button" className={type === 'out' ? 'on' : ''} onClick={() => setType('out')}>Sortie</button>

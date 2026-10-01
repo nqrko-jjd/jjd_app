@@ -1,9 +1,10 @@
 import { useCallback, useState } from 'react';
-import { ScrollView } from 'react-native';
+import { ScrollView, Pressable } from 'react-native';
 import { Text } from '@/lib/AppText';
-import { Stack, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { Stack, useLocalSearchParams, useFocusEffect, useRouter } from 'expo-router';
 import { apiGet } from '@/lib/api';
-import { Card, Label, Loading, Row, Badge } from '@/lib/ui';
+import { ScreenHeader, Card, Label, Loading, Row, Badge } from '@/lib/ui';
+import { WORKSITE_STATUS_LABEL } from '@/lib/labels';
 import { T } from '@/lib/theme';
 
 interface D {
@@ -17,14 +18,17 @@ interface D {
 
 export default function ContactDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
   const [d, setD] = useState<D | null>(null);
   useFocusEffect(useCallback(() => { apiGet<D>(`/api/contacts/${id}`).then(setD).catch(() => {}); }, [id]));
   if (!d) return <Loading />;
   const c = d.contact;
 
+
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ ...T.content, padding: 16, gap: 12 }}>
+    <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ ...T.content, gap: 20 }}>
       <Stack.Screen options={{ title: c.name, headerBackTitle: 'Retour' }} />
+      <ScreenHeader title={c.name} eyebrow="Contact" description={[c.address, c.postalCode, c.city].filter(Boolean).join(' · ')}/>
       <Card>
         <Row k="E-mail" v={c.email ?? '—'} />
         <Row k="Téléphone" v={c.phone ?? '—'} />
@@ -34,10 +38,10 @@ export default function ContactDetail() {
       </Card>
       <Label>Chantiers ({c.worksites.length})</Label>
       {c.worksites.map((w) => (
-        <Card key={w.id}>
+        <Pressable key={w.id} accessibilityRole="button" accessibilityLabel={`Ouvrir ${w.title}`} onPress={() => router.push(`/chantier/${w.id}` as never)}><Card>
           <Text style={{ fontWeight: '600', color: T.ink }}>{w.ref} — {w.title}</Text>
-          <Badge>{w.status}</Badge>
-        </Card>
+          <Badge>{WORKSITE_STATUS_LABEL[w.status as keyof typeof WORKSITE_STATUS_LABEL] ?? w.status}</Badge>
+        </Card></Pressable>
       ))}
     </ScrollView>
   );

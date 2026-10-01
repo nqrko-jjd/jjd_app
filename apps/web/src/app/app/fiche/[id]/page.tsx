@@ -1,4 +1,5 @@
 'use client';
+import { Phone, Navigation, ClipboardList, Users, Package, Camera } from 'lucide-react';
 import { SkeletonRows } from '@/components/States';
 import { use, useCallback, useState } from 'react';
 import Link from 'next/link';
@@ -28,9 +29,9 @@ interface Field {
 
 function PhoneLine({ label, name, phone }: { label: string; name: string; phone: string | null }) {
   return (
-    <div style={{ padding: '0.3rem 0' }}>
-      <span className="muted">{label} · </span>
-      {phone ? <a href={`tel:${phone.replace(/\s/g, '')}`} style={{ color: 'var(--primary)', fontWeight: 700 }}>{name} · {phone}</a> : name}
+    <div className="field-phone">
+      <div><span className="muted">{label}</span><strong>{name}</strong></div>
+      {phone && <a href={`tel:${phone.replace(/\s/g, '')}`} aria-label={`Appeler ${name}`}><Phone size={15}/>{phone}</a>}
     </div>
   );
 }
@@ -67,15 +68,15 @@ export default function WorkerFichePage({ params }: { params: Promise<{ id: stri
         <a
           href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(w.address)}`}
           target="_blank" rel="noreferrer"
-          className="btn" style={{ display: 'inline-block', marginBottom: '1rem' }}
+          className="btn" style={{ display: 'inline-flex', marginBottom: '1rem' }}
         >
-          📍 Itinéraire
+          <Navigation size={16}/> Itinéraire
         </a>
       )}
 
       {d.building?.digicode && (
         <div className="card card-pad" style={{ background: 'var(--warn-soft, #fbf3e3)', marginBottom: '1rem' }}>
-          <span className="muted">Digicode · </span><strong style={{ fontSize: '1.1rem' }}>{d.building.digicode}</strong>
+          <span className="eyebrow">Code d’accès · </span><strong style={{ fontSize: '1.1rem' }}>{d.building.digicode}</strong>
         </div>
       )}
       {d.building?.accessNote && (
@@ -86,8 +87,8 @@ export default function WorkerFichePage({ params }: { params: Promise<{ id: stri
       )}
 
       <div className="card card-pad" style={{ marginBottom: '1rem' }}>
-        <div className="muted" style={{ marginBottom: '0.2rem' }}>
-          À faire{d.today && !d.today.allDay ? ` · ${new Date(d.today.startAt).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' })}–${new Date(d.today.endAt).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' })}` : ''}
+        <div className="field-section-title">
+          <ClipboardList size={18}/> Mission du jour{d.today && !d.today.allDay ? ` · ${new Date(d.today.startAt).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' })}–${new Date(d.today.endAt).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' })}` : ''}
         </div>
         <div style={{ whiteSpace: 'pre-wrap' }}>{d.today?.toDo || w.description || 'Voir avec le bureau.'}</div>
         {d.today?.materials && <div className="muted" style={{ marginTop: '0.4rem' }}>{d.today.materials}</div>}
@@ -96,7 +97,7 @@ export default function WorkerFichePage({ params }: { params: Promise<{ id: stri
 
       {d.today && (d.today.equipment.length > 0 || d.today.consumables.length > 0) && (
         <div className="card card-pad" style={{ marginBottom: '1rem' }}>
-          <div className="muted" style={{ marginBottom: '0.3rem' }}>Matériel &amp; consommables</div>
+          <div className="field-section-title"><Package size={18}/> À emporter</div>
           {d.today.equipment.map((e, i) => <div key={`e${i}`} style={{ padding: '0.15rem 0' }}>🧰 {e.name}{e.reference ? ` (${e.reference})` : ''}</div>)}
           {d.today.consumables.map((c, i) => <div key={`c${i}`} style={{ padding: '0.15rem 0' }}>📦 {c.qty} {c.unit} — {c.name}</div>)}
         </div>
@@ -106,11 +107,7 @@ export default function WorkerFichePage({ params }: { params: Promise<{ id: stri
         <div className="card card-pad" style={{ marginBottom: '1rem' }}>
           <div className="muted" style={{ marginBottom: '0.3rem' }}>Tâches ({openTasks.length} à faire)</div>
           {[...openTasks, ...doneTasks].map((t) => (
-            <div
-              key={t.id}
-              onClick={() => busy !== t.id && toggleTask(t)}
-              style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.45rem 0', cursor: 'pointer', opacity: busy === t.id ? 0.5 : 1 }}
-            >
+            <button type="button" className="field-task" key={t.id} disabled={busy === t.id} aria-pressed={t.status === 'done'} onClick={() => toggleTask(t)}>
               <span style={{
                 width: 20, height: 20, borderRadius: 5, border: `2px solid ${t.status === 'done' ? 'var(--ok)' : 'var(--line)'}`,
                 background: t.status === 'done' ? 'var(--ok)' : 'transparent', color: '#fff', display: 'flex',
@@ -121,20 +118,20 @@ export default function WorkerFichePage({ params }: { params: Promise<{ id: stri
               <span style={{ textDecoration: t.status === 'done' ? 'line-through' : 'none', color: t.status === 'done' ? 'var(--ink-3)' : 'var(--ink)' }}>
                 {t.title}{t.assignees.length > 0 ? ` · ${t.assignees.map((a) => a.name).join(', ')}` : ''}
               </span>
-            </div>
+            </button>
           ))}
         </div>
       )}
 
       {d.today && d.today.people.length > 0 && (
         <div className="card card-pad" style={{ marginBottom: '1rem' }}>
-          <div className="muted" style={{ marginBottom: '0.2rem' }}>Équipe du jour</div>
+          <div className="field-section-title"><Users size={18}/> Équipe du jour</div>
           {d.today.people.map((p, i) => <PhoneLine key={i} label="Ouvrier" name={p.name} phone={p.phone} />)}
         </div>
       )}
 
       <div className="card card-pad" style={{ marginBottom: '1.2rem' }}>
-        <div className="muted" style={{ marginBottom: '0.2rem' }}>Contacts</div>
+        <div className="field-section-title"><Phone size={18}/> Personnes à contacter</div>
         {d.manager && <PhoneLine label="Chef de chantier" name={d.manager.name} phone={d.manager.phone} />}
         {d.client && <PhoneLine label="Client" name={d.client.name} phone={d.client.phone} />}
         {(d.building?.contacts ?? []).map((c, i) => <PhoneLine key={i} label={CONTACT_ROLE[c.role] ?? c.role} name={c.name} phone={c.phone} />)}
@@ -142,7 +139,7 @@ export default function WorkerFichePage({ params }: { params: Promise<{ id: stri
       </div>
 
       <Link href={`/app/fiche/${w.id}/rapport`} className="btn primary" style={{ display: 'block', textAlign: 'center', marginBottom: '1.2rem' }}>
-        Faire le rapport de chantier
+        <Camera size={18}/> Photos et rapport de chantier
       </Link>
 
       <div id="fil-chantier" className="section-title" style={{ marginTop: 0 }}>Fil de chantier</div>

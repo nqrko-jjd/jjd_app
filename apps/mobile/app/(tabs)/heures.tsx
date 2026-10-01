@@ -65,7 +65,7 @@ export default function Heures() {
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: T.paper }}
-      contentContainerStyle={{ ...T.content, padding: 16, gap: 12 }}
+      contentContainerStyle={{ ...T.content, gap: 20 }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} />}
     >
       <View style={s.nav}>

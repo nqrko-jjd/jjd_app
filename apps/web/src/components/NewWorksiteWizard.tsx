@@ -163,11 +163,13 @@ export function NewWorksiteWizard({
                 key={label}
                 type="button"
                 className={i === step ? 'active' : ''}
+                aria-label={`Étape ${i + 1} : ${label}`}
+                aria-current={i === step ? 'step' : undefined}
                 disabled={i > maxStep || Object.values(contactPending).some(Boolean)}
                 onClick={() => goTo(i)}
               >
                 <span className="wiz-step-num">{i + 1}</span>
-                {label}
+                <span className="wiz-step-label">{label}</span>
               </button>
             ))}
           </div>

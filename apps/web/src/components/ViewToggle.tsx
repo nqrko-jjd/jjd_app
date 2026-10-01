@@ -10,6 +10,7 @@ export function useViewMode(key: string, defaultMode: ViewMode = 'list') {
     try {
       const saved = localStorage.getItem(`view:${key}`);
       if (saved === 'list' || saved === 'gallery') setMode(saved);
+      else if (window.matchMedia('(max-width: 600px)').matches) setMode('gallery');
     } catch {
       /* mode privé */
     }

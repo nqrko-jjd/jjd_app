@@ -3,7 +3,7 @@ import { ScrollView, View } from 'react-native';
 import { Text } from '@/lib/AppText';
 import { Stack, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { apiGet } from '@/lib/api';
-import { Card, Label, Loading, Row, Badge, PhotoHeader, eur, dateBE } from '@/lib/ui';
+import { ScreenHeader, Card, Label, Loading, Row, Badge, PhotoHeader, eur, dateBE } from '@/lib/ui';
 import { T } from '@/lib/theme';
 
 interface D {
@@ -31,8 +31,9 @@ export default function VehiculeDetail() {
   const nextPay = v.payments.find((p) => p.dueOn && new Date(p.dueOn).getTime() >= Date.now());
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ ...T.content, padding: 16, gap: 12 }}>
+    <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ ...T.content, gap: 20 }}>
       <Stack.Screen options={{ title: [v.brand, v.model].filter(Boolean).join(' '), headerBackTitle: 'Retour' }} />
+      <ScreenHeader title={[v.brand, v.model].filter(Boolean).join(' ') || v.code || 'Véhicule'} eyebrow="Flotte" description={[v.plate, v.code].filter(Boolean).join(' · ')}/>
       <PhotoHeader basePath={`/api/vehicles/${v.id}`} photoUrl={v.photoUrl} onChange={load} />
       <Card>
         <Row k="Plaque" v={v.plate ?? '—'} />
@@ -41,8 +42,8 @@ export default function VehiculeDetail() {
         <Row k="Conducteur" v={v.driver ?? '—'} />
         <Row k="Km" v={v.km ?? '—'} />
         <Row k="Contrôle technique" v={dateBE(v.nextInspection)} />
-        <Row k="Équipements" v={v.equipment ?? '—'} />
-        <Row k="Dépôt" v={v.depot ?? '—'} />
+        {v.equipment && <Row k="Équipements" v={v.equipment} />}
+        {v.depot && <Row k="Dépôt" v={v.depot} />}
       </Card>
 
       <Card>
@@ -52,6 +53,7 @@ export default function VehiculeDetail() {
           : <Text style={{ color: T.ink2 }}>Aucune.</Text>}
       </Card>
 
+      {(v.acquisitionMode || v.purchasePriceHt != null || v.monthlyPayment != null || v.financeCompany || nextPay) && (
       <Card>
         <Label>Financement — {v.acquisitionMode ?? '?'}</Label>
         <Row k="Prix HTVA" v={eur(v.purchasePriceHt)} />
@@ -60,6 +62,7 @@ export default function VehiculeDetail() {
         <Row k="Fin" v={dateBE(v.financeEndOn)} />
         {nextPay && <Row k="Prochaine échéance" v={`${dateBE(nextPay.dueOn)} · solde ${eur(nextPay.balance)}`} />}
       </Card>
+      )}
 
       {v.fines.length > 0 && (
         <>

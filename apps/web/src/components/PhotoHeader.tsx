@@ -59,7 +59,7 @@ export function PhotoHeader({
     : { width: '100%', maxWidth: 460, aspectRatio: '16 / 10', borderRadius: 14 };
 
   return (
-    <div className={round ? 'row' : ''} style={round ? { gap: '1rem', marginBottom: '1.2rem', alignItems: 'center' } : { marginBottom: '1.3rem' }}>
+    <div className={`photo-header${round ? ' round row' : ''}`} style={round ? { gap: '1rem', marginBottom: '1.2rem', alignItems: 'center' } : { marginBottom: '1.3rem' }}>
       <div
         style={{
           ...box,

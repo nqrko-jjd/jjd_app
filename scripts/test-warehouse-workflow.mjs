@@ -135,7 +135,7 @@ try {
     await page.getByRole('spinbutton', { name: 'Quantité de Sac de mortier' }).waitFor();
     state.failAt = state.movementAttempts + 2;
     await page.getByRole('button', { name: /Valider l’entrée/ }).click();
-    assert.equal(await page.getByRole('textbox', { name: 'Champ de scan' }).isDisabled(), true);
+    assert.equal(await page.getByRole('textbox', { name: 'Champ de scan' }).getAttribute('readonly'), '');
     await page.getByText(/Les lignes restantes sont conservées/).waitFor();
     assert.equal(await page.locator('.stock-basket-line').count(), 1);
     assert.equal(state.movements.length, 3); checked += 3;
@@ -143,6 +143,24 @@ try {
     await waitFor(() => state.movements.length === 4, 'retry movement missing');
     assert.equal(state.movements.filter(m => m.stockItemId === 's2').length, 1, 'confirmed line must not be replayed'); checked++;
     assert.deepEqual(state.errors, []);
+    await context.close();
+  }
+  {
+    const { page, context, state } = await setup(390, 'foreman');
+    await page.goto(base + '/app/stock/scan');
+    await page.getByRole('textbox', { name: 'Champ de scan' }).waitFor();
+    await scan(page, 'ART-001');
+    await page.getByRole('spinbutton', { name: 'Quantité de Raccord cuivre' }).waitFor();
+    const destination = page.getByPlaceholder('chercher un chantier');
+    assert.equal(await destination.isDisabled(), false, 'destination must remain selectable after a scan');
+    await destination.fill('Chantier test');
+    await page.getByRole('spinbutton', { name: 'Quantité de Raccord cuivre' }).fill('0.5');
+    await page.getByRole('button', { name: /Valider la sortie/ }).click();
+    await waitFor(() => state.movements.length === 1, 'departure missing');
+    assert.equal(state.movements[0].qty, 0.5);
+    assert.equal(state.movements[0].worksiteId, 'w1');
+    assert.equal(state.movements[0].type, 'out');
+    assert.deepEqual(state.errors, []); checked += 5;
     await context.close();
   }
   for (const width of [390, 768, 1440]) {

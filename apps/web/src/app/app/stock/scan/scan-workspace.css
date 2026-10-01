@@ -16,7 +16,7 @@
 .scan-context .rack-bar-txt span { display: none; }
 .scan-context .rack-bar-txt > span { display: block; }
 .scan-context .rack-bar-input { width: 160px; min-height: 38px; font-size: 16px; }
-.scan-station { padding: 18px; border: 1px solid var(--line); border-radius: 20px; background: var(--surface); box-shadow: var(--shadow); }
+.scan-station { position: sticky; top: 12px; z-index: 20; padding: 18px; border: 1px solid var(--line); border-radius: 20px; background: var(--surface); box-shadow: var(--shadow); }
 .scan-station-title, .scan-station-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .scan-station-title { margin-bottom: 12px; }
 .scan-station-title strong { font-size: 17px; color: var(--primary-ink); }
@@ -49,6 +49,7 @@
 .scan-workspace .stock-manual { max-width: none; }
 .scan-workspace .stock-manual > summary { padding: 14px 2px; }
 @media (max-width: 900px) {
+  .scan-station { top: 76px; }
   .scan-workspace .stock-basket-confirm { bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
 }
 @media (max-width: 600px) {

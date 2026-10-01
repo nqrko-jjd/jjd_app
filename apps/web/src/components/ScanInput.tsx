@@ -65,6 +65,7 @@ export const ScanInput = forwardRef<ScanInputHandle, {
   }
 
   function onChange(v: string) {
+    if (disabledRef.current) return;
     setValue(v);
     stamps.current.push(Date.now());
     clearTimeout(timer.current);
@@ -151,7 +152,8 @@ export const ScanInput = forwardRef<ScanInputHandle, {
         <ScanLine size={26} strokeWidth={2} className="scan-bar-ic" />
         <input
           ref={ref}
-          disabled={disabled}
+          readOnly={disabled}
+          aria-disabled={disabled}
           className="scan-bar-input"
           value={value}
           inputMode={typing ? 'text' : 'none'}

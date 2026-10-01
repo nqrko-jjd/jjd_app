@@ -351,7 +351,7 @@ function ScanPanel({
       {action !== 'in' && (
         <div className="field" style={{ maxWidth: 360, marginBottom: '0.9rem' }}>
           <label>Chantier · pour tout le lot</label>
-          <ComboBox disabled={busy || scanning > 0 || cart.length > 0} placeholder="chercher un chantier" value={worksiteId} onChange={(value) => { if (!busy && scanning === 0 && cart.length === 0) setWorksiteId(value); }} options={meta.worksites.map((w) => ({ value: w.id, label: w.name }))} />
+          <ComboBox disabled={busy || scanning > 0} placeholder="chercher un chantier" value={worksiteId} onChange={(value) => { if (!busy && scanning === 0) setWorksiteId(value); }} options={meta.worksites.map((w) => ({ value: w.id, label: w.name }))} />
         </div>
       )}
       {action !== 'out' && (

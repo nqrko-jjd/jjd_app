@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutGrid, Building2, CalendarDays, ListChecks, Clock, TrendingUp, FileText, Wallet,
   BarChart3, Euro, Warehouse, Contact, Users, Truck, Wrench, Package, ScanLine, Flag, Settings, ExternalLink,
-  MessageSquare, ClipboardList, Search, ChevronDown, X, Menu, type LucideIcon,
+  MessageSquare, ClipboardList, Search, ChevronDown, ChevronLeft, ChevronRight, X, Menu, LogOut, type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useApi } from '@/lib/use-api';
@@ -115,7 +115,16 @@ export function Shell({ children, navigationPaths }: { children: React.ReactNode
   const [open, setOpen] = useState(false);
   const [navQuery, setNavQuery] = useState('');
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    try { return localStorage.getItem('jjd-nav-collapsed') === '1'; } catch { return false; }
+  });
   useEffect(() => { setOpen(false); setNavQuery(''); setExpandedGroups({}); }, [pathname]);
+  useEffect(() => {
+    document.body.classList.toggle('nav-collapsed', collapsed);
+    try { localStorage.setItem('jjd-nav-collapsed', collapsed ? '1' : '0'); } catch { /* stockage indisponible — pas bloquant */ }
+    return () => { document.body.classList.remove('nav-collapsed'); };
+  }, [collapsed]);
   useEffect(() => {
     if (!open) return;
     const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setOpen(false); };
@@ -162,7 +171,7 @@ export function Shell({ children, navigationPaths }: { children: React.ReactNode
       {open && <div className="scrim" onClick={() => setOpen(false)} />}
       <nav id="app-navigation" aria-label="Navigation principale" className={`sidebar${open ? ' open' : ''}`}>
         <button className="nav-close" aria-label="Fermer le menu" onClick={() => setOpen(false)}><X size={20} /></button>
-        <div className="brand"><span className="mark"><img src="/brand/icon-white.png" alt="" /></span>JJD Consult</div>
+        <div className="brand"><span className="mark"><img src="/brand/icon-white.png" alt="" /></span><span className="lbl">JJD Consult</span></div>
         <div className="org-card">
           <span className="mark"><img src="/brand/icon-white.png" alt="" /></span>
           <div>
@@ -177,7 +186,7 @@ export function Shell({ children, navigationPaths }: { children: React.ReactNode
         {!hasResults && <p className="nav-empty" role="status">Aucune page trouvée.</p>}
         {nav.map((g, index) => {
           const items = g.items.filter(visible).filter(matchesQuery);
-          const expanded = !!navQuery.trim() || (expandedGroups[g.title] ?? (items.some(item => isActive(item.href)) || index === 0));
+          const expanded = collapsed || !!navQuery.trim() || (expandedGroups[g.title] ?? (items.some(item => isActive(item.href)) || index === 0));
           if (!items.length) return null;
           return (
             <div key={g.title}>
@@ -196,8 +205,8 @@ export function Shell({ children, navigationPaths }: { children: React.ReactNode
                     onClick={() => setOpen(false)}
                   >
                     <span className="ic"><i.ic size={16} strokeWidth={2} /></span>
-                    {i.label}
-                    <ExternalLink size={13} style={{ marginLeft: 'auto', opacity: 0.5 }} />
+                    <span className="lbl">{i.label}</span>
+                    <ExternalLink size={13} className="lbl" style={{ marginLeft: 'auto', opacity: 0.5 }} />
                   </a>
                 ) : (
                   <Link
@@ -206,9 +215,10 @@ export function Shell({ children, navigationPaths }: { children: React.ReactNode
                     aria-current={isActive(i.href) ? 'page' : undefined}
                     className={`navlink${isActive(i.href) ? ' active' : ''}`}
                     onClick={() => setOpen(false)}
+                    title={collapsed ? i.label : undefined}
                   >
                     <span className="ic"><i.ic size={16} strokeWidth={2} /></span>
-                    {i.label}
+                    <span className="lbl">{i.label}</span>
                     {i.href === '/app/messagerie' && unreadTotal > 0 && <span className="nav-badge">{unreadTotal}</span>}
                   </Link>
                 )
@@ -217,9 +227,21 @@ export function Shell({ children, navigationPaths }: { children: React.ReactNode
             </div>
           );
         })}
+        <button
+          type="button"
+          className="nav-collapse"
+          onClick={() => setCollapsed((v) => !v)}
+          aria-pressed={collapsed}
+          title={collapsed ? 'Agrandir le menu' : 'Réduire le menu'}
+        >
+          <span className="ic">{collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}</span>
+          <span className="lbl">Réduire le menu</span>
+        </button>
         <div className="foot">
           <div className="who">{user?.email}</div>
-          <button className="logout" onClick={logout}>Déconnexion</button>
+          <button className="logout" onClick={logout} title={collapsed ? 'Déconnexion' : undefined}>
+            <LogOut size={15} /> <span className="lbl">Déconnexion</span>
+          </button>
         </div>
       </nav>
 

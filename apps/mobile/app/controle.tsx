@@ -30,7 +30,7 @@ export default function Controle() {
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: T.paper }}
-      contentContainerStyle={{ padding: 16, gap: 10 }}
+      contentContainerStyle={{ ...T.content, padding: 16, gap: 10 }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} />}
     >
       <Stack.Screen options={{ title: 'File de contrôle', headerBackTitle: 'Retour' }} />

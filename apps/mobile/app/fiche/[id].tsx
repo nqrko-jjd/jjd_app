@@ -88,7 +88,7 @@ export default function FicheDuJour() {
   const doneTasks = tasks.filter((t) => t.status === 'done');
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ padding: 16, gap: 12 }}>
+    <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ ...T.content, padding: 16, gap: 12 }}>
       <Stack.Screen options={{ title: w.ref, headerBackTitle: 'Retour' }} />
 
       <Card>

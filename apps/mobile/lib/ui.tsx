@@ -67,7 +67,7 @@ export function PhotoHeader({
 
   return (
     <View style={{ alignItems: 'center', gap: 8 }}>
-      <Pressable onPress={choose} disabled={busy}>
+      <Pressable onPress={choose} disabled={busy} style={round ? undefined : { width: '100%' }}>
         {src ? (
           <Image
             source={{ uri: src }}
@@ -90,6 +90,14 @@ export function PhotoHeader({
       </Pressable>
     </View>
   );
+}
+
+export function ScreenHeader({title,eyebrow,description,avatar}: {title:string;eyebrow?:string;description?:string;avatar?:string}) {
+ const router=useRouter();
+ return <View style={{flexDirection:'row',alignItems:'flex-start',gap:16,marginBottom:6}}><View style={{flex:1}}>{eyebrow&&<Text style={{fontSize:10.5,color:T.ink2,letterSpacing:1.3,textTransform:'uppercase',fontWeight:'700',marginBottom:7}}>{eyebrow}</Text>}<Text accessibilityRole="header" style={{fontSize:28,fontWeight:'800',letterSpacing:-.9,color:T.ink,lineHeight:35}}>{title}</Text>{description&&<Text style={{fontSize:13,color:T.ink2,lineHeight:20,marginTop:6}}>{description}</Text>}</View>{avatar&&<Pressable accessibilityLabel="Ouvrir mon espace" onPress={()=>router.push('/plus' as never)} style={{width:44,height:44,borderRadius:16,backgroundColor:T.goldSoft,alignItems:'center',justifyContent:'center'}}><Text style={{fontSize:16,fontWeight:'700',color:T.primary}}>{avatar.slice(0,2).toUpperCase()}</Text></Pressable>}</View>;
+}
+export function EmptyState({title,description,icon='inbox'}:{title:string;description?:string;icon?:keyof typeof Feather.glyphMap}) {
+ return <View style={{padding:30,backgroundColor:T.surface,borderRadius:20,borderWidth:1,borderColor:T.line,alignItems:'center',gap:12}}><View style={{padding:14,borderRadius:18,backgroundColor:T.primarySoft}}><Feather name={icon} size={24} color={T.primary}/></View><Text style={{fontWeight:'700',fontSize:16,textAlign:'center'}}>{title}</Text>{description&&<Text style={{color:T.ink2,fontSize:13,lineHeight:20,textAlign:'center'}}>{description}</Text>}</View>;
 }
 
 export function Card({ children, accent }: { children: ReactNode; accent?: string }) {
@@ -163,25 +171,25 @@ export function ResourceList<Item extends { id: string }>({
   return (
     <View style={{ flex: 1, backgroundColor: T.paper }}>
       {search && (
-        <View style={{ padding: 12 }}>
-          <TextInput
+        <View style={[T.content, {paddingBottom: 12, paddingTop: 18}]}>
+          <View style={st.searchWrap}><Feather name="search" size={18} color={T.ink3}/><TextInput
             style={st.search}
             placeholder={searchPlaceholder ?? 'Rechercher…'}
             value={q}
             onChangeText={setQ}
             placeholderTextColor={T.ink3}
-          />
+          /></View>
         </View>
       )}
       <FlatList
         data={filtered}
         keyExtractor={(x) => x.id}
-        contentContainerStyle={{ padding: 12, paddingTop: search ? 0 : 12, gap: 8 }}
+        contentContainerStyle={[T.content, { paddingTop: search ? 0 : 18, gap: 12 }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} />}
-        ListEmptyComponent={<Muted>Aucun résultat.</Muted>}
+        ListEmptyComponent={<EmptyState title="Aucun résultat" description="Essayez un autre terme de recherche."/>}
         renderItem={({ item }) => (
           <Pressable style={st.listRow} onPress={() => onPress?.(item)} disabled={!onPress}>
-            {render(item)}
+<View style={{flex:1,minWidth:0,gap:6}}>{render(item)}</View>{onPress && <Feather name="chevron-right" size={18} color={T.ink3}/>}
           </Pressable>
         )}
       />
@@ -195,18 +203,19 @@ export function useRouterPush() {
 }
 
 const st = StyleSheet.create({
-  card: { backgroundColor: T.surface, borderRadius: T.radius, borderWidth: 1, borderColor: T.line, padding: 14, gap: 6 },
-  label: { fontSize: 12, color: T.ink3, textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: '700' },
-  muted: { color: T.ink2 },
+  card: { ...T.shadow, backgroundColor: T.surface, borderRadius: T.radius, borderWidth: 1, borderColor: T.line, padding: 20, gap: 10 },
+  label: { fontSize: 11, color: T.ink2, textTransform: 'uppercase', letterSpacing: 1.1, fontWeight: '700', marginBottom: 3 },
+  muted: { color: T.ink2, fontSize: 13, lineHeight: 20 },
   badge: { borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3, alignSelf: 'flex-start' },
-  kv: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, paddingVertical: 2 },
-  kvK: { color: T.ink2, flexShrink: 0 },
-  kvV: { color: T.ink, flex: 1, textAlign: 'right', fontWeight: '600' },
-  search: { backgroundColor: T.surface, borderWidth: 1, borderColor: T.line, borderRadius: 10, padding: 12, color: T.ink },
-  listRow: { backgroundColor: T.surface, borderWidth: 1, borderColor: T.line, borderRadius: 10, padding: 12 },
-  hero: { borderRadius: T.radius + 4, padding: 16, gap: 4 },
+  kv: { flexDirection: 'row', justifyContent: 'space-between', gap: 16, paddingVertical: 8, alignItems: 'flex-start' },
+  kvK: { color: T.ink2, fontSize: 12, flexShrink: 1, maxWidth: '42%', lineHeight: 19 },
+  kvV: { color: T.ink, fontSize: 14, lineHeight: 21, flex: 1, textAlign: 'right', fontWeight: '600' },
+  searchWrap: { backgroundColor: T.surface, borderWidth: 1, borderColor: T.line, borderRadius: 14, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  search: { flex: 1, minHeight: 48, paddingVertical: 12, fontSize: 14, color: T.ink },
+  listRow: { ...T.shadow, backgroundColor: T.surface, borderWidth: 1, borderColor: T.line, borderRadius: 18, padding: 18, gap: 14, flexDirection: 'row', alignItems: 'center', minHeight: 78 },
+  hero: { borderRadius: 24, padding: 24, gap: 8, overflow: 'hidden' },
   heroIcon: {
-    position: 'absolute', top: 14, right: 14, width: 28, height: 28, borderRadius: 14,
+    position: 'absolute', top: 20, right: 20, width: 34, height: 34, borderRadius: 12,
     backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center',
   },
 });

@@ -6,7 +6,7 @@ import { useFocusEffect, Redirect, useRouter } from 'expo-router';
 import { apiGet, apiSend, flushQueue, pendingCount } from '@/lib/api';
 import { currentPosition } from '@/lib/geo';
 import { useSession } from '@/lib/session';
-import { HeroTile } from '@/lib/ui';
+import { HeroTile, ScreenHeader, EmptyState } from '@/lib/ui';
 import { T } from '@/lib/theme';
 
 interface Ev {
@@ -67,6 +67,9 @@ export default function Today() {
     return () => clearInterval(i);
   }, []);
 
+  // Le magasinier accède aux messages et à son compte, sans écran de pointage.
+  if (user?.role === 'storekeeper') return <Redirect href="/plus" />;
+
   // Bureau pur (sans fiche terrain) -> tableau de bord
   if (user && ['admin', 'office'].includes(user.role) && user.role !== 'foreman') {
     return <Redirect href="/dashboard" />;
@@ -102,13 +105,10 @@ export default function Today() {
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: T.paper }}
-      contentContainerStyle={{ padding: 16, gap: 14 }}
+      contentContainerStyle={{ ...T.content, padding: 16, gap: 20 }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} />}
     >
-      <View>
-        <Text style={s.eyebrow}>Ma journée</Text>
-        <Text style={s.hi}>Bonjour {person?.displayName || person?.firstName || ''}</Text>
-      </View>
+      <ScreenHeader eyebrow="Ma journée" title={`Bonjour ${person?.firstName || person?.displayName?.split(' ')[0] || ''}`} description="Vos chantiers et votre pointage du jour." avatar={(person?.firstName || user?.email || 'J').slice(0,1)}/>
       {queued > 0 && (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           <Feather name="clock" size={14} color={T.accent} />
@@ -132,19 +132,19 @@ export default function Today() {
           <Text style={s.heroSub}>{running.worksite?.ref} — {running.worksite?.title}</Text>
           <Text style={s.heroBig}>{elapsed(running.startedAt)}</Text>
           <Pressable style={s.stopBtn} onPress={stop}>
-            <Text style={[s.btnTxt, { color: '#fff' }]}>Arrêter</Text>
+            <Text style={[s.btnTxt, { color: '#fff' }]}>Je quitte le chantier</Text>
           </Pressable>
         </HeroTile>
       ) : (
         <HeroTile icon="play">
-          <Text style={s.heroLabel}>Prêt pour la journée</Text>
+          <Text style={s.heroLabel}>Arrivé sur chantier ?</Text>
           <Text style={s.heroBig}>0 h 00</Text>
-          <Text style={s.heroSub}>Choisis un chantier ci-dessous pour démarrer.</Text>
+          <Text style={s.heroSub}>Choisis ton chantier pour enregistrer ton arrivée.</Text>
         </HeroTile>
       ))}
 
       <Text style={s.section}>Mes chantiers du jour</Text>
-      {events.length === 0 && <Text style={s.muted}>Rien de planifié aujourd’hui.</Text>}
+      {events.length === 0 && <EmptyState title="Aucune affectation aujourd’hui" description="Le planning apparaîtra ici dès sa validation." icon="calendar"/>}
       {events.map((e) => (
         <Pressable key={e.id} style={s.card} onPress={() => router.push(`/fiche/${e.worksite.id}` as never)}>
           <Text style={s.wsRef}>{e.worksite.ref} — {e.worksite.title}</Text>
@@ -156,11 +156,11 @@ export default function Today() {
           <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
             {linked && !running && (
               <Pressable style={[s.btn, s.btnGold, { flex: 1 }]} onPress={() => start(e.worksite.id)}>
-                <Text style={[s.btnTxt, { color: '#241c05' }]}>Démarrer le compteur</Text>
+                <Text style={[s.btnTxt, { color: '#241c05' }]}>Je suis arrivé</Text>
               </Pressable>
             )}
             <Pressable style={[s.btn, { backgroundColor: T.surface2, borderWidth: 1, borderColor: T.line }]} onPress={() => router.push(`/fiche/${e.worksite.id}` as never)}>
-              <Text style={[s.btnTxt, { color: T.ink }]}>Fiche du jour ›</Text>
+              <Text style={[s.btnTxt, { color: T.ink }]}>Voir la fiche</Text>
             </Pressable>
           </View>
         </Pressable>
@@ -176,10 +176,10 @@ const s = StyleSheet.create({
   section: { fontSize: 13, fontWeight: '700', color: T.ink2, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 6 },
   card: { backgroundColor: T.surface, borderRadius: T.radius, borderWidth: 1, borderColor: T.line, padding: 16, gap: 6 },
   label: { fontSize: 12, color: T.ink2, textTransform: 'uppercase', letterSpacing: 0.5 },
-  wsRef: { fontSize: 16, fontWeight: '600', color: T.ink },
+  wsRef: { lineHeight: 24, fontSize: 17, fontWeight: '600', color: T.ink },
   big: { fontSize: 40, fontWeight: '800', color: T.ink, marginVertical: 4 },
   muted: { color: T.ink2 },
-  btn: { backgroundColor: T.primary, borderRadius: 10, padding: 14, alignItems: 'center', marginTop: 8 },
+  btn: { backgroundColor: T.primary, borderRadius: 14, padding: 15, alignItems: 'center', marginTop: 8 },
   btnGold: { backgroundColor: T.gold },
   btnTxt: { color: '#fff', fontWeight: '700', fontSize: 15 },
   heroLabel: { fontSize: 12.5, color: 'rgba(255,255,255,0.75)', fontWeight: '600' },

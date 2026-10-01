@@ -47,7 +47,7 @@ export default function DocumentDetail() {
   }
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ padding: 16, gap: 12 }}>
+    <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ ...T.content, padding: 16, gap: 12 }}>
       <Stack.Screen options={{ title: `${KIND[d.kind]} ${d.number ?? ''}`.trim(), headerBackTitle: 'Retour' }} />
 
       <Card>

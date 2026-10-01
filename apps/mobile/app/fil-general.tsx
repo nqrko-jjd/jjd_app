@@ -47,7 +47,7 @@ export default function FilGeneral() {
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: T.paper }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
       <Stack.Screen options={{ title: 'Général JJD', headerBackTitle: 'Retour' }} />
-      <ScrollView ref={scroll} contentContainerStyle={{ padding: 14, gap: 10 }}>
+      <ScrollView ref={scroll} contentContainerStyle={{ ...T.content, padding: 14, gap: 10 }}>
         {d.messages.length === 0 && <Text style={{ color: T.ink2 }}>Aucun message.</Text>}
         {d.messages.map((m) => {
           const mine = m.authorId === user?.id;

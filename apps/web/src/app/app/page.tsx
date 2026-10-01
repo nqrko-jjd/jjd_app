@@ -1,4 +1,5 @@
 'use client';
+import PreparationsPage from './stock/preparations/page';
 import { SkeletonRows, ErrorState, EmptyState } from '@/components/States';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -491,10 +492,10 @@ function monthTrend(cur: number, prev: number): string | undefined {
 
 export default function DashboardPage() {
   const { user, person } = useAuth();
-  const { data, loading, error, reload } = useApi<Dashboard>(user?.role === 'worker' || user?.role === 'foreman' ? null : '/api/dashboard');
+  const { data, loading, error, reload } = useApi<Dashboard>(user?.role === 'worker' || user?.role === 'foreman' || user?.role === 'storekeeper' ? null : '/api/dashboard');
   // historique du CA facturé sur 6 mois pour la tuile hero (facultatif : la tuile reste correcte sans)
   const { data: trend } = useApi<{ monthly: { month: string; invoiced: number }[] }>(
-    user?.role === 'worker' || user?.role === 'foreman' ? null : '/api/finance/analytics?months=6',
+    user?.role === 'worker' || user?.role === 'foreman' || user?.role === 'storekeeper' ? null : '/api/finance/analytics?months=6',
   );
   const history = trend?.monthly.map((m) => ({
     label: /^\d{4}-\d{2}$/.test(m.month)
@@ -506,6 +507,7 @@ export default function DashboardPage() {
   const eyebrow = today.toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' });
   const name = person?.displayName || person?.firstName || user?.email?.split('@')[0] || '';
 
+  if (user?.role === 'storekeeper') return <PreparationsPage />;
   if (user?.role === 'worker') return <WorkerToday />;
   if (user?.role === 'foreman') return <ForemanToday />;
 

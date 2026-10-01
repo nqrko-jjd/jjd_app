@@ -31,7 +31,7 @@ export default function VehiculeDetail() {
   const nextPay = v.payments.find((p) => p.dueOn && new Date(p.dueOn).getTime() >= Date.now());
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ padding: 16, gap: 12 }}>
+    <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ ...T.content, padding: 16, gap: 12 }}>
       <Stack.Screen options={{ title: [v.brand, v.model].filter(Boolean).join(' '), headerBackTitle: 'Retour' }} />
       <PhotoHeader basePath={`/api/vehicles/${v.id}`} photoUrl={v.photoUrl} onChange={load} />
       <Card>

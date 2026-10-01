@@ -4,7 +4,7 @@ import { Text } from '@/lib/AppText';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { apiGet } from '@/lib/api';
 import { useSession } from '@/lib/session';
-import { Badge, Muted, eur } from '@/lib/ui';
+import { Badge, Muted, eur, ScreenHeader, EmptyState } from '@/lib/ui';
 import { T } from '@/lib/theme';
 
 interface WS {
@@ -54,14 +54,11 @@ export default function Chantiers() {
   return (
     <View style={{ flex: 1, backgroundColor: T.paper }}>
       <View style={{ paddingHorizontal: 16, paddingTop: 14 }}>
-        <Text style={s.eyebrow}>Suivi des travaux</Text>
-        <Text style={s.title}>{worker ? 'Mes chantiers' : 'Vos chantiers'}</Text>
-        <Muted style={{ marginBottom: 12 }}>
-          {items.length} dossier{items.length > 1 ? 's' : ''} relevé{items.length > 1 ? 's' : ''}
-        </Muted>
+        <ScreenHeader title={worker ? 'Mes chantiers' : 'Vos chantiers'} eyebrow="Suivi des travaux" description={`${items.length} dossier${items.length > 1 ? 's' : ''} à retrouver facilement.`}/>
+
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.pillRow}>
+      <ScrollView style={{flexGrow:0}} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.pillRow}>
         {FILTERS.map((f) => (
           <Pressable key={f.key} onPress={() => setFilter(f.key)} style={[s.pill, filter === f.key && s.pillActive]}>
             <Text style={[s.pillLabel, filter === f.key && s.pillLabelActive]}>{f.label}</Text>
@@ -69,7 +66,7 @@ export default function Chantiers() {
         ))}
       </ScrollView>
 
-      <View style={{ paddingHorizontal: 12 }}>
+      <View style={{ paddingHorizontal: 18 }}>
         <TextInput
           style={s.search}
           placeholder="Rechercher (réf, titre, ville)…"
@@ -82,7 +79,8 @@ export default function Chantiers() {
       <FlatList
         data={filtered}
         keyExtractor={(x) => x.id}
-        contentContainerStyle={{ padding: 12, paddingTop: 8, gap: 8 }}
+        contentContainerStyle={{ ...T.content, padding: 18, paddingTop: 12, gap: 12 }}
+        ListEmptyComponent={<EmptyState title="Aucun chantier trouvé" description="Changez le filtre ou votre recherche." icon="home"/>}
         renderItem={({ item }) => (
           <Pressable style={s.row} onPress={() => router.push((worker ? `/fil/${item.id}` : `/chantier/${item.id}`) as never)}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
@@ -109,9 +107,9 @@ const s = StyleSheet.create({
   pillActive: { backgroundColor: T.primary, borderColor: T.primary },
   pillLabel: { color: T.ink2, fontWeight: '600', fontSize: 13 },
   pillLabelActive: { color: '#fff' },
-  search: { backgroundColor: T.surface, borderWidth: 1, borderColor: T.line, borderRadius: 10, padding: 12, color: T.ink },
-  row: { backgroundColor: T.surface, borderWidth: 1, borderColor: T.line, borderRadius: T.radius, padding: 12 },
-  rowTitle: { color: T.ink, fontWeight: '700', marginBottom: 4 },
+  search: { minHeight: 48, fontSize: 14, backgroundColor: T.surface, borderWidth: 1, borderColor: T.line, borderRadius: 14, padding: 14, color: T.ink },
+  row: { ...T.shadow, backgroundColor: T.surface, borderWidth: 1, borderColor: T.line, borderRadius: T.radius, padding: 18 },
+  rowTitle: { color: T.ink, fontSize: 17, lineHeight: 25, fontWeight: '700', marginBottom: 12 },
   ref: { fontWeight: '700', color: T.accent, fontSize: 12.5 },
-  amount: { color: T.ink2, fontSize: 12 },
+  amount: { color: T.ink, fontSize: 15, fontWeight: '700', marginLeft: 10 },
 });

@@ -161,7 +161,7 @@ export function Shell({ children, navigationPaths }: { children: React.ReactNode
   const hasResults = nav.some(group => group.items.some(item => visible(item) && matchesQuery(item)));
 
   return (
-    <div className="shell">
+    <div className={`shell profile-${user?.role ?? 'guest'}`}>
       <header className="topbar">
         <button className="burger" aria-label="Ouvrir le menu" aria-expanded={open} aria-controls="app-navigation" onClick={() => setOpen(true)}><Menu size={20} /></button>
         <span className="topbar-title">{current}</span>
@@ -245,7 +245,7 @@ export function Shell({ children, navigationPaths }: { children: React.ReactNode
         </div>
       </nav>
 
-      <main className={`main${(isWorker || bureau) ? ' has-bottom-tabs' : ''}${pathname==='/app/messagerie'?' messaging-main':''}`}>{children}</main>
+      <main className={`main${(isWorker || isForeman || isStorekeeper || bureau) ? ' has-bottom-tabs' : ''}${pathname==='/app/messagerie'?' messaging-main':''}`}>{pathname !== '/app/messagerie' && <div className="workspace-bar"><span>Espace de gestion <span className="workspace-dot">·</span> JJD Consult</span><div><span className="workspace-profile">{ROLE_LABEL[user?.role ?? ''] ?? (isStorekeeper ? 'Magasinier' : 'Votre espace')}</span><span className="workspace-avatar" aria-label={user?.email}>{(user?.email ?? 'J')[0]?.toUpperCase()}</span></div></div>}{children}</main>
 
       {isWorker && (
         <nav className="bottom-tabs worker">
@@ -255,11 +255,16 @@ export function Shell({ children, navigationPaths }: { children: React.ReactNode
                 <i.ic size={20} strokeWidth={2} />
                 {i.href === '/app/messagerie' && unreadTotal > 0 && <span className="nav-badge">{unreadTotal}</span>}
               </span>
-              {i.label}
+              {i.href === '/app/materiel' ? 'Outils' : i.href === '/app/mes-chantiers' ? 'Chantiers' : i.href === '/app/messagerie' ? 'Messages' : i.label}
             </Link>
           ))}
         </nav>
       )}
+
+      {(isForeman || isStorekeeper) && <nav className="bottom-tabs worker admin" aria-label="Navigation mobile terrain">
+        {(isForeman ? [{href:'/app',label:'Accueil',ic:LayoutGrid},{href:'/app/chantiers',label:'Chantiers',ic:Building2},{href:'/app/planning',label:'Planning',ic:CalendarDays},{href:'/app/messagerie',label:'Messages',ic:MessageSquare}] : [{href:'/app/stock/preparations',label:'Préparer',ic:ClipboardList},{href:'/app/stock/commandes',label:'Réceptions',ic:Truck},{href:'/app/stock/scan',label:'Scanner',ic:ScanLine},{href:'/app/materiel',label:'Outils',ic:Wrench}]).filter(visible).map(i=><Link key={i.href} href={i.href} aria-current={isActive(i.href)?'page':undefined} className={`bottom-tab${isActive(i.href)?' active':''}`}><i.ic size={20}/>{i.label}</Link>)}
+        <button className="bottom-tab" aria-expanded={open} aria-controls="app-navigation" onClick={()=>setOpen(true)}><Menu size={20}/>Plus</button>
+      </nav>}
 
       {bureau && <nav className="bottom-tabs worker admin" aria-label="Navigation mobile administration">
         {[{href:'/app',label:'Accueil',ic:LayoutGrid},{href:'/app/chantiers',label:'Chantiers',ic:Building2},{href:'/app/planning',label:'Planning',ic:CalendarDays},{href:'/app/messagerie',label:'Messages',ic:MessageSquare}].filter(visible).map(i=><Link key={i.href} href={i.href} aria-current={isActive(i.href)?'page':undefined} className={`bottom-tab${isActive(i.href)?' active':''}`}><i.ic size={20}/>{i.label}</Link>)}

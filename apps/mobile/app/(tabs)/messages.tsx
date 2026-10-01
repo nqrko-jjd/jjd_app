@@ -3,7 +3,7 @@ import { View, TextInput, Pressable, FlatList, StyleSheet } from 'react-native';
 import { Text } from '@/lib/AppText';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { apiGet } from '@/lib/api';
-import { Muted, Loading } from '@/lib/ui';
+import { Muted, Loading, ScreenHeader, EmptyState } from '@/lib/ui';
 import { T } from '@/lib/theme';
 
 interface ThreadItem {
@@ -42,10 +42,10 @@ export default function Messages() {
   return (
     <View style={{ flex: 1, backgroundColor: T.paper }}>
       <View style={{ paddingHorizontal: 16, paddingTop: 14 }}>
-        <Text style={s.eyebrow}>Rester en lien</Text>
-        <Text style={s.title}>Messages</Text>
+        <ScreenHeader title="Messages" eyebrow="Votre équipe" description="Le fil JJD et les échanges de vos chantiers."/>
+
       </View>
-      <View style={{ padding: 12 }}>
+      <View style={{ padding: 18 }}>
         <TextInput
           style={s.search}
           placeholder="Rechercher une conversation…"
@@ -57,8 +57,8 @@ export default function Messages() {
       <FlatList
         data={filtered}
         keyExtractor={(x) => x.id}
-        contentContainerStyle={{ padding: 12, paddingTop: 0, gap: 8 }}
-        ListEmptyComponent={<Muted style={{ paddingHorizontal: 8 }}>Aucune conversation.</Muted>}
+        contentContainerStyle={{ ...T.content, padding: 18, paddingTop: 0, gap: 0 }}
+        ListEmptyComponent={<EmptyState title="Aucune conversation" description="Les échanges de votre équipe apparaîtront ici." icon="message-circle"/>}
         renderItem={({ item }) => (
           <Pressable
             style={s.row}
@@ -72,7 +72,7 @@ export default function Messages() {
                 <Text style={s.rowTitle} numberOfLines={1}>{item.title}</Text>
                 <Text style={s.time}>{time(item.lastAt)}</Text>
               </View>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 0 }}>
                 <Text style={s.preview} numberOfLines={1}>{item.lastMessage || item.sub}</Text>
                 {item.unread > 0 && (
                   <View style={s.badge}><Text style={s.badgeTxt}>{item.unread}</Text></View>
@@ -89,13 +89,13 @@ export default function Messages() {
 const s = StyleSheet.create({
   eyebrow: { fontSize: 11.5, color: T.ink3, textTransform: 'uppercase', letterSpacing: 0.6, fontWeight: '700' },
   title: { fontSize: 22, fontWeight: '800', color: T.ink, marginTop: 2 },
-  search: { backgroundColor: T.surface, borderWidth: 1, borderColor: T.line, borderRadius: 10, padding: 12, color: T.ink },
-  row: { flexDirection: 'row', gap: 10, backgroundColor: T.surface, borderWidth: 1, borderColor: T.line, borderRadius: T.radius, padding: 12, alignItems: 'center' },
-  avatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: T.primary, alignItems: 'center', justifyContent: 'center' },
+  search: { backgroundColor: T.surface, borderWidth: 1, borderColor: T.line, borderRadius: 14, padding: 14, color: T.ink },
+  row: { flexDirection: 'row', gap: 10, backgroundColor: T.surface, borderBottomWidth: 1, borderBottomColor: T.line, padding: 18, minHeight: 88, alignItems: 'center' },
+  avatar: { width: 48, height: 48, borderRadius: 18, backgroundColor: T.primary, alignItems: 'center', justifyContent: 'center' },
   avatarTxt: { color: '#fff', fontWeight: '800', fontSize: 13, textTransform: 'uppercase' },
-  rowTitle: { color: T.ink, fontWeight: '700', flexShrink: 1, marginRight: 8 },
+  rowTitle: { fontSize: 15, color: T.ink, fontWeight: '700', flexShrink: 1, marginRight: 8 },
   time: { color: T.ink3, fontSize: 11 },
-  preview: { color: T.ink2, fontSize: 12.5, flex: 1 },
+  preview: { color: T.ink2, fontSize: 13, flex: 1 },
   badge: { backgroundColor: T.gold, borderRadius: 999, minWidth: 18, height: 18, paddingHorizontal: 5, alignItems: 'center', justifyContent: 'center' },
   badgeTxt: { color: '#241c05', fontWeight: '800', fontSize: 10.5 },
 });

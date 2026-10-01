@@ -87,7 +87,7 @@ export default function ChantierDetail() {
   const team = nextEvent ? [...new Set(nextEvent.assignments.map((a) => a.person.displayName || a.person.firstName))].join(', ') : null;
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ padding: 16, gap: 12 }}>
+    <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ ...T.content, padding: 16, gap: 12 }}>
       <Stack.Screen options={{ title: w.ref, headerBackTitle: 'Retour' }} />
 
       <HeroTile>

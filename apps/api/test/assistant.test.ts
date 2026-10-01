@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import type { Server } from 'node:http';
 import { createApp } from '../src/app.js';
 import { prisma } from '../src/db.js';
+import { configuration, ready } from '../src/lib/assistant-quota.js';
 import { runTool } from '../src/routes/assistant.js';
 
 let server: Server;
@@ -40,11 +41,11 @@ after(async () => {
   server.close();
 });
 
-test('/api/assistant/status : accessible au bureau, enabled reflète la clé Anthropic', async () => {
+test('/api/assistant/status : accessible au bureau, enabled exige clé et budgets validés', async () => {
   const r = await fetch(`${base}/api/assistant/status`, { headers: { authorization: `Bearer ${token}` } });
   assert.equal(r.status, 200);
   const { enabled } = await r.json();
-  assert.equal(enabled, !!process.env.ANTHROPIC_API_KEY);
+  assert.equal(enabled, !!process.env.ANTHROPIC_API_KEY && ready(await configuration()));
 });
 
 test('POST /api/assistant/chat sans clé configurée -> 503', async () => {
@@ -57,47 +58,13 @@ test('POST /api/assistant/chat sans clé configurée -> 503', async () => {
   assert.equal(r.status, 503);
 });
 
-test('create_devis_draft : crée un Document en statut draft, source ai-draft', async () => {
-  const { result, action } = await runTool('create_devis_draft', {
-    worksiteId, title: 'Rénovation salle de bain', lines: [{ label: 'Carrelage', qty: 20, unit: 'm²', unitPriceHt: 45 }],
-  }, userId);
-  const r = result as { id: string; draftRef: string; status: string };
-  assert.equal(r.status, 'draft');
-  assert.equal(action?.kind, 'devis');
-
-  const doc = await prisma.document.findUnique({ where: { id: r.id }, include: { lines: true } });
-  assert.equal(doc!.status, 'draft');
-  assert.equal(doc!.source, 'ai-draft');
-  assert.equal(doc!.number, null, 'jamais numéroté automatiquement');
-  assert.equal(doc!.lines.length, 1);
-  assert.equal(doc!.totalHt, 900);
-});
-
-test('create_planning_draft : crée un PlanningEvent source ai-draft, pas de sync Google', async () => {
-  const startAt = new Date('2026-10-01T08:00:00Z').toISOString();
-  const endAt = new Date('2026-10-01T16:00:00Z').toISOString();
-  const { result, action } = await runTool('create_planning_draft', { worksiteId, title: 'Pose carrelage', startAt, endAt }, userId);
-  const r = result as { id: string };
-  assert.equal(action?.kind, 'planning');
-
-  const ev = await prisma.planningEvent.findUnique({ where: { id: r.id } });
-  assert.equal(ev!.source, 'ai-draft');
-  assert.equal(ev!.googleEventId, null);
-});
-
-test('create_planning_draft : chantier inconnu -> erreur, rien créé', async () => {
-  await assert.rejects(() => runTool('create_planning_draft', { worksiteId: 'inexistant', startAt: new Date().toISOString(), endAt: new Date().toISOString() }, userId));
-});
-
-test('create_task_draft : crée une WorksiteTask source ai-draft, statut todo', async () => {
-  const { result, action } = await runTool('create_task_draft', { worksiteId, title: 'Commander le carrelage', dueOn: '2026-09-20' }, userId);
-  const r = result as { id: string; title: string };
-  assert.equal(action?.kind, 'task');
-
-  const task = await prisma.worksiteTask.findUnique({ where: { id: r.id } });
-  assert.equal(task!.source, 'ai-draft');
-  assert.equal(task!.status, 'todo');
-  assert.equal(task!.title, 'Commander le carrelage');
+test('les créations IA sont interdites avant intégration de la confirmation',async()=>{
+ for(const name of ['create_devis_draft','create_planning_draft','create_task_draft']){
+  await assert.rejects(()=>runTool(name,{worksiteId,title:'Ne pas créer',lines:[]},userId));
+ }
+ assert.equal(await prisma.document.count({where:{worksiteId}}),0);
+ assert.equal(await prisma.planningEvent.count({where:{worksiteId}}),0);
+ assert.equal(await prisma.worksiteTask.count({where:{worksiteId}}),0);
 });
 
 test('search_worksites : retrouve le chantier de test par référence', async () => {

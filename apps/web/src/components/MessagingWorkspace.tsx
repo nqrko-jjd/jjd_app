@@ -43,15 +43,15 @@ function timeFull(iso: string) {
   return new Date(iso).toLocaleString('fr-BE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
 
-export default function MessagingWorkspace({worksiteId}: {worksiteId?: string}) {
+export default function MessagingWorkspace({worksiteId, compact=false, active=true}: {worksiteId?: string; compact?:boolean; active?:boolean}) {
   return (
     <Suspense fallback={<SkeletonRows />}>
-      <MessagerieInner worksiteId={worksiteId} />
+      <MessagerieInner worksiteId={worksiteId} compact={compact} active={active} />
     </Suspense>
   );
 }
 
-function MessagerieInner({worksiteId}: {worksiteId?: string}) {
+function MessagerieInner({worksiteId, compact=false, active=true}: {worksiteId?: string; compact?:boolean; active?:boolean}) {
   const { user } = useAuth();
   const isOffice = user?.role === 'admin' || user?.role === 'office';
   const sp = useSearchParams();
@@ -79,7 +79,7 @@ function MessagerieInner({worksiteId}: {worksiteId?: string}) {
   const [newBelow,setNewBelow]=useState(false);
 
   useEffect(()=>{
-    if(worksiteId)return;
+    if(worksiteId||compact)return;
     const update=()=>{
       const el=workspaceRef.current;if(!el)return;
       const viewport=window.visualViewport;
@@ -91,12 +91,12 @@ function MessagerieInner({worksiteId}: {worksiteId?: string}) {
     };
     update();window.addEventListener('resize',update);window.visualViewport?.addEventListener('resize',update);window.visualViewport?.addEventListener('scroll',update);
     return()=>{window.removeEventListener('resize',update);window.visualViewport?.removeEventListener('resize',update);window.visualViewport?.removeEventListener('scroll',update);};
-  },[worksiteId]);
+  },[worksiteId,compact]);
 
   useEffect(()=>{const el=composerRef.current;if(el){el.style.height='auto';el.style.height=`${Math.min(el.scrollHeight,144)}px`;}},[text,tab]);
 
   const { data: listData, reload: reloadList } = useApi<{ items: ThreadItem[] }>(
-    `/api/messagerie/threads?audience=${audience}${filter === 'archived' ? '&archived=1' : ''}`,
+    active ? `/api/messagerie/threads?audience=${audience}${filter === 'archived' ? '&archived=1' : ''}` : null,
   );
   const items = listData?.items ?? [];
 
@@ -112,8 +112,8 @@ function MessagerieInner({worksiteId}: {worksiteId?: string}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestedWorksite, requestedAudience]);
 
-  const generalPath = selected?.kind === 'general' ? '/api/messagerie/general' : null;
-  const worksitePath = selected?.kind === 'worksite'
+  const generalPath = active && selected?.kind === 'general' ? '/api/messagerie/general' : null;
+  const worksitePath = active && selected?.kind === 'worksite'
     ? (audience === 'client' ? `/api/worksites/${selected.worksiteId}/thread/client` : `/api/worksites/${selected.worksiteId}/thread`)
     : null;
   const { data: genData, reload: reloadGen, error:genError, loading:genLoading } = useApi<{ thread: { id: string }; messages: Msg[] }>(generalPath);
@@ -127,10 +127,11 @@ function MessagerieInner({worksiteId}: {worksiteId?: string}) {
 
   // rafraîchissement léger — pas de push temps réel, on repasse régulièrement
   useEffect(() => {
+    if(!active)return;
     const t = setInterval(() => { reloadList(); if (selected) reloadConvo(); }, 8000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected, audience, filter]);
+  }, [selected, audience, filter, active]);
 
   function latest(){const el=bodyRef.current;if(el)el.scrollTop=el.scrollHeight;nearBottom.current=true;setNewBelow(false);}
   useEffect(() => {
@@ -141,10 +142,10 @@ function MessagerieInner({worksiteId}: {worksiteId?: string}) {
 
   // marque comme lu à l'ouverture / dès qu'un nouveau message arrive pendant la lecture
   useEffect(() => {
-    if (!selected || !convo?.thread?.id) return;
+    if (!active || !selected || !convo?.thread?.id) return;
     api('/api/messagerie/read', { method: 'POST', body: { threadId: convo.thread.id, audience } }).then(reloadList).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected, convo?.thread?.id, messages.length]);
+  }, [selected, convo?.thread?.id, messages.length, active, audience]);
 
   const q = search.trim().toLowerCase();
   const filtered = items.filter((it) => {

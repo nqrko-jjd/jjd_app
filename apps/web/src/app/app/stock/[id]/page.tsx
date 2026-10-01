@@ -172,7 +172,7 @@ export default function StockDetail({ params }: { params: Promise<{ id: string }
         <Kpi
           ic={MapPin}
           label="Emplacement"
-          value={item.location ? `Rack ${item.location}` : '—'}
+          value={item.location ?? '—'}
           sub={item.location ? `${fmtQty(primaryQty)} ${primaryUnitName}` : 'Pas encore rangé'}
         />
       </div>

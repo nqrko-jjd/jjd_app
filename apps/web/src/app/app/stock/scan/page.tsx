@@ -177,7 +177,7 @@ function ScanPanel({
     try { sessionStorage.setItem(RACK_KEY, code); } catch { /* stockage indisponible — tant pis, le ref suffit pour cette session */ }
     // les articles déjà scannés sans rack y sont rangés (on peut scanner l'article puis son rack, ou l'inverse)
     setCart((cur) => cur.map((l) => ((l.kind === 'stock' || l.kind === 'materiel') && !l.location ? { ...l, location: code } : l)));
-    setLastScan(`Rack ${code}`);
+    setLastScan(code);
     scanFeedback(true);
   }
   function clearRack() {
@@ -344,7 +344,7 @@ function ScanPanel({
         <div className={`rack-bar${rack ? ' on' : ''}`}>
           <MapPin size={20} strokeWidth={2} />
           <div className="rack-bar-txt">
-            {rack ? <><strong>Rack {rack}</strong><span> — les articles scannés y sont rangés</span></> : <span>Scannez l’étiquette du <strong>rack</strong> où vous rangez <span className="muted">(facultatif)</span></span>}
+            {rack ? <><strong>{rack}</strong><span> — les articles scannés y sont rangés</span></> : <span>Scannez l’étiquette du <strong>rack</strong> où vous rangez <span className="muted">(facultatif)</span></span>}
           </div>
           <input
             className="input rack-bar-input"

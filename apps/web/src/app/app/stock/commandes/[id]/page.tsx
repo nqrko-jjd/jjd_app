@@ -75,7 +75,7 @@ export default function CommandeDetail({ params }: { params: Promise<{ id: strin
     if (/^(BRZ|RACK)-.+/i.test(code.trim())) {
       const r = code.trim().toUpperCase().replace(/^(BRZ|RACK)-/, '');
       setRack(r);
-      setMsg({ ok: true, text: `✓ Rack ${r}` });
+      setMsg({ ok: true, text: `✓ ${r}` });
       scanFeedback(true);
       return;
     }
@@ -162,7 +162,7 @@ export default function CommandeDetail({ params }: { params: Promise<{ id: strin
           <div className={`rack-bar${rack ? ' on' : ''}`}>
             <MapPin size={20} strokeWidth={2} />
             <div className="rack-bar-txt">
-              {rack ? <><strong>Rack {rack}</strong><span> — la marchandise reçue y est rangée</span></> : <span>Scannez l’étiquette du <strong>rack</strong> où vous rangez <span className="muted">(facultatif)</span></span>}
+              {rack ? <><strong>{rack}</strong><span> — la marchandise reçue y est rangée</span></> : <span>Scannez l’étiquette du <strong>rack</strong> où vous rangez <span className="muted">(facultatif)</span></span>}
             </div>
             {rack && <button type="button" className="btn ghost" onClick={() => setRack(null)} aria-label="Retirer le rack">✕</button>}
           </div>

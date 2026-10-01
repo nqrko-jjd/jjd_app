@@ -35,8 +35,12 @@ export function CameraScanner({ onScan, onClose }: { onScan: (code: string) => v
       try {
         if (!navigator.mediaDevices?.getUserMedia) throw new Error('no-media');
         const BD = (window as unknown as { BarcodeDetector?: new (o: { formats: string[] }) => Detector }).BarcodeDetector;
+        // Haute résolution demandée des deux côtés : un code-barres d'emballage (petit, parfois
+        // vertical/abîmé/à distance) a besoin de bien plus de détail qu'un flux vidéo par défaut
+        // (souvent 640×480) pour être lisible par le décodeur, caméra native ou ZXing.
+        const videoConstraints = { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } };
         if (BD) {
-          stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
+          stream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints, audio: false });
           const video = videoRef.current!;
           video.srcObject = stream;
           await video.play();
@@ -51,10 +55,18 @@ export function CameraScanner({ onScan, onClose }: { onScan: (code: string) => v
           };
           loop();
         } else {
-          const { BrowserMultiFormatReader } = await import('@zxing/browser');
-          const reader = new BrowserMultiFormatReader(undefined, { delayBetweenScanAttempts: 150 });
+          const [{ BrowserMultiFormatReader }, { DecodeHintType }] = await Promise.all([
+            import('@zxing/browser'),
+            import('@zxing/library'),
+          ]);
+          // TRY_HARDER : passe essentielle plus lente mais bien plus tolérante (angle, distance,
+          // contraste) — sans ça, ZXing (seul décodeur dispo sur iOS/Safari, pas de BarcodeDetector
+          // natif) rate beaucoup de codes-barres réels pourtant lisibles à l'œil.
+          const hints = new Map();
+          hints.set(DecodeHintType.TRY_HARDER, true);
+          const reader = new BrowserMultiFormatReader(hints, { delayBetweenScanAttempts: 150 });
           controls = await reader.decodeFromConstraints(
-            { video: { facingMode: 'environment' }, audio: false },
+            { video: videoConstraints, audio: false },
             videoRef.current!,
             (result) => { if (result) emit(result.getText()); },
           );

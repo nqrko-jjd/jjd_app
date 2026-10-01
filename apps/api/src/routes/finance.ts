@@ -268,7 +268,7 @@ financeRouter.get(
           matches: {
             orderBy: { createdAt: 'asc' },
             include: {
-              ledgerEntry: { select: { id: true, docNumber: true, supplierName: true, direction: true, ttc: true, ht: true, worksite: { select: { ref: true } } } },
+              ledgerEntry: { select: { id: true, docNumber: true, supplierName: true, direction: true, documentId: true, ttc: true, ht: true, worksite: { select: { ref: true } } } },
               document: { select: { id: true, number: true, kind: true, totalTtc: true, contact: { select: { name: true } }, worksite: { select: { ref: true } } } },
             },
           },

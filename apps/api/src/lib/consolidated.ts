@@ -182,7 +182,7 @@ export async function consolidatedPnl(input: ConsolidatedInput) {
  */
 export async function profitShare(_year?: number) {
   const [worksites, buys, salesRaw, creditNotesRaw, times, transportMap, materielTontonAgg, dejaPayeTontonAgg] = await Promise.all([
-    prisma.worksite.findMany({ where: { kind: 'project', source: { not: 'demo' } }, select: { id: true, entity: true } }),
+    prisma.worksite.findMany({ where: { kind: 'project', source: { not: 'demo' } }, select: { id: true, entity: true, ref: true, title: true } }),
     prisma.ledgerEntry.findMany({
       where: { direction: 'purchase', worksiteId: { not: null }, source: { not: 'demo' } },
       select: { worksiteId: true, ht: true, categoryRaw: true },
@@ -234,16 +234,28 @@ export async function profitShare(_year?: number) {
     tonton: { worksites: 0, profit: 0 },
     m7: { worksites: 0, profit: 0 },
   };
+  // Détail par chantier — pour pouvoir vérifier le calcul plutôt que de se fier au seul total
+  // (demandé après la correction en masse de factures/doublons qui alimentent ce calcul).
+  const detailsByEntity: Record<string, { id: string; ref: string; title: string; sell: number; buy: number; labour: number; transport: number; profit: number }[]> = {
+    jjd: [], tonton: [], m7: [],
+  };
 
   for (const w of worksites) {
     const ent = (w.entity as keyof typeof totals) ?? 'jjd';
     if (!totals[ent]) continue;
     const invoicedLabour = invoicedLabourMap.get(w.id) ?? 0;
     const labourCost = invoicedLabour > 0 ? invoicedLabour : (timeMap.get(w.id) ?? 0);
-    const profit = (sellMap.get(w.id) ?? 0) - (buyMap.get(w.id) ?? 0) - labourCost - (transportMap.get(w.id) ?? 0);
+    const sell = sellMap.get(w.id) ?? 0;
+    const buy = buyMap.get(w.id) ?? 0;
+    const transport = transportMap.get(w.id) ?? 0;
+    const profit = sell - buy - labourCost - transport;
     totals[ent].worksites += 1;
     totals[ent].profit += profit;
+    if (sell !== 0 || buy !== 0 || labourCost !== 0 || transport !== 0) {
+      detailsByEntity[ent]!.push({ id: w.id, ref: w.ref, title: w.title, sell: round2(sell), buy: round2(buy), labour: round2(labourCost), transport: round2(transport), profit: round2(profit) });
+    }
   }
+  for (const key of Object.keys(detailsByEntity)) detailsByEntity[key]!.sort((a, b) => b.profit - a.profit);
 
   const jjdProfit = round2(totals.jjd!.profit);
   const tontonProfit = round2(totals.tonton!.profit);
@@ -266,7 +278,8 @@ export async function profitShare(_year?: number) {
       materielTonton: round2(materielTontonAgg._sum.ht ?? 0),
       dejaPayeTonton: round2(dejaPayeTontonAgg._sum.ht ?? 0),
       solde: round2(tontonProfit / 3 + (materielTontonAgg._sum.ht ?? 0) - (dejaPayeTontonAgg._sum.ht ?? 0)),
+      details: detailsByEntity.tonton,
     },
-    m7: { worksites: totals.m7!.worksites, profit: round2(totals.m7!.profit) },
+    m7: { worksites: totals.m7!.worksites, profit: round2(totals.m7!.profit), details: detailsByEntity.m7 },
   };
 }

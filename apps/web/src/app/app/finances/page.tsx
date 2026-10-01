@@ -14,13 +14,14 @@ interface Pnl {
   result: number;
   margin: number | null;
 }
+interface ProfitDetail { id: string; ref: string; title: string; sell: number; buy: number; labour: number; transport: number; profit: number }
 interface Share {
   jjd: { worksites: number; profit: number; david: number; julien: number };
   tonton: {
     worksites: number; profit: number; partGt: number; resteJjd: number;
-    materielTonton: number; dejaPayeTonton: number; solde: number;
+    materielTonton: number; dejaPayeTonton: number; solde: number; details: ProfitDetail[];
   };
-  m7: { worksites: number; profit: number };
+  m7: { worksites: number; profit: number; details: ProfitDetail[] };
 }
 const MONTHS = ['—', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
 const ENT_LABEL: Record<string, string> = { jjd: 'JJD', tonton: 'Tonton', m7: 'M7', autre: 'Non attribué' };
@@ -38,6 +39,7 @@ export default function FinancesPage() {
   const { data } = useApi<Pnl>(`/api/finance/consolidated?${qs}`);
   const { data: share } = useApi<Share>(user?.isPartner ? '/api/finance/profit-share' : null);
   const [openSec, setOpenSec] = useState<string | null>(null);
+  const [showTontonDetail, setShowTontonDetail] = useState(false);
 
 
   return (
@@ -177,6 +179,45 @@ export default function FinancesPage() {
                   <div className="row" style={{ justifyContent: 'space-between' }}><span>− Déjà versé</span><strong><Money value={share.tonton.dejaPayeTonton} /></strong></div>
                 </div>
               </div>
+
+              {share.tonton.details.length > 0 && (
+                <div style={{ marginBottom: '2rem' }}>
+                  <div className="section-title" style={{ cursor: 'pointer' }} onClick={() => setShowTontonDetail((v) => !v)}>
+                    {showTontonDetail ? '▾' : '▸'} Détail du calcul — chantiers Tonton <span className="hint">pour vérifier le total ci-dessus</span>
+                  </div>
+                  {showTontonDetail && (
+                    <div className="tbl-wrap">
+                      <table className="tbl">
+                        <thead>
+                          <tr>
+                            <th>Chantier</th>
+                            <th style={{ textAlign: 'right' }}>Vendu HT</th>
+                            <th style={{ textAlign: 'right' }}>Acheté HT</th>
+                            <th style={{ textAlign: 'right' }}>Main d'œuvre</th>
+                            <th style={{ textAlign: 'right' }}>Transport</th>
+                            <th style={{ textAlign: 'right' }}>Profit</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {share.tonton.details.map((d) => (
+                            <tr key={d.ref}>
+                              <td><Link href={`/app/chantiers/${d.ref}`}>{d.ref}</Link> <span className="muted">{d.title}</span></td>
+                              <td style={{ textAlign: 'right' }}><Money value={d.sell} /></td>
+                              <td style={{ textAlign: 'right' }}><Money value={d.buy} /></td>
+                              <td style={{ textAlign: 'right' }}><Money value={d.labour} /></td>
+                              <td style={{ textAlign: 'right' }}><Money value={d.transport} /></td>
+                              <td style={{ textAlign: 'right', fontWeight: 600 }}><Money value={d.profit} /></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr><td>Total</td><td /><td /><td /><td /><td style={{ textAlign: 'right' }}><Money value={share.tonton.profit} /></td></tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
             </>
           )}
         </>

@@ -11,7 +11,7 @@ import { PaginationBar } from '@/components/PaginationBar';
 
 interface Match {
   id: string;
-  ledgerEntry: { id: string; docNumber: string | null; supplierName: string | null; direction: string; ttc: number | null; ht: number; worksite: { ref: string } | null } | null;
+  ledgerEntry: { id: string; docNumber: string | null; supplierName: string | null; direction: string; documentId: string | null; ttc: number | null; ht: number; worksite: { ref: string } | null } | null;
   document: { id: string; number: string | null; kind: string; totalTtc: number | null; contact: { name: string } | null; worksite: { ref: string } | null } | null;
 }
 interface Tx {
@@ -49,6 +49,17 @@ function matchLabel(m: Match): string {
     return [d.worksite?.ref, `facture ${d.number ?? ''}`, d.contact?.name].filter(Boolean).join(' · ');
   }
   return '';
+}
+// La ligne de grand livre peut représenter un achat OU une vente/NDC (ex : factures historiques
+// importées puis rattachées à leur Document) — ne pas renvoyer vers « Achats » dans ce cas.
+function matchDocumentId(m: Match): string | null {
+  return m.document?.id ?? m.ledgerEntry?.documentId ?? null;
+}
+function isPurchaseLedger(m: Match): boolean {
+  return !m.document && !!m.ledgerEntry && !m.ledgerEntry.documentId && m.ledgerEntry.direction === 'purchase';
+}
+function isSaleLedgerOnly(m: Match): boolean {
+  return !m.document && !!m.ledgerEntry && !m.ledgerEntry.documentId && m.ledgerEntry.direction !== 'purchase';
 }
 
 export default function BanquePage() {
@@ -309,9 +320,10 @@ function BanqueInner() {
                                 {CONF_LABEL[t.matchConfidence ?? ''] ?? 'lié'}
                               </span>
                               <div className="bank-match-document"><strong>{matchLabel(m)}</strong><div className="row">
-                                {m.document && <Link className="bank-document-link" href={`/app/documents/${m.document.id}`}>Ouvrir la facture</Link>}
-                                {m.ledgerEntry && <Link className="bank-document-link" href={`/app/achats?q=${encodeURIComponent(m.ledgerEntry.docNumber || m.ledgerEntry.supplierName || '')}`}>Voir l’achat</Link>}
-                                <button className="bank-document-link" onClick={async()=>{try {const url=await apiBlobUrl(m.document?`/api/documents/${m.document.id}/pdf`:`/api/finance/expenses/${m.ledgerEntry!.id}/pdf`);window.open(url,'_blank','noopener');}catch(e){setFlash((e as Error).message);}}}>Voir le justificatif</button>
+                                {matchDocumentId(m) && <Link className="bank-document-link" href={`/app/documents/${matchDocumentId(m)}`}>Ouvrir la facture</Link>}
+                                {isPurchaseLedger(m) && <Link className="bank-document-link" href={`/app/achats?q=${encodeURIComponent(m.ledgerEntry!.docNumber || m.ledgerEntry!.supplierName || '')}`}>Voir l’achat</Link>}
+                                {isSaleLedgerOnly(m) && <Link className="bank-document-link" href={`/app/documents?q=${encodeURIComponent(m.ledgerEntry!.docNumber || '')}`}>Voir la vente</Link>}
+                                <button className="bank-document-link" onClick={async()=>{try {const docId=matchDocumentId(m);const url=await apiBlobUrl(docId?`/api/documents/${docId}/pdf`:`/api/finance/expenses/${m.ledgerEntry!.id}/pdf`);window.open(url,'_blank','noopener');}catch(e){setFlash((e as Error).message);}}}>Voir le justificatif</button>
                               </div></div>
                               <span className="tnum" style={{ fontSize: '0.76rem', whiteSpace: 'nowrap' }}><Money value={matchAmount(m)} /></span>
                               <button

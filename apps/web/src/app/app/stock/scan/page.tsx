@@ -61,9 +61,14 @@ function ScanPanel({
   const [catalogType, setCatalogType] = useState<CatalogType>('materiaux');
   const [worksiteId, setWorksiteId] = useState('');
   const [storageLocation, setStorageLocation] = useState('');
-  // Rack actif : on scanne son étiquette (ou on le tape), les articles scannés ensuite y sont rangés — comme l'inventaire Bricoloc.
-  const [rack, setRack] = useState<string | null>(null);
-  const rackRef = useRef<string | null>(null);
+  // Rack actif : on scanne son étiquette (ou on le tape), les articles scannés ensuite y sont
+  // rangés — comme l'inventaire Bricoloc. Survit à un rechargement/une perte de focus de l'onglet
+  // (sessionStorage) : un dépôt scanne souvent plusieurs dizaines d'articles pour un même rack,
+  // perdre ce réglage en silence en cours de route ferait repartir des entrées sans rack.
+  const RACK_KEY = 'jjd_scan_active_rack';
+  const initialRack = (() => { try { return sessionStorage.getItem(RACK_KEY); } catch { return null; } })();
+  const [rack, setRack] = useState<string | null>(initialRack);
+  const rackRef = useRef<string | null>(initialRack);
   const [rackTyped, setRackTyped] = useState('');
   // Après un scan : fenêtre « quelle quantité ? » puis « Ajouter au panier » (désactivable : +1 par scan).
   const [askQty, setAskQty] = useState(true);
@@ -165,12 +170,16 @@ function ScanPanel({
     if (action === 'out') { setErr('Le rack sert aux entrées et aux retours, pas aux sorties.'); scanFeedback(false); return; }
     rackRef.current = code;
     setRack(code);
+    try { sessionStorage.setItem(RACK_KEY, code); } catch { /* stockage indisponible — tant pis, le ref suffit pour cette session */ }
     // les articles déjà scannés sans rack y sont rangés (on peut scanner l'article puis son rack, ou l'inverse)
     setCart((cur) => cur.map((l) => ((l.kind === 'stock' || l.kind === 'materiel') && !l.location ? { ...l, location: code } : l)));
     setLastScan(`Rack ${code}`);
     scanFeedback(true);
   }
-  function clearRack() { rackRef.current = null; setRack(null); setRackTyped(''); }
+  function clearRack() {
+    rackRef.current = null; setRack(null); setRackTyped('');
+    try { sessionStorage.removeItem(RACK_KEY); } catch { /* ignore */ }
+  }
 
   async function handleScan(codeRaw: string) {
     const code = codeRaw.trim();

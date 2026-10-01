@@ -320,7 +320,7 @@ function BanqueInner() {
               <tr>
                 <th style={{ cursor: 'pointer' }} onClick={() => toggleSort('bookingDate')}>Date{sortIndicator('bookingDate')}</th>
                 <th style={{ cursor: 'pointer' }} onClick={() => toggleSort('bank')}>Banque{sortIndicator('bank')}</th>
-                <th style={{ cursor: 'pointer' }} onClick={() => toggleSort('counterparty')}>Contrepartie{sortIndicator('counterparty')}</th>
+                <th style={{ cursor: 'pointer', width: 140 }} onClick={() => toggleSort('counterparty')}>Contrepartie{sortIndicator('counterparty')}</th>
                 <th>Communication</th>
                 <th style={{ textAlign: 'right', cursor: 'pointer' }} onClick={() => toggleSort('amount')}>Montant{sortIndicator('amount')}</th>
                 <th>Rapprochement</th>
@@ -334,8 +334,8 @@ function BanqueInner() {
                   <tr>
                     <td className="tnum">{formatDateBE(t.bookingDate)}</td>
                     <td>{t.bank ?? '—'}</td>
-                    <td>{t.counterpartyName ?? <span className="muted" style={{ fontSize: '0.8rem' }}>{(t.description ?? '').slice(0, 40)}</span>}</td>
-                    <td className="mono" style={{ fontSize: '0.78rem' }}>{(t.communication ?? '').slice(0, 28)}</td>
+                    <td style={{ maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={t.counterpartyName ?? t.description ?? ''}>{t.counterpartyName ?? <span className="muted" style={{ fontSize: '0.8rem' }}>{t.description ?? ''}</span>}</td>
+                    <td className="mono" style={{ fontSize: '0.78rem' }} title={t.communication ?? ''}>{t.communication ?? ''}</td>
                     <td style={{ textAlign: 'right' }}><Money value={t.amount} sign /></td>
                     <td style={{ fontSize: '0.8rem' }}>
                       {t.matches.length === 0 ? (

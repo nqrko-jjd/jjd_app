@@ -133,6 +133,10 @@ function ScanPanel({
   function setLineUnit(key: string, unitName: string | null) {
     setCart((cur) => cur.map((l) => (l.key === key && l.kind === 'stock' ? { ...l, unitName } : l)));
   }
+  /** Rack par ligne — corrige/complète le rack actif au moment du scan, sans devoir rescanner. */
+  function setLineLocation(key: string, code: string) {
+    setCart((cur) => cur.map((l) => (l.key === key && (l.kind === 'stock' || l.kind === 'materiel') ? { ...l, location: code || null } : l)));
+  }
   function addConsommable(c: Consumable) {
     const key = `consommable:${c.id}`;
     setCart((cur) => {
@@ -397,8 +401,19 @@ function ScanPanel({
                         </select>
                       ) : line.unit
                     ) : line.kind === 'materiel' ? line.sub : ''}
-                    {(line.kind === 'stock' || line.kind === 'materiel') && line.location && <span className="badge" style={{ marginLeft: 6, fontSize: '0.7rem' }}>📍 {line.location}</span>}
                   </span>
+                  {(line.kind === 'stock' || line.kind === 'materiel') && action !== 'out' && (
+                    <span className="row" style={{ gap: '0.3rem', alignItems: 'center', marginTop: '0.25rem' }}>
+                      <MapPin size={13} className="muted" />
+                      <input
+                        className="input" list="rack-list" placeholder="rack…"
+                        style={{ padding: '0.15rem 0.4rem', fontSize: '0.78rem', width: 110 }}
+                        value={line.location ?? ''}
+                        onChange={(e) => setLineLocation(line.key, e.target.value)}
+                        aria-label={`Rack de ${line.name}`}
+                      />
+                    </span>
+                  )}
                   {line.kind === 'materiel' ? (
                     <span className="stock-qty-stepper">
                       <button type="button" className="remove" onClick={() => removeLine(line.key)}>Retirer</button>

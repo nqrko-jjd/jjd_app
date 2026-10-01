@@ -63,7 +63,6 @@ function ScanPanel({
   const [action, setAction] = useState<'in' | 'out' | 'return'>('out');
   const [catalogType, setCatalogType] = useState<CatalogType>('materiaux');
   const [worksiteId, setWorksiteId] = useState('');
-  const [storageLocation, setStorageLocation] = useState('');
   // Rack actif : on scanne son étiquette (ou on le tape), les articles scannés ensuite y sont
   // rangés — comme l'inventaire Bricoloc. Survit à un rechargement/une perte de focus de l'onglet
   // (sessionStorage) : un dépôt scanne souvent plusieurs dizaines d'articles pour un même rack,
@@ -95,8 +94,8 @@ function ScanPanel({
   // retour — on prépare souvent un départ chantier avec du stock ET des outils ensemble.
   // Pas de « Réceptionner » côté outils/consommables : ça se gère par le fournisseur.
   const { data: materielStatus } = useApi<{ enabled: boolean }>('/api/materiel/status');
-  const { data: materielStock } = useApi<{ products: MaterielProduct[] }>(materielStatus?.enabled ? '/api/materiel/stock' : null);
-  const { data: materielCons } = useApi<{ consumables: Consumable[] }>(materielStatus?.enabled ? '/api/materiel/consumables' : null);
+  const { data: materielStock, reload: reloadMateriel } = useApi<{ products: MaterielProduct[] }>(materielStatus?.enabled ? '/api/materiel/stock' : null);
+  const { data: materielCons, reload: reloadConsumables } = useApi<{ consumables: Consumable[] }>(materielStatus?.enabled ? '/api/materiel/consumables' : null);
   const materielProducts = materielStock?.products ?? [];
   const consumables = materielCons?.consumables ?? [];
   const machinesEnabled = !!materielStatus?.enabled && action !== 'in';
@@ -242,12 +241,12 @@ function ScanPanel({
     scanFeedback(false);
   }
 
-  const needsLocation = action === 'return' && cart.some((l) => l.kind === 'materiel' && !l.location);
+  const needsLocation = action === 'return' && cart.some((l) => l.kind === 'materiel' && !(l.location || rack));
 
   async function submit() {
     if (busyRef.current || scanning > 0 || cart.length === 0) return;
     if (action !== 'in' && !worksiteId) { setErr('Chantier requis.'); return; }
-    if (needsLocation && !storageLocation.trim()) { setErr('Emplacement de rangement requis pour le retour d’outils.'); return; }
+    if (needsLocation) { setErr('Emplacement de rangement requis pour le retour d’outils.'); return; }
     busyRef.current = true;
     setBusy(true);
     setErr(null);
@@ -273,20 +272,19 @@ function ScanPanel({
         } else if (action === 'out') {
           await api('/api/materiel/loans', { method: 'POST', body: { code: line.assetTag, worksiteId } });
         } else if (action === 'return') {
-          await api('/api/materiel/returns', { method: 'POST', body: { code: line.assetTag, storageLocation: line.location || storageLocation.trim() } });
+          await api('/api/materiel/returns', { method: 'POST', body: { code: line.assetTag, storageLocation: line.location || rackRef.current } });
         }
         done++;
         // Only unconfirmed movements remain if a later endpoint fails.
         setCart((cur) => cur.filter((remaining) => remaining.key !== line.key));
       }
       setCart([]);
-      setStorageLocation('');
       setToast(`${done} mouvement${done > 1 ? 's' : ''} enregistré${done > 1 ? 's' : ''}.`);
-      onDone();
+      onDone(); reloadMateriel(); reloadConsumables();
     } catch (e) {
       const detail = (e as Error).message ?? 'Erreur';
       setErr(`${done ? `${done} mouvement${done > 1 ? 's' : ''} enregistré${done > 1 ? 's' : ''}. ` : ''}${detail}. Les lignes restantes sont conservées. En cas de coupure réseau, vérifiez l’historique avant de relancer.`);
-      if (done) onDone();
+      if (done) { onDone(); reloadMateriel(); reloadConsumables(); }
     } finally {
       busyRef.current = false;
       setBusy(false);
@@ -384,16 +382,9 @@ function ScanPanel({
       </div>
       <div className="scan-linked-flow">{action === 'in' ? <Link href="/app/stock/commandes">Livraison d’une commande fournisseur →</Link> : action === 'out' ? <Link href="/app/stock/preparations">Préparer une liste chantier existante →</Link> : <span className="muted">La zone reste active pour les retours suivants.</span>}</div>
       {needsLocation && (
-        <div style={{ display: 'grid', gap: 10, padding: '0.7rem', background: 'var(--surface-2)', borderRadius: 10, marginBottom: '0.9rem', maxWidth: 420 }}>
-          <div style={{ fontWeight: 650, fontSize: '0.85rem' }}>Les outils retournés → dans quelle zone du dépôt ?</div>
-          {knownLocations.length > 0 && (
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {knownLocations.map((loc) => (
-                <button key={loc} type="button" className="badge primary" style={{ cursor: 'pointer' }} onClick={() => setStorageLocation(loc)}>{loc}</button>
-              ))}
-            </div>
-          )}
-          <input className="input" placeholder="ex. Étagère A3" value={storageLocation} onChange={(e) => setStorageLocation(e.target.value)} />
+        <div className="scan-zone-needed" role="status">
+          <strong>Choisissez la zone de rangement des outils ci-dessus, ou scannez son étiquette.</strong>
+          {knownLocations.length > 0 && <div className="row" style={{ gap: 8, marginTop: 10 }}>{knownLocations.map((loc) => <button key={loc} type="button" className="btn" disabled={busy || scanning > 0} onClick={() => pickRack(loc)}>{loc}</button>)}</div>}
         </div>
       )}
 
@@ -466,7 +457,7 @@ function ScanPanel({
           <div className="stock-basket-confirm">
             {err && <div className="badge crit" style={{ padding: '0.4rem 0.7rem', marginBottom: '0.7rem' }}>{err}</div>}
             {toast && <div className="badge ok" style={{ padding: '0.4rem 0.7rem', marginBottom: '0.7rem' }}>{toast}</div>}
-            <button type="button" className="btn primary" disabled={busy || scanning > 0 || cart.length === 0 || (action !== 'in' && !worksiteId) || (needsLocation && !storageLocation.trim())} onClick={submit}>
+            <button type="button" className="btn primary" disabled={busy || scanning > 0 || cart.length === 0 || (action !== 'in' && !worksiteId) || needsLocation} onClick={submit}>
               {busy ? 'Enregistrement…' : `Valider ${ACTION_LABEL[action]} · ${cart.length} article${cart.length > 1 ? 's' : ''}`}
             </button>
           </div>

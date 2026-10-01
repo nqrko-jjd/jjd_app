@@ -215,7 +215,7 @@ try {
     await page.getByRole('textbox', { name: 'Champ de scan' }).waitFor();
     await page.waitForTimeout(200);
     await scan(page, 'TOOL-001');
-    await page.locator('.stock-basket-line .name').getByText('Perceuse', { exact: true }).waitFor();
+    await page.locator('.stock-basket-line').filter({ hasText: 'Perceuse' }).waitFor();
     await page.waitForTimeout(750); await scan(page, 'TOOL-001');
     await page.getByText('Cet exemplaire est déjà dans le panier.', { exact: true }).waitFor();
     assert.equal(await page.locator('.stock-basket-line').count(), 1, 'a physical tool must not be duplicated');
@@ -226,7 +226,7 @@ try {
     assert.equal(state.loans[0].worksiteId, 'w1');
     await page.getByRole('button', { name: 'Retourner', exact: true }).click();
     await scan(page, 'BRZ-A01'); await scan(page, 'TOOL-001');
-    await page.locator('.stock-basket-line .name').getByText('Perceuse', { exact: true }).waitFor();
+    await page.locator('.stock-basket-line').filter({ hasText: 'Perceuse' }).waitFor();
     await page.getByRole('button', { name: /Valider le retour/ }).click();
     await waitFor(() => state.returns.length === 1, 'tool return missing');
     assert.equal(state.returns[0].storageLocation, 'A01');

@@ -72,3 +72,5 @@
   .scan-context { display: grid; grid-template-columns: minmax(0, 1fr); }
   .scan-context .rack-bar { gap: 8px; }
 }
+
+.scan-zone-needed { padding: 14px 16px; border: 1px solid var(--gold); border-radius: 14px; background: var(--surface); margin-bottom: 16px; font-size: 13px; line-height: 1.5; }

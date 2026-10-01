@@ -50,6 +50,7 @@ export default function BoiteIaPage() {
   const { data: pick } = useApi<Picker>('/api/meta/pickers');
   const worksiteOpts: WsPickerOption[] = (pick?.worksites ?? []).map(wsToPicker);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [sourceOpenId, setSourceOpenId] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -111,16 +112,23 @@ export default function BoiteIaPage() {
                   </div>
                 )}
               </div>
-              {s.status === 'pending' && (
-                <div className="row" style={{ gap: '0.4rem', flexShrink: 0 }}>
-                  <button className="btn" disabled={!!busy} onClick={() => setOpenId(openId === s.id ? null : s.id)}>
-                    {openId === s.id ? 'Fermer' : 'Valider'}
-                  </button>
-                  <button className="btn ghost" disabled={!!busy} onClick={() => dismiss(s)}>Rejeter</button>
-                </div>
-              )}
-              {s.status !== 'pending' && <span className={`badge ${s.status === 'applied' ? 'ok' : 'plain'}`}>{s.status === 'applied' ? 'Validée' : 'Rejetée'}</span>}
+              <div className="row" style={{ gap: '0.4rem', flexShrink: 0 }}>
+                <button className="btn ghost" onClick={() => setSourceOpenId(sourceOpenId === s.id ? null : s.id)}>
+                  {sourceOpenId === s.id ? 'Masquer le mail' : 'Voir le mail'}
+                </button>
+                {s.status === 'pending' && (
+                  <>
+                    <button className="btn" disabled={!!busy} onClick={() => setOpenId(openId === s.id ? null : s.id)}>
+                      {openId === s.id ? 'Fermer' : 'Valider'}
+                    </button>
+                    <button className="btn ghost" disabled={!!busy} onClick={() => dismiss(s)}>Rejeter</button>
+                  </>
+                )}
+                {s.status !== 'pending' && <span className={`badge ${s.status === 'applied' ? 'ok' : 'plain'}`}>{s.status === 'applied' ? 'Validée' : 'Rejetée'}</span>}
+              </div>
             </div>
+
+            {sourceOpenId === s.id && <MailSource id={s.id} />}
 
             {openId === s.id && (
               <div style={{ marginTop: '0.8rem', paddingTop: '0.8rem', borderTop: '1px solid var(--line)' }}>
@@ -134,6 +142,22 @@ export default function BoiteIaPage() {
         ))}
       </div>
     </>
+  );
+}
+
+function MailSource({ id }: { id: string }) {
+  const { data, loading, error } = useApi<{ subject: string; from: string; receivedAt: string | null; text: string }>(`/api/mail-suggestions/${id}/source`);
+  return (
+    <div style={{ marginTop: '0.7rem', padding: '0.7rem 0.9rem', background: 'var(--surface-2)', borderRadius: 8, fontSize: '0.84rem' }}>
+      {loading && 'Chargement du mail…'}
+      {error && <span className="state error">{error}</span>}
+      {data && (
+        <>
+          <div className="muted" style={{ marginBottom: '0.5rem' }}>{data.from} · {formatDateBE(data.receivedAt)} · {data.subject}</div>
+          <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', maxHeight: 320, overflowY: 'auto', margin: 0 }}>{data.text}</pre>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -175,6 +199,9 @@ function AppointmentForm({ s, opts, busy, onSubmit }: { s: Suggestion; opts: WsP
   });
   return (
     <div className="grid" style={{ gap: '0.6rem' }}>
+      <p className="muted" style={{ fontSize: '0.8rem' }}>
+        Valider ajoute ce rendez-vous au planning du chantier, statut <strong>« à confirmer »</strong> — comme un créneau proposé mais pas encore garanti, à toi de le confirmer ensuite dans Planning.
+      </p>
       <div className="field"><label>Chantier</label><WorksitePicker value={worksiteId} onChange={setWorksiteId} options={opts} /></div>
       <div className="field"><label>Titre</label><input className="input" value={v.title} onChange={(e) => setV({ ...v, title: e.target.value })} /></div>
       <div className="row" style={{ gap: '0.6rem' }}>

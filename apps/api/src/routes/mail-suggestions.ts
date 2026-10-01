@@ -8,7 +8,7 @@ import { Router } from 'express';
 import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, OFFICE } from '../lib/auth.js';
-import { MAIL_SUGGESTION_KINDS, type MailExtraction } from '../lib/lead-mailbox.js';
+import { MAIL_SUGGESTION_KINDS, type MailExtraction, fetchMailSource } from '../lib/lead-mailbox.js';
 
 export const mailSuggestionsRouter = Router();
 
@@ -38,6 +38,19 @@ mailSuggestionsRouter.get(
     const rows = await prisma.mailSuggestion.groupBy({ by: ['kind'], where: { status: 'pending' }, _count: true });
     const byKind = Object.fromEntries(rows.map((r) => [r.kind, r._count]));
     res.json({ total: rows.reduce((s, r) => s + r._count, 0), byKind });
+  }),
+);
+
+/** Relit le mail d'origine (IMAP, à la demande) — pour vérifier le contenu réel avant de valider. */
+mailSuggestionsRouter.get(
+  '/:id/source',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const s = await prisma.mailSuggestion.findUnique({ where: { id: req.params.id } });
+    if (!s) throw new HttpError(404, 'Suggestion introuvable');
+    const source = await fetchMailSource(s.messageId);
+    if (!source) throw new HttpError(404, 'Mail introuvable sur le serveur (déplacé, supprimé, ou boîte indisponible).');
+    res.json(source);
   }),
 );
 

@@ -151,6 +151,45 @@ interface SyncStats {
 }
 
 /**
+ * Relit un mail précis (par Message-ID) pour l'afficher à l'écran — "voir le mail d'origine"
+ * depuis une suggestion. Lecture seule comme le reste de cette boîte (pas de \Seen posé) ; ne
+ * dépend d'aucune donnée stockée en base (le texte du mail n'est jamais persisté, seul le
+ * résultat de l'extraction l'est).
+ */
+export async function fetchMailSource(messageId: string): Promise<{ subject: string; from: string; receivedAt: Date | null; text: string } | null> {
+  if (!mailSuggestionsConfigured()) return null;
+  const client = new ImapFlow({
+    host: env.leadsMailbox.host,
+    port: env.leadsMailbox.port,
+    secure: true,
+    auth: { user: env.leadsMailbox.user, pass: env.leadsMailbox.password },
+    logger: false,
+  });
+  await client.connect();
+  try {
+    const lock = await client.getMailboxLock('INBOX');
+    try {
+      const uids = await client.search({ header: { 'message-id': messageId } }, { uid: true });
+      const uid = (uids as number[])[0];
+      if (!uid) return null;
+      const msg = (await client.fetchOne(String(uid), { source: true, envelope: true }, { uid: true })) as FetchMessageObject | false;
+      if (!msg || !msg.source) return null;
+      const parsed = await simpleParser(msg.source);
+      return {
+        subject: parsed.subject ?? '',
+        from: parsed.from?.text ?? '',
+        receivedAt: parsed.date ?? null,
+        text: (parsed.text || parsed.html || '').toString(),
+      };
+    } finally {
+      lock.release();
+    }
+  } finally {
+    await client.logout().catch(() => client.close());
+  }
+}
+
+/**
  * Ne regarde que les messages des `sinceDays` derniers jours (IMAP SEARCH SINCE) — pas tout
  * l'historique à chaque passage. Chaque message est identifié par son Message-ID (unique,
  * stable) : un message déjà dans MailSuggestion (suggestion créée ou non) n'est jamais réanalysé.

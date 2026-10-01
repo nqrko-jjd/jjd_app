@@ -7,7 +7,7 @@ import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, requirePartner, OFFICE } from '../lib/auth.js';
 import { consolidatedPnl, profitShare, forecastReceivable } from '../lib/consolidated.js';
 import { analytics } from '../lib/analytics.js';
-import { autoMatchAll } from '../lib/bank-match.js';
+import { autoMatchAll, recomputeDocumentPayment } from '../lib/bank-match.js';
 import { parseBankCsv, decodeCsvBuffer, type ParsedBankRow } from '../lib/bank-csv.js';
 import { parseCardStatement, pdfToRawText, pdftotextAvailable } from '../lib/bank-pdf.js';
 import { parseScreenshots, screenshotImportAvailable } from '../lib/bank-screenshot.js';
@@ -506,20 +506,23 @@ financeRouter.post(
     await prisma.bankTransactionMatch.create({ data: { bankTransactionId: tx.id, ledgerEntryId: ledgerId, documentId } });
 
     if (ledgerId) {
-      await prisma.ledgerEntry.update({
-        where: { id: ledgerId },
-        data: { paymentStatus: 'Payé', paidOn: tx.bookingDate ?? new Date() },
-      });
+      // Une écriture de vente synchronisée depuis une facture (LedgerEntry.documentId non nul,
+      // voir syncLedgerEntryForDocument) : la FACTURE est la source de vérité — on recalcule son
+      // paiement (somme des transactions réellement rapprochées, jamais "payé" d'office), sinon
+      // un 2e/3e versement partiel sur la même facture écrase silencieusement les précédents et
+      // la facture reste invisible depuis le rapprochement bancaire (hasBankMatch à false).
+      const le = await prisma.ledgerEntry.findUnique({ where: { id: ledgerId }, select: { documentId: true } });
+      if (le?.documentId) {
+        await recomputeDocumentPayment(le.documentId);
+      } else {
+        await prisma.ledgerEntry.update({
+          where: { id: ledgerId },
+          data: { paymentStatus: 'Payé', paidOn: tx.bookingDate ?? new Date() },
+        });
+      }
     }
     if (documentId) {
-      const doc = await prisma.document.findUnique({ where: { id: documentId }, select: { totalTtc: true } });
-      await prisma.document.update({
-        where: { id: documentId },
-        data: { status: 'paid', paidAmount: doc?.totalTtc ?? 0, paidOn: tx.bookingDate ?? new Date() },
-      });
-      // Répercute sur l'écriture du grand livre synchronisée — sinon elle reste « Non payé »
-      // malgré la facture marquée payée (utilisé par Analyse / CA encaissé par chantier).
-      await syncLedgerEntryForDocument(documentId);
+      await recomputeDocumentPayment(documentId);
     }
 
     await prisma.bankTransaction.update({ where: { id: tx.id }, data: { matchConfidence: 'manual', matchedAt: new Date() } });
@@ -527,21 +530,28 @@ financeRouter.post(
   }),
 );
 
-/** Retire une facture du rapprochement d'une transaction (elle repasse « non payée »). */
+/** Retire une facture du rapprochement d'une transaction (elle repasse « non payée », ou
+ *  « partiel » s'il reste d'autres transactions rapprochées sur la même facture). */
 financeRouter.delete(
   '/bank/:id/matches/:matchId',
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
     const m = await prisma.bankTransactionMatch.findFirst({ where: { id: req.params.matchId, bankTransactionId: req.params.id } });
     if (!m) throw new HttpError(404, 'Rapprochement introuvable');
+    const ledgerDocumentId = m.ledgerEntryId
+      ? (await prisma.ledgerEntry.findUnique({ where: { id: m.ledgerEntryId }, select: { documentId: true } }))?.documentId ?? null
+      : null;
     await prisma.bankTransactionMatch.delete({ where: { id: m.id } });
 
     if (m.ledgerEntryId) {
-      await prisma.ledgerEntry.update({ where: { id: m.ledgerEntryId }, data: { paymentStatus: 'Non payé', paidOn: null } }).catch(() => {});
+      if (ledgerDocumentId) {
+        await recomputeDocumentPayment(ledgerDocumentId);
+      } else {
+        await prisma.ledgerEntry.update({ where: { id: m.ledgerEntryId }, data: { paymentStatus: 'Non payé', paidOn: null } }).catch(() => {});
+      }
     }
     if (m.documentId) {
-      await prisma.document.update({ where: { id: m.documentId }, data: { status: 'sent', paidAmount: 0, paidOn: null } }).catch(() => {});
-      await syncLedgerEntryForDocument(m.documentId).catch(() => {});
+      await recomputeDocumentPayment(m.documentId);
     }
 
     const remaining = await prisma.bankTransactionMatch.count({ where: { bankTransactionId: req.params.id } });

@@ -244,7 +244,8 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
         </div>
       </div>
 
-      <div className="detail-hero">
+      <div className="identity-dossier">
+        <div>
         <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
             <div className="eyebrow">{PERSON_ROLE_LABEL[p.role as keyof typeof PERSON_ROLE_LABEL] ?? p.role}</div>
@@ -253,8 +254,7 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
           </div>
           <span className={`badge ${todayBadgeTone}`}>{todayBadgeLabel} aujourd’hui</span>
         </div>
-      </div>
-
+        </div>
       <PhotoHeader
         basePath={`/api/people/${p.id}`}
         photoUrl={p.photoUrl}
@@ -263,6 +263,9 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
         fallback={(p.firstName[0] ?? '') + (p.lastName?.[0] ?? '')}
         onChange={reload}
       />
+      </div>
+
+
 
       <section className="card card-pad" style={{ marginBottom: '1.4rem' }}>
         <div className="eyebrow" style={{ marginBottom: '0.8rem' }}>Fiche</div>

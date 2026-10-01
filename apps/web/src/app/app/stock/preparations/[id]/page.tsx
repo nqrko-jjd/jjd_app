@@ -130,7 +130,7 @@ export default function PreparationDetail({ params }: { params: Promise<{ id: st
           const complete = l.pickedQty + EPS >= l.qty;
           const unit = l.unitName ?? l.stockItem.unit;
           return (
-            <div key={l.id} className="card card-pad" style={{ borderLeft: `4px solid ${complete ? 'var(--ok)' : l.pickedQty > 0 ? 'var(--gold)' : 'var(--line)'}` }}>
+            <div key={l.id} className="card card-pad warehouse-line" style={{ borderLeft: `4px solid ${complete ? 'var(--ok)' : l.pickedQty > 0 ? 'var(--gold)' : 'var(--line)'}` }}>
               <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'nowrap', gap: '1rem' }}>
                 {l.stockItem.photoThumbUrl
                   // eslint-disable-next-line @next/next/no-img-element
@@ -168,14 +168,14 @@ export default function PreparationDetail({ params }: { params: Promise<{ id: st
       </div>
 
       {open && canPick && (
-        <div className="row" style={{ gap: '0.6rem', position: 'sticky', bottom: '0.8rem', background: 'var(--paper)', padding: '0.6rem 0' }}>
+        <div className="row warehouse-actionbar" style={{ gap: '0.6rem', position: 'sticky', bottom: '0.8rem', background: 'var(--paper)', padding: '0.6rem 0' }}>
           <button className="btn primary" style={{ flex: 1, padding: '0.9rem', fontSize: '1.05rem' }} disabled={busy || done === 0 && order.lines.every((l) => l.pickedQty === 0)} onClick={complete}>
             {busy ? 'Validation…' : short.length ? `Terminer (manque ${short.length})` : 'Terminer la préparation'}
           </button>
         </div>
       )}
       {order.status === 'prepared' && (
-        <div className="card card-pad" style={{ borderLeft: '4px solid var(--ok)' }}>
+        <div className="card card-pad warehouse-line" style={{ borderLeft: '4px solid var(--ok)' }}>
           Préparation validée{order.preparedBy ? ` par ${order.preparedBy}` : ''}{order.preparedAt ? ` le ${formatDateBE(order.preparedAt)}` : ''} : les sorties de stock vers le chantier sont enregistrées.
         </div>
       )}

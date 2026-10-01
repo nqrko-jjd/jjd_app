@@ -3,7 +3,7 @@ import { ScrollView, View } from 'react-native';
 import { Text } from '@/lib/AppText';
 import { Stack, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { apiGet } from '@/lib/api';
-import { Card, Label, Loading, Row, Badge, PhotoHeader, eur, dateBE } from '@/lib/ui';
+import { ScreenHeader, Card, Label, Loading, Row, Badge, PhotoHeader, eur, dateBE } from '@/lib/ui';
 import { T } from '@/lib/theme';
 
 interface D {
@@ -29,8 +29,9 @@ export default function PersonneDetail() {
   const soon = Date.now() + 30 * 86400000;
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ ...T.content, padding: 16, gap: 12 }}>
+    <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ ...T.content, gap: 20 }}>
       <Stack.Screen options={{ title: p.displayName || p.firstName, headerBackTitle: 'Retour' }} />
+      <ScreenHeader title={p.displayName || p.firstName} eyebrow="Équipe" description={p.contractType === 'employee' ? 'Salarié' : p.contractType === 'subcontractor' ? 'Sous-traitant' : 'Fiche collaborateur'}/>
       <PhotoHeader basePath={`/api/people/${p.id}`} photoUrl={p.photoUrl} round onChange={load} />
       <Card>
         <Row k="Taux horaire" v={p.hourlyRate != null ? eur(p.hourlyRate) : 'à définir'} />

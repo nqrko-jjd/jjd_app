@@ -3,7 +3,7 @@ import {api} from './api';
 import {useApi} from '../apps/web/src/lib/use-api';
 const profile=localStorage.getItem('jjd-preview-client-profile')||'syndic';
 const promoter=profile==='promoter';
-const me={email:'client@example.test',label:promoter?'Promoteur Démo':'Syndic Démo',isSyndic:profile==='syndic',isPromoter:promoter,access:profile==='resident'?'limited':'full',scopeLabel:null,scope:profile==='resident'?'building':profile==='private'?'client':promoter?'promoter':'syndic'};
+const me={email:'client@example.test',label:promoter?'Promoteur Démo':profile==='private'?'Camille Démo':profile==='resident'?'Alex Démo':'Syndic Démo',isSyndic:profile==='syndic',isPromoter:promoter,access:profile==='resident'?'limited':'full',scopeLabel:null,scope:profile==='resident'?'building':profile==='private'?'client':promoter?'promoter':'syndic'};
 export const portalApi=<T,>(path:string,opts:any={})=>api<T>('/preview-portal'+path,opts);
 export function usePortal(){return {me,loading:false,signOut:()=>{location.hash='/app'}}}
 export const usePortalGuard=usePortal;

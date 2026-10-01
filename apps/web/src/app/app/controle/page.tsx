@@ -1,4 +1,5 @@
 'use client';
+import {OperationalControl} from '@/components/OperationalControl';
 import {SkeletonRows,ErrorState} from '@/components/States';
 import {useState} from 'react';
 import Link from 'next/link';
@@ -26,6 +27,8 @@ export default function ControlePage(){
  const rank=(i:Issue)=>({error:0,warning:1,info:2}[i.severity]??3);
  return <>
   <PageHead eyebrow="Administration" title="File de contrôle" sub="Les points à vérifier, avec un accès direct aux fiches concernées."/>
+  <OperationalControl/>
+  <div className="control-administrative-heading"><span className="eyebrow">Qualité des données</span><h2>Contrôles administratifs</h2></div>
   <div className="control-priorities">
    {PRIORITIES.map(p=><button key={p.key} className={`control-priority ${p.tone}${severity===p.key&&resolved==='0'?' selected':''}`} aria-pressed={severity===p.key&&resolved==='0'} onClick={()=>{setResolved('0');setSeverity(severity===p.key?'':p.key);}}><p.icon size={22}/><span><strong>{data?.openBySeverity[p.key]??'—'}</strong><span>{p.label}</span></span></button>)}
   </div>

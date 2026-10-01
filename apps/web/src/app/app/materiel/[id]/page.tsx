@@ -112,11 +112,11 @@ export default function MaterielDetail({ params }: { params: Promise<{ id: strin
         <div className="sub">{[p.brand, p.model].filter(Boolean).join(' ') || 'Parc Bricoloc'}</div>
       </div>
 
-      <div className="card card-pad" style={{ marginBottom: '1.4rem', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-        <div style={{ width: 220, aspectRatio: '4 / 3', flexShrink: 0, background: 'var(--surface-2)', borderRadius: 'var(--radius-sm)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+      <div className="card card-pad tool-summary" style={{ marginBottom: '1.4rem' }}>
+        <div className="tool-summary-media">
           {p.image ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={p.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            <img src={p.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
           ) : <Wrench size={28} strokeWidth={1.6} className="muted" />}
         </div>
         <div style={{ flex: '1 1 260px', minWidth: 0 }}>
@@ -164,26 +164,15 @@ export default function MaterielDetail({ params }: { params: Promise<{ id: strin
 
       <section>
         <h2 style={{ marginBottom: '0.7rem' }}>Exemplaires ({p.units.length})</h2>
-        <div className="tbl-wrap">
-          <table className="tbl">
-            <thead><tr><th>Étiquette</th><th>Situation</th><th /></tr></thead>
-            <tbody>
-              {p.units.map((u) => (
-                <tr key={u.assetTag}>
-                  <td className="mono">{u.assetTag}</td>
-                  <td>{unitLoc(u)}</td>
-                  <td style={{ textAlign: 'right' }}>
-                    {u.state === 'AVAILABLE' && (
-                      <button className="btn primary" disabled={busy} onClick={() => setCheckoutTarget(u.assetTag)}>Sortir…</button>
-                    )}
-                    {u.state === 'ON_SITE' && (
-                      <button className="btn" disabled={busy} onClick={() => setReturnTarget(u.assetTag)}>Rentrer au dépôt…</button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="tool-units">
+          {p.units.map((u) => (
+            <article className="tool-unit" key={u.assetTag}>
+              <header><span className="mono">{u.assetTag}</span><span className={`badge ${u.state === 'AVAILABLE' ? 'ok' : u.state === 'ON_SITE' ? 'primary' : 'warn'}`}>{STATE_LABEL[u.state] ?? u.state}</span></header>
+              <div className="sub">{unitLoc(u)}</div>
+              {u.state === 'AVAILABLE' && <button className="btn primary" disabled={busy} onClick={() => setCheckoutTarget(u.assetTag)}>Affecter à un chantier</button>}
+              {u.state === 'ON_SITE' && <button className="btn" disabled={busy} onClick={() => setReturnTarget(u.assetTag)}>Retour au dépôt</button>}
+            </article>
+          ))}
         </div>
         {p.units.map((u) => (
           <div key={`pickers-${u.assetTag}`}>

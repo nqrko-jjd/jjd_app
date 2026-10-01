@@ -4,7 +4,7 @@ import { Text } from '@/lib/AppText';
 import { Feather } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams, useFocusEffect, useRouter } from 'expo-router';
 import { apiGet, apiSend } from '@/lib/api';
-import { Card, Label, Loading, Row, Muted, dateBE } from '@/lib/ui';
+import { ScreenHeader, Card, Label, Loading, Row, Muted, dateBE } from '@/lib/ui';
 import { T } from '@/lib/theme';
 
 interface Task { id: string; title: string; status: string; assignees: { id: string; name: string }[] }
@@ -31,11 +31,9 @@ interface Field {
 
 function Phone({ label, name, phone }: { label: string; name: string; phone: string | null }) {
   return (
-    <Pressable onPress={() => phone && Linking.openURL(`tel:${phone.replace(/\s/g, '')}`)} style={{ paddingVertical: 6 }}>
-      <Text style={{ color: T.ink }}>
-        <Text style={{ color: T.ink2 }}>{label} · </Text>
-        {name}{phone ? <Text style={{ color: T.primary, fontWeight: '700' }}>  {phone}</Text> : null}
-      </Text>
+    <Pressable onPress={() => phone && Linking.openURL(`tel:${phone.replace(/\s/g, '')}`)} style={{ paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: T.line, gap: 4 }}>
+      <Text style={{ color: T.ink2, fontSize: 11 }}>{label}</Text>
+      <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',gap:12}}><Text style={{ color: T.ink, fontWeight:'700',flex:1 }}>{name}</Text>{phone && <Text style={{color:T.primary,fontWeight:'600',fontSize:12}}>{phone}</Text>}</View>
     </Pressable>
   );
 }
@@ -88,11 +86,11 @@ export default function FicheDuJour() {
   const doneTasks = tasks.filter((t) => t.status === 'done');
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ ...T.content, padding: 16, gap: 12 }}>
+    <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ ...T.content, gap: 20 }}>
       <Stack.Screen options={{ title: w.ref, headerBackTitle: 'Retour' }} />
 
+      <ScreenHeader title={w.title} eyebrow={w.ref} description="Votre mission et les informations pour intervenir."/>
       <Card>
-        <Text style={{ fontSize: 16, fontWeight: '700', color: T.ink }}>{w.title}</Text>
         {w.address ? (
           <Pressable
             onPress={() => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(w.address)}`)}

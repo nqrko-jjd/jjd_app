@@ -177,7 +177,7 @@ export default function CommandeDetail({ params }: { params: Promise<{ id: strin
           const p = pending[l.id] ?? 0;
           const done = l.receivedQty + EPS >= l.qty;
           return (
-            <div key={l.id} className="card card-pad" style={{ borderLeft: `4px solid ${done ? 'var(--ok)' : l.receivedQty + p > 0 ? 'var(--gold)' : 'var(--line)'}` }}>
+            <div key={l.id} className="card card-pad warehouse-line" style={{ borderLeft: `4px solid ${done ? 'var(--ok)' : l.receivedQty + p > 0 ? 'var(--gold)' : 'var(--line)'}` }}>
               <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'nowrap', gap: '1rem' }}>
                 {l.stockItem.photoThumbUrl
                   // eslint-disable-next-line @next/next/no-img-element
@@ -214,7 +214,7 @@ export default function CommandeDetail({ params }: { params: Promise<{ id: strin
       </div>
 
       {open && canManage && (
-        <div style={{ position: 'sticky', bottom: '0.8rem', background: 'var(--paper)', padding: '0.6rem 0' }}>
+        <div className="warehouse-actionbar" style={{ position: 'sticky', bottom: '0.8rem', background: 'var(--paper)', padding: '0.6rem 0' }}>
           <div className="row" style={{ gap: '0.6rem', alignItems: 'center' }}>
             <input className="input" style={{ maxWidth: 260 }} placeholder="N° du bon de livraison (facultatif)" value={deliveryNote} onChange={(e) => setDeliveryNote(e.target.value)} />
             <button className="btn primary" style={{ flex: 1, padding: '0.9rem', fontSize: '1.05rem' }} disabled={busy || pendingCount === 0} onClick={receive}>

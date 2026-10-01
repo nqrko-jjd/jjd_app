@@ -33,7 +33,7 @@ export default function Pipeline() {
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: T.paper }}
-      contentContainerStyle={{ ...T.content, padding: 16, gap: 12 }}
+      contentContainerStyle={{ ...T.content, gap: 20 }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} />}
     >
       <Stack.Screen options={{ title: 'Pipeline', headerBackTitle: 'Retour' }} />

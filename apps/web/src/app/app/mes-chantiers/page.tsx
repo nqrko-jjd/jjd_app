@@ -31,17 +31,17 @@ export default function MesChantiersPage() {
       {data && data.items.length === 0 && (
         <EmptyState icon={HardHat} title={q ? 'Aucun chantier ne correspond' : 'Aucun chantier pour l’instant'} text={q ? `Rien ne correspond à « ${q} ». Vérifiez l’orthographe ou effacez la recherche.` : 'Les chantiers qui vous sont assignés apparaissent ici. Contactez le bureau s’il en manque.'} action={q ? <button type="button" className="btn primary" onClick={() => setQ('')}>Effacer la recherche</button> : undefined} />
       )}
-      {data?.items.map((w) => (
-        <Link key={w.id} href={`/app/fiche/${w.id}`} className="card" style={{ display: 'block', marginBottom: '0.7rem', overflow: 'hidden' }}>
+      <div className="worker-worksites">{data?.items.map((w) => (
+        <Link key={w.id} href={`/app/fiche/${w.id}`} className="card worker-worksite-card" style={{ display: 'block', marginBottom: '0.7rem', overflow: 'hidden' }}>
           {w.building?.photoThumbUrl && (
             <div style={{ height: 140 }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={w.building.photoThumbUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             </div>
           )}
-          <div className="card-pad row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+          <div className="card-pad worker-worksite-body" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <span style={{ fontWeight: 700 }}>{w.ref}</span> — {w.title}
+              <div className="eyebrow">{w.ref}</div><h2 className="worker-mission-title">{w.title}</h2>
               {w.city && <div className="muted">{w.city}</div>}
             </div>
             <div className="row" style={{ gap: '0.5rem', alignItems: 'center' }}>
@@ -50,7 +50,7 @@ export default function MesChantiersPage() {
             </div>
           </div>
         </Link>
-      ))}
+      ))}</div>
     </>
   );
 }

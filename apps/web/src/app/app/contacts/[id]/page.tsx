@@ -152,12 +152,12 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
         </div>
       </div>
 
-      <div className="detail-hero">
+      <div className="identity-dossier">
+        <div>
         <div className="eyebrow">Contact</div>
         <h1>{c.name}</h1>
-        <div className="sub">{c.kind ? CLIENT_KIND_LABEL[c.kind as keyof typeof CLIENT_KIND_LABEL] : c.type === 'supplier' ? 'Fournisseur' : c.type === 'both' ? 'Client + Fournisseur' : c.type}</div>
-      </div>
-
+        <div className="sub">{c.kind ? CLIENT_KIND_LABEL[c.kind as keyof typeof CLIENT_KIND_LABEL] : c.type === 'supplier' ? 'Fournisseur' : c.type === 'both' ? 'Client + Fournisseur' : 'Client'}</div>
+        </div>
       <PhotoHeader
         basePath={`/api/contacts/${c.id}`}
         photoUrl={c.photoUrl}
@@ -166,6 +166,9 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
         fallback={c.name.slice(0, 2).toUpperCase()}
         onChange={reload}
       />
+      </div>
+
+
 
       <div className="info-grid" style={{ marginBottom: '1.4rem' }}>
         <Info label="E-mail" value={c.email ?? '—'} />

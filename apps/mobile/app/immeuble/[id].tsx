@@ -3,8 +3,9 @@ import { ScrollView, Pressable, Linking, View } from 'react-native';
 import { Text } from '@/lib/AppText';
 import { Stack, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { apiGet } from '@/lib/api';
-import { Card, Label, Loading, Row, Badge, Muted, useRouterPush } from '@/lib/ui';
+import { ScreenHeader, Card, Label, Loading, Row, Badge, Muted, useRouterPush } from '@/lib/ui';
 import { T } from '@/lib/theme';
+import { WORKSITE_STATUS_LABEL } from '@/lib/labels';
 
 const BUILDING_CONTACT_ROLE_LABEL: Record<string, string> = {
   concierge: 'Concierge', president: "Président d'assemblée", council: 'Membre du conseil',
@@ -37,8 +38,9 @@ export default function ImmeubleDetail() {
   const b = d.building;
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ ...T.content, padding: 16, gap: 12 }}>
+    <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ ...T.content, gap: 20 }}>
       <Stack.Screen options={{ title: b.name, headerBackTitle: 'Retour' }} />
+      <ScreenHeader title={b.name} eyebrow="Immeuble & projet" description={[b.address, b.postalCode, b.city].filter(Boolean).join(' · ')}/>
       <Card>
         <Row k="Adresse" v={[b.address, [b.postalCode, b.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') || '—'} />
         {b.syndic && <Row k="Syndic" v={b.syndic.name} />}
@@ -54,7 +56,7 @@ export default function ImmeubleDetail() {
         <Card key={c.id}>
           <Muted>{BUILDING_CONTACT_ROLE_LABEL[c.role] ?? c.role}</Muted>
           <Text style={{ fontWeight: '700', color: T.ink }}>{c.name}</Text>
-          <View style={{ flexDirection: 'row', gap: 14, marginTop: 4 }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14, marginTop: 4 }}>
             {c.phone ? <Pressable onPress={() => Linking.openURL(`tel:${c.phone}`)}><Text style={{ color: T.primary, fontWeight: '600' }}>{c.phone}</Text></Pressable> : null}
             {c.email ? <Pressable onPress={() => Linking.openURL(`mailto:${c.email}`)}><Text style={{ color: T.primary }}>{c.email}</Text></Pressable> : null}
           </View>
@@ -70,7 +72,7 @@ export default function ImmeubleDetail() {
             {u.occupantKind ? <Muted>{OCCUPANT_KIND_LABEL[u.occupantKind]}</Muted> : null}
           </View>
           {u.occupantName ? <Text style={{ color: T.ink }}>{u.occupantName}</Text> : null}
-          <View style={{ flexDirection: 'row', gap: 14, marginTop: 2 }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14, marginTop: 2 }}>
             {u.occupantPhone ? <Pressable onPress={() => Linking.openURL(`tel:${u.occupantPhone}`)}><Text style={{ color: T.primary, fontWeight: '600' }}>{u.occupantPhone}</Text></Pressable> : null}
             {u.occupantEmail ? <Text style={{ color: T.ink2 }}>{u.occupantEmail}</Text> : null}
           </View>
@@ -82,7 +84,7 @@ export default function ImmeubleDetail() {
         <Pressable key={w.id} onPress={() => push(`/chantier/${w.id}`)}>
           <Card>
             <Text style={{ fontWeight: '600', color: T.ink }}>{w.ref} — {w.title}</Text>
-            <Badge>{w.status}</Badge>
+            <Badge>{WORKSITE_STATUS_LABEL[w.status] ?? w.status}</Badge>
           </Card>
         </Pressable>
       ))}

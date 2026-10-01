@@ -3,7 +3,7 @@ import { ScrollView, View, Pressable, Alert } from 'react-native';
 import { Text } from '@/lib/AppText';
 import { Stack, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { apiGet, apiSend } from '@/lib/api';
-import { Card, Label, Loading, Row, Badge, Muted, eur, dateBE } from '@/lib/ui';
+import { ScreenHeader, Card, Label, Loading, Row, Badge, Muted, eur, dateBE } from '@/lib/ui';
 import { T } from '@/lib/theme';
 
 interface Line {
@@ -47,16 +47,14 @@ export default function DocumentDetail() {
   }
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ ...T.content, padding: 16, gap: 12 }}>
+    <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ ...T.content, gap: 20 }}>
       <Stack.Screen options={{ title: `${KIND[d.kind]} ${d.number ?? ''}`.trim(), headerBackTitle: 'Retour' }} />
 
+      <ScreenHeader title={d.number ?? d.draftRef ?? KIND[d.kind]} eyebrow={KIND[d.kind]} description={d.title ?? undefined}/>
       <Card>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text style={{ fontSize: 18, fontWeight: '800', color: T.ink }}>{d.number ?? d.draftRef ?? '—'}</Text>
-          <Badge>{d.status}</Badge>
+          <Badge>{({draft:'Brouillon',sent:'Envoyé',accepted:'Accepté',paid:'Payé',partial:'Partiellement payé',overdue:'En retard',cancelled:'Annulé',rejected:'Refusé'} as Record<string,string>)[d.status] ?? d.status}</Badge>
         </View>
-        {d.title ? <Text style={{ color: T.ink, marginTop: 4 }}>{d.title}</Text> : null}
-        <View style={{ height: 8 }} />
         <Row k="Client" v={d.billingName ?? d.contact?.name ?? '—'} />
         {d.worksite ? <Row k="Chantier" v={`${d.worksite.ref} — ${d.worksite.title}`} /> : null}
         {d.issuedOn ? <Row k="Émis le" v={dateBE(d.issuedOn)} /> : null}
@@ -81,6 +79,7 @@ export default function DocumentDetail() {
                   <Text style={{ fontWeight: '600', color: T.ink, flex: 1 }}>{l.label}</Text>
                   <Text style={{ fontWeight: '600', color: T.ink }}>{eur(l.qty * l.unitPriceHt * (1 - l.discountPct / 100))}</Text>
                 </View>
+                {l.description ? <Muted>{l.description}</Muted> : null}
                 <Muted>{l.qty} {l.unit ?? ''} × {eur(l.unitPriceHt)}{l.discountPct ? ` − ${l.discountPct}%` : ''} · TVA {Math.round(l.vatRate * 100)}%</Muted>
               </>
             )}

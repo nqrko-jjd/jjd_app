@@ -62,6 +62,9 @@ export default function PortalDashboard() {
   // pour un particulier on garde juste le prénom ; pour un syndic / une ACP on garde le nom complet
   const greetName = me.isSyndic || me.access === 'limited' ? name : name.split(/[\s,]+/)[0];
   const alert = d?.urgentItems[0];
+  const portfolio = me.scope === 'syndic' || me.scope === 'promoter';
+  const resident = me.access === 'limited';
+  const portfolioLabel = me.scope === 'promoter' ? 'Vos projets' : 'Vos immeubles';
 
   return (
     <PortalShell>
@@ -69,20 +72,20 @@ export default function PortalDashboard() {
         <>
           {/* Hero */}
           <div className="p-hero">
-            <div className="eyebrow">{me.isSyndic ? 'Espace syndic / promoteur' : 'Espace client'}</div>
+            <div className="eyebrow">{resident ? 'Espace résident' : me.scope === 'syndic' ? 'Espace syndic' : me.scope === 'promoter' ? 'Espace promoteur' : 'Votre projet'}</div>
             <h1>Bonjour, {greetName}</h1>
-            <div className="sub">{me.isSyndic ? 'Voici l’activité de votre portefeuille.' : 'Voici l’activité de vos chantiers.'}</div>
+            <div className="sub">{resident ? 'Votre intervention, vos rendez-vous et vos échanges avec JJD.' : portfolio ? 'Vos dossiers et les prochaines actions, en un regard.' : 'L’avancement de vos travaux et votre prochaine étape.'}</div>
             <Link href="/portail/demande" className="p-btn-primary p-btn-gold cta">+ Nouvelle demande</Link>
             <div className="p-hero-stats">
-              <Link href="/portail/immeubles" className="p-hero-stat link">
+              {portfolio && <Link href="/portail/immeubles" className="p-hero-stat link">
                 <div className="v">{String(d.kpis.buildings).padStart(2, '0')}</div>
-                <div className="l">{me.isSyndic ? 'Immeubles' : 'Dossiers'} <span className="chev">→</span></div>
-              </Link>
+                <div className="l">{me.scope === 'promoter' ? 'Projets' : 'Immeubles'} <span className="chev">→</span></div>
+              </Link>}
               <Link href="/portail/interventions" className="p-hero-stat link">
                 <div className="v">{String(d.kpis.interventionsActive).padStart(2, '0')}</div>
                 <div className="l">Interventions en cours <span className="chev">→</span></div>
               </Link>
-              {d.kpis.quotesToValidate != null && (
+              {!resident && d.kpis.quotesToValidate != null && (
                 <Link href="/portail/devis" className="p-hero-stat link">
                   <div className="v">{String(d.kpis.quotesToValidate).padStart(2, '0')}</div>
                   <div className="l">Devis à valider <span className="chev">→</span></div>
@@ -92,10 +95,10 @@ export default function PortalDashboard() {
           </div>
 
           {/* Portefeuille (syndic) — photos des immeubles en avant sur l'accueil, comme la maquette */}
-          {d.portfolio.length > 0 && (
+          {portfolio && d.portfolio.length > 0 && (
             <>
               <div className="row" style={{ justifyContent: 'space-between', alignItems: 'baseline', margin: '1.6rem 0 0.9rem' }}>
-                <h2 style={{ margin: 0 }}>Votre portefeuille</h2>
+                <h2 style={{ margin: 0 }}>{portfolioLabel}</h2>
                 <Link href="/portail/immeubles" className="p-more" style={{ margin: 0 }}>Tout voir ›</Link>
               </div>
               <div className="p-bgrid">
@@ -110,7 +113,7 @@ export default function PortalDashboard() {
                     <div className="body">
                       {b.city && <div className="eyebrow">{b.city}</div>}
                       <div className="name">{b.name}</div>
-                      <div className="meta">{b.lotCount ? `Copropriété · ${b.lotCount} lots` : '—'}</div>
+                      {b.lotCount != null && <div className="meta">{me.scope === 'promoter' ? 'Projet' : 'Copropriété'} · {b.lotCount} lots</div>}
                       <div className="foot">
                         <span className="meta">{b.open > 0 ? `${b.open} intervention${b.open > 1 ? 's' : ''} ouverte${b.open > 1 ? 's' : ''}` : 'Dossiers à jour'}</span>
                       </div>
@@ -178,7 +181,7 @@ export default function PortalDashboard() {
             </Link>
           )}
 
-          <div className="p-cols">
+          <div className={`p-cols${!portfolio ? ' p-cols-single' : ''}`}>
             {/* Interventions récentes */}
             <div className="p-panel">
               <div className="p-panel-h">
@@ -207,7 +210,7 @@ export default function PortalDashboard() {
             </div>
 
             {/* Planning de la semaine */}
-            <div className="p-panel">
+            {portfolio && <div className="p-panel">
               <div className="p-panel-h"><h2>Planning de la semaine</h2></div>
               <div className="p-week">
                 {d.weekPlanning.days.map((day) => (
@@ -225,11 +228,11 @@ export default function PortalDashboard() {
                 ))}
               </div>
               <Link href="/portail/planning" className="p-more">Voir tout le planning ›</Link>
-            </div>
+            </div>}
           </div>
 
           {/* Devis à valider */}
-          {d.quotesToValidate.length > 0 && (
+          {!resident && d.quotesToValidate.length > 0 && (
             <div className="p-panel">
               <div className="p-panel-h"><h2>Devis à valider</h2></div>
               {d.quotesToValidate.map((q) => (
@@ -247,7 +250,7 @@ export default function PortalDashboard() {
           )}
 
           {/* Documents récents */}
-          {d.recentDocuments.length > 0 && (
+          {!resident && d.recentDocuments.length > 0 && (
             <div>
               <h2 style={{ marginBottom: '0.9rem' }}>Documents et activité récente</h2>
               <div className="p-docs">

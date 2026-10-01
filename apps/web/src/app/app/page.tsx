@@ -47,10 +47,12 @@ function WorkerToday() {
   const now = new Date();
   const from = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
   const to = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString();
-  const { data: plan, reload: reloadPlan } = useApi<{ items: TodayEv[] }>(
+  const { data: plan, loading: planLoading, error: planError, reload: reloadPlan } = useApi<{ items: TodayEv[] }>(
     person ? `/api/planning?from=${from}&to=${to}&personId=${person.id}` : null,
   );
-  const { data: timer, reload: reloadTimer } = useApi<TimerResp>('/api/timesheet/timer');
+  const { data: timer, loading: timerLoading, error: timerError, reload: reloadTimer } = useApi<TimerResp>('/api/timesheet/timer');
+  const [timerBusy, setTimerBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [, force] = useState(0);
   useEffect(() => { const t = setInterval(() => force((x) => x + 1), 1000); return () => clearInterval(t); }, []);
 
@@ -67,12 +69,15 @@ function WorkerToday() {
 
   async function toggleTask(t: WorkerTask) {
     setTaskBusy(t.id);
-    await api(`/api/tasks/${t.id}`, { method: 'PATCH', body: { status: t.status === 'done' ? 'todo' : 'done' } });
-    await reloadTasks();
-    setTaskBusy(null);
+    try { await api(`/api/tasks/${t.id}`, { method: 'PATCH', body: { status: t.status === 'done' ? 'todo' : 'done' } }); await reloadTasks(); }
+    catch(e) { setActionError(e instanceof Error ? e.message : 'La tâche n’a pas pu être enregistrée.'); }
+    finally { setTaskBusy(null); }
   }
 
   async function start(worksiteId: string) {
+    if (timerBusy) return;
+    setTimerBusy(true); setActionError(null);
+    try {
     const pos = await currentPosition();
     const r = await api<{ geoFlag?: boolean; geoDistance?: number; geoInit?: boolean }>('/api/timesheet/timer/start', {
       method: 'POST',
@@ -86,11 +91,15 @@ function WorkerToday() {
     } else if (r.geoFlag) {
       alert(`Pointage hors zone : tu es à environ ${r.geoDistance} m du chantier. Le pointage est enregistré mais sera vérifié par le bureau.`);
     }
+    } catch(e) { setActionError(e instanceof Error ? e.message : 'Le pointage n’a pas pu démarrer.'); }
+    finally { setTimerBusy(false); }
   }
   async function stop() {
-    await api('/api/timesheet/timer/stop', { method: 'POST', body: { endedAt: new Date().toISOString() } });
-    reloadTimer();
-    reloadPlan();
+    if (timerBusy) return;
+    setTimerBusy(true); setActionError(null);
+    try { await api('/api/timesheet/timer/stop', { method: 'POST', body: { endedAt: new Date().toISOString() } }); reloadTimer(); reloadPlan(); }
+    catch(e) { setActionError(e instanceof Error ? e.message : 'Le pointage n’a pas pu être arrêté.'); }
+    finally { setTimerBusy(false); }
   }
 
   const running = timer?.running ?? null;
@@ -98,46 +107,50 @@ function WorkerToday() {
 
   return (
     <>
-      <div className="eyebrow" style={{ marginBottom: '0.3rem' }}>Mon espace ouvrier</div>
-      <PageHead title={`Bonjour ${person?.displayName || person?.firstName || ''},`} sub="Bonne journée sur le terrain." />
+      <PageHead eyebrow="Mon espace ouvrier" title={`Bonjour ${person?.displayName || person?.firstName || ''},`} sub={now.toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' })} />
 
-      {!linked && (
+      {actionError && <p className="banner crit" role="alert">{actionError}</p>}
+      {timerError && <ErrorState message={timerError} onRetry={reloadTimer}/>}
+      {planError && <ErrorState message={planError} onRetry={reloadPlan}/>}
+      {timerLoading && !timer && <SkeletonRows rows={1} height={180}/>}
+      {!timerLoading && !timerError && !linked && (
         <div className="card card-pad" style={{ borderColor: 'var(--warn)', borderWidth: 2 }}>
           <div className="muted">Ton compte n’est pas encore lié à ta fiche ouvrier. Demande au bureau de le faire (Équipe → « Lier à un compte »). En attendant, tu ne peux pas pointer.</div>
         </div>
       )}
 
-      {linked && (running ? (
-        <div className="detail-hero" style={{ marginBottom: '1.2rem' }}>
-          <div className="eyebrow">Compteur en cours</div>
+      {timer && linked && !timerError && (running ? (
+        <div className="detail-hero worker-clock" style={{ marginBottom: '1.2rem' }}>
+          <div className="eyebrow"><span className="worker-live-dot" /> Sur chantier</div>
           <div style={{ fontWeight: 700, fontSize: '1.1rem', margin: '0.2rem 0', color: '#fff' }}>{running.worksite?.ref} — {running.worksite?.title}</div>
           <div className="mono" style={{ fontSize: '2.6rem', fontWeight: 800, fontVariantNumeric: 'tabular-nums', margin: '0.4rem 0', color: '#fff' }}>{elapsed(running.startedAt)}</div>
           <div className="row" style={{ gap: '0.6rem' }}>
-            <button className="btn" style={{ background: 'var(--crit)', color: '#fff', borderColor: 'var(--crit)' }} onClick={stop}>Arrêter</button>
-            <Link href="/app/mes-heures" className="btn" style={{ background: 'rgba(255,255,255,0.1)', borderColor: 'rgba(255,255,255,0.25)', color: '#fff' }}>Mon récap →</Link>
+            <button className="btn" style={{ background: 'var(--crit)', color: '#fff', borderColor: 'var(--crit)' }} disabled={timerBusy} onClick={stop}>{timerBusy ? 'Enregistrement…' : 'Je quitte le chantier'}</button>
+            <Link href="/app/mes-heures" className="btn" style={{ background: 'rgba(255,255,255,0.1)', borderColor: 'rgba(255,255,255,0.25)', color: '#fff' }}>Mes heures →</Link>
           </div>
         </div>
       ) : (
-        <div className="detail-hero" style={{ marginBottom: '1.2rem' }}>
-          <div className="eyebrow">Prêt pour la journée</div>
+        <div className="detail-hero worker-clock" style={{ marginBottom: '1.2rem' }}>
+          <div className="eyebrow">{singleWs ? 'Prêt pour le chantier' : 'Mon pointage'}</div>
           <div className="mono" style={{ fontSize: '2.6rem', fontWeight: 800, fontVariantNumeric: 'tabular-nums', margin: '0.4rem 0', color: '#fff' }}>00:00:00</div>
           {linked && singleWs ? (
             <>
               <div className="sub">{singleWs.ref} · {singleWs.title}</div>
-              <button className="btn gold" style={{ marginTop: '0.8rem' }} onClick={() => start(singleWs.id)}>
-                Commencer le pointage
+              <button className="btn gold" style={{ marginTop: '0.8rem' }} disabled={timerBusy} onClick={() => start(singleWs.id)}>
+                Je suis arrivé sur chantier
               </button>
             </>
           ) : (
-            <div className="sub">Aucun compteur actif. Choisis un chantier ci-dessous pour démarrer.</div>
+            <div className="sub">{plan?.items.length ? 'Pointe à ton arrivée sur le chantier, puis à ton départ.' : 'Aucun chantier prévu aujourd’hui. Retrouve tes affectations dans Mes chantiers.'}</div>
           )}
         </div>
       ))}
 
       <div className="section-title">Mes chantiers du jour</div>
-      {(plan?.items.length ?? 0) === 0 && <div className="card card-pad muted">Rien de planifié aujourd’hui.</div>}
+      {planLoading && !plan && <SkeletonRows rows={2} height={100}/>}
+      {!planLoading && !planError && plan?.items.length === 0 && <div className="card card-pad worker-day-empty"><span className="worker-empty-icon"><HardHat size={24} /></span><strong>Pas de chantier prévu aujourd’hui</strong><p className="muted">Si ton affectation a changé, vérifie tes chantiers ou contacte le bureau.</p><Link className="btn" href="/app/mes-chantiers">Voir mes chantiers <ChevronRight size={16}/></Link></div>}
       {plan?.items.map((e) => (
-        <div key={e.id} className="card" style={{ marginBottom: '0.7rem', overflow: 'hidden' }}>
+        <div key={e.id} className="card worker-mission" style={{ marginBottom: '0.7rem', overflow: 'hidden' }}>
           {e.worksite.acp?.photoThumbUrl && (
             <div style={{ height: 160 }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -145,14 +158,14 @@ function WorkerToday() {
             </div>
           )}
           <div className="card-pad">
-            <div style={{ fontWeight: 700 }}>{e.worksite.ref} — {e.worksite.title}</div>
+            <div className="eyebrow">{e.worksite.ref}</div><h2 className="worker-mission-title">{e.worksite.title}</h2>
             {e.worksite.city && <div className="muted">{e.worksite.city}</div>}
             <div className="muted">
               {new Date(e.startAt).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' })} – {new Date(e.endAt).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' })}
             </div>
             <div className="row" style={{ gap: '0.5rem', marginTop: '0.6rem' }}>
               {linked && !running && (
-                <button className="btn primary" style={{ flex: 1 }} onClick={() => start(e.worksite.id)}>Démarrer le compteur</button>
+                <button className="btn primary" style={{ flex: 1 }} disabled={timerBusy} onClick={() => start(e.worksite.id)}>Je suis arrivé</button>
               )}
               <Link href={`/app/fiche/${e.worksite.id}`} className="btn" style={{ flex: 1, textAlign: 'center' }}>Fiche du jour ›</Link>
             </div>

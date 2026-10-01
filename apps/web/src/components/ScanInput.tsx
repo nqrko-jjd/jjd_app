@@ -75,6 +75,13 @@ export function ScanInput({
 
   // Garde le focus sur le champ : la gâchette doit toujours tomber ici. Sur un terminal tactile, un clic sur un bouton
   // (« Réceptionner »…) donne le focus au bouton : on le rend aussitôt au champ de scan.
+  //
+  // Le `focus()` qui suit un clic doit rester SYNCHRONE dans le gestionnaire du clic : un
+  // `setTimeout` (même à 0/quelques ms) sort du geste utilisateur aux yeux d'Android, et certains
+  // terminaux (Zebra/DataWedge) refusent alors d'établir la connexion clavier nécessaire à
+  // l'injection de la gâchette — jusqu'au prochain clic « vraiment » direct (bouton clavier,
+  // dont le focus() est déjà appelé en synchrone). Constaté en prod le 2026-10-01 : sans ce
+  // correctif, la gâchette restait muette tant qu'on n'avait pas d'abord touché le bouton clavier.
   useEffect(() => {
     if (camera) return;
     const refocus = () => {
@@ -84,9 +91,8 @@ export function ScanInput({
     };
     refocus();
     const id = setInterval(refocus, 800);
-    const onClick = () => setTimeout(refocus, 40);
-    window.addEventListener('click', onClick);
-    return () => { clearInterval(id); window.removeEventListener('click', onClick); };
+    window.addEventListener('click', refocus);
+    return () => { clearInterval(id); window.removeEventListener('click', refocus); };
   }, [camera]);
 
   // Filet de sécurité : une touche tapée alors que le focus est ailleurs (bouton, liste…) — c'est la gâchette de la Zebra

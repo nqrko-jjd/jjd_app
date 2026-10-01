@@ -416,6 +416,9 @@ export const stockItemInput = z.object({
   // de consultation — vide/absent = unité de base, comme avant. Doit être l'unité de base ou
   // l'un des `units` ci-dessus.
   displayUnitName: z.string().trim().nullish(),
+  // réactive un article désactivé (DELETE le désactive au lieu de le supprimer s'il a un
+  // historique) — jamais envoyé à la création, seulement pour le remettre actif depuis la liste.
+  active: z.boolean().optional(),
   suppliers: z.array(stockSupplierInput).optional(), // fournisseurs à lier dès la création (plusieurs, un prix par conditionnement)
 });
 

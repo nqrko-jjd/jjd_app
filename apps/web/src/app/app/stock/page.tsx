@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
+import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { PageHead, Money, Kpi } from '@/lib/ui';
 import { Warehouse, AlertTriangle, Layers, ScanLine, Package } from 'lucide-react';
@@ -31,10 +32,21 @@ export default function StockPage() {
   const canManage = user?.role === 'admin' || user?.role === 'office' || user?.role === 'storekeeper'; // un ouvrier consulte le stock, il ne le gère pas
   const [q, setQ] = useState('');
   const [stockFilter, setStockFilter] = useState<'all' | 'low' | 'ok'>('all');
+  // un article "supprimé" alors qu'il a un historique (mouvements, préparation, commande) est en
+  // fait désactivé, pas effacé — invisible par défaut (comme l'API), ce bouton le fait réapparaître.
+  const [showInactive, setShowInactive] = useState(false);
   const [creating, setCreating] = useState(false);
   const [mode, setMode] = useViewMode('stock');
-  const ctxItems = useApi<{ items: StockItem[] }>(`/api/stock/items?${q ? `q=${encodeURIComponent(q)}` : ''}`);
+  const qs = new URLSearchParams();
+  if (q) qs.set('q', q);
+  if (showInactive) qs.set('active', '0');
+  const ctxItems = useApi<{ items: StockItem[] }>(`/api/stock/items?${qs}`);
   const { data, loading, reload } = ctxItems;
+
+  async function reactivate(id: string) {
+    await api(`/api/stock/items/${id}`, { method: 'PATCH', body: { active: true } });
+    reload();
+  }
 
   const allItems = data?.items ?? [];
   const filteredItems = stockFilter === 'all' ? allItems : allItems.filter((i) => (stockFilter === 'low' ? i.low : !i.low));
@@ -100,6 +112,11 @@ export default function StockPage() {
 
       <div className="row" style={{ marginBottom: '1rem' }}>
         <input className="input" style={{ maxWidth: 280 }} placeholder="Nom, réf., marque, réf. fabricant…" value={q} onChange={(e) => setQ(e.target.value)} />
+        {canManage && (
+          <button className={`btn${showInactive ? ' primary' : ''}`} onClick={() => setShowInactive((v) => !v)} title="Un article avec un historique est désactivé plutôt que supprimé — ce bouton le fait réapparaître">
+            {showInactive ? 'Masquer les désactivés' : 'Afficher les désactivés'}
+          </button>
+        )}
         <ViewToggle mode={mode} onChange={setMode} />
       </div>
 
@@ -132,6 +149,7 @@ export default function StockPage() {
                 <div className="gallery-title">
                   {it.name}
                   {it.low && <span className="badge warn" style={{ marginLeft: 6, fontSize: '0.68rem' }}>bas</span>}
+                  {!it.active && <span className="badge plain" style={{ marginLeft: 6, fontSize: '0.68rem' }}>Désactivé</span>}
                 </div>
                 <div className="gallery-sub">
                   {[it.ref, [it.brand, it.model].filter(Boolean).join(' ') || it.category].filter(Boolean).join(' · ') || '—'} · {fmtQty(displayQty(it).qty)} {displayQty(it).unit}
@@ -139,6 +157,9 @@ export default function StockPage() {
               </div>
               <div className="row" style={{ padding: '0 0.85rem 0.7rem', justifyContent: 'space-between' }}>
                 <Money value={it.value} />
+                {!it.active && canManage && (
+                  <button className="btn ghost" style={{ fontSize: '0.76rem' }} onClick={(e) => { e.stopPropagation(); reactivate(it.id); }}>Réactiver</button>
+                )}
               </div>
             </div>
           ))}
@@ -154,6 +175,7 @@ export default function StockPage() {
                 <SortTh k="category" sort={sort} filter={colFilter}>Catégorie</SortTh>
                 <SortTh k="qty" sort={sort} align="right" filter={colFilter}>Quantité</SortTh>
                 <SortTh k="value" sort={sort} align="right" filter={colFilter}>Valeur</SortTh>
+                {showInactive && <th></th>}
               </tr>
             </thead>
             <tbody>
@@ -169,12 +191,18 @@ export default function StockPage() {
                       <span>
                     {it.name}{(it.brand || it.model) && <span className="muted"> · {[it.brand, it.model].filter(Boolean).join(' ')}</span>}
                     {it.low && <span className="badge warn" style={{ marginLeft: 6, fontSize: '0.7rem' }}>sous le seuil ({it.minQty})</span>}
+                    {!it.active && <span className="badge plain" style={{ marginLeft: 6, fontSize: '0.7rem' }}>Désactivé</span>}
                       </span>
                     </span>
                   </td>
                   <td>{it.category ?? '—'}</td>
                   <td className="tnum">{fmtQty(displayQty(it).qty)} {displayQty(it).unit}</td>
                   <td style={{ textAlign: 'right' }}><Money value={it.value} /></td>
+                  {showInactive && (
+                    <td onClick={(e) => e.stopPropagation()}>
+                      {!it.active && canManage && <button className="btn ghost" style={{ fontSize: '0.76rem' }} onClick={() => reactivate(it.id)}>Réactiver</button>}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

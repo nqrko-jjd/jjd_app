@@ -213,6 +213,7 @@ stockRouter.patch(
           category: d.category === undefined ? undefined : (d.category ?? null),
           minQty: d.minQty === undefined ? undefined : (d.minQty ?? null),
           displayUnitName: d.displayUnitName === undefined ? undefined : (d.displayUnitName ?? null),
+          active: d.active,
         },
         include: itemInclude,
       });

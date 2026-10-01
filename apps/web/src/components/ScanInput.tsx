@@ -26,8 +26,10 @@ export const ScanInput = forwardRef<ScanInputHandle, {
   hint?: string;
   /** La caméra reste ouverte après une lecture (préparation de commande : on enchaîne les articles). */
   cameraMulti?: boolean;
+  disabled?: boolean;
+  showReceivedCode?: boolean;
 }>(function ScanInput({
-  onScan, placeholder = 'Scannez un article…', hint, cameraMulti = true,
+  onScan, placeholder = 'Scannez un article…', hint, cameraMulti = true, disabled = false, showReceivedCode = true,
 }, forwardedRef) {
   const [value, setValue] = useState('');
   const [typing, setTyping] = useState(false); // clavier à l'écran autorisé
@@ -36,14 +38,19 @@ export const ScanInput = forwardRef<ScanInputHandle, {
   const stamps = useRef<number[]>([]);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
+  const disabledRef = useRef(disabled);
+  disabledRef.current = disabled;
+  useEffect(() => { if (disabled) { setCamera(false); clearTimeout(timer.current); } }, [disabled]);
+
   const lastCode = useRef({ code: '', at: 0 });
   const [received, setReceived] = useState<string | null>(null);
 
   useImperativeHandle(forwardedRef, () => ({
-    focus: () => ref.current?.focus({ preventScroll: true }),
+    focus: () => { if (!disabledRef.current) ref.current?.focus({ preventScroll: true }); },
   }), []);
 
   function submit(raw: string) {
+    if (disabledRef.current) return;
     const code = raw.replace(/[\r\n\t]/g, '').trim();
     stamps.current = [];
     clearTimeout(timer.current);
@@ -97,7 +104,7 @@ export const ScanInput = forwardRef<ScanInputHandle, {
   // dont le focus() est déjà appelé en synchrone). Constaté en prod le 2026-10-01 : sans ce
   // correctif, la gâchette restait muette tant qu'on n'avait pas d'abord touché le bouton clavier.
   useEffect(() => {
-    if (camera) return;
+    if (camera || disabled) return;
     const refocus = () => {
       const a = document.activeElement;
       if (a === ref.current) return;
@@ -107,12 +114,12 @@ export const ScanInput = forwardRef<ScanInputHandle, {
     const id = setInterval(refocus, 800);
     window.addEventListener('click', refocus);
     return () => { clearInterval(id); window.removeEventListener('click', refocus); };
-  }, [camera]);
+  }, [camera, disabled]);
 
   // Filet de sécurité : une touche tapée alors que le focus est ailleurs (bouton, liste…) — c'est la gâchette de la Zebra
   // en mode clavier — est redirigée vers le champ de scan, qui applique sa logique habituelle (Entrée ou silence).
   useEffect(() => {
-    if (camera) return;
+    if (camera || disabled) return;
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
       if (t === ref.current || isEditable(t)) return;
@@ -130,13 +137,13 @@ export const ScanInput = forwardRef<ScanInputHandle, {
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [camera]);
+  }, [camera, disabled]);
 
   return (
     <>
-      {camera && (
+      {camera && !disabled && (
         <CameraScanner
-          onScan={(c) => { onScan(c); if (!cameraMulti) setCamera(false); }}
+          onScan={(c) => { if (disabledRef.current) return; onScan(c); if (!cameraMulti) setCamera(false); }}
           onClose={() => setCamera(false)}
         />
       )}
@@ -144,6 +151,7 @@ export const ScanInput = forwardRef<ScanInputHandle, {
         <ScanLine size={26} strokeWidth={2} className="scan-bar-ic" />
         <input
           ref={ref}
+          disabled={disabled}
           className="scan-bar-input"
           value={value}
           inputMode={typing ? 'text' : 'none'}
@@ -155,14 +163,14 @@ export const ScanInput = forwardRef<ScanInputHandle, {
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); submit(value); } }}
         />
-        <button type="button" className={`scan-bar-btn${typing ? ' on' : ''}`} onClick={() => { setTyping((t) => !t); ref.current?.focus(); }} title="Saisir un code à la main" aria-label="Saisir un code à la main">
+        <button type="button" disabled={disabled} className={`scan-bar-btn${typing ? ' on' : ''}`} onClick={() => { setTyping((t) => !t); ref.current?.focus(); }} title="Saisir un code à la main" aria-label="Saisir un code à la main">
           <Keyboard size={20} />
         </button>
-        <button type="button" className="scan-bar-btn cam" onClick={() => setCamera(true)} title="Scanner avec la caméra" aria-label="Scanner avec la caméra">
+        <button type="button" disabled={disabled} className="scan-bar-btn cam" onClick={() => setCamera(true)} title="Scanner avec la caméra" aria-label="Scanner avec la caméra">
           <Camera size={20} /> <span>Caméra</span>
         </button>
       </div>
-      {received && <div className="muted" style={{ fontSize: '0.72rem', margin: '0.2rem 0 0.4rem' }}>Dernier code reçu : <span className="mono">{received}</span></div>}
+      {showReceivedCode && received && <div className="muted" style={{ fontSize: '0.72rem', margin: '0.2rem 0 0.4rem' }}>Dernier code reçu : <span className="mono">{received}</span></div>}
       {hint && <div className="muted" style={{ fontSize: '0.8rem', margin: '0.35rem 0 0.9rem' }}>{hint}</div>}
     </>
   );

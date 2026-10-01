@@ -1,0 +1,31 @@
+
+.warehouse-workflow { max-width: 1180px; padding-bottom: 24px; }
+.warehouse-workflow .detail-hero { padding: 22px; border-radius: 20px; }
+.warehouse-workflow .detail-hero h1 { font-size: clamp(23px, 3vw, 32px); line-height: 1.25; }
+.warehouse-workflow .scan-bar { border-radius: 16px; }
+.warehouse-list-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin: 18px 0 12px; }
+.warehouse-line-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding-top: 12px; margin-top: 10px; border-top: 1px solid var(--line); font-size: 13px; }
+.warehouse-line-actions .btn { min-height: 42px; border-radius: 10px; font-size: 13px; }
+.warehouse-edit-lock { border: 0; padding: 0; margin: 0; min-width: 0; }
+.warehouse-edit-lock > .row { padding: 12px; border-radius: 12px; background: var(--surface-2); }
+.warehouse-edit-lock input { font-size: 16px; min-height: 44px; }
+.warehouse-zone-edit { margin: 10px 0 16px; font-size: 13px; }
+.warehouse-zone-edit summary { cursor: pointer; color: var(--primary-ink); font-weight: 650; }
+.warehouse-zone-edit input { margin-top: 10px; max-width: 300px; font-size: 16px; }
+.warehouse-ready-message { padding: 22px; border: 1px solid var(--line); border-radius: 18px; background: var(--ok-soft); color: var(--ok); font-weight: 700; }
+.warehouse-workflow .warehouse-actionbar { border: 1px solid var(--line); padding: 12px !important; border-radius: 18px; box-shadow: var(--shadow); z-index: 12; background: var(--surface) !important; }
+.warehouse-workflow .warehouse-actionbar .btn { border-radius: 12px; min-height: 50px; }
+@media (max-width: 600px) {
+  .warehouse-workflow .detail-hero { padding: 18px; }
+  .warehouse-workflow .detail-hero > .row { flex-wrap: wrap !important; }
+  .warehouse-workflow .detail-hero h1 { font-size: 23px; }
+  .warehouse-workflow .warehouse-line { padding: 14px; border-radius: 16px; }
+  .warehouse-workflow .warehouse-line > .row { gap: 10px !important; flex-wrap: wrap !important; }
+  .warehouse-workflow .warehouse-line img { width: 48px !important; height: 48px !important; }
+  .warehouse-workflow .warehouse-line > .row > div[style*="text-align"] { flex-basis: 100%; text-align: left !important; padding-left: 0; }
+  .warehouse-workflow .warehouse-line > .row > div[style*="text-align"] > div { font-size: 22px !important; }
+  .warehouse-workflow .scan-bar-input { font-size: 16px; }
+  .warehouse-workflow .scan-bar-input::placeholder { font-size: 14px; }
+  .warehouse-workflow .scan-bar-btn { padding: 10px; }
+  .warehouse-workflow .warehouse-actionbar .btn { font-size: 14px !important; }
+}

@@ -1,0 +1,73 @@
+
+/* Scan workspace: keep the operation context once, then scan and adjust the lot. */
+.scan-workspace { max-width: 1100px; padding-bottom: 24px; }
+.scan-workspace .stock-move-actions { gap: 8px; margin-bottom: 16px; }
+.scan-workspace .stock-move-actions button { display: flex; align-items: center; gap: 10px; padding: 14px 16px; min-height: 52px; border-radius: 14px; }
+.scan-workspace .stock-move-actions small { display: none; }
+.scan-workspace .stock-move-actions .ic { flex-shrink: 0; }
+.scan-workspace .stock-move-actions button:disabled { opacity: .55; cursor: default; }
+.scan-workspace .stock-move-actions button.on:disabled { opacity: 1; }
+.scan-edit-lock { border: 0; padding: 0; margin: 0; min-width: 0; }
+.scan-context { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px; margin-bottom: 14px; }
+.scan-context > .field { flex: 1 1 300px; max-width: none !important; margin-bottom: 0 !important; }
+.scan-context .field label { font-size: 12px; margin-bottom: 6px; color: var(--ink-3); }
+.scan-context .rack-bar { flex: 1 1 360px; margin: 0; min-height: 52px; border-radius: 14px; padding: 10px 14px; }
+.scan-context .rack-bar-txt { min-width: 100px; font-size: 13px; }
+.scan-context .rack-bar-txt span { display: none; }
+.scan-context .rack-bar-txt > span { display: block; }
+.scan-context .rack-bar-input { width: 160px; min-height: 38px; font-size: 16px; }
+.scan-station { padding: 18px; border: 1px solid var(--line); border-radius: 20px; background: var(--surface); box-shadow: var(--shadow); }
+.scan-station-title, .scan-station-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.scan-station-title { margin-bottom: 12px; }
+.scan-station-title strong { font-size: 17px; color: var(--primary-ink); }
+.scan-station .scan-bar { box-shadow: none; border-radius: 14px; margin: 0; }
+.scan-station-foot { margin-top: 12px; font-size: 12px; align-items: flex-start; }
+.scan-station-foot details { flex-shrink: 0; }
+.scan-station-foot summary { cursor: pointer; color: var(--primary-ink); font-weight: 700; }
+.scan-station-foot .scan-ask { margin: 12px 0 0; font-size: 13px; }
+.scan-station .scan-last { margin: 12px 0 0; }
+.scan-linked-flow { margin: 12px 2px 20px; font-size: 13px; }
+.scan-linked-flow a { color: var(--primary-ink); font-weight: 650; text-decoration: underline; text-underline-offset: 3px; }
+.scan-workspace .stock-scan-layout { grid-template-columns: minmax(0, 1fr) !important; }
+.scan-workspace .stock-basket { position: static; overflow: visible; border-radius: 20px; }
+.scan-workspace .stock-basket-head { padding: 18px 20px; }
+.scan-workspace .stock-basket-lines { max-height: none; overflow: visible; }
+.scan-workspace .stock-basket-line { padding: 16px 20px; gap: 12px; }
+.scan-workspace .stock-basket-line .info { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 16px; align-items: center; }
+.scan-workspace .stock-basket-line .name { font-size: 15px; grid-column: 1; }
+.scan-workspace .stock-basket-line .sub { grid-column: 1; margin: 0; }
+.scan-workspace .stock-qty-stepper { grid-column: 2; grid-row: 1 / span 3; flex-wrap: nowrap; gap: 6px; }
+.scan-workspace .stock-qty-stepper button { min-width: 44px; min-height: 44px; border-radius: 10px; }
+.scan-workspace .stock-qty-stepper input { width: 64px; min-height: 44px; font-size: 16px; }
+.scan-workspace .stock-qty-stepper .remove { font-size: 12px; padding-inline: 10px; background: transparent; border-color: var(--line); color: var(--ink-3); }
+.scan-line-location { grid-column: 1; font-size: 12px; color: var(--ink-3); }
+.scan-line-location summary { display: flex; gap: 4px; align-items: center; cursor: pointer; width: fit-content; }
+.scan-line-location input { font-size: 16px !important; min-height: 40px; width: 180px !important; }
+.scan-workspace .stock-basket-confirm { position: sticky; bottom: 12px; z-index: 12; background: var(--surface); padding: 16px 20px; border-top: 1px solid var(--line); border-radius: 0 0 20px 20px; }
+.scan-workspace .stock-basket-confirm .badge { white-space: normal; display: block; line-height: 1.5; }
+.scan-workspace .stock-basket-confirm .btn { width: 100%; min-height: 52px; border-radius: 14px; }
+.scan-workspace .stock-manual { max-width: none; }
+.scan-workspace .stock-manual > summary { padding: 14px 2px; }
+@media (max-width: 900px) {
+  .scan-workspace .stock-basket-confirm { bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+}
+@media (max-width: 600px) {
+  .scan-workspace .stock-move-actions { gap: 5px; }
+  .scan-workspace .stock-move-actions button { flex-direction: column; justify-content: center; padding: 10px 5px; gap: 5px; }
+  .scan-workspace .stock-move-actions strong { font-size: 12px; text-align: center; }
+  .scan-station { padding: 12px; border-radius: 16px; }
+  .scan-station-title strong { font-size: 15px; }
+  .scan-station .scan-bar-input { font-size: 16px; }
+  .scan-station .scan-bar-input::placeholder { font-size: 13px; }
+  .scan-station .scan-bar-btn { padding: 10px; min-height: 44px; }
+  .scan-station .scan-bar { gap: 6px; padding: 6px; }
+  .scan-station .scan-bar-ic { width: 20px; }
+  .scan-station-foot { font-size: 11px; }
+  .scan-workspace .stock-basket-head { padding: 14px; }
+  .scan-workspace .stock-basket-line { padding: 14px; gap: 10px; }
+  .scan-workspace .stock-basket-line .info { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .scan-workspace .stock-qty-stepper { grid-column: 1; grid-row: auto; margin-top: 8px; }
+  .scan-workspace .stock-basket-confirm { padding: 12px; }
+  .scan-context { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .scan-context .rack-bar { gap: 8px; }
+}

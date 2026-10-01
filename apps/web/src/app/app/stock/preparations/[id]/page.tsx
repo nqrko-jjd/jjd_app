@@ -1,6 +1,7 @@
 'use client';
-import { use, useState } from 'react';
+import { use, useRef, useState } from 'react';
 import Link from 'next/link';
+import '../../warehouse-workflow.css';
 import { ClipboardList } from 'lucide-react';
 import { useApi } from '@/lib/use-api';
 import { api, ApiError } from '@/lib/api';
@@ -30,13 +31,19 @@ export default function PreparationDetail({ params }: { params: Promise<{ id: st
   const { user } = useAuth();
   const canManage = user?.role === 'admin' || user?.role === 'office' || user?.role === 'storekeeper';
   const canPick = canManage || user?.role === 'foreman';
-  const { data, loading, reload } = useApi<{ order: Order }>(`/api/stock-orders/${id}`);
+  const { data, loading, error, reload } = useApi<{ order: Order }>(`/api/stock-orders/${id}`);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [manual, setManual] = useState<Record<string, string>>({});
+  const [editing, setEditing] = useState<string | null>(null);
+  const [showReady, setShowReady] = useState(false);
+  const [scanning, setScanning] = useState(0);
+  const queue = useRef<Promise<void>>(Promise.resolve());
+  const operation = useRef(false);
   const order = data?.order ?? null;
 
   if (loading && !data) return <SkeletonRows />;
+  if (error && !order) return <div role="alert" className="card card-pad"><p>{error}</p><button className="btn" onClick={reload}>Réessayer</button></div>;
   if (!order) {
     return <EmptyState icon={ClipboardList} title="Préparation introuvable" text="Elle a peut-être été supprimée." action={<Link href="/app/stock/preparations" className="btn primary">Retour aux préparations</Link>} />;
   }
@@ -46,6 +53,12 @@ export default function PreparationDetail({ params }: { params: Promise<{ id: st
   const done = order.lines.filter((l) => l.pickedQty + EPS >= l.qty).length;
   const pct = total ? Math.round((done / total) * 100) : 0;
   const short = order.lines.filter((l) => l.pickedQty + EPS < l.qty);
+
+  function enqueueScan(code: string) {
+    if (operation.current) return;
+    setScanning((n) => n + 1);
+    queue.current = queue.current.then(() => scan(code)).finally(() => setScanning((n) => n - 1));
+  }
 
   async function scan(code: string) {
     setMsg(null);
@@ -60,22 +73,29 @@ export default function PreparationDetail({ params }: { params: Promise<{ id: st
     }
   }
   async function setPicked(l: Line, value: number) {
+    if (operation.current || scanning > 0) return;
+    if (!Number.isFinite(value) || value < 0 || value > l.qty + EPS) { setMsg({ ok: false, text: `Quantité attendue : entre 0 et ${fmt(l.qty)}.` }); return; }
+    operation.current = true;
+    setBusy(true);
     setMsg(null);
     try {
       await api(`/api/stock-orders/${id}/lines/${l.id}/picked`, { method: 'POST', body: { pickedQty: value } });
       setManual((m) => { const n = { ...m }; delete n[l.id]; return n; });
+      setEditing(null);
       reload();
     } catch (e) {
       setMsg({ ok: false, text: (e as Error).message });
-    }
+    } finally { operation.current = false; setBusy(false); }
   }
   async function complete() {
+    if (operation.current || scanning > 0 || loading) return;
     let allowShort = false;
     if (short.length) {
       const list = short.map((l) => `• ${fmt(l.qty - l.pickedQty)} ${l.unitName ?? l.stockItem.unit} de ${l.stockItem.name}`).join('\n');
       if (!confirm(`Il manque :\n${list}\n\nValider quand même (livraison partielle) ?`)) return;
       allowShort = true;
     } else if (!confirm('Valider la préparation ? Les sorties de stock vers le chantier seront enregistrées.')) return;
+    operation.current = true;
     setBusy(true);
     try {
       await api(`/api/stock-orders/${id}/complete`, { method: 'POST', body: { allowShort } });
@@ -83,20 +103,25 @@ export default function PreparationDetail({ params }: { params: Promise<{ id: st
     } catch (e) {
       setMsg({ ok: false, text: (e as Error).message });
     } finally {
+      operation.current = false;
       setBusy(false);
     }
   }
   async function cancel() {
-    if (!confirm('Annuler cette préparation ?')) return;
-    await api(`/api/stock-orders/${id}/cancel`, { method: 'POST', body: {} });
-    reload();
+    if (operation.current || scanning > 0 || !confirm('Annuler cette préparation ?')) return;
+    operation.current = true; setBusy(true);
+    try {
+      await api(`/api/stock-orders/${id}/cancel`, { method: 'POST', body: {} });
+      reload();
+    } catch (e) { setMsg({ ok: false, text: (e as Error).message }); }
+    finally { operation.current = false; setBusy(false); }
   }
 
   return (
-    <>
+    <div className="warehouse-workflow">
       <div className="row" style={{ justifyContent: 'space-between', marginBottom: '0.9rem', flexWrap: 'wrap' }}>
         <Link href="/app/stock/preparations" className="btn ghost">← Préparations</Link>
-        {canManage && open && <button className="btn" onClick={cancel}>Annuler la préparation</button>}
+        {canManage && open && <button className="btn" disabled={busy || scanning > 0} onClick={cancel}>Annuler la préparation</button>}
       </div>
 
       <div className="detail-hero">
@@ -120,13 +145,14 @@ export default function PreparationDetail({ params }: { params: Promise<{ id: st
 
       {open && canPick && (
         <>
-          <ScanInput onScan={scan} placeholder="Scannez chaque article préparé…" hint="Chaque scan ajoute 1 à la ligne correspondante. Article hors liste ou quantité dépassée : refusé." />
+          <ScanInput disabled={busy} showReceivedCode={false} onScan={enqueueScan} placeholder="Scannez chaque article préparé…" hint="Scannez à la suite. La préparation est mémorisée ; le stock sort uniquement à la validation." />
           {msg && <div className={msg.ok ? 'scan-last' : 'badge crit'} style={msg.ok ? undefined : { padding: '0.5rem 0.8rem', marginBottom: '0.9rem', display: 'block' }}>{msg.text}</div>}
         </>
       )}
 
+      <div className="warehouse-list-heading"><strong>{open ? `${short.length} article${short.length > 1 ? 's' : ''} restant${short.length > 1 ? 's' : ''}` : 'Articles préparés'}</strong>{open && done > 0 && <button type="button" className="btn ghost" onClick={() => setShowReady((v) => !v)}>{showReady ? 'Masquer' : 'Voir'} les {done} prêts</button>}{scanning > 0 && <span role="status">{scanning} lecture{scanning > 1 ? 's' : ''}…</span>}</div>
       <div style={{ display: 'grid', gap: '0.6rem', marginBottom: '1.4rem' }}>
-        {order.lines.map((l) => {
+        {order.lines.filter((l) => !open || showReady || l.pickedQty + EPS < l.qty).map((l) => {
           const complete = l.pickedQty + EPS >= l.qty;
           const unit = l.unitName ?? l.stockItem.unit;
           return (
@@ -149,8 +175,9 @@ export default function PreparationDetail({ params }: { params: Promise<{ id: st
                   {complete && <span className="badge ok">✓ complet</span>}
                 </div>
               </div>
-              {open && canPick && (
-                <div className="row" style={{ gap: '0.4rem', marginTop: '0.6rem', alignItems: 'center' }}>
+              {open && canPick && <div className="warehouse-line-actions">{!complete && <button type="button" className="btn" disabled={busy || scanning > 0 || loading} onClick={() => setPicked(l, l.qty)}>Tout préparer</button>}<button type="button" className="btn ghost" disabled={busy || scanning > 0} onClick={() => setEditing(editing === l.id ? null : l.id)}>{editing === l.id ? 'Fermer' : 'Ajuster'}</button>{!complete && <span className="muted">Reste {fmt(l.qty - l.pickedQty)} {unit}</span>}</div>}
+              {open && canPick && editing === l.id && (
+                <fieldset disabled={busy || scanning > 0} className="warehouse-edit-lock"><div className="row" style={{ gap: '0.4rem', marginTop: '0.6rem', alignItems: 'center' }}>
                   <span className="muted" style={{ fontSize: '0.8rem' }}>Quantité préparée :</span>
                   <input
                     className="input" style={{ width: 100 }} type="number" step="any" min="0" max={l.qty}
@@ -159,17 +186,19 @@ export default function PreparationDetail({ params }: { params: Promise<{ id: st
                     aria-label={`Quantité préparée de ${l.stockItem.name}`}
                   />
                   <button className="btn" onClick={() => setPicked(l, Number(String(manual[l.id] ?? l.pickedQty).replace(',', '.')))} disabled={manual[l.id] === undefined}>OK</button>
-                  {!complete && <button className="btn ghost" onClick={() => setPicked(l, l.qty)}>Tout prendre</button>}
-                </div>
+
+                </div></fieldset>
               )}
             </div>
           );
         })}
       </div>
 
+      {msg && (!open || !canPick) && <div role="status" className={msg.ok ? 'scan-last' : 'badge crit'}>{msg.text}</div>}
+      {open && done === total && total > 0 && !showReady && <div className="warehouse-ready-message">✓ Tous les articles sont préparés. Validez le départ chantier.</div>}
       {open && canPick && (
         <div className="row warehouse-actionbar" style={{ gap: '0.6rem', position: 'sticky', bottom: '0.8rem', background: 'var(--paper)', padding: '0.6rem 0' }}>
-          <button className="btn primary" style={{ flex: 1, padding: '0.9rem', fontSize: '1.05rem' }} disabled={busy || done === 0 && order.lines.every((l) => l.pickedQty === 0)} onClick={complete}>
+          <button className="btn primary" style={{ flex: 1, padding: '0.9rem', fontSize: '1.05rem' }} disabled={busy || scanning > 0 || loading || done === 0 && order.lines.every((l) => l.pickedQty === 0)} onClick={complete}>
             {busy ? 'Validation…' : short.length ? `Terminer (manque ${short.length})` : 'Terminer la préparation'}
           </button>
         </div>
@@ -179,6 +208,6 @@ export default function PreparationDetail({ params }: { params: Promise<{ id: st
           Préparation validée{order.preparedBy ? ` par ${order.preparedBy}` : ''}{order.preparedAt ? ` le ${formatDateBE(order.preparedAt)}` : ''} : les sorties de stock vers le chantier sont enregistrées.
         </div>
       )}
-    </>
+    </div>
   );
 }

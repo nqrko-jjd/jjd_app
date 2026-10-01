@@ -44,7 +44,7 @@ async function setup(width, role = 'storekeeper', toolsEnabled = false) {
     else if (path === '/api/stock/locations') data = { items: [{ code: 'A01' }, { code: 'B02' }] };
     else if (path.startsWith('/api/stock/scan/')) {
       const code = decodeURIComponent(path.split('/').at(-1));
-      const it = code === 'ART-001' ? items[0] : code === 'ART-002' ? items[1] : null;
+      const it = code === 'ART-001' ? items[0] : (code === 'ART-002' || code === '5412345678908') ? items[1] : null;
       if (code === 'ZONE-CUSTOM') data = { kind: 'rack', code: 'C03' };
       else if (it) data = { kind: 'stock', item: it, unitName: null };
       else { status = 404; data = { error: 'Code inconnu' }; }
@@ -183,7 +183,11 @@ try {
     assert.equal(await quantity.inputValue(), '1', 'barcode must not overwrite the focused quantity');
     assert.equal(state.movements.length, 0);
     assert.equal(await page.getByRole('textbox', { name: 'Champ de scan' }).evaluate(el => el === document.activeElement), true);
-    checked += 3;
+    await quantity.fill('5412345678908');
+    await page.waitForFunction(() => document.querySelector('input[aria-label="Quantité de Sac de mortier"]')?.value === '2');
+    assert.equal(await quantity.inputValue(), '1', 'IME barcode without keydown must not become a quantity');
+    assert.equal(state.movements.length, 0);
+    checked += 5;
     await context.close();
   }
   for (const width of [390, 768, 1440]) {

@@ -539,16 +539,21 @@ function ScanQuantity({ value, label, onCommit, onBarcode, onScanReady }: {
   const keys = useRef<{ text: string; times: number[] }>({ text: '', times: [] });
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const lastBarcode = useRef({ text: '', at: 0 });
+  const changes = useRef<number[]>([]);
   useEffect(() => { raw.current = String(value); setDraft(String(value)); }, [value]);
   useEffect(() => () => clearTimeout(timer.current), []);
   function finish() {
     clearTimeout(timer.current);
     const burst = keys.current;
     const fast = burst.times.length >= 4 && (burst.times[burst.times.length - 1]! - burst.times[0]!) / (burst.times.length - 1) < 80;
-    const barcode = fast && burst.text.length >= 4 && (/[^0-9.,]/.test(burst.text) || burst.text.length >= 8);
-    keys.current = { text: '', times: [] };
+    const inputTimes = changes.current;
+    const fastInput = inputTimes.length >= 4 && (inputTimes[inputTimes.length - 1]! - inputTimes[0]!) / (inputTimes.length - 1) < 80;
+    const code = fast ? burst.text : raw.current.trim();
+    // DataWedge can inject input events without keydown, or paste a complete GTIN.
+    const labelCode = /^(ART|BRZ|RACK|TOOL|BRU|MAT)-/i.test(code) || /^\\d{12,14}$/.test(code);
+    const barcode = labelCode || (fast || fastInput) && code.length >= 4 && (/[^0-9.,]/.test(code) || code.length >= 8);
+    keys.current = { text: '', times: [] }; changes.current = [];
     if (barcode) {
-      const code = burst.text;
       raw.current = String(value); setDraft(String(value));
       const now = Date.now();
       if (code !== lastBarcode.current.text || now - lastBarcode.current.at >= 700) {
@@ -563,8 +568,8 @@ function ScanQuantity({ value, label, onCommit, onBarcode, onScanReady }: {
   return <input
     type="text" role="spinbutton" inputMode="decimal" aria-valuemin={0.001} aria-valuenow={value}
     value={draft} aria-label={label}
-    onFocus={(e) => { keys.current = { text: '', times: [] }; e.currentTarget.select(); }}
-    onChange={(e) => { raw.current = e.target.value; setDraft(e.target.value); clearTimeout(timer.current); timer.current = setTimeout(finish, 240); }}
+    onFocus={(e) => { keys.current = { text: '', times: [] }; changes.current = []; e.currentTarget.select(); }}
+    onChange={(e) => { const now = Date.now(); if (!changes.current.length || now - changes.current[changes.current.length - 1]! > 300) changes.current = []; changes.current.push(now); raw.current = e.target.value; setDraft(e.target.value); clearTimeout(timer.current); timer.current = setTimeout(finish, 240); }}
     onBlur={finish}
     onKeyDown={(e) => {
       if (e.key === 'Enter') { e.preventDefault(); finish(); onScanReady(); return; }

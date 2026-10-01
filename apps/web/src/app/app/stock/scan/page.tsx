@@ -2,12 +2,14 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
+import { useAuth } from '@/lib/auth';
 import { api, ApiError } from '@/lib/api';
 import { PageHead, Thumb } from '@/lib/ui';
 import { ArrowDownToLine, ArrowUpFromLine, Undo2, MapPin } from 'lucide-react';
 import { ComboBox } from '@/components/ComboBox';
 import { ScanInput, type ScanInputHandle } from '@/components/ScanInput';
 import { scanFeedback } from '@/lib/scanFeedback';
+import './scan-workspace.css';
 import type { StockItemFull } from '@/components/StockItemModal';
 
 type StockItem = StockItemFull;
@@ -36,7 +38,7 @@ type CartLine =
 
 export default function StockScanPage() {
   const { data, reload } = useApi<{ items: StockItem[] }>('/api/stock/items');
-  const { data: meta } = useApi<Meta>('/api/stock/meta');
+  const { data: meta, loading: metaLoading, error: metaError, reload: reloadMeta } = useApi<Meta>('/api/stock/meta');
   const items = data?.items ?? [];
 
   return (
@@ -44,9 +46,11 @@ export default function StockScanPage() {
       <PageHead
         eyebrow="Ressources"
         title="Scan & mouvements"
-        sub="Choisissez l’action, le chantier, puis les articles"
+        sub="Scannez à la suite, ajustez les quantités, validez le lot."
         action={<Link href="/app/stock" className="btn">← Stock</Link>}
       />
+      {metaLoading && !meta && <p role="status" className="muted">Chargement du dépôt…</p>}
+      {metaError && <div role="alert" className="card card-pad"><p>{metaError}</p><button type="button" className="btn" onClick={reloadMeta}>Réessayer</button></div>}
       {meta && <ScanPanel items={items} meta={meta} onDone={reload} />}
     </>
   );
@@ -57,10 +61,12 @@ function ScanPanel({
 }: {
   items: StockItem[]; meta: Meta; onDone: () => void;
 }) {
+  const { user } = useAuth();
+  const canReceiveOrder = ['admin', 'office', 'storekeeper'].includes(user?.role ?? '');
+  const canPrepare = canReceiveOrder || user?.role === 'foreman';
   const [action, setAction] = useState<'in' | 'out' | 'return'>('out');
   const [catalogType, setCatalogType] = useState<CatalogType>('materiaux');
   const [worksiteId, setWorksiteId] = useState('');
-  const [storageLocation, setStorageLocation] = useState('');
   // Rack actif : on scanne son étiquette (ou on le tape), les articles scannés ensuite y sont
   // rangés — comme l'inventaire Bricoloc. Survit à un rechargement/une perte de focus de l'onglet
   // (sessionStorage) : un dépôt scanne souvent plusieurs dizaines d'articles pour un même rack,
@@ -71,8 +77,8 @@ function ScanPanel({
   const rackRef = useRef<string | null>(initialRack);
   const [rackTyped, setRackTyped] = useState('');
   // Après un scan : fenêtre « quelle quantité ? » puis « Ajouter au panier » (désactivable : +1 par scan).
-  const [askQty, setAskQty] = useState(true);
-  useEffect(() => { try { if (localStorage.getItem('jjd_scan_ask') === '0') setAskQty(false); } catch { /* ignore */ } }, []);
+  const [askQty, setAskQty] = useState(false);
+  useEffect(() => { try { if (localStorage.getItem('jjd_scan_ask') === '1') setAskQty(true); } catch { /* ignore */ } }, []);
   function toggleAsk(v: boolean) { setAskQty(v); try { localStorage.setItem('jjd_scan_ask', v ? '1' : '0'); } catch { /* ignore */ } }
   const [pending, setPending] = useState<{ item: StockItem; unitName: string | null } | null>(null);
   const scanRef = useRef<ScanInputHandle>(null);
@@ -81,6 +87,10 @@ function ScanPanel({
   const [lastScan, setLastScan] = useState<string | null>(null);
   const [cart, setCart] = useState<CartLine[]>([]);
   const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
+  const scanQueue = useRef<Promise<void>>(Promise.resolve());
+  const lineSequence = useRef(0);
+  const [scanning, setScanning] = useState(0);
   const [err, setErr] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -88,8 +98,8 @@ function ScanPanel({
   // retour — on prépare souvent un départ chantier avec du stock ET des outils ensemble.
   // Pas de « Réceptionner » côté outils/consommables : ça se gère par le fournisseur.
   const { data: materielStatus } = useApi<{ enabled: boolean }>('/api/materiel/status');
-  const { data: materielStock } = useApi<{ products: MaterielProduct[] }>(materielStatus?.enabled ? '/api/materiel/stock' : null);
-  const { data: materielCons } = useApi<{ consumables: Consumable[] }>(materielStatus?.enabled ? '/api/materiel/consumables' : null);
+  const { data: materielStock, reload: reloadMateriel } = useApi<{ products: MaterielProduct[] }>(materielStatus?.enabled ? '/api/materiel/stock' : null);
+  const { data: materielCons, reload: reloadConsumables } = useApi<{ consumables: Consumable[] }>(materielStatus?.enabled ? '/api/materiel/consumables' : null);
   const materielProducts = materielStock?.products ?? [];
   const consumables = materielCons?.consumables ?? [];
   const machinesEnabled = !!materielStatus?.enabled && action !== 'in';
@@ -121,11 +131,12 @@ function ScanPanel({
   // quantité, comme un 2e scan (cf. panier de la maquette). Un outil est un exemplaire
   // physique précis (étiqueté) : chaque clic ajoute un exemplaire disponible différent.
   function addStock(it: StockItem, unitName: string | null = null, addQty = 1) {
-    const key = `stock:${it.id}:${unitName ?? ''}`;
+    const location = action === 'out' ? null : rackRef.current;
+    const key = `stock:${it.id}:${++lineSequence.current}`;
     setCart((cur) => {
-      const existing = cur.find((l) => l.key === key);
-      if (existing && existing.kind === 'stock') return cur.map((l) => (l.key === key && l.kind === 'stock' ? { ...l, qty: l.qty + addQty } : l));
-      return [{ kind: 'stock', key, id: it.id, name: it.name, unit: it.unit, unitName, units: it.units, qty: addQty, image: it.photoThumbUrl, location: action === 'out' ? null : rackRef.current }, ...cur];
+      const existing = cur.find((l) => l.kind === 'stock' && l.id === it.id && l.unitName === unitName && (l.location ?? null) === location);
+      if (existing && existing.kind === 'stock') return cur.map((l) => (l.key === existing.key && l.kind === 'stock' ? { ...l, qty: l.qty + addQty } : l));
+      return [{ kind: 'stock', key, id: it.id, name: it.name, unit: it.unit, unitName, units: it.units, qty: addQty, image: it.photoThumbUrl, location }, ...cur];
     });
     setToast(null);
     setErr(null);
@@ -154,12 +165,12 @@ function ScanPanel({
     addMaterielUnit(unit.assetTag, p.name, [p.brand, p.model].filter(Boolean).join(' ') || unit.assetTag, p.image);
   }
   function addMaterielUnit(assetTag: string, name: string, sub: string, image?: string | null) {
-    setCart((cur) => [{ kind: 'materiel', key: `materiel:${assetTag}`, assetTag, name, sub, image, location: action === 'return' ? rackRef.current : null }, ...cur]);
+    setCart((cur) => cur.some((l) => l.kind === 'materiel' && l.assetTag === assetTag) ? cur : [{ kind: 'materiel', key: `materiel:${assetTag}`, assetTag, name, sub, image, location: action === 'return' ? rackRef.current : null }, ...cur]);
     setToast(null);
     setErr(null);
   }
   function setQty(key: string, qty: number) {
-    if (!Number.isFinite(qty) || qty < 1) return;
+    if (!Number.isFinite(qty) || qty <= 0) return;
     setCart((cur) => cur.map((l) => (l.key === key && l.kind !== 'materiel' ? { ...l, qty } : l)));
   }
   function removeLine(key: string) {
@@ -185,13 +196,23 @@ function ScanPanel({
     try { sessionStorage.removeItem(RACK_KEY); } catch { /* ignore */ }
   }
 
-  async function handleScan(codeRaw: string) {
+  function handleScan(code: string) {
+    if (busyRef.current) return;
+    setScanning((n) => n + 1);
+    // Resolve consecutive labels in order, including a rack followed immediately by an article.
+    scanQueue.current = scanQueue.current.then(() => handleScanNow(code)).catch(() => {
+      setErr('Lecture interrompue. Scannez à nouveau le dernier article.');
+    }).finally(() => setScanning((n) => n - 1));
+  }
+
+  async function handleScanNow(codeRaw: string) {
     const code = codeRaw.trim();
     if (!code) return;
     setErr(null);
     if (/^(BRZ|RACK)-.+/i.test(code)) { pickRack(code); return; }
     try {
-      const r = await api<{ item: StockItem; unitName: string | null }>(`/api/stock/scan/${encodeURIComponent(code)}`);
+      const r = await api<{ kind: 'rack'; code: string } | { kind: 'stock'; item: StockItem; unitName: string | null }>(`/api/stock/scan/${encodeURIComponent(code)}`);
+      if (r.kind === 'rack') { pickRack(r.code); return; }
       scanFeedback(true);
       if (askQty) { setPending({ item: r.item, unitName: r.unitName }); return; }
       addStock(r.item, r.unitName);
@@ -224,12 +245,13 @@ function ScanPanel({
     scanFeedback(false);
   }
 
-  const needsLocation = action === 'return' && cart.some((l) => l.kind === 'materiel' && !l.location);
+  const needsLocation = action === 'return' && cart.some((l) => l.kind === 'materiel' && !(l.location || rack));
 
   async function submit() {
-    if (cart.length === 0) return;
+    if (busyRef.current || scanning > 0 || cart.length === 0) return;
     if (action !== 'in' && !worksiteId) { setErr('Chantier requis.'); return; }
-    if (needsLocation && !storageLocation.trim()) { setErr('Emplacement de rangement requis pour le retour d’outils.'); return; }
+    if (needsLocation) { setErr('Emplacement de rangement requis pour le retour d’outils.'); return; }
+    busyRef.current = true;
     setBusy(true);
     setErr(null);
     setToast(null);
@@ -254,18 +276,21 @@ function ScanPanel({
         } else if (action === 'out') {
           await api('/api/materiel/loans', { method: 'POST', body: { code: line.assetTag, worksiteId } });
         } else if (action === 'return') {
-          await api('/api/materiel/returns', { method: 'POST', body: { code: line.assetTag, storageLocation: line.location || storageLocation.trim() } });
+          await api('/api/materiel/returns', { method: 'POST', body: { code: line.assetTag, storageLocation: line.location || rackRef.current } });
         }
         done++;
+        // Only unconfirmed movements remain if a later endpoint fails.
+        setCart((cur) => cur.filter((remaining) => remaining.key !== line.key));
       }
       setCart([]);
-      setStorageLocation('');
-      clearRack();
       setToast(`${done} mouvement${done > 1 ? 's' : ''} enregistré${done > 1 ? 's' : ''}.`);
-      onDone();
+      onDone(); reloadMateriel(); reloadConsumables();
     } catch (e) {
-      setErr((e as Error).message ?? 'Erreur');
+      const detail = (e as Error).message ?? 'Erreur';
+      setErr(`${done ? `${done} mouvement${done > 1 ? 's' : ''} enregistré${done > 1 ? 's' : ''}. ` : ''}${detail}. Les lignes restantes sont conservées. En cas de coupure réseau, vérifiez l’historique avant de relancer.`);
+      if (done) { onDone(); reloadMateriel(); reloadConsumables(); }
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   }
@@ -278,17 +303,7 @@ function ScanPanel({
     : catalog.length === 0 ? 'Aucun article.' : null;
 
   return (
-    <div>
-      <ScanInput
-        ref={scanRef}
-        placeholder={`Scannez un article pour ${action === 'in' ? 'le réceptionner' : action === 'out' ? 'le sortir' : 'le retourner'}…`}
-        hint="Gâchette du terminal, caméra du smartphone, ou saisie du code. Un 2ᵉ scan du même article ajoute 1. En entrée : scannez aussi l’étiquette du rack."
-        onScan={handleScan}
-      />
-      <label className="scan-ask">
-        <input type="checkbox" checked={askQty} onChange={(e) => toggleAsk(e.target.checked)} /> Demander la quantité à chaque scan <span className="muted">(sinon +1 par scan)</span>
-      </label>
-      {lastScan && <div className="scan-last">✓ {lastScan}</div>}
+    <div className="scan-workspace">
       {pending && (
         <QtyDialog
           item={pending.item}
@@ -316,28 +331,29 @@ function ScanPanel({
           onNext={(code) => { void handleScan(code); }}
         />
       )}
-      <div className="stock-move-actions">
-        <button type="button" className={action === 'in' ? 'on' : ''} onClick={() => setAction('in')}>
+      <div className="stock-move-actions" aria-label="Type de mouvement">
+        <button type="button" className={action === 'in' ? 'on' : ''} disabled={busy || scanning > 0 || cart.length > 0} onClick={() => setAction('in')}>
           <ArrowDownToLine className="ic" size={24} strokeWidth={1.75} />
           <strong>Réceptionner</strong>
           <small>{ACTION_DESC.in}</small>
         </button>
-        <button type="button" className={action === 'out' ? 'on' : ''} onClick={() => setAction('out')}>
+        <button type="button" className={action === 'out' ? 'on' : ''} disabled={busy || scanning > 0 || cart.length > 0} onClick={() => setAction('out')}>
           <ArrowUpFromLine className="ic" size={24} strokeWidth={1.75} />
           <strong>Sortir / affecter</strong>
           <small>{ACTION_DESC.out}</small>
         </button>
-        <button type="button" className={action === 'return' ? 'on' : ''} onClick={() => setAction('return')}>
+        <button type="button" className={action === 'return' ? 'on' : ''} disabled={busy || scanning > 0 || cart.length > 0} onClick={() => setAction('return')}>
           <Undo2 className="ic" size={24} strokeWidth={1.75} />
           <strong>Retourner</strong>
           <small>{ACTION_DESC.return}</small>
         </button>
       </div>
 
+      <fieldset className="scan-context scan-edit-lock" disabled={busy || scanning > 0}>
       {action !== 'in' && (
         <div className="field" style={{ maxWidth: 360, marginBottom: '0.9rem' }}>
-          <label>Chantier *</label>
-          <ComboBox placeholder="chercher un chantier" value={worksiteId} onChange={setWorksiteId} options={meta.worksites.map((w) => ({ value: w.id, label: w.name }))} />
+          <label>Chantier · pour tout le lot</label>
+          <ComboBox disabled={busy || scanning > 0} placeholder="chercher un chantier" value={worksiteId} onChange={(value) => { if (!busy && scanning === 0) setWorksiteId(value); }} options={meta.worksites.map((w) => ({ value: w.id, label: w.name }))} />
         </div>
       )}
       {action !== 'out' && (
@@ -351,25 +367,28 @@ function ScanPanel({
             list="rack-list"
             placeholder="ou tapez : R-01-A"
             value={rackTyped}
-            onChange={(e) => setRackTyped(e.target.value)}
+            disabled={busy || scanning > 0}
+            onChange={(e) => { setRackTyped(e.target.value); if ((racksData?.items ?? []).some((r) => r.code === e.target.value)) { pickRack(e.target.value); setRackTyped(''); } }}
+            onBlur={() => { if (rackTyped.trim() && !busy && scanning === 0) { pickRack(rackTyped); setRackTyped(''); } }}
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); pickRack(rackTyped); setRackTyped(''); } }}
             aria-label="Rack"
           />
           <datalist id="rack-list">{(racksData?.items ?? []).map((r) => <option key={r.code} value={r.code} />)}</datalist>
-          {rack && <button type="button" className="btn ghost" onClick={clearRack} aria-label="Retirer le rack">✕</button>}
+          {rack && <button type="button" className="btn ghost" disabled={busy || scanning > 0} onClick={clearRack} aria-label="Retirer le rack">✕</button>}
         </div>
       )}
+      </fieldset>
+      <div className="scan-station">
+        <div className="scan-station-title"><strong>Scanner les articles</strong><span className="pill">{scanning > 0 ? `${scanning} lecture${scanning > 1 ? 's' : ''}…` : askQty ? 'Quantité après scan' : '+1 par scan'}</span></div>
+        <ScanInput ref={scanRef} disabled={busy} showReceivedCode={false} onScan={handleScan} placeholder="Étiquette article, outil ou zone…" />
+        <div className="scan-station-foot"><span className="muted">Ajustez les quantités directement dans le lot.</span><details><summary>Options</summary><label className="scan-ask"><input type="checkbox" disabled={busy || scanning > 0} checked={askQty} onChange={(e) => toggleAsk(e.target.checked)} /> Ouvrir la quantité à chaque scan</label></details></div>
+        {lastScan && <div className="scan-last" role="status">✓ {lastScan}</div>}
+      </div>
+      <div className="scan-linked-flow">{action === 'in' && canReceiveOrder ? <Link href="/app/stock/commandes">Livraison d’une commande fournisseur →</Link> : action === 'out' && canPrepare ? <Link href="/app/stock/preparations">Préparer une liste chantier existante →</Link> : action === 'return' ? <span className="muted">La zone reste active pour les retours suivants.</span> : null}</div>
       {needsLocation && (
-        <div style={{ display: 'grid', gap: 10, padding: '0.7rem', background: 'var(--surface-2)', borderRadius: 10, marginBottom: '0.9rem', maxWidth: 420 }}>
-          <div style={{ fontWeight: 650, fontSize: '0.85rem' }}>Les outils retournés → dans quelle zone du dépôt ?</div>
-          {knownLocations.length > 0 && (
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {knownLocations.map((loc) => (
-                <button key={loc} type="button" className="badge primary" style={{ cursor: 'pointer' }} onClick={() => setStorageLocation(loc)}>{loc}</button>
-              ))}
-            </div>
-          )}
-          <input className="input" placeholder="ex. Étagère A3" value={storageLocation} onChange={(e) => setStorageLocation(e.target.value)} />
+        <div className="scan-zone-needed" role="status">
+          <strong>Choisissez la zone de rangement des outils ci-dessus, ou scannez son étiquette.</strong>
+          {knownLocations.length > 0 && <div className="row" style={{ gap: 8, marginTop: 10 }}>{knownLocations.map((loc) => <button key={loc} type="button" className="btn" disabled={busy || scanning > 0} onClick={() => pickRack(loc)}>{loc}</button>)}</div>}
         </div>
       )}
 
@@ -377,11 +396,12 @@ function ScanPanel({
         <div className="stock-basket">
           <div className="stock-basket-head">
             <div>
-              <div className="eyebrow">À valider</div>
+              <div className="eyebrow">Lot en cours</div>
               <h2>{cart.length} article{cart.length > 1 ? 's' : ''}</h2>
             </div>
-            <span className="pill">{ACTION_BADGE[action]}</span>
+            <div className="row" style={{ gap: 8 }}><span className="pill">{ACTION_BADGE[action]}</span>{cart.length > 0 && <button type="button" className="btn ghost" disabled={busy || scanning > 0} onClick={() => { if (confirm('Vider ce lot non enregistré ?')) { setCart([]); setErr(null); } }}>Vider</button>}</div>
           </div>
+          <fieldset className="scan-edit-lock" disabled={busy}>
           <div className="stock-basket-lines">
             {cart.length === 0 ? (
               <p className="stock-basket-empty">Scannez un article pour l’ajouter.</p>
@@ -403,6 +423,7 @@ function ScanPanel({
                     ) : line.kind === 'materiel' ? line.sub : ''}
                   </span>
                   {(line.kind === 'stock' || line.kind === 'materiel') && action !== 'out' && (
+                    <details className="scan-line-location"><summary><MapPin size={13} /> {line.location || rack || 'Sans zone'}</summary>
                     <span className="row" style={{ gap: '0.3rem', alignItems: 'center', marginTop: '0.25rem' }}>
                       <MapPin size={13} className="muted" />
                       <input
@@ -412,7 +433,7 @@ function ScanPanel({
                         onChange={(e) => setLineLocation(line.key, e.target.value)}
                         aria-label={`Rack de ${line.name}`}
                       />
-                    </span>
+                    </span></details>
                   )}
                   {line.kind === 'materiel' ? (
                     <span className="stock-qty-stepper">
@@ -421,11 +442,12 @@ function ScanPanel({
                   ) : (
                     <span className="stock-qty-stepper">
                       <button type="button" onClick={() => setQty(line.key, line.qty - 1)} aria-label={`Diminuer la quantité de ${line.name}`}>−</button>
-                      <input
-                        type="number" min={1} step="any"
+                      <ScanQuantity
                         value={line.qty}
-                        onChange={(e) => setQty(line.key, Number(e.target.value))}
-                        aria-label={`Quantité de ${line.name}`}
+                        label={`Quantité de ${line.name}`}
+                        onCommit={(qty) => setQty(line.key, qty)}
+                        onBarcode={handleScan}
+                        onScanReady={() => scanRef.current?.focus()}
                       />
                       <button type="button" onClick={() => setQty(line.key, line.qty + 1)} aria-label={`Augmenter la quantité de ${line.name}`}>＋</button>
                       <button type="button" className="remove" onClick={() => removeLine(line.key)}>Retirer</button>
@@ -436,16 +458,18 @@ function ScanPanel({
             ))}
           </div>
 
+          </fieldset>
           <div className="stock-basket-confirm">
             {err && <div className="badge crit" style={{ padding: '0.4rem 0.7rem', marginBottom: '0.7rem' }}>{err}</div>}
             {toast && <div className="badge ok" style={{ padding: '0.4rem 0.7rem', marginBottom: '0.7rem' }}>{toast}</div>}
-            <button type="button" className="btn primary" disabled={busy || cart.length === 0 || (action !== 'in' && !worksiteId) || (needsLocation && !storageLocation.trim())} onClick={submit}>
-              {busy ? 'Enregistrement…' : `Confirmer ${ACTION_LABEL[action]} · ${cart.length} article${cart.length > 1 ? 's' : ''}`}
+            <button type="button" className="btn primary" disabled={busy || scanning > 0 || cart.length === 0 || (action !== 'in' && !worksiteId) || needsLocation} onClick={submit}>
+              {busy ? 'Enregistrement…' : `Valider ${ACTION_LABEL[action]} · ${cart.length} article${cart.length > 1 ? 's' : ''}`}
             </button>
           </div>
         </div>
       </div>
 
+      <fieldset className="scan-edit-lock" disabled={busy || scanning > 0}>
       <details className="stock-manual">
         <summary>Ajouter sans scanner (choisir dans la liste)</summary>
         <div className="stock-catalog" style={{ marginTop: '0.8rem' }}>
@@ -496,11 +520,69 @@ function ScanPanel({
         </div>
 
       </details>
+      </fieldset>
     </div>
   );
 }
 
 const fmtN = (n: number) => new Intl.NumberFormat('fr-BE', { maximumFractionDigits: 2 }).format(n);
+
+
+/** A terminal can inject its next barcode while a manual quantity still has focus.
+ * Keep edits local until settled, and route scanner bursts without writing them as quantities. */
+function ScanQuantity({ value, label, onCommit, onBarcode, onScanReady }: {
+  value: number; label: string; onCommit: (qty: number) => void;
+  onBarcode: (code: string) => void; onScanReady: () => void;
+}) {
+  const [draft, setDraft] = useState(String(value));
+  const raw = useRef(String(value));
+  const keys = useRef<{ text: string; times: number[] }>({ text: '', times: [] });
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const lastBarcode = useRef({ text: '', at: 0 });
+  const changes = useRef<number[]>([]);
+  useEffect(() => { raw.current = String(value); setDraft(String(value)); }, [value]);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  function finish() {
+    clearTimeout(timer.current);
+    const burst = keys.current;
+    const fast = burst.times.length >= 4 && (burst.times[burst.times.length - 1]! - burst.times[0]!) / (burst.times.length - 1) < 80;
+    const inputTimes = changes.current;
+    const fastInput = inputTimes.length >= 4 && (inputTimes[inputTimes.length - 1]! - inputTimes[0]!) / (inputTimes.length - 1) < 80;
+    const code = fast ? burst.text : raw.current.trim();
+    // DataWedge can inject input events without keydown, or paste a complete GTIN.
+    const labelCode = /^(ART|BRZ|RACK|TOOL|BRU|MAT)-/i.test(code) || /^\d{12,14}$/.test(code);
+    const barcode = labelCode || (fast || fastInput) && code.length >= 4 && (/[^0-9.,]/.test(code) || code.length >= 8);
+    keys.current = { text: '', times: [] }; changes.current = [];
+    if (barcode) {
+      raw.current = String(value); setDraft(String(value));
+      const now = Date.now();
+      if (code !== lastBarcode.current.text || now - lastBarcode.current.at >= 700) {
+        lastBarcode.current = { text: code, at: now }; onBarcode(code);
+      }
+      return;
+    }
+    const qty = Number(raw.current.replace(',', '.'));
+    if (Number.isFinite(qty) && qty > 0) onCommit(qty);
+    else { raw.current = String(value); setDraft(String(value)); }
+  }
+  return <input
+    type="text" role="spinbutton" inputMode="decimal" aria-valuemin={0.001} aria-valuenow={value}
+    value={draft} aria-label={label}
+    onFocus={(e) => { keys.current = { text: '', times: [] }; changes.current = []; e.currentTarget.select(); }}
+    onChange={(e) => { const now = Date.now(); if (!changes.current.length || now - changes.current[changes.current.length - 1]! > 300) changes.current = []; changes.current.push(now); raw.current = e.target.value; setDraft(e.target.value); clearTimeout(timer.current); timer.current = setTimeout(finish, 240); }}
+    onBlur={finish}
+    onKeyDown={(e) => {
+      if (e.key === 'Enter') { e.preventDefault(); finish(); onScanReady(); return; }
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        e.preventDefault(); const next = Math.max(0.001, value + (e.key === 'ArrowUp' ? 1 : -1)); onCommit(next); return;
+      }
+      if (e.key.length !== 1 || e.ctrlKey || e.metaKey || e.altKey) return;
+      const now = Date.now(), burst = keys.current;
+      if (!burst.times.length || now - burst.times[burst.times.length - 1]! > 300) { burst.text = ''; burst.times = []; }
+      burst.text += e.key; burst.times.push(now);
+    }}
+  />;
+}
 
 /** Fenêtre ouverte par un scan : quantité (et conditionnement) à entrer / sortir, puis « Ajouter au panier ». Entrée = valider. */
 function QtyDialog({ item, initialUnit, action, rack, onCancel, onConfirm, onRescan, onNext }: {

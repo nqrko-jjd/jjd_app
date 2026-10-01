@@ -1,0 +1,49 @@
+name: Warehouse UI checks
+on:
+  push:
+    branches: ['redesign/warehouse-workflow']
+  pull_request:
+    paths:
+      - 'apps/web/src/app/app/stock/**'
+      - 'apps/web/src/components/ScanInput.tsx'
+      - 'scripts/test-warehouse-workflow.mjs'
+      - '.github/workflows/warehouse-ui-checks.yml'
+permissions:
+  contents: read
+concurrency:
+  group: warehouse-ui-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+jobs:
+  warehouse-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build:shared
+      - run: npm run typecheck --workspace @jjd/web
+      - run: npm run build --workspace @jjd/web
+      - run: npm install --no-save --package-lock=false --ignore-scripts playwright@1.58.2
+      - run: npx playwright install --with-deps chromium
+      - name: Browser workflow checks with fictitious data
+        run: |
+          npm run start --workspace @jjd/web > /tmp/jjd-warehouse-web.log 2>&1 &
+          for attempt in $(seq 1 60); do
+            if curl --silent --fail http://127.0.0.1:3100/login > /dev/null; then break; fi
+            sleep 1
+          done
+          node scripts/test-warehouse-workflow.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: warehouse-browser-screenshots
+          path: artifacts/warehouse
+          if-no-files-found: ignore

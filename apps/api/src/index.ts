@@ -3,7 +3,7 @@ import { createApp } from './app.js';
 import { env } from './env.js';
 import { prisma } from './db.js';
 import { invoiceMailboxConfigured, syncInvoiceMailbox } from './lib/invoice-mailbox.js';
-import { mailSuggestionsConfigured, syncMailSuggestions } from './lib/lead-mailbox.js';
+import { leadMailboxConfigured, syncLeadMailbox } from './lib/lead-mailbox.js';
 import { markOverdueInvoices, renumberFaDepositInvoices } from './lib/documents.js';
 import { backfillBankMatches } from './lib/bank-match.js';
 
@@ -113,22 +113,22 @@ if (invoiceMailboxConfigured()) {
 }
 
 /**
- * Boîte mail principale (info@/david@…) : sans config, `mailSuggestionsConfigured()` renvoie
+ * Boîte mail principale (info@/david@…) : sans config, `leadMailboxConfigured()` renvoie
  * false et rien ne se lance — voir lib/lead-mailbox.ts. Ne modifie jamais la boîte
  * (pas de \Seen, pas de déplacement) : décalage de démarrage différent de la boîte factures
  * pour ne pas les faire démarrer à la même seconde.
  */
-if (mailSuggestionsConfigured()) {
-  const runMailSync = () => {
-    syncMailSuggestions()
+if (leadMailboxConfigured()) {
+  const runLeadSync = () => {
+    syncLeadMailbox()
       .then((stats) => {
-        if (stats.suggestionsCreated || stats.errors.length) {
+        if (stats.leadsCreated || stats.errors.length) {
           // eslint-disable-next-line no-console
-          console.log(`[mail-suggestions] ${stats.messagesSeen} message(s) analysé(s), ${stats.suggestionsCreated} suggestion(s) créée(s)${stats.errors.length ? `, ${stats.errors.length} erreur(s) : ${stats.errors.join(' | ')}` : ''}`);
+          console.log(`[leads-mailbox] ${stats.messagesSeen} message(s) analysé(s), ${stats.leadsCreated} piste(s) créée(s)${stats.errors.length ? `, ${stats.errors.length} erreur(s) : ${stats.errors.join(' | ')}` : ''}`);
         }
       })
-      .catch((e) => console.error('[mail-suggestions] échec de synchronisation :', e.message));
+      .catch((e) => console.error('[leads-mailbox] échec de synchronisation :', e.message));
   };
-  setTimeout(runMailSync, 30_000);
-  setInterval(runMailSync, 20 * 60_000);
+  setTimeout(runLeadSync, 30_000);
+  setInterval(runLeadSync, 20 * 60_000);
 }

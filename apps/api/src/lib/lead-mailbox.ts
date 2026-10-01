@@ -36,10 +36,10 @@ const PROMPT = `Tu tries les mails reçus sur la boîte principale d'une entrepr
 Catégories ("kind") :
 - "lead" : une DEMANDE D'INTERVENTION CLIENT (un particulier, syndic ou promoteur demande un devis, signale un problème, ou demande une visite/intervention) — un NOUVEAU dossier, pas un chantier déjà en cours.
 - "appointment" : un RENDEZ-VOUS à planifier — une date/heure (même approximative) mentionnée pour une visite, réunion de chantier, rendez-vous client/fournisseur/architecte.
-- "worksite_note" : une INFORMATION utile à tracer sur un chantier DÉJÀ EN COURS (mise à jour, consigne, problème signalé, réponse dans un fil déjà engagé qui contient une info à garder) — pas de rendez-vous précis à planifier.
+- "worksite_note" : une INFORMATION utile à tracer sur un chantier DÉJÀ EN COURS (mise à jour, consigne, problème signalé, décision prise, personne à contacter, coordination d'intervention...) — pas de rendez-vous précis à planifier. IMPORTANT : une réponse dans un fil déjà engagé ("Re:"/"Fwd:", plusieurs personnes en copie) N'EST PAS automatiquement exclue — si elle contient une info concrète sur un chantier (même mineure : confirmation d'un détail technique, mise à jour de statut, qui s'occupe de quoi...), classe-la en "worksite_note". N'exclus que les réponses réellement vides de contenu nouveau.
 - "payment_reminder" : un RAPPEL DE PAIEMENT — un fournisseur réclame un paiement en retard, ou un client informe d'un paiement effectué/à venir/en retard.
 - "other" : mérite l'attention d'un humain mais ne rentre dans aucune case ci-dessus.
-- null (isActionable=false) : rien à proposer — newsletter/publicité, spam, accusé de réception creux ("merci", "bien reçu", signature seule), candidature d'emploi, mail purement administratif/interne sans contenu actionnable.
+- null (isActionable=false) : rien à proposer — newsletter/publicité, spam, accusé de réception pur sans aucune info nouvelle ("merci", "bien reçu", signature seule, transfert sans commentaire ni contenu), candidature d'emploi, mail purement administratif/interne sans rien à tracer.
 
 Réponds UNIQUEMENT avec un objet JSON valide (aucun texte avant/après, aucun bloc markdown) :
 {

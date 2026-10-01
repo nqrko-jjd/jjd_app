@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useApi } from '@/lib/use-api';
-import { AssistantChat } from './AssistantChat';
+import { CompanionLauncher } from './CompanionLauncher';
 
 type Item = { href: string; label: string; ic: LucideIcon; roles?: string[]; ext?: boolean; noBottomTab?: boolean };
 type Group = { title: string; items: Item[] };
@@ -113,7 +113,6 @@ export function Shell({ children, navigationPaths }: { children: React.ReactNode
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const [open, setOpen] = useState(false);
-  const [chatOpen, setChatOpen] = useState(false);
   const [navQuery, setNavQuery] = useState('');
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   useEffect(() => { setOpen(false); setNavQuery(''); setExpandedGroups({}); }, [pathname]);
@@ -124,7 +123,7 @@ export function Shell({ children, navigationPaths }: { children: React.ReactNode
     return () => document.removeEventListener('keydown', close);
   }, [open]);
   const bureau = user?.role === 'admin' || user?.role === 'office';
-  const { data: assistant } = useApi<{ enabled: boolean }>(bureau ? '/api/assistant/status' : null);
+  const { data: assistant } = useApi<{ enabled: boolean; previewAllowed: boolean }>(user ? '/api/assistant/status' : null);
   const isStaff = !!user && user.role !== 'client' && user.role !== 'storekeeper';
   const { data: unread, reload: reloadUnread } = useApi<{ internal: number; client: number }>(isStaff ? '/api/messagerie/unread-count' : null);
   const unreadTotal = (unread?.internal ?? 0) + (unread?.client ?? 0);
@@ -245,12 +244,7 @@ export function Shell({ children, navigationPaths }: { children: React.ReactNode
         <button className="bottom-tab" aria-expanded={open} aria-controls="app-navigation" onClick={()=>setOpen(true)}><Menu size={20}/>Plus</button>
       </nav>}
 
-      {assistant?.enabled && !chatOpen && (
-        <button type="button" className="assistant-fab" title="Assistant IA" aria-label="Ouvrir l'assistant IA" onClick={() => setChatOpen(true)}>
-          ✨
-        </button>
-      )}
-      {assistant?.enabled && <AssistantChat open={chatOpen} onClose={() => setChatOpen(false)} />}
+      {assistant?.previewAllowed && <CompanionLauncher />}
     </div>
   );
 }

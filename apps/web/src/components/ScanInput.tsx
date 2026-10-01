@@ -1,7 +1,17 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Camera, Keyboard, ScanLine } from 'lucide-react';
 import { CameraScanner } from './CameraScanner';
+
+export interface ScanInputHandle {
+  /** Redonne le focus au champ de scan — à appeler depuis un gestionnaire déclenché par un vrai
+   *  geste (clic, soumission de formulaire), ex. à la fermeture d'une fenêtre ouverte par-dessus
+   *  (QtyDialog…). Un focus() différé (effet, intervalle) ne rétablit PAS la connexion clavier
+   *  dont a besoin la gâchette d'un terminal Zebra (DataWedge) sur certains appareils — constaté
+   *  en prod le 2026-10-01 : la fenêtre « quantité » se fermait, la gâchette restait muette
+   *  jusqu'au prochain tap manuel sur le bouton clavier. */
+  focus: () => void;
+}
 
 /**
  * Champ de scan « toujours actif » : la gâchette d'un terminal Zebra (DataWedge en mode clavier)
@@ -10,15 +20,15 @@ import { CameraScanner } from './CameraScanner';
  * scanne avec la caméra (bouton). Le clavier à l'écran est masqué par défaut pour ne pas
  * recouvrir l'écran à chaque gâchette — le bouton clavier permet de taper un code à la main.
  */
-export function ScanInput({
-  onScan, placeholder = 'Scannez un article…', hint, cameraMulti = true,
-}: {
+export const ScanInput = forwardRef<ScanInputHandle, {
   onScan: (code: string) => void;
   placeholder?: string;
   hint?: string;
   /** La caméra reste ouverte après une lecture (préparation de commande : on enchaîne les articles). */
   cameraMulti?: boolean;
-}) {
+}>(function ScanInput({
+  onScan, placeholder = 'Scannez un article…', hint, cameraMulti = true,
+}, forwardedRef) {
   const [value, setValue] = useState('');
   const [typing, setTyping] = useState(false); // clavier à l'écran autorisé
   const [camera, setCamera] = useState(false);
@@ -28,6 +38,10 @@ export function ScanInput({
 
   const lastCode = useRef({ code: '', at: 0 });
   const [received, setReceived] = useState<string | null>(null);
+
+  useImperativeHandle(forwardedRef, () => ({
+    focus: () => ref.current?.focus({ preventScroll: true }),
+  }), []);
 
   function submit(raw: string) {
     const code = raw.replace(/[\r\n\t]/g, '').trim();
@@ -152,4 +166,4 @@ export function ScanInput({
       {hint && <div className="muted" style={{ fontSize: '0.8rem', margin: '0.35rem 0 0.9rem' }}>{hint}</div>}
     </>
   );
-}
+});

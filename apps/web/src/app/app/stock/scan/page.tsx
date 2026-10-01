@@ -6,7 +6,7 @@ import { api, ApiError } from '@/lib/api';
 import { PageHead, Thumb } from '@/lib/ui';
 import { ArrowDownToLine, ArrowUpFromLine, Undo2, MapPin } from 'lucide-react';
 import { ComboBox } from '@/components/ComboBox';
-import { ScanInput } from '@/components/ScanInput';
+import { ScanInput, type ScanInputHandle } from '@/components/ScanInput';
 import { scanFeedback } from '@/lib/scanFeedback';
 import type { StockItemFull } from '@/components/StockItemModal';
 
@@ -70,6 +70,7 @@ function ScanPanel({
   useEffect(() => { try { if (localStorage.getItem('jjd_scan_ask') === '0') setAskQty(false); } catch { /* ignore */ } }, []);
   function toggleAsk(v: boolean) { setAskQty(v); try { localStorage.setItem('jjd_scan_ask', v ? '1' : '0'); } catch { /* ignore */ } }
   const [pending, setPending] = useState<{ item: StockItem; unitName: string | null } | null>(null);
+  const scanRef = useRef<ScanInputHandle>(null);
   const { data: racksData } = useApi<{ items: { code: string }[] }>('/api/stock/locations');
   const [query, setQuery] = useState('');
   const [lastScan, setLastScan] = useState<string | null>(null);
@@ -266,6 +267,7 @@ function ScanPanel({
   return (
     <div>
       <ScanInput
+        ref={scanRef}
         placeholder={`Scannez un article pour ${action === 'in' ? 'le réceptionner' : action === 'out' ? 'le sortir' : 'le retourner'}…`}
         hint="Gâchette du terminal, caméra du smartphone, ou saisie du code. Un 2ᵉ scan du même article ajoute 1. En entrée : scannez aussi l’étiquette du rack."
         onScan={handleScan}
@@ -280,11 +282,14 @@ function ScanPanel({
           initialUnit={pending.unitName}
           action={action}
           rack={rack}
-          onCancel={() => setPending(null)}
+          onCancel={() => { setPending(null); scanRef.current?.focus(); }}
           onConfirm={(qty, unitName) => {
             addStock(pending.item, unitName, qty);
             setLastScan(`${pending.item.name} · ${qty} ${unitName ?? pending.item.unit}`);
             setPending(null);
+            // Synchrone dans ce gestionnaire (déclenché par un clic ou une soumission de
+            // formulaire, donc un vrai geste utilisateur) : voir ScanInputHandle.focus().
+            scanRef.current?.focus();
           }}
           // un scan pendant que la fenêtre est ouverte : même article/conditionnement = +1, sinon on valide la fenêtre et on traite le nouveau code
           onRescan={async (code, unit) => {

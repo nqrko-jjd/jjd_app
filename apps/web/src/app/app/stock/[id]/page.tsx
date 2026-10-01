@@ -464,7 +464,7 @@ function MovementModal({
           contactId: type === 'in' ? contactId || null : null,
           worksiteId: type === 'out' ? worksiteId || null : null,
           requestedByName: type === 'out' ? requestedByName || null : null,
-          location: type === 'in' ? location || null : null,
+          location: type === 'in' || type === 'adjustment' ? location || null : null,
           note: note || null,
         },
       });
@@ -539,13 +539,16 @@ function MovementModal({
                 <label>Fournisseur</label>
                 <ContactPicker typeFilter="supplier" value={contactId} onChange={(cid) => setContactId(cid)} />
               </div>
-              <div className="field" style={{ gridColumn: '1 / -1' }}>
-                <label htmlFor="mv-location">Rangé au rack</label>
-                <input id="mv-location" className="input" list="mv-rack-list" placeholder="R-01-A…" value={location} onChange={(e) => setLocation(e.target.value)} />
-                <datalist id="mv-rack-list">{(racksData?.items ?? []).map((r) => <option key={r.code} value={r.code} />)}</datalist>
-                <span className="muted" style={{ fontSize: '0.75rem' }}>Facultatif — même rack que « Scan &amp; mouvements », « BRZ- » accepté ou non devant le code.</span>
-              </div>
             </>
+          )}
+
+          {(type === 'in' || type === 'adjustment') && (
+            <div className="field" style={{ gridColumn: '1 / -1' }}>
+              <label htmlFor="mv-location">Rangé au rack</label>
+              <input id="mv-location" className="input" list="mv-rack-list" placeholder="R-01-A…" value={location} onChange={(e) => setLocation(e.target.value)} />
+              <datalist id="mv-rack-list">{(racksData?.items ?? []).map((r) => <option key={r.code} value={r.code} />)}</datalist>
+              <span className="muted" style={{ fontSize: '0.75rem' }}>Facultatif — même rack que « Scan &amp; mouvements », « BRZ- » accepté ou non devant le code.</span>
+            </div>
           )}
 
           {type === 'out' && (

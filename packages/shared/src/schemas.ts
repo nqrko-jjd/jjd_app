@@ -419,6 +419,9 @@ export const stockItemInput = z.object({
   // réactive un article désactivé (DELETE le désactive au lieu de le supprimer s'il a un
   // historique) — jamais envoyé à la création, seulement pour le remettre actif depuis la liste.
   active: z.boolean().optional(),
+  // rack de rangement — correction directe possible depuis la fiche, sans passer par un
+  // mouvement (celui-ci reste un historique immuable, pas un formulaire de correction).
+  location: z.string().trim().max(40).nullish(),
   suppliers: z.array(stockSupplierInput).optional(), // fournisseurs à lier dès la création (plusieurs, un prix par conditionnement)
 });
 

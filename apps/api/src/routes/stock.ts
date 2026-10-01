@@ -201,6 +201,8 @@ stockRouter.patch(
         await tx.stockItemUnit.deleteMany({ where: { stockItemId: current.id } });
         await tx.stockItemUnit.createMany({ data: d.units.map((u, i) => ({ stockItemId: current.id, name: u.name, factor: u.factor, position: i })) });
       }
+      const newLocation = d.location === undefined ? undefined : normalizeLocation(d.location);
+      if (newLocation) await tx.stockLocation.upsert({ where: { code: newLocation }, create: { code: newLocation }, update: {} });
       return tx.stockItem.update({
         where: { id: current.id },
         data: {
@@ -214,6 +216,7 @@ stockRouter.patch(
           minQty: d.minQty === undefined ? undefined : (d.minQty ?? null),
           displayUnitName: d.displayUnitName === undefined ? undefined : (d.displayUnitName ?? null),
           active: d.active,
+          location: newLocation,
         },
         include: itemInclude,
       });

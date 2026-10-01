@@ -66,7 +66,9 @@ export async function applyStockMovement(tx: Prisma.TransactionClient, d: StockM
     newQty = baseQty;
   }
 
-  const location = d.type === 'in' ? normalizeLocation(d.location) : null;
+  // utile aussi sur un inventaire : compter un article, c'est souvent aussi le moment où on
+  // confirme/corrige où il se trouve — pas que sur une entrée.
+  const location = d.type === 'in' || d.type === 'adjustment' ? normalizeLocation(d.location) : null;
   if (location) await tx.stockLocation.upsert({ where: { code: location }, create: { code: location }, update: {} });
   const updated = await tx.stockItem.update({ where: { id: item.id }, data: { qty: newQty, avgCost: newAvgCost, ...(location ? { location } : {}) } });
   const movement = await tx.stockMovement.create({

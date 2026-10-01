@@ -25,7 +25,7 @@ export function StockItemModal({ item, onClose, onSaved }: { item?: StockItemFul
   const [v, setV] = useState({
     name: item?.name ?? '', ref: item?.ref ?? '', brand: item?.brand ?? '', model: item?.model ?? '', category: item?.category ?? '',
     unit: item?.unit ?? '', minQty: item?.minQty != null ? String(item.minQty) : '', note: item?.note ?? '',
-    displayUnitName: item?.displayUnitName ?? '',
+    displayUnitName: item?.displayUnitName ?? '', location: item?.location ?? '',
   });
   const [photo, setPhoto] = useState<File | null>(null);
   const photoPreview = useMemo(() => (photo ? URL.createObjectURL(photo) : null), [photo]);
@@ -87,6 +87,7 @@ export function StockItemModal({ item, onClose, onSaved }: { item?: StockItemFul
         ...(v.ref.trim() ? { ref: v.ref.trim() } : {}),
         units: units.filter((u) => u.name.trim()).map((u) => ({ name: u.name.trim(), factor: factorOfUnit(u.name) })),
         displayUnitName: unitNames.includes(v.displayUnitName) ? v.displayUnitName : null,
+        ...(item ? { location: v.location.trim() || null } : {}),
         ...(item ? {} : {
           suppliers: suppliers.filter((x) => x.contactId).map((x, i) => ({
             contactId: x.contactId, supplierRef: x.supplierRef || null, unitName: x.unitName || null,
@@ -165,6 +166,13 @@ export function StockItemModal({ item, onClose, onSaved }: { item?: StockItemFul
             <label htmlFor="si-min">Seuil d’alerte (en {v.unit || 'unité de base'})</label>
             <input id="si-min" className="input" type="number" step="any" value={v.minQty} onChange={(e) => set('minQty', e.target.value)} />
           </div>
+          {item && (
+            <div className="field">
+              <label htmlFor="si-location">Rack de rangement</label>
+              <input id="si-location" className="input" placeholder="R-01-A…" value={v.location} onChange={(e) => set('location', e.target.value)} />
+              <span className="muted" style={{ fontSize: '0.75rem' }}>Correction directe — n’ajoute pas de mouvement à l’historique.</span>
+            </div>
+          )}
           <div className="field" style={{ gridColumn: '1 / -1' }}>
             <label htmlFor="si-cat">Catégorie</label>
             <input id="si-cat" className="input" value={v.category} onChange={(e) => set('category', e.target.value)} placeholder="Plâtrerie, Peinture…" />

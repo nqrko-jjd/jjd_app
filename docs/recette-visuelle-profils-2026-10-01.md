@@ -39,3 +39,11 @@ Ces tests de rendu ne sont pas une validation matérielle Safari/iPhone ou Andro
 Les maquettes de test utilisent exclusivement des données fictives. Aucune requête de cette recette n’est envoyée à un service métier réel. L’aperçu web isolé peut utiliser une police de repli quand les polices externes sont bloquées ; la configuration des polices du site déployé est conservée.
 
 Aucune modification du schéma Prisma, des routes API, des droits, des données, des sauvegardes ni des intégrations externes dans ce diff. Les modifications récentes de la boîte mail IA sur `main` ont été intégrées à la base de la branche, sans les remplacer.
+
+## Validation sur le VPS isolé
+
+Le build Docker complet de la PR #8 réussit (run 36837798450). Son déploiement complet s’arrête au garde-fou : la base **de test** n’a pas les colonnes `ProcessedEmail` introduites par les derniers changements de boîte mail sur `main`. Aucun conteneur n’est remplacé par ce run et aucune migration n’est exécutée.
+
+Une branche exclusivement de recette, `test/visual-complete-existing-api`, conserve exactement le frontend de la PR et reprend l’API du commit déjà compatible avec la base de test (`86e640b`). Cette branche ne doit **jamais être fusionnée** en production. Elle permet de valider le rendu et le démarrage du frontend sans migration ni activation d’intégrations. La nouvelle boîte mail IA n’y est pas validable avec cette ancienne API.
+
+La PR de production conserve l’API actuelle de `main` (`df5d9ad`) : elle ne revient pas à l’ancienne API de test. Le déploiement de ce commit de base en production est confirmé réussi par le run 36835431470.

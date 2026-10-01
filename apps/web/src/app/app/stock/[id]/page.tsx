@@ -1,5 +1,5 @@
 'use client';
-import { Warehouse, Layers, AlertTriangle, Package } from 'lucide-react';
+import { Warehouse, Layers, AlertTriangle, Package, MapPin } from 'lucide-react';
 import { SkeletonRows, EmptyState } from '@/components/States';
 import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -155,7 +155,7 @@ export default function StockDetail({ params }: { params: Promise<{ id: string }
           <h1>{item.name}</h1>
           <span className={`badge ${item.low ? 'crit' : 'ok'}`}>{item.low ? 'À réapprovisionner' : 'Disponible'}</span>
         </div>
-        <div className="sub">{fmtQty(primaryQty)} {primaryUnitName} en stock{inBig}{item.location ? ` · 📍 rack ${item.location}` : ''}</div>
+        <div className="sub">{fmtQty(primaryQty)} {primaryUnitName} en stock{inBig}</div>
       </div>
       </div>
 
@@ -168,6 +168,12 @@ export default function StockDetail({ params }: { params: Promise<{ id: string }
           value={item.minQty != null ? `${fmtQty(item.minQty)} ${item.unit}` : '—'}
           sub={item.low ? 'Sous le seuil' : 'Au-dessus du seuil'}
           warn={item.low}
+        />
+        <Kpi
+          ic={MapPin}
+          label="Emplacement"
+          value={item.location ? `Rack ${item.location}` : '—'}
+          sub={item.location ? `${fmtQty(primaryQty)} ${primaryUnitName}` : 'Pas encore rangé'}
         />
       </div>
 

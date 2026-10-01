@@ -5,7 +5,7 @@ import { Feather } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { apiGet } from '@/lib/api';
 import { useSession } from '@/lib/session';
-import { Card, Muted, Loading } from '@/lib/ui';
+import { Card, Muted, Loading, EmptyState } from '@/lib/ui';
 import { T } from '@/lib/theme';
 
 interface Ev {
@@ -107,11 +107,11 @@ export default function Planning() {
       </View>
 
       <ScrollView
-        contentContainerStyle={{ padding: 16, paddingTop: 12, gap: 8 }}
+        contentContainerStyle={{ ...T.content, padding: 16, paddingTop: 12, gap: 8 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} />}
       >
         <Text style={s.dayHeading}>{DAY_LONG[dayIndex]} {selectedDate.toLocaleDateString('fr-BE', { day: '2-digit', month: 'long' })}</Text>
-        {dayEvents.length === 0 && <Muted>Rien de planifié ce jour-là.</Muted>}
+        {dayEvents.length === 0 && <EmptyState title="Journée disponible" description="Aucune affectation pour ce jour." icon="calendar"/>}
         {dayEvents.map((e) => (
           <Card key={e.id}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
@@ -151,22 +151,22 @@ export default function Planning() {
 }
 
 const s = StyleSheet.create({
-  title: { fontSize: 22, fontWeight: '800', color: T.ink },
+  title: { fontSize: 28, fontWeight: '800', color: T.ink },
   todayBtn: { borderWidth: 1, borderColor: T.line, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: T.surface },
   todayTxt: { color: T.primary, fontWeight: '700', fontSize: 12.5 },
   nav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 },
   navBtn: { borderWidth: 1, borderColor: T.line, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 6, backgroundColor: T.surface },
   week: { fontWeight: '600', color: T.ink },
   strip: { flexDirection: 'row', paddingHorizontal: 10, paddingVertical: 10, gap: 4 },
-  dayPill: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 12, gap: 2 },
+  dayPill: { flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 16, gap: 2 },
   dayPillActive: { backgroundColor: T.primary },
   dayPillLabel: { fontSize: 10.5, color: T.ink3, fontWeight: '700', textTransform: 'uppercase' },
-  dayPillNum: { fontSize: 15, color: T.ink, fontWeight: '700' },
+  dayPillNum: { fontSize: 18, color: T.ink, fontWeight: '700' },
   dayPillLabelActive: { color: '#fff' },
   dot: { width: 4, height: 4, borderRadius: 2, backgroundColor: 'transparent', marginTop: 2 },
   dotOn: { backgroundColor: T.gold },
   dotActive: { backgroundColor: '#fff' },
   dayHeading: { fontSize: 13, fontWeight: '700', color: T.ink2, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 2 },
-  ref: { fontWeight: '700', color: T.ink, flex: 1 },
+  ref: { fontSize: 15, lineHeight: 23, fontWeight: '700', color: T.ink, flex: 1 },
   time: { color: T.ink2, fontSize: 12, fontWeight: '600' },
 });

@@ -37,6 +37,9 @@ function dashboardKpis(){
 export async function api<T=unknown>(path:string,opts:any={}):Promise<T>{
  if(path.startsWith('/api/vehicles/') && path.includes('/repairs') && opts.body?.ledgerEntryId){const e=businessApi(`/api/finance/expenses/${opts.body.ledgerEntryId}`,'GET',null,db,people).expense;if(!e || e.direction!=='purchase' || (e.vehicleId && e.vehicleId!==path.split('/')[3]))throw Error('Choisissez une facture d’achat pour ce véhicule.');}
  const fleet=fleetApi(path,opts.method||'GET',opts.body);if(fleet!==undefined){if(fleet.vehicle?.repairs)fleet.vehicle.repairs=fleet.vehicle.repairs.map((r:any)=>{let ledgerEntry=null;if(r.ledgerEntryId){try{ledgerEntry=businessApi(`/api/finance/expenses/${r.ledgerEntryId}`,'GET',null,db,people).expense;}catch{}}return {...r,ledgerEntry};});if(fleet.vehicle?.repairs)fleet.vehicle.ledgerEntries=[...new Map([...fleet.vehicle.ledgerEntries,...fleet.vehicle.repairs.flatMap((r:any)=>r.ledgerEntry?[r.ledgerEntry]:[])].map((e:any)=>[e.id,e])).values()];return fleet as T;}
+ if(path==='/api/timesheet/timer')return {running:null,linked:true} as T;
+ if(path==='/api/people/team')return {items:people.slice(0,8).map((p:any,i:number)=>({id:p.id,name:p.displayName,worksite:db.worksites[i%2]}))} as T;
+ if(path==='/api/timesheet/pending'||path==='/api/reports/review-queue')return {items:[]} as T;
  const business=businessApi(path,opts.method||'GET',opts.body,db,people);if(business!==undefined)return business as T;
  const url=new URL(path,'https://demo.invalid'),p=url.pathname,b=opts.body,method=opts.method||'GET';let result:any;
  if(p==='/api/assistant/status')result={enabled:false};

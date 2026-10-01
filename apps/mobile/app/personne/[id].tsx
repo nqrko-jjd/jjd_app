@@ -29,7 +29,7 @@ export default function PersonneDetail() {
   const soon = Date.now() + 30 * 86400000;
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ padding: 16, gap: 12 }}>
+    <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ ...T.content, padding: 16, gap: 12 }}>
       <Stack.Screen options={{ title: p.displayName || p.firstName, headerBackTitle: 'Retour' }} />
       <PhotoHeader basePath={`/api/people/${p.id}`} photoUrl={p.photoUrl} round onChange={load} />
       <Card>

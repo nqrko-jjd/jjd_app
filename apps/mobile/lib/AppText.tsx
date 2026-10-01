@@ -1,4 +1,4 @@
-import { Text as RNText, type TextProps, type TextStyle } from 'react-native';
+import { Text as RNText, StyleSheet, type TextProps, type TextStyle } from 'react-native';
 
 // DM Sans est chargée en poids fixes (voir app/_layout.tsx) : contrairement à une police système,
 // `fontWeight` seul ne suffit pas à obtenir le bon graisse, il faut pointer la bonne fontFamily.
@@ -13,14 +13,12 @@ const FAMILY_BY_WEIGHT: Record<string, string> = {
 };
 
 function flattenStyle(style: TextProps['style']): TextStyle {
-  if (!style) return {};
-  if (Array.isArray(style)) return Object.assign({}, ...style.filter(Boolean));
-  return style as TextStyle;
+  return StyleSheet.flatten(style) ?? {};
 }
 
 export function Text({ style, ...props }: TextProps) {
   const flat = flattenStyle(style);
   const weight = flat.fontWeight != null ? String(flat.fontWeight) : '400';
   const fontFamily = FAMILY_BY_WEIGHT[weight] ?? 'DMSans_400Regular';
-  return <RNText {...props} style={[{ fontFamily }, style]} />;
+  return <RNText {...props} style={[{ fontFamily, fontSize: 14, color: '#173b31' }, style]} />;
 }

@@ -118,7 +118,7 @@ export default function Fil() {
           ),
         }}
       />
-      <ScrollView ref={scroll} contentContainerStyle={{ padding: 14, gap: 10 }}>
+      <ScrollView ref={scroll} contentContainerStyle={{ ...T.content, padding: 14, gap: 10 }}>
         {d.messages.length === 0 && <Text style={{ color: T.ink2 }}>Aucun message.</Text>}
         {d.messages.map((m) => {
           if (m.kind === 'status') {

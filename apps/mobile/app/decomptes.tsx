@@ -31,7 +31,7 @@ export default function Decomptes() {
   }
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ padding: 16, gap: 10 }}>
+    <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ ...T.content, padding: 16, gap: 10 }}>
       <Stack.Screen options={{ title: 'Décomptes du mois', headerBackTitle: 'Retour' }} />
       <View style={s.nav}>
         <Pressable style={s.btn} onPress={() => shift(-1)}><Feather name="chevron-left" size={18} color={T.ink} /></Pressable>

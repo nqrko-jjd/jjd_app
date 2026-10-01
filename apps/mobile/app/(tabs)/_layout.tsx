@@ -14,9 +14,9 @@ function Icon({ name, color, focused }: { name: FeatherName; color: ColorValue; 
   return (
     <View
       style={{
-        width: 36,
-        height: 28,
-        borderRadius: 10,
+        width: 44,
+        height: 30,
+        borderRadius: 12,
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: focused ? T.primarySoft : 'transparent',
@@ -62,7 +62,7 @@ export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerStyle: { backgroundColor: T.surface },
+        headerStyle: { backgroundColor: T.paper },
         headerTitleStyle: { color: T.ink, fontWeight: '700', fontFamily: 'DMSans_700Bold' },
         headerShadowVisible: false,
         tabBarActiveTintColor: T.primary,
@@ -75,8 +75,8 @@ export default function TabsLayout() {
           borderTopWidth: 0,
           borderTopLeftRadius: 24,
           borderTopRightRadius: 24,
-          height: 56 + insets.bottom,
-          paddingTop: 8,
+          height: 68 + insets.bottom,
+          paddingTop: 10,
           paddingBottom: 8 + insets.bottom,
           shadowColor: '#0f2a20',
           shadowOpacity: 0.08,
@@ -87,15 +87,15 @@ export default function TabsLayout() {
         tabBarLabelStyle: { fontSize: 11, fontWeight: '600', fontFamily: 'DMSans_600SemiBold' },
       }}
     >
-      <Tabs.Screen name="index" options={worker || foreman ? tab('Aujourd’hui', 'grid') : hide} />
+      <Tabs.Screen name="index" options={worker || foreman ? {...tab('Aujourd’hui', 'grid'),headerShown:false} : hide} />
       <Tabs.Screen name="heures" options={worker ? tab('Mes heures', 'clock') : hide} />
-      <Tabs.Screen name="dashboard" options={office ? tab('Bord', 'grid') : hide} />
-      <Tabs.Screen name="chantiers" options={staff ? tab('Chantiers', 'home') : worker ? tab('Mes chantiers', 'home') : hide} />
-      <Tabs.Screen name="planning" options={staff || worker ? tab('Planning', 'calendar') : hide} />
-      <Tabs.Screen name="valider" options={staff ? tab('Valider', 'check-square') : hide} />
-      <Tabs.Screen name="messages" options={tab('Messages', 'message-circle', unread)} />
-      <Tabs.Screen name="plus" options={staff ? tab('Plus', 'more-horizontal') : hide} />
-      <Tabs.Screen name="compte" options={worker ? tab('Compte', 'user') : hide} />
+      <Tabs.Screen name="dashboard" options={office ? {...tab('Accueil', 'grid'),headerShown:false} : hide} />
+      <Tabs.Screen name="chantiers" options={staff || worker ? {...tab('Chantiers', 'home'),headerShown:false} : hide} />
+      <Tabs.Screen name="planning" options={staff ? {...tab('Planning', 'calendar'),headerShown:false} : hide} />
+      <Tabs.Screen name="valider" options={hide} />
+      <Tabs.Screen name="messages" options={{...tab('Messages', 'message-circle', unread),headerShown:false}} />
+      <Tabs.Screen name="plus" options={{...tab('Plus', 'more-horizontal'),headerShown:false}} />
+      <Tabs.Screen name="compte" options={hide} />
     </Tabs>
   );
 }

@@ -13,7 +13,7 @@
       "**/*"
     ],
     "ios": {
-      "supportsTablet": false,
+      "supportsTablet": true,
       "bundleIdentifier": "be.jjdconsult.chantier",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false

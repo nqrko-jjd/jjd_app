@@ -23,7 +23,7 @@ export default function ContactDetail() {
   const c = d.contact;
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ padding: 16, gap: 12 }}>
+    <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ ...T.content, padding: 16, gap: 12 }}>
       <Stack.Screen options={{ title: c.name, headerBackTitle: 'Retour' }} />
       <Card>
         <Row k="E-mail" v={c.email ?? '—'} />

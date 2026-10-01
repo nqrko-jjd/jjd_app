@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { View, TextInput, Pressable, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, TextInput, Pressable, StyleSheet, KeyboardAvoidingView, Platform, Image, ScrollView } from 'react-native';
 import { Text } from '@/lib/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSession } from '@/lib/session';
+import { LinearGradient } from 'expo-linear-gradient';
 import { T } from '@/lib/theme';
 
 export default function Login() {
@@ -25,12 +26,13 @@ export default function Login() {
 
   return (
     <SafeAreaView style={s.wrap}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={s.inner}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-          <View style={s.mark}><Text style={s.markT}>J</Text></View>
-          <Text style={s.brand}>JD Chantier</Text>
-        </View>
-        <Text style={s.sub}>Connecte-toi avec ton compte JJD.</Text>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{flex:1}}>
+        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={s.inner}>
+        <LinearGradient colors={[T.heroFrom,T.heroTo]} style={s.hero}><Image source={require('../assets/splash-logo.png')} style={{width:58,height:64,resizeMode:'contain'}}/><Text style={s.brand}>JJD Consult</Text><Text style={s.heroText}>Votre équipe. Vos chantiers.
+Tout au même endroit.</Text></LinearGradient>
+        <Text style={{fontSize:26,fontWeight:'800',color:T.ink,marginTop:14}}>Bienvenue</Text>
+        <Text style={s.sub}>Connectez-vous à votre espace de travail.</Text>
+        <Text style={s.fieldLabel}>Adresse e-mail</Text>
         <TextInput
           style={s.input}
           placeholder="E-mail"
@@ -40,6 +42,7 @@ export default function Login() {
           onChangeText={setEmail}
           placeholderTextColor={T.ink2}
         />
+        <Text style={s.fieldLabel}>Mot de passe</Text>
         <TextInput
           style={s.input}
           placeholder="Mot de passe"
@@ -52,6 +55,7 @@ export default function Login() {
         <Pressable style={s.btn} onPress={submit} disabled={busy}>
           <Text style={s.btnTxt}>{busy ? 'Connexion…' : 'Se connecter'}</Text>
         </Pressable>
+      </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -59,21 +63,24 @@ export default function Login() {
 
 const s = StyleSheet.create({
   wrap: { flex: 1, backgroundColor: T.paper },
-  inner: { flex: 1, justifyContent: 'center', padding: 24, gap: 12 },
+  inner: { flexGrow: 1, justifyContent: 'center', padding: 24, gap: 10, width: '100%', maxWidth: 540, alignSelf: 'center' },
   mark: { width: 34, height: 34, borderRadius: 9, backgroundColor: T.primary, alignItems: 'center', justifyContent: 'center' },
   markT: { color: '#fff', fontWeight: '800', fontSize: 17 },
-  brand: { fontSize: 24, fontWeight: '800', color: T.ink },
+  hero: { borderRadius: 26, padding: 28, gap: 14 },
+  heroText: { color: '#cbded1', fontSize: 15, lineHeight: 23 },
+  fieldLabel: { color: T.ink2, fontSize: 12, fontWeight: '600', marginTop: 4 },
+  brand: { fontSize: 28, fontWeight: '700', color: 'white' },
   sub: { color: T.ink2, marginBottom: 8 },
   input: {
     backgroundColor: T.surface,
     borderWidth: 1,
     borderColor: T.line,
-    borderRadius: 10,
-    padding: 14,
+    borderRadius: 14,
+    padding: 16,
     fontSize: 16,
     color: T.ink,
   },
   err: { color: T.crit },
-  btn: { backgroundColor: T.primary, borderRadius: 10, padding: 16, alignItems: 'center', marginTop: 4 },
+  btn: { backgroundColor: T.primary, borderRadius: 14, padding: 16, alignItems: 'center', marginTop: 4 },
   btnTxt: { color: '#fff', fontWeight: '700', fontSize: 16 },
 });

@@ -570,7 +570,7 @@ model MailSuggestion {
   resultRef     String? // id de l'enregistrement créé à la validation (PlanningEvent, message de fil...)
   resolvedNote  String?
   createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  updatedAt     DateTime  @default(now()) @updatedAt
 
   @@index([kind, status])
   @@index([worksiteId])

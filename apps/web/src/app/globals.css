@@ -228,6 +228,27 @@ p { margin: 0; }
   color: #cbdad2; border-radius: var(--radius-sm); padding: 0.45rem; font-weight: 600;
 }
 .sidebar .foot .logout:hover { background: rgba(255,255,255,0.1); color: #fff; }
+.sidebar .foot .logout { display: flex; align-items: center; justify-content: center; gap: 0.5rem; }
+
+.nav-collapse {
+  display: flex; align-items: center; justify-content: center; gap: 0.6rem;
+  margin-top: 0.3rem; padding: 0.55rem 0.7rem; width: 100%;
+  border: 1px solid var(--nav-line); background: rgba(255,255,255,0.04); border-radius: var(--radius-sm);
+  color: var(--nav-fg); font-size: 0.78rem; font-weight: 600; cursor: pointer;
+}
+.nav-collapse:hover { background: rgba(255,255,255,0.08); color: #fff; }
+
+/* mode réduit (icônes seules) — persisté en localStorage, voir Shell.tsx */
+body.nav-collapsed .shell { grid-template-columns: 92px minmax(0, 1fr); }
+body.nav-collapsed .sidebar { width: 68px; padding: 1.1rem 0.4rem 1rem; align-items: center; }
+body.nav-collapsed .sidebar .brand { justify-content: center; padding: 0.3rem 0 1.2rem; }
+body.nav-collapsed .org-card,
+body.nav-collapsed .nav-search,
+body.nav-collapsed .nav-group-toggle,
+body.nav-collapsed .foot .who { display: none; }
+body.nav-collapsed .navlink { justify-content: center; gap: 0; padding: 0.65rem 0.4rem; }
+body.nav-collapsed .navlink .lbl, body.nav-collapsed .nav-collapse .lbl { display: none; }
+body.nav-collapsed .navlink .nav-badge { position: absolute; top: 2px; right: 2px; margin-left: 0; }
 
 .main {
   /* grid-column explicite : la sidebar (position:fixed) ne réserve plus sa cellule de grille,
@@ -965,6 +986,17 @@ p { margin: 0; }
   }
   .sidebar.open { transform: translateX(0); }
   .scrim { position: fixed; inset: 0; background: rgba(10,14,22,0.5); z-index: 40; backdrop-filter: blur(1px); }
+  /* le tiroir mobile reste plein écran même si le mode réduit (desktop) est activé */
+  body.nav-collapsed .shell { grid-template-columns: minmax(0, 1fr); }
+  body.nav-collapsed .sidebar { width: 252px; padding: 1.1rem 0.85rem 1rem; align-items: stretch; }
+  body.nav-collapsed .sidebar .brand { justify-content: flex-start; padding: 0.3rem 0.6rem 1.2rem; }
+  body.nav-collapsed .org-card { display: flex; }
+  body.nav-collapsed .nav-search { display: flex; }
+  body.nav-collapsed .nav-group-toggle { display: flex; }
+  body.nav-collapsed .foot .who { display: block; }
+  body.nav-collapsed .navlink { justify-content: flex-start; gap: 0.7rem; padding: 0.69rem 0.75rem; }
+  body.nav-collapsed .navlink .lbl, body.nav-collapsed .nav-collapse .lbl { display: inline; }
+  body.nav-collapsed .navlink .nav-badge { position: static; margin-left: auto; }
   .main { padding: 1rem; }
   .main.has-bottom-tabs { padding-bottom: 5.2rem; }
   .page-head { margin-bottom: 1rem; }

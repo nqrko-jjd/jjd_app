@@ -24,3 +24,11 @@ Vérifications : typecheck web ; navigateur à 1440, 820 et 390 px ; ouverture/f
 ### Préalable au prochain déploiement
 
 Le déploiement précédent a abouti sur une base de test vide (0 comptes/0 chantiers). Le compte rendu utilisateur confirme ensuite le rétablissement de l'accès, mais le statut automatisé disponible ne publie que l'état des conteneurs. Vérifier la correction du choix des volumes/projet Compose et les comptages réels avant/après le prochain déploiement. Ne supprimer aucun volume et ne pas restaurer par-dessus une base sans diagnostic. Cette livraison ne modifie ni Compose, ni le script serveur, ni le schéma.
+
+## V3 — IA seule et quota visuel (remplace l’interface V2)
+
+La bulle ouvre directement Compagnon IA. Les échanges équipe/client restent dans la messagerie habituelle. Le portrait fictif réaliste remplace le SVG à casque. L’accueil mobile est réduit et les suggestions n’affichent plus leurs sous-titres.
+
+Une ligne ouvre « Mon quota » : simulation d’un budget de 1 €/mois/personne et de 10 demandes/jour ; direction Julien/David exemptée de ces deux limites, budget direction restant à définir. L’état initial fictif est 72 % et 7 demandes restantes. Chaque envoi simule une demande et 2 points de crédit ; ces valeurs ne sont pas un tarif. Compteurs conservés par profil durant la session uniquement. Blocage local et rallonge simulée sans envoi. Renouvellement mensuel affiché au 1er du mois suivant, minuit belge ; aucun vrai mécanisme de facturation, autorisation, quota serveur ou renouvellement automatique n’est livré ici. Le sélecteur de profil est rangé dans les détails du quota.
+
+Tests : TypeScript ; 1440/820/390 px sans débordement, saisie visible ; épuisement des 7 demandes simulées, exemption direction, zéro écriture API et zéro erreur JS. Les publications précédentes PR5 ont préservé les volumes restaurés et vérifié 886 chantiers avant déploiement.

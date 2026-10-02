@@ -58,13 +58,23 @@ test('POST /api/assistant/chat sans clé configurée -> 503', async () => {
   assert.equal(r.status, 503);
 });
 
-test('les créations IA sont interdites avant intégration de la confirmation',async()=>{
- for(const name of ['create_devis_draft','create_planning_draft','create_task_draft']){
-  await assert.rejects(()=>runTool(name,{worksiteId,title:'Ne pas créer',lines:[]},userId));
- }
- assert.equal(await prisma.document.count({where:{worksiteId}}),0);
- assert.equal(await prisma.planningEvent.count({where:{worksiteId}}),0);
+test('les créations IA sont réservées à la direction et restent des brouillons',async()=>{
+ const worker=await prisma.user.findFirst({where:{role:'worker',active:true}});
+ if(worker)await assert.rejects(()=>runTool('create_task_draft',{worksiteId,title:'Interdit'},worker.id));
  assert.equal(await prisma.worksiteTask.count({where:{worksiteId}}),0);
+
+ const devis=await runTool('create_devis_draft',{worksiteId,title:'Peinture',assumptions:'TVA à confirmer',lines:[{label:'Murs',qty:100,unit:'m²',unitPriceHt:20}]},userId);
+ const d=await prisma.document.findUniqueOrThrow({where:{id:(devis.result as {id:string}).id}});
+ assert.equal(d.status,'draft');assert.equal(d.number,null);assert.equal(d.source,'ai-draft');
+ assert.equal(d.totalHt,2000);assert.equal(devis.action?.kind,'devis');
+
+ const rdv=await runTool('create_planning_draft',{worksiteId,title:'RDV client',startAt:'2026-10-08T09:00:00+02:00',endAt:'2026-10-08T10:00:00+02:00'},userId);
+ const ev=await prisma.planningEvent.findUniqueOrThrow({where:{id:(rdv.result as {id:string}).id}});
+ assert.equal(ev.status,'tentative');assert.equal(ev.kind,'meeting');assert.equal(ev.source,'ai-draft');
+ await assert.rejects(()=>runTool('create_planning_draft',{worksiteId,startAt:'2026-10-08T10:00:00Z',endAt:'2026-10-08T09:00:00Z'},userId));
+
+ const task=await runTool('create_task_draft',{worksiteId,title:'Commander peinture'},userId);
+ assert.equal((await prisma.worksiteTask.findUniqueOrThrow({where:{id:(task.result as {id:string}).id}})).source,'ai-draft');
 });
 
 test('search_worksites : retrouve le chantier de test par référence', async () => {

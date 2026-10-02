@@ -1,11 +1,13 @@
 'use client';
 import {useEffect,useRef,useState} from 'react';
 import {ArrowUp,ChevronLeft,MessageCircle,Mic,Phone,PhoneOff,Plus,Square,Volume2,VolumeX} from 'lucide-react';
+import Link from 'next/link';
 import {api,ApiError} from '@/lib/api';
 import {CompanionAvatar} from './CompanionAvatar';
 import s from '@/app/app-compagnon/companion.module.css';
 export type LiveQuota={direction:boolean;enabled:boolean;monthlyLimitEuro:number|null;spentEuro:number;reservedEuro:number;remainingPercent:number|null;dailyRemaining:number|null;dailyLimit:number|null;dailyResetAt:string;monthlyResetAt:string};
-type Turn={role:'user'|'assistant';content:string};
+type DraftAction={kind:'devis'|'planning'|'task';id:string;label:string;href:string};
+type Turn={role:'user'|'assistant';content:string;actions?:DraftAction[]};
 const date=(v:string)=>new Intl.DateTimeFormat('fr-BE',{timeZone:'Europe/Brussels',day:'numeric',month:'long',hour:'2-digit',minute:'2-digit'}).format(new Date(v));
 // Dictée (entrée) : API Web Speech native, pas de coût ni de requête supplémentaire. Absente de
 // Safari/iOS — sur iPhone on compte sur le micro du clavier système, déjà dispo sur ce textarea.
@@ -82,8 +84,8 @@ export default function CompanionLive({embedded=false,initialQuota}:{embedded?:b
   const payload=retry&&pending.current?pending.current:{requestId:crypto.randomUUID(),messages};pending.current=payload;
   if(!retry){setTurns(messages);setInput('');}
   try{
-   const r=await api<{reply:string;quota:LiveQuota}>('/api/assistant/chat',{method:'POST',body:payload});
-   setTurns([...messages,{role:'assistant',content:r.reply}]);setQ(r.quota);pending.current=null;
+   const r=await api<{reply:string;actions?:DraftAction[];quota:LiveQuota}>('/api/assistant/chat',{method:'POST',body:payload});
+   setTurns([...messages,{role:'assistant',content:r.reply,actions:r.actions}]);setQ(r.quota);pending.current=null;
    if(voiceOn||convoActive.current)speak(r.reply,convoActive.current?conversationTurn:undefined);
   }
   catch(e){setError((e as Error).message);if(e instanceof ApiError&&e.status!==409)pending.current=null;if(convoActive.current)stopConversation();}
@@ -91,11 +93,11 @@ export default function CompanionLive({embedded=false,initialQuota}:{embedded?:b
  }
  const blocked=!q.enabled||q.remainingPercent===0||q.dailyRemaining===0;
  return <div className={`${s.app} ${embedded?s.embedded:''}`}><main className={s.main}>
-  <header className={s.header}><div className={s.heading}><CompanionAvatar size={38}/><div><strong>Compagnon JJD</strong><small>Assistant IA · lecture seule</small></div></div><button className={s.pending} disabled={busy} onClick={()=>{setTurns([]);setError('');pending.current=null;}}> <Plus size={14}/> Nouvelle</button></header>
+  <header className={s.header}><div className={s.heading}><CompanionAvatar size={38}/><div><strong>Compagnon JJD</strong><small>{q.direction?'Assistant IA · brouillons à valider':'Assistant IA · lecture seule'}</small></div></div><button className={s.pending} disabled={busy} onClick={()=>{setTurns([]);setError('');pending.current=null;}}> <Plus size={14}/> Nouvelle</button></header>
   <button className={s.quotaStrip} aria-expanded={details} onClick={()=>setDetails(!details)}><span className={s.previewTag}>Connecté</span><span>{q.direction?'Direction':`${q.dailyRemaining}/${q.dailyLimit} demandes`} · {q.remainingPercent??'—'} % disponibles</span><span className={s.quotaLink}>Mon quota</span></button>
   <div className={s.thread}>
    {details&&<section className={s.quotaCard}><div className={s.quotaTitle}><strong>Votre utilisation réelle</strong></div><div className={s.quotaMetric}><span>Crédit restant</span><b>{q.remainingPercent??'—'} %</b></div><progress max={100} value={q.remainingPercent??0}/><p>{q.spentEuro.toFixed(4)} € comptabilisés · {q.reservedEuro.toFixed(4)} € réservés<br/>Budget : {q.monthlyLimitEuro??'à définir'} € · renouvellement le {date(q.monthlyResetAt)} (heure belge).</p>{q.direction?<p>Budget direction distinct ; aucune limite de 10 demandes/jour.</p>:<p>{q.dailyRemaining} demandes restantes · renouvellement le {date(q.dailyResetAt)}.</p>}<p>Montants API hors taxes, selon le taux de conversion configuré. Une provision conservée après incident peut être supérieure au coût fournisseur définitif.</p></section>}
-   {!turns.length?<section className={s.welcome}><h1>Bonjour,<br/><em>comment puis-je t’aider ?</em></h1><div className={s.starters}>{['Retrouver un chantier','Retrouver un contact','Comprendre les pointages'].map(t=><button key={t} onClick={()=>setInput(t)}><MessageCircle size={18}/><strong>{t}</strong></button>)}</div><p>Consultation uniquement. Aucun devis, tâche ou planning ne sera créé.</p></section>:<div className={s.messages}>{turns.map((t,i)=><div key={i} className={`${s.message} ${t.role==='user'?s.mine:''}`}><div className={s.author}>{t.role==='assistant'&&<CompanionAvatar size={25}/>} {t.role==='user'?'Vous':'Compagnon IA'}</div><div className={s.bubble}>{t.content}</div>{t.role==='assistant'&&<button type="button" className={s.extension} style={{display:'inline-flex',alignItems:'center',gap:4,marginTop:6}} onClick={()=>speak(t.content)}><Volume2 size={12}/> Écouter</button>}</div>)}</div>}
+   {!turns.length?<section className={s.welcome}><h1>Bonjour,<br/><em>comment puis-je t’aider ?</em></h1><div className={s.starters}>{(q.direction?['Préparer un devis','Planifier un rendez-vous','Retrouver un chantier']:['Retrouver un chantier','Comprendre les pointages']).map(t=><button key={t} onClick={()=>setInput(t)}><MessageCircle size={18}/><strong>{t}</strong></button>)}</div><p>{q.direction?'Je prépare des brouillons (devis, rendez-vous, tâches) : rien n’est envoyé ni confirmé avant ta validation.':'Consultation uniquement. Aucun devis, tâche ou planning ne sera créé.'}</p></section>:<div className={s.messages}>{turns.map((t,i)=><div key={i} className={`${s.message} ${t.role==='user'?s.mine:''}`}><div className={s.author}>{t.role==='assistant'&&<CompanionAvatar size={25}/>} {t.role==='user'?'Vous':'Compagnon IA'}</div><div className={s.bubble}>{t.content}</div>{t.actions?.length?<div style={{display:'grid',gap:6,marginTop:8}}>{t.actions.map(a=><Link key={a.id} href={a.href} className={s.extension} style={{display:'inline-flex',alignItems:'center',gap:6,textDecoration:'none',fontWeight:700}}>✨ {a.label} — ouvrir pour valider →</Link>)}</div>:null}{t.role==='assistant'&&<button type="button" className={s.extension} style={{display:'inline-flex',alignItems:'center',gap:4,marginTop:6}} onClick={()=>speak(t.content)}><Volume2 size={12}/> Écouter</button>}</div>)}</div>}
    {busy&&<p role="status">Compagnon consulte les informations autorisées…</p>}<div ref={bottom}/>
   </div><footer className={s.footer}>{error&&<p role="alert" className={s.error}>{error}</p>}{pending.current&&!busy&&<button className={s.extension} onClick={()=>send(true)}>Vérifier la réponse de cette demande</button>}{blocked&&<p className={s.error}>Accès suspendu ou quota atteint. Consulte « Mon quota ».</p>}
    {conversationOn&&<p className={s.privacy} style={{fontWeight:700,color:'#1b4a38',margin:'0 0 8px'}}>{listening?'🎤 Je t’écoute…':speaking?'🔊 Compagnon répond…':busy?'… Compagnon réfléchit':'En conversation — parle quand tu veux'}</p>}

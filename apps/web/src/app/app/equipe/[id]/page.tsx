@@ -17,7 +17,7 @@ import { PERSON_FIELDS } from '@/lib/forms';
 import {
   PERSON_ROLE_LABEL, WORKER_CONTRACT_LABEL, LEGAL_DOC_LABEL, LEGAL_DOC_TYPES,
   ADJUSTMENT_TYPES, ADJUSTMENT_TYPE_LABEL, WORKSITE_STATUS_OPEN, ABSENCE_KIND_LABEL,
-  formatHours, formatEur,
+  formatHours, formatEur, loginLabel,
 } from '@jjd/shared';
 import type { PlanningEv, PlanAbsence, PlanVehicleRef, PlanPerson } from '@/components/planningTypes';
 
@@ -67,7 +67,7 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
   const { data, loading, error, reload } = useApi<Detail>(`/api/people/${id}`);
   const { data: stats } = useApi<{ months: { month: string; amount: number; hours: number; worksites: number }[] }>(`/api/people/${id}/stats`);
   const { data: earnings } = useApi<Earnings>(`/api/people/${id}/earnings`);
-  const [created, setCreated] = useState<{ email: string; password: string } | null>(null);
+  const [created, setCreated] = useState<{ email: string; login: string; password: string } | null>(null);
   const [editing, setEditing] = useState(false);
   const [addingDoc, setAddingDoc] = useState(false);
   const [adjModal, setAdjModal] = useState<'new' | Adjustment | null>(null);
@@ -117,10 +117,10 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
   const now = new Date().toLocaleDateString('fr-BE', { month: 'long', year: 'numeric' });
 
   async function createAccount() {
-    const email = prompt('E-mail de connexion pour cette personne :', p.email ?? '');
+    const email = prompt('N° de GSM ou e-mail de connexion pour cette personne :', p.phone ?? p.email ?? '');
     if (!email) return;
     try {
-      const r = await api<{ email: string; password: string }>(`/api/people/${id}/account`, {
+      const r = await api<{ email: string; login: string; password: string }>(`/api/people/${id}/account`, {
         method: 'POST',
         body: { email },
       });
@@ -281,7 +281,7 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
           <Info
             label="Compte appli"
             value={p.user
-              ? <><span className="badge ok">Lié</span> <span className="muted" style={{ fontSize: '0.82rem' }}>{p.user.email}</span></>
+              ? <><span className="badge ok">Lié</span> <span className="muted" style={{ fontSize: '0.82rem' }}>{loginLabel(p.user.email)}</span></>
               : <button className="btn" style={{ padding: '0.2rem 0.6rem', fontSize: '0.8rem' }} onClick={createAccount}>Créer un compte</button>}
           />
         </div>
@@ -291,7 +291,7 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
         <div className="card card-pad" style={{ marginBottom: '1.4rem', borderLeft: '3px solid var(--ok)' }}>
           <div className="eyebrow">Compte créé — à communiquer à la personne</div>
           <p style={{ margin: '0.4rem 0 0' }}>
-            E-mail : <strong>{created.email}</strong> · Mot de passe provisoire : <strong className="mono">{created.password}</strong>
+            Identifiant : <strong>{created.login}</strong> · Code / mot de passe provisoire : <strong className="mono">{created.password}</strong>
           </p>
         </div>
       )}

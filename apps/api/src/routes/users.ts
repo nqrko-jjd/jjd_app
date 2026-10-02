@@ -3,6 +3,8 @@ import { ROLES, INTERNAL_ROLES } from '@jjd/shared';
 import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, hashPassword } from '../lib/auth.js';
+import { parseNewLogin, newSecret, accountLogin } from '../lib/accounts.js';
+import { loginLabel } from '@jjd/shared';
 
 export const usersRouter = Router();
 
@@ -17,7 +19,7 @@ function label(u: {
   if (u.contact) return u.contact.name;
   if (u.syndic) return `${u.syndic.name} (syndic)`;
   if (u.residentOf) return `${u.residentOf.name} (résident)`;
-  return u.email;
+  return loginLabel(u.email);
 }
 
 /** Liste tous les comptes de connexion (équipe + portail) pour la gestion centralisée. */
@@ -38,6 +40,7 @@ usersRouter.get(
       items: users.map((u) => ({
         id: u.id,
         email: u.email,
+        login: loginLabel(u.email),
         role: u.role,
         active: u.active,
         portalAccess: u.portalAccess,
@@ -59,9 +62,8 @@ usersRouter.post(
   requireAuth('admin'),
   asyncHandler(async (req, res) => {
     const { email: rawEmail, role, personId } = req.body as { email?: string; role?: string; personId?: string };
-    const email = String(rawEmail ?? '').trim().toLowerCase();
-    if (!/.+@.+\..+/.test(email)) throw new HttpError(422, 'E-mail invalide');
-    if (await prisma.user.findUnique({ where: { email } })) throw new HttpError(409, 'Cet e-mail est déjà pris');
+    const { email, phone } = parseNewLogin(rawEmail);
+    if (await prisma.user.findUnique({ where: { email } })) throw new HttpError(409, phone ? 'Ce numéro de GSM est déjà utilisé' : 'Cet e-mail est déjà pris');
     if (!role || !INTERNAL_ROLES.includes(role as (typeof INTERNAL_ROLES)[number])) throw new HttpError(422, 'Rôle invalide');
 
     let resolvedPersonId: string | null = null;
@@ -72,11 +74,11 @@ usersRouter.post(
       resolvedPersonId = person.id;
     }
 
-    const password = Math.random().toString(36).slice(2, 8);
+    const password = newSecret(phone);
     const user = await prisma.user.create({
       data: { email, passwordHash: await hashPassword(password), role, personId: resolvedPersonId },
     });
-    res.status(201).json({ email: user.email, password });
+    res.status(201).json({ ...accountLogin(user.email), password });
   }),
 );
 
@@ -106,9 +108,12 @@ usersRouter.post(
   '/:id/reset-password',
   requireAuth('admin'),
   asyncHandler(async (req, res) => {
-    const password = Math.random().toString(36).slice(2, 8);
+    const target = await prisma.user.findUnique({ where: { id: req.params.id }, select: { email: true } });
+    if (!target) throw new HttpError(404, 'Compte introuvable');
+    const { phone } = accountLogin(target.email);
+    const password = newSecret(phone);
     const user = await prisma.user.update({ where: { id: req.params.id }, data: { passwordHash: await hashPassword(password) } });
-    res.json({ email: user.email, password });
+    res.json({ ...accountLogin(user.email), password });
   }),
 );
 

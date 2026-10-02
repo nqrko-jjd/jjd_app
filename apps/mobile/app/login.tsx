@@ -19,7 +19,7 @@ export default function Login() {
     try {
       await signIn(email.trim().toLowerCase(), password);
     } catch {
-      setErr('E-mail ou mot de passe incorrect.');
+      setErr('Identifiant ou mot de passe incorrect.');
       setBusy(false);
     }
   }
@@ -32,20 +32,20 @@ export default function Login() {
 Tout au même endroit.</Text></LinearGradient>
         <Text style={{fontSize:26,fontWeight:'800',color:T.ink,marginTop:14}}>Bienvenue</Text>
         <Text style={s.sub}>Connectez-vous à votre espace de travail.</Text>
-        <Text style={s.fieldLabel}>Adresse e-mail</Text>
+        <Text style={s.fieldLabel}>E-mail ou n° de GSM</Text>
         <TextInput
           style={s.input}
-          placeholder="E-mail"
+          placeholder="E-mail ou 0475 12 34 56"
           autoCapitalize="none"
-          keyboardType="email-address"
+          keyboardType="default"
           value={email}
           onChangeText={setEmail}
           placeholderTextColor={T.ink2}
         />
-        <Text style={s.fieldLabel}>Mot de passe</Text>
+        <Text style={s.fieldLabel}>Mot de passe ou code</Text>
         <TextInput
           style={s.input}
-          placeholder="Mot de passe"
+          placeholder="Mot de passe ou code"
           secureTextEntry
           value={password}
           onChangeText={setPassword}

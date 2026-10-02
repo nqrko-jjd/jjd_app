@@ -16,7 +16,7 @@ export default function LoginPage() {
     try {
       await login(email.trim().toLowerCase(), password);
     } catch {
-      setErr('E-mail ou mot de passe incorrect.');
+      setErr('Identifiant ou mot de passe incorrect.');
       setBusy(false);
     }
   }
@@ -33,11 +33,11 @@ export default function LoginPage() {
         </div>
         <div className="login-heading"><span className="eyebrow">Bon retour</span><h1>Connexion</h1><p className="muted">Retrouvez votre espace JJD.</p></div>
         <div className="field">
-          <label htmlFor="email">E-mail</label>
-          <input id="email" className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" required placeholder="votre@email.be" />
+          <label htmlFor="email">E-mail ou n° de GSM</label>
+          <input id="email" className="input" type="text" inputMode="email" autoCapitalize="none" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" required placeholder="votre@email.be ou 0475 12 34 56" />
         </div>
         <div className="field">
-          <label htmlFor="pw">Mot de passe</label>
+          <label htmlFor="pw">Mot de passe ou code</label>
           <input id="pw" className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required />
         </div>
         {err && <div className="badge crit" style={{ padding: '0.4rem 0.6rem' }}>{err}</div>}

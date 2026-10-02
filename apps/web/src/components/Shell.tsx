@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useApi } from '@/lib/use-api';
+import { loginLabel } from '@jjd/shared';
 import { CompanionLauncher } from './CompanionLauncher';
 
 type Item = { href: string; label: string; ic: LucideIcon; roles?: string[]; ext?: boolean; noBottomTab?: boolean };
@@ -241,14 +242,14 @@ export function Shell({ children, navigationPaths }: { children: React.ReactNode
           <span className="lbl">Réduire le menu</span>
         </button>
         <div className="foot">
-          <div className="who">{user?.email}</div>
+          <div className="who">{loginLabel(user?.email)}</div>
           <button className="logout" onClick={logout} title={collapsed ? 'Déconnexion' : undefined}>
             <LogOut size={15} /> <span className="lbl">Déconnexion</span>
           </button>
         </div>
       </nav>
 
-      <main className={`main${(isWorker || isForeman || isStorekeeper || bureau) ? ' has-bottom-tabs' : ''}${pathname==='/app/messagerie'?' messaging-main':''}`}>{pathname !== '/app/messagerie' && <div className="workspace-bar"><span>Espace de gestion <span className="workspace-dot">·</span> JJD Consult</span><div><span className="workspace-profile">{ROLE_LABEL[user?.role ?? ''] ?? (isStorekeeper ? 'Magasinier' : 'Votre espace')}</span><span className="workspace-avatar" aria-label={user?.email}>{(user?.email ?? 'J')[0]?.toUpperCase()}</span></div></div>}{children}</main>
+      <main className={`main${(isWorker || isForeman || isStorekeeper || bureau) ? ' has-bottom-tabs' : ''}${pathname==='/app/messagerie'?' messaging-main':''}`}>{pathname !== '/app/messagerie' && <div className="workspace-bar"><span>Espace de gestion <span className="workspace-dot">·</span> JJD Consult</span><div><span className="workspace-profile">{ROLE_LABEL[user?.role ?? ''] ?? (isStorekeeper ? 'Magasinier' : 'Votre espace')}</span><span className="workspace-avatar" aria-label={loginLabel(user?.email)}>{(loginLabel(user?.email) || 'J').replace(/^\+/, '')[0]?.toUpperCase()}</span></div></div>}{children}</main>
 
       {isWorker && (
         <nav className="bottom-tabs worker">

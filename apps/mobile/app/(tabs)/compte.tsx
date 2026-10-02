@@ -3,6 +3,7 @@ import { Text } from '@/lib/AppText';
 import { useSession } from '@/lib/session';
 import { API_URL } from '@/lib/api';
 import { T } from '@/lib/theme';
+import { loginLabel } from '@/lib/login-label';
 
 export default function Compte() {
   const { user, person, signOut } = useSession();
@@ -10,8 +11,8 @@ export default function Compte() {
     <View style={s.wrap}>
       <View style={s.card}>
         <Text style={s.label}>Connecté</Text>
-        <Text style={s.name}>{person?.displayName || person?.firstName || user?.email}</Text>
-        <Text style={s.muted}>{user?.email}</Text>
+        <Text style={s.name}>{person?.displayName || person?.firstName || loginLabel(user?.email)}</Text>
+        <Text style={s.muted}>{loginLabel(user?.email)}</Text>
         <Text style={s.muted}>Rôle : {user?.role}</Text>
       </View>
       <Text style={[s.muted, { fontSize: 12 }]}>API : {API_URL}</Text>

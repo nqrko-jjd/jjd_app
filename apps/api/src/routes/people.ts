@@ -11,6 +11,7 @@ import { prisma } from '../db.js';
 import { insensitive } from '../lib/search.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, STAFF, OFFICE, hashPassword } from '../lib/auth.js';
+import { parseNewLogin, newSecret, accountLogin } from '../lib/accounts.js';
 import { attachPhotoRoutes } from '../lib/photo-upload.js';
 import { storeFile, UPLOADS_DIR } from '../lib/media.js';
 import { monthlyStatement, personEarningsSeries, personEarningsBreakdown } from '../lib/statement.js';
@@ -319,11 +320,10 @@ peopleRouter.post(
     if (!person) throw new HttpError(404, 'Fiche introuvable');
     if (person.user) throw new HttpError(409, 'Un compte existe déjà pour cette personne');
 
-    const email = String(req.body.email ?? '').trim().toLowerCase();
-    if (!/.+@.+\..+/.test(email)) throw new HttpError(422, 'E-mail invalide');
-    if (await prisma.user.findUnique({ where: { email } })) throw new HttpError(409, 'Cet e-mail est déjà pris');
+    const { email, phone } = parseNewLogin(req.body.email ?? req.body.phone);
+    if (await prisma.user.findUnique({ where: { email } })) throw new HttpError(409, phone ? 'Ce numéro de GSM est déjà utilisé' : 'Cet e-mail est déjà pris');
 
-    const password = req.body.password || Math.random().toString(36).slice(2, 8);
+    const password = req.body.password || newSecret(phone);
     await prisma.user.create({
       data: {
         email,
@@ -332,7 +332,7 @@ peopleRouter.post(
         personId: person.id,
       },
     });
-    res.status(201).json({ email, password });
+    res.status(201).json({ ...accountLogin(email), password });
   }),
 );
 

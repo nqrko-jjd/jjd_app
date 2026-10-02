@@ -6,7 +6,7 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { PageHead, Money, formatDateBE, Avatar } from '@/lib/ui';
 import type { Company } from '@/lib/doc-ui';
-import { VAT_RATES, ROLES, ROLE_LABEL, INTERNAL_ROLES } from '@jjd/shared';
+import { VAT_RATES, ROLES, ROLE_LABEL, INTERNAL_ROLES, loginLabel } from '@jjd/shared';
 import { AddressAutocomplete } from '@/components/AddressAutocomplete';
 import { FormModal, type FieldDef } from '@/components/FormModal';
 import { downloadCsv, pickAndImportCsv, summarizeImport } from '@/lib/csvIO';
@@ -143,7 +143,7 @@ function UsersTab() {
   const unlinkedPeople = (pick?.people ?? []).filter((p) => !linkedPersonIds.has(p.id));
 
   const createFields: FieldDef[] = [
-    { name: 'email', label: 'E-mail', required: true },
+    { name: 'email', label: 'E-mail ou n° de GSM (ouvriers sans e-mail)', required: true },
     { name: 'role', label: 'Rôle', type: 'select', required: true, options: INTERNAL_ROLES.map((r) => ({ value: r, label: ROLE_LABEL[r] })) },
     {
       name: 'personId', label: 'Fiche Équipe liée (optionnel)', type: 'select',
@@ -162,8 +162,8 @@ function UsersTab() {
   async function resetPassword(id: string) {
     if (!confirm('Générer un nouveau mot de passe pour ce compte ?')) return;
     try {
-      const r = await api<{ email: string; password: string }>(`/api/users/${id}/reset-password`, { method: 'POST' });
-      setMsg(`Nouveau mot de passe pour ${r.email} : ${r.password} — à communiquer à la personne, il ne sera plus affiché.`);
+      const r = await api<{ login: string; password: string }>(`/api/users/${id}/reset-password`, { method: 'POST' });
+      setMsg(`Nouveau code pour ${r.login} : ${r.password} — à communiquer à la personne, il ne sera plus affiché.`);
     } catch (e) {
       setMsg((e as Error).message);
     }
@@ -188,8 +188,8 @@ function UsersTab() {
           initial={{ role: 'worker' }}
           onClose={() => setCreating(false)}
           onSubmit={async (v) => {
-            const r = await api<{ email: string; password: string }>('/api/users', { method: 'POST', body: v });
-            setMsg(`Compte créé pour ${r.email} — mot de passe provisoire : ${r.password} (à communiquer à la personne, il ne sera plus affiché).`);
+            const r = await api<{ login: string; password: string }>('/api/users', { method: 'POST', body: v });
+            setMsg(`Compte créé pour ${r.login} — code provisoire : ${r.password} (à communiquer à la personne, il ne sera plus affiché).`);
             reload();
           }}
         />
@@ -216,7 +216,7 @@ function UsersTab() {
                   <Avatar src={u.photoThumbUrl} label={u.label} />
                   {u.link ? <a href={u.link}>{u.label}</a> : u.label}
                 </td>
-                <td className="muted" style={{ fontSize: '0.85rem' }}>{u.email}</td>
+                <td className="muted" style={{ fontSize: '0.85rem' }}>{loginLabel(u.email)}</td>
                 <td>
                   <select className="select" value={u.role} onChange={(e) => setRole(u.id, e.target.value)}>
                     {ROLES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}

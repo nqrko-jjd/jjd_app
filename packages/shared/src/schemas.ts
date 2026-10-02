@@ -11,7 +11,8 @@ import {
 const nonEmpty = z.string().trim().min(1);
 
 export const loginSchema = z.object({
-  email: z.string().trim().email(),
+  /** E-mail OU numéro de GSM (le nom du champ reste « email » pour ne pas casser les clients existants). */
+  email: z.string().trim().min(3).max(200),
   password: z.string().min(1),
 });
 

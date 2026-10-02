@@ -11,12 +11,14 @@ import type { AuthUser } from './auth.js';
 export const EURO = 1_000_000;
 export const isDirection = (u: Pick<AuthUser, 'email' | 'role'>) =>
   ['admin', 'office'].includes(u.role) && ['david@jjd-consult.be','julien@jjd-consult.be'].includes(u.email.toLowerCase());
+export const isFieldUser = (u: Pick<AuthUser, 'role'>) => ['foreman', 'worker'].includes(u.role);
+export const canUsePilot = (u: Pick<AuthUser, 'email' | 'role'>) => isDirection(u) || isFieldUser(u);
 export const isBudgetManager = (u: Pick<AuthUser, 'email' | 'role'>) => u.role === 'admin' && u.email.toLowerCase() === 'david@jjd-consult.be';
-export function assertPilot(u: AuthUser) { if (!isDirection(u)) throw new HttpError(403, 'Compagnon est actuellement réservé à Julien et David.'); }
+export function assertPilot(u: AuthUser) { if (!canUsePilot(u)) throw new HttpError(403, 'Compagnon est actuellement réservé à l’équipe JJD.'); }
 export type Pricing = { model: string; inputUsdPerMillion: number; outputUsdPerMillion: number; eurPerUsd: number };
 export type Config = { enabled: boolean; globalMonthlyMicro: number; directionMonthlyMicro: number; pricing: Pricing | null };
 const PREFIX='assistant:v1:';
-async function currentPilot(tx:Tx,u:AuthUser){const row=await tx.user.findUnique({where:{id:u.id}});if(!row||!row.active||!isDirection(row as AuthUser))throw new HttpError(403,'Accès IA retiré.');}
+async function currentPilot(tx:Tx,u:AuthUser){const row=await tx.user.findUnique({where:{id:u.id}});if(!row||!row.active||!canUsePilot(row as AuthUser))throw new HttpError(403,'Accès IA retiré.');}
 const CONFIG=PREFIX+'config';
 const defaults:Config={enabled:false,globalMonthlyMicro:0,directionMonthlyMicro:0,pricing:null};
 type Bucket={spent:number;reserved:number;requests:number;extra:number;extraRequests:number};

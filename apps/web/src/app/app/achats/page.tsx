@@ -580,8 +580,9 @@ function ExpenseModal({
   });
   // Une facture peut couvrir plusieurs chantiers (ex. sous-traitant intervenu sur
   // plusieurs R-) : au-delà d'une ligne, le chantier unique + montant HT global sont
-  // remplacés par une répartition manuelle, HT par chantier (uniquement à la création —
-  // une dépense existante reste liée à un seul chantier, modifiable comme avant).
+  // remplacés par une répartition manuelle, HT par chantier. Sur une dépense existante, la 1re ligne
+  // met à jour la dépense en place (son rapprochement bancaire éventuel y reste attaché) et les
+  // suivantes créent les autres parts, avec le même PDF.
   const [splits, setSplits] = useState<{ worksiteId: string; ht: string }[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -719,21 +720,37 @@ function ExpenseModal({
           throw new Error('Chaque ligne de répartition doit avoir un chantier et un montant HT > 0.');
         }
         const totalHt = splits.reduce((sum, s) => sum + Number(s.ht), 0);
+        // Sur une dépense existante, on ne change pas le montant global par mégarde : la somme doit rester égale.
+        if (expense && Math.abs(totalHt - expense.ht) > 0.01) {
+          throw new Error(`La somme des parts (${totalHt.toFixed(2)} €) doit égaler le HT de la facture (${expense.ht.toFixed(2)} €).`);
+        }
         const totalTtc = v.ttc === '' ? null : Number(v.ttc);
         const totalVat = v.vatRecup === '' ? null : Number(v.vatRecup);
-        for (const s of splits) {
+        // PDF à recopier sur les nouvelles parts : celui qu'on vient de déposer, sinon celui déjà enregistré.
+        let sharedFile: File | null = pendingFile;
+        if (!sharedFile && expense?.hasPdf && pdfUrl) {
+          sharedFile = new File([await (await fetch(pdfUrl)).blob()], `${expense.docNumber ?? 'facture'}.pdf`, { type: 'application/pdf' });
+        }
+        for (const [i, s] of splits.entries()) {
           const share = Number(s.ht) / totalHt;
-          const saved = await api<{ expense: { id: string } }>('/api/finance/expenses', {
-            method: 'POST',
-            body: {
-              ...commonBody(),
-              worksiteId: s.worksiteId,
-              ht: Number(s.ht),
-              ttc: totalTtc != null ? Math.round(totalTtc * share * 100) / 100 : null,
-              vatRecup: totalVat != null ? Math.round(totalVat * share * 100) / 100 : null,
-            },
-          });
-          await attachFile(saved.expense.id);
+          const body = {
+            ...commonBody(),
+            worksiteId: s.worksiteId,
+            ht: Number(s.ht),
+            ttc: totalTtc != null ? Math.round(totalTtc * share * 100) / 100 : null,
+            vatRecup: totalVat != null ? Math.round(totalVat * share * 100) / 100 : null,
+          };
+          if (expense && i === 0) {
+            await api(`/api/finance/expenses/${expense.id}`, { method: 'PATCH', body: { ...body, vehicleId: v.vehicleId || null } });
+            if (pendingFile) await attachFile(expense.id);
+            continue;
+          }
+          const saved = await api<{ expense: { id: string } }>('/api/finance/expenses', { method: 'POST', body });
+          if (sharedFile) {
+            const fd = new FormData();
+            fd.append('file', sharedFile);
+            await apiUpload(`/api/finance/expenses/${saved.expense.id}/pdf`, fd);
+          }
         }
         onSaved();
         return;
@@ -854,6 +871,7 @@ function ExpenseModal({
                 <button type="button" className="btn" onClick={() => setSplits((prev) => [...(prev ?? []), { worksiteId: '', ht: '' }])}>+ Chantier</button>
                 <span className="muted" style={{ fontSize: '0.8rem' }}>
                   Total réparti : {splits.reduce((sum, s) => sum + (Number(s.ht) || 0), 0)} €
+                  {expense && <> · HT de la facture : {expense.ht} € (la somme doit être identique){bankMatches.length > 0 && ' · le rapprochement bancaire reste attaché à la 1re ligne'}</>}
                 </span>
               </div>
             </div>
@@ -861,7 +879,7 @@ function ExpenseModal({
             <div className="field" style={{ gridColumn: '1 / -1' }}>
               <label>
                 Chantier
-                {!expense && (
+                {(!expense || expense.editable) && (
                   <button
                     type="button"
                     className="btn ghost"

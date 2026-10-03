@@ -16,7 +16,7 @@ import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, OFFICE, FIELD_OFFICE } from '../lib/auth.js';
 import { storeFile, UPLOADS_DIR } from '../lib/media.js';
 import { nameOverlap } from '../lib/bank-match.js';
-import { extractDocumentInfo } from '../lib/document-extract.js';
+import { extractDocumentInfo, suggestExpenseCategory } from '../lib/document-extract.js';
 import { toCsv, readTableBuffer, pick } from '../lib/table-io.js';
 import { invoiceMailboxConfigured, syncInvoiceMailbox, reprocessEmailEntries, scanInvoiceMailboxHistory, PROCESSED_MAILBOX } from '../lib/invoice-mailbox.js';
 import { scanAllEntriesForRefs } from '../lib/purchase-ref-scan.js';
@@ -501,7 +501,9 @@ expensesRouter.post(
   asyncHandler(async (req, res) => {
     if (!req.file) throw new HttpError(422, 'Aucun fichier');
     const extraction = await extractDocumentInfo(req.file.buffer, req.file.mimetype, ['supplier', 'both']);
-    res.json({ extraction });
+    const isPdf = req.file.mimetype === 'application/pdf';
+    const suggestedCategory = isPdf ? await suggestExpenseCategory(req.file.buffer, extraction.contactId) : null;
+    res.json({ extraction, suggestedCategory });
   }),
 );
 

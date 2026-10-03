@@ -491,3 +491,73 @@ export async function extractDocumentInfo(
     worksiteId, worksiteRef, otherWorksiteRefs, textExtracted: true,
   };
 }
+
+/* ------------------------------------------------------------ suggestion de catégorie de dépense */
+
+export interface CategorySuggestion { code: string; label: string; source: 'supplier' | 'ai' }
+
+const CATEGORY_PROMPT = `Tu classes une facture d'ACHAT reçue par JJD Consult (entreprise belge de rénovation) dans UNE catégorie de dépense. Lis le document (fournisseur, lignes, désignations).
+
+Repères : la grande majorité des achats sont du "materiel" (grossistes, quincaillerie, peinture, sanitaire, électricité, bois, outillage consommable… achetés pour les chantiers). Les autres catégories ne s'appliquent que si le document est clairement d'un autre type (carburant, assurance, location de matériel/engin, container/déchets, loyer, charges…).
+
+Catégories possibles (code | libellé | nombre de factures déjà classées ainsi) :
+{LIST}
+
+Réponds UNIQUEMENT avec un objet JSON : {"code": "<code exact de la liste>"}. Si tu hésites entre plusieurs catégories, choisis la plus probable.`;
+
+/**
+ * Propose la catégorie d'une dépense : 1) d'après l'historique du fournisseur (si ses factures
+ * précédentes vont presque toujours dans la même catégorie — gratuit et fiable), 2) sinon en
+ * faisant lire le PDF par Claude parmi les catégories réellement utilisées. Best-effort : renvoie
+ * null en cas de doute ou d'erreur, jamais d'exception.
+ */
+export async function suggestExpenseCategory(buf: Buffer | null, contactId: string | null): Promise<CategorySuggestion | null> {
+  try {
+    const labelOf = async (code: string) => (await prisma.category.findUnique({ where: { code }, select: { label: true } }))?.label ?? code;
+    if (contactId) {
+      const hist = await prisma.ledgerEntry.groupBy({
+        by: ['categoryCode'],
+        where: { direction: 'purchase', contactId, categoryCode: { not: null }, source: { not: 'demo' } },
+        _count: true,
+        orderBy: { _count: { categoryCode: 'desc' } },
+      });
+      const total = hist.reduce((s, h) => s + h._count, 0);
+      const top = hist[0];
+      if (top?.categoryCode && total >= 2 && top._count / total >= 0.6) {
+        return { code: top.categoryCode, label: await labelOf(top.categoryCode), source: 'supplier' };
+      }
+    }
+    if (!aiClient || !buf) return null;
+
+    const usage = await prisma.ledgerEntry.groupBy({
+      by: ['categoryCode'], where: { direction: 'purchase', categoryCode: { not: null }, source: { not: 'demo' } },
+      _count: true, orderBy: { _count: { categoryCode: 'desc' } },
+    });
+    const cats = await prisma.category.findMany({ where: { active: true, kind: 'expense' }, select: { code: true, label: true } });
+    const countByCode = new Map(usage.map((u) => [u.categoryCode!, u._count]));
+    const seenLabels = new Set<string>();
+    const candidates = cats
+      .filter((c) => countByCode.has(c.code) || c.code === 'materiel')
+      .sort((a, b) => (countByCode.get(b.code) ?? 0) - (countByCode.get(a.code) ?? 0))
+      .filter((c) => (seenLabels.has(c.label) ? false : (seenLabels.add(c.label), true))); // libellés en double (anciens codes E-xx)
+    if (!candidates.length) return null;
+
+    const response = await aiClient.messages.create({
+      model: AI_MODEL,
+      max_tokens: 100,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: buf.toString('base64') } },
+          { type: 'text', text: CATEGORY_PROMPT.replace('{LIST}', candidates.map((c) => `${c.code} | ${c.label} | ${countByCode.get(c.code) ?? 0}`).join('\n')) },
+        ],
+      }],
+    });
+    const text = response.content.find((b): b is Anthropic.TextBlock => b.type === 'text')?.text ?? '';
+    const code = (JSON.parse(text.match(/\{[\s\S]*\}/)?.[0] ?? '{}') as { code?: string }).code;
+    const hit = candidates.find((c) => c.code === code);
+    return hit ? { code: hit.code, label: hit.label, source: 'ai' } : null;
+  } catch {
+    return null;
+  }
+}

@@ -604,6 +604,7 @@ function ExpenseModal({
       const fd = new FormData();
       fd.append('file', f);
       const r = await apiUpload<{
+        suggestedCategory: { code: string; label: string; source: 'supplier' | 'ai' } | null;
         extraction: {
           kind: string | null; docNumber: string | null; issuedOn: string | null; dueOn: string | null;
           totalHt: number | null; totalTtc: number | null; totalVat: number | null; vatRate: number | null;
@@ -612,7 +613,11 @@ function ExpenseModal({
         };
       }>('/api/finance/expenses/extract', fd);
       const ex = r.extraction;
-      if (!ex.textExtracted) { setExtractNote('PDF sans texte lisible (scan/photo) — à compléter à la main.'); return; }
+      const sug = r.suggestedCategory;
+      const sugNote = sug ? `Catégorie proposée : ${sug.label} (${sug.source === 'supplier' ? 'd’après les factures précédentes de ce fournisseur' : 'lecture du PDF'}) — à vérifier.` : '';
+      if (sug) setV((prev) => ({ ...prev, categoryCode: prev.categoryCode || sug.code }));
+      if (!ex.textExtracted) { setExtractNote(`PDF sans texte lisible (scan/photo) — à compléter à la main. ${sugNote}`.trim()); return; }
+      if (sugNote) setExtractNote(sugNote);
       const ht = ex.totalHt ?? (ex.totalTtc != null ? Math.round((ex.totalTtc / (1 + (ex.vatRate ?? 0.21))) * 100) / 100 : null);
       // la TVA récupérable = le montant de TVA lu tel quel dans le PDF quand il a été trouvé de
       // façon fiable (le repère isolé "TVA 21% …" est peu sûr — souvent noyé dans un tableau —
@@ -741,7 +746,7 @@ function ExpenseModal({
             vatRecup: totalVat != null ? Math.round(totalVat * share * 100) / 100 : null,
           };
           if (expense && i === 0) {
-            await api(`/api/finance/expenses/${expense.id}`, { method: 'PATCH', body: { ...body, vehicleId: v.vehicleId || null } });
+            await api(`/api/finance/expenses/${expense.id}`, { method: 'PATCH', body });
             if (pendingFile) await attachFile(expense.id);
             continue;
           }
@@ -759,7 +764,6 @@ function ExpenseModal({
       const body = {
         ...commonBody(),
         worksiteId: v.worksiteId || null,
-        vehicleId: v.vehicleId || null,
         ht: Number(v.ht || 0),
         vatRecup: v.vatRecup === '' ? null : Number(v.vatRecup),
         ttc: v.ttc === '' ? null : Number(v.ttc),
@@ -898,15 +902,6 @@ function ExpenseModal({
               />
             </div>
           )}
-          <div className="field" style={{ gridColumn: '1 / -1' }}>
-            <label>Véhicule <span className="muted" style={{ fontWeight: 400, fontSize: '0.8rem' }}> — réparation, entretien, carburant…</span></label>
-            <ComboBox
-              placeholder="— (pas lié à un véhicule)"
-              value={v.vehicleId}
-              onChange={(val) => set('vehicleId', val)}
-              options={meta.vehicles.map((c) => ({ value: c.id, label: c.name }))}
-            />
-          </div>
           <div className="field">
             <label>Montant HT *{splits && <span className="muted" style={{ fontWeight: 400, fontSize: '0.8rem' }}> (total réparti)</span>}</label>
             <input

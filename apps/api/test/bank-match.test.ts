@@ -215,3 +215,34 @@ test('pickCitedMatch : paiement partiel d’une facture citée par son numéro (
   // facture déjà soldée : rien à rapprocher
   assert.equal(pickCitedMatch(tx('FACTURE F2026-336', 100, 'in'), byNumber, () => 0), null);
 });
+
+test('paiement groupé : « Factures F2026/ 65,66,67 » rapproche chaque facture pour sa part, à la cent près', async () => {
+  const { pickGroupedMatch, invoiceNumbersIn, paymentMessage } = await import('../src/lib/bank-match.js');
+  const mk = (id: string, ttc: number) => ({ id, ttc, ht: ttc / 1.06, date: new Date('2026-02-01'), direction: 'sale', bankComm: null, supplierName: null, contactName: 'Beerlandt', documentId: 'D' + id });
+  const idx = new Map([['2026-65', [mk('L65', 10000)]], ['2026-66', [mk('L66', 8000)]], ['2026-67', [mk('L67', 12051.18)]], ['2026-68', [mk('L68', 5000)]]]);
+  const left = (l: { ttc: number | null }) => l.ttc ?? 0;
+  const ing = (msg: string, amount: number) => ({ amount, side: 'in', bookingDate: new Date('2026-03-16'), description: `Instantoverschrijving in euro Van: M JOHAN - BE35 Instant op 16/03 - 17:17:13 Mededeling: ${msg} Persoonlijke info: 84c9fea775`, communication: null });
+
+  assert.equal(paymentMessage(ing('Factures F2026/ 65,66,67', 1)), 'Factures F2026/ 65,66,67');
+  assert.deepEqual(invoiceNumbersIn('Factures F2026/ 65,66,67,68,69,70'), [65, 66, 67, 68, 69, 70]);
+  assert.deepEqual(invoiceNumbersIn('F2026 302 291 290'), [302, 291, 290]);
+  assert.deepEqual(invoiceNumbersIn('Facture 2026-134'), [134]);
+  assert.deepEqual(invoiceNumbersIn('Facture D2026-059 VB26/338'), []);
+  assert.deepEqual(invoiceNumbersIn('F 079'), [79]);
+  assert.deepEqual(invoiceNumbersIn('Factures 187 278 28...'), [187, 278]); // dernier nombre tronqué écarté
+  assert.deepEqual(invoiceNumbersIn('Solde travaux non termines'), []);
+
+  // 10 000 + 8 000 + 12 051,18 = 30 051,18 : les trois factures citées, chacune pour sa part
+  const all = pickGroupedMatch(ing('Factures F2026/ 65,66,67', 30051.18), idx, left)!;
+  assert.deepEqual(all.map((p) => [p.ledgerId, p.amount]), [['L65', 10000], ['L66', 8000], ['L67', 12051.18]]);
+  // une facture citée en trop (68) : le seul sous-ensemble qui égale le virement est retenu
+  const sub = pickGroupedMatch(ing('Factures F2026/ 65,66,67,68', 18000), idx, left)!;
+  assert.deepEqual(sub.map((p) => p.ledgerId), ['L65', 'L66']);
+  // aucun sous-ensemble ne tombe juste : rien (à la main)
+  assert.equal(pickGroupedMatch(ing('Factures F2026/ 65,66,67', 12345), idx, left), null);
+  // une seule facture citée, paiement partiel
+  assert.deepEqual(pickGroupedMatch(ing('Facture F2026-65', 4000), idx, left)!.map((p) => p.amount), [4000]);
+  // paiement supérieur à ce qui reste : écarté ; sortie d'argent : jamais
+  assert.equal(pickGroupedMatch(ing('Facture F2026-65', 11000), idx, left), null);
+  assert.equal(pickGroupedMatch({ ...ing('Factures F2026/ 65,66', 18000), side: 'out' }, idx, left), null);
+});

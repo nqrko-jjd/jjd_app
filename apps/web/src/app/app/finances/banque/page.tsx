@@ -12,6 +12,7 @@ import { FormModal } from '@/components/FormModal';
 
 interface Match {
   id: string;
+  amount?: number | null;
   ledgerEntry: { id: string; docNumber: string | null; supplierName: string | null; direction: string; documentId: string | null; ttc: number | null; ht: number; worksite: { ref: string } | null } | null;
   document: { id: string; number: string | null; kind: string; totalTtc: number | null; contact: { name: string } | null; worksite: { ref: string } | null } | null;
 }
@@ -36,6 +37,7 @@ interface PontoStatus {
 const CONF_LABEL: Record<string, string> = { strong: 'auto ✓✓', good: 'auto ✓', manual: 'manuel' };
 
 function matchAmount(m: Match): number {
+  if (m.amount != null) return m.amount; // part du virement affectée à cette facture (paiement groupé)
   if (m.ledgerEntry) return m.ledgerEntry.ttc ?? m.ledgerEntry.ht;
   if (m.document) return m.document.totalTtc ?? 0;
   return 0;

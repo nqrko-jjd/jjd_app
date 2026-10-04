@@ -42,9 +42,10 @@ export async function recomputeDocumentPayment(documentId: string) {
 
   const matches = await prisma.bankTransactionMatch.findMany({
     where: { OR: [{ documentId }, { ledgerEntry: { documentId } }] },
-    select: { bankTransaction: { select: { amount: true, bookingDate: true } } },
+    select: { amount: true, bankTransaction: { select: { amount: true, bookingDate: true } } },
   });
-  const paidAmount = round2(matches.reduce((s, m) => s + Math.abs(m.bankTransaction.amount ?? 0), 0));
+  // part affectée à cette facture si le virement en solde plusieurs, sinon tout le montant de la transaction
+  const paidAmount = round2(matches.reduce((s, m) => s + (m.amount ?? Math.abs(m.bankTransaction.amount ?? 0)), 0));
   const bookingDates = matches.map((m) => m.bankTransaction.bookingDate).filter((d): d is Date => !!d).sort((a, b) => b.getTime() - a.getTime());
   const paidOn = bookingDates[0] ?? null;
   const status = matches.length === 0 ? 'sent' : paidAmount + 0.02 >= doc.totalTtc ? 'paid' : 'partial';
@@ -91,6 +92,74 @@ export function pickCitedMatch(
   const l = [...targets.values()][0]!;
   const left = outstanding(l);
   return left > 0.02 && amt <= left + 0.02 ? l.id : null;
+}
+
+/** Message libre du paiement : « Mededeling » ING, ou colonne « Communications » Belfius. */
+export function paymentMessage(tx: { description?: string | null; communication?: string | null }): string {
+  const d = (tx.description ?? '').replace(/\s+/g, ' ');
+  const ing = d.match(/Mededeling:\s*(.*?)(?:\s*Persoonlijke info.*)?$/i)?.[1];
+  return (ing ?? (tx.communication ?? '')).replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Numéros de facture listés dans un message (« Factures F2026/ 65,66,67 », « F2026 302 291 290 », « F-182 »…).
+ * Écarte dates, années, codes type « VB26/338 » et numéros de devis ; un message tronqué (« 28... ») perd son dernier
+ * nombre, incomplet.
+ */
+export function invoiceNumbersIn(message: string): number[] {
+  if (!/factur|^\s*F[\s\d.\-/]|\bF\d/i.test(message)) return [];
+  let cleaned = message
+    .replace(/\b\d{1,2}[/.]\d{1,2}[/.]\d{2,4}\b/g, ' ')
+    .replace(/\b[A-Za-z]{1,3}\d{2}\/\d{2,}\b/g, ' ')
+    .replace(/\bD\d{4}-?\d+\b/gi, ' ');
+  const truncated = /\d+\s*\.{2,}|…/.test(cleaned);
+  if (truncated) cleaned = cleaned.replace(/\d+\s*(\.{2,}|…).*$/, ' ');
+  const out = new Set<number>();
+  for (const m of cleaned.matchAll(/\b(\d{1,4})\b/g)) {
+    const n = Number(m[1]);
+    if (m[1]!.length === 4 && n >= 2000 && n <= 2100) continue; // une année, pas un numéro
+    if (n > 0) out.add(n);
+  }
+  return [...out];
+}
+
+/**
+ * Paiement groupé : le message liste plusieurs factures de vente (ou une seule, partiellement payée). Retenu si la
+ * somme de ce qui reste à payer sur les factures citées égale exactement le virement, ou, à défaut, si UN seul
+ * sous-ensemble des factures citées l'égale. Renvoie la part affectée à chaque facture.
+ */
+export function pickGroupedMatch(
+  tx: { amount: number | null; side: string | null; bookingDate: Date | null; description?: string | null; communication?: string | null },
+  saleIndex: Map<string, LedgerLite[]>, // « 2026-65 » -> écritures de vente F2026-065
+  outstanding: (l: LedgerLite) => number,
+): { ledgerId: string; amount: number }[] | null {
+  const amt = round2(Math.abs(tx.amount ?? 0));
+  if (!amt || tx.side !== 'in' || !tx.bookingDate) return null;
+  const nums = invoiceNumbersIn(paymentMessage(tx));
+  if (!nums.length) return null;
+  const year = tx.bookingDate.getUTCFullYear();
+  const cands = new Map<string, { l: LedgerLite; left: number }>();
+  for (const n of nums) {
+    const found = [year, year - 1].map((y) => saleIndex.get(`${y}-${n}`) ?? []).find((a) => a.length) ?? [];
+    for (const l of found) {
+      const left = round2(outstanding(l));
+      if (left > 0.02 && (!l.date || l.date.getTime() <= tx.bookingDate.getTime() + 3 * DAY)) cands.set(l.id, { l, left });
+    }
+  }
+  const list = [...cands.values()];
+  if (!list.length) return null;
+  const total = round2(list.reduce((s, c) => s + c.left, 0));
+  if (Math.abs(total - amt) <= 0.05) return list.map((c) => ({ ledgerId: c.l.id, amount: c.left }));
+  if (list.length === 1 && amt < list[0]!.left - 0.02) return [{ ledgerId: list[0]!.l.id, amount: amt }]; // paiement partiel
+  if (list.length > 16) return null;
+  const hits: number[] = [];
+  for (let mask = 1; mask < 1 << list.length && hits.length < 2; mask++) {
+    let sum = 0;
+    for (let i = 0; i < list.length; i++) if (mask & (1 << i)) sum += list[i]!.left;
+    if (Math.abs(sum - amt) <= 0.05) hits.push(mask);
+  }
+  if (hits.length !== 1) return null; // aucune combinaison, ou plusieurs : à trancher à la main
+  return list.filter((_, i) => hits[0]! & (1 << i)).map((c) => ({ ledgerId: c.l.id, amount: c.left }));
 }
 
 export interface TxLite {
@@ -230,6 +299,7 @@ export async function autoMatchAll(
     supplierName: l.supplierName, contactName: l.contact?.name ?? null, documentId: l.documentId,
   }));
   const docNumberById = new Map(ledgerRows.map((l) => [l.id, alnum(l.docNumber)]));
+  const rawNumberById = new Map(ledgerRows.map((l) => [l.id, (l.docNumber ?? '').trim()]));
   const documentIdByLedger = new Map(ledgers.map((l) => [l.id, l.documentId]));
 
   // index montant (au centime) + index communication structurée -> lookup O(1)
@@ -247,14 +317,14 @@ export async function autoMatchAll(
   }
 
   const now = new Date();
-  const updates: { id: string; ledgerId: string; confidence: 'strong' | 'good' }[] = [];
+  const updates: { id: string; ledgerId: string; confidence: 'strong' | 'good'; amount?: number }[] = [];
 
   // Déjà payé par écriture (somme des paiements rapprochés) et index des écritures par n° de facture.
   const ledgerByDocument = new Map(ledgers.filter((l) => l.documentId).map((l) => [l.documentId!, l.id]));
   const paid = new Map<string, number>();
-  for (const m of await prisma.bankTransactionMatch.findMany({ select: { ledgerEntryId: true, documentId: true, bankTransaction: { select: { amount: true } } } })) {
+  for (const m of await prisma.bankTransactionMatch.findMany({ select: { ledgerEntryId: true, documentId: true, amount: true, bankTransaction: { select: { amount: true } } } })) {
     const lid = m.ledgerEntryId ?? (m.documentId ? ledgerByDocument.get(m.documentId) : undefined);
-    if (lid) paid.set(lid, (paid.get(lid) ?? 0) + Math.abs(m.bankTransaction.amount ?? 0));
+    if (lid) paid.set(lid, (paid.get(lid) ?? 0) + (m.amount ?? Math.abs(m.bankTransaction.amount ?? 0)));
   }
   const byNumber = new Map<string, LedgerLite[]>();
   for (const l of ledgers) {
@@ -273,6 +343,21 @@ export async function autoMatchAll(
     paid.set(lid, (paid.get(lid) ?? 0) + Math.abs(tx.amount ?? 0));
     citedDone.add(tx.id);
   }
+  // paiements groupés / partiels dont le message liste les numéros de facture (ventes), chronologique
+  const saleIndex = new Map<string, LedgerLite[]>();
+  for (const l of ledgers) {
+    if (l.direction !== 'sale') continue;
+    const m = /^F(\d{4})-0*(\d+)$/i.exec(rawNumberById.get(l.id) ?? '');
+    if (m) { const k = `${m[1]}-${Number(m[2])}`; const b = saleIndex.get(k); if (b) b.push(l); else saleIndex.set(k, [l]); }
+  }
+  for (const tx of [...txs].sort((a, b) => (a.bookingDate?.getTime() ?? 0) - (b.bookingDate?.getTime() ?? 0))) {
+    if (isInternalMovement(tx) || citedDone.has(tx.id)) continue;
+    const g = pickGroupedMatch(tx, saleIndex, outstanding);
+    if (!g) continue;
+    for (const part of g) { updates.push({ id: tx.id, ledgerId: part.ledgerId, confidence: 'strong', amount: part.amount }); paid.set(part.ledgerId, (paid.get(part.ledgerId) ?? 0) + part.amount); }
+    citedDone.add(tx.id);
+  }
+
   for (const tx of txs) {
     const amt = Math.round(Math.abs(tx.amount ?? 0) * 100);
     if (!amt) continue;
@@ -300,7 +385,7 @@ export async function autoMatchAll(
     const batch = updates.slice(i, i + 100);
     await prisma.$transaction([
       ...batch.map((u) =>
-        prisma.bankTransactionMatch.create({ data: { bankTransactionId: u.id, ledgerEntryId: u.ledgerId } }),
+        prisma.bankTransactionMatch.create({ data: { bankTransactionId: u.id, ledgerEntryId: u.ledgerId, amount: u.amount ?? null } }),
       ),
       ...batch.map((u) =>
         prisma.bankTransaction.update({ where: { id: u.id }, data: { matchConfidence: u.confidence, matchedAt: now } }),

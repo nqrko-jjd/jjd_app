@@ -854,6 +854,8 @@ model BankTransactionMatch {
   ledgerEntry       LedgerEntry?    @relation(fields: [ledgerEntryId], references: [id], onDelete: Cascade)
   documentId        String?
   document          Document?       @relation("DocumentBankMatchLines", fields: [documentId], references: [id], onDelete: Cascade)
+  /// Part du paiement affectée à cette facture quand un virement en solde plusieurs (null = tout le montant de la transaction).
+  amount            Float?
   createdAt         DateTime        @default(now())
 
   @@index([bankTransactionId])

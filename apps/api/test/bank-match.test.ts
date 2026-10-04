@@ -181,3 +181,15 @@ test('autoMatchAll : une facture de vente rapprochée passe "paid", pas seulemen
     await prisma.document.delete({ where: { id: doc.id } });
   }
 });
+
+test('isInternalMovement : virements entre comptes JJD, recharges et relevés VISA ne se rapprochent jamais', async () => {
+  const { isInternalMovement } = await import('../src/lib/bank-match.js');
+  assert.equal(isInternalMovement({ description: 'VIREMENT INSTANTANE BELFIUS MOBILE VERS BE64 3632 5469 4152 Jjd Consult REF. : 0905471864798' }), true);
+  assert.equal(isInternalMovement({ description: 'Instantoverschrijving in euro Van: JJD CONSULT - BE31068949400055' }), true);
+  assert.equal(isInternalMovement({ counterpartyAccount: 'BE31 0689 4940 0055' }), true);
+  assert.equal(isInternalMovement({ description: 'VISA RELEVE NUMERO 116 REF. : 0827556272771 VAL. 06-05' }), true);
+  assert.equal(isInternalMovement({ description: 'CHARGEMENT DE LA CARTE VISA BUSINESS GOLD PREPAID NO 4569' }), true);
+  // un client qui paie JJD (JJD bénéficiaire) n'est PAS un virement interne
+  assert.equal(isInternalMovement({ description: 'VERSEMENT DE BE33 2100 4334 8746 STEVENART VERS BE31 0689 4940 0055 SPRL JJD Consult REF. : 080G73L285131' }), false);
+  assert.equal(isInternalMovement({ description: 'ACHAT VISA BUSINESS GOLD NO 4569 59** **** 7449 AU NOM DE SWEERT JULIEN' }), false);
+});

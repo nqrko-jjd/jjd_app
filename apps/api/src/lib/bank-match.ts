@@ -53,6 +53,19 @@ export async function recomputeDocumentPayment(documentId: string) {
   await syncLedgerEntryForDocument(documentId);
 }
 
+/** Comptes de JJD Consult (Belfius, ING) : un virement entre les deux n'est ni un encaissement ni un paiement. */
+const OWN_IBANS = ['BE31068949400055', 'BE64363254694152'];
+const alnum = (s: string | null | undefined) => (s ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+/** Lignes qu'on ne rapproche jamais automatiquement à une facture : virements entre comptes JJD, recharges de cartes
+ *  prépayées et relevés VISA (prélèvement mensuel global) — ce sont des mouvements d'argent internes, les vrais achats
+ *  par carte étant saisis ligne par ligne. */
+export function isInternalMovement(tx: { description?: string | null; counterpartyAccount?: string | null }): boolean {
+  if (OWN_IBANS.includes(alnum(tx.counterpartyAccount))) return true;
+  const d = tx.description ?? '';
+  return /VERS\s+BE64\s?3632\s?5469\s?4152|VAN:\s*JJD CONSULT\s*-\s*BE31068949400055|CHARGEMENT (DE LA CARTE )?VISA|VISA RELEVE|RELEVE NUMERO/i.test(d);
+}
+
 export interface TxLite {
   id: string;
   amount: number | null;
@@ -175,13 +188,13 @@ export async function autoMatchAll(
 ): Promise<{ strong: number; good: number; scanned: number }> {
   const txs = await prisma.bankTransaction.findMany({
     where: { ...(opts.onlyUnmatched === false ? {} : { matches: { none: {} } }), ...opts.txFilter },
-    select: { id: true, amount: true, bookingDate: true, structuredComm: true, counterpartyName: true, side: true },
+    select: { id: true, amount: true, bookingDate: true, structuredComm: true, counterpartyName: true, side: true, description: true, communication: true, counterpartyAccount: true },
     orderBy: { bookingDate: 'desc' },
   });
 
   const ledgerRows = await prisma.ledgerEntry.findMany({
     select: {
-      id: true, ttc: true, ht: true, date: true, direction: true, bankComm: true,
+      id: true, ttc: true, ht: true, date: true, direction: true, bankComm: true, docNumber: true,
       supplierName: true, contact: { select: { name: true } }, documentId: true,
     },
   });
@@ -189,6 +202,7 @@ export async function autoMatchAll(
     id: l.id, ttc: l.ttc, ht: l.ht, date: l.date, direction: l.direction, bankComm: l.bankComm,
     supplierName: l.supplierName, contactName: l.contact?.name ?? null, documentId: l.documentId,
   }));
+  const docNumberById = new Map(ledgerRows.map((l) => [l.id, alnum(l.docNumber)]));
   const documentIdByLedger = new Map(ledgers.map((l) => [l.id, l.documentId]));
 
   // index montant (au centime) + index communication structurée -> lookup O(1)
@@ -210,9 +224,18 @@ export async function autoMatchAll(
   for (const tx of txs) {
     const amt = Math.round(Math.abs(tx.amount ?? 0) * 100);
     if (!amt) continue;
+    if (isInternalMovement(tx)) continue;
     const pool: LedgerLite[] = [];
     if (tx.structuredComm) pool.push(...(byComm.get(tx.structuredComm) ?? []));
     for (let d = -2; d <= 2; d++) pool.push(...(byAmount.get(amt + d) ?? []));
+    // Le libellé bancaire cite le n° de la facture (ex. « Mededeling: F2026-215 ») : preuve la plus forte,
+    // à condition qu'une seule écriture du lot (même montant) soit citée et que le sens soit cohérent.
+    const text = alnum(`${tx.description ?? ''} ${tx.communication ?? ''}`);
+    const cited = text ? [...new Map(pool.map((l) => [l.id, l])).values()].filter((l) => {
+      const n = docNumberById.get(l.id) ?? '';
+      return n.length >= 5 && text.includes(n) && sideMatches(tx as TxLite, l) && Math.abs(amountOf(l) - Math.abs(tx.amount ?? 0)) <= 0.02;
+    }) : [];
+    if (cited.length === 1) { updates.push({ id: tx.id, ledgerId: cited[0]!.id, confidence: 'strong' }); continue; }
     const m = pickMatch(tx as TxLite, pool);
     if (m) updates.push({ id: tx.id, ledgerId: m.ledgerId, confidence: m.confidence });
   }

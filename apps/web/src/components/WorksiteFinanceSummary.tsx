@@ -35,9 +35,7 @@ export function WorksiteFinanceSummary({ margin, worksiteId, billingName, billin
       </div>
       <div className="worksite-finance-check">
         <span><strong>{documentCount}</strong> documents liés · <strong><Money value={margin.totalCost} /></strong> de coûts engagés</span>
-        {margin.quotedHt > 0 && margin.invoicedHt <= margin.quotedHt
-          ? <span>Marge prévisionnelle : <strong><Money value={margin.forecastMargin} sign /></strong></span>
-          : <span>Marge sur l’encaissé : <strong><Money value={margin.realMargin} sign /></strong></span>}
+        <span>Marge sur l’encaissé : <strong><Money value={margin.realMargin} sign /></strong></span>
       </div>
     </div>
   );

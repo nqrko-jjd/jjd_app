@@ -6,15 +6,10 @@ const PROFIT_COLOR = '#7fd6a8';
 const LOSS_COLOR = '#d9776a';
 
 export function WorksiteProfitability({ quoted, invoiced, paid, totalCost, costs, children }: { quoted:number; invoiced:number; paid:number; totalCost:number; costs:{label:string;amount:number}[]; children?:ReactNode }) {
- // Le "vendu" (devis du logiciel) ne reflète pas toujours tout le chantier : travaux
- // complémentaires facturés sans devis formel, vieux chantiers importés d'Excel avec
- // seulement une partie des devis recréés après coup... Si le facturé dépasse déjà le vendu,
- // ce dernier est manifestement sous-évalué — on bascule alors le chiffre principal sur
- // l'encaissé (réel, fiable) et on relègue le vendu en second plan plutôt que de laisser
- // croire à une perte qui n'existe pas.
- // Sans aucun devis (marché à 0), il n'y a rien à comparer : on part directement de l'encaissé.
- const quotedReliable = quoted > 0 && invoiced <= quoted;
- const sales = quotedReliable ? quoted : paid;
+ // La marge se calcule toujours sur l'encaissé (réel, fiable), comme la part GT. Le « vendu »
+ // (devis du logiciel) ne couvre pas toujours tout le chantier — travaux complémentaires sans
+ // devis, vieux chantiers importés d'Excel, chantiers sans devis — et reste en information.
+ const sales = paid;
  const balance = sales - totalCost;
  const pct = sales > 0 ? balance / sales * 100 : null;
  const loss = balance < 0;
@@ -42,16 +37,16 @@ export function WorksiteProfitability({ quoted, invoiced, paid, totalCost, costs
     <div className="rent-donut-center"><strong>{pct != null ? `${pctFmt(pct)} %` : '—'}</strong><span>{loss ? 'Perte' : 'Bénéfice'}</span></div>
    </div>
    <div className="rent-figures">
-    <div><span><i style={{background:'#cfd8cf'}} />{quotedReliable ? 'Total des ventes' : 'Total encaissé'}</span><strong>{money(sales)}</strong></div>
+    <div><span><i style={{background:'#cfd8cf'}} />Total encaissé</span><strong>{money(sales)}</strong></div>
     {costs.map((c, i) => <div key={c.label}><span><i style={{background: loss ? LOSS_COLOR : COST_COLORS[i % COST_COLORS.length]}} />{c.label}</span><strong>{money(c.amount)}</strong></div>)}
     <div className="rent-total"><span><i style={{background: loss ? LOSS_COLOR : PROFIT_COLOR}} />{loss ? 'Perte' : 'Bénéfice'}</span><strong>{money(balance)}</strong></div>
    </div>
   </div>
   <details className="rent-details">
    <summary>Détails</summary>
-   <p className="rent-note">{quotedReliable ? 'Solde provisoire : les coûts restant à engager ne sont pas encore déduits.' : quoted <= 0 ? "Aucun devis enregistré sur ce chantier : le solde est basé sur l'encaissé réel." : "Le devis enregistré ne couvre pas tout le chantier (facturé > vendu) : le solde est basé sur l'encaissé réel plutôt que sur le devis."}</p>
+   <p className="rent-note">Marge calculée sur l'encaissé : ce qui a été payé moins les coûts engagés. Les coûts restant à engager ne sont pas encore déduits.</p>
    <div className="profitability-comparison-row">
-    <div><span>Montant vendu / marché</span><strong>{money(quoted)}</strong><small>{quotedReliable ? 'devis acceptés' : quoted <= 0 ? 'aucun devis' : 'devis incomplet'}</small></div>
+    <div><span>Montant vendu / marché</span><strong>{money(quoted)}</strong><small>{quoted <= 0 ? 'aucun devis enregistré' : invoiced > quoted ? 'inférieur au facturé (devis incomplet)' : 'devis acceptés'}</small></div>
     <div><span>Facturé − coûts engagés</span><strong>{money(invoiced-totalCost)}</strong><small>{money(invoiced)} facturés à ce jour</small></div>
     <div><span>Encaissé − coûts engagés</span><strong>{money(paid-totalCost)}</strong><small>{money(paid)} encaissés à ce jour</small></div>
     <div><span>Total des coûts engagés</span><strong>{money(totalCost)}</strong><small>main-d'œuvre, achats, transport</small></div>

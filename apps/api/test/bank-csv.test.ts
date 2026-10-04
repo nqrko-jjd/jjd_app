@@ -101,3 +101,15 @@ test('export Belfius officiel : le libellé est la colonne « Transaction », pa
   assert.equal(row.amount, -2875);
   assert.equal(row.bookingDate?.toISOString().slice(0, 10), '2026-10-05');
 });
+
+test('export ING : le libellé est la colonne « Libellés » (I), pas « Détails du mouvement »', () => {
+  const csv = [
+    'Numéro de compte;Nom du compte;Compte contrepartie;Numéro de mouvement;Date comptable;Date valeur;Montant;Devise;Libellés;Détails du mouvement;Message',
+    'BE64363254694152;JJD CONSULT SRL;BE29433117044164;976;21/09/2026;21/09/2026;625,00;EUR;Instantoverschrijving in euro Van: BAITA VZW - BE29433117044164 Instant op 21/09 - 11:09:03 Mededeling: DEVIS D2026-280 DE 31/07/2026;;',
+  ].join('\n');
+  const row = parseBankCsv(csv).rows[0]!;
+  assert.match(row.description ?? '', /BAITA VZW.*DEVIS D2026-280/);
+  assert.equal(row.counterpartyAccount, 'BE29433117044164');
+  assert.equal(row.amount, 625);
+  assert.equal(row.bookingDate?.toISOString().slice(0, 10), '2026-09-21');
+});

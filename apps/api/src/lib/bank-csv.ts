@@ -62,8 +62,9 @@ const PATTERNS: Record<keyof Omit<ParsedBankRow, 'externalId' | 'currency'>, Reg
   counterpartyName: [/nomcontrepartie/, /naamtegenpartij/, /counterpartname/, /tegenpartij/, /beneficiaire/, /begunstigde/, /nomdubeneficiaire/, /commercant/, /merchant/, /libelle/, /naam/],
   counterpartyAccount: [/comptecontrepartie/, /rekeningtegenpartij/, /counterpartaccount/, /ibancontrepartie/, /tegenpartijrekening/],
   // « Transaction » (libellé brut Belfius avec compte, REF, date valeur) avant tout autre repli — surtout pas « Numéro de transaction »
-  description: [/^transaction$/, /description/, /omschrijving/, /details/, /nature/, /typetransaction/, /transaction$/],
-  communication: [/communication/, /mededeling/, /remittance/, /reference/, /gestructureerde/, /freetext/],
+  // ING : « Libellés » (col. I) porte l'essentiel (type d'opération, contrepartie, mededeling) ; « Détails du mouvement » est un doublon long, souvent vide
+  description: [/^transaction$/, /^libelles?$/, /description/, /omschrijving/, /details/, /nature/, /typetransaction/, /transaction$/],
+  communication: [/communication/, /mededeling/, /remittance/, /reference/, /gestructureerde/, /freetext/, /^message$/],
 };
 
 // Colonnes de numérotation (« Numéro de transaction », « Numéro d'extrait ») : jamais le libellé.

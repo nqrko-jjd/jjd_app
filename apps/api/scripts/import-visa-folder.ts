@@ -68,7 +68,7 @@ async function run() {
   for (const { label, st } of toImport) { const r = await insertBankRows(st.purchases, label, 'pdf-visa'); imported += r.imported; dup += r.duplicates; }
   console.log(`\nAchats importés: ${imported} | écartés comme déjà présents: ${dup}`);
   let linked = 0;
-  for (const l of relink) { const t = await prisma.bankTransaction.findUnique({ where: { id: l.txId }, select: { communication: true } }); if (t && !t.communication) { await prisma.bankTransaction.update({ where: { id: l.txId }, data: { communication: l.text } }); linked++; } }
+  for (const l of relink) { const t = await prisma.bankTransaction.findUnique({ where: { id: l.txId }, select: { communication: true } }); if (t && !t.communication?.includes('Relevé VISA')) { await prisma.bankTransaction.update({ where: { id: l.txId }, data: { communication: t.communication ? `${l.text} | ${t.communication.replace(/\s+/g, ' ')}` : l.text } }); linked++; } }
   console.log('Prélèvements « VISA RELEVE » annotés avec leur relevé:', linked);
   console.log('=== Contrôle final (base vs attendu)');
   for (const [card, list] of [...byCard.entries()].sort()) {

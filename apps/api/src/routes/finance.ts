@@ -23,7 +23,11 @@ function derive(date: Date) {
   return { year: date.getFullYear(), month: String(m), quarter: `T${Math.ceil(m / 3)}` };
 }
 
-/** Insère des lignes de relevé (dédoublonnage par externalId + inter-sources). */
+const normDesc = (s: string | null) => (s ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
+/** Références bancaires du libellé brut (« REF. : 311fc58a… ») — identifient l'opération. */
+const bankRefs = (s: string | null) => new Set([...(s ?? '').matchAll(/REF\.?\s*:\s*([A-Za-z0-9]{8,})/gi)].map((m) => m[1]!.toUpperCase()));
+
+/** Insère des lignes de relevé (dédoublonnage par externalId, par libellé/REF bancaire, puis inter-sources). */
 async function insertBankRows(rows: ParsedBankRow[], bankLabel: string, source: string) {
   const norm = (s: string | null) => (s ?? '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 12);
   let imported = 0;
@@ -35,13 +39,21 @@ async function insertBankRows(rows: ParsedBankRow[], bankLabel: string, source: 
       const next = new Date(sameDay); next.setUTCDate(next.getUTCDate() + 1);
       const near = await prisma.bankTransaction.findMany({
         where: { amount: r.amount, bookingDate: { gte: new Date(sameDay.getTime() - 3 * 86400000), lt: next } },
-        select: { counterpartyName: true },
+        select: { counterpartyName: true, description: true },
       });
-      if (near.some((n) => !r.counterpartyName || !n.counterpartyName
-        || norm(n.counterpartyName) === norm(r.counterpartyName)
-        || norm(n.counterpartyName).includes(norm(r.counterpartyName).slice(0, 6)))) {
-        duplicates++; continue;
-      }
+      const myRefs = bankRefs(r.description);
+      const isDup = near.some((n) => {
+        // Libellés bruts avec REF des deux côtés : la REF tranche (deux paiements identiques le même
+        // jour mais de REF différentes sont bien deux opérations, pas un doublon).
+        const theirRefs = bankRefs(n.description);
+        if (myRefs.size && theirRefs.size) {
+          return normDesc(n.description) === normDesc(r.description) || [...myRefs].some((x) => theirRefs.has(x));
+        }
+        return !r.counterpartyName || !n.counterpartyName
+          || norm(n.counterpartyName) === norm(r.counterpartyName)
+          || norm(n.counterpartyName).includes(norm(r.counterpartyName).slice(0, 6));
+      });
+      if (isDup) { duplicates++; continue; }
     }
     await prisma.bankTransaction.create({
       data: {

@@ -61,17 +61,24 @@ const PATTERNS: Record<keyof Omit<ParsedBankRow, 'externalId' | 'currency'>, Reg
   amount: [/montant/, /bedrag/, /amount/, /^somme$/, /transactionamount/, /debitcredit/],
   counterpartyName: [/nomcontrepartie/, /naamtegenpartij/, /counterpartname/, /tegenpartij/, /beneficiaire/, /begunstigde/, /nomdubeneficiaire/, /commercant/, /merchant/, /libelle/, /naam/],
   counterpartyAccount: [/comptecontrepartie/, /rekeningtegenpartij/, /counterpartaccount/, /ibancontrepartie/, /tegenpartijrekening/],
-  description: [/transaction$/, /description/, /omschrijving/, /details/, /nature/, /typetransaction/],
+  // « Transaction » (libellé brut Belfius avec compte, REF, date valeur) avant tout autre repli — surtout pas « Numéro de transaction »
+  description: [/^transaction$/, /description/, /omschrijving/, /details/, /nature/, /typetransaction/, /transaction$/],
   communication: [/communication/, /mededeling/, /remittance/, /reference/, /gestructureerde/, /freetext/],
 };
+
+// Colonnes de numérotation (« Numéro de transaction », « Numéro d'extrait ») : jamais le libellé.
+const NEVER_DESCRIPTION = /^(numero|nr|num)/;
 
 function mapHeaders(headers: string[]): Partial<Record<keyof ParsedBankRow, number>> {
   const idx: Partial<Record<keyof ParsedBankRow, number>> = {};
   const normed = headers.map(norm);
   for (const [field, regexes] of Object.entries(PATTERNS) as [keyof typeof PATTERNS, RegExp[]][]) {
-    for (let i = 0; i < normed.length; i++) {
-      if (idx[field] !== undefined) break;
-      if (regexes.some((re) => re.test(normed[i]!))) idx[field] = i;
+    // priorité à l'ordre des motifs (le plus spécifique d'abord), puis à l'ordre des colonnes
+    found: for (const re of regexes) {
+      for (let i = 0; i < normed.length; i++) {
+        if (field === 'description' && NEVER_DESCRIPTION.test(normed[i]!)) continue;
+        if (re.test(normed[i]!)) { idx[field] = i; break found; }
+      }
     }
   }
   return idx;

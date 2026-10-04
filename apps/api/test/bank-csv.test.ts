@@ -82,3 +82,22 @@ test('decodeCsvBuffer : bascule en latin1 quand l’UTF-8 produit des caractère
   const utf8Buf = Buffer.from(original, 'utf8');
   assert.equal(decodeCsvBuffer(utf8Buf), original);
 });
+
+test('export Belfius officiel : le libellé est la colonne « Transaction », pas « Numéro de transaction »', () => {
+  const csv = [
+    'Date de comptabilisation à partir de;18/09/2026',
+    "Date de comptabilisation jusqu'au;05/10/2026",
+    '',
+    "Compte;Date de comptabilisation;Numéro d'extrait;Numéro de transaction;Compte contrepartie;Nom contrepartie contient;Rue et numéro;Code postal et ville;Transaction;Date valeur;Montant;Devise;BIC;Code pays;Communications",
+    'BE31 0689 4940 0055;05/10/2026;;;BE93 9679 5593 5467;Venilson Heleno Gabriel;;;VIREMENT INSTANTANE BELFIUS MOBILE VERS   BE93 9679 5593 5467 Venilson Heleno Gabriel   Astire01fr/26   REF. : 09054033A3547 VAL. 03-10;03/10/2026;-2875,00;EUR;TRWIBEB1;;Astire01fr/26',
+  ].join('\n');
+  const r = parseBankCsv(csv);
+  assert.equal(r.rows.length, 1);
+  const row = r.rows[0]!;
+  assert.match(row.description ?? '', /REF\. : 09054033A3547 VAL\. 03-10/);
+  assert.equal(row.counterpartyAccount, 'BE93 9679 5593 5467');
+  assert.equal(row.counterpartyName, 'Venilson Heleno Gabriel');
+  assert.equal(row.communication, 'Astire01fr/26');
+  assert.equal(row.amount, -2875);
+  assert.equal(row.bookingDate?.toISOString().slice(0, 10), '2026-10-05');
+});

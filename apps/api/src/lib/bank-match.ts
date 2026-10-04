@@ -63,7 +63,7 @@ const alnum = (s: string | null | undefined) => (s ?? '').toUpperCase().replace(
 export function isInternalMovement(tx: { description?: string | null; counterpartyAccount?: string | null }): boolean {
   if (OWN_IBANS.includes(alnum(tx.counterpartyAccount))) return true;
   const d = tx.description ?? '';
-  return /VERS\s+BE64\s?3632\s?5469\s?4152|VAN:\s*JJD CONSULT\s*-\s*BE31068949400055|CHARGEMENT (DE LA CARTE )?VISA|VISA RELEVE|RELEVE NUMERO/i.test(d);
+  return /VERS\s+BE64\s?3632\s?5469\s?4152|VAN:\s*JJD CONSULT\s*-\s*BE31068949400055|CHARGEMENT.{0,40}(VISA|PREPAID)|VISA RELEVE|RELEVE NUMERO/i.test(d);
 }
 
 export interface TxLite {

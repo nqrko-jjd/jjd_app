@@ -189,6 +189,8 @@ test('isInternalMovement : virements entre comptes JJD, recharges et relevés VI
   assert.equal(isInternalMovement({ counterpartyAccount: 'BE31 0689 4940 0055' }), true);
   assert.equal(isInternalMovement({ description: 'VISA RELEVE NUMERO 116 REF. : 0827556272771 VAL. 06-05' }), true);
   assert.equal(isInternalMovement({ description: 'CHARGEMENT DE LA CARTE VISA BUSINESS GOLD PREPAID NO 4569' }), true);
+  assert.equal(isInternalMovement({ description: 'CHARGEMENT DE LA CARTE PREPAID VISA BUSINESS GOLD PREPAID NO 4569 58** **** 7639' }), true);
+  assert.equal(isInternalMovement({ description: 'DECHARGEMENT DE LA CARTE PREPAID VISA BUSINESS GOLD PREPAID NO 4569 58** **** 8031' }), true);
   // un client qui paie JJD (JJD bénéficiaire) n'est PAS un virement interne
   assert.equal(isInternalMovement({ description: 'VERSEMENT DE BE33 2100 4334 8746 STEVENART VERS BE31 0689 4940 0055 SPRL JJD Consult REF. : 080G73L285131' }), false);
   assert.equal(isInternalMovement({ description: 'ACHAT VISA BUSINESS GOLD NO 4569 59** **** 7449 AU NOM DE SWEERT JULIEN' }), false);

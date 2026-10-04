@@ -195,3 +195,23 @@ test('isInternalMovement : virements entre comptes JJD, recharges et relevés VI
   assert.equal(isInternalMovement({ description: 'VERSEMENT DE BE33 2100 4334 8746 STEVENART VERS BE31 0689 4940 0055 SPRL JJD Consult REF. : 080G73L285131' }), false);
   assert.equal(isInternalMovement({ description: 'ACHAT VISA BUSINESS GOLD NO 4569 59** **** 7449 AU NOM DE SWEERT JULIEN' }), false);
 });
+
+test('pickCitedMatch : paiement partiel d’une facture citée par son numéro (acompte puis solde)', async () => {
+  const { pickCitedMatch, invoiceTokens } = await import('../src/lib/bank-match.js');
+  const inv = { id: 'L1', ttc: 58300, ht: 55000, date: new Date('2026-08-01'), direction: 'sale', bankComm: null, supplierName: null, contactName: 'Jacobs', documentId: 'D1' };
+  const other = { ...inv, id: 'L2', documentId: 'D2' };
+  const byNumber = new Map([['F2026336', [inv]], ['F2026337', [other]]]);
+  const left = (l: { id: string; ttc: number | null }) => (l.ttc ?? 0) - (l.id === 'L1' ? 40000 : 0); // 40 000 € déjà payés sur F2026-336
+  const tx = (desc: string, amount: number, side: string) => ({ amount, side, description: desc, communication: null });
+  assert.deepEqual(invoiceTokens('SOLDE FACTURE F2026-336 VERS BE31 0689 4940 0055 REF. : 080G7A3059693'), ['F2026336']);
+  // solde de 8 300 € sur 18 300 € restants : retenu
+  assert.equal(pickCitedMatch(tx('SOLDE FACTURE F2026-336 JACOBS', 8300, 'in'), byNumber, left), 'L1');
+  // dépasse ce qui reste à payer : écarté
+  assert.equal(pickCitedMatch(tx('FACTURE F2026-336', 20000, 'in'), byNumber, left), null);
+  // sens incohérent (sortie pour une vente) : écarté
+  assert.equal(pickCitedMatch(tx('FACTURE F2026-336', 8300, 'out'), byNumber, left), null);
+  // deux factures citées : à traiter à la main
+  assert.equal(pickCitedMatch(tx('FACTURES F2026-336 ET F2026-337', 8300, 'in'), byNumber, left), null);
+  // facture déjà soldée : rien à rapprocher
+  assert.equal(pickCitedMatch(tx('FACTURE F2026-336', 100, 'in'), byNumber, () => 0), null);
+});

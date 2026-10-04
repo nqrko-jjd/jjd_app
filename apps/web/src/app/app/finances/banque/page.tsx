@@ -337,7 +337,7 @@ function BanqueInner() {
                     <td style={{ maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={t.counterpartyName ?? t.description ?? ''}>{t.counterpartyName ?? <span className="muted" style={{ fontSize: '0.8rem' }}>{t.description ?? ''}</span>}</td>
                     <td style={{ fontSize: '0.76rem', lineHeight: 1.45, wordBreak: 'break-word' }}>
                       {t.communication && !(t.description ?? '').toLowerCase().includes(t.communication.toLowerCase()) && <div className="mono" style={{ marginBottom: 2 }}>{t.communication}</div>}
-                      <span className="muted">{(t.description ?? '').split(/(REF\.?\s*:\s*[A-Za-z0-9]+)/gi).map((part, i) => (/^REF/i.test(part) ? <strong key={i} style={{ color: 'var(--ink)' }}>{part}</strong> : part))}</span>
+                      <span className="muted">{(t.description ?? '').split(/(REF\.?\s*:\s*[A-Za-z0-9]+|(?<![A-Za-z0-9])[FD]\d{4}-?\d{2,7}(?![A-Za-z0-9]))/gi).map((part, i) => (/^REF/i.test(part) ? <span key={i} style={{ opacity: 0.55 }}>{part}</span> : /^[FD]\d{4}-?\d{2,7}$/i.test(part) ? <strong key={i} style={{ color: 'var(--ink)' }}>{part}</strong> : part))}</span>
                     </td>
                     <td style={{ textAlign: 'right' }}><Money value={t.amount} sign /></td>
                     <td style={{ fontSize: '0.8rem' }}>

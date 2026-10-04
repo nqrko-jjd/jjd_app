@@ -47,7 +47,7 @@ export async function recomputeDocumentPayment(documentId: string) {
   const paidAmount = round2(matches.reduce((s, m) => s + Math.abs(m.bankTransaction.amount ?? 0), 0));
   const bookingDates = matches.map((m) => m.bankTransaction.bookingDate).filter((d): d is Date => !!d).sort((a, b) => b.getTime() - a.getTime());
   const paidOn = bookingDates[0] ?? null;
-  const status = matches.length === 0 ? 'sent' : paidAmount + 0.01 >= doc.totalTtc ? 'paid' : 'partial';
+  const status = matches.length === 0 ? 'sent' : paidAmount + 0.02 >= doc.totalTtc ? 'paid' : 'partial';
 
   await prisma.document.update({ where: { id: documentId }, data: { status, paidAmount, paidOn } });
   await syncLedgerEntryForDocument(documentId);
@@ -64,6 +64,33 @@ export function isInternalMovement(tx: { description?: string | null; counterpar
   if (OWN_IBANS.includes(alnum(tx.counterpartyAccount))) return true;
   const d = tx.description ?? '';
   return /VERS\s+BE64\s?3632\s?5469\s?4152|VAN:\s*JJD CONSULT\s*-\s*BE31068949400055|CHARGEMENT.{0,40}(VISA|PREPAID)|VISA RELEVE|RELEVE NUMERO/i.test(d);
+}
+
+/** Numéros de facture/devis cités dans un libellé bancaire (« F2026-336 », « F20260215 », « D2026-280 »…), normalisés. */
+export function invoiceTokens(text: string): string[] {
+  return [...new Set([...text.matchAll(/(?<![A-Za-z0-9])[A-Za-z]{0,4}\d{4}[-/]?\d{2,8}(?![A-Za-z0-9])/g)].map((m) => alnum(m[0])))];
+}
+
+/**
+ * Le libellé cite le n° d'UNE facture connue : c'est la preuve la plus forte, même si le paiement est partiel
+ * (acompte, solde…). Retenu si le sens est cohérent et si le montant ne dépasse pas ce qui reste à payer.
+ * Deux factures citées (paiement groupé) ou aucune → null (à traiter à la main).
+ */
+export function pickCitedMatch(
+  tx: { amount: number | null; side: string | null; description?: string | null; communication?: string | null },
+  byNumber: Map<string, LedgerLite[]>,
+  outstanding: (l: LedgerLite) => number,
+): string | null {
+  const amt = Math.abs(tx.amount ?? 0);
+  if (!amt) return null;
+  const targets = new Map<string, LedgerLite>();
+  for (const token of invoiceTokens(`${tx.description ?? ''} ${tx.communication ?? ''}`)) {
+    for (const l of byNumber.get(token) ?? []) if (sideMatches(tx as TxLite, l)) targets.set(l.documentId ?? l.id, l);
+  }
+  if (targets.size !== 1) return null;
+  const l = [...targets.values()][0]!;
+  const left = outstanding(l);
+  return left > 0.02 && amt <= left + 0.02 ? l.id : null;
 }
 
 export interface TxLite {
@@ -221,21 +248,38 @@ export async function autoMatchAll(
 
   const now = new Date();
   const updates: { id: string; ledgerId: string; confidence: 'strong' | 'good' }[] = [];
+
+  // Déjà payé par écriture (somme des paiements rapprochés) et index des écritures par n° de facture.
+  const ledgerByDocument = new Map(ledgers.filter((l) => l.documentId).map((l) => [l.documentId!, l.id]));
+  const paid = new Map<string, number>();
+  for (const m of await prisma.bankTransactionMatch.findMany({ select: { ledgerEntryId: true, documentId: true, bankTransaction: { select: { amount: true } } } })) {
+    const lid = m.ledgerEntryId ?? (m.documentId ? ledgerByDocument.get(m.documentId) : undefined);
+    if (lid) paid.set(lid, (paid.get(lid) ?? 0) + Math.abs(m.bankTransaction.amount ?? 0));
+  }
+  const byNumber = new Map<string, LedgerLite[]>();
+  for (const l of ledgers) {
+    const n = docNumberById.get(l.id) ?? '';
+    if (n.length >= 5) { const b = byNumber.get(n); if (b) b.push(l); else byNumber.set(n, [l]); }
+  }
+  const outstanding = (l: LedgerLite) => amountOf(l) - (paid.get(l.id) ?? 0);
+  // chronologique : un acompte puis un solde sur la même facture s'additionnent dans l'ordre
+  const citedDone = new Set<string>();
+  const ledgerTotal = new Map(ledgers.map((l) => [l.id, amountOf(l)]));
+  for (const tx of [...txs].sort((a, b) => (a.bookingDate?.getTime() ?? 0) - (b.bookingDate?.getTime() ?? 0))) {
+    if (isInternalMovement(tx)) continue;
+    const lid = pickCitedMatch(tx, byNumber, outstanding);
+    if (!lid) continue;
+    updates.push({ id: tx.id, ledgerId: lid, confidence: 'strong' });
+    paid.set(lid, (paid.get(lid) ?? 0) + Math.abs(tx.amount ?? 0));
+    citedDone.add(tx.id);
+  }
   for (const tx of txs) {
     const amt = Math.round(Math.abs(tx.amount ?? 0) * 100);
     if (!amt) continue;
-    if (isInternalMovement(tx)) continue;
+    if (isInternalMovement(tx) || citedDone.has(tx.id)) continue;
     const pool: LedgerLite[] = [];
     if (tx.structuredComm) pool.push(...(byComm.get(tx.structuredComm) ?? []));
     for (let d = -2; d <= 2; d++) pool.push(...(byAmount.get(amt + d) ?? []));
-    // Le libellé bancaire cite le n° de la facture (ex. « Mededeling: F2026-215 ») : preuve la plus forte,
-    // à condition qu'une seule écriture du lot (même montant) soit citée et que le sens soit cohérent.
-    const text = alnum(`${tx.description ?? ''} ${tx.communication ?? ''}`);
-    const cited = text ? [...new Map(pool.map((l) => [l.id, l])).values()].filter((l) => {
-      const n = docNumberById.get(l.id) ?? '';
-      return n.length >= 5 && text.includes(n) && sideMatches(tx as TxLite, l) && Math.abs(amountOf(l) - Math.abs(tx.amount ?? 0)) <= 0.02;
-    }) : [];
-    if (cited.length === 1) { updates.push({ id: tx.id, ledgerId: cited[0]!.id, confidence: 'strong' }); continue; }
     const m = pickMatch(tx as TxLite, pool);
     if (m) updates.push({ id: tx.id, ledgerId: m.ledgerId, confidence: m.confidence });
   }
@@ -251,17 +295,6 @@ export async function autoMatchAll(
   const docUpdates = updates.filter((u) => documentIdByLedger.get(u.ledgerId));
   const ledgerOnlyUpdates = updates.filter((u) => !documentIdByLedger.get(u.ledgerId));
 
-  const docTotals = docUpdates.length
-    ? new Map(
-        (
-          await prisma.document.findMany({
-            where: { id: { in: docUpdates.map((u) => documentIdByLedger.get(u.ledgerId)!) } },
-            select: { id: true, totalTtc: true },
-          })
-        ).map((d) => [d.id, d.totalTtc]),
-      )
-    : new Map<string, number>();
-
   // écriture par lots : transactions bancaires + statut « payé » des écritures non liées à une facture
   for (let i = 0; i < updates.length; i += 100) {
     const batch = updates.slice(i, i + 100);
@@ -273,7 +306,7 @@ export async function autoMatchAll(
         prisma.bankTransaction.update({ where: { id: u.id }, data: { matchConfidence: u.confidence, matchedAt: now } }),
       ),
       ...ledgerOnlyUpdates
-        .filter((u) => batch.includes(u))
+        .filter((u) => batch.includes(u) && (paid.get(u.ledgerId) ?? 0) + 0.02 >= (ledgerTotal.get(u.ledgerId) ?? 0))
         .map((u) =>
           prisma.ledgerEntry.update({
             where: { id: u.ledgerId },
@@ -285,13 +318,8 @@ export async function autoMatchAll(
 
   // factures de vente : on passe par le Document puis on répercute sur le grand livre
   // (syncLedgerEntryForDocument), au lieu d'écrire directement dans LedgerEntry.
-  for (const u of docUpdates) {
-    const documentId = documentIdByLedger.get(u.ledgerId)!;
-    await prisma.document.update({
-      where: { id: documentId },
-      data: { status: 'paid', paidAmount: docTotals.get(documentId) ?? 0, paidOn: txDate.get(u.id) ?? now },
-    });
-    await syncLedgerEntryForDocument(documentId);
+  for (const documentId of new Set(docUpdates.map((u) => documentIdByLedger.get(u.ledgerId)!))) {
+    await recomputeDocumentPayment(documentId); // somme des paiements réellement rapprochés : payée, ou partielle
   }
 
   const strong = updates.filter((u) => u.confidence === 'strong').length;

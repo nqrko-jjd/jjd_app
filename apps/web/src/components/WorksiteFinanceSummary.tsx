@@ -26,7 +26,7 @@ export function WorksiteFinanceSummary({ margin, worksiteId, billingName, billin
         <article><span>Marché HT</span><strong><Money value={margin.quotedHt} /></strong><small>Devis et montant convenu</small></article>
         <article><span>Facturé HT</span><strong><Money value={margin.invoicedHt} /></strong><small>Factures moins notes de crédit</small></article>
         <article><span>Encaissé HT</span><strong><Money value={margin.paidHt} /></strong><small>Paiements enregistrés</small></article>
-        <article className="remaining"><span>Reste à facturer HT</span><strong><Money value={margin.leftToInvoice} /></strong><small>{margin.leftToInvoice < 0 ? 'Dépassement du marché à vérifier' : 'Solde du marché, pas un avancement validé'}</small></article>
+        <article className="remaining"><span>Reste à facturer HT</span><strong>{margin.quotedHt <= 0 ? '—' : <Money value={margin.leftToInvoice} />}</strong><small>{margin.quotedHt <= 0 ? 'Aucun devis enregistré' : margin.leftToInvoice < 0 ? 'Dépassement du marché à vérifier' : 'Solde du marché, pas un avancement validé'}</small></article>
       </div>
       <div className="worksite-finance-costs">
         <article><Clock3 size={21} /><div><strong>Main-d’œuvre</strong><span>{formatHours(hours)} enregistrées</span><small>{pendingHours > 0 ? `${formatHours(pendingHours)} sur journées à contrôler` : 'Aucune heure en attente'}</small><button className="btn ghost" onClick={()=>{const el=document.getElementById('worksite-labour');el?.scrollIntoView({behavior:'smooth'});el?.focus({preventScroll:true});}}>Voir les heures par jour</button></div><b><Money value={margin.labourCost} /></b></article>
@@ -35,7 +35,9 @@ export function WorksiteFinanceSummary({ margin, worksiteId, billingName, billin
       </div>
       <div className="worksite-finance-check">
         <span><strong>{documentCount}</strong> documents liés · <strong><Money value={margin.totalCost} /></strong> de coûts engagés</span>
-        <span>Marge prévisionnelle : <strong><Money value={margin.forecastMargin} sign /></strong></span>
+        {margin.quotedHt > 0 && margin.invoicedHt <= margin.quotedHt
+          ? <span>Marge prévisionnelle : <strong><Money value={margin.forecastMargin} sign /></strong></span>
+          : <span>Marge sur l’encaissé : <strong><Money value={margin.realMargin} sign /></strong></span>}
       </div>
     </div>
   );

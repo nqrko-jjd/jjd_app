@@ -12,7 +12,8 @@ export function WorksiteProfitability({ quoted, invoiced, paid, totalCost, costs
  // ce dernier est manifestement sous-évalué — on bascule alors le chiffre principal sur
  // l'encaissé (réel, fiable) et on relègue le vendu en second plan plutôt que de laisser
  // croire à une perte qui n'existe pas.
- const quotedReliable = quoted <= 0 || invoiced <= quoted;
+ // Sans aucun devis (marché à 0), il n'y a rien à comparer : on part directement de l'encaissé.
+ const quotedReliable = quoted > 0 && invoiced <= quoted;
  const sales = quotedReliable ? quoted : paid;
  const balance = sales - totalCost;
  const pct = sales > 0 ? balance / sales * 100 : null;
@@ -48,9 +49,9 @@ export function WorksiteProfitability({ quoted, invoiced, paid, totalCost, costs
   </div>
   <details className="rent-details">
    <summary>Détails</summary>
-   <p className="rent-note">{quotedReliable ? 'Solde provisoire : les coûts restant à engager ne sont pas encore déduits.' : "Le devis enregistré ne couvre pas tout le chantier (facturé > vendu) : le solde est basé sur l'encaissé réel plutôt que sur le devis."}</p>
+   <p className="rent-note">{quotedReliable ? 'Solde provisoire : les coûts restant à engager ne sont pas encore déduits.' : quoted <= 0 ? "Aucun devis enregistré sur ce chantier : le solde est basé sur l'encaissé réel." : "Le devis enregistré ne couvre pas tout le chantier (facturé > vendu) : le solde est basé sur l'encaissé réel plutôt que sur le devis."}</p>
    <div className="profitability-comparison-row">
-    <div><span>Montant vendu / marché</span><strong>{money(quoted)}</strong><small>{quotedReliable ? 'devis acceptés' : 'devis incomplet'}</small></div>
+    <div><span>Montant vendu / marché</span><strong>{money(quoted)}</strong><small>{quotedReliable ? 'devis acceptés' : quoted <= 0 ? 'aucun devis' : 'devis incomplet'}</small></div>
     <div><span>Facturé − coûts engagés</span><strong>{money(invoiced-totalCost)}</strong><small>{money(invoiced)} facturés à ce jour</small></div>
     <div><span>Encaissé − coûts engagés</span><strong>{money(paid-totalCost)}</strong><small>{money(paid)} encaissés à ce jour</small></div>
     <div><span>Total des coûts engagés</span><strong>{money(totalCost)}</strong><small>main-d'œuvre, achats, transport</small></div>

@@ -27,31 +27,29 @@ const normDesc = (s: string | null) => (s ?? '').toLowerCase().replace(/\s+/g, '
 /** Références bancaires du libellé brut (« REF. : 311fc58a… ») — identifient l'opération. */
 const bankRefs = (s: string | null) => new Set([...(s ?? '').matchAll(/REF\.?\s*:\s*([A-Za-z0-9]{8,})/gi)].map((m) => m[1]!.toUpperCase()));
 
-/** Insère des lignes de relevé (dédoublonnage par externalId, par libellé/REF bancaire, puis inter-sources). */
+/** Insère des lignes de relevé. Doublon = même identifiant (ré-import, fichiers qui se recoupent), ou — pour une ligne
+ *  déjà en base d'un AUTRE import — même jour/montant avec exactement le même libellé, ou une même REF bancaire.
+ *  Plus d'heuristique « même montant à quelques jours + début de nom identique » : elle écartait de vraies opérations
+ *  (parkings, prélèvements récurrents). Deux lignes du même fichier ne se comparent jamais entre elles. */
 async function insertBankRows(rows: ParsedBankRow[], bankLabel: string, source: string) {
-  const norm = (s: string | null) => (s ?? '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 12);
+  const runStart = new Date();
   let imported = 0;
   let duplicates = 0;
   for (const r of rows) {
     if (await prisma.bankTransaction.findUnique({ where: { externalId: r.externalId } })) { duplicates++; continue; }
-    if (r.bookingDate && r.amount != null) {
-      const sameDay = new Date(r.bookingDate); sameDay.setUTCHours(0, 0, 0, 0);
-      const next = new Date(sameDay); next.setUTCDate(next.getUTCDate() + 1);
-      const near = await prisma.bankTransaction.findMany({
-        where: { amount: r.amount, bookingDate: { gte: new Date(sameDay.getTime() - 3 * 86400000), lt: next } },
-        select: { counterpartyName: true, description: true },
-      });
+    if (r.bookingDate && r.amount != null && r.description) {
+      const day = new Date(r.bookingDate); day.setUTCHours(0, 0, 0, 0);
+      const next = new Date(day); next.setUTCDate(next.getUTCDate() + 1);
       const myRefs = bankRefs(r.description);
+      const near = await prisma.bankTransaction.findMany({
+        where: { amount: r.amount, createdAt: { lt: runStart }, bookingDate: { gte: new Date(day.getTime() - 3 * 86400000), lt: next } },
+        select: { bookingDate: true, description: true },
+      });
       const isDup = near.some((n) => {
-        // Libellés bruts avec REF des deux côtés : la REF tranche (deux paiements identiques le même
-        // jour mais de REF différentes sont bien deux opérations, pas un doublon).
+        const sameDay = n.bookingDate != null && n.bookingDate >= day && n.bookingDate < next;
+        if (sameDay && normDesc(n.description) === normDesc(r.description)) return true;
         const theirRefs = bankRefs(n.description);
-        if (myRefs.size && theirRefs.size) {
-          return normDesc(n.description) === normDesc(r.description) || [...myRefs].some((x) => theirRefs.has(x));
-        }
-        return !r.counterpartyName || !n.counterpartyName
-          || norm(n.counterpartyName) === norm(r.counterpartyName)
-          || norm(n.counterpartyName).includes(norm(r.counterpartyName).slice(0, 6));
+        return myRefs.size > 0 && [...myRefs].some((x) => theirRefs.has(x));
       });
       if (isDup) { duplicates++; continue; }
     }

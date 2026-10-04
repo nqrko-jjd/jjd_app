@@ -138,7 +138,9 @@ export function parseBankCsv(raw: string): ParseResult {
   }
 
   const at = (cells: string[], f: keyof ParsedBankRow) => (idx[f] !== undefined ? cells[idx[f]!] ?? null : null);
+  const detailsIdx = headers.map(norm).findIndex((h) => /^details(dumouvement)?$/.test(h));
   const rows: ParsedBankRow[] = [];
+  const seen = new Map<string, number>(); // occurrences d'une même opération dans le fichier
   let skipped = 0;
 
   for (const line of lines.slice(headerLine + 1)) {
@@ -150,10 +152,17 @@ export function parseBankCsv(raw: string): ParseResult {
     const counterpartyName = at(cells, 'counterpartyName');
     const description = at(cells, 'description');
     const communication = at(cells, 'communication');
+    // Clé stable : date, montant, contrepartie, libellé, détails. Deux opérations réellement identiques le même jour
+    // (ex. deux prélèvements de 560,90 €) reçoivent un rang (#2, #3…) : aucune n'est perdue, et un ré-import ou un
+    // fichier qui recoupe le précédent redonne exactement les mêmes identifiants.
+    const baseKey = stableId([
+      bookingDate?.toISOString().slice(0, 10) ?? '', amount ?? '', counterpartyName ?? '', communication ?? description ?? '',
+      detailsIdx >= 0 ? (cells[detailsIdx] ?? '').replace(/\s+/g, ' ').trim() : '',
+    ]);
+    const rank = (seen.get(baseKey) ?? 0) + 1;
+    seen.set(baseKey, rank);
     rows.push({
-      externalId: `csv-${stableId([
-        bookingDate?.toISOString().slice(0, 10) ?? '', amount ?? '', counterpartyName ?? '', communication ?? description ?? '',
-      ])}`,
+      externalId: `csv-${baseKey}${rank > 1 ? `-${rank}` : ''}`,
       bookingDate,
       valueDate: parseLooseDate(at(cells, 'valueDate')),
       amount,

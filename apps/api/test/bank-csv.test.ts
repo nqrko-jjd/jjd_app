@@ -113,3 +113,16 @@ test('export ING : le libellé est la colonne « Libellés » (I), pas « Détai
   assert.equal(row.amount, 625);
   assert.equal(row.bookingDate?.toISOString().slice(0, 10), '2026-09-21');
 });
+
+test('ING : deux opérations identiques le même jour gardent deux identifiants stables (rien n’est perdu, ré-import idempotent)', () => {
+  const head = 'Numéro de compte;Nom du compte;Compte contrepartie;Numéro de mouvement;Date comptable;Date valeur;Montant;Devise;Libellés;Détails du mouvement;Message';
+  const line = (n: number) => `BE64363254694152;JJD CONSULT SRL;BE24310160025838;${n};07/04/2026;07/04/2026;-560,90;EUR;Domiciliëring in euro (SEPA) ING Equipment Lease Belgium Bericht als bijlage;DEBET VOOR EEN DOMICILIERING;`;
+  const csv = [head, line(408), line(409), 'BE64363254694152;JJD CONSULT SRL;;410;08/04/2026;08/04/2026;-37,00;EUR;Betaling Bancontact PARKING BRUSSEL;;'].join('\n');
+  const a = parseBankCsv(csv).rows, b = parseBankCsv(csv).rows;
+  assert.equal(a.length, 3);
+  assert.equal(new Set(a.map((r) => r.externalId)).size, 3);
+  assert.deepEqual(a.map((r) => r.externalId), b.map((r) => r.externalId));
+  // un fichier qui recoupe le précédent (même jour) redonne les mêmes identifiants
+  const overlap = parseBankCsv([head, line(0), line(1)].join('\n')).rows.map((r) => r.externalId);
+  assert.deepEqual(overlap, a.slice(0, 2).map((r) => r.externalId));
+});

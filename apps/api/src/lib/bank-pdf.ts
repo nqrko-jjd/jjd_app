@@ -144,3 +144,81 @@ export function parseCardStatement(text: string): CardStatement {
   }
   return { cardRef, period, rows, total };
 }
+
+/* ------------------------------------------------------------------ cartes VISA : relevé complet */
+
+export interface VisaStatement {
+  clientRef: string | null;
+  cardLast4: string | null;
+  cardNumber: string | null; // « 4569 58XX XXXX 8820 »
+  cardholder: string | null;
+  closeDate: Date | null;
+  debitDate: Date | null; // carte à débit différé : date du prélèvement sur le compte courant
+  period: string | null;
+  total: number | null; // total des dépenses du relevé (positif)
+  purchases: ParsedBankRow[]; // achats de la section « Transactions »
+  loads: { date: Date | null; amount: number; label: string }[]; // « Votre chargement / déchargement » (+ = chargement)
+  sumPurchases: number; // somme des achats (positive) — doit égaler `total`
+}
+
+const frDate = (s: string | undefined | null): Date | null => {
+  const m = s?.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+  return m ? new Date(Date.UTC(Number(m[3]), Number(m[2]) - 1, Number(m[1]))) : null;
+};
+
+/**
+ * Lit un « État des dépenses » Belfius/Atos (texte `pdftotext -raw`) avec ses deux sections : « Chargements &
+ * Déchargements » (cartes prépayées) et « Transactions ». Plusieurs pages possibles. Les lignes de complément
+ * « (Via …) » sont rattachées à l'achat qui précède. Chaque achat reçoit un rang quand le même achat se répète
+ * dans le relevé (deux plein d'essence identiques le même jour).
+ */
+export function parseVisaStatement(text: string): VisaStatement {
+  const lines = text.replace(/\r/g, '').split('\n').map((l) => l.trim());
+  const clientRef = text.match(/R.f.rence client\s+(\d{6,})/i)?.[1] ?? null;
+  const cardM = text.match(/Num.ro de carte\s+(\d{4} \d{2}XX XXXX (\d{4}))\s*-\s*(.+)/i);
+  const closeDate = frDate(text.match(/Date de cl.ture\s+(\d{2}\/\d{2}\/\d{4})/i)?.[1]);
+  const debitDate = frDate(text.match(/Date de d.bit\s+(\d{2}\/\d{2}\/\d{4})/i)?.[1]);
+  const period = text.match(/Transactions du (\d{2}\/\d{2}\/\d{4} au \d{2}\/\d{2}\/\d{4})/)?.[1] ?? null;
+  const totalM = text.match(/Total(?: des d.penses)?(?: au \d{2}\/\d{2}\/\d{4})?\s+([\d.]+,\d{2})\s*EUR\s*-/i);
+  const closeMonth = closeDate ? closeDate.getUTCMonth() + 1 : 12;
+  const closeYear = closeDate ? closeDate.getUTCFullYear() : new Date().getUTCFullYear();
+  const cardLast4 = cardM?.[2] ?? null;
+
+  const LINE = /^(\d{2}\/\d{2})\s+(\d{2}\/\d{2})\s+(.+?)\s+([\d.]+,\d{2})\s*EUR\s*([+-])\s*$/;
+  type Sec = 'loads' | 'tx' | null;
+  let sec: Sec = null;
+  const purchases: ParsedBankRow[] = [];
+  const loads: VisaStatement['loads'] = [];
+  const seen = new Map<string, number>();
+  let last: ParsedBankRow | null = null;
+  for (const line of lines) {
+    if (/Chargements & D/i.test(line)) { sec = 'loads'; last = null; continue; }
+    if (/^Transactions - Num/i.test(line)) { sec = 'tx'; last = null; continue; }
+    if (/^Total\b/i.test(line)) { sec = null; last = null; continue; }
+    const m = LINE.exec(line);
+    if (m && sec) {
+      const [, dTx, dBook, descRaw, amtRaw, sign] = m;
+      const magnitude = parseAmount(amtRaw) ?? 0;
+      const desc = descRaw!.replace(/\s+/g, ' ').trim();
+      if (sec === 'loads') { loads.push({ date: dmToDate(dBook!, closeYear, closeMonth), amount: sign === '+' ? magnitude : -magnitude, label: desc }); last = null; continue; }
+      const amount = sign === '-' ? -magnitude : magnitude;
+      const bookingDate = dmToDate(dBook!, closeYear, closeMonth);
+      const base = [cardLast4, closeDate?.toISOString().slice(0, 10) ?? '', dTx, dBook, amount, desc].join('|');
+      const rank = (seen.get(base) ?? 0) + 1; seen.set(base, rank);
+      const row: ParsedBankRow = {
+        externalId: stableId([base, rank]),
+        bookingDate, valueDate: dmToDate(dTx!, closeYear, closeMonth), amount, currency: 'EUR',
+        counterpartyName: desc.replace(COUNTRY, '').trim() || desc, counterpartyAccount: null, description: desc,
+        communication: null,
+      };
+      purchases.push(row); last = row;
+      continue;
+    }
+    if (sec === 'tx' && last && /^\(Via .+\)$/i.test(line)) { last.description = `${last.description} ${line}`; }
+  }
+  const sumPurchases = Math.round(-purchases.reduce((s, r) => s + (r.amount ?? 0), 0) * 100) / 100;
+  return {
+    clientRef, cardLast4, cardNumber: cardM?.[1] ?? null, cardholder: cardM?.[3]?.trim() ?? null,
+    closeDate, debitDate, period, total: totalM ? parseAmount(totalM[1]) ?? null : null, purchases, loads, sumPurchases,
+  };
+}

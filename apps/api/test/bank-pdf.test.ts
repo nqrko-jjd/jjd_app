@@ -51,3 +51,43 @@ test('parseCardStatement : externalId stable (ré-import idempotent)', () => {
   assert.equal(a, b);
   assert.ok(a.startsWith('pdf-'));
 });
+
+import { parseVisaStatement } from '../src/lib/bank-pdf.js';
+
+test('parseVisaStatement : carte prépayée avec chargements, achats et total qui concorde', () => {
+  const text = [
+    'Date de clôture 13/03/2025', 'Transactions du 14/02/2025 au 13/03/2025', 'ETAT DES DÉPENSES', 'Référence client 7771574436',
+    'Chargements & Déchargements - Numéro de carte 4569 58XX XXXX 8820 - David Scott',
+    'DATE CHARGEMENT', '19/02 19/02 Votre chargement 250,00 EUR+', '25/02 25/02 Votre chargement 350,00 EUR+',
+    'Transactions - Numéro de carte 4569 58XX XXXX 8820 - David Scott',
+    '18/02 19/02 CARON BRUXELLES BE 46,60 EUR -', '19/02 20/02 BRICO MATERIAUX BRUXELLES BE 59,52 EUR -', '19/02 20/02 BRICO MATERIAUX BRUXELLES BE 59,52 EUR -',
+    'Total des dépenses au 13/03/2025 165,64 EUR -',
+  ].join('\n');
+  const s = parseVisaStatement(text);
+  assert.equal(s.cardLast4, '8820');
+  assert.equal(s.clientRef, '7771574436');
+  assert.equal(s.closeDate?.toISOString().slice(0, 10), '2025-03-13');
+  assert.equal(s.loads.length, 2);
+  assert.equal(s.loads[0]!.amount, 250);
+  assert.equal(s.purchases.length, 3);
+  assert.equal(s.sumPurchases, 165.64);
+  assert.equal(s.total, 165.64);
+  assert.equal(new Set(s.purchases.map((p) => p.externalId)).size, 3); // les deux achats identiques gardent chacun leur identifiant
+  assert.equal(s.purchases[0]!.bookingDate?.toISOString().slice(0, 10), '2025-02-19');
+});
+
+test('parseVisaStatement : carte à débit différé, date de débit et complément « (Via …) »', () => {
+  const text = [
+    'Date de clôture 25/01/2025', 'Date de débit 03/02/2025', 'Transactions du 26/12/2024 au 25/01/2025', 'Référence client 7701909272',
+    'Transactions - Numéro de carte 4569 59XX XXXX 4960 - David Scott',
+    '28/12 28/12 OBAT FRANCE NANTES FR 109,00 EUR -', '(Via OBAT FRANCE)', '22/01 23/01 SIXT9515801944 BRUESSEL BE 1.618,98 EUR -',
+    'Total 1.727,98 EUR -',
+  ].join('\n');
+  const s = parseVisaStatement(text);
+  assert.equal(s.cardLast4, '4960');
+  assert.equal(s.debitDate?.toISOString().slice(0, 10), '2025-02-03');
+  assert.equal(s.purchases[0]!.description, 'OBAT FRANCE NANTES FR (Via OBAT FRANCE)');
+  assert.equal(s.purchases[0]!.bookingDate?.toISOString().slice(0, 10), '2024-12-28'); // passage d'année
+  assert.equal(s.sumPurchases, 1727.98);
+  assert.equal(s.total, 1727.98);
+});

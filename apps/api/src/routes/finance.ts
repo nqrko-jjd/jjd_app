@@ -31,7 +31,7 @@ const bankRefs = (s: string | null) => new Set([...(s ?? '').matchAll(/REF\.?\s*
  *  déjà en base d'un AUTRE import — même jour/montant avec exactement le même libellé, ou une même REF bancaire.
  *  Plus d'heuristique « même montant à quelques jours + début de nom identique » : elle écartait de vraies opérations
  *  (parkings, prélèvements récurrents). Deux lignes du même fichier ne se comparent jamais entre elles. */
-async function insertBankRows(rows: ParsedBankRow[], bankLabel: string, source: string) {
+export async function insertBankRows(rows: ParsedBankRow[], bankLabel: string, source: string) {
   const runStart = new Date();
   let imported = 0;
   let duplicates = 0;

@@ -246,3 +246,16 @@ test('paiement groupé : « Factures F2026/ 65,66,67 » rapproche chaque facture
   assert.equal(pickGroupedMatch(ing('Facture F2026-65', 11000), idx, left), null);
   assert.equal(pickGroupedMatch({ ...ing('Factures F2026/ 65,66', 18000), side: 'out' }, idx, left), null);
 });
+
+test('pickMatch : loyer mensuel au même montant -> l’écriture du bon mois (la plus proche en date)', async () => {
+  const { pickMatch } = await import('../src/lib/bank-match.js');
+  const mk = (id: string, date: string, who = 'SX') => ({ id, ttc: 1718.59, ht: 1718.59, date: new Date(date), direction: 'purchase', bankComm: null, supplierName: who, contactName: null, documentId: null });
+  const months = [mk('M4', '2025-04-01'), mk('M5', '2025-05-01'), mk('M6', '2025-06-01'), mk('M7', '2025-07-01')];
+  const tx = (date: string) => ({ id: 't', amount: -1718.59, bookingDate: new Date(date), structuredComm: null, counterpartyName: 'SX', side: 'out' });
+  assert.equal(pickMatch(tx('2025-06-05'), months)?.ledgerId, 'M6');
+  assert.equal(pickMatch(tx('2025-05-06'), months)?.ledgerId, 'M5');
+  // tiers différents (deux fournisseurs, même montant) : on ne devine pas
+  assert.equal(pickMatch(tx('2025-06-05'), [mk('A', '2025-06-01', 'Alpha'), mk('B', '2025-06-02', 'Beta')]), null);
+  // deux écritures presque aussi proches l’une que l’autre : on ne devine pas
+  assert.equal(pickMatch(tx('2025-06-15'), [mk('A', '2025-06-10'), mk('B', '2025-06-20')]), null);
+});

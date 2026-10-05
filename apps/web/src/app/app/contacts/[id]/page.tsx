@@ -9,6 +9,7 @@ import { PageHead, StatusBadge, Money, formatDateBE, Kpi, formatEur } from '@/li
 import { Wallet, Euro, Scale, FileText, Users } from 'lucide-react';
 import { FormModal, type FieldDef } from '@/components/FormModal';
 import { CollapsibleSection } from '@/components/CollapsibleSection';
+import { ComboBox } from '@/components/ComboBox';
 import { PhotoHeader } from '@/components/PhotoHeader';
 import { useSort, SortTh } from '@/lib/sort';
 import { CONTACT_FIELDS, composeContactPayload, splitContactName } from '@/lib/forms';
@@ -55,6 +56,11 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
   const { data, loading, error, reload } = useApi<Detail>(`/api/contacts/${id}`);
   const { data: pick } = useApi<{ buildings: { id: string; name: string }[]; syndics: { id: string; name: string }[]; promoters: { id: string; name: string }[] }>('/api/meta/pickers');
   const [editing, setEditing] = useState(false);
+  const [merging, setMerging] = useState(false);
+  const [dupId, setDupId] = useState('');
+  const [finalName, setFinalName] = useState('');
+  const [mergeBusy, setMergeBusy] = useState(false);
+  const { data: allContacts } = useApi<{ items: { id: string; name: string; type: string; vat: string | null; city: string | null }[] }>(merging ? '/api/contacts' : null);
   const [personModal, setPersonModal] = useState<'new' | ContactPerson | null>(null);
   const [portalInfo, setPortalInfo] = useState<{ email: string; portal: string } | null>(null);
   const [purchasesShown, setPurchasesShown] = useState(PAGE);
@@ -105,6 +111,20 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
     await api(`/api/contacts/${id}/persons/${pid}`, { method: 'DELETE' });
     reload();
   }
+  async function doMerge() {
+    const dup = allContacts?.items.find((x) => x.id === dupId);
+    if (!dup) return;
+    if (!confirm(`Fusionner « ${dup.name} » dans « ${finalName || c.name} » ? Tous ses devis, factures, achats et chantiers seront rattachés à cette fiche, puis « ${dup.name} » sera supprimée.`)) return;
+    setMergeBusy(true);
+    try {
+      await api('/api/contacts/merge', { method: 'POST', body: { keepId: id, removeIds: [dupId], name: finalName || undefined } });
+      setMerging(false); setDupId(''); reload();
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setMergeBusy(false);
+    }
+  }
   async function removeContact() {
     if (!confirm(`Supprimer définitivement « ${c.name} » ? Cette action est irréversible.`)) return;
     try {
@@ -117,6 +137,21 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
 
   return (
     <>
+      {merging && (
+        <div className="modal-scrim" onClick={() => setMerging(false)}>
+          <div className="modal" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head"><h2>Fusionner un doublon dans « {c.name} »</h2><button className="btn ghost" onClick={() => setMerging(false)} aria-label="Fermer">✕</button></div>
+            <div style={{ padding: '1rem', display: 'grid', gap: '0.8rem' }}>
+              <p className="muted" style={{ margin: 0, fontSize: '0.85rem' }}>La fiche choisie disparaît : ses devis, factures, achats, chantiers et contacts sont rattachés à « {c.name} ». Vous pouvez répéter l’opération pour plusieurs doublons.</p>
+              <div className="field"><label>Fiche en doublon</label>
+                <ComboBox placeholder="Rechercher une fiche…" value={dupId} onChange={setDupId} options={(allContacts?.items ?? []).filter((x) => x.id !== id).map((x) => ({ value: x.id, label: `${x.name}${x.vat ? ` · ${x.vat}` : ''}${x.city ? ` · ${x.city}` : ''}` }))} />
+              </div>
+              <div className="field"><label>Nom final de la fiche</label><input className="input" value={finalName} onChange={(e) => setFinalName(e.target.value)} placeholder={c.name} /></div>
+            </div>
+            <div className="modal-foot"><button className="btn" onClick={() => setMerging(false)}>Annuler</button><button className="btn primary" disabled={!dupId || mergeBusy} onClick={doMerge}>{mergeBusy ? 'Fusion…' : 'Fusionner'}</button></div>
+          </div>
+        </div>
+      )}
       {editing && (
         <FormModal
           title={`Modifier ${c.name}`}
@@ -148,6 +183,7 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
         <Link href="/app/contacts" className="btn ghost">← Contacts</Link>
         <div className="row">
           <button className="btn" onClick={() => setEditing(true)}>Modifier</button>
+          <button className="btn" onClick={() => { setFinalName(c.name); setMerging(true); }}>Fusionner un doublon</button>
           <button className="btn" onClick={removeContact}>Supprimer</button>
         </div>
       </div>

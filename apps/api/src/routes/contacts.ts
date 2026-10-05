@@ -7,6 +7,7 @@ import { requireAuth, STAFF, OFFICE, hashPassword } from '../lib/auth.js';
 import { lookupBelgianVat } from '../lib/vies.js';
 import { attachPhotoRoutes } from '../lib/photo-upload.js';
 import { withQuotedFromDocuments } from '../lib/worksite-margin.js';
+import { mergeContacts } from '../lib/contact-merge.js';
 
 const isPaidStr = (s: string | null) =>
   (s ?? '').toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').trim() === 'paye';
@@ -48,6 +49,17 @@ function shapeContact<T extends { linkedAcpId?: string | null; linkedAcp?: unkno
 }
 
 /** Recherche une entreprise par n° de TVA (VIES) pour préremplir un nouveau contact. */
+/** Fusionne des fiches en doublon dans celle-ci (voir lib/contact-merge.ts). */
+contactsRouter.post(
+  '/merge',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const { keepId, removeIds, name } = req.body as { keepId?: string; removeIds?: string[]; name?: string };
+    if (!keepId || !Array.isArray(removeIds)) throw new HttpError(422, 'Fiche à conserver et fiches à fusionner requises.');
+    res.json(await mergeContacts(keepId, removeIds, { name }));
+  }),
+);
+
 contactsRouter.get(
   '/vat-lookup',
   requireAuth(...OFFICE),

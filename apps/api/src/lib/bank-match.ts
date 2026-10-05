@@ -232,6 +232,19 @@ export function pickMatch(tx: TxLite, candidates: LedgerLite[]): { ledgerId: str
   });
   if (near.length === 1) return { ledgerId: near[0]!.id, confidence: 'good' };
 
+  // Paiement récurrent (loyer, abonnement) : même tiers, même montant chaque mois. On retient l'écriture la plus proche en
+  // date quand elle est nettement plus proche que les autres (≤ 20 jours, et au moins 10 jours d'avance).
+  if (near.length > 1 && tx.bookingDate) {
+    const party = (l: LedgerLite) => norm(l.supplierName ?? l.contactName);
+    const first = party(near[0]!);
+    if (first && near.every((l) => party(l) === first)) {
+      const ranked = near.filter((l) => l.date)
+        .map((l) => ({ l, d: Math.abs(tx.bookingDate!.getTime() - l.date!.getTime()) / DAY }))
+        .sort((x, y) => x.d - y.d);
+      if (ranked.length >= 2 && ranked[0]!.d <= 20 && ranked[1]!.d - ranked[0]!.d >= 10) return { ledgerId: ranked[0]!.l.id, confidence: 'good' };
+    }
+  }
+
   // 3. montant + date + nom de contrepartie (départage plusieurs candidats)
   if (near.length > 1 && tx.counterpartyName) {
     const byName = near.filter(
@@ -365,8 +378,9 @@ export async function autoMatchAll(
     const pool: LedgerLite[] = [];
     if (tx.structuredComm) pool.push(...(byComm.get(tx.structuredComm) ?? []));
     for (let d = -2; d <= 2; d++) pool.push(...(byAmount.get(amt + d) ?? []));
-    const m = pickMatch(tx as TxLite, pool);
-    if (m) updates.push({ id: tx.id, ledgerId: m.ledgerId, confidence: m.confidence });
+    const open = pool.filter((l) => (paid.get(l.id) ?? 0) + 0.02 < amountOf(l)); // une écriture déjà soldée par d'autres paiements n'est plus candidate
+    const m = pickMatch(tx as TxLite, open);
+    if (m) { updates.push({ id: tx.id, ledgerId: m.ledgerId, confidence: m.confidence }); paid.set(m.ledgerId, (paid.get(m.ledgerId) ?? 0) + Math.abs(tx.amount ?? 0)); }
   }
 
   // date de la transaction (pour poser paidOn sur l'écriture rapprochée)

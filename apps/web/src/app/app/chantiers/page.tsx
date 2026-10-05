@@ -24,13 +24,17 @@ import {
  * tableau de bord/la messagerie/le picker planning-stock. L'onglet "Tous" doit donc explicitement
  * demander archived=all (sinon le filtre par défaut du backend masquerait les clôturés).
  */
+// Chaque statut doit avoir son onglet (sinon un chantier « en attente », « demande »… n'est visible que dans « Tous »).
 const STATUS_VIEWS: { key: string; label: string; archived?: '1' | 'all' }[] = [
   { key: '', label: 'Tous', archived: 'all' },
+  { key: 'lead,quote_needed', label: 'Demandes / devis', archived: 'all' },
   { key: 'in_progress', label: 'En cours' },
   { key: 'to_plan,scheduled', label: 'À planifier' },
+  { key: 'on_hold', label: 'En attente', archived: 'all' },
   { key: 'to_invoice', label: 'À facturer' },
   { key: 'done,invoiced', label: 'Terminés' },
   { key: 'closed', label: 'Clôturé', archived: '1' },
+  { key: 'refused,cancelled', label: 'Refusés / abandonnés', archived: 'all' },
 ];
 
 interface WS {
@@ -189,7 +193,7 @@ function ChantiersInner() {
         }
       />
       {kind === 'project' && (
-        <div className="seg" style={{ marginBottom: '1rem' }}>
+        <div className="seg" style={{ marginBottom: '1rem', flexWrap: 'wrap' }}>
           {STATUS_VIEWS.map((v) => (
             <button key={v.key || 'all'} className={status === v.key ? 'on' : ''} onClick={() => setStatus(v.key)}>
               {v.label}

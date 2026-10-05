@@ -21,8 +21,8 @@ before(async () => {
   base = `http://127.0.0.1:${typeof addr === 'object' && addr ? addr.port : 0}`;
   const login = await fetch(base + '/api/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'david@jjd-consult.be', password: 'jjd' }) });
   token = (await login.json()).token;
-  const open = await prisma.worksite.create({ data: { ref: 'R-PK-OUVERT', title: 'Chantier ouvert test', kind: 'project', status: 'in_progress' } });
-  const closed = await prisma.worksite.create({ data: { ref: 'R-PK-CLOS', title: 'Vieux dossier test', kind: 'project', status: 'closed', archived: true } });
+  const open = await prisma.worksite.create({ data: { ref: 'R-PK-OUVERT', title: 'Chantier ouvert test', kind: 'project', status: 'in_progress', source: 'test' } });
+  const closed = await prisma.worksite.create({ data: { ref: 'R-PK-CLOS', title: 'Vieux dossier test', kind: 'project', status: 'closed', archived: true, source: 'test' } });
   ids.push(open.id, closed.id);
 });
 

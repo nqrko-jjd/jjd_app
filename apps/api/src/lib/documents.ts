@@ -5,6 +5,7 @@ import {
 } from '@jjd/shared';
 import { prisma, nextCounter } from '../db.js';
 import { HttpError } from './http.js';
+import { PAYMENT_TOLERANCE } from './payment-tolerance.js';
 import { sanitizeLineHtml } from './sanitize.js';
 
 /**
@@ -236,7 +237,7 @@ export async function syncLedgerEntryForDocument(documentId: string) {
   const current = existing ?? (await prisma.ledgerEntry.findUnique({ where: { documentId: doc.id }, select: { id: true, source: true } }));
   const adopted = !!current && current.source !== 'document-sync';
 
-  const paymentStatus = doc.totalTtc > 0 && doc.paidAmount + 0.01 >= doc.totalTtc ? 'Payé' : 'Non payé';
+  const paymentStatus = doc.totalTtc > 0 && doc.paidAmount + PAYMENT_TOLERANCE >= doc.totalTtc ? 'Payé' : 'Non payé';
   const supplierName = doc.billingName ?? doc.contact?.name ?? null;
   const period = deriveLedgerPeriod(doc.issuedOn);
 
@@ -282,6 +283,16 @@ export async function syncLedgerEntryForDocument(documentId: string) {
  * le grand livre — donc idempotent et sûr à rejouer à intervalles réguliers.
  */
 export async function markOverdueInvoices(now: Date = new Date()) {
+  // facture dont l'encaissement couvre le total à l'arrondi près (ex. 18 802,34 € pour 18 802,44 €) : payée,
+  // jamais « en retard » — répare aussi celles restées bloquées avant la tolérance (voir payment-tolerance.ts)
+  const nearlyPaid = await prisma.document.findMany({
+    where: { kind: { in: ['invoice', 'deposit_invoice'] }, status: { in: ['sent', 'partial', 'overdue'] }, paidAmount: { gt: 0 }, totalTtc: { gt: 0 } },
+    select: { id: true, totalTtc: true, paidAmount: true },
+  });
+  for (const d of nearlyPaid.filter((x) => x.paidAmount + PAYMENT_TOLERANCE >= x.totalTtc)) {
+    await prisma.document.update({ where: { id: d.id }, data: { status: 'paid' } });
+    await syncLedgerEntryForDocument(d.id);
+  }
   const r = await prisma.document.updateMany({
     where: {
       kind: { in: ['invoice', 'deposit_invoice'] },

@@ -24,6 +24,7 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '../db.js';
 import { round2 } from '@jjd/shared';
 import { syncLedgerEntryForDocument } from './documents.js';
+import { PAYMENT_TOLERANCE } from './payment-tolerance.js';
 
 /**
  * Recalcule `paidAmount`/`status`/`paidOn` d'une facture de vente à partir des
@@ -48,7 +49,7 @@ export async function recomputeDocumentPayment(documentId: string) {
   const paidAmount = round2(matches.reduce((s, m) => s + (m.amount ?? Math.abs(m.bankTransaction.amount ?? 0)), 0));
   const bookingDates = matches.map((m) => m.bankTransaction.bookingDate).filter((d): d is Date => !!d).sort((a, b) => b.getTime() - a.getTime());
   const paidOn = bookingDates[0] ?? null;
-  const status = matches.length === 0 ? 'sent' : paidAmount + 0.02 >= doc.totalTtc ? 'paid' : 'partial';
+  const status = matches.length === 0 ? 'sent' : paidAmount + PAYMENT_TOLERANCE >= doc.totalTtc ? 'paid' : 'partial';
 
   await prisma.document.update({ where: { id: documentId }, data: { status, paidAmount, paidOn } });
   await syncLedgerEntryForDocument(documentId);

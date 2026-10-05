@@ -14,6 +14,7 @@ import { docInclude, buildLineRows, cloneLineRows, refreshDocTotals, issueDocume
 import { renderDocumentPdf } from '../lib/pdf.js';
 import { extractDocumentInfo } from '../lib/document-extract.js';
 import { UPLOADS_DIR } from '../lib/media.js';
+import { PAYMENT_TOLERANCE } from '../lib/payment-tolerance.js';
 import { taskInclude, serializeTask } from './tasks.js';
 
 export const documentsRouter = Router();
@@ -553,7 +554,7 @@ documentsRouter.post(
     const amount = typeof req.body?.amount === 'number' ? req.body.amount : doc.totalTtc;
     const paidOn = req.body?.paidOn ? new Date(req.body.paidOn) : new Date();
     const paidAmount = Math.round((doc.paidAmount + amount) * 100) / 100;
-    const status = paidAmount + 0.01 >= doc.totalTtc ? 'paid' : 'partial';
+    const status = paidAmount + PAYMENT_TOLERANCE >= doc.totalTtc ? 'paid' : 'partial';
     const updated = await prisma.document.update({
       where: { id: doc.id },
       data: { paidAmount, paidOn: status === 'paid' ? paidOn : doc.paidOn, status },

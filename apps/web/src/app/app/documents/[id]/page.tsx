@@ -572,6 +572,24 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
               </div>
             )}
 
+            {isInvoiceLike && (doc.payments?.length ?? 0) > 0 && (
+              <div className="doc-recap-rows" style={{ marginTop: '0.6rem' }}>
+                <div className="eyebrow" style={{ margin: '0 0 0.3rem' }}>Paiements reçus ({doc.payments!.length})</div>
+                {doc.payments!.map((p) => (
+                  <div key={p.matchId} className="doc-recap-row" style={{ alignItems: 'baseline' }}>
+                    <span style={{ minWidth: 0 }}>
+                      <Link href={`/app/finances/banque?documentId=${id}`} style={{ textDecoration: 'underline' }}>{p.date ? formatDateBE(p.date) : '—'}</Link>
+                      <span className="muted" style={{ fontSize: '0.76rem' }}> · {[p.bank, p.counterparty].filter(Boolean).join(' · ')}</span>
+                    </span>
+                    <span>{formatEur(p.amount)}</span>
+                  </div>
+                ))}
+                {doc.payments!.length > 1 && (
+                  <div className="doc-recap-row strong"><span>Total encaissé</span><span>{formatEur(doc.payments!.reduce((s, p) => s + p.amount, 0))}</span></div>
+                )}
+              </div>
+            )}
+
             {dirty && <div className="doc-recap-dirty">Modifications non enregistrées</div>}
 
             <div className="doc-recap-actions">

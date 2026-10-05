@@ -52,6 +52,7 @@ export interface DocFull {
   paidAmount: number;
   paidOn: string | null;
   hasBankMatch: boolean;
+  payments?: { matchId: string; txId: string; date: string | null; amount: number; bank: string | null; counterparty: string | null }[];
   vatRate: number | null;
   structuredComm: string | null;
   peppolStatus: string | null;

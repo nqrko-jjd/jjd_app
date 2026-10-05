@@ -267,7 +267,10 @@ financeRouter.get(
     // prioritaire sur `matched`, puisqu'une facture rapprochée est par définition "matched".
     // Le rapprochement peut viser directement le Document (rapprochement manuel), ou son
     // écriture de grand livre synchronisée (rapprochement automatique) — les deux comptent.
-    if (documentId) and.push({ matches: { some: { OR: [{ documentId }, { ledgerEntry: { documentId } }] } } });
+    if (documentId) {
+      const dn = (await prisma.document.findUnique({ where: { id: documentId }, select: { number: true } }))?.number;
+      and.push({ matches: { some: { OR: [{ documentId }, { ledgerEntry: { documentId } }, ...(dn ? [{ ledgerEntry: { documentId: null, docNumber: dn, direction: { in: ['sale', 'credit_note'] } } }] : [])] } } });
+    }
     else if (matched === '1') and.push({ matches: { some: {} } });
     else if (matched === '0') and.push({ matches: { none: {} } });
     if (from) and.push({ bookingDate: { gte: new Date(from) } });

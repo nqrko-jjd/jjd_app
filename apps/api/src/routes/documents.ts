@@ -250,10 +250,29 @@ documentsRouter.get(
     // historique où le paiement exact n'a jamais été retrouvé) — la date affichée n'est alors
     // qu'un artefact d'import, pas confirmée. Le signaler plutôt que de laisser croire que
     // c'est fiable — voir le lien vers /finances/banque?documentId= côté web.
-    const bankMatchCount = await prisma.bankTransactionMatch.count({
-      where: { OR: [{ documentId: doc.id }, { ledgerEntry: { documentId: doc.id } }] },
+    // Tous les paiements de la facture : rapprochés au document, à son écriture synchronisée, ou à l'écriture
+    // historique (Excel, non liée) de même numéro — sinon une facture payée en plusieurs fois n'en montrait qu'un.
+    const matches = await prisma.bankTransactionMatch.findMany({
+      where: {
+        OR: [
+          { documentId: doc.id },
+          { ledgerEntry: { documentId: doc.id } },
+          ...(doc.number ? [{ ledgerEntry: { documentId: null, docNumber: doc.number, direction: { in: ['sale', 'credit_note'] } } }] : []),
+        ],
+      },
+      select: { id: true, amount: true, bankTransaction: { select: { id: true, bookingDate: true, amount: true, bank: true, counterpartyName: true } } },
     });
-    res.json({ document: { ...doc, hasBankMatch: bankMatchCount > 0 }, company });
+    const payments = matches
+      .map((m) => ({
+        matchId: m.id,
+        txId: m.bankTransaction.id,
+        date: m.bankTransaction.bookingDate,
+        amount: Math.round((m.amount ?? Math.abs(m.bankTransaction.amount ?? 0)) * 100) / 100,
+        bank: m.bankTransaction.bank,
+        counterparty: m.bankTransaction.counterpartyName,
+      }))
+      .sort((a, b) => (a.date?.getTime() ?? 0) - (b.date?.getTime() ?? 0));
+    res.json({ document: { ...doc, hasBankMatch: payments.length > 0, payments }, company });
   }),
 );
 

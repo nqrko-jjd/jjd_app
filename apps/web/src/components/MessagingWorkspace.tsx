@@ -207,6 +207,40 @@ function MessagerieInner({worksiteId, compact=false, active=true}: {worksiteId?:
     }
   }
 
+  // Import d'un export WhatsApp (.zip) dans le fil de ce chantier — même route que la fiche chantier
+  const zipRef = useRef<HTMLInputElement>(null);
+  const [importMsg, setImportMsg] = useState<string | null>(null);
+  async function importWhatsapp(files: FileList | null) {
+    const zip = files?.[0];
+    if (!zip || !worksiteId) return;
+    if (!confirm('Importer cet export WhatsApp ? Les messages iront dans le chat, les photos/vidéos dans les pièces jointes. Un import précédent pour ce chantier serait remplacé.')) {
+      if (zipRef.current) zipRef.current.value = '';
+      return;
+    }
+    setBusy(true);
+    setImportMsg('Import en cours… (peut prendre une minute selon le nombre de photos)');
+    try {
+      const fd = new FormData();
+      fd.append('zip', zip);
+      const r = await apiUpload<{ imported: { texts: number; photos: number; videos: number; audios: number; files: number; skipped: number }; warnings: string[] }>(
+        `/api/worksites/${worksiteId}/thread/import-whatsapp`, fd,
+      );
+      const { imported: im, warnings } = r;
+      setImportMsg(
+        `Importé : ${im.texts} message(s), ${im.photos} photo(s), ${im.videos} vidéo(s), ${im.audios} note(s) vocale(s), ${im.files} fichier(s)`
+        + (im.skipped ? ` · ${im.skipped} média(s) introuvable(s)` : '')
+        + (warnings.length ? ` — ${warnings.slice(0, 3).join(' ; ')}${warnings.length > 3 ? '…' : ''}` : ''),
+      );
+      reloadConvo();
+      reloadList();
+    } catch (e) {
+      setImportMsg(`Échec de l’import : ${(e as Error).message}`);
+    } finally {
+      setBusy(false);
+      if (zipRef.current) zipRef.current.value = '';
+    }
+  }
+
   const voice = useVoiceRecorder(async (blob) => {
     if (!selected || audience === 'client') return;
     setBusy(true);
@@ -236,8 +270,19 @@ function MessagerieInner({worksiteId, compact=false, active=true}: {worksiteId?:
       {actionError && <div className="card card-pad" role="alert" style={{borderColor:'var(--crit)',marginBottom:'1rem'}}>{actionError}</div>}
       {worksiteId && <div className="worksite-discussion-head">
         <div><h3>Discussion du chantier</h3><p>Le même fil que dans la messagerie. Les photos restent internes tant que vous ne les partagez pas.</p></div>
-        <Link className="btn" href={`/app/messagerie?worksite=${worksiteId}&audience=${audience}`}>Ouvrir la messagerie</Link>
+        <div className="row" style={{ gap: '0.5rem', flexWrap: 'wrap' }}>
+          {isOffice && (
+            <>
+              <input ref={zipRef} type="file" accept=".zip,application/zip" hidden onChange={(e) => importWhatsapp(e.target.files)} />
+              <button type="button" className="btn" onClick={() => zipRef.current?.click()} disabled={busy} title="Importer un export WhatsApp (.zip) : chat + photos">
+                Import WhatsApp
+              </button>
+            </>
+          )}
+          <Link className="btn" href={`/app/messagerie?worksite=${worksiteId}&audience=${audience}`}>Ouvrir la messagerie</Link>
+        </div>
       </div>}
+      {worksiteId && importMsg && <div className="muted" role="status" style={{ margin: '-10px 0 14px', fontSize: '0.84rem' }}>{importMsg}</div>}
       {worksiteId && isOffice && <div className="msg-audience-tabs worksite-discussion-tabs">
         <button className={audience==='internal'?'active':''} onClick={()=>{setAudience('internal');setTab('chat');}}>Équipe interne</button>
         <button className={audience==='client'?'active':''} onClick={()=>{setAudience('client');setTab('chat');}}>Échanges client</button>

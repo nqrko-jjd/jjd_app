@@ -215,6 +215,27 @@ export async function syncLedgerEntryForDocument(documentId: string) {
   const isSaleSide = doc.kind === 'invoice' || doc.kind === 'deposit_invoice' || doc.kind === 'credit_note';
   if (!isSaleSide) return;
 
+  // Une facture historique existe déjà au grand livre (import Excel, documentId nul) : ne JAMAIS en
+  // créer une seconde — la vente serait comptée deux fois. Si le montant concorde on adopte
+  // l'écriture existante (elle devient l'écriture synchronisée du document), sinon on ne touche
+  // à rien et c'est l'écriture historique qui fait foi.
+  const existing = await prisma.ledgerEntry.findUnique({ where: { documentId: doc.id }, select: { id: true, source: true } });
+  if (!existing && doc.number) {
+    const twins = await prisma.ledgerEntry.findMany({
+      where: { documentId: null, direction: { in: ['sale', 'credit_note'] }, docNumber: doc.number },
+      select: { id: true, ttc: true, ht: true },
+    });
+    if (twins.length) {
+      const t = twins[0]!;
+      const sameAmount = Math.abs(Math.abs(t.ttc ?? t.ht) - Math.abs(doc.totalTtc)) < 0.02;
+      if (twins.length === 1 && doc.kind !== 'credit_note' && sameAmount) await prisma.ledgerEntry.update({ where: { id: t.id }, data: { documentId: doc.id } });
+      else return;
+    }
+  }
+  // écriture reprise de l'Excel : les champs que le document ne renseigne pas (chantier, client) sont conservés
+  const current = existing ?? (await prisma.ledgerEntry.findUnique({ where: { documentId: doc.id }, select: { id: true, source: true } }));
+  const adopted = !!current && current.source !== 'document-sync';
+
   const paymentStatus = doc.totalTtc > 0 && doc.paidAmount + 0.01 >= doc.totalTtc ? 'Payé' : 'Non payé';
   const supplierName = doc.billingName ?? doc.contact?.name ?? null;
   const period = deriveLedgerPeriod(doc.issuedOn);
@@ -242,9 +263,9 @@ export async function syncLedgerEntryForDocument(documentId: string) {
     update: {
       date: doc.issuedOn,
       docNumber: doc.number,
-      worksiteId: doc.worksiteId,
-      contactId: doc.contactId,
-      supplierName,
+      worksiteId: adopted ? (doc.worksiteId ?? undefined) : doc.worksiteId,
+      contactId: adopted ? (doc.contactId ?? undefined) : doc.contactId,
+      supplierName: adopted ? (supplierName ?? undefined) : supplierName,
       ht: doc.totalHt,
       vatDue: doc.totalVat,
       ttc: doc.totalTtc,

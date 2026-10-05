@@ -343,6 +343,23 @@ financeRouter.patch(
   }),
 );
 
+/**
+ * Une facture de vente historique (import Excel) existe au grand livre SANS lien avec son Document de
+ * l'appli : les deux ressortaient dans les propositions de rapprochement, et choisir le Document créait une
+ * 2e écriture (vente comptée deux fois). On retire donc le Document et on propose à sa place l'écriture
+ * existante, la seule qui compte dans les finances.
+ */
+async function splitLedgerTwins<D extends { number: string | null }>(docs: D[]) {
+  const nums = docs.map((d) => d.number).filter((n): n is string => !!n);
+  if (!nums.length) return { docs, twins: [] };
+  const twins = await prisma.ledgerEntry.findMany({
+    where: { documentId: null, direction: { in: ['sale', 'credit_note'] }, docNumber: { in: nums } },
+    include: { worksite: { select: { ref: true, title: true } } },
+  });
+  const have = new Set(twins.map((t) => (t.docNumber ?? '').trim().toUpperCase()));
+  return { docs: docs.filter((d) => !d.number || !have.has(d.number.trim().toUpperCase())), twins };
+}
+
 /** Suggère des écritures du grand livre à rapprocher d'une transaction. */
 financeRouter.get(
   '/bank/:id/suggestions',
@@ -391,9 +408,12 @@ financeRouter.get(
           select: { id: true, number: true, kind: true, totalTtc: true, issuedOn: true, status: true, contact: { select: { name: true } }, worksite: { select: { ref: true } } },
         }),
       ]);
+      const split = await splitLedgerTwins(docs);
+      const known = new Set(ledgers.map((l) => l.id));
+      const twinLedgers = split.twins.filter((t) => !known.has(t.id) && !usedLedgerIds.includes(t.id));
       return res.json({
         items: [
-          ...ledgers.map((l) => ({
+          ...[...ledgers, ...twinLedgers].map((l) => ({
             kind: 'ledger' as const,
             id: l.id,
             label: [l.docNumber, l.supplierName].filter(Boolean).join(' · ') || (l.direction === 'sale' ? 'Vente' : 'Achat'),
@@ -402,7 +422,7 @@ financeRouter.get(
             direction: l.direction,
             worksiteRef: l.worksite?.ref ?? l.worksiteRef ?? null,
           })),
-          ...docs.map((d) => ({
+          ...split.docs.map((d) => ({
             kind: 'document' as const,
             id: d.id,
             label: [d.number, d.contact?.name].filter(Boolean).join(' · ') || 'Facture de vente',
@@ -477,7 +497,13 @@ financeRouter.get(
       orderBy: { issuedOn: 'desc' },
       select: { id: true, number: true, kind: true, totalTtc: true, issuedOn: true, status: true, contact: { select: { name: true } }, worksite: { select: { ref: true } } },
     });
-    const docItems = docs.map((d) => ({
+    const autoSplit = await splitLedgerTwins(docs);
+    const autoKnown = new Set(ledgerItems.map((l) => l.id));
+    for (const t of autoSplit.twins) {
+      if (autoKnown.has(t.id) || usedLedgerIds.includes(t.id)) continue;
+      ledgerItems.push({ kind: 'ledger' as const, id: t.id, label: [t.docNumber, t.supplierName].filter(Boolean).join(' · ') || 'Vente', amount: t.ttc ?? t.ht, date: t.date, direction: t.direction, worksiteRef: t.worksite?.ref ?? t.worksiteRef ?? null });
+    }
+    const docItems = autoSplit.docs.map((d) => ({
       kind: 'document' as const,
       id: d.id,
       label: [d.number, d.contact?.name].filter(Boolean).join(' · ') || 'Facture de vente',

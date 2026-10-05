@@ -358,7 +358,7 @@ documentsRouter.patch(
     // Modification des lignes/montants après émission — normalement on passerait par une
     // note de crédit, mais autorisé pour l'instant (phase de test) ; tracé dans l'audit log
     // pour garder une trace de ce qui a changé après coup.
-    if (existing.lockedAt && data.lines) {
+    if (existing.lockedAt && data.lines && (data.lines.length > 0 || (await prisma.documentLine.count({ where: { documentId: existing.id } })) > 0)) {
       await prisma.auditLog.create({
         data: {
           actorId: req.user!.id,
@@ -397,7 +397,12 @@ documentsRouter.patch(
       },
     });
 
-    if (data.lines) {
+    // Document importé (TrustUp) sans détail de lignes : ses montants sont stockés tels quels. Enregistrer l'en-tête
+    // (chantier, client…) envoie une liste de lignes vide — la traiter reviendrait à recalculer les totaux à
+    // partir de rien et les remettre à 0 (fait : 23 devis/factures remis à 0 le 05/10). On ne touche donc aux
+    // lignes que si le document en avait déjà, ou si on en envoie réellement.
+    const hadLines = data.lines ? await prisma.documentLine.count({ where: { documentId: existing.id } }) : 0;
+    if (data.lines && (data.lines.length > 0 || hadLines > 0)) {
       await prisma.documentLine.deleteMany({ where: { documentId: existing.id } });
       if (data.lines.length) await prisma.documentLine.createMany({ data: buildLineRows(existing.id, data.lines) });
       await refreshDocTotals(existing.id);

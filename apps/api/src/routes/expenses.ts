@@ -209,11 +209,11 @@ expensesRouter.get(
         orderBy: { name: 'asc' },
         select: { id: true, name: true },
       }),
+      // chantiers clôturés/archivés inclus (en fin de liste) : on doit pouvoir y rattacher une dépense
       prisma.worksite.findMany({
-        where: { archived: false },
-        orderBy: { updatedAt: 'desc' },
+        orderBy: [{ archived: 'asc' }, { updatedAt: 'desc' }],
         take: 5000,
-        select: { id: true, ref: true, title: true },
+        select: { id: true, ref: true, title: true, archived: true, status: true },
       }),
       prisma.vehicle.findMany({
         where: { active: true },
@@ -231,7 +231,7 @@ expensesRouter.get(
       categories,
       rawCategories: rawCats.map((c) => c.categoryRaw).filter(Boolean),
       suppliers,
-      worksites: worksites.map((w) => ({ id: w.id, name: `${w.ref} · ${w.title}` })),
+      worksites: worksites.map((w) => ({ id: w.id, name: `${w.ref} · ${w.title}${w.status === 'closed' ? ' (clôturé)' : w.archived ? ' (archivé)' : ''}` })),
       vehicles: vehicles.map((v) => ({ id: v.id, name: [v.code, v.name || `${v.brand ?? ''} ${v.model ?? ''}`.trim(), v.plate].filter(Boolean).join(' · ') })),
       years: years.map((y) => y.year).filter(Boolean),
     });

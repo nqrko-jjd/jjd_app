@@ -57,7 +57,17 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
   useEffect(() => {
     if (data?.document) {
       setDoc(data.document);
-      const initLines = data.document.lines.length ? data.document.lines : [emptyLine()];
+      // Document importé sans détail de lignes mais avec un montant stocké : on pré-remplit UNE ligne à ce montant, pour que
+      // le récapitulatif affiche le vrai total (et non 0) et que le montant soit modifiable ; sans quoi l'éditeur partait
+      // d'une ligne vide à 0 €, et enregistrer sans désignation ne changeait rien.
+      const d = data.document;
+      // (seulement si le taux de TVA du total stocké est un taux standard : sinon enregistrer fausserait le total)
+      const ratio = d.totalHt > 0 ? d.totalVat / d.totalHt : 0;
+      const stdRate = [0, 0.06, 0.12, 0.21].find((r) => Math.abs(r - ratio) < 0.003);
+      const imported0: DocLine | null = !d.lines.length && d.totalHt > 0 && stdRate !== undefined
+        ? { kind: 'item', label: 'Reprise du montant importé', qty: 1, unit: 'forfait', unitPriceHt: d.totalHt, discountPct: 0, vatRate: stdRate }
+        : null;
+      const initLines = d.lines.length ? d.lines : [imported0 ?? emptyLine()];
       setLines(initLines);
       setDirty(false);
       setBillingOpen(!!(data.document.billingName || data.document.billingVat || data.document.billingAddress || data.document.billingEmail));
@@ -101,6 +111,11 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
   const toggleDesc = (i: number) => setOpenDesc((s) => { const next = new Set(s); if (next.has(i)) next.delete(i); else next.add(i); return next; });
 
   async function save() {
+    // une ligne avec un prix mais sans désignation était écartée en silence à l'enregistrement (« ça ne change rien »)
+    if (lines.some((l) => l.kind === 'item' && !l.label.trim() && (l.unitPriceHt > 0 || l.qty > 1))) {
+      setMsg('Chaque ligne avec un montant doit avoir une désignation (colonne « Désignation ») — sinon elle n’est pas enregistrée.');
+      return;
+    }
     setBusy('save');
     try {
       await api(`/api/documents/${id}`, {

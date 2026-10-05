@@ -462,30 +462,57 @@ expensesRouter.get(
     });
     if (!e) throw new HttpError(404, 'Dépense introuvable');
     const amount = Math.abs(e.ttc ?? e.ht ?? 0);
-    const win = e.date
-      ? { bookingDate: { gte: new Date(e.date.getTime() - 30 * 86400000), lte: new Date(e.date.getTime() + 60 * 86400000) } }
-      : {};
-    const raw = await prisma.bankTransaction.findMany({
-      where: {
-        matches: { none: {} },
-        // décaissement : montant négatif de valeur proche du TTC de la dépense
-        amount: { gte: -(amount + 1), lte: -(amount - 1) },
-        ...win,
-      },
-      orderBy: { bookingDate: 'desc' },
-      take: 40,
-      select: { id: true, bookingDate: true, amount: true, bank: true, counterpartyName: true, communication: true },
-    });
     const supplier = e.contact?.name ?? e.supplierName ?? '';
+
+    // Recherche libre (texte, montant, dates, paiements déjà rapprochés compris) : dès qu'un critère est donné on n'impose
+    // plus « même montant ± 1 € et ± 2 mois » — c'est l'utilisateur qui cherche. Sans critère : propositions automatiques.
+    const qs = req.query as Record<string, string | undefined>;
+    const words = (qs.q ?? '').trim().split(/\s+/).filter(Boolean).slice(0, 6);
+    const askedAmount = qs.amount !== undefined && qs.amount !== '' ? parseAmount(qs.amount) : null;
+    const from = qs.from ? parseLooseDate(qs.from) : null;
+    const to = qs.to ? parseLooseDate(qs.to) : null;
+    const includeMatched = qs.all === '1';
+    const manual = words.length > 0 || askedAmount != null || !!from || !!to || includeMatched;
+
+    const where: Prisma.BankTransactionWhereInput = manual
+      ? {
+          ...(includeMatched ? {} : { matches: { none: {} } }),
+          ...(askedAmount != null ? { OR: [{ amount: { gte: Math.abs(askedAmount) - 0.5, lte: Math.abs(askedAmount) + 0.5 } }, { amount: { gte: -(Math.abs(askedAmount) + 0.5), lte: -(Math.abs(askedAmount) - 0.5) } }] } : {}),
+          ...(from || to ? { bookingDate: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {}),
+          AND: words.map((w) => ({
+            OR: [
+              { description: { contains: w, ...insensitive } },
+              { counterpartyName: { contains: w, ...insensitive } },
+              { communication: { contains: w, ...insensitive } },
+            ],
+          })),
+        }
+      : {
+          matches: { none: {} },
+          // décaissement : montant négatif de valeur proche du TTC de la dépense
+          amount: { gte: -(amount + 1), lte: -(amount - 1) },
+          ...(e.date ? { bookingDate: { gte: new Date(e.date.getTime() - 30 * 86400000), lte: new Date(e.date.getTime() + 60 * 86400000) } } : {}),
+        };
+    const raw = await prisma.bankTransaction.findMany({
+      where,
+      orderBy: { bookingDate: 'desc' },
+      take: manual ? 60 : 40,
+      select: {
+        id: true, bookingDate: true, amount: true, bank: true, counterpartyName: true, communication: true, description: true,
+        matches: { select: { ledgerEntry: { select: { docNumber: true, supplierName: true } }, document: { select: { number: true } } } },
+      },
+    });
     const items = raw
-      .map((t) => ({
+      .map(({ matches, ...t }) => ({
         ...t,
-        nameMatch: !!supplier && !!t.counterpartyName && nameOverlap(supplier, t.counterpartyName),
+        nameMatch: !!supplier && !!(t.counterpartyName || t.description) && nameOverlap(supplier, `${t.counterpartyName ?? ''} ${t.description ?? ''}`),
+        // paiement déjà rapproché à d'autres factures (un paiement peut en couvrir plusieurs)
+        matchedTo: matches.map((m) => m.ledgerEntry?.docNumber ?? m.document?.number ?? m.ledgerEntry?.supplierName ?? '?'),
       }))
       // le fournisseur qui correspond d'abord, puis par date décroissante
       .sort((a, b) => Number(b.nameMatch) - Number(a.nameMatch))
-      .slice(0, 15);
-    res.json({ items, supplier });
+      .slice(0, manual ? 40 : 15);
+    res.json({ items, supplier, manual });
   }),
 );
 

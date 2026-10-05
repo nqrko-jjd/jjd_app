@@ -60,6 +60,8 @@ interface BankTx {
   id: string; bookingDate: string | null; amount: number | null;
   bank: string | null; counterpartyName: string | null; communication: string | null;
   nameMatch?: boolean;
+  description?: string | null;
+  matchedTo?: string[];
 }
 interface BankMatch extends BankTx { matchId: string }
 interface PurchaseCandidate {
@@ -592,6 +594,11 @@ function ExpenseModal({
   const [extractNote, setExtractNote] = useState<string | null>(null);
   const [bankMatches, setBankMatches] = useState<BankMatch[]>([]);
   const [bankSug, setBankSug] = useState<BankTx[] | null>(null);
+  // recherche libre d'un paiement : texte (libellé, contrepartie, communication), montant, dates, paiements déjà rapprochés compris
+  const [payOpen, setPayOpen] = useState(false);
+  const [pay, setPay] = useState({ q: '', amount: '', from: '', to: '', all: false });
+  const [payRes, setPayRes] = useState<BankTx[] | null>(null);
+  const [payBusy, setPayBusy] = useState(false);
 
   // à la création seulement : lit le PDF déposé pour préremplir le formulaire
   // (fournisseur, chantier, montants…) — l'utilisateur corrige ensuite si besoin
@@ -667,6 +674,22 @@ function ExpenseModal({
     if (!expense) return;
     const r = await api<{ items: BankTx[] }>(`/api/finance/expenses/${expense.id}/bank-suggestions`);
     setBankSug(r.items);
+  }
+  async function runPaymentSearch() {
+    if (!expense) return;
+    setPayBusy(true);
+    try {
+      const qs = new URLSearchParams();
+      if (pay.q.trim()) qs.set('q', pay.q.trim());
+      if (pay.amount.trim()) qs.set('amount', pay.amount.trim());
+      if (pay.from) qs.set('from', pay.from);
+      if (pay.to) qs.set('to', pay.to);
+      if (pay.all) qs.set('all', '1');
+      const r = await api<{ items: BankTx[] }>(`/api/finance/expenses/${expense.id}/bank-suggestions?${qs}`);
+      setPayRes(r.items);
+    } finally {
+      setPayBusy(false);
+    }
   }
   async function linkPayment(txId: string) {
     if (!expense) return;
@@ -947,8 +970,8 @@ function ExpenseModal({
           {expense && (
             <div className="field" style={{ gridColumn: '1 / -1' }}>
               <label>Paiement (rapprochement bancaire)</label>
-              {bankMatches.length > 0 ? (
-                <div className="grid" style={{ gap: '0.4rem' }}>
+              {bankMatches.length > 0 && (
+                <div className="grid" style={{ gap: '0.4rem', marginBottom: '0.5rem' }}>
                   {bankMatches.map((m) => (
                     <div key={m.matchId} className="row" style={{ gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
                       <span className="badge ok">Rapproché</span>
@@ -958,28 +981,71 @@ function ExpenseModal({
                     </div>
                   ))}
                 </div>
-              ) : bankSug ? (
-                bankSug.length === 0 ? (
-                  <span className="muted">Aucune transaction bancaire non rapprochée ne correspond (montant ± 1 €, ± 2 mois).</span>
-                ) : (
-                  <div className="grid" style={{ gap: '0.35rem' }}>
-                    <span className="muted" style={{ fontSize: '0.8rem' }}>Vérifie le nom : « fournisseur ✓ » = la contrepartie du paiement correspond au fournisseur.</span>
-                    {bankSug.map((t) => (
-                      <button key={t.id} type="button" className="btn" style={{ justifyContent: 'space-between' }} onClick={() => linkPayment(t.id)}>
-                        <span>
-                          <span className={`badge ${t.nameMatch ? 'ok' : 'plain'}`} style={{ marginRight: 6 }}>
-                            {t.nameMatch ? 'fournisseur ✓' : 'montant seul'}
-                          </span>
-                          {formatDateBE(t.bookingDate)} · {t.counterpartyName ?? ((t.communication ?? '').slice(0, 30) || '—')} · {t.bank ?? ''}
+              )}
+              {bankSug && bankSug.length > 0 && !payOpen && (
+                <div className="grid" style={{ gap: '0.35rem' }}>
+                  <span className="muted" style={{ fontSize: '0.8rem' }}>Vérifie le nom : « fournisseur ✓ » = la contrepartie du paiement correspond au fournisseur.</span>
+                  {bankSug.map((t) => (
+                    <button key={t.id} type="button" className="btn" style={{ justifyContent: 'space-between' }} onClick={() => linkPayment(t.id)}>
+                      <span>
+                        <span className={`badge ${t.nameMatch ? 'ok' : 'plain'}`} style={{ marginRight: 6 }}>
+                          {t.nameMatch ? 'fournisseur ✓' : 'montant seul'}
                         </span>
-                        <Money value={t.amount} sign />
-                      </button>
-                    ))}
-                    <button type="button" className="btn ghost" onClick={() => setBankSug(null)}>Annuler</button>
+                        {formatDateBE(t.bookingDate)} · {t.counterpartyName ?? ((t.communication ?? '').slice(0, 30) || '—')} · {t.bank ?? ''}
+                      </span>
+                      <Money value={t.amount} sign />
+                    </button>
+                  ))}
+                </div>
+              )}
+              {bankSug && bankSug.length === 0 && !payOpen && bankMatches.length === 0 && (
+                <span className="muted">Aucune transaction bancaire non rapprochée ne correspond (montant ± 1 €, ± 2 mois) — utilise « Chercher dans la banque » pour chercher autrement.</span>
+              )}
+              {payOpen && (
+                <div className="card card-pad" style={{ display: 'grid', gap: '0.5rem', background: 'var(--surface-2)' }}>
+                  <div className="muted" style={{ fontSize: '0.8rem' }}>
+                    Cherche dans tous les mouvements de la banque : un mot du libellé, de la contrepartie ou de la communication (plusieurs mots = tous doivent y être), un montant (± 0,50 €), une période.
                   </div>
-                )
-              ) : (
-                <button type="button" className="btn" onClick={searchPayment}>Rechercher le paiement dans la banque</button>
+                  <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '0.5rem' }}>
+                    <input className="input" placeholder="Texte (ex. vector, REF, n° facture…)" value={pay.q} onChange={(e) => setPay({ ...pay, q: e.target.value })} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); runPaymentSearch(); } }} />
+                    <input className="input" placeholder="Montant (ex. 120,50)" inputMode="decimal" value={pay.amount} onChange={(e) => setPay({ ...pay, amount: e.target.value })} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); runPaymentSearch(); } }} />
+                    <input className="input" type="date" aria-label="Du" value={pay.from} onChange={(e) => setPay({ ...pay, from: e.target.value })} />
+                    <input className="input" type="date" aria-label="Au" value={pay.to} onChange={(e) => setPay({ ...pay, to: e.target.value })} />
+                  </div>
+                  <label className="row" style={{ gap: '0.4rem', alignItems: 'center', fontSize: '0.85rem' }}>
+                    <input type="checkbox" checked={pay.all} onChange={(e) => setPay({ ...pay, all: e.target.checked })} />
+                    Inclure les paiements déjà rapprochés à une autre facture
+                  </label>
+                  <div className="row" style={{ gap: '0.5rem' }}>
+                    <button type="button" className="btn primary" disabled={payBusy} onClick={runPaymentSearch}>{payBusy ? 'Recherche…' : 'Chercher'}</button>
+                    <button type="button" className="btn ghost" onClick={() => { setPayOpen(false); setPayRes(null); }}>Fermer</button>
+                  </div>
+                  {payRes && (payRes.length === 0 ? (
+                    <span className="muted">Aucun mouvement ne correspond à cette recherche.</span>
+                  ) : (
+                    <div className="grid" style={{ gap: '0.35rem', maxHeight: 320, overflowY: 'auto' }}>
+                      {payRes.map((t) => (
+                        <button key={t.id} type="button" className="btn" style={{ justifyContent: 'space-between', textAlign: 'left', height: 'auto', padding: '0.4rem 0.6rem' }} onClick={() => linkPayment(t.id)}>
+                          <span style={{ minWidth: 0 }}>
+                            {t.nameMatch && <span className="badge ok" style={{ marginRight: 6 }}>fournisseur ✓</span>}
+                            {t.matchedTo && t.matchedTo.length > 0 && <span className="badge warn" style={{ marginRight: 6 }}>déjà lié : {t.matchedTo.slice(0, 2).join(', ')}{t.matchedTo.length > 2 ? '…' : ''}</span>}
+                            {formatDateBE(t.bookingDate)} · {t.counterpartyName ?? '—'} · {t.bank ?? ''}
+                            <span className="muted" style={{ display: 'block', fontSize: '0.76rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {(t.description ?? t.communication ?? '').replace(/\s+/g, ' ').slice(0, 120)}
+                            </span>
+                          </span>
+                          <Money value={t.amount} sign />
+                        </button>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {!payOpen && (
+                <div className="row" style={{ gap: '0.5rem', marginTop: bankSug || bankMatches.length ? '0.5rem' : 0, flexWrap: 'wrap' }}>
+                  {!bankSug && bankMatches.length === 0 && <button type="button" className="btn" onClick={searchPayment}>Proposer les paiements au même montant</button>}
+                  <button type="button" className="btn" onClick={() => { setPayOpen(true); setPayRes(null); }}>{bankMatches.length > 0 ? 'Ajouter un paiement' : 'Chercher dans la banque'}</button>
+                </div>
               )}
             </div>
           )}

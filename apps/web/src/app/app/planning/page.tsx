@@ -120,6 +120,18 @@ export default function PlanningPage() {
   const people = useMemo(() => (peopleData?.items ?? []).filter((p) => p.active), [peopleData]);
   const { data: wsData } = useApi<{ items: WsRow[] }>(`/api/worksites?status=${WORKSITE_STATUS_OPEN.join(',')}`);
   const worksitesActive = useMemo(() => [...(wsData?.items ?? [])].sort((a, b) => a.ref.localeCompare(b.ref)), [wsData]);
+  // Les chantiers clôturés/archivés restent affectables et filtrables (reprise d'anciens dossiers) :
+  // la liste courte /api/meta/pickers les contient tous ; on garde la liste « ouverts » pour les
+  // compteurs et la vue par chantier, et on y ajoute les clôturés pour les sélecteurs seulement.
+  const { data: pickData } = useApi<{ worksites: { id: string; name: string; city: string | null }[] }>('/api/meta/pickers');
+  const worksitesClosed = useMemo(() => {
+    const open = new Set(worksitesActive.map((w) => w.id));
+    return (pickData?.worksites ?? []).filter((w) => !open.has(w.id)).map((w): WsRow => {
+      const [ref = '', ...rest] = w.name.split(' · ');
+      return { id: w.id, ref, title: rest.join(' · '), city: w.city, status: 'closed' };
+    });
+  }, [pickData, worksitesActive]);
+  const worksitesAll = useMemo(() => [...worksitesActive, ...worksitesClosed], [worksitesActive, worksitesClosed]);
   const worksiteStatusCounts = useMemo(() => worksitesActive.reduce<Record<string, number>>((counts, w) => {
     counts[w.status] = (counts[w.status] ?? 0) + 1;
     return counts;
@@ -262,11 +274,11 @@ export default function PlanningPage() {
     return true;
   }), [people, q, specialtyFilter, worksiteFilter, worksiteStatusFilter, statusFilteredWorksiteIds, events, onlyFree, peopleIdsByDay, absentIdsByDay, trackedDay]);
 
-  const worksiteRows = useMemo(() => statusFilteredWorksites.filter((w) => {
+  const worksiteRows = useMemo(() => [...statusFilteredWorksites, ...(worksiteFilter ? worksitesClosed.filter((w) => w.id === worksiteFilter) : [])].filter((w) => {
     if (q && !w.ref.toLowerCase().includes(q) && !w.title.toLowerCase().includes(q) && !(w.city ?? '').toLowerCase().includes(q)) return false;
     if (worksiteFilter && w.id !== worksiteFilter) return false;
     return true;
-  }), [statusFilteredWorksites, q, worksiteFilter]);
+  }), [statusFilteredWorksites, worksitesClosed, q, worksiteFilter]);
 
   const resourceRows = useMemo(() => resources.filter((r) => {
     if (q && !r.label.toLowerCase().includes(q)) return false;
@@ -382,6 +394,11 @@ export default function PlanningPage() {
         <select className="select" aria-label="Filtrer par chantier" value={worksiteFilter} onChange={(e) => setWorksiteFilter(e.target.value)}>
           <option value="">Tous les chantiers</option>
           {statusFilteredWorksites.map((w) => <option key={w.id} value={w.id}>{w.ref} · {w.title}</option>)}
+          {worksitesClosed.length > 0 && (
+            <optgroup label="Clôturés / archivés">
+              {worksitesClosed.map((w) => <option key={w.id} value={w.id}>{w.ref} · {w.title}</option>)}
+            </optgroup>
+          )}
         </select>
         {view === 'workers' && (
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem' }}>
@@ -617,7 +634,7 @@ export default function PlanningPage() {
 
       {assignmentModal && (
         <PlanningAssignmentModal
-          worksites={worksitesActive}
+          worksites={worksitesAll}
           people={people}
           vehicles={vehicles}
           equipmentList={equipmentList}

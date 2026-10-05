@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
 import { useAuth } from '@/lib/auth';
 import { PageHead, Money, Kpi, formatEur } from '@/lib/ui';
+import { api } from '@/lib/api';
+import { WorksitePicker } from '@/components/WorksitePicker';
 import { TrendingUp, TrendingDown, Scale, Percent } from 'lucide-react';
 
 interface Pnl {
@@ -15,7 +17,7 @@ interface Pnl {
   margin: number | null;
 }
 interface ProfitDetail { id: string; ref: string; title: string; sell: number; buy: number; labour: number; transport: number; profit: number }
-interface ForecastItem { worksiteId: string | null; ref: string; title: string; quotedHt: number; invoicedHt: number; remaining: number }
+interface ForecastItem { worksiteId: string | null; ref: string; title: string; quotedHt: number; invoicedHt: number; remaining: number; documentId?: string; number?: string | null; client?: string | null; subject?: string | null }
 interface Forecast { total: number; items: ForecastItem[] }
 interface Share {
   jjd: { worksites: number; profit: number; david: number; julien: number };
@@ -40,7 +42,21 @@ export default function FinancesPage() {
   if (entity) qs.set('entity', entity);
   const { data } = useApi<Pnl>(`/api/finance/consolidated?${qs}`);
   const { data: share } = useApi<Share>(user?.isPartner ? '/api/finance/profit-share' : null);
-  const { data: forecast } = useApi<Forecast>('/api/finance/forecast');
+  const { data: forecast, reload: reloadForecast } = useApi<Forecast>('/api/finance/forecast');
+  // liste des chantiers (clôturés/archivés compris) pour imputer un R- à un devis accepté sans chantier
+  const { data: pickers } = useApi<{ worksites: { id: string; name: string; city?: string | null }[] }>('/api/meta/pickers');
+  const wsOptions = (pickers?.worksites ?? []).map((w) => ({ id: w.id, ref: w.name.split(' · ')[0]!, title: w.name, city: w.city ?? null }));
+  const [assignMsg, setAssignMsg] = useState<string | null>(null);
+  async function assignWorksite(documentId: string, worksiteId: string) {
+    if (!worksiteId) return;
+    try {
+      await api(`/api/documents/${documentId}`, { method: 'PATCH', body: { worksiteId } });
+      setAssignMsg('Chantier imputé au devis.');
+      reloadForecast();
+    } catch (e) {
+      setAssignMsg(`Échec : ${(e as Error).message}`);
+    }
+  }
   const [openSec, setOpenSec] = useState<string | null>(null);
   const [showTontonDetail, setShowTontonDetail] = useState(false);
 
@@ -160,7 +176,9 @@ export default function FinancesPage() {
                 Seuls les devis explicitement marqués « accepté » comptent. Un chantier démarré dont le
                 devis est resté « envoyé » n'apparaît pas ici tant que son statut n'est pas corrigé.
               </div>
-              <div className="tbl-wrap">
+              {assignMsg && <div className="muted" role="status" style={{ margin: '0 0 0.5rem' }}>{assignMsg}</div>}
+              {/* overflow visible : la liste déroulante du sélecteur de chantier ne doit pas être coupée par le conteneur du tableau */}
+              <div className="tbl-wrap" style={{ overflow: 'visible' }}>
                 <table className="tbl">
                   <thead>
                     <tr>
@@ -172,9 +190,22 @@ export default function FinancesPage() {
                   </thead>
                   <tbody>
                     {forecast.items.map((it) => (
-                      <tr key={it.worksiteId ?? it.title}>
+                      <tr key={it.worksiteId ?? it.documentId ?? it.title}>
                         <td>
-                          {it.worksiteId ? <Link href={`/app/chantiers/${it.worksiteId}`}>{it.ref}</Link> : it.ref} <span className="muted">{it.title}</span>
+                          {it.worksiteId ? (
+                            <><Link href={`/app/chantiers/${it.worksiteId}`}>{it.ref}</Link> <span className="muted">{it.title}</span></>
+                          ) : (
+                            <div style={{ minWidth: 260 }}>
+                              <div>
+                                {it.documentId ? <Link href={`/app/documents/${it.documentId}`} style={{ fontWeight: 600 }}>{it.number ?? 'Devis'}</Link> : it.ref}
+                                {it.client && <> · {it.client}</>} <span className="muted">— devis sans chantier lié</span>
+                              </div>
+                              {it.subject && <div className="muted" style={{ fontSize: '0.78rem', margin: '0.1rem 0 0.3rem' }}>{it.subject}</div>}
+                              {it.documentId && (
+                                <WorksitePicker value="" onChange={(id) => assignWorksite(it.documentId!, id)} options={wsOptions} placeholder="Imputer à un chantier (R-… ou nom)" />
+                              )}
+                            </div>
+                          )}
                         </td>
                         <td style={{ textAlign: 'right' }}><Money value={it.quotedHt} /></td>
                         <td style={{ textAlign: 'right' }}><Money value={it.invoicedHt} /></td>

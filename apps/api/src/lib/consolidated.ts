@@ -296,7 +296,7 @@ export async function forecastReceivable() {
   const [acceptedQuotes, invoices, creditNotes, worksites] = await Promise.all([
     prisma.document.findMany({
       where: { kind: 'quote', status: 'accepted', source: { not: 'demo' } },
-      select: { id: true, worksiteId: true, totalHt: true },
+      select: { id: true, worksiteId: true, totalHt: true, number: true, title: true, billingName: true, contact: { select: { name: true } } },
     }),
     prisma.document.findMany({
       where: { kind: { in: ['invoice', 'deposit_invoice'] }, status: { not: 'draft' }, source: { not: 'demo' } },
@@ -321,13 +321,14 @@ export async function forecastReceivable() {
   }
 
   const quotedByWorksite = new Map<string, number>();
-  const orphanQuotes: { id: string; totalHt: number }[] = [];
+  const orphanQuotes: { id: string; totalHt: number; number: string | null; subject: string | null; client: string | null }[] = [];
   for (const q of acceptedQuotes) {
     if (q.worksiteId) quotedByWorksite.set(q.worksiteId, (quotedByWorksite.get(q.worksiteId) ?? 0) + q.totalHt);
-    else orphanQuotes.push({ id: q.id, totalHt: q.totalHt });
+    else orphanQuotes.push({ id: q.id, totalHt: q.totalHt, number: q.number, subject: q.title, client: q.billingName ?? q.contact?.name ?? null });
   }
 
-  const items: { worksiteId: string | null; ref: string; title: string; quotedHt: number; invoicedHt: number; remaining: number }[] = [];
+  // documentId/number/client/subject : seulement pour un devis sans chantier — pour le retrouver et lui imputer un R- depuis la page Finances
+  const items: { worksiteId: string | null; ref: string; title: string; quotedHt: number; invoicedHt: number; remaining: number; documentId?: string; number?: string | null; client?: string | null; subject?: string | null }[] = [];
   for (const [worksiteId, quotedHt] of quotedByWorksite) {
     const invoicedHt = invoicedByWorksite.get(worksiteId) ?? 0;
     const remaining = round2(Math.max(0, quotedHt - invoicedHt));
@@ -341,7 +342,7 @@ export async function forecastReceivable() {
     const invoicedHt = invoicedByParent.get(q.id) ?? 0;
     const remaining = round2(Math.max(0, q.totalHt - invoicedHt));
     if (remaining <= 0.01) continue;
-    items.push({ worksiteId: null, ref: '—', title: 'Devis sans chantier lié', quotedHt: round2(q.totalHt), invoicedHt: round2(invoicedHt), remaining });
+    items.push({ worksiteId: null, ref: '—', title: 'Devis sans chantier lié', quotedHt: round2(q.totalHt), invoicedHt: round2(invoicedHt), remaining, documentId: q.id, number: q.number, client: q.client, subject: q.subject });
   }
   items.sort((a, b) => b.remaining - a.remaining);
 

@@ -68,7 +68,8 @@ function buildWhere(q: Record<string, string>) {
     and.push({ direction: type });
   } else {
     // Vue par défaut : achats + notes de crédit d'achat (une NC de vente réduit le CA, pas une
-    // dépense) + bordereaux (preuve d'enlèvement/paiement reçue avant la facture — voir
+    // dépense ; une ligne « Crédit auto » = emprunt/financement véhicule, ni facture ni note de crédit : elle
+    // faussait le total et le « reste à payer ») + bordereaux (preuve d'enlèvement/paiement reçue avant la facture — voir
     // linkedInvoiceId). categoryRaw peut être NULL (saisie manuelle sans catégorie) :
     // NOT{contains} exclurait alors la ligne (NULL n'est ni "contient" ni "ne contient pas" en
     // SQL) -> OR explicite.
@@ -76,7 +77,13 @@ function buildWhere(q: Record<string, string>) {
       OR: [
         { direction: 'purchase' },
         { direction: 'delivery_slip' },
-        { direction: 'credit_note', OR: [{ categoryRaw: null }, { NOT: { categoryRaw: { contains: 'vente' } } }] },
+        {
+          direction: 'credit_note',
+          OR: [
+            { categoryRaw: null },
+            { AND: [{ NOT: { categoryRaw: { contains: 'vente' } } }, { NOT: { categoryRaw: { contains: 'dit auto', ...insensitive } } }] },
+          ],
+        },
       ],
     });
   }
@@ -147,12 +154,19 @@ expensesRouter.get(
           return acc;
         }
         const ttc = e.ttc ?? e.ht;
-        const sign = e.direction === 'credit_note' ? -1 : 1;
-        acc.ht += sign * e.ht;
-        acc.ttc += sign * ttc;
-        // une note de crédit vient toujours en déduction (elle n'est jamais "payée")
-        if (e.direction === 'credit_note') acc.unpaidTtc -= ttc;
-        else if (!isPaidStr(e.paymentStatus)) {
+        // une note de crédit réduit toujours les dépenses, qu'elle soit saisie en positif ou en négatif (l'import
+        // contient les deux : le signe appliqué par-dessus un montant déjà négatif la comptait comme une dépense)
+        if (e.direction === 'credit_note') {
+          acc.ht -= Math.abs(e.ht);
+          acc.ttc -= Math.abs(ttc);
+          // « reste à payer » : seules les notes de crédit non réglées viennent en déduction (celles marquées payées
+          // sont déjà soldées avec le fournisseur)
+          if (!isPaidStr(e.paymentStatus)) acc.unpaidTtc -= Math.abs(ttc);
+          return acc;
+        }
+        acc.ht += e.ht;
+        acc.ttc += ttc;
+        if (!isPaidStr(e.paymentStatus)) {
           acc.unpaidTtc += ttc;
           if (e.dueDate && e.dueDate < now) { acc.overdueCount += 1; acc.overdueTtc += ttc; }
         }

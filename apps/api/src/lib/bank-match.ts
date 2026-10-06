@@ -36,13 +36,20 @@ import { PAYMENT_TOLERANCE } from './payment-tolerance.js';
  * paiements déjà liés quand on en retire un.
  */
 export async function recomputeDocumentPayment(documentId: string) {
-  const doc = await prisma.document.findUnique({ where: { id: documentId }, select: { totalTtc: true, status: true } });
+  const doc = await prisma.document.findUnique({ where: { id: documentId }, select: { totalTtc: true, status: true, number: true } });
   if (!doc) return;
   // Statuts qui ne relèvent pas du cycle paiement (jamais touchés ici).
   if (doc.status === 'credited' || doc.status === 'declined' || doc.status === 'draft') return;
 
   const matches = await prisma.bankTransactionMatch.findMany({
-    where: { OR: [{ documentId }, { ledgerEntry: { documentId } }] },
+    where: {
+      OR: [
+        { documentId },
+        { ledgerEntry: { documentId } },
+        // facture historique (Excel) pas encore liée à son Document : ses paiements comptent aussi
+        ...(doc.number ? [{ ledgerEntry: { documentId: null, docNumber: doc.number, direction: { in: ['sale', 'credit_note'] } } }] : []),
+      ],
+    },
     select: { amount: true, bankTransaction: { select: { amount: true, bookingDate: true } } },
   });
   // part affectée à cette facture si le virement en solde plusieurs, sinon tout le montant de la transaction
@@ -161,6 +168,20 @@ export function pickGroupedMatch(
   }
   if (hits.length !== 1) return null; // aucune combinaison, ou plusieurs : à trancher à la main
   return list.filter((_, i) => hits[0]! & (1 << i)).map((c) => ({ ledgerId: c.l.id, amount: c.left }));
+}
+
+/**
+ * Document de vente qui correspond à une écriture du grand livre : celui auquel elle est synchronisée ou — pour une
+ * facture historique (Excel) restée non liée — le Document de même numéro. Sans cela un paiement rapproché à l'écriture
+ * laissait la facture « en retard » (c'était le cas pour F2026-166).
+ */
+export async function documentIdForLedger(ledgerId: string): Promise<string | null> {
+  const l = await prisma.ledgerEntry.findUnique({ where: { id: ledgerId }, select: { documentId: true, direction: true, docNumber: true } });
+  if (!l) return null;
+  if (l.documentId) return l.documentId;
+  if ((l.direction !== 'sale' && l.direction !== 'credit_note') || !l.docNumber) return null;
+  const docs = await prisma.document.findMany({ where: { number: l.docNumber, kind: { in: ['invoice', 'deposit_invoice', 'credit_note'] } }, select: { id: true }, take: 2 });
+  return docs.length === 1 ? docs[0]!.id : null;
 }
 
 export interface TxLite {
@@ -315,6 +336,18 @@ export async function autoMatchAll(
   const docNumberById = new Map(ledgerRows.map((l) => [l.id, alnum(l.docNumber)]));
   const rawNumberById = new Map(ledgerRows.map((l) => [l.id, (l.docNumber ?? '').trim()]));
   const documentIdByLedger = new Map(ledgers.map((l) => [l.id, l.documentId]));
+  // écritures historiques (Excel) non liées : on les rattache à leur Document de même numéro pour que le paiement se répercute
+  const twinIds = new Set<string>();
+  {
+    const saleDocs = await prisma.document.findMany({ where: { kind: { in: ['invoice', 'deposit_invoice', 'credit_note'] }, number: { not: null } }, select: { id: true, number: true } });
+    const idByNumber = new Map<string, string | null>();
+    for (const d of saleDocs) { const k = d.number!.trim(); idByNumber.set(k, idByNumber.has(k) ? null : d.id); }
+    for (const l of ledgerRows) {
+      if (l.documentId || (l.direction !== 'sale' && l.direction !== 'credit_note') || !l.docNumber) continue;
+      const id = idByNumber.get(l.docNumber.trim());
+      if (id) { documentIdByLedger.set(l.id, id); twinIds.add(l.id); }
+    }
+  }
 
   // index montant (au centime) + index communication structurée -> lookup O(1)
   const byAmount = new Map<number, LedgerLite[]>();
@@ -420,6 +453,13 @@ export async function autoMatchAll(
   // (syncLedgerEntryForDocument), au lieu d'écrire directement dans LedgerEntry.
   for (const documentId of new Set(docUpdates.map((u) => documentIdByLedger.get(u.ledgerId)!))) {
     await recomputeDocumentPayment(documentId); // somme des paiements réellement rapprochés : payée, ou partielle
+  }
+  // écriture historique que la synchro n'a pas pu lier au Document (montant différent) : statut posé directement, comme avant
+  for (const u of docUpdates.filter((x) => twinIds.has(x.ledgerId))) {
+    const le = await prisma.ledgerEntry.findUnique({ where: { id: u.ledgerId }, select: { documentId: true } });
+    if (!le?.documentId && (paid.get(u.ledgerId) ?? 0) + 0.02 >= (ledgerTotal.get(u.ledgerId) ?? 0)) {
+      await prisma.ledgerEntry.update({ where: { id: u.ledgerId }, data: { paymentStatus: 'Payé', paidOn: txDate.get(u.id) ?? now } });
+    }
   }
 
   const strong = updates.filter((u) => u.confidence === 'strong').length;

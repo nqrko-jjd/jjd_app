@@ -7,7 +7,7 @@ import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, requirePartner, OFFICE } from '../lib/auth.js';
 import { consolidatedPnl, profitShare, forecastReceivable } from '../lib/consolidated.js';
 import { analytics } from '../lib/analytics.js';
-import { autoMatchAll, recomputeDocumentPayment } from '../lib/bank-match.js';
+import { autoMatchAll, recomputeDocumentPayment, documentIdForLedger } from '../lib/bank-match.js';
 import { parseBankCsv, decodeCsvBuffer, type ParsedBankRow } from '../lib/bank-csv.js';
 import { parseCardStatement, pdfToRawText, pdftotextAvailable } from '../lib/bank-pdf.js';
 import { parseScreenshots, screenshotImportAvailable } from '../lib/bank-screenshot.js';
@@ -550,10 +550,11 @@ financeRouter.post(
       // paiement (somme des transactions réellement rapprochées, jamais "payé" d'office), sinon
       // un 2e/3e versement partiel sur la même facture écrase silencieusement les précédents et
       // la facture reste invisible depuis le rapprochement bancaire (hasBankMatch à false).
-      const le = await prisma.ledgerEntry.findUnique({ where: { id: ledgerId }, select: { documentId: true } });
-      if (le?.documentId) {
-        await recomputeDocumentPayment(le.documentId);
-      } else {
+      // (ou le Document de même numéro quand l'écriture est une facture historique non liée)
+      const docId = await documentIdForLedger(ledgerId);
+      if (docId) await recomputeDocumentPayment(docId);
+      const after = await prisma.ledgerEntry.findUnique({ where: { id: ledgerId }, select: { documentId: true } });
+      if (!after?.documentId) {
         await prisma.ledgerEntry.update({
           where: { id: ledgerId },
           data: { paymentStatus: 'Payé', paidOn: tx.bookingDate ?? new Date() },
@@ -577,15 +578,14 @@ financeRouter.delete(
   asyncHandler(async (req, res) => {
     const m = await prisma.bankTransactionMatch.findFirst({ where: { id: req.params.matchId, bankTransactionId: req.params.id } });
     if (!m) throw new HttpError(404, 'Rapprochement introuvable');
-    const ledgerDocumentId = m.ledgerEntryId
-      ? (await prisma.ledgerEntry.findUnique({ where: { id: m.ledgerEntryId }, select: { documentId: true } }))?.documentId ?? null
-      : null;
+    const ledgerDocumentId = m.ledgerEntryId ? await documentIdForLedger(m.ledgerEntryId) : null;
     await prisma.bankTransactionMatch.delete({ where: { id: m.id } });
 
     if (m.ledgerEntryId) {
       if (ledgerDocumentId) {
         await recomputeDocumentPayment(ledgerDocumentId);
-      } else {
+      }
+      if (!(m.ledgerEntryId && (await prisma.ledgerEntry.findUnique({ where: { id: m.ledgerEntryId }, select: { documentId: true } }))?.documentId)) {
         await prisma.ledgerEntry.update({ where: { id: m.ledgerEntryId }, data: { paymentStatus: 'Non payé', paidOn: null } }).catch(() => {});
       }
     }

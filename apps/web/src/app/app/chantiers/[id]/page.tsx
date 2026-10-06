@@ -381,7 +381,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
           {(() => {
             const quotes = w.documents.filter((d) => d.kind === 'quote');
             const invoices = w.documents.filter((d) => d.kind !== 'quote');
-            const signed = (d: { kind: string; totalHt: number }) => (d.kind === 'credit_note' ? -d.totalHt : d.totalHt);
+            const signed = (d: { kind: string; totalHt: number }) => (d.kind === 'credit_note' ? -Math.abs(d.totalHt) : d.totalHt);
             const byStatus = (list: typeof quotes) => {
               const m = new Map<string, { n: number; ht: number }>();
               for (const d of list) { const v = m.get(d.status) ?? { n: 0, ht: 0 }; v.n++; v.ht += signed(d); m.set(d.status, v); }

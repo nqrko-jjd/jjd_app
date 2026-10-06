@@ -6,7 +6,8 @@ import type { Company } from '@/lib/doc-ui';
 
 interface Line {
   id: string; qty: number; price: number | null; unitName: string | null;
-  stockItem: { ref: string | null; name: string; brand: string | null; model: string | null; unit: string };
+  label: string | null; // description d'une ligne libre (hors stock)
+  stockItem: { ref: string | null; name: string; brand: string | null; model: string | null; unit: string } | null;
 }
 interface Order {
   id: string; ref: string; status: string; expectedOn: string | null; supplierRef: string | null; note: string | null;
@@ -94,11 +95,11 @@ export default function PrintOrder({ params }: { params: Promise<{ id: string }>
           </thead>
           <tbody>
             {order.lines.map((l) => {
-              const unit = l.unitName ?? l.stockItem.unit;
+              const unit = l.unitName ?? l.stockItem?.unit ?? '';
               return (
                 <tr key={l.id}>
-                  <td className="mono">{l.stockItem.ref ?? '—'}</td>
-                  <td>{l.stockItem.name}{(l.stockItem.brand || l.stockItem.model) ? ` (${[l.stockItem.brand, l.stockItem.model].filter(Boolean).join(' ')})` : ''}</td>
+                  <td className="mono">{l.stockItem?.ref ?? '—'}</td>
+                  <td>{l.stockItem ? l.stockItem.name : l.label}{(l.stockItem?.brand || l.stockItem?.model) ? ` (${[l.stockItem.brand, l.stockItem.model].filter(Boolean).join(' ')})` : ''}</td>
                   <td className="num">{fmtQty(l.qty)} {unit}</td>
                   <td className="num">{l.price != null ? fmtEur(l.price) : '—'}</td>
                   <td className="num">{l.price != null ? fmtEur(l.qty * l.price) : '—'}</td>

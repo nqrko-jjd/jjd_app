@@ -3,6 +3,8 @@
  * (créées au bureau, réceptionnées par le magasinier à l'arrivée de la marchandise).
  */
 import { Router } from 'express';
+import path from 'node:path';
+import { createReadStream, existsSync, unlinkSync } from 'node:fs';
 import multer from 'multer';
 import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
@@ -10,12 +12,21 @@ import { round2 } from '@jjd/shared';
 import { prisma, nextCounter } from '../db.js';
 import { insensitive } from '../lib/search.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
-import { requireAuth, STOCK_MOVE, STOCK_MANAGE } from '../lib/auth.js';
+import { requireAuth, STOCK_MOVE, STOCK_MANAGE, OFFICE } from '../lib/auth.js';
+import { storeFile, UPLOADS_DIR } from '../lib/media.js';
 import { applyStockMovement, sameName, unitFactor } from '../lib/stock.js';
 import { parseTariff, guessPacking } from '../lib/supplier-tariff.js';
 
 export const purchasingRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
+/** Documents joints à une commande (PDF, photos, Word/Excel…) : 14 Mo max, comme la limite du proxy (15 Mo par requête). */
+const MAX_ORDER_FILE_BYTES = 14 * 1024 * 1024;
+const orderFileUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_ORDER_FILE_BYTES, files: 1 } });
+const ORDER_FILE_EXT = new Set(['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.heic', '.gif', '.doc', '.docx', '.xls', '.xlsx', '.odt', '.ods', '.rtf', '.txt', '.csv', '.eml', '.msg', '.zip']);
+const INLINE_TYPES: Record<string, string> = { '.pdf': 'application/pdf', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif' };
+const cleanName = (s: string) => s.replace(/[\u0000-\u001f"\\/]/g, '_').trim();
+/** Les noms de fichiers arrivent en latin1 depuis multer : on les remet en UTF-8 (accents). */
+const fixName = (s: string) => { try { const u = Buffer.from(s, 'latin1').toString('utf8'); return u.includes('�') ? s : u; } catch { return s; } };
 const OPEN = ['ordered', 'partial'];
 
 /* ================================================================== tarifs fournisseurs */
@@ -139,14 +150,17 @@ const orderInclude = {
       stockItem: { select: { id: true, ref: true, name: true, brand: true, model: true, unit: true, photoThumbUrl: true, units: { select: { name: true, factor: true } } } },
     },
   },
+  files: { orderBy: { createdAt: 'asc' as const }, select: { id: true, label: true, originalName: true, mimeType: true, size: true, createdAt: true } },
 } satisfies Prisma.PurchaseOrderInclude;
 
+/** Ligne = article du stock (stockItemId) OU ligne libre (label : produit commandé une seule fois, jamais mis en stock). */
 const lineInput = z.object({
-  stockItemId: z.string().min(1),
-  unitName: z.string().trim().nullish(),
+  stockItemId: z.string().min(1).nullish(),
+  label: z.string().trim().max(300).nullish(),
+  unitName: z.string().trim().max(40).nullish(),
   qty: z.coerce.number().positive(),
   price: z.coerce.number().min(0).nullish(),
-});
+}).refine((l) => !!l.stockItemId || !!l.label?.trim(), { message: 'Chaque ligne a besoin d’un article du stock ou d’une description' });
 const orderInput = z.object({
   contactId: z.string().min(1),
   worksiteId: z.string().nullish(),
@@ -164,16 +178,20 @@ async function nextRef(): Promise<string> {
 
 async function checkLines(contactId: string, lines: z.infer<typeof lineInput>[]) {
   if (!(await prisma.contact.findUnique({ where: { id: contactId }, select: { id: true } }))) throw new HttpError(422, 'Fournisseur introuvable');
-  const items = await prisma.stockItem.findMany({ where: { id: { in: lines.map((l) => l.stockItemId) } }, include: { units: true, suppliers: true } });
+  const items = await prisma.stockItem.findMany({ where: { id: { in: lines.flatMap((l) => (l.stockItemId ? [l.stockItemId] : [])) } }, include: { units: true, suppliers: true } });
   const byId = new Map(items.map((i) => [i.id, i]));
   return lines.map((l, position) => {
+    if (!l.stockItemId) {
+      // ligne libre : pas d'article, pas de stock — description, quantité, unité (texte libre) et prix saisis tels quels
+      return { stockItemId: null as string | null, label: l.label!.trim(), unitName: l.unitName?.trim() || null, qty: l.qty, price: l.price ?? null, position };
+    }
     const item = byId.get(l.stockItemId);
     if (!item || !item.active) throw new HttpError(422, 'Article introuvable ou désactivé');
     unitFactor(item, l.unitName);
     const unitName = l.unitName?.trim() && !sameName(l.unitName, item.unit) ? l.unitName.trim() : null;
     // prix par défaut : celui de ce fournisseur pour cet article/conditionnement
     const link = item.suppliers.find((s) => s.contactId === contactId && (s.unitName ?? null) === unitName);
-    return { stockItemId: item.id, unitName, qty: l.qty, price: l.price ?? link?.price ?? null, position };
+    return { stockItemId: item.id as string | null, label: null as string | null, unitName, qty: l.qty, price: l.price ?? link?.price ?? null, position };
   });
 }
 
@@ -298,15 +316,18 @@ purchasingRouter.post(
       if (!fresh || !OPEN.includes(fresh.status)) throw new HttpError(409, 'Cette commande vient d’être clôturée');
       for (const r of toReceive) {
         const line = order.lines.find((l) => l.id === r.lineId)!;
-        await applyStockMovement(
-          tx,
-          {
-            stockItemId: line.stockItemId, type: 'in', qty: r.qty, unit: line.unitName, contactId: order.contactId,
-            unitCost: line.price ?? undefined, location: d.location,
-            note: `Réception ${order.ref}${d.deliveryNote ? ` · BL ${d.deliveryNote}` : ''}`,
-          },
-          req.user!.id,
-        );
+        // ligne libre (hors stock) : on note seulement qu'elle est arrivée, aucune entrée en stock
+        if (line.stockItemId) {
+          await applyStockMovement(
+            tx,
+            {
+              stockItemId: line.stockItemId, type: 'in', qty: r.qty, unit: line.unitName, contactId: order.contactId,
+              unitCost: line.price ?? undefined, location: d.location,
+              note: `Réception ${order.ref}${d.deliveryNote ? ` · BL ${d.deliveryNote}` : ''}`,
+            },
+            req.user!.id,
+          );
+        }
         await tx.purchaseOrderLine.update({ where: { id: line.id }, data: { receivedQty: round2(line.receivedQty + r.qty) } });
       }
       const lines = await tx.purchaseOrderLine.findMany({ where: { orderId: order.id } });
@@ -338,5 +359,79 @@ purchasingRouter.post(
     if (cur.status === 'received' || cur.status === 'cancelled') throw new HttpError(409, 'Commande déjà terminée ou annulée');
     await prisma.purchaseOrder.update({ where: { id: cur.id }, data: { status: 'cancelled' } });
     res.json({ order: await loadOrder(cur.id) });
+  }),
+);
+
+/* ================================================================== documents joints à une commande */
+
+const presentFile = (orderId: string, f: { id: string; label: string; originalName: string | null; mimeType: string | null; size: number; createdAt: Date }) => ({
+  ...f, downloadPath: `/api/purchasing/orders/${orderId}/files/${f.id}/download`,
+});
+
+purchasingRouter.get(
+  '/orders/:id/files',
+  requireAuth(...STOCK_MANAGE),
+  asyncHandler(async (req, res) => {
+    const orderId = req.params.id as string;
+    if (!(await prisma.purchaseOrder.findUnique({ where: { id: orderId }, select: { id: true } }))) throw new HttpError(404, 'Commande introuvable');
+    const rows = await prisma.purchaseOrderFile.findMany({ where: { orderId }, orderBy: { createdAt: 'asc' } });
+    res.json({ items: rows.map((f) => presentFile(orderId, f)), maxBytes: MAX_ORDER_FILE_BYTES });
+  }),
+);
+
+purchasingRouter.post(
+  '/orders/:id/files',
+  requireAuth(...OFFICE),
+  (req, res, next) => {
+    orderFileUpload.single('file')(req, res, (err: unknown) => {
+      if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') return next(new HttpError(413, `Fichier trop lourd : ${Math.round(MAX_ORDER_FILE_BYTES / 1024 / 1024)} Mo maximum par fichier.`));
+      next(err);
+    });
+  },
+  asyncHandler(async (req, res) => {
+    const orderId = req.params.id as string;
+    if (!(await prisma.purchaseOrder.findUnique({ where: { id: orderId }, select: { id: true } }))) throw new HttpError(404, 'Commande introuvable');
+    if (!req.file) throw new HttpError(422, 'Aucun fichier');
+    const original = cleanName(fixName(req.file.originalname || 'fichier'));
+    const ext = path.extname(original).toLowerCase();
+    if (!ORDER_FILE_EXT.has(ext)) throw new HttpError(422, `Type de fichier non accepté (${ext || 'sans extension'}). Acceptés : PDF, images, Word/Excel, texte, e-mail, zip.`);
+    const label = z.string().max(200).optional().parse(req.body?.label);
+    const fileUrl = storeFile(req.file.buffer, original, 'purchase-orders');
+    const row = await prisma.purchaseOrderFile.create({
+      data: { orderId, label: label?.trim() || original.replace(/\.[^.]+$/, ''), fileUrl, originalName: original, mimeType: req.file.mimetype || null, size: req.file.size, uploadedById: req.user!.id },
+    });
+    res.status(201).json({ file: presentFile(orderId, row) });
+  }),
+);
+
+purchasingRouter.delete(
+  '/orders/:id/files/:fileId',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const f = await prisma.purchaseOrderFile.findFirst({ where: { id: req.params.fileId, orderId: req.params.id } });
+    if (!f) throw new HttpError(404, 'Fichier introuvable');
+    await prisma.purchaseOrderFile.delete({ where: { id: f.id } });
+    try {
+      const p = path.join(UPLOADS_DIR, path.normalize(f.fileUrl.replace(/^\/?uploads\//, '')));
+      if (existsSync(p)) unlinkSync(p);
+    } catch { /* le fichier disparu du disque ne doit pas bloquer la suppression */ }
+    res.status(204).end();
+  }),
+);
+
+purchasingRouter.get(
+  '/orders/:id/files/:fileId/download',
+  requireAuth(...STOCK_MANAGE),
+  asyncHandler(async (req, res) => {
+    const f = await prisma.purchaseOrderFile.findFirst({ where: { id: req.params.fileId, orderId: req.params.id } });
+    if (!f) throw new HttpError(404, 'Fichier introuvable');
+    const p = path.join(UPLOADS_DIR, path.normalize(f.fileUrl.replace(/^\/?uploads\//, '')));
+    if (!existsSync(p)) throw new HttpError(404, 'Fichier introuvable sur le serveur');
+    const inline = INLINE_TYPES[path.extname(p).toLowerCase()];
+    const name = (f.originalName ?? f.label).replace(/[^\w.\- ()]/g, '_');
+    res.setHeader('Content-Type', inline ?? 'application/octet-stream');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="${name}"`);
+    createReadStream(p).pipe(res);
   }),
 );

@@ -1,10 +1,10 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Truck } from 'lucide-react';
 import { useApi } from '@/lib/use-api';
-import { api } from '@/lib/api';
+import { api, apiUpload } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { PageHead, formatDateBE, formatEur } from '@/lib/ui';
 import { SkeletonRows, EmptyState } from '@/components/States';
@@ -12,6 +12,7 @@ import { ComboBox } from '@/components/ComboBox';
 import { ContactPicker } from '@/components/ContactPicker';
 import type { StockItemFull } from '@/components/StockItemModal';
 import { PO_STATUS_LABEL, PO_STATUS_TONE } from '@/lib/stock-orders-ui';
+import { ORDER_FILE_ACCEPT, ORDER_FILE_MAX_BYTES, sizeLabel } from '@/components/PurchaseOrderFiles';
 
 interface OrderRow {
   id: string; ref: string; status: string; expectedOn: string | null; orderedOn: string | null; supplierRef: string | null; note: string | null;
@@ -100,7 +101,10 @@ export default function CommandesPage() {
 
 /* ------------------------------------------------------------- création */
 
-interface DraftLine { stockItemId: string; unitName: string; qty: string; price: string; priceAuto: boolean }
+/** Ligne d'article du stock (mode « stock ») ou ligne libre : produit commandé une seule fois, décrit en texte, jamais mis en stock. */
+interface DraftLine { mode: 'stock' | 'free'; stockItemId: string; label: string; unitName: string; qty: string; price: string; priceAuto: boolean }
+const newStockLine = (): DraftLine => ({ mode: 'stock', stockItemId: '', label: '', unitName: '', qty: '1', price: '', priceAuto: true });
+const newFreeLine = (): DraftLine => ({ mode: 'free', stockItemId: '', label: '', unitName: '', qty: '1', price: '', priceAuto: false });
 
 function NewOrderModal({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string) => void }) {
   const { data: meta } = useApi<Meta>('/api/stock/meta');
@@ -111,7 +115,9 @@ function NewOrderModal({ onClose, onCreated }: { onClose: () => void; onCreated:
   const [expectedOn, setExpectedOn] = useState('');
   const [supplierRef, setSupplierRef] = useState('');
   const [note, setNote] = useState('');
-  const [lines, setLines] = useState<DraftLine[]>([{ stockItemId: '', unitName: '', qty: '1', price: '', priceAuto: true }]);
+  const [lines, setLines] = useState<DraftLine[]>([newStockLine()]);
+  const [files, setFiles] = useState<File[]>([]); // documents joints (PDF du bon de commande…), envoyés une fois la commande créée
+  const fileInput = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -133,21 +139,23 @@ function NewOrderModal({ onClose, onCreated }: { onClose: () => void; onCreated:
     setLines((ls) => ls.map((l, j) => {
       if (j !== i) return l;
       const next = { ...l, ...patch };
-      if ((patch.stockItemId !== undefined || patch.unitName !== undefined) && next.priceAuto) next.price = knownPrice(next.stockItemId, next.unitName, contactId);
+      if (next.mode === 'stock' && (patch.stockItemId !== undefined || patch.unitName !== undefined) && next.priceAuto) next.price = knownPrice(next.stockItemId, next.unitName, contactId);
       return next;
     }));
   }
   // changer de fournisseur remet à jour les prix qui n'ont pas été saisis à la main
   useEffect(() => {
-    setLines((ls) => ls.map((l) => (l.priceAuto ? { ...l, price: knownPrice(l.stockItemId, l.unitName, contactId) } : l)));
+    setLines((ls) => ls.map((l) => (l.mode === 'stock' && l.priceAuto ? { ...l, price: knownPrice(l.stockItemId, l.unitName, contactId) } : l)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contactId]);
 
   async function submit(e: React.FormEvent, status: 'ordered' | 'draft') {
     e.preventDefault();
-    const valid = lines.filter((l) => l.stockItemId);
+    const valid = lines.filter((l) => (l.mode === 'free' ? l.label.trim() : l.stockItemId));
     if (!contactId) { setErr('Choisissez un fournisseur'); return; }
-    if (!valid.length) { setErr('Ajoutez au moins un article'); return; }
+    if (!valid.length) { setErr('Ajoutez au moins une ligne (un article du stock ou une ligne libre décrite)'); return; }
+    const tooBig = files.find((f) => f.size > ORDER_FILE_MAX_BYTES);
+    if (tooBig) { setErr(`« ${tooBig.name} » est trop lourd (${sizeLabel(tooBig.size)}, ${sizeLabel(ORDER_FILE_MAX_BYTES)} maximum).`); return; }
     setBusy(true);
     setErr(null);
     try {
@@ -156,11 +164,22 @@ function NewOrderModal({ onClose, onCreated }: { onClose: () => void; onCreated:
         body: {
           contactId, worksiteId: worksiteId || null, expectedOn: expectedOn || null, supplierRef: supplierRef || null, note: note || null, status,
           lines: valid.map((l) => ({
-            stockItemId: l.stockItemId, unitName: l.unitName || null, qty: Number(String(l.qty).replace(',', '.')),
+            stockItemId: l.mode === 'stock' ? l.stockItemId : null, label: l.mode === 'free' ? l.label.trim() : null,
+            unitName: l.unitName.trim() || null, qty: Number(String(l.qty).replace(',', '.')),
             price: l.price === '' ? null : Number(String(l.price).replace(',', '.')),
           })),
         },
       });
+      // la commande existe : on y joint les documents ; un échec n'annule pas la commande, on le signale
+      const failed: string[] = [];
+      for (const f of files) {
+        try {
+          const fd = new FormData();
+          fd.append('file', f);
+          await apiUpload(`/api/purchasing/orders/${r.order.id}/files`, fd);
+        } catch (e3) { failed.push(`${f.name} (${(e3 as Error).message})`); }
+      }
+      if (failed.length) alert(`La commande est créée, mais ces documents n'ont pas pu être joints : ${failed.join(' ; ')}.\nVous pouvez les ajouter depuis la commande.`);
       onCreated(r.order.id);
     } catch (e2) {
       setErr((e2 as Error).message ?? 'Erreur');
@@ -199,24 +218,47 @@ function NewOrderModal({ onClose, onCreated }: { onClose: () => void; onCreated:
 
           <div className="field" style={{ gridColumn: '1 / -1' }}>
             <label>Articles commandés</label>
+            <p className="muted" style={{ margin: '0 0 0.5rem', fontSize: '0.82rem' }}>
+              Un article du stock se réceptionne par scan et alimente le stock. Une <strong>ligne libre</strong> (produit commandé une seule fois) se décrit en texte et n’entre pas en stock.
+            </p>
             {lines.map((l, i) => {
               const it = items.find((x) => x.id === l.stockItemId);
               return (
                 <div key={i} className="row" style={{ gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'nowrap', alignItems: 'center' }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <ComboBox placeholder="chercher un article" value={l.stockItemId} onChange={(v) => setLine(i, { stockItemId: v, unitName: '' })} options={itemOptions} />
+                    {l.mode === 'free'
+                      ? <input className="input" placeholder="Description (ex. porte vitrée sur mesure 90×210)" value={l.label} onChange={(e) => setLine(i, { label: e.target.value })} aria-label="Description de la ligne libre" />
+                      : <ComboBox placeholder="chercher un article" value={l.stockItemId} onChange={(v) => setLine(i, { stockItemId: v, unitName: '' })} options={itemOptions} />}
                   </div>
                   <input className="input" style={{ width: 80 }} type="number" step="any" min="0" value={l.qty} onChange={(e) => setLine(i, { qty: e.target.value })} aria-label="Quantité" />
-                  <select className="select" style={{ width: 110 }} value={l.unitName} onChange={(e) => setLine(i, { unitName: e.target.value })} aria-label="Unité" disabled={!it}>
-                    <option value="">{it?.unit ?? 'unité'}</option>
-                    {(it?.units ?? []).map((u) => <option key={u.name} value={u.name}>{u.name}</option>)}
-                  </select>
+                  {l.mode === 'free'
+                    ? <input className="input" style={{ width: 110 }} placeholder="unité (pce…)" value={l.unitName} onChange={(e) => setLine(i, { unitName: e.target.value })} aria-label="Unité" />
+                    : <select className="select" style={{ width: 110 }} value={l.unitName} onChange={(e) => setLine(i, { unitName: e.target.value })} aria-label="Unité" disabled={!it}>
+                      <option value="">{it?.unit ?? 'unité'}</option>
+                      {(it?.units ?? []).map((u) => <option key={u.name} value={u.name}>{u.name}</option>)}
+                    </select>}
                   <input className="input" style={{ width: 100 }} type="number" step="any" min="0" placeholder="Prix HT" value={l.price} onChange={(e) => setLine(i, { price: e.target.value, priceAuto: false })} aria-label="Prix HT par unité" />
                   <button type="button" className="btn ghost" onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))} aria-label="Retirer">✕</button>
                 </div>
               );
             })}
-            <button type="button" className="btn" style={{ alignSelf: 'flex-start' }} onClick={() => setLines((ls) => [...ls, { stockItemId: '', unitName: '', qty: '1', price: '', priceAuto: true }])}>+ Ajouter un article</button>
+            <div className="row" style={{ gap: '0.5rem' }}>
+              <button type="button" className="btn" onClick={() => setLines((ls) => [...ls, newStockLine()])}>+ Ajouter un article du stock</button>
+              <button type="button" className="btn" onClick={() => setLines((ls) => [...ls, newFreeLine()])}>+ Ajouter une ligne libre</button>
+            </div>
+          </div>
+
+          <div className="field" style={{ gridColumn: '1 / -1' }}>
+            <label>Document de la commande (facultatif)</label>
+            <input ref={fileInput} type="file" multiple hidden accept={ORDER_FILE_ACCEPT} onChange={(e) => { const picked = Array.from(e.target.files ?? []); if (picked.length) setFiles((fs) => [...fs, ...picked]); e.target.value = ''; }} />
+            {files.map((f, i) => (
+              <div key={`${f.name}-${i}`} className="row" style={{ gap: '0.5rem', alignItems: 'center', marginBottom: '0.3rem' }}>
+                <span>📎 {f.name} <span className="muted" style={{ fontSize: '0.78rem' }}>({sizeLabel(f.size)})</span></span>
+                <button type="button" className="btn ghost" onClick={() => setFiles((fs) => fs.filter((_, j) => j !== i))} aria-label={`Retirer ${f.name}`}>✕</button>
+              </div>
+            ))}
+            <button type="button" className="btn" style={{ alignSelf: 'flex-start' }} onClick={() => fileInput.current?.click()}>+ Joindre un document (PDF de la commande…)</button>
+            <span className="muted" style={{ fontSize: '0.78rem' }}>PDF, photo, Word/Excel, e-mail… · {sizeLabel(ORDER_FILE_MAX_BYTES)} maximum par fichier</span>
           </div>
         </div>
         {err && <div className="badge crit" style={{ margin: '0 1.15rem', padding: '0.4rem 0.7rem' }}>{err}</div>}

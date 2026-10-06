@@ -1487,18 +1487,36 @@ model PurchaseOrder {
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
   lines       PurchaseOrderLine[]
+  files       PurchaseOrderFile[]
 
   @@index([status])
   @@index([contactId])
+}
+
+/// Document joint à une commande fournisseur (PDF du bon de commande, devis reçu, confirmation…).
+model PurchaseOrderFile {
+  id           String        @id @default(cuid())
+  orderId      String
+  order        PurchaseOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  label        String // nom affiché (par défaut le nom du fichier, sans extension)
+  fileUrl      String // /uploads/purchase-orders/…
+  originalName String?
+  mimeType     String?
+  size         Int           @default(0)
+  uploadedById String?
+  createdAt    DateTime      @default(now())
+
+  @@index([orderId])
 }
 
 model PurchaseOrderLine {
   id          String        @id @default(cuid())
   orderId     String
   order       PurchaseOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  stockItemId String
-  stockItem   StockItem     @relation(fields: [stockItemId], references: [id])
-  unitName    String? // unité de commande ; vide = unité de base
+  stockItemId String? // vide = ligne libre (produit commandé une seule fois, hors stock)
+  stockItem   StockItem?    @relation(fields: [stockItemId], references: [id])
+  label       String? // description d'une ligne libre (sans article de stock)
+  unitName    String? // unité de commande ; vide = unité de base (ligne libre : texte libre, ex. « pce »)
   qty         Float // commandé, dans l'unité de la ligne
   price       Float? // prix HT par unité de commande
   receivedQty Float         @default(0) // déjà réceptionné, dans l'unité de la ligne

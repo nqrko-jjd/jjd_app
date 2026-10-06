@@ -108,6 +108,7 @@ test('créer l’article depuis le tarif : kg + sac de 25, fournisseur lié au p
 });
 
 let orderId = '';
+let freeOrderId = '';
 
 test('commande fournisseur : prix par défaut = celui du fournisseur pour ce conditionnement ; brouillon → passée', async () => {
   const r = await jf('/api/purchasing/orders', post({ contactId: supplierId, note: 'Pour le chantier', lines: [{ stockItemId: itemId, unitName: 'sac', qty: 10 }] }));
@@ -153,4 +154,74 @@ test('droits : un ouvrier ne voit pas les commandes ; le magasinier les voit', a
   const w = await login('ouvrier@jjd-consult.be');
   assert.equal((await jf('/api/purchasing/orders', { as: w })).status, 403);
   assert.equal((await jf('/api/purchasing/orders', { as: storeToken })).status, 200);
+});
+
+test('ligne libre (produit commandé une seule fois) : sans article de stock, mélangeable avec une ligne de stock ; ligne vide refusée', async () => {
+  const bad = await jf('/api/purchasing/orders', post({ contactId: supplierId, lines: [{ qty: 1 }] }));
+  assert.equal(bad.status, 422, 'ni article ni description');
+  const r = await jf('/api/purchasing/orders', post({
+    contactId: supplierId,
+    lines: [
+      { label: '  Porte vitrée sur mesure 90x210  ', qty: 1, unitName: 'pce', price: 840 },
+      { stockItemId: itemId, unitName: 'sac', qty: 2 },
+    ],
+  }));
+  assert.equal(r.status, 201);
+  const [free, stock] = r.body.order.lines;
+  assert.equal(free.stockItemId, null);
+  assert.equal(free.stockItem, null);
+  assert.equal(free.label, 'Porte vitrée sur mesure 90x210');
+  assert.equal(free.unitName, 'pce');
+  assert.equal(free.price, 840);
+  assert.equal(stock.stockItemId, itemId);
+  const list = await jf('/api/purchasing/orders?status=all');
+  const row = list.body.items.find((o: { id: string }) => o.id === r.body.order.id);
+  assert.equal(row.totalHt, 840 + 2 * 10.2);
+  freeOrderId = r.body.order.id;
+});
+
+test('réception d’une ligne libre : marquée reçue, aucune entrée en stock ; la ligne de stock, elle, alimente le stock', async () => {
+  const order = (await jf(`/api/purchasing/orders/${freeOrderId}`, { as: storeToken })).body.order;
+  const free = order.lines.find((l: { label: string | null }) => l.label);
+  const before = await prisma.stockMovement.count({ where: { contactId: supplierId } });
+  const r = await jf(`/api/purchasing/orders/${freeOrderId}/receive`, { ...post({ lines: [{ lineId: free.id, qty: 1 }] }), as: storeToken });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.order.status, 'partial');
+  assert.equal(r.body.order.lines.find((l: { id: string }) => l.id === free.id).receivedQty, 1);
+  assert.equal(await prisma.stockMovement.count({ where: { contactId: supplierId } }), before, 'pas de mouvement de stock pour une ligne libre');
+  const stock = order.lines.find((l: { stockItemId: string | null }) => l.stockItemId);
+  const r2 = await jf(`/api/purchasing/orders/${freeOrderId}/receive`, { ...post({ lines: [{ lineId: stock.id, qty: 2 }] }), as: storeToken });
+  assert.equal(r2.body.order.status, 'received');
+  assert.equal(await prisma.stockMovement.count({ where: { contactId: supplierId } }), before + 1);
+});
+
+test('document joint à la commande : le bureau dépose (PDF), le magasinier ouvre mais ne dépose pas ni ne supprime', async () => {
+  const send = (as: string, name: string, content: BlobPart) => {
+    const fd = new FormData();
+    fd.append('file', new Blob([content], { type: 'application/pdf' }), name);
+    return jf(`/api/purchasing/orders/${freeOrderId}/files`, { method: 'POST', body: fd, as });
+  };
+  assert.equal((await send(storeToken, 'bc.pdf', 'x')).status, 403);
+  assert.equal((await send(token, 'virus.exe', 'MZ')).status, 422);
+  const up = await send(token, 'Bon de commande porte é.pdf', '%PDF-1.4 commande porte');
+  assert.equal(up.status, 201);
+  assert.equal(up.body.file.label, 'Bon de commande porte é');
+  assert.equal(up.body.file.size, '%PDF-1.4 commande porte'.length);
+
+  const order = (await jf(`/api/purchasing/orders/${freeOrderId}`, { as: storeToken })).body.order;
+  assert.equal(order.files.length, 1, 'les documents sont renvoyés avec la commande');
+  const list = await jf(`/api/purchasing/orders/${freeOrderId}/files`, { as: storeToken });
+  assert.equal(list.body.items.length, 1);
+  const dl = await fetch(base + up.body.file.downloadPath, { headers: { authorization: `Bearer ${storeToken}` } });
+  assert.equal(dl.status, 200);
+  assert.equal(dl.headers.get('content-type'), 'application/pdf');
+  assert.match(await dl.text(), /commande porte/);
+
+  const del = (as: string) => fetch(`${base}/api/purchasing/orders/${freeOrderId}/files/${up.body.file.id}`, { method: 'DELETE', headers: { authorization: `Bearer ${as}` } });
+  assert.equal((await del(storeToken)).status, 403);
+  assert.equal((await del(token)).status, 204);
+  assert.equal(await prisma.purchaseOrderFile.count({ where: { orderId: freeOrderId } }), 0);
+
+  const big = await send(token, 'gros.pdf', new Uint8Array(15 * 1024 * 1024));
+  assert.equal(big.status, 413);
 });

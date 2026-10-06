@@ -11,29 +11,34 @@ import { SkeletonRows, EmptyState } from '@/components/States';
 import { ScanInput } from '@/components/ScanInput';
 import { scanFeedback } from '@/lib/scanFeedback';
 import { PO_STATUS_LABEL, PO_STATUS_TONE } from '@/lib/stock-orders-ui';
+import { PurchaseOrderFiles, type OrderFileItem } from '@/components/PurchaseOrderFiles';
 
 interface Line {
-  id: string; stockItemId: string; unitName: string | null; qty: number; price: number | null; receivedQty: number;
-  stockItem: { id: string; ref: string | null; name: string; brand: string | null; model: string | null; unit: string; photoThumbUrl: string | null; units: { name: string; factor: number }[] };
+  id: string; stockItemId: string | null; label: string | null; unitName: string | null; qty: number; price: number | null; receivedQty: number;
+  /** null = ligne libre (produit commandé une seule fois, hors stock) */
+  stockItem: null | { id: string; ref: string | null; name: string; brand: string | null; model: string | null; unit: string; photoThumbUrl: string | null; units: { name: string; factor: number }[] };
 }
 interface Order {
   id: string; ref: string; status: string; expectedOn: string | null; orderedOn: string | null; supplierRef: string | null; note: string | null;
   contact: { id: string; name: string; customerNumber: string | null; onAccount: boolean; phone: string | null; email: string | null };
   worksite: { id: string; ref: string; title: string } | null;
   lines: Line[];
+  files: OrderFileItem[];
 }
 
 const fmt = (n: number) => new Intl.NumberFormat('fr-BE', { maximumFractionDigits: 2 }).format(n);
 const EPS = 0.0001;
-const factor = (item: Line['stockItem'], unit: string | null) =>
+type StockItemInfo = NonNullable<Line['stockItem']>;
+const lineName = (l: Line) => l.stockItem?.name ?? l.label ?? 'Ligne libre';
+const lineUnit = (l: Line) => l.unitName ?? l.stockItem?.unit ?? '';
+const factor = (item: StockItemInfo, unit: string | null) =>
   !unit || unit.toLowerCase() === item.unit.toLowerCase() ? 1 : item.units.find((u) => u.name.toLowerCase() === unit.toLowerCase())?.factor ?? 1;
 
 /** Pré-remplit un e-mail de commande dans le client mail de l'utilisateur — jamais envoyé par
  *  l'appli elle-même (pas de SMTP configuré), juste préparé pour relecture avant envoi. */
 function orderEmailHref(order: Order): string {
   const lines = order.lines.map((l) => {
-    const unit = l.unitName ?? l.stockItem.unit;
-    return `- ${l.stockItem.ref ? `${l.stockItem.ref} · ` : ''}${l.stockItem.name} : ${fmt(l.qty)} ${unit}`;
+    return `- ${l.stockItem?.ref ? `${l.stockItem.ref} · ` : ''}${lineName(l)} : ${fmt(l.qty)} ${lineUnit(l)}`.trimEnd();
   }).join('\n');
   const subject = `Commande ${order.ref}${order.worksite ? ` — chantier ${order.worksite.ref}` : ''}`;
   const body = [
@@ -100,7 +105,7 @@ export default function CommandeDetail({ params }: { params: Promise<{ id: strin
       // ligne dont il reste le plus à recevoir, avec ce qui est déjà scanné en attente
       setPending((p) => {
         const line = lines.find((l) => (p[l.id] ?? 0) + l.receivedQty + EPS < l.qty) ?? lines[0]!;
-        const inLineUnit = factor(line.stockItem, r.unitName) / factor(line.stockItem, line.unitName);
+        const inLineUnit = factor(line.stockItem!, r.unitName) / factor(line.stockItem!, line.unitName);
         return { ...p, [line.id]: Math.round(((p[line.id] ?? 0) + inLineUnit) * 100) / 100 };
       });
       setMsg({ ok: true, text: `✓ ${r.item.name}` });
@@ -116,7 +121,7 @@ export default function CommandeDetail({ params }: { params: Promise<{ id: strin
     const lines = order!.lines.filter((l) => (pending[l.id] ?? 0) > 0).map((l) => ({ lineId: l.id, qty: pending[l.id]! }));
     if (!lines.length) return;
     const over = order!.lines.filter((l) => (pending[l.id] ?? 0) > 0 && l.receivedQty + pending[l.id]! > l.qty + EPS);
-    if (over.length && !confirm(`Quantité reçue supérieure à la commande pour : ${over.map((l) => l.stockItem.name).join(', ')}. Valider quand même ?`)) return;
+    if (over.length && !confirm(`Quantité reçue supérieure à la commande pour : ${over.map(lineName).join(', ')}. Valider quand même ?`)) return;
     operation.current = true;
     setBusy(true);
     try {
@@ -124,7 +129,7 @@ export default function CommandeDetail({ params }: { params: Promise<{ id: strin
       setPending({});
       setEditing(null);
       setDeliveryNote('');
-      setMsg({ ok: true, text: 'Réception enregistrée : le stock est à jour.' });
+      setMsg({ ok: true, text: order!.lines.some((l) => l.stockItemId && (pending[l.id] ?? 0) > 0) ? 'Réception enregistrée : le stock est à jour.' : 'Réception enregistrée.' });
       reload();
     } catch (e) {
       setMsg({ ok: false, text: (e as Error).message });
@@ -177,8 +182,12 @@ export default function CommandeDetail({ params }: { params: Promise<{ id: strin
         </div>
       </div>
 
+      <div style={{ marginTop: '1.1rem' }}>
+        <PurchaseOrderFiles orderId={order.id} files={order.files ?? []} onChanged={reload} />
+      </div>
+
       {open && canManage && (
-        <div style={{ marginTop: '1.1rem' }}>
+        <div>
           <ScanInput disabled={busy} showReceivedCode={false} onScan={enqueueScan} placeholder="Scannez chaque article livré…" hint="Scannez à la suite. Le stock est mis à jour à la validation du lot." />
           <div className={`rack-bar${rack ? ' on' : ''}`}>
             <MapPin size={20} strokeWidth={2} />
@@ -196,20 +205,22 @@ export default function CommandeDetail({ params }: { params: Promise<{ id: strin
       <div className="warehouse-list-heading"><strong>{open ? 'Articles attendus' : 'Articles commandés'}</strong>{open && order.lines.some((l) => l.receivedQty + EPS >= l.qty) && <button type="button" className="btn ghost" onClick={() => setShowReceived((v) => !v)}>{showReceived ? 'Masquer' : 'Voir'} les déjà reçus</button>}{scanning > 0 && <span role="status">{scanning} lecture{scanning > 1 ? 's' : ''}…</span>}</div>
       <div style={{ display: 'grid', gap: '0.6rem', margin: '1rem 0 1.4rem' }}>
         {order.lines.filter((l) => !open || showReceived || (pending[l.id] ?? 0) > 0 || l.receivedQty + EPS < l.qty).map((l) => {
-          const unit = l.unitName ?? l.stockItem.unit;
+          const unit = lineUnit(l);
           const p = pending[l.id] ?? 0;
           const done = l.receivedQty + EPS >= l.qty;
           return (
             <div key={l.id} className="card card-pad warehouse-line" style={{ borderLeft: `4px solid ${done ? 'var(--ok)' : l.receivedQty + p > 0 ? 'var(--gold)' : 'var(--line)'}` }}>
               <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'nowrap', gap: '1rem' }}>
-                {l.stockItem.photoThumbUrl
+                {l.stockItem?.photoThumbUrl
                   // eslint-disable-next-line @next/next/no-img-element
                   && <img src={l.stockItem.photoThumbUrl} alt="" style={{ width: 64, height: 64, borderRadius: 10, objectFit: 'cover', flexShrink: 0 }} />}
                 <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ fontWeight: 700, fontSize: '1.02rem' }}>{l.stockItem.name}</div>
+                  <div style={{ fontWeight: 700, fontSize: '1.02rem' }}>{lineName(l)}</div>
                   <div className="muted" style={{ fontSize: '0.8rem' }}>
-                    <span className="mono">{l.stockItem.ref}</span>{l.stockItem.brand || l.stockItem.model ? ` · ${[l.stockItem.brand, l.stockItem.model].filter(Boolean).join(' ')}` : ''}
-                    {canOrder && l.price != null ? ` · ${formatEur(l.price)} HT / ${unit}` : ''}
+                    {l.stockItem
+                      ? <><span className="mono">{l.stockItem.ref}</span>{l.stockItem.brand || l.stockItem.model ? ` · ${[l.stockItem.brand, l.stockItem.model].filter(Boolean).join(' ')}` : ''}</>
+                      : <span className="badge">Ligne libre · hors stock</span>}
+                    {canOrder && l.price != null ? ` · ${formatEur(l.price)} HT${unit ? ` / ${unit}` : ''}` : ''}
                   </div>
                 </div>
                 <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
@@ -225,7 +236,7 @@ export default function CommandeDetail({ params }: { params: Promise<{ id: strin
                   <span className="muted" style={{ fontSize: '0.8rem' }}>Reçu maintenant :</span>
                   <input className="input" style={{ width: 100 }} type="number" step="any" min="0" value={p || ''} placeholder="0"
                     onChange={(e) => setPending((m) => ({ ...m, [l.id]: Math.max(0, Number(String(e.target.value).replace(',', '.')) || 0) }))}
-                    aria-label={`Quantité reçue de ${l.stockItem.name}`} />
+                    aria-label={`Quantité reçue de ${lineName(l)}`} />
                   <span className="muted" style={{ fontSize: '0.8rem' }}>{unit}</span>
 
                   {p > 0 && <button className="btn ghost" onClick={() => setPending((m) => ({ ...m, [l.id]: 0 }))}>Effacer</button>}

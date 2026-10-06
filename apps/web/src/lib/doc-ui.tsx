@@ -68,7 +68,7 @@ export interface DocFull {
   worksite: { id: string; ref: string; title: string } | null;
   contact: { id: string; name: string; vat: string | null; address: string | null; box: string | null; postalCode: string | null; city: string | null; email: string | null } | null;
   parent: { id: string; kind: string; number: string | null; draftRef: string | null } | null;
-  children: { id: string; kind: string; number: string | null; draftRef: string | null; status: string }[];
+  children: { id: string; kind: string; number: string | null; draftRef: string | null; status: string; totalTtc?: number; issuedOn?: string | null; lockedAt?: string | null }[];
   lines: DocLine[];
 }
 

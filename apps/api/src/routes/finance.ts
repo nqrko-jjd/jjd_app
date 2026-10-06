@@ -692,6 +692,28 @@ financeRouter.post(
  * rattrapage manuel antérieur : à lier plutôt qu'à dupliquer), ou rien du tout (vrai trou : une
  * écriture neuve peut être créée sans risque de doublon).
  */
+/**
+ * Factures de vente HISTORIQUES : écritures du grand livre (import Excel) qui n'ont pas de document dans l'appli. On les liste (recherche
+ * par n° / client / chantier) pour pouvoir en tirer un document, puis une note de crédit (POST /api/documents/from-ledger/:id).
+ */
+financeRouter.get(
+  '/ledger-sync/historical',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const q = String((req.query as Record<string, string>).q ?? '').trim();
+    const where: Prisma.LedgerEntryWhereInput = { direction: 'sale', documentId: null, docNumber: { not: null } };
+    if (q) where.OR = [{ docNumber: { contains: q, ...insensitive } }, { supplierName: { contains: q, ...insensitive } }, { worksiteRef: { contains: q, ...insensitive } }];
+    const [items, total] = await Promise.all([
+      prisma.ledgerEntry.findMany({
+        where, orderBy: [{ date: 'desc' }, { docNumber: 'desc' }], take: 60,
+        select: { id: true, docNumber: true, date: true, ht: true, ttc: true, paymentStatus: true, supplierName: true, worksiteRef: true, worksite: { select: { ref: true } } },
+      }),
+      prisma.ledgerEntry.count({ where }),
+    ]);
+    res.json({ items: items.map(({ worksite, ...e }) => ({ ...e, worksiteRef: worksite?.ref ?? e.worksiteRef })), total });
+  }),
+);
+
 financeRouter.get(
   '/ledger-sync/gaps',
   requireAuth(...OFFICE),

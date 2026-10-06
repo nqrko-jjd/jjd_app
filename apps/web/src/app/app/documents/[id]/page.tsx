@@ -11,6 +11,7 @@ import { ContactPicker } from '@/components/ContactPicker';
 import { AssigneePicker } from '@/components/AssigneePicker';
 import { WorksitePicker, type WsPickerOption } from '@/components/WorksitePicker';
 import { DocumentDelivery } from '@/components/DocumentDelivery';
+import { CreditNoteModal } from '@/components/CreditNoteModal';
 import { RichText } from '@/components/RichText';
 import { computeDocTotals, VAT_RATES } from '@jjd/shared';
 
@@ -47,6 +48,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
   const [msg, setMsg] = useState<string | null>(null);
   const [libQ, setLibQ] = useState('');
   const [tasksModal, setTasksModal] = useState(false);
+  const [creditOpen, setCreditOpen] = useState(false);
   const [billingOpen, setBillingOpen] = useState(false);
   const [showDiscount, setShowDiscount] = useState(false);
   const [openDesc, setOpenDesc] = useState<Set<number>>(new Set());
@@ -148,6 +150,10 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
     }
   }
 
+  // total déjà crédité par des notes de crédit émises (rattachées à cette facture)
+  const creditedTtc = doc ? Math.round(doc.children.filter((c) => c.kind === 'credit_note' && c.lockedAt).reduce((s, c) => s + Math.abs(c.totalTtc ?? 0), 0) * 100) / 100 : 0;
+  const creditRemaining = doc ? Math.round((Math.abs(doc.totalTtc) - creditedTtc) * 100) / 100 : 0;
+
   async function act(path: string, body?: unknown, confirmText?: string) {
     if (confirmText && !window.confirm(confirmText)) return;
     setBusy(path);
@@ -222,6 +228,8 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
         </div>
       )}
 
+      {creditOpen && <CreditNoteModal invoice={{ id: doc.id, number: doc.number, totalTtc: doc.totalTtc }} creditedTtc={creditedTtc} onClose={() => setCreditOpen(false)} onCreated={(nid) => router.push(`/app/documents/${nid}`)} />}
+
       {(doc.parent || doc.children.length > 0) && (
       <div className="row" style={{ marginBottom: '1rem', gap: '0.4rem' }}>
         {doc.parent && (
@@ -231,9 +239,14 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
         )}
         {doc.children.map((c) => (
           <Link key={c.id} href={`/app/documents/${c.id}`} className="chip">
-            {DOC_KIND_LABEL[c.kind]} {c.number ?? c.draftRef} →
+            {DOC_KIND_LABEL[c.kind]} {c.number ?? c.draftRef}{c.kind === 'credit_note' && c.totalTtc != null ? ` · ${formatEur(Math.abs(c.totalTtc))}` : ''}{c.kind === 'credit_note' && !c.lockedAt ? ' (brouillon)' : ''} →
           </Link>
         ))}
+        {(doc.kind === 'invoice' || doc.kind === 'deposit_invoice') && creditedTtc > 0 && (
+          <span className="muted" style={{ fontSize: '0.84rem', alignSelf: 'center' }}>
+            Crédité {formatEur(creditedTtc)} sur {formatEur(Math.abs(doc.totalTtc))}{creditRemaining > 0.01 ? ` · reste ${formatEur(creditRemaining)}` : ' · intégralement'}
+          </span>
+        )}
       </div>
       )}
 
@@ -491,8 +504,8 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
                   <button className="btn" disabled={!!busy} onClick={() => act('/status', { status: 'declined' })}>Refusé</button>
                 </>
               )}
-              {isInvoiceLike && locked && (
-                <button className="btn" disabled={!!busy} onClick={() => act('/credit-note', {})}>Note de crédit</button>
+              {isInvoiceLike && locked && doc.status !== 'credited' && creditRemaining > 0.01 && (
+                <button className="btn" disabled={!!busy} onClick={() => setCreditOpen(true)}>Note de crédit…</button>
               )}
               <button className="btn" disabled={!!busy} onClick={() => act('/duplicate', {})}>Dupliquer</button>
               <button

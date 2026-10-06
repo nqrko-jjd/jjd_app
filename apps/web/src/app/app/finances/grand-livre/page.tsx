@@ -2,6 +2,7 @@
 import { SkeletonRows, ErrorState, EmptyState } from '@/components/States';
 import { useState } from 'react';
 import Link from 'next/link';
+import { HistoricalInvoices } from '@/components/HistoricalInvoices';
 import { CheckCircle2 } from 'lucide-react';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
@@ -56,6 +57,8 @@ export default function GrandLivrePage() {
         correspondante dans le grand livre. Cette page liste les devis/factures/notes de crédit émis qui n’ont
         pas (encore) d’écriture — à corriger une fois ; tout ce qui est émis après reste synchronisé tout seul.
       </p>
+
+      <HistoricalInvoices />
 
       {loading && <SkeletonRows />}
       {error && !loading && <ErrorState message={error} onRetry={reload} />}

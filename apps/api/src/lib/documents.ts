@@ -1,7 +1,7 @@
 import type { Prisma } from '@prisma/client';
 import {
   computeDocTotals, formatDocNumber, docCounterName, belgianStructuredComm,
-  computeDueDate, lineTotalHt, type DocumentLineInput,
+  computeDueDate, lineTotalHt, round2, type DocumentLineInput,
 } from '@jjd/shared';
 import { prisma, nextCounter } from '../db.js';
 import { HttpError } from './http.js';
@@ -49,7 +49,7 @@ export const docInclude = {
   worksite: { select: { id: true, ref: true, title: true } },
   contact: { select: { id: true, name: true, vat: true, address: true, box: true, postalCode: true, city: true, email: true } },
   parent: { select: { id: true, kind: true, number: true, draftRef: true } },
-  children: { select: { id: true, kind: true, number: true, draftRef: true, status: true } },
+  children: { select: { id: true, kind: true, number: true, draftRef: true, status: true, totalTtc: true, issuedOn: true, lockedAt: true } },
   createdBy: { select: { id: true, email: true } },
 } satisfies Prisma.DocumentInclude;
 
@@ -163,7 +163,50 @@ export async function issueDocument(documentId: string, opts: { issuedOn?: Date;
     include: docInclude,
   });
   await syncLedgerEntryForDocument(documentId);
+  if (doc.kind === 'credit_note' && doc.parentId) await applyCreditToParent(doc.parentId);
   return updated;
+}
+
+/** Total TTC déjà crédité sur une facture (notes de crédit émises qui s'y rattachent), en valeur absolue. */
+export async function creditedTtc(parentId: string): Promise<number> {
+  const cns = await prisma.document.findMany({ where: { parentId, kind: 'credit_note', lockedAt: { not: null } }, select: { totalTtc: true } });
+  return round2(cns.reduce((s, c) => s + Math.abs(c.totalTtc), 0));
+}
+
+/**
+ * Une facture intégralement créditée (à la tolérance d'arrondi près) passe « créditée » : elle n'est plus à encaisser
+ * et son statut de paiement n'est plus recalculé. Un crédit partiel ne change pas son statut. Idempotent.
+ */
+export async function applyCreditToParent(parentId: string) {
+  const p = await prisma.document.findUnique({ where: { id: parentId }, select: { id: true, kind: true, status: true, totalTtc: true } });
+  if (!p || (p.kind !== 'invoice' && p.kind !== 'deposit_invoice') || p.status === 'draft' || p.status === 'credited' || p.totalTtc <= 0) return;
+  if ((await creditedTtc(p.id)) + PAYMENT_TOLERANCE >= p.totalTtc) {
+    await prisma.document.update({ where: { id: p.id }, data: { status: 'credited' } });
+    await syncLedgerEntryForDocument(p.id);
+  }
+}
+
+/**
+ * Lignes d'une note de crédit PARTIELLE d'un montant TTC donné. Facture à un seul taux de TVA : une ligne unique au bon
+ * montant HT (ajusté au centime pour retomber exactement sur le TTC demandé). Plusieurs taux : les lignes de la facture
+ * sont mises à l'échelle proportionnellement.
+ */
+export function partialCreditLines(
+  documentId: string,
+  src: { totalTtc: number; vatRate: number | null; lines: StoredLine[] },
+  amountTtc: number,
+  label: string,
+) {
+  if (src.vatRate != null) {
+    const guess = round2(amountTtc / (1 + src.vatRate));
+    const ht = [0, -0.01, 0.01, -0.02, 0.02].map((d) => round2(guess + d))
+      .find((h) => computeDocTotals([{ kind: 'item', qty: 1, unitPriceHt: h, discountPct: 0, vatRate: src.vatRate }]).totalTtc === amountTtc) ?? guess;
+    return buildLineRows(documentId, [{
+      kind: 'item', label, description: null, qty: 1, unit: 'forfait', unitPriceHt: ht, discountPct: 0, vatRate: src.vatRate, priceItemId: null,
+    }]);
+  }
+  const factor = amountTtc / src.totalTtc;
+  return cloneLineRows(documentId, src.lines, (l) => ({ unitPriceHt: round2(l.unitPriceHt * factor) }));
 }
 
 /**
@@ -237,7 +280,9 @@ export async function syncLedgerEntryForDocument(documentId: string) {
   const current = existing ?? (await prisma.ledgerEntry.findUnique({ where: { documentId: doc.id }, select: { id: true, source: true } }));
   const adopted = !!current && current.source !== 'document-sync';
 
-  const paymentStatus = doc.totalTtc > 0 && doc.paidAmount + PAYMENT_TOLERANCE >= doc.totalTtc ? 'Payé' : 'Non payé';
+  const isCredit = doc.kind === 'credit_note';
+  const sgn = (n: number) => (isCredit ? -Math.abs(n) : n); // une note de crédit réduit le CA : montants négatifs au grand livre
+  const paymentStatus = isCredit || (doc.totalTtc > 0 && doc.paidAmount + PAYMENT_TOLERANCE >= doc.totalTtc) ? 'Payé' : 'Non payé';
   const supplierName = doc.billingName ?? doc.contact?.name ?? null;
   const period = deriveLedgerPeriod(doc.issuedOn);
 
@@ -253,9 +298,9 @@ export async function syncLedgerEntryForDocument(documentId: string) {
       contactId: doc.contactId,
       supplierName,
       categoryRaw: doc.kind === 'credit_note' ? 'Note de crédit vente' : null,
-      ht: doc.totalHt,
-      vatDue: doc.totalVat,
-      ttc: doc.totalTtc,
+      ht: sgn(doc.totalHt),
+      vatDue: sgn(doc.totalVat),
+      ttc: sgn(doc.totalTtc),
       paymentStatus,
       paidOn: doc.paidOn,
       source: 'document-sync',
@@ -267,9 +312,9 @@ export async function syncLedgerEntryForDocument(documentId: string) {
       worksiteId: adopted ? (doc.worksiteId ?? undefined) : doc.worksiteId,
       contactId: adopted ? (doc.contactId ?? undefined) : doc.contactId,
       supplierName: adopted ? (supplierName ?? undefined) : supplierName,
-      ht: doc.totalHt,
-      vatDue: doc.totalVat,
-      ttc: doc.totalTtc,
+      ht: sgn(doc.totalHt),
+      vatDue: sgn(doc.totalVat),
+      ttc: sgn(doc.totalTtc),
       paymentStatus,
       paidOn: doc.paidOn,
       ...period,

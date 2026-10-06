@@ -10,7 +10,8 @@ import { prisma, nextCounter } from '../db.js';
 import { insensitive } from '../lib/search.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, OFFICE } from '../lib/auth.js';
-import { docInclude, buildLineRows, cloneLineRows, refreshDocTotals, issueDocument, getCompany, syncLedgerEntryForDocument } from '../lib/documents.js';
+import { z } from 'zod';
+import { docInclude, buildLineRows, cloneLineRows, refreshDocTotals, issueDocument, getCompany, syncLedgerEntryForDocument, creditedTtc, partialCreditLines } from '../lib/documents.js';
 import { renderDocumentPdf } from '../lib/pdf.js';
 import { extractDocumentInfo } from '../lib/document-extract.js';
 import { UPLOADS_DIR } from '../lib/media.js';
@@ -542,30 +543,103 @@ documentsRouter.post(
   }),
 );
 
-/** Facture -> note de crédit brouillon liée (mêmes lignes, à ajuster). */
+/**
+ * Facture -> note de crédit liée. Sans corps : crédit TOTAL (ce qui reste à créditer), mêmes lignes, en brouillon à ajuster.
+ * Avec { amountTtc } : crédit PARTIEL de ce montant (jamais au-delà du reste à créditer). { reason } : motif ajouté à la note.
+ * { issue: true } : émet aussitôt la note de crédit (numéro NC…), ce qui passe la facture « créditée » si elle est intégralement créditée.
+ */
+const creditNoteInput = z.object({
+  amountTtc: z.coerce.number().positive().optional(),
+  reason: z.string().trim().max(500).optional(),
+  issue: z.boolean().optional(),
+});
 documentsRouter.post(
   '/:id/credit-note',
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
+    const body = creditNoteInput.parse(req.body ?? {});
     const src = await prisma.document.findUnique({ where: { id: req.params.id }, include: { lines: true } });
     if (!src) throw new HttpError(404, 'Document introuvable');
     if (src.kind !== 'invoice' && src.kind !== 'deposit_invoice') throw new HttpError(422, 'Note de crédit sur une facture uniquement');
+    if (!src.number) throw new HttpError(422, 'Émettez d’abord la facture : une note de crédit se fait sur une facture émise.');
+    const already = await creditedTtc(src.id);
+    const remaining = Math.round((Math.abs(src.totalTtc) - already) * 100) / 100;
+    if (remaining <= 0.01) throw new HttpError(409, `La facture ${src.number} est déjà intégralement créditée.`);
+    const amount = body.amountTtc != null ? Math.round(body.amountTtc * 100) / 100 : remaining;
+    if (amount > remaining + 0.005) {
+      throw new HttpError(422, `Montant trop élevé : il ne reste que ${remaining.toFixed(2).replace('.', ',')} € à créditer sur ${src.number}.`);
+    }
+    const full = Math.abs(amount - Math.abs(src.totalTtc)) < 0.005;
+    // facture importée sans détail de lignes : on retrouve son taux de TVA unique depuis ses totaux
+    const effRate = src.vatRate ?? (src.lines.length === 0 && src.totalHt > 0 ? Math.round((src.totalVat / src.totalHt) * 100) / 100 : null);
+    if (!src.lines.length && effRate == null) throw new HttpError(422, `La facture ${src.number} n’a ni lignes ni montant HT : impossible d’en déduire une note de crédit.`);
     const seq = await nextCounter('doc:draft');
     const cn = await prisma.document.create({
       data: {
         kind: 'credit_note', direction: 'credit_note', draftRef: `BROUILLON-${seq}`,
         status: 'draft', worksiteId: src.worksiteId, contactId: src.contactId,
         title: src.title, parentId: src.id,
-        note: `Note de crédit sur facture ${src.number || src.draftRef}`,
+        note: `Note de crédit${full ? '' : ' partielle'} sur facture ${src.number}${body.reason ? ` — ${body.reason}` : ''}`,
         source: 'manual', createdById: req.user!.id,
       },
     });
-    if (src.lines.length) {
+    if (full && src.lines.length) {
       await prisma.documentLine.createMany({ data: cloneLineRows(cn.id, src.lines) });
-      await refreshDocTotals(cn.id);
+    } else {
+      await prisma.documentLine.createMany({
+        data: partialCreditLines(
+          cn.id,
+          { totalTtc: Math.abs(src.totalTtc), vatRate: effRate, lines: src.lines },
+          amount,
+          `Note de crédit${full ? '' : ' partielle'} sur facture ${src.number}${body.reason ? ` — ${body.reason}` : ''}`,
+        ),
+      });
     }
-    const full = await prisma.document.findUnique({ where: { id: cn.id }, include: docInclude });
-    res.status(201).json({ document: full });
+    await refreshDocTotals(cn.id);
+    await prisma.auditLog.create({ data: { actorId: req.user!.id, action: 'credit-note', entity: 'document', entityId: cn.id, meta: { parent: src.number, amountTtc: amount } } });
+    if (body.issue) await issueDocument(cn.id);
+    const out = await prisma.document.findUnique({ where: { id: cn.id }, include: docInclude });
+    res.status(201).json({ document: out });
+  }),
+);
+
+/**
+ * Facture HISTORIQUE (écriture du grand livre issue de l'Excel, sans document dans l'appli) -> document « facture » émis, avec le
+ * même numéro et les mêmes montants, adoptant l'écriture (aucun doublon au grand livre). Sert surtout à pouvoir faire une note
+ * de crédit dessus. Idempotent : si le document existe déjà on le renvoie.
+ */
+documentsRouter.post(
+  '/from-ledger/:ledgerId',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const e = await prisma.ledgerEntry.findUnique({ where: { id: req.params.ledgerId } });
+    if (!e || e.direction !== 'sale') throw new HttpError(404, 'Facture de vente introuvable au grand livre');
+    if (e.documentId) {
+      res.json({ document: await prisma.document.findUnique({ where: { id: e.documentId }, include: docInclude }) });
+      return;
+    }
+    if (!e.docNumber) throw new HttpError(422, 'Cette écriture n’a pas de numéro de facture.');
+    const clash = await prisma.document.findFirst({ where: { kind: { in: ['invoice', 'deposit_invoice'] }, number: e.docNumber } });
+    if (clash) throw new HttpError(409, `Le numéro ${e.docNumber} existe déjà dans l’appli : utilisez cette facture.`);
+    const ttc = e.ttc ?? e.ht + (e.vatDue ?? 0);
+    const vatRate = e.ht > 0 ? Math.max(0, Math.round(((ttc - e.ht) / e.ht) * 100) / 100) : 0;
+    const paid = e.paymentStatus === 'Payé';
+    const issuedOn = e.date ?? new Date();
+    const doc = await prisma.document.create({
+      data: {
+        kind: 'invoice', direction: 'sale', number: e.docNumber, status: paid ? 'paid' : 'sent',
+        worksiteId: e.worksiteId, contactId: e.contactId, title: `Facture ${e.docNumber}`, issuedOn, lockedAt: issuedOn,
+        source: 'legacy', createdById: req.user!.id,
+      },
+    });
+    await prisma.documentLine.createMany({
+      data: buildLineRows(doc.id, [{ kind: 'item', label: `Facture ${e.docNumber}`, description: null, qty: 1, unit: 'forfait', unitPriceHt: e.ht, discountPct: 0, vatRate, priceItemId: null }]),
+    });
+    const totals = await refreshDocTotals(doc.id);
+    if (paid) await prisma.document.update({ where: { id: doc.id }, data: { paidAmount: totals.totalTtc, paidOn: e.paidOn ?? issuedOn } });
+    await prisma.ledgerEntry.update({ where: { id: e.id }, data: { documentId: doc.id } }); // adopte l'écriture : pas de doublon
+    await prisma.auditLog.create({ data: { actorId: req.user!.id, action: 'from-ledger', entity: 'document', entityId: doc.id, meta: { number: doc.number } } });
+    res.status(201).json({ document: await prisma.document.findUnique({ where: { id: doc.id }, include: docInclude }) });
   }),
 );
 

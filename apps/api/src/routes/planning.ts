@@ -276,7 +276,11 @@ planningRouter.get(
             tasks: {
               where: { status: { not: 'done' } },
               orderBy: { position: 'asc' },
-              select: { id: true, title: true, assignee: { select: { displayName: true, firstName: true } } },
+              select: {
+                id: true, title: true, dueOn: true,
+                assignee: { select: { displayName: true, firstName: true } }, // ancien champ (une seule personne)
+                assignees: { select: { person: { select: { displayName: true, firstName: true } } } }, // responsables (plusieurs)
+              },
             },
           },
         },
@@ -303,6 +307,11 @@ planningRouter.get(
         endAt: ev.endAt,
         allDay: ev.allDay,
         instructions: ev.note,
+        // ce qui est saisi sur le créneau lui-même (formulaire d'affectation) : jusqu'ici absent de la fiche imprimée
+        tasksNote: ev.tasksNote,
+        accessNote: ev.accessNote,
+        materialsNote: ev.materialsNote,
+        departure: ev.departureAt || ev.departureFrom ? { at: ev.departureAt, from: ev.departureFrom } : null,
         worksite: { id: w.id, ref: w.ref, title: w.title, description: w.description, address },
         client: w.client,
         building: w.acp
@@ -320,7 +329,11 @@ planningRouter.get(
         })),
         equipment: ev.equipment.map((e) => ({ name: e.equipment.name, reference: e.equipment.reference })),
         consumables: ev.consumables.map((c) => ({ name: c.consumable.name, qty: c.qty, unit: c.consumable.unit })),
-        tasks: w.tasks.map((t) => ({ title: t.title, assignee: t.assignee ? (t.assignee.displayName || t.assignee.firstName) : null })),
+        tasks: w.tasks.map((t) => {
+          const names = t.assignees.map((a) => a.person.displayName || a.person.firstName);
+          if (!names.length && t.assignee) names.push(t.assignee.displayName || t.assignee.firstName);
+          return { title: t.title, assignee: names.length ? names.join(', ') : null, dueOn: t.dueOn };
+        }),
       },
     });
   }),

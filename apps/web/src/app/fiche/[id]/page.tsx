@@ -5,6 +5,10 @@ import { api } from '@/lib/api';
 interface Fiche {
   id: string; title: string | null; startAt: string; endAt: string; allDay: boolean;
   instructions: string | null;
+  tasksNote: string | null;
+  accessNote: string | null;
+  materialsNote: string | null;
+  departure: { at: string | null; from: string | null } | null;
   worksite: { id: string; ref: string; title: string; description: string | null; address: string };
   client: { name: string; phone: string | null } | null;
   building: { name: string; digicode: string | null; accessNote: string | null; contacts: { role: string | null; name: string; phone: string | null }[] } | null;
@@ -14,7 +18,7 @@ interface Fiche {
   people: { name: string; role: string; phone: string | null }[];
   equipment: { name: string; reference: string | null }[];
   consumables: { name: string; qty: number; unit: string }[];
-  tasks: { title: string; assignee: string | null }[];
+  tasks: { title: string; assignee: string | null; dueOn?: string | null }[];
 }
 
 const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' });
@@ -43,6 +47,8 @@ export default function FichePage({ params }: { params: Promise<{ id: string }> 
 
   if (err) return <div style={{ padding: 40 }}>Erreur : {err}</div>;
   if (!f) return <div style={{ padding: 40 }}>Chargement…</div>;
+  // « travaux à réaliser sur ce créneau » : une tâche par ligne (puces/tirets éventuels retirés)
+  const taskLines = (f.tasksNote ?? '').split(/\r?\n/).map((l) => l.replace(/^\s*(?:[-•*·]|\d+[.)])\s*/, '').trim()).filter(Boolean);
 
   return (
     <>
@@ -60,6 +66,7 @@ export default function FichePage({ params }: { params: Promise<{ id: string }> 
           <div className="when">
             <div className="date">{dateLabel(f.startAt)}</div>
             {!f.allDay && <div className="hours">{hhmm(f.startAt)} – {hhmm(f.endAt)}</div>}
+            {f.departure && <div className="departure">Départ {f.departure.at ? hhmm(f.departure.at) : ''}{f.departure.from ? ` — ${f.departure.from}` : ''}</div>}
           </div>
         </header>
 
@@ -114,6 +121,26 @@ export default function FichePage({ params }: { params: Promise<{ id: string }> 
           </div>
         </section>
 
+        {taskLines.length > 0 && (
+          <section className="box tasks-box">
+            <div className="lbl">Travaux à réaliser sur ce créneau</div>
+            <ul className="checklist">
+              {taskLines.map((t, i) => <li key={i}><span className="cb" />{t}</li>)}
+            </ul>
+          </section>
+        )}
+
+        {(f.accessNote || f.materialsNote) && (
+          <section className="grid2">
+            {f.accessNote && (
+              <div className="box"><div className="lbl">Accès, livraison, protections</div><div className="pre">{f.accessNote}</div></div>
+            )}
+            {f.materialsNote && (
+              <div className="box"><div className="lbl">Matériaux / matériel à prévoir</div><div className="pre">{f.materialsNote}</div></div>
+            )}
+          </section>
+        )}
+
         {f.consumables.length > 0 && (
           <section className="box">
             <div className="lbl">Consommables à prévoir</div>
@@ -133,8 +160,8 @@ export default function FichePage({ params }: { params: Promise<{ id: string }> 
         {f.tasks.length > 0 && (
           <section className="box">
             <div className="lbl">Tâches en cours sur le chantier</div>
-            <ul>
-              {f.tasks.map((t, i) => <li key={i}>{t.title}{t.assignee ? ` — ${t.assignee}` : ''}</li>)}
+            <ul className="checklist">
+              {f.tasks.map((t, i) => <li key={i}><span className="cb" /><span>{t.title}{t.assignee ? ` — ${t.assignee}` : ''}{t.dueOn ? ` (pour le ${new Date(t.dueOn).toLocaleDateString('fr-BE')})` : ''}</span></li>)}
             </ul>
           </section>
         )}
@@ -169,6 +196,12 @@ const CSS = `
   .access .note { margin-top: 2px; }
   .consumables { list-style: none; padding: 0; margin-top: 4px; }
   .consumables li { display: flex; justify-content: space-between; border-bottom: 1px dashed #e0e6e2; padding: 3px 0; }
+  .departure { font-size: 12px; color: #5a675f; margin-top: 2px; }
+  .pre { white-space: pre-wrap; }
+  .checklist { list-style: none; padding-left: 0; }
+  .checklist li { display: flex; gap: 8px; align-items: flex-start; padding: 3px 0; border-bottom: 1px dashed #e0e6e2; }
+  .checklist .cb { flex: none; width: 12px; height: 12px; border: 1.5px solid #0c2a22; border-radius: 2px; margin-top: 3px; }
+  .tasks-box { border-color: #0c2a22; }
   .instructions { background: #eef4f0; border-left: 4px solid #0c2a22; border-radius: 6px; padding: 12px 14px; }
   .instructions p { margin: 0; white-space: pre-wrap; }
   .toolbar { max-width: 780px; margin: 12px auto 0; padding: 0 24px; text-align: right; }

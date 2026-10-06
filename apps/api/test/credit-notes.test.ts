@@ -121,3 +121,19 @@ test('note de crédit : refusée sur un brouillon de facture ou sur un devis', a
   const quote = await post('/api/documents', { kind: 'quote', worksiteId: wsId, lines: [{ label: 'x', qty: 1, unitPriceHt: 10, vatRate: 0 }] });
   assert.equal((await post(`/api/documents/${quote.body.document.id}/credit-note`)).status, 422);
 });
+
+test('facture CRÉDITÉE : un paiement rattaché met à jour son « payé » sans changer son statut, et elle n’est jamais « à encaisser » au grand livre', async () => {
+  const inv = await issuedInvoice(1000); // 1 060 € TTC
+  await post(`/api/documents/${inv.id}/credit-note`, { issue: true });
+  assert.equal((await prisma.document.findUniqueOrThrow({ where: { id: inv.id } })).status, 'credited');
+  const tx = await prisma.bankTransaction.create({ data: { bookingDate: new Date('2026-06-01'), amount: 1060, description: 'VERSEMENT test facture créditée', side: 'in', bank: 'Belfius', source: 'test' } });
+  const r = await post(`/api/finance/bank/${tx.id}/matches`, { documentId: inv.id });
+  assert.equal(r.status, 201);
+  const doc = await prisma.document.findUniqueOrThrow({ where: { id: inv.id } });
+  assert.equal(doc.status, 'credited', 'le statut reste « créditée »');
+  assert.equal(doc.paidAmount, 1060, 'le paiement est bien enregistré sur la facture');
+  assert.ok(doc.paidOn);
+  assert.equal((await prisma.ledgerEntry.findUniqueOrThrow({ where: { documentId: inv.id } })).paymentStatus, 'Payé');
+  await prisma.bankTransactionMatch.deleteMany({ where: { bankTransactionId: tx.id } });
+  await prisma.bankTransaction.delete({ where: { id: tx.id } });
+});

@@ -245,6 +245,8 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
         {(doc.kind === 'invoice' || doc.kind === 'deposit_invoice') && creditedTtc > 0 && (
           <span className="muted" style={{ fontSize: '0.84rem', alignSelf: 'center' }}>
             Crédité {formatEur(creditedTtc)} sur {formatEur(Math.abs(doc.totalTtc))}{creditRemaining > 0.01 ? ` · reste ${formatEur(creditRemaining)}` : ' · intégralement'}
+            {doc.paidAmount > 0.01 ? ` · payé ${formatEur(doc.paidAmount)}` : ''}
+            {doc.paidAmount - creditRemaining > 0.01 ? ` · trop-perçu ${formatEur(doc.paidAmount - creditRemaining)} à rembourser ou à imputer sur une autre facture` : ''}
           </span>
         )}
       </div>

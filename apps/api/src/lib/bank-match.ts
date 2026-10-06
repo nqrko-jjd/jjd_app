@@ -38,8 +38,10 @@ import { PAYMENT_TOLERANCE } from './payment-tolerance.js';
 export async function recomputeDocumentPayment(documentId: string) {
   const doc = await prisma.document.findUnique({ where: { id: documentId }, select: { totalTtc: true, status: true, number: true } });
   if (!doc) return;
-  // Statuts qui ne relèvent pas du cycle paiement (jamais touchés ici).
-  if (doc.status === 'credited' || doc.status === 'declined' || doc.status === 'draft') return;
+  // Refusé / brouillon : hors cycle paiement, jamais touchés ici. Une facture CRÉDITÉE peut pourtant encore recevoir un paiement
+  // (le client règle l'ancienne facture avant ou après l'avoir) : on tient à jour son payé et sa date, mais son statut reste « créditée ».
+  if (doc.status === 'declined' || doc.status === 'draft') return;
+  const credited = doc.status === 'credited';
 
   const matches = await prisma.bankTransactionMatch.findMany({
     where: {
@@ -56,7 +58,7 @@ export async function recomputeDocumentPayment(documentId: string) {
   const paidAmount = round2(matches.reduce((s, m) => s + (m.amount ?? Math.abs(m.bankTransaction.amount ?? 0)), 0));
   const bookingDates = matches.map((m) => m.bankTransaction.bookingDate).filter((d): d is Date => !!d).sort((a, b) => b.getTime() - a.getTime());
   const paidOn = bookingDates[0] ?? null;
-  const status = matches.length === 0 ? 'sent' : paidAmount + PAYMENT_TOLERANCE >= doc.totalTtc ? 'paid' : 'partial';
+  const status = credited ? 'credited' : matches.length === 0 ? 'sent' : paidAmount + PAYMENT_TOLERANCE >= doc.totalTtc ? 'paid' : 'partial';
 
   await prisma.document.update({ where: { id: documentId }, data: { status, paidAmount, paidOn } });
   await syncLedgerEntryForDocument(documentId);

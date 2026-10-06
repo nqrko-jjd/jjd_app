@@ -249,7 +249,7 @@ export async function syncLedgerEntryForDocument(documentId: string) {
   const doc = await prisma.document.findUnique({
     where: { id: documentId },
     select: {
-      id: true, kind: true, lockedAt: true, issuedOn: true, number: true,
+      id: true, kind: true, status: true, lockedAt: true, issuedOn: true, number: true,
       worksiteId: true, contactId: true, billingName: true,
       totalHt: true, totalVat: true, totalTtc: true, paidAmount: true, paidOn: true,
       contact: { select: { name: true } },
@@ -282,7 +282,8 @@ export async function syncLedgerEntryForDocument(documentId: string) {
 
   const isCredit = doc.kind === 'credit_note';
   const sgn = (n: number) => (isCredit ? -Math.abs(n) : n); // une note de crédit réduit le CA : montants négatifs au grand livre
-  const paymentStatus = isCredit || (doc.totalTtc > 0 && doc.paidAmount + PAYMENT_TOLERANCE >= doc.totalTtc) ? 'Payé' : 'Non payé';
+  // une note de crédit, ou une facture CRÉDITÉE (annulée), n'est jamais « à encaisser » au grand livre, même si elle a reçu un paiement partiel ou nul
+  const paymentStatus = isCredit || doc.status === 'credited' || (doc.totalTtc > 0 && doc.paidAmount + PAYMENT_TOLERANCE >= doc.totalTtc) ? 'Payé' : 'Non payé';
   const supplierName = doc.billingName ?? doc.contact?.name ?? null;
   const period = deriveLedgerPeriod(doc.issuedOn);
 

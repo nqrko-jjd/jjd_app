@@ -16,6 +16,8 @@ const iconFor = (f: WorksiteFileItem) => {
   const n = (f.originalName ?? '').toLowerCase();
   if (n.endsWith('.pdf')) return '📕';
   if (/\.(jpe?g|png|webp|gif|heic)$/.test(n)) return '🖼️';
+  if (/\.(mp4|mov|m4v|webm|avi|mkv|3gp)$/.test(n)) return '🎞️';
+  if (/\.(mp3|m4a|wav|ogg|opus)$/.test(n)) return '🎧';
   if (/\.(xlsx?|csv|ods)$/.test(n)) return '📊';
   if (/\.(docx?|odt|rtf|txt)$/.test(n)) return '📝';
   if (/\.(dwg|dxf)$/.test(n)) return '📐';
@@ -35,8 +37,8 @@ export function WorksiteFiles({ worksiteId, onChanged }: { worksiteId: string; o
   const [editing, setEditing] = useState<string | null>(null);
   const [editLabel, setEditLabel] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
-  const maxBytes = data?.maxBytes ?? 14 * 1024 * 1024;
-  const categories = data?.categories ?? ['Fiche technique', 'Plan', 'Offre / devis fournisseur', 'Certificat / garantie', 'Photo', 'Autre'];
+  const maxBytes = data?.maxBytes ?? 300 * 1024 * 1024;
+  const categories = data?.categories ?? ['Fiche technique', 'Plan', 'Offre / devis fournisseur', 'Certificat / garantie', 'Photo', 'Vidéo', 'Autre'];
 
   async function upload(files: FileList | File[] | null) {
     const list = files ? Array.from(files) : [];
@@ -114,7 +116,7 @@ export function WorksiteFiles({ worksiteId, onChanged }: { worksiteId: string; o
             <div className="filedrop-row filedrop-empty">
               <span className="filedrop-ic">{busy ? '⏳' : '⬆'}</span>
               <div>
-                <strong>{busy ? 'Envoi en cours…' : 'Glisser des fichiers ici'}</strong>
+                <strong>{busy ? 'Envoi en cours… (une vidéo peut prendre quelques minutes, ne fermez pas la page)' : 'Glisser des fichiers ici (PDF, photos, vidéos MP4…)'}</strong>
                 <div className="muted" style={{ fontSize: '0.8rem' }}>ou cliquer pour parcourir · plusieurs fichiers possibles · {sizeLabel(maxBytes)} maximum par fichier</div>
               </div>
             </div>

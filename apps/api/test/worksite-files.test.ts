@@ -73,8 +73,20 @@ test('seul le bureau dépose, renomme et supprime ; la suppression efface aussi 
   assert.equal(await prisma.worksiteFile.count({ where: { id } }), 0);
 });
 
+test('vidéo MP4 acceptée (jusqu\'à 300 Mo par défaut), servie avec le bon type', async () => {
+  const up = await upload(admin, 'visite chantier.mp4', new Uint8Array(3 * 1024 * 1024), { category: 'Vidéo' });
+  assert.equal(up.status, 201);
+  assert.equal(up.body!.file!.size, 3 * 1024 * 1024);
+  const dl = await get(worker, up.body!.file!.downloadPath);
+  assert.equal(dl.status, 200);
+  assert.equal(dl.headers.get('content-type'), 'video/mp4');
+  assert.equal(dl.headers.get('content-disposition')?.startsWith('inline'), true);
+});
+
 test('fichier trop lourd : message clair (413), type non accepté : 422, chantier inconnu : 404', async () => {
-  const big = await upload(admin, 'gros.pdf', new Uint8Array(15 * 1024 * 1024));
+  process.env.WORKSITE_FILE_MAX_MB = '1';
+  const big = await upload(admin, 'gros.mp4', new Uint8Array(2 * 1024 * 1024));
+  delete process.env.WORKSITE_FILE_MAX_MB;
   assert.equal(big.status, 413);
   assert.match(big.body!.error!, /trop lourd/i);
   const bad = await upload(admin, 'virus.exe', 'MZ');

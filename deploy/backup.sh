@@ -35,4 +35,8 @@ mv "$BACKUP_TMP/db.sql.gz" "$BACKUP_DIR/jjd-db-$BACKUP_STAMP.sql.gz"
 mv "$BACKUP_TMP/uploads.tar.gz" "$BACKUP_DIR/jjd-uploads-$BACKUP_STAMP.tar.gz"
 (cd "$BACKUP_DIR" && sha256sum "jjd-db-$BACKUP_STAMP.sql.gz" "jjd-uploads-$BACKUP_STAMP.tar.gz" > "jjd-$BACKUP_STAMP.sha256")
 find "$BACKUP_DIR" -type f \( -name 'jjd-db-*.sql.gz' -o -name 'jjd-uploads-*.tar.gz' -o -name 'jjd-*.sha256' \) -mtime "+$RETENTION_DAYS" -delete
+# Les médias pèsent ~4 Go par copie : 45 jours de copies dépassaient le disque du VPS (96 % le 2026-10-06). On ne garde que les
+# UPLOADS_KEEP copies de médias les plus récentes ; les dumps SQL (~2 Mo) suivent RETENTION_DAYS.
+UPLOADS_KEEP=5
+ls -1t "$BACKUP_DIR"/jjd-uploads-*.tar.gz 2>/dev/null | tail -n +"$((UPLOADS_KEEP + 1))" | xargs -r rm -f --
 printf 'Sauvegarde vérifiée : %s\n' "$BACKUP_STAMP"

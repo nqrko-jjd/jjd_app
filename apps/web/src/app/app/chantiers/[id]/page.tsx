@@ -11,6 +11,7 @@ import { PageHead, StatusBadge, PriorityBadge, EntityBadge, ScopeBadge, BillingM
 import { FormModal, toDateInput, type FieldDef } from '@/components/FormModal';
 import MessagingWorkspace from '@/components/MessagingWorkspace';
 import { WorksiteTasks } from '@/components/WorksiteTasks';
+import { WorksiteFiles } from '@/components/WorksiteFiles';
 import { WorksiteLabourDetail } from '@/components/WorksiteLabourDetail';
 import { WorksiteProfitability } from '@/components/WorksiteProfitability';
 import { WorksiteFinanceSummary } from '@/components/WorksiteFinanceSummary';
@@ -74,7 +75,9 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
   const [editingContacts, setEditingContacts] = useState(false);
   const [editing, setEditing] = useState(false);
   const [invoicing, setInvoicing] = useState<string | null>(null);
-  const [tab, setTab] = useState<'overview' | 'tasks' | 'finances' | 'photos' | 'discussion'>('overview');
+  const [tab, setTab] = useState<'overview' | 'tasks' | 'finances' | 'photos' | 'files' | 'discussion'>('overview');
+  // nombre de documents (pastille de l'onglet « Documents »)
+  const { data: filesInfo, reload: reloadFiles } = useApi<{ items: unknown[] }>(`/api/worksites/${id}/files`);
 
   if (loading) return <SkeletonRows />;
   if (!data) {
@@ -197,6 +200,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
         <button className={`page-tab${tab === 'tasks' ? ' active' : ''}`} onClick={() => setTab('tasks')}>Tâches</button>
         <button className={`page-tab${tab === 'finances' ? ' active' : ''}`} onClick={() => setTab('finances')}>Finances & rentabilité</button>
         <button className={`page-tab${tab === 'photos' ? ' active' : ''}`} onClick={() => setTab('photos')}>Photos &amp; rapports <span className="n">{w.reports.length}</span></button>
+        <button className={`page-tab${tab === 'files' ? ' active' : ''}`} onClick={() => setTab('files')}>Documents{filesInfo?.items.length ? <> <span className="n">{filesInfo.items.length}</span></> : null}</button>
         <button className={`page-tab${tab === 'discussion' ? ' active' : ''}`} onClick={() => setTab('discussion')}>Discussion</button>
       </div>
 
@@ -458,6 +462,8 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
           )}
         </>
       )}
+
+      {tab === 'files' && <WorksiteFiles key={w.id} worksiteId={w.id} onChanged={reloadFiles} />}
 
       {tab === 'discussion' && <MessagingWorkspace key={w.id} worksiteId={w.id}/>}
     </>

@@ -16,6 +16,7 @@ import { dashboardRouter, metaRouter, importsRouter } from './routes/misc.js';
 import { planningRouter, teamsRouter, vehiclesRouter, equipmentRouter, consumablesRouter, absencesRouter } from './routes/planning.js';
 import { timesheetRouter, statementsRouter } from './routes/timesheet.js';
 import { threadRouter } from './routes/thread.js';
+import { worksiteFilesRouter } from './routes/worksite-files.js';
 import { messagerieRouter } from './routes/messagerie.js';
 import { portalRouter } from './routes/portal.js';
 import { financeRouter } from './routes/finance.js';
@@ -49,6 +50,7 @@ export function createApp() {
   app.use('/api/public', publicRouter);
   app.use('/api/portal', portalRouter);
   app.use('/api/worksites/:worksiteId/thread', threadRouter);
+  app.use('/api/worksites/:worksiteId/files', worksiteFilesRouter);
   app.use('/api/messagerie', messagerieRouter);
   app.use('/api/push', pushRouter);
   app.use('/api/worksites/:worksiteId/reports', worksiteReportsRouter);

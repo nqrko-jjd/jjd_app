@@ -88,6 +88,7 @@ model User {
   reports           WorksiteReport[]   @relation("ReportAuthor")
   reviewedReports   WorksiteReport[]   @relation("ReportReviewer")
   createdTasks      WorksiteTask[]     @relation("TaskCreatedBy")
+  worksiteFiles     WorksiteFile[]     @relation("WorksiteFileUploader")
   stockMovements    StockMovement[]    @relation("StockMovementBy")
   personAdjustments PersonAdjustment[] @relation("PersonAdjustmentAuthor")
   threadReads       ThreadRead[]
@@ -493,6 +494,7 @@ model Worksite {
   thread         Thread?
   reports        WorksiteReport[]
   tasks          WorksiteTask[]
+  files          WorksiteFile[]
   taskPhases     WorksiteTaskPhase[]
   stockMovements StockMovement[]
   stockOrders    StockOrder[]    @relation("StockOrderWorksite")
@@ -1288,6 +1290,24 @@ model ReportPhoto {
 
 /// Phase / groupe de tâches d'un chantier (ex. "Gros-oeuvre", "Finitions") — façon TrustUp.
 /// Une tâche sans phase reste valide ("Tâches sans phase", même libellé que TrustUp).
+/// Documents d'un chantier (fiche technique, plan, offre fournisseur, certificat…) déposés par le bureau.
+model WorksiteFile {
+  id           String   @id @default(cuid())
+  worksiteId   String
+  worksite     Worksite @relation(fields: [worksiteId], references: [id], onDelete: Cascade)
+  label        String // nom affiché (par défaut le nom du fichier, sans extension)
+  category     String? // Fiche technique | Plan | Offre / devis fournisseur | Certificat / garantie | Photo | Autre
+  fileUrl      String // /uploads/worksite-files/…
+  originalName String?
+  mimeType     String?
+  size         Int      @default(0)
+  uploadedById String?
+  uploadedBy   User?    @relation("WorksiteFileUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now())
+
+  @@index([worksiteId])
+}
+
 model WorksiteTaskPhase {
   id         String         @id @default(cuid())
   worksiteId String

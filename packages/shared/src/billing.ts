@@ -128,7 +128,7 @@ export const DOC_STATUS_LABEL: Record<string, string> = {
   declined: 'Refusé',
   expired: 'Expiré',
   paid: 'Payée',
-  partial: 'Partiel',
+  partial: 'Payée partiellement',
   overdue: 'En retard',
   credited: 'Créditée',
 };

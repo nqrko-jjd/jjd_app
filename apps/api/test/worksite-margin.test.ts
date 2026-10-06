@@ -147,3 +147,18 @@ test('worksiteMargin : "Crédit auto" est un financement, pas une dépense — e
   assert.ok(m);
   assert.equal(m!.materialCost, before, 'le crédit/leasing auto ne doit pas gonfler le coût matériaux');
 });
+
+test('worksiteMargin : une facture « payée partiellement » compte au prorata dans le CA encaissé (un mouvement d’argent existe)', async () => {
+  const before = (await worksiteMargin(worksiteId))!;
+  const doc = await prisma.document.create({
+    data: { kind: 'invoice', direction: 'sale', number: 'F-PARTIAL-T', status: 'partial', worksiteId, totalHt: 1000, totalVat: 60, totalTtc: 1060, paidAmount: 530, source: 'test', issuedOn: new Date('2026-04-01'), lockedAt: new Date('2026-04-01') },
+  });
+  await prisma.ledgerEntry.create({
+    data: { direction: 'sale', worksiteId, ht: 1000, ttc: 1060, paymentStatus: 'Non payé', documentId: doc.id, docNumber: 'F-PARTIAL-T', date: new Date('2026-04-01'), source: 'test' },
+  });
+  const m = (await worksiteMargin(worksiteId))!;
+  assert.equal(Math.round((m.invoicedHt - before.invoicedHt) * 100) / 100, 1000, 'facturée en entier');
+  assert.equal(Math.round((m.paidHt - before.paidHt) * 100) / 100, 500, 'encaissée pour la moitié (530 € sur 1 060 € TTC)');
+  await prisma.ledgerEntry.deleteMany({ where: { documentId: doc.id } });
+  await prisma.document.delete({ where: { id: doc.id } });
+});

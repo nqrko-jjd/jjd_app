@@ -559,7 +559,7 @@ function formatEuro(n: number): string {
 const DOC_KIND: Record<string, string> = { quote: 'Devis', invoice: 'Facture', credit_note: 'Note de crédit', deposit_invoice: 'Acompte' };
 const DOC_STATUS: Record<string, string> = {
   draft: 'Brouillon', sent: 'Envoyé', accepted: 'Accepté', declined: 'Décliné', expired: 'Expiré',
-  paid: 'Payé', partial: 'Partiel', overdue: 'En retard', credited: 'Annulé',
+  paid: 'Payé', partial: 'Payée partiellement', overdue: 'En retard', credited: 'Annulé',
 };
 const DOC_TONE: Record<string, string> = {
   paid: 'ok', accepted: 'ok', sent: 'primary', overdue: 'crit', declined: 'crit', partial: 'warn',

@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import { prisma } from '../db.js';
 import { round2 } from '@jjd/shared';
 import { allWorksitesTransport } from './vehicle-cost.js';
@@ -11,6 +12,19 @@ import { allWorksitesTransport } from './vehicle-cost.js';
 const norm = (s: string | null) => (s ?? '').toLowerCase().trim();
 // Égalité stricte : "Non Payé" contient "Payé" comme sous-chaîne, un .includes() les confondrait.
 export const isPaid = (s: string | null) => norm(s) === 'payé';
+
+/** Ce que l'écriture d'une facture fait réellement entrer : tout si elle est payée, sinon la part déjà versée si la facture est
+ *  « payée partiellement » (un mouvement d'argent existe : il doit compter dans l'encaissé et la marge), sinon rien. */
+export type PaidShareInput = { paymentStatus: string | null; document?: { status: string; paidAmount: number; totalTtc: number } | null };
+export function paidFraction(e: PaidShareInput): number {
+  if (isPaid(e.paymentStatus)) return 1;
+  const d = e.document;
+  if (d && d.status === 'partial' && d.totalTtc > 0 && d.paidAmount > 0) return Math.min(1, d.paidAmount / d.totalTtc);
+  return 0;
+}
+/** Filtre Prisma : écritures payées OU rattachées à une facture payée partiellement. */
+export const PAID_OR_PARTIAL: Prisma.LedgerEntryWhereInput = { OR: [{ paymentStatus: 'Payé' }, { document: { is: { status: 'partial' } } }] };
+export const PAID_SHARE_SELECT = { paymentStatus: true, document: { select: { status: true, paidAmount: true, totalTtc: true } } } as const;
 
 export function entityOf(cat: string | null, wsEntity: string | null): 'jjd' | 'tonton' | 'm7' | 'autre' {
   const c = norm(cat);
@@ -188,8 +202,8 @@ export async function profitShare(_year?: number) {
       select: { worksiteId: true, ht: true, categoryRaw: true },
     }),
     prisma.ledgerEntry.findMany({
-      where: { direction: 'sale', paymentStatus: 'Payé', worksiteId: { not: null }, source: { not: 'demo' } },
-      select: { worksiteId: true, ht: true },
+      where: { direction: 'sale', ...PAID_OR_PARTIAL, worksiteId: { not: null }, source: { not: 'demo' } },
+      select: { worksiteId: true, ht: true, ...PAID_SHARE_SELECT },
     }),
     // Notes de crédit : réduisent le CA encaissé si "vente" (et payées), sinon le coût matériaux.
     prisma.ledgerEntry.findMany({
@@ -217,7 +231,7 @@ export async function profitShare(_year?: number) {
   const sellMap = new Map<string, number>();
   for (const s of salesRaw) {
     if (!s.worksiteId) continue;
-    sellMap.set(s.worksiteId, (sellMap.get(s.worksiteId) ?? 0) + s.ht);
+    sellMap.set(s.worksiteId, (sellMap.get(s.worksiteId) ?? 0) + s.ht * paidFraction(s));
   }
   for (const c of creditNotesRaw) {
     if (!c.worksiteId || isVehicleFinancing(c.categoryRaw)) continue;

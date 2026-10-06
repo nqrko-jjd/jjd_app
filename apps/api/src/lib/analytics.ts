@@ -1,6 +1,6 @@
 import { prisma } from '../db.js';
 import { round2 } from '@jjd/shared';
-import { section, SECTION_LABEL, entityOf, isOuvrierRemuneration, isCreditNoteSale, isVehicleFinancing } from './consolidated.js';
+import { section, SECTION_LABEL, entityOf, isOuvrierRemuneration, isCreditNoteSale, isVehicleFinancing, paidFraction, PAID_OR_PARTIAL, PAID_SHARE_SELECT } from './consolidated.js';
 
 /**
  * Séries pour la page « Analyse » : mensuel (CA / dépenses / résultat / heures),
@@ -39,7 +39,7 @@ export async function analytics(input: AnalyticsInput = {}) {
   const [ledger, times, docs, worksites] = await Promise.all([
     prisma.ledgerEntry.findMany({
       where: { date: { gte: prevWin.from }, source: { not: 'demo' } },
-      select: { date: true, direction: true, ht: true, categoryRaw: true, paymentStatus: true, contactId: true, worksite: { select: { entity: true } } },
+      select: { date: true, direction: true, ht: true, categoryRaw: true, paymentStatus: true, contactId: true, worksite: { select: { entity: true } }, document: { select: { status: true, paidAmount: true, totalTtc: true } } },
     }),
     prisma.timeEntry.findMany({
       where: { date: { gte: prevWin.from }, status: { in: ['approved', 'submitted'] }, source: { not: 'demo' } },
@@ -69,7 +69,7 @@ export async function analytics(input: AnalyticsInput = {}) {
     if (e.direction === 'sale') {
       m.revenue += e.ht;
       m.invoiced += e.ht;
-      if (isPaid(e.paymentStatus)) m.collected += e.ht;
+      m.collected += e.ht * paidFraction(e);
     } else if (e.direction === 'credit_note' && norm(e.categoryRaw).includes('vente')) {
       m.revenue += e.ht; // signe déjà négatif
     } else if (!isVehicleFinancing(e.categoryRaw)) {
@@ -107,7 +107,7 @@ export async function analytics(input: AnalyticsInput = {}) {
       if (k < fromKey || k >= toExclusiveKey) continue;
       const ent = entityOf(e.categoryRaw, e.worksite?.entity ?? null);
       if (!keep(ent)) continue;
-      if (e.direction === 'sale') { revenue += e.ht; if (isPaid(e.paymentStatus)) collected += e.ht; }
+      if (e.direction === 'sale') { revenue += e.ht; collected += e.ht * paidFraction(e); }
       else if (e.direction === 'credit_note' && norm(e.categoryRaw).includes('vente')) revenue += e.ht;
       else if (!isVehicleFinancing(e.categoryRaw)) expenses += e.ht;
     }
@@ -157,8 +157,8 @@ export async function analytics(input: AnalyticsInput = {}) {
       select: { worksiteId: true, ht: true, categoryRaw: true },
     }),
     prisma.ledgerEntry.findMany({
-      where: { direction: 'sale', paymentStatus: 'Payé', worksiteId: { not: null }, date: { gte: win.from }, source: { not: 'demo' } },
-      select: { worksiteId: true, ht: true },
+      where: { direction: 'sale', ...PAID_OR_PARTIAL, worksiteId: { not: null }, date: { gte: win.from }, source: { not: 'demo' } },
+      select: { worksiteId: true, ht: true, ...PAID_SHARE_SELECT },
     }),
     prisma.ledgerEntry.findMany({
       where: { direction: 'credit_note', worksiteId: { not: null }, date: { gte: win.from }, source: { not: 'demo' } },
@@ -180,7 +180,7 @@ export async function analytics(input: AnalyticsInput = {}) {
   const sellW = new Map<string, number>();
   for (const s of salesRaw) {
     if (!s.worksiteId) continue;
-    sellW.set(s.worksiteId, (sellW.get(s.worksiteId) ?? 0) + s.ht);
+    sellW.set(s.worksiteId, (sellW.get(s.worksiteId) ?? 0) + s.ht * paidFraction(s));
   }
   // Notes de crédit : réduisent le CA encaissé si "vente" (et payées), sinon le coût matériaux.
   for (const c of creditNotesRaw) {

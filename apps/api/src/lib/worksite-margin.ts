@@ -1,7 +1,7 @@
 import { computeWorksiteMargin, type Entity, type WorksiteMargin } from '@jjd/shared';
 import { prisma } from '../db.js';
 import { worksiteTransport, type WorksiteTransport } from './vehicle-cost.js';
-import { isOuvrierRemuneration, isCreditNoteSale, isPaid, isVehicleFinancing } from './consolidated.js';
+import { isOuvrierRemuneration, isCreditNoteSale, isVehicleFinancing, paidFraction } from './consolidated.js';
 
 /**
  * « Devisé HT » d'un chantier d'après les devis présents dans le logiciel : devis émis et
@@ -109,7 +109,7 @@ export async function worksiteMargin(worksiteId: string): Promise<WorksiteMargin
   if (!ws) return null;
 
   const [ledger, time, transport, labour] = await Promise.all([
-    prisma.ledgerEntry.findMany({ where: { worksiteId } }),
+    prisma.ledgerEntry.findMany({ where: { worksiteId }, include: { document: { select: { status: true, paidAmount: true, totalTtc: true } } } }),
     prisma.timeEntry.aggregate({
       where: { worksiteId, status: { in: ['approved', 'submitted'] } },
       _sum: { amount: true },
@@ -130,7 +130,7 @@ export async function worksiteMargin(worksiteId: string): Promise<WorksiteMargin
   for (const e of ledger) {
     if (e.direction === 'sale') {
       invoicedHt += e.ht;
-      if (isPaid(e.paymentStatus)) paidHt += e.ht;
+      paidHt += e.ht * paidFraction(e); // payée partiellement : la part déjà versée compte dans l'encaissé
     } else if (e.direction === 'purchase') {
       if (isVehicleFinancing(e.categoryRaw)) continue; // crédit/leasing : financement, pas une dépense
       if (isOuvrierRemuneration(e.categoryRaw)) invoicedLabourCost += e.ht;
@@ -140,7 +140,7 @@ export async function worksiteMargin(worksiteId: string): Promise<WorksiteMargin
       // le coût matériaux, pas le CA (sinon vente et achat se neutralisent à tort).
       if (isCreditNoteSale(e.categoryRaw)) {
         invoicedHt += e.ht;
-        if (isPaid(e.paymentStatus)) paidHt += e.ht;
+        paidHt += e.ht * paidFraction(e);
       } else if (!isVehicleFinancing(e.categoryRaw)) {
         materialCost += e.ht;
       }

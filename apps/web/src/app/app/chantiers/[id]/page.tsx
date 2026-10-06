@@ -377,36 +377,61 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
             </>
           )}
 
-          <CollapsibleSection
-            title="Devis & factures"
-            defaultOpen
-            summary={w.documents.length ? `${w.documents.length} · ${formatEuro(w.documents.reduce((s, d) => s + d.totalHt, 0))} HT` : 'Aucun'}
-          >
-            {data.margin && data.margin.quotedHt > 0 && (
-              <InvoicedProgress invoicedHt={data.margin.invoicedHt} quotedHt={data.margin.quotedHt} />
-            )}
-            {w.documents.length === 0 ? (
-              <p className="muted" style={{ margin: 0 }}>Aucun devis / facture rattaché.</p>
-            ) : (
-              <div className="tbl-wrap">
+          {/* Devis et factures séparés : un seul tableau mélangé devenait illisible dès qu'il y avait beaucoup de pièces */}
+          {(() => {
+            const quotes = w.documents.filter((d) => d.kind === 'quote');
+            const invoices = w.documents.filter((d) => d.kind !== 'quote');
+            const signed = (d: { kind: string; totalHt: number }) => (d.kind === 'credit_note' ? -d.totalHt : d.totalHt);
+            const byStatus = (list: typeof quotes) => {
+              const m = new Map<string, { n: number; ht: number }>();
+              for (const d of list) { const v = m.get(d.status) ?? { n: 0, ht: 0 }; v.n++; v.ht += signed(d); m.set(d.status, v); }
+              return [...m.entries()].map(([st, v]) => `${v.n} ${(DOC_STATUS[st] ?? st).toLowerCase()}`).join(' · ');
+            };
+            const table = (list: typeof quotes) => (
+              <div className="tbl-wrap" style={list.length > 10 ? { maxHeight: 380, overflowY: 'auto' } : undefined}>
                 <table className="tbl">
                   <thead><tr><th>Type</th><th>Numéro</th><th>Date</th><th style={{ textAlign: 'right' }}>HT</th><th>Statut</th></tr></thead>
                   <tbody>
-                    {w.documents.map((d) => (
+                    {list.map((d) => (
                       <tr key={d.id}>
                         <td>{DOC_KIND[d.kind] ?? d.kind}</td>
                         <td className="mono"><Link href={`/app/documents/${d.id}`}>{d.number ?? d.draftRef ?? '—'}</Link></td>
                         <td className="tnum">{formatDateBE(d.issuedOn)}</td>
-                        <td style={{ textAlign: 'right' }}><Money value={d.totalHt} /></td>
+                        <td style={{ textAlign: 'right' }}><Money value={signed(d)} /></td>
                         <td><span className={`badge ${DOC_TONE[d.status] ?? ''}`}>{DOC_STATUS[d.status] ?? d.status}</span></td>
                       </tr>
                     ))}
                   </tbody>
+                  <tfoot>
+                    <tr><td colSpan={3}>Total HT</td><td style={{ textAlign: 'right' }}><Money value={list.reduce((sum, d) => sum + signed(d), 0)} /></td><td /></tr>
+                  </tfoot>
                 </table>
               </div>
-            )}
-            <Link href={`/app/documents?worksiteId=${encodeURIComponent(w.id)}`} className="btn" style={{ marginTop: '0.7rem' }}>Documents de ce chantier</Link>
-          </CollapsibleSection>
+            );
+            return (
+              <>
+                <CollapsibleSection
+                  title="Devis"
+                  defaultOpen
+                  summary={quotes.length ? `${quotes.length} · ${formatEuro(quotes.reduce((sum, d) => sum + d.totalHt, 0))} HT${byStatus(quotes) ? ` — ${byStatus(quotes)}` : ''}` : 'Aucun'}
+                >
+                  {quotes.length === 0 ? <p className="muted" style={{ margin: 0 }}>Aucun devis rattaché.</p> : table(quotes)}
+                </CollapsibleSection>
+                <CollapsibleSection
+                  title="Factures"
+                  hint="acomptes et notes de crédit compris"
+                  defaultOpen
+                  summary={invoices.length ? `${invoices.length} · ${formatEuro(invoices.reduce((sum, d) => sum + signed(d), 0))} HT${byStatus(invoices) ? ` — ${byStatus(invoices)}` : ''}` : 'Aucune'}
+                >
+                  {data.margin && data.margin.quotedHt > 0 && (
+                    <InvoicedProgress invoicedHt={data.margin.invoicedHt} quotedHt={data.margin.quotedHt} />
+                  )}
+                  {invoices.length === 0 ? <p className="muted" style={{ margin: 0 }}>Aucune facture rattachée.</p> : table(invoices)}
+                  <Link href={`/app/documents?worksiteId=${encodeURIComponent(w.id)}`} className="btn" style={{ marginTop: '0.7rem' }}>Documents de ce chantier</Link>
+                </CollapsibleSection>
+              </>
+            );
+          })()}
 
           <WorksiteExpenses worksiteId={w.id} />
         </>

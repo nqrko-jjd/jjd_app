@@ -5,13 +5,14 @@ import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
 import { useAuth } from '@/lib/auth';
 import { PageHead, Money, formatEur } from '@/lib/ui';
-import { TrendTile, RevenueChart, MonthBars, HBars } from '@/lib/charts';
+import { TrendTile, MonthBars, HBars } from '@/lib/charts';
+import { DashboardExplorer } from '@/components/DashboardExplorer';
 import { ENTITY_LABEL } from '@jjd/shared';
 
 interface Analytics {
   range: { months: number; from: string };
   entity: string | null;
-  monthly: { month: string; revenue: number; expenses: number; result: number; collected: number; hours: number; labourCost: number }[];
+  monthly: { month: string; revenue: number; expenses: number; result: number; collected: number; hours: number; labourCost: number; invoiced: number; expenseBreakdown?: { purchases: number; payroll: number; other: number } }[];
   totals: { revenue: number; expenses: number; result: number; collected: number; hours: number; marginPct: number | null };
   prev: { revenue: number; expenses: number; result: number; collected: number; hours: number; marginPct: number | null };
   expenseSections: { key: string; label: string; total: number }[];
@@ -81,13 +82,7 @@ export default function AnalysePage() {
             <div><strong>Par chantier</strong><p>Retrouvez les heures, achats et marges dans la <Link href="/app/chantiers">fiche du chantier</Link>.</p></div>
           </div>
 
-          <div className="section-title">CA, dépenses &amp; résultat <span className="hint">par mois</span></div>
-          <div className="card card-pad" style={{ marginBottom: '1.5rem' }}>
-            <RevenueChart data={data.monthly} />
-            <p className="hint" style={{ marginTop: '0.6rem' }}>
-              La ventilation des dépenses est encore approximative (à caler avec le comptable) — voir <Link href="/app/finances">Finances</Link>.
-            </p>
-          </div>
+          <DashboardExplorer key={`${entity}-${months}`} monthly={data.monthly} />
 
           <div className="chart-2col">
             <div className="card card-pad">

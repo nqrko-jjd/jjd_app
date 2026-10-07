@@ -8,7 +8,6 @@ import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { PageHead, Money, formatDateBE, Avatar, ProgressCell, Kpi } from '@/lib/ui';
-import { DashboardExplorer } from '@/components/DashboardExplorer';
 import { rowNav } from '@/lib/rowNav';
 import { LEGAL_DOC_LABEL, WORKSITE_STATUS_LABEL, WORKSITE_PROGRESS_PCT, type WorksiteStatus } from '@jjd/shared';
 import {
@@ -401,25 +400,21 @@ function fieldStateBadge(ev: FieldEvent): { tone: string; label: string } {
 
 /** « Sur le terrain aujourd'hui » : horaire, chantier, équipe, état de pointage. */
 function FieldToday({ items }: { items: FieldEvent[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const visible = expanded ? items : items.slice(0, 4);
   return (
-    <section className="panel">
+    <section className="panel dashboard-day">
       <div className="panelhead">
-        <h2>Sur le terrain aujourd’hui <span className="hint">{items.length}</span></h2>
+        <h2>Aujourd’hui <span className="hint">{items.length}</span></h2>
         <Link href="/app/planning" className="hint">Ouvrir le planning →</Link>
       </div>
       {items.length === 0 ? (
         <div className="panel-empty">
-          <EmptyState
-            icon={HardHat}
-            title="Personne sur le terrain aujourd’hui"
-            text="Aucune affectation n’est planifiée pour aujourd’hui. Planifiez une équipe sur un chantier pour la voir apparaître ici, avec son état de pointage."
-            action={<Link href="/app/planning" className="btn primary">Ouvrir le planning</Link>}
-            secondary={<Link href="/app/chantiers" className="btn">Voir les chantiers</Link>}
-          />
+          <p className="muted">Aucune affectation prévue aujourd’hui.</p>
         </div>
       ) : (
         <div className="field-list">
-          {items.map((ev) => {
+          {visible.map((ev) => {
             const st = fieldStateBadge(ev);
             return (
               <div key={ev.id} className="field-row">
@@ -432,40 +427,43 @@ function FieldToday({ items }: { items: FieldEvent[] }) {
                   <div className="sub">{ev.worksite.ref}{ev.worksite.city ? ` · ${ev.worksite.city}` : ''}</div>
                 </div>
                 <div className="field-state"><span className={`badge ${st.tone}`}>{st.label}</span></div>
-                <div className="crew">
+                <details className="crew"><summary>{ev.team || 'Équipe'} · {ev.people.length} personne{ev.people.length !== 1 ? 's' : ''}</summary><div className="dashboard-crew-detail">
                   {ev.team && <span className="badge plain">{ev.team}</span>}
                   {ev.people.map((p) => (
                     <span key={p.id} className="who" title={p.state === 'running' ? 'Compteur en cours' : p.state === 'done' ? 'A pointé sur ce chantier' : 'Pas encore pointé'}>
                       {p.state === 'running' ? '● ' : p.state === 'done' ? '✓ ' : '○ '}{p.name}
                     </span>
                   ))}
-                </div>
+                </div></details>
               </div>
             );
           })}
         </div>
       )}
+      {items.length > 4 && <button className="dashboard-show-more" onClick={() => setExpanded(!expanded)} aria-expanded={expanded}>{expanded ? 'Réduire' : `Voir les ${items.length} affectations`}</button>}
     </section>
   );
 }
 
-/** Chantiers en cours : bandeau de pastilles cliquables. */
-function InProgressBand({ rows }: { rows: InProgressRow[] }) {
+/** Chantiers en cours : dossiers compacts, titres complets et accès direct. */
+function InProgressBand({ rows, total }: { rows: InProgressRow[]; total: number }) {
+  const [expanded, setExpanded] = useState(false);
   return (
     <>
       <div className="row" style={{ justifyContent: 'space-between', margin: '1.8rem 0 0.8rem' }}>
-        <div className="section-title" style={{ margin: 0 }}>Chantiers en cours <span className="hint">{rows.length}</span></div>
+        <div className="section-title" style={{ margin: 0 }}>Chantiers en cours <span className="hint">{total}</span></div>
         <Link href="/app/chantiers?statut=in_progress" className="hint">Tous les chantiers →</Link>
       </div>
-      <div className="pill-band">
-        {rows.map((w) => (
-          <Link key={w.id} href={`/app/chantiers/${w.id}`} className="pill" title={`${w.title}${w.manager ? ` · ${w.manager}` : ''}`}>
-            <Avatar src={w.photoThumbUrl} label={w.title} size={24} />
-            <span className="t">{w.title}</span>
-            <span className="ref">{w.ref}</span>
+      <div className="dashboard-sites">
+        {(expanded ? rows : rows.slice(0, 6)).map((w) => (
+          <Link key={w.id} href={`/app/chantiers/${w.id}`} className="dashboard-site" title={`${w.title}${w.manager ? ` · ${w.manager}` : ''}`}>
+            <Avatar src={w.photoThumbUrl} label={w.title} size={40} />
+            <span className="dashboard-site-copy"><small>{w.ref}{w.city ? ` · ${w.city}` : ''}</small><strong>{w.title}</strong>{w.client && <span>{w.client}</span>}</span>
+            <ChevronRight size={17} />
           </Link>
         ))}
       </div>
+      {rows.length > 6 && <button className="dashboard-show-more" style={{ borderRadius: 12, marginTop: 10 }} onClick={() => setExpanded(!expanded)} aria-expanded={expanded}>{expanded ? 'Réduire' : 'Afficher plus de chantiers'}</button>}
     </>
   );
 }
@@ -507,6 +505,7 @@ function monthTrend(cur: number, prev: number): string | undefined {
 export default function DashboardPage() {
   const { user, person } = useAuth();
   const { data, loading, error, reload } = useApi<Dashboard>(user?.role === 'worker' || user?.role === 'foreman' || user?.role === 'storekeeper' ? null : '/api/dashboard');
+  const priorities = (data?.alerts ?? []).filter(a => !['overdue_invoices', 'overdue_supplier_invoices', 'quotes_follow', 'expiring_docs'].includes(a.kind));
   const today = new Date();
   const eyebrow = today.toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' });
   const name = person?.displayName || person?.firstName || user?.email?.split('@')[0] || '';
@@ -537,37 +536,33 @@ export default function DashboardPage() {
       {data && (
         <>
           <div className="dashboard-summary">
-            <Kpi ic={BarChart3} label="Factures émises · HT" href="/app/documents?kind=invoice&dashboard=invoiced" value={<Money value={data.kpis.invoicedMonth} />} sub="Ce mois · montant facturé, pas encaissé" hero />
+            <Kpi ic={BarChart3} label="Facturé ce mois · HT" href="/app/documents?kind=invoice&dashboard=invoiced" value={<Money value={data.kpis.invoicedMonth} />} hero />
             <div className="dashboard-receivable">
-              <Kpi ic={Wallet} label="Clients · reste à encaisser TTC" href="/app/documents?kind=invoice&dashboard=receivable" value={<Money value={data.kpis.receivableAmount} />} sub="À ce jour · toutes les factures non soldées" />
+              <Kpi ic={Wallet} label="Clients à encaisser · TTC" href="/app/documents?kind=invoice&dashboard=receivable" value={<Money value={data.kpis.receivableAmount} />} sub="Factures non soldées" />
               <Link className="dashboard-overdue" href="/app/documents?kind=invoice&dashboard=overdue">Dont <Money value={data.kpis.overdueAmount} /> en retard · {data.kpis.overdueCount} factures</Link>
             </div>
-            <Kpi ic={CreditCard} label="Fournisseurs · retard TTC" href="/app/achats?paid=0&overdue=1" value={<Money value={data.kpis.supplierOverdueAmount} />} sub={`${data.kpis.supplierOverdueCount} factures échues à régler`} warn={data.kpis.supplierOverdueCount > 0} />
-            <Kpi ic={FileText} label="Devis à suivre · HT" href="/app/documents?kind=quote&dashboard=quotes" value={<Money value={data.kpis.quotesPendingAmount} />} sub={`${data.kpis.quotesPendingCount} devis envoyés · pas encore du CA`} />
+            <Kpi ic={CreditCard} label="Fournisseurs échus · TTC" href="/app/achats?paid=0&overdue=1" value={<Money value={data.kpis.supplierOverdueAmount} />} sub={`${data.kpis.supplierOverdueCount} factures à régler`} warn={data.kpis.supplierOverdueCount > 0} />
+            <Kpi ic={FileText} label="Devis en attente · HT" href="/app/documents?kind=quote&dashboard=quotes" value={<Money value={data.kpis.quotesPendingAmount} />} sub={`${data.kpis.quotesPendingCount} devis envoyés`} />
           </div>
-          {(user?.role === 'admin' || user?.role === 'office') && <DashboardExplorer />}
-          <div className="dashboard-workload"><Link href="/app/chantiers?statut=in_progress"><Building2 size={18} /> <strong>{data.kpis.openWorksites} chantiers en cours</strong></Link><span>{data.kpis.teamsOnSiteToday} équipes sur le terrain aujourd’hui</span><Link href="/app/planning" className="btn">Voir le planning</Link></div>
-          <div className="dashboard-pipeline"><Link href="/app/finances#previsionnel">Reste à facturer sur devis acceptés · <Money value={data.kpis.forecastAmount} /></Link><Link href="/app/documents?kind=invoice&dashboard=collected">Factures soldées ce mois · <Money value={data.kpis.paidMonth} /> HT</Link></div>
+          <div className="dashboard-pipeline"><Link href="/app/finances#previsionnel">Reste à facturer sur devis acceptés · <Money value={data.kpis.forecastAmount} /></Link><Link href="/app/analyse">Voir l’analyse financière <ChevronRight size={15}/></Link></div>
 
-          <div className="split" style={{ margin: '1.8rem 0 0.8rem' }}>
+          <div className="split dashboard-focus" style={{ margin: '1.2rem 0 0.8rem' }}>
             <section className="panel">
               <div className="panelhead">
-                <h2>À traiter en priorité <span className="hint">{data.alerts.length}</span></h2>
+                <h2>À traiter en priorité <span className="hint">{priorities.length}</span></h2>
                 <small>trié par urgence</small>
               </div>
-              {data.alerts.length === 0 ? (
+              {priorities.length === 0 ? (
                 <div className="panel-empty">
                   <EmptyState
                     icon={ShieldCheck}
-                    title="Rien à traiter en priorité"
-                    text="Aucune facture échue, relance ou échéance à surveiller pour l’instant. Le prochain point apparaîtra ici dès qu’il devient urgent."
-                    action={<Link href="/app/documents" className="btn primary">Voir les devis &amp; factures</Link>}
-                    secondary={<Link href="/app/planning" className="btn">Ouvrir le planning</Link>}
+                    title="Aucune autre action urgente"
+                    text="Les éventuelles factures échues et devis à suivre figurent dans les cartes ci-dessus."
                   />
                 </div>
               ) : (
                 <div className="alert-list">
-                  {data.alerts.map((a) => {
+                  {priorities.map((a) => {
                     const AlertIc = ALERT_KIND_ICON[a.kind] ?? AlertTriangle;
                     return (
                       <Link key={a.kind} href={a.href} className={`alert ${a.severity}`}>
@@ -585,19 +580,11 @@ export default function DashboardPage() {
             <FieldToday items={data.fieldToday ?? []} />
           </div>
 
-          {data.inProgress.length > 0 && <InProgressBand rows={data.inProgress} />}
+          {data.inProgress.length > 0 && <InProgressBand rows={data.inProgress} total={data.kpis.openWorksites} />}
 
-          <div className="section-title" style={{ marginTop: '1.8rem' }}>Documents légaux qui expirent</div>
-          {data.expiringDocs.length === 0 && (
-            <EmptyState
-              icon={ShieldCheck}
-              title="Aucun document n’expire dans les 30 jours"
-              text="Cartes d’identité, permis de travail, Limosa, VCA… : tous les documents suivis sont à jour. Ajoutez-en depuis la fiche d’une personne pour être alerté avant l’échéance."
-              action={<Link href="/app/equipe" className="btn primary">Ouvrir l’équipe</Link>}
-            />
-          )}
           {data.expiringDocs.length > 0 && (
             <>
+              <div className="section-title" style={{ marginTop: '1.8rem' }}>Documents légaux à renouveler <Link href="/app/equipe" className="hint">Voir l’équipe →</Link></div>
               <div className="tbl-wrap">
                 <table className="tbl">
                   <thead><tr><th>Personne</th><th>Document</th><th>Échéance</th></tr></thead>

@@ -330,7 +330,7 @@ export default function PlanningPage() {
         onClick={() => setDetailEv(e)}
       >
         <span className="t">{hhmm(e.startAt)}–{hhmm(e.endAt)}{e.status === 'tentative' ? ' · ?' : ''}</span>
-        <span className="r">{e.kind === 'meeting' ? 'RDV · ' : ''}{e.worksite.ref} · {e.worksite.city ?? e.worksite.title}</span>
+        <span className="r">{e.worksite.ref} · {e.worksite.city ?? e.worksite.title}</span>
         <span className="n">{e.assignments.length} pers.{e.vehicles[0] ? ` · ${e.vehicles[0].vehicle.code ?? e.vehicles[0].vehicle.plate ?? ''}` : ''}</span>
       </button>
     ));

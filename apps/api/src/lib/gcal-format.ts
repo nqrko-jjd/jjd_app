@@ -20,6 +20,8 @@ export interface GcalEventSource {
     address: string | null; box: string | null; postalCode: string | null; city: string | null;
     manager?: { displayName: string | null; firstName: string } | null;
     acp?: { digicode: string | null; accessNote: string | null } | null;
+    /** contacts propres à l'intervention (propriétaire, locataire, sur place…), saisis sur le chantier */
+    contacts?: { role: string; name: string; phone: string | null }[];
   };
   team: { name: string } | null;
   vehicles: { vehicle: { plate: string | null; model: string | null; brand?: string | null; code?: string | null }; driver: { displayName: string | null; firstName: string } | null }[];
@@ -54,12 +56,15 @@ export function composeGcalEvent(ev: GcalEventSource): { summary: string; descri
   const access = [clean(ev.accessNote), w.acp?.accessNote ? clean(w.acp.accessNote) : '', w.acp?.digicode ? `Digicode : ${w.acp.digicode}` : ''].filter(Boolean);
   if (access.length) blocks.push(`🏢 Accès / Étage : ${access.join('\n')}`);
 
-  // note libre : les lignes « Contact … : » deviennent le bloc contact, le reste des consignes
-  const noteLines = clean(ev.note).split('\n').map((l) => l.trim()).filter(Boolean);
-  const contacts = noteLines.filter((l) => /^contact\b/i.test(l)).map((l) => l.replace(/^contact( sur place)?\s*:?\s*/i, ''));
-  const others = noteLines.filter((l) => !/^contact\b/i.test(l));
-  if (others.length) blocks.push(others.join('\n'));
-  if (contacts.length) blocks.push(`📞 Contact sur place : ${contacts.join(' / ')}`);
+  // champ « Contact sur place / coordination » du formulaire (pour un RDV : « Avec qui »), recopié tel quel dans le bloc 📞 ;
+  // à défaut, les contacts renseignés sur le chantier (sur place d'abord)
+  const noteLines = clean(ev.note).split('\n').map((l) => l.trim()).filter(Boolean).map((l) => l.replace(/^contact( sur place)?\s*:\s*/i, ''));
+  if (noteLines.length) blocks.push(`${ev.kind === 'meeting' ? '🤝 Avec' : '📞 Contact sur place'} : ${noteLines.join('\n')}`);
+  else if (ev.kind !== 'meeting' && w.contacts?.length) {
+    const order = (r: string) => (r === 'sur_place' ? 0 : r === 'locataire' ? 1 : r === 'proprietaire' ? 2 : 3);
+    const list = [...w.contacts].sort((a, b) => order(a.role) - order(b.role)).slice(0, 3);
+    blocks.push(`📞 Contact sur place : ${list.map((c) => [c.name, c.phone].filter(Boolean).join(' – ')).join(' / ')}`);
+  }
 
   if (clean(ev.tasksNote)) blocks.push(['🛠 Mission :', ...bullets(ev.tasksNote!)].join('\n'));
 

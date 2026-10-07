@@ -306,11 +306,11 @@ export default function PlanningPage() {
       <button
         key={e.id}
         type="button"
-        className={`plan-chip tone-${toneFor(e.worksite.id)}${e.status === 'tentative' ? ' tentative' : ''}`}
+        className={`plan-chip ${e.kind === 'meeting' ? 'kind-meeting' : `tone-${toneFor(e.worksite.id)}`}${e.status === 'tentative' ? ' tentative' : ''}`}
         onClick={() => setDetailEv(e)}
       >
         <span className="t">{hhmm(e.startAt)}–{hhmm(e.endAt)}{e.status === 'tentative' ? ' · ?' : ''}</span>
-        <span className="r">{e.worksite.ref} · {e.worksite.city ?? e.worksite.title}</span>
+        <span className="r">{e.kind === 'meeting' ? 'RDV · ' : ''}{e.worksite.ref} · {e.worksite.city ?? e.worksite.title}</span>
         <span className="n">{e.assignments.length} pers.{e.vehicles[0] ? ` · ${e.vehicles[0].vehicle.code ?? e.vehicles[0].vehicle.plate ?? ''}` : ''}</span>
       </button>
     ));
@@ -627,13 +627,11 @@ export default function PlanningPage() {
 
       <div className="plan-legend">
         {view === 'month' ? (
-          <>
-            <span><span className="plan-legend-swatch kind-intervention" /> Intervention confirmée</span>
-            <span><span className="plan-legend-swatch kind-meeting" /> Rendez-vous d’affaire</span>
-          </>
+          <span><span className="plan-legend-swatch kind-intervention" /> Intervention confirmée</span>
         ) : (
           <span>Chaque couleur correspond à un chantier.</span>
         )}
+        <span><span className="plan-legend-swatch kind-meeting" /> Rendez-vous d’affaire (jaune dans toutes les vues et dans Google Agenda)</span>
         <span className="plan-dashed-key">À confirmer</span>
         <span>Congés et formations bloquent l’affectation.</span>
       </div>

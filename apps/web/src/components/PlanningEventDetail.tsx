@@ -37,7 +37,7 @@ export function PlanningEventDetail({
         <div className="modal-body" style={{ display: 'block', maxHeight: '72vh', overflowY: 'auto' }}>
           <div className="plan-detail-heading">
             <span className="muted">{fmtDate(ev.startAt)} · {hhmm(ev.startAt)} – {hhmm(ev.endAt)}</span>
-            {isMeeting && <span className="badge" style={{ marginLeft: 8 }}>{PLANNING_EVENT_KIND_LABEL.meeting}</span>}
+            {isMeeting && <span className="badge kind-meeting" style={{ marginLeft: 8, background: 'var(--tone-bg)', color: 'var(--tone-fg)', borderColor: 'var(--tone-line)' }}>{PLANNING_EVENT_KIND_LABEL.meeting}</span>}
             <span className={`badge ${ev.status === 'tentative' ? 'warn' : ''}`} style={{ marginLeft: 8 }}>
               {PLANNING_EVENT_STATUS_LABEL[ev.status as keyof typeof PLANNING_EVENT_STATUS_LABEL] ?? ev.status}
             </span>

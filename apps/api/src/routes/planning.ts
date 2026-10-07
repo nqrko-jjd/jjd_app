@@ -31,6 +31,7 @@ async function syncToGoogle(eventId: string) {
           ref: true, title: true, address: true, box: true, postalCode: true, city: true,
           manager: { select: { displayName: true, firstName: true } },
           acp: { select: { digicode: true, accessNote: true } },
+          contacts: { orderBy: { position: 'asc' }, select: { role: true, name: true, phone: true } },
         },
       },
       team: { select: { name: true } },

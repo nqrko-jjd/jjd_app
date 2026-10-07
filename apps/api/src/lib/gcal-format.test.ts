@@ -31,8 +31,7 @@ test('fiche Google Agenda : titre complet et blocs avec icônes, comme les ancie
   assert.equal(r.location, 'Avenue René Magritte 4, 1300 Wavre');
   assert.equal(r.description, [
     '🏢 Accès / Étage : Appartement 2.2 – Résidence Condor –',
-    'RDV pris mais client pas dispo',
-    '📞 Contact sur place : Javier Demolder',
+    '📞 Contact sur place : RDV pris mais client pas dispo\nJavier Demolder',
     '🛠 Mission :\n– SAV salle de douche :\n– Dépose de l’ancien joint silicone entre tub de douche et faïence\n– Nettoyage complet du support\n– Fourniture et pose d’une nouvelle plinthe',
     '👥 Ouvriers : Eduardo et Coco',
     '🔧 Matériel : Cutter, Grattoir joint, Silicone (2 cartouche), pistolet à cartouche, petit matériel de finition',
@@ -50,6 +49,13 @@ test('titre : pas de doublon quand le titre du créneau est déjà dans celui du
 test('blocs vides absents : un créneau sans détail ne produit pas de lignes vides ni d’icônes seules', () => {
   const r = composeGcalEvent({ ...base, tasksNote: null, accessNote: null, materialsNote: null, note: null, assignments: [], equipment: [], consumables: [], vehicles: [], worksite: { ...base.worksite, manager: null } });
   assert.equal(r.description, '');
+});
+
+test('contact sur place : champ du formulaire recopié ; à défaut les contacts du chantier ; RDV = « Avec »', () => {
+  const noNote = { ...base, note: null, worksite: { ...base.worksite, contacts: [{ role: 'proprietaire', name: 'Mme Dupont', phone: '0470 11 22 33' }, { role: 'sur_place', name: 'Javier Demolder', phone: null }] } };
+  assert.match(composeGcalEvent(noNote).description, /📞 Contact sur place : Javier Demolder \/ Mme Dupont – 0470 11 22 33/);
+  assert.match(composeGcalEvent({ ...base, note: 'Contact sur place : M. Martin 0475 00 00 00' }).description, /📞 Contact sur place : M\. Martin 0475 00 00 00/);
+  assert.match(composeGcalEvent({ ...base, kind: 'meeting', note: 'Architecte Vanderlinden' }).description, /🤝 Avec : Architecte Vanderlinden/);
 });
 
 test('couleur Google : rendez-vous en jaune (id 5), intervention sans couleur (celle de l’agenda)', () => {

@@ -23,7 +23,7 @@ export default function PublicListPage({ params }: { params: Promise<{ token: st
       setData(await r.json());
     } catch (e) { setError(e instanceof Error ? e.message : 'Erreur'); }
   }
-  useEffect(() => { load(); }); // eslint-disable-line react-hooks/exhaustive-deps -- une seule fois au montage (le jeton ne change pas)
+  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps -- une seule fois au montage (le jeton ne change pas)
 
   async function answer(itemId: string, choice: 'ok' | 'other' | null, comment?: string) {
     setBusy(itemId); setFlash(null);

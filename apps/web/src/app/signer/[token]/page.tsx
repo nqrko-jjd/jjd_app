@@ -31,7 +31,7 @@ export default function SignQuotePage({ params }: { params: Promise<{ token: str
       setView(await r.json());
     } catch (e) { setError(e instanceof Error ? e.message : 'Erreur'); }
   }
-  useEffect(() => { load(); }); // eslint-disable-line react-hooks/exhaustive-deps -- une seule fois au montage (le jeton ne change pas)
+  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps -- une seule fois au montage (le jeton ne change pas)
 
   async function post(path: string, body: unknown) {
     setBusy(true); setFlash(null);
@@ -66,10 +66,11 @@ export default function SignQuotePage({ params }: { params: Promise<{ token: str
         </div>
       </section>
 
+      <a className="btn" href={pdfUrl} target="_blank" rel="noreferrer noopener" style={{ display: 'block', textAlign: 'center', marginBottom: '0.8rem', padding: '0.7rem 1rem', fontSize: '1rem' }}>Ouvrir le devis en PDF (plein écran)</a>
       <section style={{ ...card, padding: 0, overflow: 'hidden' }}>
         <iframe title="Devis" src={`${pdfUrl}#toolbar=0&navpanes=0`} style={{ width: '100%', height: '70vh', minHeight: 460, border: 0, display: 'block', background: '#f4f4f0' }} />
         <div style={{ padding: '0.6rem 1rem', fontSize: '0.88rem', borderTop: '1px solid #e5e7df' }}>
-          Le PDF ne s’affiche pas bien ? <a href={pdfUrl} target="_blank" rel="noreferrer noopener">Ouvrez-le dans un nouvel onglet</a>. Les conditions générales sont jointes à la dernière page.
+          Les conditions générales sont jointes à la dernière page du devis.
         </div>
       </section>
 

@@ -1273,8 +1273,18 @@ body.nav-collapsed .navlink .nav-badge { position: absolute; top: 2px; right: 2p
 
 /* ---------------------------------------------------- planning (KPI + grille par ressource) */
 .plan-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); border: 1px solid var(--line); background: var(--surface); border-radius: 17px; overflow: hidden; margin-bottom: 1.5rem; }
-.plan-kpis > div { padding: 1.2rem 1.3rem; border-right: 1px solid var(--line); }
-.plan-kpis > div:last-child { border-right: none; }
+.plan-kpis > button { position: relative; padding: 1.2rem 1.3rem; border: 0; border-right: 1px solid var(--line); background: transparent; font: inherit; text-align: left; color: inherit; cursor: pointer; transition: background 120ms ease; }
+.plan-kpis > button::after { content: '›'; position: absolute; top: 0.9rem; right: 1rem; font-size: 1.3rem; color: var(--ink-3); }
+.plan-kpis > button:hover, .plan-kpis > button:focus-visible { background: var(--primary-soft); }
+.plan-kpis > button:last-child { border-right: none; }
+.plan-info-section { margin-bottom: 1rem; }
+.plan-info-head { margin: 0 0 0.4rem; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-3); }
+.plan-info-head.ok { color: var(--primary); }
+.plan-info-head.warn { color: var(--warn); }
+.plan-info-list { list-style: none; margin: 0; padding: 0; }
+.plan-info-list li { display: flex; flex-direction: column; gap: 0.1rem; padding: 0.5rem 0; border-top: 1px solid var(--line); }
+.plan-info-list li:first-child { border-top: 0; }
+.plan-info-list li span { font-size: 0.82rem; color: var(--ink-2); }
 .plan-kpis strong { display: block; font-size: 1.8rem; font-weight: 550; color: var(--primary-ink); font-variant-numeric: tabular-nums; }
 .plan-kpis strong small { font-size: 1rem; font-weight: 500; color: var(--ink-3); }
 .plan-kpis span { display: block; font-size: 0.76rem; line-height: 1.5; color: var(--ink-3); margin-top: 0.5rem; }
@@ -1463,7 +1473,8 @@ body.nav-collapsed .navlink .nav-badge { position: absolute; top: 2px; right: 2p
 
 @media (max-width: 900px) {
   .plan-kpis { grid-template-columns: repeat(2, 1fr); }
-  .plan-kpis > div:nth-child(2n) { border-right: none; }
+  .plan-kpis > button:nth-child(2n) { border-right: none; }
+  .plan-kpis > button { border-bottom: 1px solid var(--line); }
   .plan-detail-columns { grid-template-columns: 1fr; }
   .plan-worker-picker, .plan-equipment-picker, .plan-vehicle-picker { grid-template-columns: 1fr; }
 }

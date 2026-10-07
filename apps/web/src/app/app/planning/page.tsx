@@ -61,6 +61,9 @@ function vehicleLabel(v: PlanVehicleRef) {
   return [v.code, [v.brand, v.model].filter(Boolean).join(' ')].filter(Boolean).join(' · ') || v.plate || '—';
 }
 
+type KpiKey = 'workers' | 'affected' | 'free' | 'subs' | 'absent' | 'vehicles';
+type InfoRow = { id: string; name: string; lines: string[] };
+type InfoSection = { label: string; rows: InfoRow[]; tone?: 'ok' | 'warn' | 'muted' };
 type ViewMode = 'planning' | 'agenda' | 'day' | 'workers' | 'worksites' | 'resources' | 'month';
 /** Ordre d'affichage des personnes : ouvriers d'abord ; sous-traitants, gestionnaires et bureau à part. */
 const CAT_ORDER = { ouvrier: 0, sous_traitant: 1, gestionnaire: 2, bureau: 3 } as const;
@@ -73,6 +76,7 @@ export default function PlanningPage() {
   const [monthAnchor, setMonthAnchor] = useState(() => startOfMonth(new Date()));
   const [trackedDay, setTrackedDay] = useState(() => toDateInput(new Date()));
   const [dayAgenda, setDayAgenda] = useState<string | null>(null);
+  const [kpiInfo, setKpiInfo] = useState<KpiKey | null>(null);
   const [narrow, setNarrow] = useState(false);
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 900px)');
@@ -271,6 +275,40 @@ export default function PlanningPage() {
   const freeToday = Math.max(0, totalActive - affectedToday - absentToday);
   const vehiclesReservedToday = vehicleIdsByDay.get(trackedDay)?.size ?? 0;
 
+  /** Détail d'une tuile du haut (popup) : qui est affecté où, qui est libre, qui est absent, quels véhicules — pour la journée suivie. */
+  function kpiDetails(key: KpiKey): { title: string; sections: InfoSection[] } {
+    const dayEvs = events.filter((e) => toDateInput(new Date(e.startAt)) === trackedDay).sort((a, b) => a.startAt.localeCompare(b.startAt));
+    const slot = (e: PlanningEv) => `${e.worksite.ref} · ${e.worksite.title}${e.allDay ? '' : ` (${hhmm(e.startAt)}–${hhmm(e.endAt)})`}`;
+    const evsByPerson = new Map<string, PlanningEv[]>();
+    for (const e of dayEvs) for (const a of e.assignments) evsByPerson.set(a.person.id, [...(evsByPerson.get(a.person.id) ?? []), e]);
+    const absByPerson = new Map<string, PlanAbsence>();
+    for (const a of absences) if (trackedDay >= toDateInput(new Date(a.startsOn)) && trackedDay <= toDateInput(new Date(a.endsOn))) absByPerson.set(a.personId, a);
+    const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, 'fr');
+    const absLine = (a: PlanAbsence) => `${ABSENCE_KIND_LABEL[a.kind as keyof typeof ABSENCE_KIND_LABEL] ?? a.kind} · jusqu’au ${new Date(a.endsOn).toLocaleDateString('fr-BE', { day: 'numeric', month: 'short' })}`;
+    const field = people.filter((p) => fieldIds.has(p.id));
+    const affected: InfoRow[] = field.filter((p) => evsByPerson.has(p.id)).map((p) => ({ id: p.id, name: personLabel(p), lines: evsByPerson.get(p.id)!.map(slot) })).sort(byName);
+    const free: InfoRow[] = field.filter((p) => !evsByPerson.has(p.id) && !absByPerson.has(p.id)).map((p) => ({ id: p.id, name: personLabel(p), lines: [specialtyLabel(p)] })).sort(byName);
+    const absent: InfoRow[] = field.filter((p) => absByPerson.has(p.id)).map((p) => ({ id: p.id, name: personLabel(p), lines: [absLine(absByPerson.get(p.id)!)] })).sort(byName);
+    const subs: InfoRow[] = people.filter((p) => subIds.has(p.id) && evsByPerson.has(p.id)).map((p) => ({ id: p.id, name: personLabel(p), lines: evsByPerson.get(p.id)!.map(slot) })).sort(byName);
+    switch (key) {
+      case 'workers': return { title: `Ouvriers au planning · ${field.length}`, sections: [{ label: `Affectés · ${affected.length}`, rows: affected, tone: 'ok' }, { label: `Libres · ${free.length}`, rows: free, tone: 'warn' }, { label: `Absents · ${absent.length}`, rows: absent, tone: 'muted' }] };
+      case 'affected': return { title: `Affectés · ${affected.length}`, sections: [{ label: 'Où ils travaillent', rows: affected, tone: 'ok' }] };
+      case 'free': return { title: `Libres toute la journée · ${free.length}`, sections: [{ label: 'Disponibles pour une affectation', rows: free, tone: 'warn' }] };
+      case 'subs': return { title: `Sous-traitants affectés · ${subs.length}`, sections: [{ label: 'Appelés à la demande (hors effectif)', rows: subs, tone: 'ok' }] };
+      case 'absent': return { title: `Absences / formations · ${absent.length}`, sections: [{ label: 'Indisponibles', rows: absent, tone: 'muted' }] };
+      default: {
+        const used = new Map<string, InfoRow>();
+        for (const e of dayEvs) for (const v of e.vehicles) {
+          const row = used.get(v.vehicle.id) ?? { id: v.vehicle.id, name: vehicleLabel(v.vehicle), lines: [] };
+          row.lines.push(`${slot(e)}${v.driver ? ` · conducteur ${personLabel(v.driver)}` : ' · conducteur à définir'}`);
+          used.set(v.vehicle.id, row);
+        }
+        const freeVeh: InfoRow[] = vehicles.filter((v) => !used.has(v.id)).map((v) => ({ id: v.id, name: vehicleLabel(v), lines: [v.seats ? `${v.seats} places` : 'Libre'] })).sort(byName);
+        return { title: `Véhicules · ${used.size}/${vehicles.length} réservés`, sections: [{ label: `Réservés · ${used.size}`, rows: [...used.values()].sort(byName), tone: 'ok' }, { label: `Disponibles · ${freeVeh.length}`, rows: freeVeh, tone: 'warn' }] };
+      }
+    }
+  }
+
   const specialtyOptions = useMemo(() => Array.from(new Set(people.map(specialtyLabel))).sort(), [people]);
 
   function eventsFor(day: string, matcher: (e: PlanningEv) => boolean) {
@@ -408,12 +446,12 @@ export default function PlanningPage() {
       />
 
       <div className="plan-kpis">
-        <div><strong>{totalActive}</strong><span>Ouvriers au planning</span></div>
-        <div><strong>{affectedToday}</strong><span>Affectés le {trackedShort}</span></div>
-        <div><strong>{freeToday}</strong><span>Libres toute la journée</span></div>
-        <div><strong>{subAffectedToday}</strong><span>Sous-traitants affectés (à la demande, hors effectif)</span></div>
-        <div><strong>{absentToday}</strong><span>Absences / formations</span></div>
-        <div><strong>{vehiclesReservedToday}<small>/{vehicles.length}</small></strong><span>Véhicules réservés</span></div>
+        <button type="button" onClick={() => setKpiInfo('workers')}><strong>{totalActive}</strong><span>Ouvriers au planning</span></button>
+        <button type="button" onClick={() => setKpiInfo('affected')}><strong>{affectedToday}</strong><span>Affectés le {trackedShort}</span></button>
+        <button type="button" onClick={() => setKpiInfo('free')}><strong>{freeToday}</strong><span>Libres toute la journée</span></button>
+        <button type="button" onClick={() => setKpiInfo('subs')}><strong>{subAffectedToday}</strong><span>Sous-traitants affectés (à la demande, hors effectif)</span></button>
+        <button type="button" onClick={() => setKpiInfo('absent')}><strong>{absentToday}</strong><span>Absences / formations</span></button>
+        <button type="button" onClick={() => setKpiInfo('vehicles')}><strong>{vehiclesReservedToday}<small>/{vehicles.length}</small></strong><span>Véhicules réservés</span></button>
       </div>
 
       <div className="plan-topbar">
@@ -757,6 +795,40 @@ export default function PlanningPage() {
           onSaved={() => { setAbsenceModal(null); reloadAll(); }}
         />
       )}
+      {kpiInfo && (() => {
+        const info = kpiDetails(kpiInfo);
+        return (
+          <div className="modal-scrim" onClick={() => setKpiInfo(null)}>
+            <div className="modal" style={{ maxWidth: 480 }} onClick={(e) => e.stopPropagation()}>
+              <div className="modal-head">
+                <div>
+                  <h2>{info.title}</h2>
+                  <div className="muted" style={{ fontSize: '0.8rem' }}>{new Date(`${trackedDay}T00:00:00`).toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
+                </div>
+                <button className="btn ghost" onClick={() => setKpiInfo(null)} aria-label="Fermer">✕</button>
+              </div>
+              <div className="modal-body" style={{ display: 'block', maxHeight: '72vh', overflowY: 'auto' }}>
+                {info.sections.map((sec) => (
+                  <section key={sec.label} className="plan-info-section">
+                    <h3 className={`plan-info-head ${sec.tone ?? ''}`}>{sec.label}</h3>
+                    {sec.rows.length === 0 ? <p className="muted" style={{ margin: '0.2rem 0 0.8rem', fontSize: '0.85rem' }}>Personne.</p> : (
+                      <ul className="plan-info-list">
+                        {sec.rows.map((r) => (
+                          <li key={r.id}>
+                            <strong>{r.name}</strong>
+                            {r.lines.map((l, i) => <span key={i}>{l}</span>)}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </section>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {dayAgenda && (
         <div className="modal-scrim" onClick={() => setDayAgenda(null)}>
           <div className="modal" style={{ maxWidth: 420 }} onClick={(e) => e.stopPropagation()}>

@@ -38,7 +38,11 @@ export function joinNames(list: string[]): string {
 const bullets = (text: string) => clean(text).split('\n').map((l) => l.trim()).filter(Boolean).map((l) => (/^[-–—•*]\s*/.test(l) ? `– ${l.replace(/^[-–—•*]\s*/, '')}` : `– ${l}`));
 const hhmm = (d: Date) => new Intl.DateTimeFormat('fr-BE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Brussels' }).format(d).replace(':', 'h');
 
-export function composeGcalEvent(ev: GcalEventSource): { summary: string; description: string; location: string | undefined } {
+/** Couleurs Google Agenda : les rendez-vous d'affaire en JAUNE (« Banane », id 5) comme dans les anciennes fiches ;
+ *  les interventions gardent la couleur de l'agenda (bleu). À la mise à jour, l'absence de couleur remet celle de l'agenda. */
+export const GCAL_COLOR_MEETING = '5';
+
+export function composeGcalEvent(ev: GcalEventSource): { summary: string; description: string; location: string | undefined; colorId: string | undefined } {
   const w = ev.worksite;
   // titre : réf - titre du chantier - titre du créneau (sans répéter ce qui est déjà dedans)
   const parts = [ev.kind === 'meeting' ? 'RDV' : w.ref, clean(w.title)];
@@ -87,5 +91,5 @@ export function composeGcalEvent(ev: GcalEventSource): { summary: string; descri
     ? [[ev.meetingAddress, ev.meetingBox && `bte ${ev.meetingBox}`].filter(Boolean).join(' '), [ev.meetingPostalCode, ev.meetingCity].filter(Boolean).join(' ')].filter(Boolean).join(', ')
     : [[w.address, w.box && `bte ${w.box}`].filter(Boolean).join(' '), [w.postalCode, w.city].filter(Boolean).join(' ')].filter(Boolean).join(', ');
 
-  return { summary, description: blocks.join('\n\n'), location: location || undefined };
+  return { summary, description: blocks.join('\n\n'), location: location || undefined, colorId: ev.kind === 'meeting' ? GCAL_COLOR_MEETING : undefined };
 }

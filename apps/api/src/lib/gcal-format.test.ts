@@ -52,6 +52,11 @@ test('blocs vides absents : un créneau sans détail ne produit pas de lignes vi
   assert.equal(r.description, '');
 });
 
+test('couleur Google : rendez-vous en jaune (id 5), intervention sans couleur (celle de l’agenda)', () => {
+  assert.equal(composeGcalEvent({ ...base, kind: 'meeting' }).colorId, '5');
+  assert.equal(composeGcalEvent(base).colorId, undefined);
+});
+
 test('RDV hors chantier : sa propre adresse ; départ affiché en heure de Bruxelles', () => {
   const r = composeGcalEvent({ ...base, kind: 'meeting', meetingOnSite: false, meetingAddress: 'Rue Royale 1', meetingPostalCode: '1000', meetingCity: 'Bruxelles', departureAt: new Date('2026-02-12T06:30:00Z'), departureFrom: 'Dépôt' });
   assert.equal(r.location, 'Rue Royale 1, 1000 Bruxelles');

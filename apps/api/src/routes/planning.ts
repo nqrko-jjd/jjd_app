@@ -42,11 +42,12 @@ async function syncToGoogle(eventId: string) {
   });
   if (!ev) return;
   // même présentation que les anciennes fiches Google Agenda (titre complet, blocs avec icônes) : voir lib/gcal-format.ts
-  const { summary, description, location } = composeGcalEvent(ev);
+  const { summary, description, location, colorId } = composeGcalEvent(ev);
   const gid = await upsertEvent(ev.googleEventId, {
     summary,
     description,
     location,
+    colorId,
     start: ev.startAt,
     end: ev.endAt,
     allDay: ev.allDay,

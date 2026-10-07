@@ -48,6 +48,8 @@ interface EventInput {
   summary: string;
   description?: string;
   location?: string;
+  /** couleur Google de l'événement (« colorId » 1 à 11) ; absente = couleur de l'agenda. */
+  colorId?: string;
   start: Date;
   end: Date;
   allDay?: boolean;
@@ -59,6 +61,7 @@ function toResource(e: EventInput) {
     summary: e.summary,
     description: e.description,
     location: e.location,
+    colorId: e.colorId,
     start: e.allDay ? { date: d(e.start) } : { dateTime: e.start.toISOString() },
     end: e.allDay ? { date: d(e.end) } : { dateTime: e.end.toISOString() },
   };

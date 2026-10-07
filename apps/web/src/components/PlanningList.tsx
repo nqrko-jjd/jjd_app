@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from 'react';
 import type { PlanningEv, PlanAbsence } from './planningTypes';
 
 const dayKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+/** Plafond de la liste (≈ 2 ans) : au-delà, plus de chargement. */
+const MAX_DAYS = 730;
 const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' });
 const personName = (p: { displayName: string | null; firstName: string }) => p.displayName || p.firstName;
 
@@ -67,15 +69,27 @@ export function PlanningList({ days, events, absences, absenceLabel, busy, onOpe
   const [open, setOpen] = useState<Set<string>>(new Set());
   const loadMore = useRef(onLoadMore);
   loadMore.current = onLoadMore;
+  const state = useRef({ busy, capped: false });
+  const capped = days.length >= MAX_DAYS;
+  state.current = { busy, capped };
+  // chargement automatique en descendant : UNE fois à chaque fois que le bas de la liste entre dans l'écran (observateur créé une seule fois).
+  // Sans cela, une liste courte (peu d'événements à venir) laisserait le bas toujours visible et enchaînerait les chargements sans fin.
   useEffect(() => {
     const el = sentinel.current;
-    if (!el || busy) return;
-    const io = new IntersectionObserver((entries) => { if (entries.some((e) => e.isIntersecting)) loadMore.current(); }, { rootMargin: '300px' });
+    if (!el) return;
+    let inView = false;
+    const io = new IntersectionObserver((entries) => {
+      const now = entries.some((e) => e.isIntersecting);
+      if (now && !inView && !state.current.busy && !state.current.capped) loadMore.current();
+      inView = now;
+    }, { rootMargin: '300px' });
     io.observe(el);
     return () => io.disconnect();
-  }, [busy, days.length]);
+  }, []);
 
   const today = dayKey(new Date());
+  const endLabel = days.length ? days[days.length - 1]!.toLocaleDateString('fr-BE', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+  const lastEvent = events.reduce<string | null>((m, e) => (!m || e.startAt > m ? e.startAt : m), null);
   const byDay = new Map<string, PlanningEv[]>();
   for (const e of events) {
     const k = dayKey(new Date(e.startAt));
@@ -147,7 +161,16 @@ export function PlanningList({ days, events, absences, absenceLabel, busy, onOpe
         </div>
       ))}
       {groups.length === 0 && <div className="plan-list-empty" style={{ padding: '1.4rem' }}>Rien de planifié sur cette période.</div>}
-      <div ref={sentinel} className="plan-list-end">{busy ? 'Chargement…' : <button type="button" className="plan-list-more" onClick={onLoadMore}>Charger la suite ↓</button>}</div>
+      <div ref={sentinel} className="plan-list-end">
+        {busy ? 'Chargement…' : capped ? 'Fin de la liste (2 ans affichés).' : (
+          <div>
+            <div style={{ marginBottom: '0.3rem' }}>
+              {lastEvent ? `Dernier événement : ${new Date(lastEvent).toLocaleDateString('fr-BE', { day: 'numeric', month: 'long' })}` : 'Rien de planifié sur cette période'} · affiché jusqu’au {endLabel}
+            </div>
+            <button type="button" className="plan-list-more" onClick={onLoadMore}>Charger {days.length >= 31 ? 'un mois de plus' : 'la suite'} ↓</button>
+          </div>
+        )}
+      </div>
     </section>
   );
 }

@@ -1290,20 +1290,6 @@ body.nav-collapsed .navlink .nav-badge { position: absolute; top: 2px; right: 2p
 .plan-search input { border: 0; background: none; padding: 0.6rem 0; flex: 1; font: inherit; color: var(--ink); min-width: 0; }
 .plan-search input:focus { outline: none; }
 
-.plan-observation-callout {
-  width: 100%; display: grid; grid-template-columns: auto minmax(240px, 1fr) auto auto; align-items: center; gap: 0.85rem;
-  margin: -0.15rem 0 1rem; padding: 0.85rem 1rem; text-align: left; font: inherit; color: var(--ink);
-  background: color-mix(in srgb, var(--warn) 8%, var(--surface)); border: 1px solid color-mix(in srgb, var(--warn) 34%, var(--line));
-  border-radius: 13px; cursor: pointer; transition: border-color 150ms ease, transform 150ms ease, background 150ms ease;
-}
-.plan-observation-callout:hover, .plan-observation-callout.active { border-color: color-mix(in srgb, var(--warn) 62%, var(--line)); background: color-mix(in srgb, var(--warn) 12%, var(--surface)); }
-.plan-observation-callout:hover { transform: translateY(-1px); }
-.plan-observation-icon { width: 35px; height: 35px; display: inline-flex; align-items: center; justify-content: center; border-radius: 10px; color: var(--primary); background: var(--surface); border: 1px solid var(--line); }
-.plan-observation-callout strong, .plan-observation-callout small { display: block; }
-.plan-observation-callout strong { font-size: 0.88rem; color: var(--primary-ink); }
-.plan-observation-callout small { margin-top: 0.2rem; color: var(--ink-3); line-height: 1.4; }
-.plan-observation-sites { color: var(--ink-2); font-size: 0.78rem; font-weight: 600; }
-.plan-observation-action { color: var(--primary); font-size: 0.78rem; font-weight: 700; white-space: nowrap; }
 .plan-row-status { margin-top: 0.35rem; }
 .plan-row-status .badge { font-size: 0.62rem; padding: 0.18rem 0.38rem; }
 
@@ -1390,14 +1376,15 @@ body.nav-collapsed .navlink .nav-badge { position: absolute; top: 2px; right: 2p
 /* -------------------------------------------------------- planning — vue mensuelle (agenda) */
 .plan-month-board { padding: 0; overflow: hidden; }
 .plan-month-weekdays {
-  display: grid; grid-template-columns: repeat(7, 1fr); border-bottom: 1px solid var(--line);
+  display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-bottom: 1px solid var(--line);
   background: var(--surface-2);
 }
 .plan-month-weekdays div {
   padding: 0.6rem 0.7rem; font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
   letter-spacing: 0.04em; color: var(--ink-3);
 }
-.plan-month-grid { display: grid; grid-template-columns: repeat(7, 1fr); }
+.plan-month-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.plan-month-day { min-width: 0; }
 .plan-month-day {
   min-height: 118px; padding: 0.4rem; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line);
   cursor: pointer; display: flex; flex-direction: column; gap: 0.25rem;
@@ -1430,8 +1417,10 @@ body.nav-collapsed .navlink .nav-badge { position: absolute; top: 2px; right: 2p
 .plan-month-more:hover { color: var(--primary); }
 @media (max-width: 900px) {
   .plan-month-weekdays div { font-size: 0.62rem; padding: 0.4rem 0.3rem; }
-  .plan-month-day { min-height: 84px; padding: 0.25rem; }
-  .plan-month-chip { font-size: 0.62rem; }
+  .plan-month-day { min-height: 64px; padding: 0.25rem 0.2rem; }
+  /* sur mobile : de simples barres de couleur (bleu = intervention, jaune = rendez-vous) ; toucher le jour ouvre la liste détaillée */
+  .plan-month-chip { font-size: 0; height: 6px; padding: 0; border-left: 0; border-radius: 3px; background: var(--tone-accent, var(--line-strong)); }
+  .plan-month-more { font-size: 0.6rem; padding: 0; }
 }
 
 /* détail d'une affectation (popup lecture) */
@@ -1468,18 +1457,9 @@ body.nav-collapsed .navlink .nav-badge { position: absolute; top: 2px; right: 2p
 .plan-vehicle-option > label { display: flex; align-items: flex-start; gap: 0.55rem; margin: 0; cursor: pointer; }
 .plan-vehicle-option .driver-select { margin-top: 0.5rem; width: 100%; font-size: 0.78rem; padding: 0.3rem 0.4rem; }
 
-/* mode "Agrandir le planning" : masque la sidebar pour libérer la largeur */
-/* display:none sortirait la sidebar de la grille et ferait replacer .main dans la 1re
- * colonne (0 large) au lieu de la 2e — on passe la grille à une seule colonne à la place. */
-body.plan-wide .shell { grid-template-columns: minmax(0, 1fr); }
-body.plan-wide .sidebar { display: none; }
-body.plan-wide .main { max-width: none; }
-
 @media (max-width: 900px) {
   .plan-kpis { grid-template-columns: repeat(2, 1fr); }
   .plan-kpis > div:nth-child(2n) { border-right: none; }
-  .plan-observation-callout { grid-template-columns: auto minmax(0, 1fr); }
-  .plan-observation-sites, .plan-observation-action { grid-column: 2; }
   .plan-detail-columns { grid-template-columns: 1fr; }
   .plan-worker-picker, .plan-equipment-picker, .plan-vehicle-picker { grid-template-columns: 1fr; }
 }

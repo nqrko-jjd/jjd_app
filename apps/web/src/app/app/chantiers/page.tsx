@@ -11,7 +11,7 @@ import { ContextMenu, useContextMenu, openActions, type MenuItem } from '@/compo
 import { PaginationBar } from '@/components/PaginationBar';
 import { useSort, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
-import { ArrowRight, Building2, LayoutGrid, List, MapPin, UserRound } from 'lucide-react';
+import { ArrowRight, Building2, CalendarPlus, LayoutGrid, List, MapPin, UserRound } from 'lucide-react';
 import {
   WORKSITE_STATUS_LABEL, WORKSITE_STATUSES, WORKSITE_PRIORITIES, WORKSITE_PRIORITY_LABEL,
   WORKSITE_SCOPES, WORKSITE_SCOPE_LABEL, WORKSITE_BILLING_MODES, WORKSITE_BILLING_MODE_LABEL,
@@ -90,6 +90,8 @@ function ChantiersInner() {
     kind === 'project' ? '/api/worksites/counts' : null,
   );
   const reloadAll = () => { reload(); reloadCounts(); };
+  // « Planifier » : bouton rapide sur chaque ligne des onglets où l'on cherche surtout à programmer quelque chose (en attente, à planifier)
+  const quickPlan = status === 'on_hold' || status === 'to_plan,scheduled';
   const countOf = (key: string) => (key === '' ? counts?.total : key.split(',').reduce((a, s) => a + (counts?.byStatus[s] ?? 0), 0));
 
   const { data: refs } = useApi<{
@@ -271,6 +273,16 @@ function ChantiersInner() {
                     <div><span>Avancement</span><strong>{progress}%</strong></div>
                     <div className="progress-bar"><div className="progress-fill" style={{ width: `${progress}%` }} /></div>
                   </div>
+                  {quickPlan && (
+                    <Link
+                      href={`/app/planning?new=${w.id}`}
+                      className="btn primary"
+                      style={{ margin: '0 0 0.7rem', justifyContent: 'center' }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <CalendarPlus size={16} /> Planifier un événement
+                    </Link>
+                  )}
                   <div className="worksite-card-foot">
                     <div>
                       <span>{w.scope ? WORKSITE_SCOPE_LABEL[w.scope as keyof typeof WORKSITE_SCOPE_LABEL] : 'Type à préciser'}</span>
@@ -333,7 +345,13 @@ function ChantiersInner() {
                   <td><StatusBadge status={w.status} /></td>
                   <td style={{ textAlign: 'right' }}><Money value={w.invoicedHt} /></td>
                   <td><ProgressCell pct={WORKSITE_PROGRESS_PCT[w.status as WorksiteStatus] ?? 0} /></td>
-                  <td className="muted">→</td>
+                  <td className="muted" style={{ whiteSpace: 'nowrap' }}>
+                    {quickPlan && (
+                      <Link href={`/app/planning?new=${w.id}`} className="btn" onClick={(e) => e.stopPropagation()}>
+                        <CalendarPlus size={15} /> Planifier
+                      </Link>
+                    )}{' '}→
+                  </td>
                 </tr>
               ))}
             </tbody>

@@ -75,7 +75,7 @@ export async function bureauDashboard() {
   const [
     invoicedMonth, invoicedPrevMonth, paidMonth, overdue, receivable, quotesPending, worksitesToInvoice,
     expiringDocs, ctExpiring, activeCount, activeWorksites,
-    crmNextActions, todayEvents, supplierOverdue, forecast,
+    crmNextActions, todayEvents, supplierOverdue, forecast, onHoldCount,
   ] = await Promise.all([
     prisma.document.aggregate({
       where: { kind: { in: ['invoice', 'deposit_invoice'] }, issuedOn: { gte: monthStart }, source: { not: 'demo' } }, _sum: { totalHt: true },
@@ -122,6 +122,8 @@ export async function bureauDashboard() {
       select: { ht: true, ttc: true },
     }),
     forecastReceivable(),
+    // chantiers « en observation / attente » (séchage, contrôle, attente terrain) : à garder à l'œil jusqu'à la reprise
+    prisma.worksite.count({ where: { kind: 'project', status: 'on_hold', source: { not: 'demo' } } }),
   ]);
 
   const teamsOnSiteToday = new Set(todayEvents.map((e) => e.teamId).filter((id): id is string => !!id)).size;
@@ -161,6 +163,7 @@ export async function bureauDashboard() {
       supplierOverdueAmount,
       supplierOverdueCount: supplierOverdue.length,
       openWorksites: activeCount,
+      onHoldWorksites: onHoldCount,
       teamsOnSiteToday,
       receivableAmount,
       quotesPendingAmount,

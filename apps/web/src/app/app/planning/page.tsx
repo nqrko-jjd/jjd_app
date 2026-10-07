@@ -11,7 +11,7 @@ import { PlanningAssignmentModal } from '@/components/PlanningAssignmentModal';
 import { PlanningEventDetail } from '@/components/PlanningEventDetail';
 import { PlanningAbsenceModal } from '@/components/PlanningAbsenceModal';
 import { WORKSITE_STATUS_OPEN, WORKSITE_STATUS_LABEL, ABSENCE_KIND_LABEL, PERSON_ROLE_LABEL, WORKFORCE_CATEGORY_LABEL, workforceCategory, isFieldWorker } from '@jjd/shared';
-import { Eye, Search, Truck, Wrench } from 'lucide-react';
+import { Search, Truck, Wrench } from 'lucide-react';
 import type { PlanningEv, PlanAbsence, PlanVehicleRef } from '@/components/planningTypes';
 
 interface PersonRow { id: string; displayName: string | null; firstName: string; role: string; contractType?: string | null; specialties?: unknown; active: boolean; phone?: string | null }
@@ -69,7 +69,6 @@ type Resource = { kind: 'vehicle' | 'equipment'; id: string; label: string; sub:
 
 export default function PlanningPage() {
   const [view, setView] = useState<ViewMode>('agenda');
-  const [periodWeeks, setPeriodWeeks] = useState<1 | 2>(1);
   const [anchor, setAnchor] = useState(() => mondayOf(new Date()));
   const [monthAnchor, setMonthAnchor] = useState(() => startOfMonth(new Date()));
   const [trackedDay, setTrackedDay] = useState(() => toDateInput(new Date()));
@@ -79,7 +78,6 @@ export default function PlanningPage() {
   const [worksiteFilter, setWorksiteFilter] = useState('');
   const [worksiteStatusFilter, setWorksiteStatusFilter] = useState('');
   const [onlyFree, setOnlyFree] = useState(false);
-  const [wide, setWide] = useState(false);
   // vue « Planning » (liste façon Google Agenda) : début de la fenêtre et nombre de jours chargés (défilement sans fin)
   const [listStart, setListStart] = useState(() => { const t = new Date(); t.setHours(0, 0, 0, 0); return t; });
   const [listSpan, setListSpan] = useState(31);
@@ -94,12 +92,15 @@ export default function PlanningPage() {
   const [dragOverDay, setDragOverDay] = useState<string | null>(null);
   const [absenceModal, setAbsenceModal] = useState<{ existing?: PlanAbsence | null; prefill?: { personId?: string; date?: string } } | null>(null);
 
+  // lien « Planifier » depuis la liste des chantiers : /app/planning?new=<id du chantier> ouvre le formulaire déjà rattaché à ce chantier
   useEffect(() => {
-    document.body.classList.toggle('plan-wide', wide);
-    return () => { document.body.classList.remove('plan-wide'); };
-  }, [wide]);
+    const id = new URLSearchParams(window.location.search).get('new');
+    if (!id) return;
+    setAssignmentModal({ existing: null, prefill: { worksiteId: id } });
+    window.history.replaceState(null, '', window.location.pathname);
+  }, []);
 
-  const weekDays = useMemo(() => daysFrom(anchor, periodWeeks * 7), [anchor, periodWeeks]);
+  const weekDays = useMemo(() => daysFrom(anchor, 7), [anchor]);
   const monthDays = useMemo(() => monthGridDays(monthAnchor), [monthAnchor]);
   const dayView = useMemo(() => [new Date(`${trackedDay}T00:00:00`)], [trackedDay]);
   const listDays = useMemo(() => daysFrom(listStart, listSpan), [listStart, listSpan]);
@@ -151,7 +152,6 @@ export default function PlanningPage() {
   }, {}), [worksitesActive]);
   const statusFilteredWorksites = useMemo(() => worksitesActive.filter((w) => !worksiteStatusFilter || w.status === worksiteStatusFilter), [worksitesActive, worksiteStatusFilter]);
   const statusFilteredWorksiteIds = useMemo(() => new Set(statusFilteredWorksites.map((w) => w.id)), [statusFilteredWorksites]);
-  const observationWorksites = useMemo(() => worksitesActive.filter((w) => w.status === 'on_hold'), [worksitesActive]);
   const { data: vehData } = useApi<{ items: VehicleRow[] }>('/api/vehicles');
   const vehicles = useMemo(() => (vehData?.items ?? []).filter((v) => v.status !== 'sold' && v.status !== 'retired' && !v.excludedFromPlanning), [vehData]);
   const { data: equipData } = useApi<{ items: EquipRow[] }>('/api/equipment');
@@ -354,11 +354,9 @@ export default function PlanningPage() {
     else if (view === 'day') setTrackedDay(toDateInput(new Date()));
     else goToday();
   }
-  const viewKey = view === 'agenda' ? (periodWeeks === 2 ? '2weeks' : 'week') : view;
+  const viewKey = view === 'agenda' ? 'week' : view;
   function changeView(v: string) {
-    if (v === 'week') { setView('agenda'); setPeriodWeeks(1); }
-    else if (v === '2weeks') { setView('agenda'); setPeriodWeeks(2); }
-    else if (v === 'worksites') { setView('worksites'); setPeriodWeeks(1); }
+    if (v === 'week') setView('agenda');
     else setView(v as ViewMode);
   }
   const monthLabel = monthAnchor.toLocaleDateString('fr-BE', { month: 'long', year: 'numeric' });
@@ -417,14 +415,12 @@ export default function PlanningPage() {
           <button type="button" className="btn" onClick={navNext} aria-label="Suivant">→</button>
         </div>
         <div className="plan-period">
-          {view !== 'month' && view !== 'day' && view !== 'planning' && <button type="button" className="btn plan-expand-toggle" onClick={() => setWide((w) => !w)}>{wide ? 'Réduire' : 'Agrandir le planning'}</button>}
           <label className="plan-view-select">
             <span>Affichage</span>
             <select className="select" value={viewKey} onChange={(e) => changeView(e.target.value)} aria-label="Format d’affichage du planning">
               <option value="planning">Planning (liste)</option>
               <option value="day">Jour</option>
               <option value="week">Semaine</option>
-              <option value="2weeks">2 semaines</option>
               <option value="month">Mois</option>
               <optgroup label="Grilles">
                 <option value="worksites">Par chantier</option>
@@ -482,22 +478,6 @@ export default function PlanningPage() {
 
 
 
-      {observationWorksites.length > 0 && (
-        <button
-          type="button"
-          className={`plan-observation-callout${worksiteStatusFilter === 'on_hold' ? ' active' : ''}`}
-          onClick={() => { setWorksiteStatusFilter('on_hold'); setWorksiteFilter(''); setView('worksites'); }}
-        >
-          <span className="plan-observation-icon"><Eye size={18} strokeWidth={2} /></span>
-          <span>
-            <strong>{observationWorksites.length} chantier{observationWorksites.length > 1 ? 's' : ''} à garder sous observation</strong>
-            <small>Séchage, contrôle ou attente terrain : les dossiers restent visibles jusqu’à la reprise.</small>
-          </span>
-          <span className="plan-observation-sites">{observationWorksites.slice(0, 3).map((w) => w.ref).join(' · ')}</span>
-          <span className="plan-observation-action">Voir et planifier →</span>
-        </button>
-      )}
-
       <div className="plan-datebar">
         <strong>{rangeLabel}</strong>
         <label>
@@ -538,7 +518,7 @@ export default function PlanningPage() {
                 <div
                   key={ds}
                   className={`plan-month-day${outside ? ' outside' : ''}${sameDate(ds, trackedDay) ? ' selected-day' : ''}${isToday ? ' today' : ''}${dragOverDay === ds ? ' drag-over' : ''}`}
-                  onClick={() => selectTrackedDay(ds)}
+                  onClick={() => { selectTrackedDay(ds); if (window.matchMedia('(max-width: 900px)').matches) setDayAgenda(ds); }}
                   onDragOver={(dragEv) => { if (draggingId) { dragEv.preventDefault(); dragEv.dataTransfer.dropEffect = 'move'; setDragOverDay(ds); } }}
                   onDragLeave={() => setDragOverDay((cur) => (cur === ds ? null : cur))}
                   onDrop={(dragEv) => {
@@ -562,7 +542,7 @@ export default function PlanningPage() {
                         onDragStart={(dragEv) => { dragEv.dataTransfer.setData('text/plain', e.id); dragEv.dataTransfer.effectAllowed = 'move'; setDraggingId(e.id); }}
                         onDragEnd={() => { setDraggingId(null); setDragOverDay(null); }}
                       >
-                        <span className="tm">{hhmm(e.startAt)}</span> {e.kind === 'meeting' ? `RDV · ${e.title || e.worksite.ref}` : e.title || e.worksite.ref}
+                        <span className="tm">{hhmm(e.startAt)}</span> {e.title || e.worksite.ref}
                       </button>
                     ))}
                     {extra > 0 && (

@@ -12,7 +12,7 @@ import { rowNav } from '@/lib/rowNav';
 import { LEGAL_DOC_LABEL, WORKSITE_STATUS_LABEL, WORKSITE_PROGRESS_PCT, type WorksiteStatus } from '@jjd/shared';
 import {
   BarChart3, Wallet, Building2, Flag, FileText, Clock, MessageSquare, Users,
-  Search, Bell, ChevronRight, AlertTriangle, Receipt, Mail, Phone, ShieldAlert, ShieldCheck, Truck, HardHat, CreditCard, TrendingUp, type LucideIcon,
+  Eye, Search, Bell, ChevronRight, AlertTriangle, Receipt, Mail, Phone, ShieldAlert, ShieldCheck, Truck, HardHat, CreditCard, TrendingUp, type LucideIcon,
 } from 'lucide-react';
 
 interface TodayEv {
@@ -331,7 +331,7 @@ interface Dashboard {
   kpis: {
     invoicedMonth: number; invoicedPrevMonth: number; paidMonth: number; overdueAmount: number;
     overdueCount: number; supplierOverdueAmount: number; supplierOverdueCount: number;
-    openWorksites: number; teamsOnSiteToday: number;
+    openWorksites: number; onHoldWorksites: number; teamsOnSiteToday: number;
     receivableAmount: number; quotesPendingAmount: number; quotesPendingCount: number;
     forecastAmount: number; forecastCount: number;
   };
@@ -568,6 +568,14 @@ export default function DashboardPage() {
               value={data.kpis.openWorksites}
               sub={data.kpis.teamsOnSiteToday > 0 ? `${data.kpis.teamsOnSiteToday} équipe${data.kpis.teamsOnSiteToday > 1 ? 's' : ''} sur le terrain aujourd’hui` : 'Aucune équipe sur le terrain aujourd’hui'}
               href="/app/chantiers?statut=in_progress"
+            />
+            <Kpi
+              ic={Eye}
+              label="Sous observation"
+              value={data.kpis.onHoldWorksites}
+              sub={data.kpis.onHoldWorksites > 0 ? 'Séchage, contrôle, attente terrain : à planifier à la reprise' : 'Aucun chantier en attente'}
+              href="/app/chantiers?statut=on_hold"
+              warn={data.kpis.onHoldWorksites > 0}
             />
             <Kpi ic={Flag} label="Impayés" href="/app/documents?kind=invoice&dashboard=overdue" value={<Money value={data.kpis.overdueAmount} />} sub={`${data.kpis.overdueCount} facture${data.kpis.overdueCount > 1 ? 's' : ''} en retard`} warn />
             <Kpi

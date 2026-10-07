@@ -9,6 +9,7 @@ import { useAuth } from '@/lib/auth';
 import { PageHead, Money, formatDateBE } from '@/lib/ui';
 import { PaginationBar } from '@/components/PaginationBar';
 import { FormModal } from '@/components/FormModal';
+import { BankClientAssign } from '@/components/BankClientAssign';
 
 interface Match {
   id: string;
@@ -20,6 +21,7 @@ interface Tx {
   id: string; bookingDate: string | null; bank: string | null; counterpartyName: string | null;
   description: string | null; amount: number | null; communication: string | null;
   matchConfidence: string | null;
+  contact?: { id: string; name: string } | null;
   // plusieurs factures possibles pour une même transaction — un acompte réglé en une fois,
   // décompté ensuite par le fournisseur sur plusieurs factures reçues
   matches: Match[];
@@ -375,6 +377,15 @@ function BanqueInner() {
                             </div>
                           )}
                         </div>
+                      )}
+                      {(t.amount ?? 0) > 0 && (
+                        <BankClientAssign
+                          txId={t.id}
+                          amount={t.amount ?? 0}
+                          shares={t.matches.map((m) => m.amount ?? null)}
+                          contact={t.contact ?? null}
+                          onDone={reload}
+                        />
                       )}
                     </td>
                     <td>

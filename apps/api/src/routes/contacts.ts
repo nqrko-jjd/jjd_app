@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { contactInput, contactPersonInput, normalizeName, round2 } from '@jjd/shared';
 import { prisma } from '../db.js';
+import { clientAccount } from '../lib/client-account.js';
 import { insensitive } from '../lib/search.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, STAFF, OFFICE, hashPassword } from '../lib/auth.js';
@@ -164,9 +165,11 @@ contactsRouter.get(
       }
     }
 
+    const clientAcct = await clientAccount(contact.id);
     res.json({
       contact: {
         ...contact,
+        clientAccount: clientAcct,
         purchases: [...ledger].reverse().map((p) => ({ ...p, paid: isPaidStr(p.paymentStatus), hasPdf: !!p.pdfPath })),
         purchaseBalance: [...balanceLedger].reverse(),
         purchaseSummary: {

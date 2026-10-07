@@ -311,6 +311,7 @@ model Contact {
 
   stockSuppliers   StockSupplier[]   @relation("StockSupplierContact")
   purchaseOrders   PurchaseOrder[]   @relation("PurchaseOrderSupplier")
+  bankTransactions BankTransaction[] @relation("BankTransactionClient")
   supplierProducts SupplierProduct[] @relation("SupplierProductContact")
   customerNumber   String? // fournisseur : notre n° de client chez lui
   onAccount        Boolean           @default(false) // fournisseur : achats en compte (facturés plus tard)
@@ -837,11 +838,17 @@ model BankTransaction {
   source              String? // "xlsx" | "ponto"
   createdAt           DateTime     @default(now())
 
+  /// Client (ou payeur) à qui est attribué ce virement entrant : permet de montrer sur sa fiche l'argent reçu SANS facture
+  /// (acompte à facturer, trop-perçu à rendre). Posé au rapprochement, ou à la main sur la ligne bancaire.
+  contactId String?
+  contact   Contact? @relation("BankTransactionClient", fields: [contactId], references: [id], onDelete: SetNull)
+
   matches BankTransactionMatch[]
 
   @@index([bookingDate])
   @@index([matchedLedgerId])
   @@index([matchedDocumentId])
+  @@index([contactId])
 }
 
 /// Une facture rapprochée d'une transaction bancaire — plusieurs possibles par transaction (un

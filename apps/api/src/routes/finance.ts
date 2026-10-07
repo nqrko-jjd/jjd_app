@@ -293,6 +293,7 @@ financeRouter.get(
         skip: (page - 1) * pageSize, take: pageSize,
         include: {
           account: { select: { label: true, iban: true } },
+          contact: { select: { id: true, name: true } },
           matches: {
             orderBy: { createdAt: 'asc' },
             include: {
@@ -340,6 +341,14 @@ financeRouter.patch(
       if (amount == null) throw new HttpError(422, 'Montant invalide');
       data.amount = amount;
       data.side = amount < 0 ? 'out' : 'in';
+    }
+    // client / payeur à qui attribuer ce virement entrant (argent reçu sans facture : acompte à facturer, trop-perçu)
+    if ('contactId' in b) {
+      if (b.contactId == null || b.contactId === '') data.contactId = null;
+      else {
+        if (typeof b.contactId !== 'string' || !(await prisma.contact.findUnique({ where: { id: b.contactId }, select: { id: true } }))) throw new HttpError(422, 'Client introuvable');
+        data.contactId = b.contactId;
+      }
     }
     const updated = await prisma.bankTransaction.update({ where: { id: existing.id }, data });
     res.json({ transaction: updated });
@@ -543,6 +552,13 @@ financeRouter.post(
     if (dup) throw new HttpError(409, 'Cette facture est déjà rapprochée de cette transaction');
 
     await prisma.bankTransactionMatch.create({ data: { bankTransactionId: tx.id, ledgerEntryId: ledgerId, documentId } });
+    // un virement entrant rapproché à la facture d'un client lui est attribué (son compte client montrera ensuite ce qui reste sans facture)
+    if (!tx.contactId && (tx.amount ?? 0) > 0) {
+      const cid = documentId
+        ? (await prisma.document.findUnique({ where: { id: documentId }, select: { contactId: true } }))?.contactId
+        : (await prisma.ledgerEntry.findUnique({ where: { id: ledgerId! }, select: { contactId: true } }))?.contactId;
+      if (cid) await prisma.bankTransaction.update({ where: { id: tx.id }, data: { contactId: cid } });
+    }
 
     if (ledgerId) {
       // Une écriture de vente synchronisée depuis une facture (LedgerEntry.documentId non nul,

@@ -40,6 +40,10 @@ interface Detail {
     purchases: Purchase[];
     purchaseBalance: BalanceLine[];
     purchaseSummary: { count: number; ht: number; ttc: number; balance: number };
+    clientAccount: {
+      invoicedTtc: number; openTtc: number; unallocatedTotal: number; balance: number;
+      unallocated: { id: string; date: string | null; bank: string | null; amount: number; remaining: number; description: string }[];
+    };
   };
 }
 
@@ -261,6 +265,49 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
             </div>
           ))}
         </div>
+      )}
+
+      {/* Compte client : facturé, reste à encaisser, et argent reçu SANS facture (acompte à facturer, trop-perçu à rendre) */}
+      {(c.clientAccount.invoicedTtc !== 0 || c.clientAccount.unallocatedTotal > 0) && (
+        <>
+          <div className="section-title">Compte client</div>
+          <div className="kpis" style={{ marginBottom: '1rem' }}>
+            <Kpi ic={Wallet} label="Facturé TTC" value={<Money value={c.clientAccount.invoicedTtc} />} sub="Factures moins notes de crédit" />
+            <Kpi ic={Euro} label="Reste à encaisser" value={<Money value={c.clientAccount.openTtc} />} sub="Sur les factures ouvertes" warn={c.clientAccount.openTtc > 0.01} />
+            <Kpi ic={Scale} label="Reçu sans facture" value={<Money value={c.clientAccount.unallocatedTotal} />} sub="Déjà sur votre compte : à facturer ou à rembourser" warn={c.clientAccount.unallocatedTotal > 0.01} />
+            <Kpi
+              ic={FileText}
+              label={c.clientAccount.balance < 0 ? 'Crédit du client' : 'Solde du compte'}
+              value={<Money value={Math.abs(c.clientAccount.balance)} />}
+              sub={c.clientAccount.balance < 0 ? 'Vous lui devez (facture à émettre ou remboursement)' : c.clientAccount.balance > 0 ? 'Il vous doit encore' : 'Compte soldé'}
+            />
+          </div>
+          {c.clientAccount.unallocated.length > 0 && (
+            <div className="card card-pad" style={{ marginBottom: '1.4rem', borderLeft: '3px solid var(--gold)' }}>
+              <div className="eyebrow">Argent reçu sans facture correspondante</div>
+              <p className="muted" style={{ margin: '0.3rem 0 0.7rem', fontSize: '0.84rem' }}>
+                Ces montants sont déjà sur votre compte. Émettez une facture d’acompte ou rattachez-les à une facture, ou remboursez-les au client.
+              </p>
+              <div className="tbl-wrap">
+                <table className="tbl">
+                  <thead><tr><th>Date</th><th>Banque</th><th style={{ textAlign: 'right' }}>Non affecté</th><th style={{ textAlign: 'right' }}>Virement</th><th>Communication</th><th /></tr></thead>
+                  <tbody>
+                    {c.clientAccount.unallocated.map((u) => (
+                      <tr key={u.id}>
+                        <td className="tnum">{formatDateBE(u.date)}</td>
+                        <td>{u.bank ?? '—'}</td>
+                        <td style={{ textAlign: 'right' }}><strong><Money value={u.remaining} /></strong></td>
+                        <td style={{ textAlign: 'right' }}><Money value={u.amount} /></td>
+                        <td style={{ fontSize: '0.78rem', maxWidth: 420 }} title={u.description}>{u.description.length > 140 ? `${u.description.slice(0, 140)}…` : u.description}</td>
+                        <td><Link className="btn ghost" style={mini} href={`/app/finances/banque?q=${encodeURIComponent((u.description || '').slice(0, 30))}`}>Voir la ligne</Link></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* Achats — fournisseurs uniquement */}

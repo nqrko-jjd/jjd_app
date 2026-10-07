@@ -360,6 +360,8 @@ const FIELDS: { name: keyof Company; label: string; full?: boolean; area?: boole
   { name: 'website', label: 'Site web' },
   { name: 'quoteTerms', label: 'Conditions — devis', full: true, area: true },
   { name: 'invoiceTerms', label: 'Conditions — factures', full: true, area: true },
+  { name: 'vatNote6', label: 'Mention TVA 6 % (habitation de plus de 10 ans) — affichée sous le total quand une ligne est à 6 %. Vide = aucune mention.', full: true, area: true },
+  { name: 'vatNote0', label: 'Mention autoliquidation (TVA 0 %) — affichée quand une ligne est à 0 %. Vide = aucune mention.', full: true, area: true },
 ];
 
 function CompanyForm({ canEdit }: { canEdit: boolean }) {
@@ -376,7 +378,7 @@ function CompanyForm({ canEdit }: { canEdit: boolean }) {
           <label key={f.name} className="field" style={f.full ? { gridColumn: '1 / -1' } : undefined}>
             <span>{f.label}</span>
             {f.area ? (
-              <textarea className="input" rows={2} disabled={!canEdit} value={form[f.name]} onChange={(e) => { setForm({ ...form, [f.name]: e.target.value }); setSaved(false); }} />
+              <textarea className="input" rows={f.name === 'vatNote6' ? 7 : f.name === 'vatNote0' ? 4 : 2} disabled={!canEdit} value={form[f.name]} onChange={(e) => { setForm({ ...form, [f.name]: e.target.value }); setSaved(false); }} />
             ) : f.address ? (
               <AddressAutocomplete
                 disabled={!canEdit}

@@ -76,4 +76,5 @@ export interface Company {
   name: string; address: string; postalCode: string; city: string; vat: string;
   iban: string; email: string; phone: string; website: string;
   quoteTerms: string; invoiceTerms: string;
+  vatNote6: string; vatNote0: string;
 }

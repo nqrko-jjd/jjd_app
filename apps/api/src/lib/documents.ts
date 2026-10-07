@@ -1,7 +1,7 @@
 import type { Prisma } from '@prisma/client';
 import {
   computeDocTotals, formatDocNumber, docCounterName, belgianStructuredComm,
-  computeDueDate, lineTotalHt, round2, type DocumentLineInput,
+  computeDueDate, lineTotalHt, round2, VAT_RATE_NOTE, type DocumentLineInput,
 } from '@jjd/shared';
 import { prisma, nextCounter } from '../db.js';
 import { HttpError } from './http.js';
@@ -365,6 +365,9 @@ const COMPANY_DEFAULTS = {
   website: 'www.jjd-consult.be',
   quoteTerms: 'Devis valable 30 jours. Acompte de 30 % à la commande.',
   invoiceTerms: 'Facture payable à 30 jours. Tout retard de paiement entraîne de plein droit et sans mise en demeure un intérêt de 8 % l’an et une indemnité forfaitaire de 40 €.',
+  // mentions légales TVA (modifiables dans Paramètres ; vide = pas de mention)
+  vatNote6: VAT_RATE_NOTE['0.06']!,
+  vatNote0: VAT_RATE_NOTE['0']!,
 };
 export type Company = typeof COMPANY_DEFAULTS;
 

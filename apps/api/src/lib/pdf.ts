@@ -35,6 +35,7 @@ export interface PdfDoc {
   billingVat: string | null;
   billingEmail: string | null;
   customerRef: string | null;
+  vatRate?: number | null;
   worksite: { ref: string } | null;
   contact: { name: string; vat: string | null; address: string | null; box: string | null; postalCode: string | null; city: string | null } | null;
   lines: PdfDocLine[];
@@ -82,7 +83,9 @@ export async function buildHtml(d: PdfDoc, co: Company): Promise<string> {
     .map(([rate, b]) => Number(rate) === 0 ? `<tr><td colspan="2">TVA : autoliquidation</td></tr>` : `<tr><td>TVA ${Math.round(Number(rate) * 100)}%</td><td>${formatEur(b.vat)}</td></tr>`)
     .join('');
   // mention légale spécifique (taux réduit 6% habitation, autoliquidation 0%…), une fois par taux présent
-  const vatNotes = vatLegalNotes(d.lines.filter((l) => l.kind === 'item').map((l) => l.vatRate))
+  // (document importé sans lignes : on se rabat sur le taux enregistré du document)
+  const itemRates = d.lines.filter((l) => l.kind === 'item').map((l) => l.vatRate);
+  const vatNotes = vatLegalNotes(itemRates.length ? itemRates : [d.vatRate], { '0.06': co.vatNote6, '0': co.vatNote0 })
     .map((note) => `<p class="vat-note">${esc(note).replace(/\n/g, '<br>')}</p>`)
     .join('');
 
@@ -157,20 +160,34 @@ export async function buildHtml(d: PdfDoc, co: Company): Promise<string> {
           <tr class="grand"><td>Total TTC</td><td>${formatEur(totals.totalTtc)}</td></tr>
         </tbody></table>
       </div>
-      ${vatNotes}
+      ${d.kind === 'quote'
+        ? `<div class="sign-row">
+             <div class="sign-box"><div>Mention « Bon pour accord »</div><div>Date et signature</div><div class="sign-date">...... / ...... / ............</div><div class="sign-space"></div></div>
+             <div class="sign-notes">${vatNotes}</div>
+           </div>`
+        : vatNotes}
       ${payBlock}
       <footer class="terms">${esc(d.terms || (d.kind === 'quote' ? co.quoteTerms : co.invoiceTerms))}</footer>
     </div>
-    ${isInvoiceLike ? `<section class="sheet general-terms"><h1>Conditions générales JJD Consult SRL</h1>${DOCUMENT_TERMS.map(text => `<p>${esc(text)}</p>`).join('')}</section>` : ''}
+    ${isInvoiceLike || d.kind === 'quote' ? `<section class="sheet general-terms"><h1>Conditions générales JJD Consult SRL</h1><div class="cg-cols">${DOCUMENT_TERMS.map(text => `<p>${esc(text)}</p>`).join('')}</div></section>
+    <script>${CG_FIT_SCRIPT}</script>` : ''}
   </body></html>`;
 }
 
 const CSS = `
 
   .document-logo { display:block; width:220px; height:auto; object-fit:contain; }
-  .sheet.general-terms { break-before:page; font-size:10px; line-height:1.45; column-count:2; column-gap:24px; }
-  .general-terms h1 { column-span:all; font-size:17px; color:#173f34; margin:0 0 18px; }
-  .general-terms p { margin:0 0 10px; orphans:3; widows:3; }
+  /* conditions générales : une seule page A4 (2 colonnes, police réduite automatiquement jusqu'à ce que tout tienne — voir CG_FIT_SCRIPT) */
+  .sheet.general-terms { break-before:page; padding:0; margin:0; max-width:none; line-height:1.25; }
+  .general-terms h1 { font-size:13px; color:#173f34; margin:0 0 4mm; }
+  .cg-cols { width:178mm; height:248mm; column-count:2; column-gap:6mm; column-fill:auto; font-size:8px; overflow:hidden; }
+  .general-terms p { margin:0 0 1.6mm; orphans:1; widows:1; text-align:justify; }
+  .sign-row { display:flex; gap:18px; align-items:flex-start; margin-top:14px; break-inside:avoid; }
+  .sign-box { flex:none; width:190px; border:1px solid #cfd5cc; border-radius:8px; padding:8px 10px; font-size:10px; color:#55606e; }
+  .sign-box .sign-date { margin-top:4px; color:#26372f; letter-spacing:.04em; }
+  .sign-box .sign-space { height:44px; }
+  .sign-notes { flex:1; min-width:0; }
+  .sign-notes .vat-note:first-child { margin-top:0; }
   .intro, .desc, .ln-label { white-space:pre-wrap; overflow-wrap:anywhere; }
   .pay, .totals, .head { break-inside:avoid; }
   @page { size: A4; margin: 16mm; }
@@ -241,6 +258,9 @@ const CSS = `
   .vat-note { margin: 14px 0 0; color: #788078; font-size: 9.5px; line-height: 1.5; }
   .vat-note + .vat-note { margin-top: 8px; }
 `;
+
+/** Réduit la police des conditions générales jusqu'à ce qu'elles tiennent sur la page (aucune colonne ne déborde à droite). */
+export const CG_FIT_SCRIPT = `(function(){var c=document.querySelector('.cg-cols');if(!c)return;var s=8;c.style.fontSize=s+'px';while(s>4&&c.scrollWidth>c.clientWidth+1){s-=0.1;c.style.fontSize=s.toFixed(1)+'px';}})();`;
 
 /** Chemin de l'exécutable Chromium (variable d'env prioritaire, sinon Chromium apt sur le VPS). */
 function chromiumPath(): string {

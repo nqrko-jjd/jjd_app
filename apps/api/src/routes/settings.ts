@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { depotInput } from '@jjd/shared';
+import { depotInput, VAT_RATE_NOTE } from '@jjd/shared';
 import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth } from '../lib/auth.js';
@@ -22,6 +22,8 @@ const companySchema = z.object({
   website: z.string().trim().default(''),
   quoteTerms: z.string().trim().default(''),
   invoiceTerms: z.string().trim().default(''),
+  vatNote6: z.string().trim().default(VAT_RATE_NOTE['0.06']!),
+  vatNote0: z.string().trim().default(VAT_RATE_NOTE['0']!),
 });
 
 settingsRouter.get(

@@ -27,6 +27,15 @@ export default function PrintDocument({ params }: { params: Promise<{ id: string
     }
   }, [d, co]);
 
+  // conditions générales : on réduit la police jusqu'à ce qu'elles tiennent sur une page (aucune colonne ne déborde)
+  useEffect(() => {
+    const c = document.querySelector<HTMLElement>('.cg-cols');
+    if (!c) return;
+    let s = 8;
+    c.style.fontSize = `${s}px`;
+    while (s > 4 && c.scrollWidth > c.clientWidth + 1) { s -= 0.1; c.style.fontSize = `${s.toFixed(1)}px`; }
+  }, [d, co]);
+
   if (err) return <div style={{ padding: 40 }}>Erreur : {err}</div>;
   if (!d || !co) return <div style={{ padding: 40 }}>Chargement…</div>;
 
@@ -42,7 +51,8 @@ export default function PrintDocument({ params }: { params: Promise<{ id: string
   const clientVat = d.billingVat ?? d.contact?.vat;
   const hasDiscount = items.some((l) => l.kind === 'item' && l.discountPct > 0);
   // mention légale spécifique (taux réduit 6% habitation, autoliquidation 0%…), une fois par taux présent
-  const vatNotes = vatLegalNotes(items.filter((l) => l.kind === 'item').map((l) => l.vatRate));
+  const itemRates = items.filter((l) => l.kind === 'item').map((l) => l.vatRate);
+  const vatNotes = vatLegalNotes(itemRates.length ? itemRates : [d.vatRate], { '0.06': co.vatNote6, '0': co.vatNote0 });
 
   return (
     <>
@@ -135,7 +145,12 @@ export default function PrintDocument({ params }: { params: Promise<{ id: string
           </table>
         </div>
 
-        {vatNotes.map((note, i) => <p key={i} className="vat-note">{note}</p>)}
+        {d.kind === 'quote' ? (
+          <div className="sign-row">
+            <div className="sign-box"><div>Mention « Bon pour accord »</div><div>Date et signature</div><div className="sign-date">...... / ...... / ............</div><div className="sign-space" /></div>
+            <div className="sign-notes">{vatNotes.map((note, i) => <p key={i} className="vat-note">{note}</p>)}</div>
+          </div>
+        ) : vatNotes.map((note, i) => <p key={i} className="vat-note">{note}</p>)}
 
         {(d.kind === 'invoice' || d.kind === 'deposit_invoice') && (
           <div className="pay">
@@ -148,9 +163,9 @@ export default function PrintDocument({ params }: { params: Promise<{ id: string
           {d.terms || (d.kind === 'quote' ? co.quoteTerms : co.invoiceTerms)}
         </footer>
       </div>
-      {(d.kind === 'invoice' || d.kind === 'deposit_invoice') && <section className="sheet general-terms">
+      {(d.kind === 'invoice' || d.kind === 'deposit_invoice' || d.kind === 'quote') && <section className="sheet general-terms">
         <h1>Conditions générales JJD Consult SRL</h1>
-        {DOCUMENT_TERMS.map((text, i) => <p key={i}>{text}</p>)}
+        <div className="cg-cols">{DOCUMENT_TERMS.map((text, i) => <p key={i}>{text}</p>)}</div>
       </section>}
     </>
   );
@@ -159,9 +174,16 @@ export default function PrintDocument({ params }: { params: Promise<{ id: string
 const CSS = `
 
   .document-logo { display:block; width:220px; height:auto; object-fit:contain; }
-  .sheet.general-terms { break-before:page; font-size:10px; line-height:1.45; column-count:2; column-gap:24px; }
-  .general-terms h1 { column-span:all; font-size:17px; color:#173f34; margin:0 0 18px; }
-  .general-terms p { margin:0 0 10px; orphans:3; widows:3; }
+  .sheet.general-terms { break-before:page; padding:0; margin:0; max-width:none; line-height:1.25; }
+  .general-terms h1 { font-size:13px; color:#173f34; margin:0 0 4mm; }
+  .cg-cols { width:178mm; height:248mm; column-count:2; column-gap:6mm; column-fill:auto; font-size:8px; overflow:hidden; }
+  .general-terms p { margin:0 0 1.6mm; orphans:1; widows:1; text-align:justify; }
+  .sign-row { display:flex; gap:18px; align-items:flex-start; margin-top:14px; break-inside:avoid; }
+  .sign-box { flex:none; width:190px; border:1px solid #cfd5cc; border-radius:8px; padding:8px 10px; font-size:10px; color:#55606e; }
+  .sign-box .sign-date { margin-top:4px; color:#26372f; letter-spacing:.04em; }
+  .sign-box .sign-space { height:44px; }
+  .sign-notes { flex:1; min-width:0; }
+  .sign-notes .vat-note:first-child { margin-top:0; }
   .intro, .desc, .ln-label { white-space:pre-wrap; overflow-wrap:anywhere; }
   .pay, .totals, .head { break-inside:avoid; }
   @page { size: A4; margin: 16mm; }

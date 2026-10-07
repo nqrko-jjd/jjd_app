@@ -102,13 +102,14 @@ export const VAT_RATE_NOTE: Record<string, string> = {
 };
 
 /** Notes TVA à afficher pour un document, une seule fois par taux présent, dans l'ordre des lignes. */
-export function vatLegalNotes(vatRates: (number | null | undefined)[]): string[] {
+export function vatLegalNotes(vatRates: (number | null | undefined)[], overrides?: Partial<Record<string, string | undefined>>): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
   for (const r of vatRates) {
     if (r == null) continue;
     const key = String(r);
-    const note = VAT_RATE_NOTE[key];
+    // texte personnalisé dans Paramètres (vide = on n'affiche pas la mention), sinon le texte d'origine
+    const note = overrides?.[key] !== undefined ? overrides[key]!.trim() : VAT_RATE_NOTE[key];
     if (note && !seen.has(key)) { seen.add(key); out.push(note); }
   }
   return out;

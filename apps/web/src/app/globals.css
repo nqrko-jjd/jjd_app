@@ -1407,6 +1407,7 @@ body.nav-collapsed .navlink .nav-badge { position: absolute; top: 2px; right: 2p
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .plan-month-chip.tentative { border-left-style: dashed; }
+.plan-month-chip.absence { background: #6b6f6e; color: #fff; border-left-color: #4d504f; }
 .plan-month-chip .tm { font-weight: 700; margin-right: 0.3rem; }
 .plan-month-chip[draggable="true"] { cursor: grab; }
 .plan-month-chip.dragging { opacity: 0.4; }
@@ -1418,9 +1419,12 @@ body.nav-collapsed .navlink .nav-badge { position: absolute; top: 2px; right: 2p
 @media (max-width: 900px) {
   .plan-month-weekdays div { font-size: 0.62rem; padding: 0.4rem 0.3rem; }
   .plan-month-day { min-height: 64px; padding: 0.25rem 0.2rem; }
-  /* sur mobile : de simples barres de couleur (bleu = intervention, jaune = rendez-vous) ; toucher le jour ouvre la liste détaillée */
-  .plan-month-chip { font-size: 0; height: 6px; padding: 0; border-left: 0; border-radius: 3px; background: var(--tone-accent, var(--line-strong)); }
-  .plan-month-more { font-size: 0.6rem; padding: 0; }
+  /* sur mobile comme Google Agenda : barres pleines (bleu = intervention, jaune = rendez-vous, gris = congé) au texte coupé ; toucher une barre ouvre sa fiche */
+  .plan-month-events { gap: 2px; }
+  .plan-month-chip { font-size: 0.6rem; line-height: 1.5; height: auto; padding: 0 3px; border-left: 0; border-radius: 3px; background: var(--tone-accent, var(--line-strong)); color: #fff; font-weight: 500; }
+  .plan-month-chip .tm { display: none; }
+  .plan-month-chip.kind-meeting { color: #3a2e00; }
+  .plan-month-more { font-size: 0.7rem; padding: 0; line-height: 1; text-align: left; letter-spacing: 0.1em; }
 }
 
 /* détail d'une affectation (popup lecture) */

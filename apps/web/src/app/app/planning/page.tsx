@@ -73,6 +73,14 @@ export default function PlanningPage() {
   const [monthAnchor, setMonthAnchor] = useState(() => startOfMonth(new Date()));
   const [trackedDay, setTrackedDay] = useState(() => toDateInput(new Date()));
   const [dayAgenda, setDayAgenda] = useState<string | null>(null);
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 900px)');
+    const on = () => setNarrow(mq.matches);
+    on();
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
   const [search, setSearch] = useState('');
   const [specialtyFilter, setSpecialtyFilter] = useState('');
   const [worksiteFilter, setWorksiteFilter] = useState('');
@@ -510,10 +518,19 @@ export default function PlanningPage() {
               const ds = toDateInput(d);
               const outside = d.getMonth() !== monthAnchor.getMonth();
               const isToday = sameDate(ds, toDateInput(new Date()));
+              // une seule barre par chantier et par jour (matin / après-midi / plusieurs équipes) ; les congés en gris d'abord
               const dayEvents = eventsFor(ds, eventMatchesWorksiteFilters)
                 .sort((a, b) => a.startAt.localeCompare(b.startAt));
-              const shown = dayEvents.slice(0, 3);
-              const extra = dayEvents.length - shown.length;
+              const groups: PlanningEv[][] = [];
+              for (const e of dayEvents) {
+                const g = e.kind === 'intervention' ? groups.find((x) => x[0]!.kind === 'intervention' && x[0]!.worksite.id === e.worksite.id) : undefined;
+                if (g) g.push(e); else groups.push([e]);
+              }
+              const dayAbsences = absences.filter((a) => ds >= toDateInput(new Date(a.startsOn)) && ds <= toDateInput(new Date(a.endsOn)));
+              const maxRows = narrow ? 5 : 3;
+              const rows: ({ abs: PlanAbsence } | { grp: PlanningEv[] })[] = [...dayAbsences.map((abs) => ({ abs })), ...groups.map((grp) => ({ grp }))];
+              const shown = rows.slice(0, maxRows);
+              const extra = rows.length - shown.length;
               return (
                 <div
                   key={ds}
@@ -531,23 +548,35 @@ export default function PlanningPage() {
                 >
                   <div className="plan-month-daynum">{isToday ? <span className="plan-month-today-dot">{d.getDate()}</span> : d.getDate()}</div>
                   <div className="plan-month-events">
-                    {shown.map((e) => (
-                      <button
-                        key={e.id}
-                        type="button"
-                        draggable
-                        title="Glisser pour déplacer à un autre jour"
-                        className={`plan-month-chip kind-${e.kind}${e.status === 'tentative' ? ' tentative' : ''}${draggingId === e.id ? ' dragging' : ''}`}
-                        onClick={(ev) => { ev.stopPropagation(); setDetailEv(e); }}
-                        onDragStart={(dragEv) => { dragEv.dataTransfer.setData('text/plain', e.id); dragEv.dataTransfer.effectAllowed = 'move'; setDraggingId(e.id); }}
-                        onDragEnd={() => { setDraggingId(null); setDragOverDay(null); }}
-                      >
-                        <span className="tm">{hhmm(e.startAt)}</span> {e.title || e.worksite.ref}
-                      </button>
-                    ))}
+                    {shown.map((r) => {
+                      if ('abs' in r) {
+                        const a = r.abs;
+                        return (
+                          <button key={`abs-${a.id}`} type="button" className="plan-month-chip absence" onClick={(ev) => { ev.stopPropagation(); setAbsenceModal({ existing: a }); }}>
+                            {ABSENCE_KIND_LABEL[a.kind as keyof typeof ABSENCE_KIND_LABEL] ?? a.kind} {personLabel(a.person)}
+                          </button>
+                        );
+                      }
+                      const e = r.grp[0]!;
+                      const multi = r.grp.length > 1;
+                      return (
+                        <button
+                          key={e.id}
+                          type="button"
+                          draggable={!multi}
+                          title={multi ? `${r.grp.length} créneaux ce jour-là` : 'Glisser pour déplacer à un autre jour'}
+                          className={`plan-month-chip kind-${e.kind}${e.status === 'tentative' ? ' tentative' : ''}${draggingId === e.id ? ' dragging' : ''}`}
+                          onClick={(ev) => { ev.stopPropagation(); if (multi) setDayAgenda(ds); else setDetailEv(e); }}
+                          onDragStart={(dragEv) => { dragEv.dataTransfer.setData('text/plain', e.id); dragEv.dataTransfer.effectAllowed = 'move'; setDraggingId(e.id); }}
+                          onDragEnd={() => { setDraggingId(null); setDragOverDay(null); }}
+                        >
+                          <span className="tm">{hhmm(e.startAt)}</span> {e.worksite.ref} - {e.worksite.title}
+                        </button>
+                      );
+                    })}
                     {extra > 0 && (
                       <button type="button" className="plan-month-more" onClick={(ev) => { ev.stopPropagation(); setDayAgenda(ds); }}>
-                        +{extra} de plus
+                        {narrow ? '•••' : `+${extra} de plus`}
                       </button>
                     )}
                   </div>

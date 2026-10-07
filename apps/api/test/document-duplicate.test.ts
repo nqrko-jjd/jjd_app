@@ -31,6 +31,29 @@ const post = async (path: string, body: unknown = {}) => {
   return { status: r.status, body: (await r.json().catch(() => null)) as any }; // eslint-disable-line @typescript-eslint/no-explicit-any
 };
 
+test('dupliquer reprend toute la fiche : textes, coordonnées, lignes avec descriptions ; un document importé sans lignes reporte son budget', async () => {
+  const mk = await post('/api/documents', { kind: 'quote', worksiteId: wsId, title: 'Rénovation', lines: [{ label: 'Peinture', description: '<ul><li>Salon</li></ul>', qty: 1, unit: 'forfait', unitPriceHt: 5950, vatRate: 0.06 }] });
+  const id = mk.body.document.id as string;
+  await prisma.document.update({ where: { id }, data: { intro: 'Bonjour, voici notre offre', terms: 'Acompte 50 %', note: 'Note interne', customerRef: 'BC-12', billingName: 'Nelson D.', billingVat: 'BE0123456789', billingAddress: 'Rue 1, 1000 Bruxelles', billingEmail: 'n@example.com' } });
+  for (const body of [{}, { kind: 'invoice' }]) {
+    const d = (await post(`/api/documents/${id}/duplicate`, body)).body.document;
+    assert.equal(d.intro, 'Bonjour, voici notre offre');
+    assert.equal(d.terms, 'Acompte 50 %');
+    assert.match(d.note, /Note interne/);
+    assert.equal(d.customerRef, 'BC-12');
+    assert.equal(d.billingName, 'Nelson D.');
+    assert.equal(d.billingEmail, 'n@example.com');
+    assert.equal(d.lines[0].description, '<ul><li>Salon</li></ul>');
+    assert.equal(d.totalHt, 5950);
+  }
+  // importé sans lignes : seul le total est stocké
+  const bare = await prisma.document.create({ data: { kind: 'quote', direction: 'sale', status: 'sent', number: 'D-DUPBARE', worksiteId: wsId, totalHt: 20200, totalVat: 1212, totalTtc: 21412, source: 'import' } });
+  const copy = (await post(`/api/documents/${bare.id}/duplicate`, {})).body.document;
+  assert.equal(copy.lines.length, 1);
+  assert.equal(copy.totalHt, 20200);
+  assert.equal(copy.totalTtc, 21412);
+});
+
 test('dupliquer dans un autre type : facture -> devis (brouillon indépendant) -> facture ; même type ; note de crédit sur facture émise refusée ici', async () => {
   const mk = await post('/api/documents', { kind: 'invoice', worksiteId: wsId, lines: [{ label: 'Travaux', qty: 2, unitPriceHt: 100, vatRate: 0.06 }] });
   const inv = mk.body.document as { id: string };

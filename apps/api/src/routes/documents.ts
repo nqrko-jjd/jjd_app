@@ -496,16 +496,32 @@ documentsRouter.post(
         worksiteId: src.worksiteId,
         contactId: src.contactId,
         title: src.title,
-        // le texte d'introduction n'existe que sur un devis
-        intro: target === 'quote' ? src.intro : null,
+        // toute la fiche : textes (introduction, conditions, note), coordonnées de facturation et référence client suivent la copie
+        intro: src.intro,
         terms: src.terms,
-        note: changed ? `Copie du ${LABEL[src.kind] ?? src.kind} ${src.number ?? src.draftRef ?? ''}`.trim() : src.note,
+        note: changed ? [src.note, `Copie du ${LABEL[src.kind] ?? src.kind} ${src.number ?? src.draftRef ?? ''}`.trim()].filter(Boolean).join('\n') : src.note,
+        customerRef: src.customerRef,
+        billingName: src.billingName,
+        billingVat: src.billingVat,
+        billingAddress: src.billingAddress,
+        billingEmail: src.billingEmail,
+        vatRate: src.vatRate,
         source: 'manual',
         createdById: req.user!.id,
       },
     });
-    if (src.lines.length) {
-      await prisma.documentLine.createMany({ data: cloneLineRows(copy.id, src.lines) });
+    // Document importé (PDF) sans détail de lignes mais avec un montant : on reporte ce budget sur une ligne unique
+    // (comme l'éditeur), sinon la copie partirait à 0 €. Seulement si la TVA du total est un taux standard.
+    let srcLines = src.lines;
+    if (!srcLines.length && src.totalHt > 0) {
+      const ratio = src.totalVat / src.totalHt;
+      const stdRate = [0, 0.06, 0.12, 0.21].find((r) => Math.abs(r - ratio) < 0.003);
+      if (stdRate !== undefined) {
+        srcLines = [{ id: '', documentId: src.id, position: 0, kind: 'item', label: 'Reprise du montant importé', description: null, qty: 1, unit: 'forfait', unitPriceHt: src.totalHt, discountPct: 0, vatRate: stdRate, totalHt: src.totalHt, priceItemId: null }];
+      }
+    }
+    if (srcLines.length) {
+      await prisma.documentLine.createMany({ data: cloneLineRows(copy.id, srcLines) });
       await refreshDocTotals(copy.id);
     }
     const full = await prisma.document.findUnique({ where: { id: copy.id }, include: docInclude });

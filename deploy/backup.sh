@@ -12,11 +12,14 @@ BACKUP_DIR="$(pwd)/backups"
 RETENTION_DAYS=45
 TODAY=$(date -u +%Y-%m-%d)
 BACKUP_STAMP="${TODAY}T$(date -u +%H-%M-%SZ)-$$"
-if [ -f .env.production ]; then
-  set -a
-  source .env.production
-  set +a
-fi
+# Lecture CIBLÉE des seules variables utiles — jamais « source .env.production » : une valeur avec espace, chevron, $ ou & casse le script
+# (voire exécute du code) et bloquait tout déploiement (vécu le 2026-10-07 avec SMTP_FROM=JJD Consult <info@…>).
+envval() {
+  [ -f .env.production ] || return 0
+  { grep -E "^$1=" .env.production || true; } | tail -n1 | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'\$//"
+}
+POSTGRES_USER="$(envval POSTGRES_USER)"
+POSTGRES_DB="$(envval POSTGRES_DB)"
 mkdir -p "$BACKUP_DIR"
 if [ "${BACKUP_FORCE:-0}" != "1" ] && ls "$BACKUP_DIR"/jjd-db-"${TODAY}"T*.sql.gz >/dev/null 2>&1; then
   echo "→ Sauvegarde déjà faite aujourd'hui ($TODAY) — rien à faire (BACKUP_FORCE=1 pour forcer)."

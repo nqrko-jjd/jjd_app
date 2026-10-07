@@ -2,6 +2,7 @@
 import { PlanningAgenda } from '@/components/PlanningAgenda';
 import { PlanningList } from '@/components/PlanningList';
 import { SkeletonRows } from '@/components/States';
+import { vehicleLabel, vehicleName } from '@/lib/vehicle';
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
@@ -57,9 +58,6 @@ function specialtyLabel(p: PersonRow) {
   return specs[0] || PERSON_ROLE_LABEL[p.role as keyof typeof PERSON_ROLE_LABEL] || p.role;
 }
 function hhmm(iso: string) { return new Date(iso).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' }); }
-function vehicleLabel(v: PlanVehicleRef) {
-  return [v.code, [v.brand, v.model].filter(Boolean).join(' ')].filter(Boolean).join(' · ') || v.plate || '—';
-}
 
 type KpiKey = 'workers' | 'affected' | 'free' | 'subs' | 'absent' | 'vehicles';
 type InfoRow = { id: string; name: string; lines: string[] };
@@ -377,7 +375,7 @@ export default function PlanningPage() {
       >
         <span className="t">{hhmm(e.startAt)}–{hhmm(e.endAt)}{e.status === 'tentative' ? ' · ?' : ''}</span>
         <span className="r">{e.worksite.ref} · {e.worksite.city ?? e.worksite.title}</span>
-        <span className="n">{e.assignments.length} pers.{e.vehicles[0] ? ` · ${e.vehicles[0].vehicle.code ?? e.vehicles[0].vehicle.plate ?? ''}` : ''}</span>
+        <span className="n">{e.assignments.length} pers.{e.vehicles[0] ? ` · ${vehicleName(e.vehicles[0].vehicle)}` : ''}</span>
       </button>
     ));
   }

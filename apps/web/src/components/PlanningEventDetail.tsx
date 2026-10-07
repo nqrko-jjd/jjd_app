@@ -1,4 +1,5 @@
 'use client';
+import { vehicleLabel } from '@/lib/vehicle';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { PLANNING_EVENT_STATUS_LABEL, PLANNING_EVENT_KIND_LABEL } from '@jjd/shared';
@@ -63,8 +64,7 @@ export function PlanningEventDetail({
                 {ev.vehicles.length > 0 ? (
                   ev.vehicles.map((v) => (
                     <p key={v.vehicle.id} style={{ margin: '0 0 0.3rem' }}>
-                      {[v.vehicle.brand, v.vehicle.model].filter(Boolean).join(' ') || v.vehicle.code || v.vehicle.plate}
-                      {v.vehicle.code ? ` · ${v.vehicle.code}` : ''}
+                      {vehicleLabel(v.vehicle)}
                       {v.driver && <span className="muted"> · conduit par {v.driver.displayName || v.driver.firstName}</span>}
                     </p>
                   ))

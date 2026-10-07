@@ -1,4 +1,5 @@
 'use client';
+import { vehicleLabel } from '@/lib/vehicle';
 import { useMemo, useState } from 'react';
 import { api } from '@/lib/api';
 import { WorksitePicker, type WsPickerOption } from './WorksitePicker';
@@ -394,7 +395,7 @@ export function PlanningAssignmentModal({
                 {vehicles.map((v) => {
                   const sel = f.vehicles.find((x) => x.vehicleId === v.id);
                   const busyHere = busyVehicleIds.has(v.id);
-                  const label = [v.code, [v.brand, v.model].filter(Boolean).join(' ')].filter(Boolean).join(' · ') || v.plate || '—';
+                  const label = vehicleLabel(v);
                   return (
                     <div key={v.id} className="plan-vehicle-option">
                       <label>

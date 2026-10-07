@@ -355,7 +355,7 @@ planningRouter.get(
         manager: w.manager ? { name: w.manager.displayName || w.manager.firstName, phone: w.manager.phone } : null,
         team: ev.team?.name ?? null,
         vehicles: ev.vehicles.map((v) => ({
-          label: [v.vehicle.code, v.vehicle.brand, v.vehicle.model].filter(Boolean).join(' '), plate: v.vehicle.plate,
+          label: v.vehicle.model || v.vehicle.brand || v.vehicle.plate || v.vehicle.code || 'Véhicule', plate: v.vehicle.plate,
         })),
         people: ev.assignments.map((a) => ({
           name: a.person.displayName || a.person.firstName,

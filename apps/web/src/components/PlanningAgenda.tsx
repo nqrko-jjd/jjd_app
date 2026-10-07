@@ -1,6 +1,7 @@
 'use client';
 import { Truck, Users, Plus, AlertTriangle } from 'lucide-react';
 import type { PlanningEv } from './planningTypes';
+import { vehicleLabel } from '@/lib/vehicle';
 const dayKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 export function PlanningAgenda({days, events, onOpen, onNew, onMove}: {
   days: Date[]; events: PlanningEv[]; onOpen: (event: PlanningEv) => void;
@@ -23,7 +24,7 @@ export function PlanningAgenda({days, events, onOpen, onNew, onMove}: {
             <strong>{event.title || event.worksite.title}</strong><span>{event.worksite.city}</span>
             <div className="agenda-team"><Users size={14}/>{event.assignments.length} personne{event.assignments.length!==1?'s':''}</div>
             <span className="agenda-names">{event.assignments.map(a=>a.person.displayName||a.person.firstName).join(', ') || 'Équipe à affecter'}</span>
-            {event.vehicles.map(v=><div key={v.vehicle.id} className="agenda-vehicle"><Truck size={14}/><span>{v.vehicle.code||v.vehicle.plate} · {v.driver?.displayName||v.driver?.firstName||'Conducteur à définir'}</span></div>)}
+            {event.vehicles.map(v=><div key={v.vehicle.id} className="agenda-vehicle"><Truck size={14}/><span>{vehicleLabel(v.vehicle)} · {v.driver?.displayName||v.driver?.firstName||'Conducteur à définir'}</span></div>)}
             {event.vehicles.length>0 && <small>{unknownSeats?'Capacité à vérifier':`${event.assignments.length} personnes / ${seats} places au total`}</small>}
             {transportWarning && <span className="agenda-warning"><AlertTriangle size={14}/>Transport à vérifier</span>}
             {event.status==='tentative' && <span className="agenda-warning">Provisoire</span>}

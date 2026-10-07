@@ -1,4 +1,5 @@
 'use client';
+import { vehicleName } from '@/lib/vehicle';
 import { SkeletonRows, ErrorState, EmptyState } from '@/components/States';
 import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -514,7 +515,7 @@ function AchatsInner() {
                     {e.source === 'email' && <span className="badge plain" style={{ marginLeft: 6 }} title="Reçue sur la boîte mail factures — à vérifier">✉️ Boîte mail</span>}
                   </td>
                   <td className="mono" style={{ fontSize: '0.82rem' }}>{e.docNumber ?? '—'}</td>
-                  <td className="mono">{e.worksite?.ref ?? (e.vehicle ? `🚗 ${e.vehicle.code ?? e.vehicle.plate ?? e.vehicle.name ?? ''}` : '—')}</td>
+                  <td className="mono">{e.worksite?.ref ?? (e.vehicle ? `🚗 ${vehicleName(e.vehicle)}` : '—')}</td>
                   <td>{e.categoryLabel ?? '—'}</td>
                   <td style={{ textAlign: 'right' }}><Money value={e.ht} /></td>
                   <td style={{ textAlign: 'right' }}><Money value={e.ttc ?? e.ht} /></td>

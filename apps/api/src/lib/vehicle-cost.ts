@@ -88,7 +88,7 @@ export async function vehicleCostBreakdown(vehicleId: string) {
 /* ---------------------------------------------------------------- par chantier */
 
 const vehLabel = (v: { code: string | null; brand: string | null; model: string | null; plate: string | null }) =>
-  [v.code, [v.brand, v.model].filter(Boolean).join(' '), v.plate].filter(Boolean)[0] ?? 'Véhicule';
+  v.model || v.brand || v.plate || v.code || 'Véhicule';
 
 export interface WorksiteTrip {
   date: string; // YYYY-MM-DD

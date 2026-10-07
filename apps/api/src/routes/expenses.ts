@@ -246,7 +246,7 @@ expensesRouter.get(
       rawCategories: rawCats.map((c) => c.categoryRaw).filter(Boolean),
       suppliers,
       worksites: worksites.map((w) => ({ id: w.id, name: `${w.ref} · ${w.title}${w.status === 'closed' ? ' (clôturé)' : w.archived ? ' (archivé)' : ''}` })),
-      vehicles: vehicles.map((v) => ({ id: v.id, name: [v.code, v.name || `${v.brand ?? ''} ${v.model ?? ''}`.trim(), v.plate].filter(Boolean).join(' · ') })),
+      vehicles: vehicles.map((v) => ({ id: v.id, name: [v.model || v.brand || v.name, v.plate].filter(Boolean).join(' · ') || v.code || 'Véhicule' })),
       years: years.map((y) => y.year).filter(Boolean),
     });
   }),

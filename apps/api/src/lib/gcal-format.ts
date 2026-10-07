@@ -86,7 +86,7 @@ export function composeGcalEvent(ev: GcalEventSource, ov: BlockOverride = {}): G
   if (material) blocks.push(`🔧 Matériel : ${material}`);
 
   const vehicles = ev.vehicles.map((v) => {
-    const label = [v.vehicle.brand ?? v.vehicle.model, v.vehicle.brand ? v.vehicle.model : null, v.vehicle.plate].filter(Boolean).join(' ');
+    const label = [v.vehicle.model || v.vehicle.brand, v.vehicle.plate].filter(Boolean).join(' ');
     const driver = v.driver ? v.driver.displayName || v.driver.firstName : null;
     return driver ? `${label} (${driver})` : label;
   }).filter(Boolean);

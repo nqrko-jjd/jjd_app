@@ -9,7 +9,7 @@ import { T } from '@/lib/theme';
 interface Expense {
   id: string; date: string | null; supplier: string | null; categoryLabel: string | null; docNumber: string | null;
   worksite: { ref: string } | null;
-  vehicle: { code: string | null; plate: string | null; name: string | null } | null;
+  vehicle: { code: string | null; plate: string | null; name: string | null; brand?: string | null; model?: string | null } | null;
   ttc: number | null; ht: number; paid: boolean; hasPdf: boolean;
 }
 
@@ -59,7 +59,7 @@ export default function Achats() {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <Badge tone={e.paid ? 'ok' : 'warn'}>{e.paid ? 'Payée' : 'Non payée'}</Badge>
               {e.worksite && <Muted>{e.worksite.ref}</Muted>}
-              {e.vehicle && <Muted>🚗 {e.vehicle.code ?? e.vehicle.plate ?? e.vehicle.name}</Muted>}
+              {e.vehicle && <Muted>🚗 {e.vehicle.model || e.vehicle.brand || e.vehicle.name || e.vehicle.plate || e.vehicle.code}</Muted>}
               {e.hasPdf && <Feather name="paperclip" size={12} color={T.ink3} />}
             </View>
           </View>

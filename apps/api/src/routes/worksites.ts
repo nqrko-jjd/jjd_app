@@ -422,7 +422,7 @@ worksitesRouter.get(
             toDo: ev.note, materials: ev.materialsNote,
             team: ev.team?.name ?? null,
             vehicle: ev.vehicles.length
-              ? ev.vehicles.map((v) => `${v.vehicle.code ?? ''} ${v.vehicle.brand ?? ''} ${v.vehicle.model ?? ''}`.trim()).join(', ')
+              ? ev.vehicles.map((v) => [v.vehicle.model || v.vehicle.brand || v.vehicle.code, v.vehicle.plate].filter(Boolean).join(' · ')).join(', ')
               : null,
             people: ev.assignments.map((a) => ({ personId: a.personId, name: a.person.displayName || a.person.firstName, phone: a.person.phone })),
             equipment: ev.equipment.map((e) => ({ name: e.equipment.name, reference: e.equipment.reference })),

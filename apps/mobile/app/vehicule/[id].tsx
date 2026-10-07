@@ -33,7 +33,7 @@ export default function VehiculeDetail() {
   return (
     <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ ...T.content, gap: 20 }}>
       <Stack.Screen options={{ title: [v.brand, v.model].filter(Boolean).join(' '), headerBackTitle: 'Retour' }} />
-      <ScreenHeader title={[v.brand, v.model].filter(Boolean).join(' ') || v.code || 'Véhicule'} eyebrow="Flotte" description={[v.plate, v.code].filter(Boolean).join(' · ')}/>
+      <ScreenHeader title={[v.brand, v.model].filter(Boolean).join(' ') || v.plate || 'Véhicule'} eyebrow="Flotte" description={v.plate ?? undefined}/>
       <PhotoHeader basePath={`/api/vehicles/${v.id}`} photoUrl={v.photoUrl} onChange={load} />
       <Card>
         <Row k="Plaque" v={v.plate ?? '—'} />

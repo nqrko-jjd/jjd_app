@@ -58,6 +58,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
   const { data: cdcList } = useApi<{ items: { id: string }[] }>(`/api/cdc?quoteId=${id}`);
   const { data: plList } = useApi<{ items: { id: string }[] }>(`/api/purchase-lists?quoteId=${id}`);
   const { data: peppol } = useApi<{ enabled: boolean }>('/api/settings/peppol');
+  const { data: mailCfg } = useApi<{ enabled: boolean }>('/api/settings/email');
   const { data: lib } = useApi<{ items: { id: string; label: string; unit: string | null; unitPriceHt: number; vatRate: number }[] }>(
     libQ.length >= 2 ? `/api/price-items?q=${encodeURIComponent(libQ)}` : null,
   );
@@ -511,7 +512,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
           </div>
           </div>
 
-          <DocumentDelivery doc={doc} busy={!!busy} onExternal={() => act('/send', { confirmedExternal: true })} onError={setMsg} peppolEnabled={!!peppol?.enabled} onPeppol={() => act('/send', { peppol: true })} onPeppolRefresh={() => act('/peppol/refresh', {})} />
+          <DocumentDelivery doc={doc} busy={!!busy} onExternal={() => act('/send', { confirmedExternal: true })} onError={setMsg} emailEnabled={!!mailCfg?.enabled} onEmail={(m) => act('/email', m)} peppolEnabled={!!peppol?.enabled} onPeppol={() => act('/send', { peppol: true })} onPeppolRefresh={() => act('/peppol/refresh', {})} />
 
           {/* Actions secondaires */}
           <section className="doc-card">

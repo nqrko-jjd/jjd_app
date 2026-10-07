@@ -15,6 +15,7 @@ import { z } from 'zod';
 import { docInclude, buildLineRows, cloneLineRows, refreshDocTotals, issueDocument, getCompany, syncLedgerEntryForDocument, creditedTtc, partialCreditLines } from '../lib/documents.js';
 import { renderDocumentPdf } from '../lib/pdf.js';
 import { sendViaPeppol, refreshPeppolStatus } from '../lib/peppol.js';
+import { emailInput, defaultEmail, sendEmailWithPdf, emailConfigured } from '../lib/doc-mail.js';
 import { extractDocumentInfo } from '../lib/document-extract.js';
 import { UPLOADS_DIR } from '../lib/media.js';
 import { PAYMENT_TOLERANCE } from '../lib/payment-tolerance.js';
@@ -783,6 +784,42 @@ documentsRouter.post(
       document: updated,
       note: `${DOC_KIND_LABEL[doc.kind]} : envoi externe enregistré. Aucun document transmis par JJD.`,
     });
+  }),
+);
+
+/** Destinataire, objet et texte proposés pour l'envoi par e-mail. */
+documentsRouter.get(
+  '/:id/email/defaults',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const doc = await prisma.document.findUnique({ where: { id: req.params.id }, include: docInclude });
+    if (!doc) throw new HttpError(404, 'Document introuvable');
+    res.json(defaultEmail(doc, await getCompany()));
+  }),
+);
+
+/**
+ * Envoi par e-mail du PDF (devis, facture, acompte, note de crédit) depuis la boîte JJD.
+ * Réel ou rien : si le serveur SMTP refuse, le document n'est PAS marqué envoyé. Le document doit être émis.
+ */
+documentsRouter.post(
+  '/:id/email',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    if (!emailConfigured()) throw new HttpError(503, 'Envoi par e-mail non configuré : le serveur d’envoi de la boîte JJD n’est pas encore branché.');
+    const input = emailInput.parse(req.body);
+    const doc = await prisma.document.findUnique({ where: { id: req.params.id } });
+    if (!doc) throw new HttpError(404, 'Document introuvable');
+    const delivery = externalDeliveryState(doc);
+    const pdf = await getDocPdfBuffer(doc.id);
+    await sendEmailWithPdf(input, pdf);
+    const updated = await prisma.document.update({
+      where: { id: doc.id },
+      data: delivery.alreadyRecorded ? {} : { status: delivery.status, sentAt: new Date() },
+      include: docInclude,
+    });
+    await prisma.auditLog.create({ data: { actorId: req.user!.id, action: 'send', entity: 'document', entityId: doc.id, meta: { channel: 'email', to: input.to } } });
+    res.json({ document: updated, note: `${DOC_KIND_LABEL[doc.kind] ?? 'Document'} envoyé par e-mail à ${input.to.join(', ')}.` });
   }),
 );
 

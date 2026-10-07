@@ -40,6 +40,15 @@ export const env = {
   /** Assistant IA (chat) — brouillons de devis/planning/tâches. Sans clé = masqué. */
   anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? '',
 
+  /** Envoi de documents par e-mail (SMTP de la boîte JJD, ex. info@jjd-consult.be). Sans identifiants = envoi par e-mail désactivé. */
+  smtp: {
+    host: process.env.SMTP_HOST ?? '',
+    port: Number(process.env.SMTP_PORT ?? 465),
+    user: process.env.SMTP_USER ?? '',
+    password: process.env.SMTP_PASSWORD ?? '',
+    from: process.env.SMTP_FROM ?? '',
+  },
+
   /** Envoi Peppol via Recommand (point d'accès certifié). ENVOI SEULEMENT — la réception reste chez le comptable. Sans clé = envoi désactivé. */
   peppol: {
     baseUrl: process.env.RECOMMAND_API_URL ?? 'https://app.recommand.eu/api/v1',

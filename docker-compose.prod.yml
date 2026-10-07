@@ -45,6 +45,12 @@ services:
       DEEPL_API_KEY: ${DEEPL_API_KEY:-}
       # Assistant IA (chat, brouillons) — laisser vide tant que non configuré
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # Envoi de documents par e-mail (SMTP de la boîte JJD) — vide = désactivé
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
       # Envoi Peppol via Recommand (ENVOI SEULEMENT, la réception reste chez le comptable) — vide = désactivé
       RECOMMAND_API_KEY: ${RECOMMAND_API_KEY:-}
       RECOMMAND_API_SECRET: ${RECOMMAND_API_SECRET:-}

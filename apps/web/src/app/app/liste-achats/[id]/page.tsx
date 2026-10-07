@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
 import { api, apiBlobUrl } from '@/lib/api';
 import { PageHead, Kpi, formatEur } from '@/lib/ui';
+import { aiNote, setFlash, takeFlash, AI_WAIT, type AiInfo } from '@/lib/ai-flash';
 import { Wallet, ShoppingCart, PackageCheck } from 'lucide-react';
 
 interface InternalItem { id: string; lot: string; label: string; qty: number; unit: string; estCostHt: number; supplier: string; status: 'todo' | 'ordered' | 'received'; note: string }
@@ -34,7 +35,10 @@ export default function PurchaseListPage({ params }: { params: Promise<{ id: str
   const loaded = useRef(false);
 
   useEffect(() => {
-    if (data && !loaded.current) { loaded.current = true; setTitle(data.list.title); setInternal(data.list.internalItems); setClient(data.list.clientItems); setShareToken(data.list.shareToken); }
+    if (data && !loaded.current) {
+      loaded.current = true; setTitle(data.list.title); setInternal(data.list.internalItems); setClient(data.list.clientItems); setShareToken(data.list.shareToken);
+      const f = takeFlash(); if (f) setMsg({ ok: true, text: f });
+    }
   }, [data]);
   useEffect(() => {
     const warn = (e: BeforeUnloadEvent) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } };
@@ -74,6 +78,17 @@ export default function PurchaseListPage({ params }: { params: Promise<{ id: str
     await api(`/api/purchase-lists/${id}/share`, { method: 'DELETE' });
     setShareToken(null);
   }
+  async function regenerate() {
+    if (!data?.list.quoteId) return;
+    if (!window.confirm('Rédiger une NOUVELLE liste avec l’IA depuis le devis ? La liste actuelle est conservée. Cela utilise le budget IA.')) return;
+    setBusy(true); setMsg({ ok: true, text: AI_WAIT });
+    try {
+      const r = await api<{ list: { id: string }; ai?: AiInfo }>(`/api/purchase-lists/from-quote/${data.list.quoteId}`, { method: 'POST', body: { fresh: true } });
+      setFlash(aiNote(r.ai));
+      router.push(`/app/liste-achats/${r.list.id}`);
+    } catch (e) { setMsg({ ok: false, text: e instanceof Error ? e.message : 'Génération impossible.' }); }
+    finally { setBusy(false); }
+  }
   async function remove() {
     if (!window.confirm('Supprimer cette liste d’achats ?')) return;
     await api(`/api/purchase-lists/${id}`, { method: 'DELETE' });
@@ -95,6 +110,7 @@ export default function PurchaseListPage({ params }: { params: Promise<{ id: str
           <div className="row" style={{ flexWrap: 'wrap' }}>
             {data.list.worksiteId && <Link className="btn" href={`/app/chantiers/${data.list.worksiteId}`}>← Chantier</Link>}
             <button className="btn" onClick={() => pdf(tab)}>PDF</button>
+            {data.list.quoteId && <button className="btn" disabled={busy} onClick={regenerate} title="Recrée la liste, rédigée par l’IA, depuis le devis">Régénérer avec l’IA</button>}
             <button className="btn primary" disabled={busy || !dirty} onClick={save}>{busy ? 'Enregistrement…' : dirty ? 'Enregistrer' : 'Enregistré'}</button>
           </div>
         )}

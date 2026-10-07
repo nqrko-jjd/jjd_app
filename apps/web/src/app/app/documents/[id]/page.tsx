@@ -14,6 +14,7 @@ import { DocumentDelivery } from '@/components/DocumentDelivery';
 import { CreditNoteModal } from '@/components/CreditNoteModal';
 import { RichText } from '@/components/RichText';
 import { QuotePlanModal } from '@/components/QuotePlanModal';
+import { aiNote, setFlash, AI_WAIT, type AiInfo } from '@/lib/ai-flash';
 import { computeDocTotals, VAT_RATES } from '@jjd/shared';
 
 /** Un <br> ou une balise vide compte comme "rien" — l'utilisateur n'a en réalité rien tapé. */
@@ -205,7 +206,9 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
     setBusy('/cdc');
     try {
       if (dirty) await save();
-      const r = await api<{ cdc: { id: string } }>(`/api/cdc/from-quote/${id}`, { method: 'POST', body: {} });
+      setMsg(AI_WAIT);
+      const r = await api<{ cdc: { id: string }; existing?: boolean; ai?: AiInfo }>(`/api/cdc/from-quote/${id}`, { method: 'POST', body: {} });
+      if (!r.existing) setFlash(aiNote(r.ai));
       router.push(`/app/cdc/${r.cdc.id}`);
     } catch (e) { setMsg((e as Error).message); } finally { setBusy(null); }
   }
@@ -213,7 +216,9 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
     setBusy('/purchase-list');
     try {
       if (dirty) await save();
-      const r = await api<{ list: { id: string } }>(`/api/purchase-lists/from-quote/${id}`, { method: 'POST', body: {} });
+      setMsg(AI_WAIT);
+      const r = await api<{ list: { id: string }; existing?: boolean; ai?: AiInfo }>(`/api/purchase-lists/from-quote/${id}`, { method: 'POST', body: {} });
+      if (!r.existing) setFlash(aiNote(r.ai));
       router.push(`/app/liste-achats/${r.list.id}`);
     } catch (e) { setMsg((e as Error).message); } finally { setBusy(null); }
   }

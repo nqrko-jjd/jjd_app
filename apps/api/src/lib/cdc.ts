@@ -127,11 +127,11 @@ const STANDARD_INCLUDED = [
   'Les adaptations mineures de mise en œuvre imposées par la réalité du terrain',
 ];
 
-const isOption = (label: string) => /^\s*(option|variante)\b/i.test(label);
+export const isOption = (label: string) => /^\s*(option|variante)\b/i.test(label);
 
-interface Lot { title: string; intro: string; items: CdcInput['quote']['lines']; texts: string[] }
+export interface Lot { title: string; intro: string; items: CdcInput['quote']['lines']; texts: string[] }
 
-function groupLots(lines: CdcInput['quote']['lines']): Lot[] {
+export function groupLots(lines: CdcInput['quote']['lines']): Lot[] {
   const lots: Lot[] = [];
   let cur: Lot | null = null;
   for (const l of lines) {

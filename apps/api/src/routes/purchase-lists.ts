@@ -11,6 +11,8 @@ import {
   buildClientItems, buildInternalItems, clientItemSchema, internalItemSchema, mergeClientAnswers, newShareToken,
   internalListHtml, clientListHtml, type ClientItem, type InternalItem,
 } from '../lib/purchase-list.js';
+import { aiGenerateJson } from '../lib/ai-generate.js';
+import { PURCHASE_SYSTEM, aiPurchaseSchema, applyAiPurchase, purchasePrompt } from '../lib/ai-purchase.js';
 
 /** Listes d'achats d'un chantier : interne (tout le matériel) et client (produits proposés, lien public). Voir lib/purchase-list.ts. */
 export const purchaseListsRouter = Router();
@@ -49,15 +51,27 @@ purchaseListsRouter.post('/from-quote/:quoteId', requireAuth(...OFFICE), asyncHa
   const existing = await prisma.purchaseList.findFirst({ where: { quoteId: quote.id }, orderBy: { updatedAt: 'desc' } });
   if (existing && req.body?.fresh !== true) { res.json({ list: await view(existing), existing: true }); return; }
   const lines: QuoteLine[] = quote.lines.map((l) => ({ kind: l.kind, label: l.label, description: l.description, qty: l.qty, unit: l.unit, totalHt: l.totalHt, category: l.priceItem?.category ?? null }));
-  const internalItems = buildInternalItems(lines);
+  let internalItems = buildInternalItems(lines);
   if (!internalItems.length) throw new HttpError(422, 'Ce devis n’a pas de poste de fourniture : rien à acheter.');
+  let clientItems = buildClientItems(lines);
+  // Rédaction par l'IA (budget de l'assistant, direction seulement) ; sinon la liste de base, avec la raison
+  let ai: { used: boolean; reason?: string; costEuro?: number } = { used: false, reason: 'Génération par l’IA non demandée.' };
+  if (req.body?.ai !== false) {
+    const r = await aiGenerateJson(req.user!, { system: PURCHASE_SYSTEM, prompt: purchasePrompt(lines, quote.worksite), schema: aiPurchaseSchema, maxOutput: 8000 });
+    if (!r.ok) ai = { used: false, reason: r.reason };
+    else {
+      const merged = applyAiPurchase(lines, r.data);
+      if (merged) { internalItems = merged.internal; if (merged.client.length) clientItems = merged.client; ai = { used: true, costEuro: r.costEuro }; }
+      else ai = { used: false, reason: 'La réponse de l’IA n’était pas exploitable : liste de base utilisée.' };
+    }
+  }
   const created = await prisma.purchaseList.create({
     data: {
       worksiteId: quote.worksite.id, quoteId: quote.id, title: `Achats — ${quote.worksite.title}`,
-      internalItems: asJson(internalItems), clientItems: asJson(buildClientItems(lines)), createdById: req.user!.id,
+      internalItems: asJson(internalItems), clientItems: asJson(clientItems), createdById: req.user!.id,
     },
   });
-  res.status(201).json({ list: await view(created), existing: false });
+  res.status(201).json({ list: await view(created), existing: false, ai });
 }));
 
 purchaseListsRouter.get('/:id', requireAuth(...STAFF), asyncHandler(async (req, res) => {

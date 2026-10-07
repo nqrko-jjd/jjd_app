@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
 import { api, apiBlobUrl } from '@/lib/api';
 import { PageHead } from '@/lib/ui';
+import { aiNote, setFlash, takeFlash, AI_WAIT, type AiInfo } from '@/lib/ai-flash';
 
 type Block =
   | { type: 'p'; text: string }
@@ -41,6 +42,7 @@ export default function CdcPage({ params }: { params: Promise<{ id: string }> })
     if (data && !loaded.current) {
       loaded.current = true;
       setTitle(data.cdc.title); setContent(data.cdc.content); setStatus(data.cdc.status);
+      const f = takeFlash(); if (f) setMsg({ ok: true, text: f });
     }
   }, [data]);
 
@@ -76,11 +78,14 @@ export default function CdcPage({ params }: { params: Promise<{ id: string }> })
   }
   async function regenerate() {
     if (!data?.cdc.quoteId) return;
-    if (!window.confirm('Générer une NOUVELLE version depuis le devis ? La version actuelle est conservée (tu pourras la supprimer ensuite).')) return;
+    if (!window.confirm('Rédiger une NOUVELLE version avec l’IA depuis le devis ? La version actuelle est conservée (tu pourras la supprimer ensuite). Cela utilise le budget IA.')) return;
+    setBusy(true); setMsg({ ok: true, text: AI_WAIT });
     try {
-      const r = await api<{ cdc: Cdc }>(`/api/cdc/from-quote/${data.cdc.quoteId}`, { method: 'POST', body: { fresh: true } });
+      const r = await api<{ cdc: Cdc; ai?: AiInfo }>(`/api/cdc/from-quote/${data.cdc.quoteId}`, { method: 'POST', body: { fresh: true } });
+      setFlash(aiNote(r.ai));
       router.push(`/app/cdc/${r.cdc.id}`);
     } catch (e) { setMsg({ ok: false, text: e instanceof Error ? e.message : 'Génération impossible.' }); }
+    finally { setBusy(false); }
   }
   async function remove() {
     if (!window.confirm('Supprimer ce cahier des charges ?')) return;
@@ -119,7 +124,7 @@ export default function CdcPage({ params }: { params: Promise<{ id: string }> })
           {status === 'draft'
             ? <button className="btn" disabled={busy} onClick={() => save('validated')} title="Marque le document comme définitif (reste modifiable)">Marquer validé</button>
             : <button className="btn" disabled={busy} onClick={() => save('draft')}>Repasser en brouillon</button>}
-          {data.cdc.quoteId && <button className="btn" onClick={regenerate} title="Recrée un brouillon depuis le devis (utile si le devis a changé)">Régénérer depuis le devis</button>}
+          {data.cdc.quoteId && <button className="btn" onClick={regenerate} title="Recrée un brouillon rédigé par l’IA depuis le devis (utile si le devis a changé)" disabled={busy}>Régénérer avec l’IA</button>}
           <button className="btn ghost" onClick={remove}>Supprimer</button>
         </span>
       </div>

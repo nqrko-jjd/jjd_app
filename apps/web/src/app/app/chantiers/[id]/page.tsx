@@ -2,7 +2,8 @@
 import { ContactsDialog } from '@/components/ContactRoleEditor';
 import { HardHat } from 'lucide-react';
 import { SkeletonRows, EmptyState, ErrorState } from '@/components/States';
-import { use, useState } from 'react';
+import { use, useMemo, useState } from 'react';
+import { GanttChart, eventsToGantt } from '@/components/GanttChart';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
@@ -312,6 +313,8 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
                 </section>
               )}
 
+              <PlanningGanttCard worksiteId={w.id} />
+
               <CdcCard worksiteId={w.id} />
 
               {nextEvent && (
@@ -612,6 +615,22 @@ function TransportDetail({ t }: { t: NonNullable<Detail['margin']>['transport'] 
 }
 
 /** Cahiers des charges du chantier (générés depuis un devis) : accès direct, ou comment en créer un. */
+/** Planning du chantier en diagramme de Gantt (interventions, regroupées par lot quand elles viennent du devis). */
+function PlanningGanttCard({ worksiteId }: { worksiteId: string }) {
+  const { data } = useApi<{ items: Parameters<typeof eventsToGantt>[0] }>(`/api/planning?worksiteId=${worksiteId}`);
+  const rows = useMemo(() => eventsToGantt(data?.items ?? []), [data]);
+  if (!rows.length) return null;
+  return (
+    <section className="card card-pad" style={{ marginBottom: '1rem' }}>
+      <div className="row" style={{ justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+        <div className="section-title" style={{ margin: 0 }}>Planning</div>
+        <Link href="/app/planning" className="hint">Ouvrir le planning →</Link>
+      </div>
+      <GanttChart rows={rows} />
+    </section>
+  );
+}
+
 function CdcCard({ worksiteId }: { worksiteId: string }) {
   const { data } = useApi<{ items: { id: string; title: string; status: string; updatedAt: string }[] }>(`/api/cdc?worksiteId=${worksiteId}`);
   if (!data) return null;

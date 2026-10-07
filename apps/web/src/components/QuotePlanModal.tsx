@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
+import { GanttChart, type GanttRow } from './GanttChart';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
@@ -55,6 +56,17 @@ export function QuotePlanModal({ quoteId, onClose }: { quoteId: string; onClose:
     return () => { cancelled = true; clearTimeout(t); };
   }, [quoteId, body, startDate]);
 
+  // une barre par lot : du premier créneau (matin / après-midi) au dernier
+  const ganttRows: GanttRow[] = useMemo(() => {
+    if (!pv) return [];
+    return pv.lots.flatMap((l, i): GanttRow[] => {
+      const s = pv.slots.filter((x) => x.lot === i + 1);
+      if (!s.length) return [];
+      const first = s[0]!; const last = s[s.length - 1]!;
+      return [{ id: String(i), label: l.title, sub: `${l.manDays} j d’ouvrier · ${formatEur(l.budgetHt)}`, startDay: first.date, startPart: first.start < '12:00' ? 0 : 0.5, endDay: last.date, endPart: last.end <= '13:00' ? 0.5 : 1, tentative: true, text: `${String(l.days).replace('.', ',')} j` }];
+    });
+  }, [pv]);
+
   async function create(replace: boolean) {
     setBusy(true); setErr(null);
     try {
@@ -67,7 +79,7 @@ export function QuotePlanModal({ quoteId, onClose }: { quoteId: string; onClose:
 
   return (
     <div className="modal-scrim" onClick={onClose}>
-      <div className="modal" style={{ maxWidth: 760, maxHeight: '92vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
+      <div className="modal" style={{ maxWidth: 980, maxHeight: '92vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-head"><h2>Planning prévisionnel d’après le devis</h2><button className="btn ghost" onClick={onClose} aria-label="Fermer">✕</button></div>
         <div style={{ padding: '1rem', display: 'grid', gap: '0.9rem' }}>
           {done ? (
@@ -93,6 +105,10 @@ export function QuotePlanModal({ quoteId, onClose }: { quoteId: string; onClose:
 
               {pv && (
                 <>
+                  <div>
+                    <div className="eyebrow" style={{ margin: '0 0 0.4rem' }}>Planning en diagramme de Gantt</div>
+                    <GanttChart rows={ganttRows} />
+                  </div>
                   <div className="tbl-wrap">
                     <table className="tbl">
                       <thead><tr><th>Lot</th><th style={{ textAlign: 'right' }}>Budget HT</th><th style={{ textAlign: 'right' }}>Main-d’œuvre</th><th style={{ textAlign: 'right' }}>Journées d’ouvrier</th><th style={{ textAlign: 'right' }}>Durée</th></tr></thead>

@@ -22,12 +22,12 @@ export const clientItemSchema = z.object({
   clientChoice: z.enum(['ok', 'other']).nullable().optional(), clientComment: z.string().max(2000).optional(), answeredAt: z.string().nullable().optional(),
 });
 
-const isOption = (l: string) => /^\s*(option|variante)\b/i.test(l);
-const isLabour = (l: QuoteLine) => (l.unit ?? '').toLowerCase().replace(/\./g, '') === 'h' || /main d['’]œuvre|main d['’]oeuvre|heures? de|journée|déplacement|deplacement|évacuation|evacuation|étude|etude|dossier|permis/i.test(l.label) || /main d['’]œuvre|main d['’]oeuvre/i.test(l.category ?? '');
-const newId = () => nanoid(8);
-const r2 = (n: number) => Math.round(n * 100) / 100;
+export const isOption = (l: string) => /^\s*(option|variante)\b/i.test(l);
+export const isLabour = (l: QuoteLine) => (l.unit ?? '').toLowerCase().replace(/\./g, '') === 'h' || /main d['’]œuvre|main d['’]oeuvre|heures? de|journée|déplacement|deplacement|évacuation|evacuation|étude|etude|dossier|permis/i.test(l.label) || /main d['’]œuvre|main d['’]oeuvre/i.test(l.category ?? '');
+export const newId = () => nanoid(8);
+export const r2 = (n: number) => Math.round(n * 100) / 100;
 
-function lotsOf(lines: QuoteLine[]): { title: string; items: QuoteLine[] }[] {
+export function lotsOf(lines: QuoteLine[]): { title: string; items: QuoteLine[] }[] {
   const lots: { title: string; items: QuoteLine[] }[] = [];
   let cur: { title: string; items: QuoteLine[] } | null = null;
   for (const l of lines) {

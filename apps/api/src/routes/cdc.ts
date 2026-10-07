@@ -8,6 +8,8 @@ import { requireAuth, OFFICE, STAFF } from '../lib/auth.js';
 import { buildCdc, cdcToDocx, cdcToHtml, todoCount, type CdcContent } from '../lib/cdc.js';
 import { renderHtmlPdf } from '../lib/pdf.js';
 import { getCompany } from '../lib/documents.js';
+import { aiGenerateJson } from '../lib/ai-generate.js';
+import { CDC_SYSTEM, aiCdcSchema, applyAiToCdc, cdcPrompt } from '../lib/ai-cdc.js';
 
 /** Cahiers des charges : générés depuis un devis, puis édités (voir lib/cdc.ts). */
 export const cdcRouter = Router();
@@ -62,16 +64,28 @@ cdcRouter.post('/from-quote/:quoteId', requireAuth(...OFFICE), asyncHandler(asyn
   if (!quote.lines.some((l) => l.kind === 'item')) throw new HttpError(422, 'Ce devis n’a pas encore de lignes de travaux.');
   const existing = await prisma.scopeDoc.findFirst({ where: { quoteId: quote.id }, orderBy: { updatedAt: 'desc' } });
   if (existing && req.body?.fresh !== true) { res.json({ cdc: view(existing), existing: true }); return; }
-  const content = buildCdc({
+  const input = {
     worksite: quote.worksite,
     client: quote.contact ?? quote.worksite.client,
     quote: { number: quote.number, issuedOn: quote.issuedOn, totalHt: quote.totalHt, title: quote.title, lines: quote.lines.map((l) => ({ kind: l.kind, label: l.label, description: l.description, qty: l.qty, unit: l.unit, totalHt: l.totalHt })) },
-  });
+  };
+  let content = buildCdc(input);
+  // Rédaction par l'IA (budget de l'assistant, direction seulement) ; en cas de problème on garde la génération de base et on dit pourquoi
+  let ai: { used: boolean; reason?: string; costEuro?: number } = { used: false, reason: 'Génération par l’IA non demandée.' };
+  if (req.body?.ai !== false) {
+    const r = await aiGenerateJson(req.user!, { system: CDC_SYSTEM, prompt: cdcPrompt(input), schema: aiCdcSchema, maxOutput: 8000 });
+    if (!r.ok) ai = { used: false, reason: r.reason };
+    else {
+      const merged = applyAiToCdc(content, r.data, input);
+      if (merged) { content = merged; ai = { used: true, costEuro: r.costEuro }; }
+      else ai = { used: false, reason: 'La réponse de l’IA ne correspondait pas aux lots du devis : génération de base utilisée.' };
+    }
+  }
   const created = await prisma.scopeDoc.create({
     data: { worksiteId: quote.worksite.id, quoteId: quote.id, title: `Cahier des charges — ${quote.worksite.title}`, content: content as unknown as Prisma.InputJsonValue, createdById: req.user!.id },
   });
-  await prisma.auditLog.create({ data: { actorId: req.user!.id, action: 'create', entity: 'scopeDoc', entityId: created.id, meta: { quote: quote.number } } });
-  res.status(201).json({ cdc: view(created), existing: false });
+  await prisma.auditLog.create({ data: { actorId: req.user!.id, action: 'create', entity: 'scopeDoc', entityId: created.id, meta: { quote: quote.number, ai: ai.used, aiCostEuro: ai.costEuro } } });
+  res.status(201).json({ cdc: view(created), existing: false, ai });
 }));
 
 cdcRouter.get('/:id', requireAuth(...STAFF), asyncHandler(async (req, res) => {

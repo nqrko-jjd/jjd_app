@@ -4,6 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEv
 export type MenuItem =
   | { label: ReactNode; onClick: () => void; danger?: boolean; disabled?: boolean; check?: boolean }
   | { label: ReactNode; items: MenuItem[]; disabled?: boolean }
+  | { heading: ReactNode }
   | 'separator';
 
 /** Gère l'état {x, y, row} d'un menu contextuel de tableau. */
@@ -27,6 +28,9 @@ export function openActions(href: string, go: (href: string) => void): MenuItem[
 
 function isSubmenu(i: MenuItem): i is { label: ReactNode; items: MenuItem[]; disabled?: boolean } {
   return typeof i === 'object' && 'items' in i;
+}
+function isHeading(i: MenuItem): i is { heading: ReactNode } {
+  return typeof i === 'object' && 'heading' in i;
 }
 
 function MenuBox({ children }: { children: ReactNode }) {
@@ -101,6 +105,7 @@ export function ContextMenu({ x, y, items, onClose }: { x: number; y: number; it
       <Wrapper>
         {list.map((it, i) => {
           if (it === 'separator') return <div key={i} className="ctx-sep" />;
+          if (isHeading(it)) return <div key={i} className="ctx-heading" role="presentation">{it.heading}</div>;
           if (isSubmenu(it)) {
             return (
               <div

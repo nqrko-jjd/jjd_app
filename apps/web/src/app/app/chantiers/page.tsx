@@ -17,6 +17,7 @@ import {
   WORKSITE_SCOPES, WORKSITE_SCOPE_LABEL, WORKSITE_BILLING_MODES, WORKSITE_BILLING_MODE_LABEL,
   WORKSITE_PROGRESS_PCT, type WorksiteStatus,
 } from '@jjd/shared';
+import { WORKSITE_STATUS_GROUPS } from '@/lib/worksite-status-groups';
 
 /**
  * "Clôturé" est un statut comme un autre ici (au même titre que "Terminé"/"En cours") — même si,
@@ -136,12 +137,15 @@ function ChantiersInner() {
       'separator',
       {
         label: 'Changer le statut',
-        items: WORKSITE_STATUSES.map((s) => ({
-          label: WORKSITE_STATUS_LABEL[s],
-          check: s === w.status,
-          disabled: s === w.status,
-          onClick: () => patchWs(w.id, { status: s }),
-        })),
+        items: WORKSITE_STATUS_GROUPS.flatMap((g): MenuItem[] => [
+          { heading: g.label },
+          ...g.statuses.map((s): MenuItem => ({
+            label: WORKSITE_STATUS_LABEL[s],
+            check: s === w.status,
+            disabled: s === w.status,
+            onClick: () => patchWs(w.id, { status: s }),
+          })),
+        ]),
       },
       {
         label: 'Priorité',
@@ -227,7 +231,11 @@ function ChantiersInner() {
               aria-label="Action groupée : changer le statut"
             >
               <option value="">Changer le statut…</option>
-              {WORKSITE_STATUSES.map((s) => <option key={s} value={s}>{WORKSITE_STATUS_LABEL[s]}</option>)}
+              {WORKSITE_STATUS_GROUPS.map((g) => (
+                <optgroup key={g.label} label={g.label}>
+                  {g.statuses.map((s) => <option key={s} value={s}>{WORKSITE_STATUS_LABEL[s]}</option>)}
+                </optgroup>
+              ))}
             </select>
           </div>
         )}

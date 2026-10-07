@@ -945,6 +945,7 @@ model PlanningEvent {
   note          String? // contact sur place / coordination + instructions libres pour l'équipe
   googleEventId String?  @unique // UID de l'événement Google Agenda (synchro / import)
   source        String? // "agenda-import" | null (créé dans l'app)
+  fromQuoteId   String? // créneau proposé automatiquement d'après le budget d'un devis (routes/quote-tools.ts)
   createdById   String?
   createdBy     User?    @relation("EventCreatedBy", fields: [createdById], references: [id])
   createdAt     DateTime @default(now())
@@ -957,6 +958,7 @@ model PlanningEvent {
 
   @@index([startAt])
   @@index([worksiteId])
+  @@index([fromQuoteId])
 }
 
 /// Absence d'un ouvrier (congé, formation…) — bloque son affectation sur la période, distinct
@@ -1652,4 +1654,22 @@ model ScopeDoc {
 
   @@index([worksiteId])
   @@index([quoteId])
+}
+
+/// Listes d'achats d'un chantier (interne + produits proposés au client), générées depuis le devis (lib/purchase-list.ts).
+model PurchaseList {
+  id            String   @id @default(cuid())
+  worksiteId    String?
+  quoteId       String?
+  title         String
+  shareToken    String? // lien public de la liste client (aucun prix de revient ni fournisseur dedans)
+  internalItems Json
+  clientItems   Json
+  createdById   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([worksiteId])
+  @@index([quoteId])
+  @@index([shareToken])
 }

@@ -53,8 +53,8 @@ const lowerFirst = (s: string) => (s ? s.charAt(0).toLowerCase() + s.slice(1) : 
  * Règles par mot-clé : un poste du devis qui parle de carrelage, de peinture, de châssis… déclenche (1) le choix de produit à faire valider
  * par le maître d'ouvrage et (2) les exclusions habituelles de ce corps de métier. C'est ce qui évite « je pensais que c'était compris ».
  */
-interface TradeRule { re: RegExp; trade: string; choice: string; excludes: string[] }
-const TRADE_RULES: TradeRule[] = [
+export interface TradeRule { re: RegExp; trade: string; choice: string; excludes: string[] }
+export const TRADE_RULES: TradeRule[] = [
   { re: /carrel|faïenc|faienc|dallage|mosa[iï]que/i, trade: 'Carrelage / faïence', choice: 'Carrelage / faïence : gamme, format, teinte, joints (référence et prix au m² retenus)', excludes: [
     'Fourniture des carreaux au-delà du prix au m² prévu au devis (le surcoût d’un choix plus cher est à charge du maître d’ouvrage)',
     'Pose en diagonale, calepinage particulier, formats supérieurs à 60 × 60 cm ou pièces de découpe spéciales, sauf mention contraire',

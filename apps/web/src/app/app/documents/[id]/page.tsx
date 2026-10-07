@@ -13,6 +13,7 @@ import { WorksitePicker, type WsPickerOption } from '@/components/WorksitePicker
 import { DocumentDelivery } from '@/components/DocumentDelivery';
 import { CreditNoteModal } from '@/components/CreditNoteModal';
 import { RichText } from '@/components/RichText';
+import { QuotePlanModal } from '@/components/QuotePlanModal';
 import { computeDocTotals, VAT_RATES } from '@jjd/shared';
 
 /** Un <br> ou une balise vide compte comme "rien" — l'utilisateur n'a en réalité rien tapé. */
@@ -48,12 +49,14 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
   const [msg, setMsg] = useState<string | null>(null);
   const [libQ, setLibQ] = useState('');
   const [tasksModal, setTasksModal] = useState(false);
+  const [planOpen, setPlanOpen] = useState(false);
   const [creditOpen, setCreditOpen] = useState(false);
   const [billingOpen, setBillingOpen] = useState(false);
   const [showDiscount, setShowDiscount] = useState(false);
   const [openDesc, setOpenDesc] = useState<Set<number>>(new Set());
   // cahier des charges déjà généré depuis ce devis ?
   const { data: cdcList } = useApi<{ items: { id: string }[] }>(`/api/cdc?quoteId=${id}`);
+  const { data: plList } = useApi<{ items: { id: string }[] }>(`/api/purchase-lists?quoteId=${id}`);
   const { data: lib } = useApi<{ items: { id: string; label: string; unit: string | null; unitPriceHt: number; vatRate: number }[] }>(
     libQ.length >= 2 ? `/api/price-items?q=${encodeURIComponent(libQ)}` : null,
   );
@@ -203,6 +206,18 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
       const r = await api<{ cdc: { id: string } }>(`/api/cdc/from-quote/${id}`, { method: 'POST', body: {} });
       router.push(`/app/cdc/${r.cdc.id}`);
     } catch (e) { setMsg((e as Error).message); } finally { setBusy(null); }
+  }
+  async function openPurchaseList() {
+    setBusy('/purchase-list');
+    try {
+      if (dirty) await save();
+      const r = await api<{ list: { id: string } }>(`/api/purchase-lists/from-quote/${id}`, { method: 'POST', body: {} });
+      router.push(`/app/liste-achats/${r.list.id}`);
+    } catch (e) { setMsg((e as Error).message); } finally { setBusy(null); }
+  }
+  async function openPlan() {
+    if (dirty) { setBusy('/plan'); try { await save(); } catch (e) { setMsg((e as Error).message); setBusy(null); return; } setBusy(null); }
+    setPlanOpen(true);
   }
   const isInvoiceLike = doc.kind === 'invoice' || doc.kind === 'deposit_invoice';
   const remaining = Math.max(0, totals.totalTtc - doc.paidAmount);
@@ -518,6 +533,22 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
                   {cdcList?.items.length ? 'Cahier des charges' : 'Générer le cahier des charges'}
                 </button>
               )}
+              {isQuote && (
+                <button
+                  className="btn" disabled={!!busy || !doc.worksite} onClick={openPlan}
+                  title={doc.worksite ? 'Durée et créneaux proposés d’après le budget du devis' : 'Rattachez d’abord le devis à un chantier'}
+                >
+                  Planning prévisionnel…
+                </button>
+              )}
+              {isQuote && (
+                <button
+                  className="btn" disabled={!!busy || !doc.worksite} onClick={openPurchaseList}
+                  title={doc.worksite ? 'Matériel à acheter + produits à faire valider par le client' : 'Rattachez d’abord le devis à un chantier'}
+                >
+                  {plList?.items.length ? 'Liste d’achats' : 'Générer la liste d’achats'}
+                </button>
+              )}
               {isQuote && locked && (
                 <>
                   <button className="btn" disabled={!!busy} onClick={() => act('/status', { status: 'accepted' })}>Accepté</button>
@@ -651,6 +682,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
         </aside>
       </div>
 
+      {planOpen && <QuotePlanModal quoteId={id} onClose={() => setPlanOpen(false)} />}
       {tasksModal && (
         <TasksFromLinesModal
           docId={id}

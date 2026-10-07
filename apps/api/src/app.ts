@@ -33,6 +33,8 @@ import { stockOrdersRouter } from './routes/stock-orders.js';
 import { purchasingRouter } from './routes/purchasing.js';
 import { assistantRouter } from './routes/assistant.js';
 import { cdcRouter } from './routes/cdc.js';
+import { quoteToolsRouter } from './routes/quote-tools.js';
+import { purchaseListsRouter, publicPurchaseListRouter } from './routes/purchase-lists.js';
 import { geocodeRouter } from './routes/geocode.js';
 import { usersRouter } from './routes/users.js';
 import { pushRouter } from './routes/push.js';
@@ -89,6 +91,9 @@ export function createApp() {
   app.use('/api/purchasing', purchasingRouter);
   app.use('/api/assistant', assistantRouter);
   app.use('/api/cdc', cdcRouter);
+  app.use('/api/quote-tools', quoteToolsRouter);
+  app.use('/api/purchase-lists', purchaseListsRouter);
+  app.use('/api/public/purchase-list', publicPurchaseListRouter);
   app.use('/api/geocode', geocodeRouter);
   app.use('/api/users', usersRouter);
 

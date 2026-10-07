@@ -116,6 +116,7 @@ export function Shell({ children, navigationPaths }: { children: React.ReactNode
   const { user, logout } = useAuth();
   const [open, setOpen] = useState(false);
   const [navQuery, setNavQuery] = useState('');
+  const [companionOpen, setCompanionOpen] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -231,6 +232,19 @@ export function Shell({ children, navigationPaths }: { children: React.ReactNode
             </div>
           );
         })}
+        {assistant?.previewAllowed && pathname !== '/app/messagerie' && (
+          <button
+            type="button"
+            className="navlink"
+            aria-expanded={companionOpen}
+            aria-controls="jjd-companion"
+            title={collapsed ? 'Compagnon IA' : undefined}
+            onClick={() => { setOpen(false); setCompanionOpen((v) => !v); }}
+          >
+            <span className="ic"><Sparkles size={16} strokeWidth={2} /></span>
+            <span className="lbl">Compagnon IA</span>
+          </button>
+        )}
         <button
           type="button"
           className="nav-collapse"
@@ -275,9 +289,8 @@ export function Shell({ children, navigationPaths }: { children: React.ReactNode
         <button className="bottom-tab" aria-expanded={open} aria-controls="app-navigation" onClick={()=>setOpen(true)}><Menu size={20}/>Plus</button>
       </nav>}
 
-      {/* Sur Messagerie, la bulle (coin bas-droit) chevauche le composeur de la messagerie
-          d'équipe en mobile — déjà plein écran sur cette page, pas besoin de la bulle en plus. */}
-      {assistant?.previewAllowed && pathname !== '/app/messagerie' && <CompanionLauncher />}
+      {/* Le Compagnon IA s'ouvre depuis le menu latéral (plus de bulle flottante : elle bloquait des boutons) */}
+      {assistant?.previewAllowed && pathname !== '/app/messagerie' && <CompanionLauncher open={companionOpen} onClose={() => setCompanionOpen(false)} />}
     </div>
   );
 }

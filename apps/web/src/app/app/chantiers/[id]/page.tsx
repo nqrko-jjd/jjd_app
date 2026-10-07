@@ -312,6 +312,8 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
                 </section>
               )}
 
+              <CdcCard worksiteId={w.id} />
+
               {nextEvent && (
                 <div className="card card-pad">
                   <div className="section-title" style={{ marginTop: 0 }}>Prochaine étape</div>
@@ -606,6 +608,29 @@ function TransportDetail({ t }: { t: NonNullable<Detail['margin']>['transport'] 
         </table>
       </div>
     </CollapsibleSection>
+  );
+}
+
+/** Cahiers des charges du chantier (générés depuis un devis) : accès direct, ou comment en créer un. */
+function CdcCard({ worksiteId }: { worksiteId: string }) {
+  const { data } = useApi<{ items: { id: string; title: string; status: string; updatedAt: string }[] }>(`/api/cdc?worksiteId=${worksiteId}`);
+  if (!data) return null;
+  return (
+    <section className="card card-pad" style={{ marginBottom: '1rem' }}>
+      <div className="section-title" style={{ marginTop: 0 }}>Cahier des charges</div>
+      {data.items.length === 0 ? (
+        <p className="muted" style={{ margin: 0, fontSize: '0.88rem' }}>Aucun pour l’instant. Ouvre le devis du chantier et clique sur « Générer le cahier des charges » : il fixe ce qui est compris ou non, les finitions et le choix des produits.</p>
+      ) : (
+        <div style={{ display: 'grid', gap: '0.4rem' }}>
+          {data.items.map((c) => (
+            <Link key={c.id} href={`/app/cdc/${c.id}`} className="row" style={{ justifyContent: 'space-between', gap: '0.6rem' }}>
+              <span>{c.title}</span>
+              <span className={`badge ${c.status === 'validated' ? 'ok' : 'warn'}`}>{c.status === 'validated' ? 'Validé' : 'Brouillon'}</span>
+            </Link>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 

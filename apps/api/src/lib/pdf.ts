@@ -273,3 +273,16 @@ export async function renderDocumentPdf(d: PdfDoc, co: Company): Promise<Buffer>
     await page.close();
   }
 }
+
+/** PDF d'une page HTML autonome (cahier des charges…) — même Chromium que les devis. */
+export async function renderHtmlPdf(html: string): Promise<Buffer> {
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+  try {
+    await page.setContent(html, { waitUntil: 'load' });
+    const pdf = await page.pdf({ format: 'A4', printBackground: true, preferCSSPageSize: true });
+    return Buffer.from(pdf);
+  } finally {
+    await page.close();
+  }
+}

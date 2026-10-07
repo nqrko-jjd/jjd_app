@@ -115,6 +115,7 @@ function DocumentsInner() {
       // une note de crédit sur une facture ÉMISE se fait depuis la facture (« Note de crédit… ») : lien, montant partiel, plafond
       ...(d.kind === 'quote' ? [{ label: 'Dupliquer en note de crédit libre', onClick: () => post(`/api/documents/${d.id}/duplicate`, { kind: 'credit_note' }, true) }] : []),
       ...(isQuote ? [{ label: 'Convertir en facture', onClick: () => post(`/api/documents/${d.id}/convert`, {}, true) }] : []),
+      ...(isQuote ? [{ label: 'Cahier des charges', onClick: async () => { try { const r = await api<{ cdc: { id: string } }>(`/api/cdc/from-quote/${d.id}`, { method: 'POST', body: {} }); router.push(`/app/cdc/${r.cdc.id}`); } catch (e) { alert((e as Error).message); } } }] : []),
       ...(isQuote && d.status === 'sent'
         ? [
             { label: 'Marquer accepté', onClick: () => post(`/api/documents/${d.id}/status`, { status: 'accepted' }) },

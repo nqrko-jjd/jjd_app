@@ -52,6 +52,8 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
   const [billingOpen, setBillingOpen] = useState(false);
   const [showDiscount, setShowDiscount] = useState(false);
   const [openDesc, setOpenDesc] = useState<Set<number>>(new Set());
+  // cahier des charges déjà généré depuis ce devis ?
+  const { data: cdcList } = useApi<{ items: { id: string }[] }>(`/api/cdc?quoteId=${id}`);
   const { data: lib } = useApi<{ items: { id: string; label: string; unit: string | null; unitPriceHt: number; vatRate: number }[] }>(
     libQ.length >= 2 ? `/api/price-items?q=${encodeURIComponent(libQ)}` : null,
   );
@@ -194,6 +196,14 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
     return base;
   })();
   const isQuote = doc.kind === 'quote';
+  async function openCdc() {
+    setBusy('/cdc');
+    try {
+      if (dirty) await save();
+      const r = await api<{ cdc: { id: string } }>(`/api/cdc/from-quote/${id}`, { method: 'POST', body: {} });
+      router.push(`/app/cdc/${r.cdc.id}`);
+    } catch (e) { setMsg((e as Error).message); } finally { setBusy(null); }
+  }
   const isInvoiceLike = doc.kind === 'invoice' || doc.kind === 'deposit_invoice';
   const remaining = Math.max(0, totals.totalTtc - doc.paidAmount);
   const colspan = showDiscount ? 6 : 5;
@@ -499,6 +509,14 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
               )}
               {isQuote && doc.worksite && (
                 <button className="btn" disabled={!!busy} onClick={() => setTasksModal(true)}>Créer des tâches depuis ce devis</button>
+              )}
+              {isQuote && (
+                <button
+                  className="btn" disabled={!!busy || !doc.worksite} onClick={openCdc}
+                  title={doc.worksite ? 'Brouillon de cahier des charges : ce qui est compris ou non, finitions, choix des produits' : 'Rattachez d’abord le devis à un chantier'}
+                >
+                  {cdcList?.items.length ? 'Cahier des charges' : 'Générer le cahier des charges'}
+                </button>
               )}
               {isQuote && locked && (
                 <>

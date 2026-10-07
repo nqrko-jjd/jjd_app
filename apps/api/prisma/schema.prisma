@@ -1637,3 +1637,19 @@ model StockLocation {
   label     String?
   createdAt DateTime @default(now())
 }
+
+/// Cahier des charges d'un chantier : généré depuis le devis (lib/cdc.ts) puis édité. Contenu structuré en JSON (sections de blocs).
+model ScopeDoc {
+  id          String   @id @default(cuid())
+  worksiteId  String?
+  quoteId     String? // devis (Document) d'origine
+  title       String
+  status      String   @default("draft") // draft | validated
+  content     Json
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([worksiteId])
+  @@index([quoteId])
+}

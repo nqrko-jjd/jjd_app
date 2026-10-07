@@ -70,7 +70,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
   const { data: pick } = useApi<{
     clients: { id: string; name: string }[];
     buildings: { id: string; name: string }[];
-    people: { id: string; name: string }[];
+    people: { id: string; name: string; role?: string }[];
   }>('/api/meta/pickers');
   const [editingContacts, setEditingContacts] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -115,7 +115,8 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
     { name: 'title', label: 'Intitulé', required: true, full: true },
     { name: 'clientId', label: 'Client / donneur d’ordre', type: 'contact', full: true },
     { name: 'buildingId', label: 'Immeuble / ACP / projet', type: 'contact', contactKindFilter: ['acp', 'developer'], placeholder: 'Chercher un immeuble / ACP / projet…', full: true, fillAddressFrom: { address: 'address', postalCode: 'postalCode', city: 'city' } },
-    { name: 'managerId', label: 'Chef de chantier', type: 'select', options: (pick?.people ?? []).map((p) => ({ value: p.id, label: p.name })) },
+    // gestionnaires de chantier (Tonton, Julien…) d'abord : ils supervisent le chantier et sont repris sur sa fiche
+    { name: 'managerId', label: 'Gestionnaire de chantier', type: 'select', options: [...(pick?.people ?? [])].sort((a, b) => Number(b.role === 'manager') - Number(a.role === 'manager')).map((p) => ({ value: p.id, label: p.role === 'manager' ? `${p.name} (gestionnaire)` : p.name })) },
     { name: 'entity', label: 'Entité', type: 'select', options: ENTITIES.map((e) => ({ value: e, label: ENTITY_LABEL[e] })) },
     { name: 'status', label: 'Statut', type: 'select', options: WORKSITE_STATUSES.map((s) => ({ value: s, label: WORKSITE_STATUS_LABEL[s] })) },
     { name: 'priority', label: 'Priorité', type: 'select', options: WORKSITE_PRIORITIES.map((p) => ({ value: p, label: WORKSITE_PRIORITY_LABEL[p] })) },

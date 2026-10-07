@@ -1272,7 +1272,7 @@ body.nav-collapsed .navlink .nav-badge { position: absolute; top: 2px; right: 2p
 ::selection { background: var(--primary-soft); }
 
 /* ---------------------------------------------------- planning (KPI + grille par ressource) */
-.plan-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border: 1px solid var(--line); background: var(--surface); border-radius: 17px; overflow: hidden; margin-bottom: 1.5rem; }
+.plan-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); border: 1px solid var(--line); background: var(--surface); border-radius: 17px; overflow: hidden; margin-bottom: 1.5rem; }
 .plan-kpis > div { padding: 1.2rem 1.3rem; border-right: 1px solid var(--line); }
 .plan-kpis > div:last-child { border-right: none; }
 .plan-kpis strong { display: block; font-size: 1.8rem; font-weight: 550; color: var(--primary-ink); font-variant-numeric: tabular-nums; }
@@ -2442,3 +2442,42 @@ body.plan-wide .main { max-width: none; }
 @media(max-width:600px){.bottom-tab.active{color:var(--nav-fg-active)}.worksite-detail-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.worksite-detail-kpis .value{font-size:20px}.worksite-detail-kpis .kpi{padding:16px 13px}.vehicle-sheet{min-width:0}.vehicle-essentials{grid-template-columns:repeat(2,minmax(0,1fr))}.vehicle-essential{min-width:0;overflow-wrap:anywhere}}
 .vehicle-sheet{grid-template-columns:minmax(0,1fr)}.vehicle-panel,.vehicle-overview,.vehicle-facts{min-width:0}.vehicle-sheet .tbl-wrap{max-width:100%;overflow-x:auto}@media(max-width:600px){.vehicle-facts{grid-template-columns:repeat(2,minmax(0,1fr))}.vehicle-overview{grid-template-columns:minmax(0,1fr)}}
 .vehicle-cover-copy,.vehicle-photo{min-width:0}.vehicle-identity>svg{max-width:100%;height:auto}@media(max-width:600px){.vehicle-cover{grid-template-columns:minmax(0,1fr)}}
+
+/* planning : barre d'outils regroupée (navigation à gauche, affichage et filtres à droite), menu « Plus » */
+.plan-nav { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+.plan-nav-label { margin-left: 0.7rem; font-size: 1rem; }
+.plan-view-select { display: inline-flex; align-items: center; gap: 0.45rem; font-size: 0.82rem; color: var(--ink-3); }
+.plan-view-select .select { min-width: 190px; }
+.plan-more-menu { position: relative; }
+.plan-more-menu > summary { list-style: none; cursor: pointer; }
+.plan-more-menu > summary::-webkit-details-marker { display: none; }
+.plan-more-panel { position: absolute; right: 0; top: calc(100% + 6px); z-index: 30; min-width: 260px; display: grid; gap: 2px; padding: 0.4rem; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); }
+.plan-more-panel .btn { justify-content: flex-start; text-align: left; }
+.plan-group-row th { text-align: left; background: var(--surface-2); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-2); padding: 0.5rem 0.8rem; }
+
+/* vue « Planning » (liste façon Google Agenda) */
+.plan-list { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.plan-list-more { display: block; width: 100%; padding: 0.7rem; border: 0; background: var(--surface-2); color: var(--ink-2); font: inherit; font-size: 0.82rem; cursor: pointer; }
+.plan-list-more:hover { color: var(--primary); }
+.plan-list-day { display: grid; grid-template-columns: 110px 1fr; border-top: 1px solid var(--line); }
+.plan-list-date { padding: 0.8rem 1rem; display: flex; align-items: baseline; gap: 0.5rem; }
+.plan-list-date strong { font-size: 1.4rem; font-weight: 600; line-height: 1; }
+.plan-list-date small { text-transform: uppercase; font-size: 0.66rem; letter-spacing: 0.05em; color: var(--ink-3); }
+.plan-list-day.today .plan-list-date strong { background: var(--primary); color: #fff; border-radius: 50%; width: 2.1rem; height: 2.1rem; display: inline-grid; place-items: center; font-size: 1.05rem; }
+.plan-list-rows { display: flex; flex-direction: column; min-width: 0; }
+.plan-list-row { display: grid; grid-template-columns: 14px 150px minmax(0, 2.6fr) minmax(0, 1.4fr) minmax(0, 1fr); gap: 0.8rem; align-items: center; text-align: left; padding: 0.55rem 0.9rem; border: 0; border-bottom: 1px solid var(--line); background: transparent; font: inherit; font-size: 0.86rem; color: var(--ink); cursor: pointer; }
+.plan-list-row:last-child { border-bottom: 0; }
+.plan-list-row:hover { background: var(--surface-2); }
+.plan-list-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--tone-accent, var(--primary)); }
+.plan-list-row.tentative .plan-list-dot { background: transparent; border: 2px solid var(--tone-accent, var(--primary)); }
+.plan-list-row.absence .plan-list-dot { background: #7a8a85; }
+.plan-list-time { font-variant-numeric: tabular-nums; color: var(--ink-2); }
+.plan-list-title { font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plan-list-where, .plan-list-people { color: var(--ink-3); font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plan-list-empty { padding: 0.8rem 0.9rem; color: var(--ink-3); font-size: 0.86rem; }
+.plan-list-end { padding: 0.4rem; text-align: center; color: var(--ink-3); font-size: 0.82rem; }
+@media (max-width: 860px) {
+  .plan-list-day { grid-template-columns: 70px 1fr; }
+  .plan-list-row { grid-template-columns: 14px 1fr; row-gap: 0.1rem; }
+  .plan-list-row .plan-list-time, .plan-list-row .plan-list-title, .plan-list-row .plan-list-where, .plan-list-row .plan-list-people { grid-column: 2; white-space: normal; }
+}

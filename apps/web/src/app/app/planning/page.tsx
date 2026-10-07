@@ -1,7 +1,8 @@
 'use client';
 import { PlanningAgenda } from '@/components/PlanningAgenda';
+import { PlanningList } from '@/components/PlanningList';
 import { SkeletonRows } from '@/components/States';
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
@@ -9,11 +10,11 @@ import { PageHead, StatusBadge } from '@/lib/ui';
 import { PlanningAssignmentModal } from '@/components/PlanningAssignmentModal';
 import { PlanningEventDetail } from '@/components/PlanningEventDetail';
 import { PlanningAbsenceModal } from '@/components/PlanningAbsenceModal';
-import { WORKSITE_STATUS_OPEN, WORKSITE_STATUS_LABEL, ABSENCE_KIND_LABEL, PERSON_ROLE_LABEL } from '@jjd/shared';
+import { WORKSITE_STATUS_OPEN, WORKSITE_STATUS_LABEL, ABSENCE_KIND_LABEL, PERSON_ROLE_LABEL, WORKFORCE_CATEGORY_LABEL, workforceCategory, isFieldWorker } from '@jjd/shared';
 import { Eye, Search, Truck, Wrench } from 'lucide-react';
 import type { PlanningEv, PlanAbsence, PlanVehicleRef } from '@/components/planningTypes';
 
-interface PersonRow { id: string; displayName: string | null; firstName: string; role: string; specialties?: unknown; active: boolean; phone?: string | null }
+interface PersonRow { id: string; displayName: string | null; firstName: string; role: string; contractType?: string | null; specialties?: unknown; active: boolean; phone?: string | null }
 interface WsRow { id: string; ref: string; title: string; city: string | null; status: string }
 interface EquipRow { id: string; name: string }
 interface VehicleRow extends PlanVehicleRef { status: string; excludedFromPlanning: boolean }
@@ -60,7 +61,10 @@ function vehicleLabel(v: PlanVehicleRef) {
   return [v.code, [v.brand, v.model].filter(Boolean).join(' ')].filter(Boolean).join(' · ') || v.plate || '—';
 }
 
-type ViewMode = 'agenda' | 'day' | 'workers' | 'worksites' | 'resources' | 'month';
+type ViewMode = 'planning' | 'agenda' | 'day' | 'workers' | 'worksites' | 'resources' | 'month';
+/** Ordre d'affichage des personnes : ouvriers d'abord ; sous-traitants, gestionnaires et bureau à part. */
+const CAT_ORDER = { ouvrier: 0, sous_traitant: 1, gestionnaire: 2, bureau: 3 } as const;
+const CAT_NOTE = { ouvrier: '', sous_traitant: ' — appelés à la demande, hors effectif disponible', gestionnaire: ' — supervisent, toujours disponibles, hors effectif terrain', bureau: ' — hors terrain' } as const;
 type Resource = { kind: 'vehicle' | 'equipment'; id: string; label: string; sub: string };
 
 export default function PlanningPage() {
@@ -76,6 +80,9 @@ export default function PlanningPage() {
   const [worksiteStatusFilter, setWorksiteStatusFilter] = useState('');
   const [onlyFree, setOnlyFree] = useState(false);
   const [wide, setWide] = useState(false);
+  // vue « Planning » (liste façon Google Agenda) : début de la fenêtre et nombre de jours chargés (défilement sans fin)
+  const [listStart, setListStart] = useState(() => { const t = new Date(); t.setHours(0, 0, 0, 0); return t; });
+  const [listSpan, setListSpan] = useState(31);
 
   const [assignmentModal, setAssignmentModal] = useState<{
     existing?: PlanningEv | null;
@@ -95,7 +102,8 @@ export default function PlanningPage() {
   const weekDays = useMemo(() => daysFrom(anchor, periodWeeks * 7), [anchor, periodWeeks]);
   const monthDays = useMemo(() => monthGridDays(monthAnchor), [monthAnchor]);
   const dayView = useMemo(() => [new Date(`${trackedDay}T00:00:00`)], [trackedDay]);
-  const days = view === 'month' ? monthDays : view === 'day' ? dayView : weekDays;
+  const listDays = useMemo(() => daysFrom(listStart, listSpan), [listStart, listSpan]);
+  const days = view === 'planning' ? listDays : view === 'month' ? monthDays : view === 'day' ? dayView : weekDays;
   const dayStrs = useMemo(() => days.map(toDateInput), [days]);
   const from = days[0]!.toISOString();
   const to = addDays(days[days.length - 1]!, 1).toISOString();
@@ -238,9 +246,14 @@ export default function PlanningPage() {
     setTrackedDay(toDateInput(new Date()));
   }
 
-  const totalActive = people.length;
-  const affectedToday = peopleIdsByDay.get(trackedDay)?.size ?? 0;
-  const absentToday = absentIdsByDay.get(trackedDay)?.size ?? 0;
+  // effectif terrain = les OUVRIERS ; sous-traitants (à la demande), gestionnaires (supervision) et bureau sont comptés à part
+  const fieldIds = useMemo(() => new Set(people.filter(isFieldWorker).map((p) => p.id)), [people]);
+  const subIds = useMemo(() => new Set(people.filter((p) => workforceCategory(p) === 'sous_traitant').map((p) => p.id)), [people]);
+  const countIn = (ids: Set<string> | undefined, among: Set<string>) => { let n = 0; ids?.forEach((id) => { if (among.has(id)) n++; }); return n; };
+  const totalActive = fieldIds.size;
+  const affectedToday = countIn(peopleIdsByDay.get(trackedDay), fieldIds);
+  const absentToday = countIn(absentIdsByDay.get(trackedDay), fieldIds);
+  const subAffectedToday = countIn(peopleIdsByDay.get(trackedDay), subIds);
   const freeToday = Math.max(0, totalActive - affectedToday - absentToday);
   const vehiclesReservedToday = vehicleIdsByDay.get(trackedDay)?.size ?? 0;
 
@@ -268,12 +281,13 @@ export default function PlanningPage() {
     if (specialtyFilter && specialtyLabel(p) !== specialtyFilter) return false;
     if ((worksiteFilter || worksiteStatusFilter) && !events.some((e) => eventMatchesWorksiteFilters(e) && e.assignments.some((a) => a.person.id === p.id))) return false;
     if (onlyFree) {
+      if (!isFieldWorker(p)) return false; // « libres » = ouvriers uniquement
       const affected = peopleIdsByDay.get(trackedDay)?.has(p.id);
       const absent = absentIdsByDay.get(trackedDay)?.has(p.id);
       if (affected || absent) return false;
     }
     return true;
-  }), [people, q, specialtyFilter, worksiteFilter, worksiteStatusFilter, statusFilteredWorksiteIds, events, onlyFree, peopleIdsByDay, absentIdsByDay, trackedDay]);
+  }).sort((a, b) => CAT_ORDER[workforceCategory(a)] - CAT_ORDER[workforceCategory(b)]), [people, q, specialtyFilter, worksiteFilter, worksiteStatusFilter, statusFilteredWorksiteIds, events, onlyFree, peopleIdsByDay, absentIdsByDay, trackedDay]);
 
   const worksiteRows = useMemo(() => [...statusFilteredWorksites, ...(worksiteFilter ? worksitesClosed.filter((w) => w.id === worksiteFilter) : [])].filter((w) => {
     if (q && !w.ref.toLowerCase().includes(q) && !w.title.toLowerCase().includes(q) && !(w.city ?? '').toLowerCase().includes(q)) return false;
@@ -316,9 +330,36 @@ export default function PlanningPage() {
     ));
   }
 
+  function navPrev() {
+    if (view === 'planning') { setListStart((d) => addDays(d, -14)); setListSpan((n) => n + 14); }
+    else if (view === 'month') shiftMonth(-1);
+    else if (view === 'day') shiftDay(-1);
+    else shiftWeek(-1);
+  }
+  function navNext() {
+    if (view === 'planning') setListSpan((n) => n + 14);
+    else if (view === 'month') shiftMonth(1);
+    else if (view === 'day') shiftDay(1);
+    else shiftWeek(1);
+  }
+  function navToday() {
+    if (view === 'planning') { const t = new Date(); t.setHours(0, 0, 0, 0); setListStart(t); setListSpan(31); setTrackedDay(toDateInput(t)); }
+    else if (view === 'month') goTodayMonth();
+    else if (view === 'day') setTrackedDay(toDateInput(new Date()));
+    else goToday();
+  }
+  const viewKey = view === 'agenda' ? (periodWeeks === 2 ? '2weeks' : 'week') : view;
+  function changeView(v: string) {
+    if (v === 'week') { setView('agenda'); setPeriodWeeks(1); }
+    else if (v === '2weeks') { setView('agenda'); setPeriodWeeks(2); }
+    else if (v === 'worksites') { setView('worksites'); setPeriodWeeks(1); }
+    else setView(v as ViewMode);
+  }
   const monthLabel = monthAnchor.toLocaleDateString('fr-BE', { month: 'long', year: 'numeric' });
   const dayLabel = dayView[0]!.toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' });
-  const rangeLabel = view === 'month'
+  const rangeLabel = view === 'planning'
+    ? `Planning · à partir du ${listStart.toLocaleDateString('fr-BE', { day: 'numeric', month: 'long', year: 'numeric' })}`
+    : view === 'month'
     ? monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1)
     : view === 'day'
     ? dayLabel.charAt(0).toUpperCase() + dayLabel.slice(1)
@@ -333,17 +374,22 @@ export default function PlanningPage() {
         sub="Des équipes composées pour chaque chantier, chaque jour."
         action={
           <div className="row">
-            {evData?.googleSync && (
-              <>
-              <button className="btn" onClick={() => gcalBackfill()} disabled={gcalBusy} title="Envoie vers Google Agenda les événements jamais synchronisés — ne touche pas à ceux déjà envoyés">
-                {gcalBusy ? 'Synchronisation…' : '↻ Rattraper Google Agenda'}
-              </button>
-              <button className="btn" onClick={() => gcalBackfill(true)} disabled={gcalBusy} title="Réécrit dans Google Agenda les événements à venir déjà envoyés, avec la nouvelle présentation (titre complet, icônes, mission en tirets)">
-                Mettre à jour le format Google
-              </button>
-              </>
-            )}
-            <button className="btn" onClick={() => setAbsenceModal({})}>+ Congé / formation</button>
+            <details className="plan-more-menu" onKeyDown={(e) => { if (e.key === 'Escape') { e.currentTarget.open = false; } }}>
+              <summary className="btn">Plus <span aria-hidden="true">⌄</span></summary>
+              <div className="plan-more-panel">
+                <button className="btn ghost" onClick={() => setAbsenceModal({})}>+ Congé / formation</button>
+                {evData?.googleSync && (
+                  <>
+                    <button className="btn ghost" onClick={() => gcalBackfill()} disabled={gcalBusy} title="Envoie vers Google Agenda les événements jamais synchronisés — ne touche pas à ceux déjà envoyés">
+                      {gcalBusy ? 'Synchronisation…' : '↻ Rattraper Google Agenda'}
+                    </button>
+                    <button className="btn ghost" onClick={() => gcalBackfill(true)} disabled={gcalBusy} title="Réécrit dans Google Agenda les événements à venir déjà envoyés, avec la nouvelle présentation">
+                      Mettre à jour le format Google
+                    </button>
+                  </>
+                )}
+              </div>
+            </details>
             <button className="btn primary" onClick={() => openNew({ date: trackedDay })}>+ Nouvelle affectation</button>
           </div>
         }
@@ -353,25 +399,34 @@ export default function PlanningPage() {
         <div><strong>{totalActive}</strong><span>Ouvriers au planning</span></div>
         <div><strong>{affectedToday}</strong><span>Affectés le {trackedShort}</span></div>
         <div><strong>{freeToday}</strong><span>Libres toute la journée</span></div>
+        <div><strong>{subAffectedToday}</strong><span>Sous-traitants affectés (à la demande, hors effectif)</span></div>
         <div><strong>{absentToday}</strong><span>Absences / formations</span></div>
         <div><strong>{vehiclesReservedToday}<small>/{vehicles.length}</small></strong><span>Véhicules réservés</span></div>
       </div>
 
       <div className="plan-topbar">
-        <div className="plan-switch" role="group" aria-label="Affichage du planning">
-          <button className={view === 'day' ? 'active' : ''} onClick={() => setView('day')}>Jour</button>
-          <button className={view === 'agenda' && periodWeeks === 1 ? 'active' : ''} onClick={() => { setView('agenda'); setPeriodWeeks(1); }}>Semaine</button>
-          <button className={view === 'agenda' && periodWeeks === 2 ? 'active' : ''} onClick={() => { setView('agenda'); setPeriodWeeks(2); }}>2 semaines</button>
-          <button className={view === 'month' ? 'active' : ''} onClick={() => setView('month')}>Mois</button>
-          <button className={view === 'worksites' ? 'active' : ''} onClick={() => { setView('worksites'); setPeriodWeeks(1); }}>Suivi des chantiers</button>
+        <div className="plan-nav" role="group" aria-label="Navigation dans le temps">
+          <button type="button" className="btn" onClick={navPrev} aria-label="Précédent">←</button>
+          <button type="button" className="btn" onClick={navToday}>{view === 'month' || view === 'day' || view === 'planning' ? "Aujourd'hui" : 'Cette semaine'}</button>
+          <button type="button" className="btn" onClick={navNext} aria-label="Suivant">→</button>
         </div>
         <div className="plan-period">
-          {view !== 'month' && view !== 'day' && <button type="button" className="btn plan-expand-toggle" onClick={() => setWide((w) => !w)}>{wide ? 'Réduire' : 'Agrandir le planning'}</button>}
-          <button type="button" className="btn" onClick={() => (view === 'month' ? shiftMonth(-1) : view === 'day' ? shiftDay(-1) : shiftWeek(-1))}>←</button>
-          <button type="button" className="btn" onClick={() => (view === 'month' ? goTodayMonth() : view === 'day' ? setTrackedDay(toDateInput(new Date())) : goToday())}>
-            {view === 'month' ? "Aujourd'hui" : view === 'day' ? "Aujourd'hui" : 'Cette semaine'}
-          </button>
-          <button type="button" className="btn" onClick={() => (view === 'month' ? shiftMonth(1) : view === 'day' ? shiftDay(1) : shiftWeek(1))}>→</button>
+          {view !== 'month' && view !== 'day' && view !== 'planning' && <button type="button" className="btn plan-expand-toggle" onClick={() => setWide((w) => !w)}>{wide ? 'Réduire' : 'Agrandir le planning'}</button>}
+          <label className="plan-view-select">
+            <span>Affichage</span>
+            <select className="select" value={viewKey} onChange={(e) => changeView(e.target.value)} aria-label="Format d’affichage du planning">
+              <option value="planning">Planning (liste)</option>
+              <option value="day">Jour</option>
+              <option value="week">Semaine</option>
+              <option value="2weeks">2 semaines</option>
+              <option value="month">Mois</option>
+              <optgroup label="Grilles">
+                <option value="worksites">Par chantier</option>
+                <option value="workers">Par ouvrier et sous-traitant</option>
+                <option value="resources">Véhicules et matériel</option>
+              </optgroup>
+            </select>
+          </label>
           <details className="plan-filter-menu" onKeyDown={(e) => { if (e.key === 'Escape') { e.currentTarget.open = false; e.currentTarget.querySelector('summary')?.focus(); } }}>
             <summary className="btn" title="Recherche et filtres du planning">
               Filtres{(search || worksiteStatusFilter || worksiteFilter) && <span className="plan-filter-count">{Number(Boolean(search)) + Number(Boolean(worksiteStatusFilter)) + Number(Boolean(worksiteFilter))}</span>}
@@ -445,7 +500,19 @@ export default function PlanningPage() {
         </label>
       </div>
 
-      {loading && !evData ? <SkeletonRows /> : view === 'agenda' ? (
+      {loading && !evData ? <SkeletonRows /> : view === 'planning' ? (
+        <PlanningList
+          days={listDays}
+          events={events.filter((e) => eventMatchesWorksiteFilters(e) && (!search || [e.title, e.worksite.title, e.worksite.ref, ...e.assignments.map((a) => a.person.displayName || a.person.firstName)].join(' ').toLowerCase().includes(q)))}
+          absences={absences}
+          absenceLabel={(k) => ABSENCE_KIND_LABEL[k as keyof typeof ABSENCE_KIND_LABEL] ?? k}
+          busy={loading}
+          onOpen={setDetailEv}
+          onOpenAbsence={(a) => setAbsenceModal({ existing: a })}
+          onLoadMore={() => setListSpan((n) => n + 31)}
+          onLoadPrev={() => { setListStart((d) => addDays(d, -14)); setListSpan((n) => n + 14); }}
+        />
+      ) : view === 'agenda' ? (
         <PlanningAgenda days={weekDays} events={events.filter(e => eventMatchesWorksiteFilters(e) && (!search || [e.title,e.worksite.title,e.worksite.ref,...e.assignments.map(a=>a.person.displayName||a.person.firstName)].join(' ').toLowerCase().includes(search.toLowerCase())))} onOpen={setDetailEv} onNew={date=>openNew({date})} onMove={moveEventToDay} />
       ) : view === 'month' ? (
         <section className="plan-board plan-month-board">
@@ -525,7 +592,7 @@ export default function PlanningPage() {
                   </th>
                   {days.map((d) => {
                     const ds = toDateInput(d);
-                    const affected = peopleIdsByDay.get(ds)?.size ?? 0;
+                    const affected = countIn(peopleIdsByDay.get(ds), fieldIds);
                     return (
                       <th key={ds} className={sameDate(ds, trackedDay) ? 'selected-day' : ''}>
                         <button type="button" onClick={() => selectTrackedDay(ds)}>
@@ -538,8 +605,15 @@ export default function PlanningPage() {
                 </tr>
               </thead>
               <tbody>
-                {view === 'workers' && workerRows.map((p) => (
-                  <tr key={p.id}>
+                {view === 'workers' && workerRows.map((p, i) => {
+                  const cat = workforceCategory(p);
+                  const first = i === 0 || workforceCategory(workerRows[i - 1]!) !== cat;
+                  return (
+                  <Fragment key={p.id}>
+                  {first && (
+                    <tr className="plan-group-row"><th colSpan={days.length + 1}>{WORKFORCE_CATEGORY_LABEL[cat]} · {workerRows.filter((x) => workforceCategory(x) === cat).length}{CAT_NOTE[cat]}</th></tr>
+                  )}
+                  <tr>
                     <th>
                       <span className="plan-avatar">{initials(p)}</span>
                       <div>
@@ -558,6 +632,8 @@ export default function PlanningPage() {
                             </span>
                           ) : dayEvents.length > 0 ? (
                             renderChips(ds, dayEvents)
+                          ) : cat === 'gestionnaire' || cat === 'bureau' ? (
+                            <span className="muted" style={{ fontSize: '0.74rem' }}>{cat === 'gestionnaire' ? 'disponible' : '—'}</span>
                           ) : (
                             <button type="button" className="plan-vacancy" onClick={() => openNew({ personId: p.id, date: ds, worksiteId: worksiteFilter || undefined })}>
                               ＋ Affecter
@@ -567,7 +643,9 @@ export default function PlanningPage() {
                       );
                     })}
                   </tr>
-                ))}
+                  </Fragment>
+                  );
+                })}
 
                 {view === 'worksites' && worksiteRows.map((w) => (
                   <tr key={w.id}>
@@ -626,7 +704,7 @@ export default function PlanningPage() {
       )}
 
       <div className="plan-legend">
-        {view === 'month' ? (
+        {view === 'month' || view === 'planning' ? (
           <span><span className="plan-legend-swatch kind-intervention" /> Intervention confirmée</span>
         ) : (
           <span>Chaque couleur correspond à un chantier.</span>

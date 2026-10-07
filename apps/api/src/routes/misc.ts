@@ -51,7 +51,7 @@ metaRouter.get(
     const [clients, buildings, people, worksites, syndics, promoters] = await Promise.all([
       prisma.contact.findMany({ where: { OR: [{ type: 'client' }, { type: 'both' }] }, orderBy: { name: 'asc' }, select: { id: true, name: true } }),
       prisma.contact.findMany({ where: { kind: { in: ['acp', 'developer'] } }, orderBy: { name: 'asc' }, select: { id: true, name: true, syndicId: true, promoterId: true } }),
-      prisma.person.findMany({ where: { active: true }, orderBy: { firstName: 'asc' }, select: { id: true, firstName: true, lastName: true, displayName: true } }),
+      prisma.person.findMany({ where: { active: true }, orderBy: { firstName: 'asc' }, select: { id: true, firstName: true, lastName: true, displayName: true, role: true } }),
       // les chantiers clôturés/archivés restent choisissables (reprise d'anciens dossiers, recoupement
       // des paiements) : en fin de liste, avec un suffixe — jamais cachés
       prisma.worksite.findMany({
@@ -68,7 +68,7 @@ metaRouter.get(
       buildings,
       syndics,
       promoters,
-      people: people.map((p) => ({ id: p.id, name: p.displayName || `${p.firstName} ${p.lastName ?? ''}`.trim() })),
+      people: people.map((p) => ({ id: p.id, name: p.displayName || `${p.firstName} ${p.lastName ?? ''}`.trim(), role: p.role })),
       worksites: worksites.map((w) => ({ id: w.id, name: `${w.ref} · ${w.title}${w.status === 'closed' ? ' (clôturé)' : w.archived ? ' (archivé)' : ''}`, clientId: w.clientId, city: w.city, managerId: w.managerId })),
     });
   }),

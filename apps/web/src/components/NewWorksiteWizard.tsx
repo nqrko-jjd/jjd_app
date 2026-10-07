@@ -65,7 +65,7 @@ export function NewWorksiteWizard({
   onClose,
   onCreated,
 }: {
-  people: { id: string; name: string }[];
+  people: { id: string; name: string; role?: string }[];
   initialBuilding?: { id: string; name: string; address?: string | null; postalCode?: string | null; city?: string | null };
   onClose: () => void;
   onCreated: () => void;
@@ -247,10 +247,10 @@ export function NewWorksiteWizard({
                 <input className="input" value={v.unitLabel} onChange={(e) => patch({ unitLabel: e.target.value })} placeholder="Appartement 3B · 2e étage / parties communes" />
               </div>
               <div className="field">
-                <label>Responsable JJD</label>
+                <label>Gestionnaire de chantier</label>
                 <select className="select" value={v.managerId} onChange={(e) => patch({ managerId: e.target.value })}>
                   <option value="">—</option>
-                  {people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  {[...people].sort((a, b) => Number(b.role === 'manager') - Number(a.role === 'manager')).map((p) => <option key={p.id} value={p.id}>{p.role === 'manager' ? `${p.name} (gestionnaire)` : p.name}</option>)}
                 </select>
               </div>
               <div className="field">

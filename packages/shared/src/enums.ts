@@ -29,7 +29,7 @@ export const INTERNAL_ROLES: Role[] = ['admin', 'office', 'foreman', 'worker', '
  * chef de chantier à la création (routes/people.ts, POST /:id/account) ;
  * les 3 autres valeurs restent de simples ouvriers côté accès.
  */
-export const PERSON_ROLES = ['foreman', 'team_leader', 'qualified_worker', 'worker', 'office'] as const;
+export const PERSON_ROLES = ['foreman', 'team_leader', 'qualified_worker', 'worker', 'manager', 'office'] as const;
 export type PersonRole = (typeof PERSON_ROLES)[number];
 
 export const PERSON_ROLE_LABEL: Record<PersonRole, string> = {
@@ -37,8 +37,32 @@ export const PERSON_ROLE_LABEL: Record<PersonRole, string> = {
   team_leader: "Chef d'équipe",
   qualified_worker: 'Ouvrier qualifié',
   worker: 'Ouvrier',
+  manager: 'Gestionnaire de chantier',
   office: 'Bureau',
 };
+
+/**
+ * Effectif du planning : seuls les OUVRIERS comptent comme « disponibles pour le terrain » (ils tournent tous les jours).
+ * Les sous-traitants sont appelés à la demande (comptés à part), les gestionnaires de chantier (Tonton, Julien) supervisent
+ * et sont toujours disponibles par défaut (jamais dans l'effectif terrain, repris comme gestionnaire sur la fiche chantier),
+ * le bureau n'est pas du terrain.
+ */
+export const WORKFORCE_CATEGORIES = ['ouvrier', 'sous_traitant', 'gestionnaire', 'bureau'] as const;
+export type WorkforceCategory = (typeof WORKFORCE_CATEGORIES)[number];
+export const WORKFORCE_CATEGORY_LABEL: Record<WorkforceCategory, string> = {
+  ouvrier: 'Ouvriers',
+  sous_traitant: 'Sous-traitants',
+  gestionnaire: 'Gestionnaires de chantier',
+  bureau: 'Bureau',
+};
+export function workforceCategory(p: { role: string; contractType?: string | null }): WorkforceCategory {
+  if (p.role === 'manager') return 'gestionnaire';
+  if (p.role === 'office') return 'bureau';
+  if (p.contractType === 'subcontractor') return 'sous_traitant';
+  return 'ouvrier';
+}
+/** Compte dans l'effectif disponible pour le terrain. */
+export const isFieldWorker = (p: { role: string; contractType?: string | null }) => workforceCategory(p) === 'ouvrier';
 
 /* ------------------------------------------------------ Entité d'attribution */
 /**

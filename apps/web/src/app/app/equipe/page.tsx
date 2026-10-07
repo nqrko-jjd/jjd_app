@@ -16,6 +16,7 @@ import { rowNav } from '@/lib/rowNav';
 import { PERSON_FIELDS } from '@/lib/forms';
 import {
   PERSON_ROLE_LABEL, PERSON_ROLES, WORKER_CONTRACT_LABEL, WORKSITE_STATUS_OPEN, ABSENCE_KIND_LABEL,
+  WORKFORCE_CATEGORIES, WORKFORCE_CATEGORY_LABEL, workforceCategory, isFieldWorker, type WorkforceCategory,
 } from '@jjd/shared';
 import { Users, CircleCheck, Building2, CalendarOff, CalendarPlus, UserX, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { PlanningEv, PlanAbsence, PlanVehicleRef } from '@/components/planningTypes';
@@ -99,14 +100,25 @@ function EquipeInner() {
     }
     return map;
   }, [people, events, absences, day]);
+  // Seuls les OUVRIERS comptent dans l'effectif disponible pour le terrain : les sous-traitants sont appelés à la demande,
+  // les gestionnaires de chantier supervisent (toujours disponibles par défaut), le bureau n'est pas du terrain.
+  const [catFilter, setCatFilter] = useState<'all' | WorkforceCategory>('all');
+  const fieldIds = useMemo(() => new Set(people.filter(isFieldWorker).map((p) => p.id)), [people]);
+  const catCounts = useMemo(() => {
+    const c: Record<WorkforceCategory, number> = { ouvrier: 0, sous_traitant: 0, gestionnaire: 0, bureau: 0 };
+    for (const p of people) c[workforceCategory(p)]++;
+    return c;
+  }, [people]);
   const availCounts = useMemo(() => {
     const c = { available: 0, assigned: 0, unavailable: 0 };
-    for (const info of availInfo.values()) c[info.status]++;
+    for (const [id, info] of availInfo) if (fieldIds.has(id)) c[info.status]++;
     return c;
-  }, [availInfo]);
+  }, [availInfo, fieldIds]);
   const filteredRows = useMemo(
-    () => people.filter((p) => statusFilter === 'all' || availInfo.get(p.id)?.status === statusFilter),
-    [people, availInfo, statusFilter],
+    () => people
+      .filter((p) => (statusFilter === 'all' || availInfo.get(p.id)?.status === statusFilter) && (catFilter === 'all' || workforceCategory(p) === catFilter))
+      .sort((a, b) => WORKFORCE_CATEGORIES.indexOf(workforceCategory(a)) - WORKFORCE_CATEGORIES.indexOf(workforceCategory(b))),
+    [people, availInfo, statusFilter, catFilter],
   );
 
   async function patch(id: string, body: Record<string, unknown>) {
@@ -212,10 +224,17 @@ function EquipeInner() {
       </div>
 
       <div className="kpis" style={{ marginBottom: '1.4rem' }}>
-        <Kpi ic={Users} label="Collaborateurs" value={people.length} sub="Selon les filtres" hero />
+        <Kpi ic={Users} label="Ouvriers (effectif terrain)" value={catCounts.ouvrier} sub={`Hors effectif : ${catCounts.sous_traitant} sous-traitant${catCounts.sous_traitant > 1 ? 's' : ''} · ${catCounts.gestionnaire} gestionnaire${catCounts.gestionnaire > 1 ? 's' : ''} · ${catCounts.bureau} bureau`} hero />
         <Kpi ic={CircleCheck} label="Libres toute la journée" value={availCounts.available} sub="Disponibles ce jour-là" />
         <Kpi ic={Building2} label="Avec affectation" value={availCounts.assigned} sub="Déjà sur un chantier" />
         <Kpi ic={CalendarOff} label="Indisponibles" value={availCounts.unavailable} sub={availCounts.unavailable > 0 ? 'Congé ou formation' : 'Personne d’absent'} warn={availCounts.unavailable > 0} />
+      </div>
+
+      <div className="msg-filter-chips" style={{ marginBottom: '0.6rem' }}>
+        <button className={catFilter === 'all' ? 'on' : ''} onClick={() => setCatFilter('all')}>Toutes catégories · {people.length}</button>
+        {WORKFORCE_CATEGORIES.map((c) => (
+          <button key={c} className={catFilter === c ? 'on' : ''} onClick={() => setCatFilter(c)}>{WORKFORCE_CATEGORY_LABEL[c]} · {catCounts[c]}</button>
+        ))}
       </div>
 
       <div className="msg-filter-chips" style={{ marginBottom: '1.1rem' }}>

@@ -29,6 +29,34 @@ function isSubmenu(i: MenuItem): i is { label: ReactNode; items: MenuItem[]; dis
   return typeof i === 'object' && 'items' in i;
 }
 
+function MenuBox({ children }: { children: ReactNode }) {
+  return <div className="ctx-menu" role="menu">{children}</div>;
+}
+
+/** Sous-menu : se replace dans la fenêtre (remonte s'il dépasse en bas, s'ouvre à gauche s'il dépasse à droite, défile s'il est plus haut que l'écran). */
+function SubMenu({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.maxHeight = `${window.innerHeight - 16}px`;
+    el.style.overflowY = 'auto';
+    let r = el.getBoundingClientRect();
+    if (r.bottom > window.innerHeight - 8) {
+      const shift = Math.min(r.bottom - (window.innerHeight - 8), Math.max(0, r.top - 8));
+      el.style.top = `${-5 - shift}px`;
+    }
+    r = el.getBoundingClientRect();
+    if (r.right > window.innerWidth - 8) {
+      el.style.left = 'auto';
+      el.style.right = '100%';
+      el.style.marginLeft = '0';
+      el.style.marginRight = '2px';
+    }
+  }, []);
+  return <div ref={ref} className="ctx-menu ctx-sub" role="menu">{children}</div>;
+}
+
 /** Menu contextuel positionné au curseur. Se ferme au clic extérieur, Échap, scroll. */
 export function ContextMenu({ x, y, items, onClose }: { x: number; y: number; items: MenuItem[]; onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -47,7 +75,10 @@ export function ContextMenu({ x, y, items, onClose }: { x: number; y: number; it
   }, [x, y]);
 
   useEffect(() => {
-    const close = () => onClose();
+    const close = (e?: Event) => {
+      if (e && e.type === 'scroll' && ref.current?.contains(e.target as Node)) return; // défilement interne d'un sous-menu long
+      onClose();
+    };
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     const onDown = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) onClose();
@@ -65,8 +96,9 @@ export function ContextMenu({ x, y, items, onClose }: { x: number; y: number; it
   }, [onClose]);
 
   function renderItems(list: MenuItem[], sub = false) {
+    const Wrapper = sub ? SubMenu : MenuBox;
     return (
-      <div className={`ctx-menu${sub ? ' ctx-sub' : ''}`} role="menu">
+      <Wrapper>
         {list.map((it, i) => {
           if (it === 'separator') return <div key={i} className="ctx-sep" />;
           if (isSubmenu(it)) {
@@ -101,7 +133,7 @@ export function ContextMenu({ x, y, items, onClose }: { x: number; y: number; it
             </button>
           );
         })}
-      </div>
+      </Wrapper>
     );
   }
 

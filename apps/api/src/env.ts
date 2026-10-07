@@ -42,19 +42,20 @@ export const env = {
 
   /** Envoi de documents par e-mail (SMTP de la boîte JJD, ex. info@jjd-consult.be). Sans identifiants = envoi par e-mail désactivé. */
   smtp: {
-    host: process.env.SMTP_HOST ?? '',
+    host: (process.env.SMTP_HOST ?? '').trim(),
     port: Number(process.env.SMTP_PORT ?? 465),
-    user: process.env.SMTP_USER ?? '',
-    password: process.env.SMTP_PASSWORD ?? '',
-    from: process.env.SMTP_FROM ?? '',
+    user: (process.env.SMTP_USER ?? '').trim(),
+    password: (process.env.SMTP_PASSWORD ?? '').trim(),
+    from: (process.env.SMTP_FROM ?? '').trim(),
   },
 
   /** Envoi Peppol via Recommand (point d'accès certifié). ENVOI SEULEMENT — la réception reste chez le comptable. Sans clé = envoi désactivé. */
   peppol: {
     baseUrl: process.env.RECOMMAND_API_URL ?? 'https://app.recommand.eu/api/v1',
-    apiKey: process.env.RECOMMAND_API_KEY ?? '',
-    apiSecret: process.env.RECOMMAND_API_SECRET ?? '',
-    companyId: process.env.RECOMMAND_COMPANY_ID ?? '',
+    // .trim() : un fichier .env créé sous Windows laisse un retour chariot invisible en fin de valeur (cause d'échecs de connexion silencieux)
+    apiKey: (process.env.RECOMMAND_API_KEY ?? '').trim(),
+    apiSecret: (process.env.RECOMMAND_API_SECRET ?? '').trim(),
+    companyId: (process.env.RECOMMAND_COMPANY_ID ?? '').trim(),
   },
 
   google: {

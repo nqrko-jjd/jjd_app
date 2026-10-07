@@ -4,10 +4,9 @@ import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, OFFICE } from '../lib/auth.js';
 import { env } from '../env.js';
 import {
-  pontoConfigured, buildAuthUrl, handleCallback, refreshAccounts,
-  fetchAccountTransactions, pontoDisconnect,
+  pontoConfigured, pontoMode, buildAuthUrl, handleCallback, refreshAccounts, pontoDisconnect,
 } from '../lib/ponto.js';
-import { autoMatchAll } from '../lib/bank-match.js';
+import { syncPonto } from '../lib/ponto-sync.js';
 
 export const pontoRouter = Router();
 
@@ -16,11 +15,14 @@ pontoRouter.get(
   requireAuth(...OFFICE),
   asyncHandler(async (_req, res) => {
     const configured = pontoConfigured();
-    const tokens = configured ? await prisma.setting.findUnique({ where: { key: 'ponto:tokens' } }) : null;
+    const mode = pontoMode();
+    // intégration personnalisée : pas de consentement à donner, les comptes sont ceux liés dans le tableau de bord Ponto
+    const tokens = configured && mode === 'connect' ? await prisma.setting.findUnique({ where: { key: 'ponto:tokens' } }) : null;
     const accounts = await prisma.bankAccount.findMany({ orderBy: { label: 'asc' } });
     res.json({
       configured,
-      connected: !!tokens,
+      mode,
+      connected: configured && (mode === 'custom' || !!tokens),
       redirectUri: env.ponto.redirectUri,
       accounts: accounts.map((a) => ({
         id: a.id, iban: a.iban, label: a.label, balance: a.balance,
@@ -63,30 +65,7 @@ pontoRouter.post(
   requireAuth(...OFFICE),
   asyncHandler(async (_req, res) => {
     if (!pontoConfigured()) throw new HttpError(400, 'Ponto non configuré');
-    await refreshAccounts();
-    const accounts = await prisma.bankAccount.findMany({ where: { externalId: { not: null } } });
-    let imported = 0;
-    for (const acc of accounts) {
-      const txs = await fetchAccountTransactions({ id: acc.id, externalId: acc.externalId!, syncCursor: acc.syncCursor });
-      for (const t of txs) {
-        const created = await prisma.bankTransaction.upsert({
-          where: { externalId: t.externalId },
-          create: {
-            externalId: t.externalId, accountId: acc.id, bookingDate: t.bookingDate, valueDate: t.valueDate,
-            bank: acc.label, amount: t.amount, currency: t.currency, counterpartyName: t.counterpartyName,
-            counterpartyAccount: t.counterpartyAccount, description: t.description, communication: t.communication,
-            structuredComm: t.structuredComm, side: t.side, source: 'ponto',
-          },
-          update: {
-            amount: t.amount, counterpartyName: t.counterpartyName, description: t.description,
-            communication: t.communication, structuredComm: t.structuredComm, side: t.side,
-          },
-        });
-        if (created.createdAt.getTime() > Date.now() - 5000) imported++;
-      }
-    }
-    const match = await autoMatchAll();
-    res.json({ accounts: accounts.length, imported, match });
+    res.json(await syncPonto());
   }),
 );
 

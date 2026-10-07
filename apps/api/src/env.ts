@@ -73,6 +73,13 @@ export const env = {
     signKeyId: process.env.PONTO_SIGNATURE_KEY_ID ?? '',
     signKeyFile: process.env.PONTO_SIGNATURE_KEY_FILE ?? './secrets/ponto-signature-key.pem',
     sandbox: (process.env.PONTO_SANDBOX ?? '') === '1',
+    /**
+     * « custom » = intégration personnalisée créée dans le tableau de bord Ponto pour SA PROPRE organisation : client_id + client_secret
+     * suffisent (OAuth « client credentials », API api.myponto.com), ni certificat ni écran de consentement.
+     * « connect » = Ponto Connect d'éditeur (certificat mTLS + consentement). Vide = automatique : custom dès qu'il y a un secret et pas de certificat.
+     */
+    mode: process.env.PONTO_MODE ?? '',
+    apiUrl: process.env.PONTO_API_URL ?? '',
   },
 
   /**

@@ -7,6 +7,8 @@ import { mailSuggestionsConfigured, syncMailSuggestions } from './lib/lead-mailb
 import { markOverdueInvoices, renumberFaDepositInvoices } from './lib/documents.js';
 import { backfillBankMatches } from './lib/bank-match.js';
 import { backfillWorksiteGeo } from './lib/worksite-geo.js';
+import { pontoConfigured } from './lib/ponto.js';
+import { syncPonto } from './lib/ponto-sync.js';
 import { sweepWorksiteStatuses } from './lib/worksite-status.js';
 
 function lanAddresses(): string[] {
@@ -82,6 +84,14 @@ async function runMarkOverdue() {
   }
 }
 await runMarkOverdue();
+// connexion bancaire Ponto : synchro automatique (3 par jour : la banque limite les accès sans client présent), puis rapprochement
+if (pontoConfigured()) {
+  const runPonto = () => syncPonto()
+    .then((r) => { if (r.imported) console.log(`[ponto] ${r.imported} nouvelle(s) transaction(s), rapprochement : ${JSON.stringify(r.match)}`); })
+    .catch((e) => console.error('[ponto] synchro automatique échouée :', e.message));
+  setTimeout(runPonto, 90_000);
+  setInterval(runPonto, 8 * 3600_000);
+}
 // chantier dont une intervention démarre aujourd'hui : « À planifier » / « Planifié » → « En cours »
 const runStatusSweep = () => sweepWorksiteStatuses().then((n) => { if (n) console.log(`[statuts] ${n} chantier(s) passé(s) « En cours »`); }).catch((e) => console.error('[statuts] échec :', e.message));
 setTimeout(runStatusSweep, 60_000);

@@ -75,7 +75,16 @@ function httpsRequest(
 let agent: https.Agent | null = null;
 let agentChecked = false;
 
+/** « custom » : intégration personnalisée de SA PROPRE organisation (client credentials, sans certificat) ; « connect » : Ponto Connect d'éditeur (mTLS). */
+export function pontoMode(): 'custom' | 'connect' {
+  if (env.ponto.mode === 'custom' || env.ponto.mode === 'connect') return env.ponto.mode;
+  const hasCert = existsSync(secretPath(env.ponto.certFile)) && existsSync(secretPath(env.ponto.keyFile));
+  return env.ponto.clientSecret && !hasCert ? 'custom' : 'connect';
+}
+const apiBase = () => (pontoMode() === 'custom' ? (env.ponto.apiUrl || 'https://api.myponto.com') : API_BASE).replace(/\/+$/, '');
+
 export function pontoConfigured(): boolean {
+  if (pontoMode() === 'custom') return !!env.ponto.clientId && !!env.ponto.clientSecret;
   return (
     !!env.ponto.clientId &&
     existsSync(secretPath(env.ponto.certFile)) &&
@@ -86,6 +95,11 @@ export function pontoConfigured(): boolean {
 function mtlsAgent(): https.Agent | null {
   if (agentChecked) return agent;
   agentChecked = true;
+  if (pontoMode() === 'custom') {
+    if (pontoConfigured()) console.log('[ponto] actif (intégration personnalisée, sans certificat)');
+    else console.log('[ponto] non configuré (PONTO_CLIENT_ID / PONTO_CLIENT_SECRET manquants) — connexion bancaire désactivée');
+    return null;
+  }
   if (!pontoConfigured()) {
     console.log('[ponto] non configuré (client_id ou certificats manquants) — connexion bancaire désactivée');
     return null;
@@ -130,12 +144,15 @@ export async function pontoDisconnect() {
 
 async function tokenRequest(body: Record<string, string>): Promise<TokenSet> {
   if (!pontoConfigured()) throw new Error('Ponto non configuré');
-  const params = new URLSearchParams({ client_id: env.ponto.clientId, ...body }).toString();
+  // intégration personnalisée : l'identification passe uniquement par l'en-tête Basic (pas de client_id dans le corps)
+  const params = new URLSearchParams(pontoMode() === 'custom' ? body : { client_id: env.ponto.clientId, ...body }).toString();
   const headers: Record<string, string> = { 'content-type': 'application/x-www-form-urlencoded', Accept: 'application/json' };
   if (env.ponto.clientSecret) {
     headers.Authorization = `Basic ${Buffer.from(`${env.ponto.clientId}:${env.ponto.clientSecret}`).toString('base64')}`;
   }
-  const r = await httpsRequest(`${API_BASE}/oauth2/token`, { method: 'POST', headers, body: params });
+  let r = await httpsRequest(`${apiBase()}/oauth2/token`, { method: 'POST', headers, body: params });
+  // l'adresse du jeton diffère selon la version de l'API : seconde tentative avec le préfixe historique
+  if (r.status === 404 && pontoMode() === 'custom') r = await httpsRequest(`${apiBase()}/ponto-connect/oauth2/token`, { method: 'POST', headers, body: params });
   if (r.status >= 300) throw new Error(`Ponto token ${r.status} : ${r.text.slice(0, 300)}`);
   const j = JSON.parse(r.text) as { access_token: string; refresh_token?: string; expires_in: number };
   const set: TokenSet = {
@@ -149,6 +166,11 @@ async function tokenRequest(body: Record<string, string>): Promise<TokenSet> {
 
 async function validToken(): Promise<string> {
   const cur = await readTokens();
+  if (pontoMode() === 'custom') {
+    // jeton d'application (≈ 30 min), simplement redemandé quand il expire — pas de consentement ni de jeton de rafraîchissement
+    if (cur && cur.expiresAt > Date.now()) return cur.accessToken;
+    return (await tokenRequest({ grant_type: 'client_credentials' })).accessToken;
+  }
   if (!cur) throw new Error('Ponto non connecté (aucun consentement)');
   if (cur.expiresAt > Date.now()) return cur.accessToken;
   if (!cur.refreshToken) throw new Error('Session Ponto expirée — reconnecter');
@@ -201,7 +223,10 @@ export async function handleCallback(code: string, state: string): Promise<void>
 
 async function apiGet<T = unknown>(pathname: string): Promise<T> {
   const token = await validToken();
-  const url = pathname.startsWith('http') ? pathname : `${API_BASE}${pathname}`;
+  const base = apiBase();
+  // les liens de pagination absolus ne sont suivis que s'ils restent sur l'API Ponto (le jeton ne part jamais ailleurs)
+  if (pathname.startsWith('http') && !pathname.startsWith(`${base}/`)) throw new Error('Lien de pagination Ponto inattendu — ignoré');
+  const url = pathname.startsWith('http') ? pathname : `${base}${pathname}`;
   const r = await httpsRequest(url, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } });
   if (r.status >= 300) throw new Error(`Ponto GET ${pathname} -> ${r.status} : ${r.text.slice(0, 300)}`);
   return JSON.parse(r.text) as T;
@@ -209,7 +234,7 @@ async function apiGet<T = unknown>(pathname: string): Promise<T> {
 
 async function apiPost<T = unknown>(pathname: string, body: unknown): Promise<T> {
   const token = await validToken();
-  const r = await httpsRequest(`${API_BASE}${pathname}`, {
+  const r = await httpsRequest(`${apiBase()}${pathname}`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'content-type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify(body),
@@ -312,11 +337,25 @@ export async function refreshAccounts(): Promise<number> {
   return list.data.length;
 }
 
+/** Demande à Ponto de rafraîchir un compte auprès de la banque, puis attend (≈ 40 s max) qu'elle soit terminée. */
 async function triggerSync(accountId: string): Promise<void> {
+  const body = { data: { type: 'synchronization', attributes: { resourceType: 'account', resourceId: accountId, subtype: 'accountTransactions' } } };
   try {
-    await apiPost('/synchronizations', {
-      data: { type: 'synchronization', attributes: { resourceType: 'account', resourceId: accountId, subtype: 'accountTransactions' } },
-    });
+    let created: { data?: { id?: string } };
+    try {
+      created = await apiPost(pontoMode() === 'custom' ? `/accounts/${accountId}/synchronizations` : '/synchronizations', body);
+    } catch (first) {
+      // selon la version de l'API, l'une ou l'autre adresse existe
+      if (pontoMode() !== 'custom') throw first;
+      created = await apiPost('/synchronizations', body);
+    }
+    const syncId = created.data?.id;
+    for (let i = 0; syncId && i < 20; i++) {
+      await new Promise((r) => setTimeout(r, 2000));
+      const st = await apiGet<{ data?: { attributes?: { status?: string } } }>(`/synchronizations/${syncId}`);
+      const status = st.data?.attributes?.status;
+      if (status && status !== 'pending' && status !== 'running') break;
+    }
   } catch (e) {
     // pas bloquant : on lira quand même les transactions déjà côté Ponto
     console.warn('[ponto] synchronization non déclenchée :', (e as Error).message);
@@ -328,7 +367,7 @@ export async function fetchAccountTransactions(account: { id: string; externalId
   await triggerSync(account.externalId);
   const out: NormalizedTx[] = [];
   let url: string | undefined = account.syncCursor
-    ? `${API_BASE}/accounts/${account.externalId}/transactions?page[limit]=100&page[after]=${account.syncCursor}`
+    ? `${apiBase()}/accounts/${account.externalId}/transactions?page[limit]=100&page[after]=${account.syncCursor}`
     : `/accounts/${account.externalId}/transactions?page[limit]=100`;
   let lastId: string | null = account.syncCursor;
   let guard = 0;

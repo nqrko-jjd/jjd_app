@@ -245,7 +245,7 @@ function BanqueInner() {
             <strong>Connexion bancaire (Ponto)</strong>
             <div className="muted" style={{ fontSize: '0.85rem' }}>
               {!ponto ? 'Chargement…'
-                : !ponto.configured ? 'Non configurée — voir docs/ponto.md (certificats + client_id).'
+                : !ponto.configured ? 'Non configurée — il manque PONTO_CLIENT_ID et PONTO_CLIENT_SECRET (intégration Ponto) sur le serveur.'
                 : !ponto.connected ? 'Configurée, pas encore connectée à une banque.'
                 : `${ponto.accounts.length} compte(s) · ${ponto.accounts.map((a) => a.label ?? a.iban).filter(Boolean).join(', ') || '—'}`}
             </div>

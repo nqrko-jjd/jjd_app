@@ -350,7 +350,7 @@ interface FieldEvent {
 
 const ALERT_KIND_ICON: Record<string, LucideIcon> = {
   overdue_invoices: AlertTriangle, overdue_supplier_invoices: CreditCard, to_invoice: Receipt, quotes_follow: Mail,
-  crm_due: Phone, expiring_docs: ShieldAlert, ct_expiring: Truck,
+  crm_due: Phone, expiring_docs: ShieldAlert, ct_expiring: Truck, on_hold: Eye,
 };
 
 const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' });
@@ -568,14 +568,6 @@ export default function DashboardPage() {
               value={data.kpis.openWorksites}
               sub={data.kpis.teamsOnSiteToday > 0 ? `${data.kpis.teamsOnSiteToday} équipe${data.kpis.teamsOnSiteToday > 1 ? 's' : ''} sur le terrain aujourd’hui` : 'Aucune équipe sur le terrain aujourd’hui'}
               href="/app/chantiers?statut=in_progress"
-            />
-            <Kpi
-              ic={Eye}
-              label="Sous observation"
-              value={data.kpis.onHoldWorksites}
-              sub={data.kpis.onHoldWorksites > 0 ? 'Séchage, contrôle, attente terrain : à planifier à la reprise' : 'Aucun chantier en attente'}
-              href="/app/chantiers?statut=on_hold"
-              warn={data.kpis.onHoldWorksites > 0}
             />
             <Kpi ic={Flag} label="Impayés" href="/app/documents?kind=invoice&dashboard=overdue" value={<Money value={data.kpis.overdueAmount} />} sub={`${data.kpis.overdueCount} facture${data.kpis.overdueCount > 1 ? 's' : ''} en retard`} warn />
             <Kpi

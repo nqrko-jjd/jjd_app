@@ -141,6 +141,8 @@ export async function bureauDashboard() {
     alerts.push({ kind: 'overdue_supplier_invoices', severity: 'critical', label: 'Factures fournisseurs échues', count: supplierOverdue.length, amount: supplierOverdueAmount, href: '/app/achats?paid=0' });
   if (worksitesToInvoice)
     alerts.push({ kind: 'to_invoice', severity: 'warning', label: 'Chantiers terminés à facturer', count: worksitesToInvoice, href: '/app/chantiers?statut=to_invoice' });
+  if (onHoldCount)
+    alerts.push({ kind: 'on_hold', severity: 'warning', label: 'Chantiers sous observation (à planifier à la reprise)', count: onHoldCount, href: '/app/chantiers?statut=on_hold' });
   if (quotesPending.length)
     alerts.push({ kind: 'quotes_follow', severity: 'warning', label: 'Devis envoyés sans réponse', count: quotesPending.length, amount: quotesPendingAmount, href: '/app/documents?kind=quote&statut=sent' });
   if (crmNextActions)

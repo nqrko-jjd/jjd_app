@@ -8,8 +8,23 @@ const COLOR_RE = /^(#[0-9a-fA-F]{3,8}|rgb\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*\))$/;
  * d'impression (dangerouslySetInnerHTML, imprimée en PDF via Puppeteer), donc jamais de balises
  * exécutables (script, on*, style externe…), seulement la mise en forme inline autorisée.
  */
+/**
+ * Chromium (contentEditable) fait un <div> par ligne quand on appuie sur Entrée — balise que le nettoyage retire, ce qui
+ * recollait tout le texte sur une seule ligne à l'enregistrement. On les convertit donc d'abord en sauts de ligne
+ * (<div>a</div><div>b</div> → a<br>b ; une ligne vide <div><br></div> reste une ligne vide).
+ */
+export function divsToBreaks(html: string): string {
+  let out = '';
+  for (const tok of html.split(/(<\/?(?:div|p)(?:\s[^>]*)?>)/i)) {
+    if (/^<(?:div|p)(?:\s[^>]*)?>$/i.test(tok)) {
+      if (out && !/(?:<br\s*\/?>|<\/(?:ul|ol|li)>)$/i.test(out)) out += '<br>';
+    } else if (!/^<\/(?:div|p)>$/i.test(tok)) out += tok;
+  }
+  return out;
+}
+
 export function sanitizeLineHtml(html: string): string {
-  return sanitizeHtml(html, {
+  return sanitizeHtml(divsToBreaks(html), {
     // <font color> : c'est ce que produit réellement execCommand('foreColor') sous Chromium
     // (le moteur de la barre d'outils RichText, voir components/RichText.tsx), pas <span
     // style="color:…"> — les deux sont acceptés pour ne pas dépendre d'un comportement de moteur.

@@ -36,3 +36,12 @@ test('sanitizeLineHtml : conserve listes à puces/numérotées et le barré', ()
   const html = '<ul><li>Un</li><li>Deux</li></ul><ol><li>Un</li></ol><strike>ancien prix</strike><s>autre</s>';
   assert.equal(sanitizeLineHtml(html), html);
 });
+
+test('sanitizeLineHtml : les lignes de l’éditeur (<div> de Chromium) deviennent des sauts de ligne, pas un seul bloc de texte', () => {
+  assert.equal(sanitizeLineHtml('Installation<div>Percement</div><div>Pose du WC</div>'), 'Installation<br />Percement<br />Pose du WC');
+  assert.equal(sanitizeLineHtml('a<div>b</div><div><br></div><div>c</div>'), 'a<br />b<br /><br />c');
+  assert.equal(sanitizeLineHtml('<div>un</div><div>deux</div>'), 'un<br />deux');
+  assert.equal(sanitizeLineHtml('<p>un</p><p>deux</p>'), 'un<br />deux');
+  assert.equal(sanitizeLineHtml('ligne 1<br>ligne 2'), 'ligne 1<br />ligne 2');
+  assert.equal(sanitizeLineHtml('<ul><li>a</li></ul><div>b</div>'), '<ul><li>a</li></ul>b');
+});

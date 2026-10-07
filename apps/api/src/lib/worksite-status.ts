@@ -9,7 +9,7 @@ import { worksiteQuotedHtBatch, worksiteInvoicedHtBatch } from './worksite-margi
  *                                          (+ « En observation / attente », « Refusé », « Abandonné » à côté)
  *
  * Principes :
- *  - on AVANCE ; les seuls retours en arrière sont explicites (voir « reculs ») ;
+ *  - on AVANCE ; seul retour en arrière : « Planifié » → « À planifier » quand la dernière intervention disparaît ; « Clôturé » ne bouge plus ;
  *  - « Abandonné » n'est jamais touché ; « Refusé » ne repart que si un devis est finalement accepté ;
  *  - « En observation / attente » ne reprend que si on planifie une intervention ou si on pointe sur le chantier ;
  *  - un changement manuel de statut reste ce qu'il est : l'automatisme ne réagit qu'à un NOUVEL événement du chantier ;
@@ -45,6 +45,9 @@ type Step = { to: WorksiteStatus; reason: string };
 /** UNE transition à partir du statut courant (ou null). */
 function step(s: string, sig: StatusSignals, trigger: StatusTrigger): Step | null {
   if (s === 'cancelled') return null;
+  // « Clôturé » est définitif pour l'automatisme : l'historique importé (notes de crédit, factures « non payées » de l'Excel…) n'est pas assez
+  // fiable pour rouvrir un dossier tout seul — on ne rouvre qu'à la main
+  if (s === 'closed') return null;
   if (s === 'refused') return trigger === 'document' && sig.quotes.accepted > 0 ? { to: 'to_plan', reason: 'devis finalement accepté' } : null;
 
   // ---- facturation / encaissement (déclenchés par un document, un paiement, ou la fin signalée sur le terrain)
@@ -57,8 +60,6 @@ function step(s: string, sig: StatusSignals, trigger: StatusTrigger): Step | nul
       const to: WorksiteStatus = sig.allPaid ? 'closed' : 'invoiced';
       if (s !== to) return { to, reason: sig.allPaid ? 'tout est facturé et encaissé' : 'tout est facturé' };
     } else {
-      // reculs : une note de crédit (ou une facture annulée) fait repasser un dossier facturé / clôturé « à facturer »
-      if ((s === 'invoiced' || s === 'closed') && sig.creditNotes > 0) return { to: 'to_invoice', reason: 'note de crédit : il reste à facturer' };
       // terminé sur le terrain mais pas (entièrement) facturé
       if (s === 'done') return { to: 'to_invoice', reason: 'terminé, reste à facturer' };
       // un acompte émis = le client s'engage

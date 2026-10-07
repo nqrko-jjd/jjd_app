@@ -79,15 +79,10 @@ test('paiement partiel : la facture reste « facturé »', () => {
   assert.equal(to({ status: 'invoiced', quotedHt: 10000, invoicedHt: 10000, invoices: 1, allPaid: false }, 'document'), null);
 });
 
-test('clôturé qui redevient impayé (nouvelle facture non payée) : retour à facturé', () => {
-  assert.equal(to({ status: 'closed', quotedHt: 10000, invoicedHt: 10000, invoices: 2, allPaid: false }, 'document'), 'invoiced');
-});
-
-test('note de crédit : facturé / clôturé repasse « à facturer » tant que le marché n’est plus entièrement facturé', () => {
-  assert.equal(to({ status: 'invoiced', quotedHt: 10000, invoicedHt: 6000, invoices: 1, creditNotes: 1 }, 'document'), 'to_invoice');
-  assert.equal(to({ status: 'closed', quotedHt: 10000, invoicedHt: 6000, invoices: 1, creditNotes: 1, allPaid: true }, 'document'), 'to_invoice');
-  // facture annulée puis refaite du même montant : toujours facturé
-  assert.equal(to({ status: 'invoiced', quotedHt: 10000, invoicedHt: 10000, invoices: 2, creditNotes: 1 }, 'document'), null);
+test('« Clôturé » est définitif pour l’automatisme (historique importé trop peu fiable pour rouvrir seul) ; facturé + note de crédit ne recule pas non plus', () => {
+  assert.equal(to({ status: 'closed', quotedHt: 10000, invoicedHt: 10000, invoices: 2, allPaid: false }, 'document'), null);
+  assert.equal(to({ status: 'closed', quotedHt: 10000, invoicedHt: 6000, invoices: 1, creditNotes: 1, allPaid: true }, 'document'), null);
+  assert.equal(to({ status: 'invoiced', quotedHt: 10000, invoicedHt: 6000, invoices: 1, creditNotes: 1 }, 'document'), null);
 });
 
 test('terminé sur le terrain (fil clôturé) : à facturer ; déjà tout facturé → facturé ; tout payé → clôturé', () => {

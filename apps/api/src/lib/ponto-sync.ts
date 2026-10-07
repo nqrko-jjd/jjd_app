@@ -17,7 +17,7 @@ export async function syncPonto(): Promise<{ accounts: number; imported: number;
     for (const acc of accounts) {
       const txs = await fetchAccountTransactions({ id: acc.id, externalId: acc.externalId!, syncCursor: acc.syncCursor });
       for (const t of txs) {
-        const known = await prisma.bankTransaction.findUnique({ where: { externalId: t.externalId }, select: { id: true } });
+        const known = await prisma.bankTransaction.findFirst({ where: { OR: [{ externalId: t.externalId }, { pontoId: t.externalId }] }, select: { id: true } });
         if (known) {
           await prisma.bankTransaction.update({
             where: { id: known.id },
@@ -29,7 +29,7 @@ export async function syncPonto(): Promise<{ accounts: number; imported: number;
         const day = 86400000;
         const near = t.bookingDate
           ? await prisma.bankTransaction.findMany({
-              where: { externalId: null, amount: { gte: t.amount - 0.005, lte: t.amount + 0.005 }, bookingDate: { gte: new Date(t.bookingDate.getTime() - 3 * day), lte: new Date(t.bookingDate.getTime() + 3 * day) } },
+              where: { pontoId: null, OR: [{ source: null }, { source: { not: 'ponto' } }], amount: { gte: t.amount - 0.005, lte: t.amount + 0.005 }, bookingDate: { gte: new Date(t.bookingDate.getTime() - 3 * day), lte: new Date(t.bookingDate.getTime() + 3 * day) } },
               select: { id: true, amount: true, bookingDate: true, counterpartyName: true, counterpartyAccount: true },
             })
           : [];
@@ -38,7 +38,7 @@ export async function syncPonto(): Promise<{ accounts: number; imported: number;
           await prisma.bankTransaction.update({
             where: { id: twin.id },
             data: {
-              externalId: t.externalId, accountId: acc.id, valueDate: t.valueDate ?? undefined, communication: t.communication ?? undefined,
+              pontoId: t.externalId, accountId: acc.id, valueDate: t.valueDate ?? undefined, communication: t.communication ?? undefined,
               structuredComm: t.structuredComm ?? undefined, counterpartyAccount: t.counterpartyAccount ?? undefined,
             },
           });

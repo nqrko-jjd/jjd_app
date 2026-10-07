@@ -68,3 +68,24 @@ test('RDV hors chantier : sa propre adresse ; départ affiché en heure de Bruxe
   assert.equal(r.location, 'Rue Royale 1, 1000 Bruxelles');
   assert.match(r.description, /🕗 Départ : 07h30 · Dépôt/);
 });
+
+test('une seule fiche par chantier et par jour : créneaux fusionnés, détail AM / PM dans la description', async () => {
+  const { composeGcalGroup } = await import('./gcal-format.js');
+  const at = (h: number, m = 0) => new Date(Date.UTC(2026, 9, 7, h - 2, m)); // heure de Bruxelles (UTC+2 en octobre)
+  const person = (n: string) => ({ person: { displayName: n, firstName: n } });
+  const journee = { ...base, title: null, startAt: at(8, 30), endAt: at(17), tasksNote: 'Pose des pavés', assignments: [person('Eduardo'), person('Patrick')], note: null };
+  const matin = { ...base, title: null, startAt: at(8, 30), endAt: at(12, 30), tasksNote: 'Pose des pavés', assignments: [person('Aitor')], note: null };
+  const aprem = { ...base, title: null, startAt: at(12, 30), endAt: at(17), tasksNote: 'Passage tuyaux', assignments: [person('Coco'), person('Rom')], note: null };
+  const r = composeGcalGroup([aprem, journee, matin]);
+  assert.equal(r.summary, 'R-654 - Wavre - Matexi - Condor');
+  assert.equal(r.start.getTime(), at(8, 30).getTime());
+  assert.equal(r.end.getTime(), at(17).getTime());
+  assert.match(r.description, /👥 Ouvriers :\n– Eduardo et Patrick\n– Aitor \(AM\)\n– Coco et Rom \(PM\)/);
+  assert.match(r.description, /🛠 Mission :\n(– Pose des pavés\n– Passage tuyaux|– Pose des pavés\nPM : – Passage tuyaux|[^]*Passage tuyaux)/);
+  // un seul créneau : fiche identique à composeGcalEvent
+  const one = composeGcalGroup([journee]);
+  assert.equal(one.description, composeGcalEvent(journee).description);
+  // deux équipes sur le même horaire : pas d'étiquette AM/PM
+  const same = composeGcalGroup([journee, { ...journee, assignments: [person('Coco')] }]);
+  assert.match(same.description, /👥 Ouvriers :\n– Eduardo et Patrick\n– Coco$/m);
+});

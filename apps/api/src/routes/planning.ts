@@ -7,7 +7,7 @@ import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, STAFF, OFFICE } from '../lib/auth.js';
 import { upsertEvent, deleteEvent, gcalEnabled } from '../lib/gcal.js';
-import { composeGcalEvent } from '../lib/gcal-format.js';
+import { composeGcalEvent, composeGcalGroup } from '../lib/gcal-format.js';
 import { attachPhotoRoutes } from '../lib/photo-upload.js';
 import { vehicleCostBreakdown } from '../lib/vehicle-cost.js';
 import { storeFile, UPLOADS_DIR } from '../lib/media.js';
@@ -22,40 +22,71 @@ function resolveUpload(rel: string): string {
 
 export const planningRouter = Router();
 
-async function syncToGoogle(eventId: string) {
-  const ev = await prisma.planningEvent.findUnique({
-    where: { id: eventId },
-    include: {
-      worksite: {
-        select: {
-          ref: true, title: true, address: true, box: true, postalCode: true, city: true,
-          manager: { select: { displayName: true, firstName: true } },
-          acp: { select: { digicode: true, accessNote: true } },
-          contacts: { orderBy: { position: 'asc' }, select: { role: true, name: true, phone: true } },
-        },
-      },
-      team: { select: { name: true } },
-      vehicles: { include: { vehicle: { select: { plate: true, model: true, brand: true, code: true } }, driver: { select: { displayName: true, firstName: true } } } },
-      assignments: { include: { person: { select: { displayName: true, firstName: true } } } },
-      equipment: { include: { equipment: { select: { name: true } } } },
-      consumables: { include: { consumable: { select: { name: true, unit: true } } } },
+const SLOT_INCLUDE = {
+  worksite: {
+    select: {
+      ref: true, title: true, address: true, box: true, postalCode: true, city: true,
+      manager: { select: { displayName: true, firstName: true } },
+      acp: { select: { digicode: true, accessNote: true } },
+      contacts: { orderBy: { position: 'asc' as const }, select: { role: true, name: true, phone: true } },
     },
-  });
-  if (!ev) return;
+  },
+  team: { select: { name: true } },
+  vehicles: { include: { vehicle: { select: { plate: true, model: true, brand: true, code: true } }, driver: { select: { displayName: true, firstName: true } } } },
+  assignments: { include: { person: { select: { displayName: true, firstName: true } } } },
+  equipment: { include: { equipment: { select: { name: true } } } },
+  consumables: { include: { consumable: { select: { name: true, unit: true } } } },
+};
+
+/** jour calendaire (AAAA-MM-JJ) à Bruxelles */
+const brusselsDay = (d: Date) => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Brussels' }).format(d);
+
+/**
+ * Pousse un créneau vers Google Agenda. Les interventions d'un même chantier le même jour (matin / après-midi, plusieurs équipes…)
+ * ne forment qu'UNE fiche Google (voir syncGroup) ; les rendez-vous et les fiches importées de Google gardent la leur.
+ * Renvoie l'id de la fiche Google qui représente ce créneau.
+ */
+async function syncToGoogle(eventId: string): Promise<string | null> {
+  const head = await prisma.planningEvent.findUnique({ where: { id: eventId }, select: { worksiteId: true, startAt: true, kind: true, source: true } });
+  if (!head) return null;
+  if (head.kind !== 'intervention' || head.source) return syncSingle(eventId);
+  return syncGroup(head.worksiteId, brusselsDay(head.startAt));
+}
+
+async function syncSingle(eventId: string): Promise<string | null> {
+  const ev = await prisma.planningEvent.findUnique({ where: { id: eventId }, include: SLOT_INCLUDE });
+  if (!ev) return null;
   // même présentation que les anciennes fiches Google Agenda (titre complet, blocs avec icônes) : voir lib/gcal-format.ts
   const { summary, description, location, colorId } = composeGcalEvent(ev);
-  const gid = await upsertEvent(ev.googleEventId, {
-    summary,
-    description,
-    location,
-    colorId,
-    start: ev.startAt,
-    end: ev.endAt,
-    allDay: ev.allDay,
+  const gid = await upsertEvent(ev.googleEventId, { summary, description, location, colorId, start: ev.startAt, end: ev.endAt, allDay: ev.allDay });
+  if (gid && gid !== ev.googleEventId) await prisma.planningEvent.update({ where: { id: ev.id }, data: { googleEventId: gid } });
+  return gid;
+}
+
+/** Une fiche Google pour tous les créneaux d'intervention d'un chantier un jour donné ; les anciennes fiches en double sont supprimées. */
+async function syncGroup(worksiteId: string, day: string): Promise<string | null> {
+  const d0 = new Date(`${day}T00:00:00Z`).getTime();
+  const near = await prisma.planningEvent.findMany({
+    where: { worksiteId, kind: 'intervention', source: null, startAt: { gte: new Date(d0 - 86400000), lt: new Date(d0 + 2 * 86400000) } },
+    include: SLOT_INCLUDE,
+    orderBy: [{ startAt: 'asc' }, { id: 'asc' }],
   });
-  if (gid && gid !== ev.googleEventId) {
-    await prisma.planningEvent.update({ where: { id: ev.id }, data: { googleEventId: gid } });
+  const slots = near.filter((s) => brusselsDay(s.startAt) === day);
+  if (slots.length === 0) return null;
+  // la fiche Google déjà existante est conservée (le premier créneau qui en a une), sinon on en crée une
+  const primary = slots.find((s) => s.googleEventId) ?? slots[0]!;
+  const merged = composeGcalGroup(slots);
+  const gid = await upsertEvent(primary.googleEventId, {
+    summary: merged.summary, description: merged.description, location: merged.location, colorId: merged.colorId,
+    start: merged.start, end: merged.end, allDay: merged.allDay,
+  });
+  for (const s of slots) {
+    if (s.id === primary.id || !s.googleEventId) continue;
+    await deleteEvent(s.googleEventId);
+    await prisma.planningEvent.update({ where: { id: s.id }, data: { googleEventId: null } });
   }
+  if (gid && gid !== primary.googleEventId) await prisma.planningEvent.update({ where: { id: primary.id }, data: { googleEventId: gid } });
+  return gid;
 }
 
 planningRouter.get(
@@ -109,15 +140,18 @@ planningRouter.post(
     const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
     const missing = await prisma.planningEvent.findMany({
       where: reformat ? { googleEventId: { not: null }, source: null, startAt: { gte: startOfToday } } : { googleEventId: null },
-      select: { id: true },
+      select: { id: true, worksiteId: true, startAt: true, kind: true, source: true },
     });
     let synced = 0;
     const errors: string[] = [];
+    // les interventions d'un même chantier le même jour partagent une seule fiche Google : on ne la traite qu'une fois
+    const done = new Set<string>();
     for (const ev of missing) {
+      const key = ev.kind === 'intervention' && !ev.source ? `${ev.worksiteId}|${brusselsDay(ev.startAt)}` : ev.id;
+      if (done.has(key)) { synced++; continue; }
+      done.add(key);
       try {
-        await syncToGoogle(ev.id);
-        const check = await prisma.planningEvent.findUnique({ where: { id: ev.id }, select: { googleEventId: true } });
-        if (check?.googleEventId) synced++;
+        if (await syncToGoogle(ev.id)) synced++;
         else errors.push(`${ev.id} : échec silencieux (voir logs serveur)`);
       } catch (e) {
         errors.push(`${ev.id} : ${(e as Error).message}`);
@@ -182,6 +216,7 @@ planningRouter.patch(
   requireAuth(...STAFF),
   asyncHandler(async (req, res) => {
     const d = planningEventInput.partial().parse(req.body);
+    const before = await prisma.planningEvent.findUnique({ where: { id: req.params.id }, select: { worksiteId: true, startAt: true, kind: true, source: true } });
     await prisma.planningEvent.update({
       where: { id: req.params.id },
       data: {
@@ -221,6 +256,13 @@ planningRouter.patch(
       },
     });
     await syncToGoogle(req.params.id!);
+    // créneau déplacé vers un autre jour / chantier, ou changé de nature : la fiche Google qu'il quitte doit être recalculée
+    if (before && before.kind === 'intervention' && !before.source) {
+      const after = await prisma.planningEvent.findUnique({ where: { id: req.params.id }, select: { worksiteId: true, startAt: true, kind: true } });
+      if (after && (after.worksiteId !== before.worksiteId || after.kind !== before.kind || brusselsDay(after.startAt) !== brusselsDay(before.startAt))) {
+        await syncGroup(before.worksiteId, brusselsDay(before.startAt));
+      }
+    }
     res.json({ event: await withIncludes(req.params.id!) });
   }),
 );
@@ -233,6 +275,8 @@ planningRouter.delete(
     if (!ev) throw new HttpError(404, 'Événement introuvable');
     if (ev.googleEventId) await deleteEvent(ev.googleEventId);
     await prisma.planningEvent.delete({ where: { id: req.params.id } });
+    // il reste peut-être d'autres créneaux ce jour-là sur ce chantier : la fiche Google commune est recalculée
+    if (ev.kind === 'intervention' && !ev.source) await syncGroup(ev.worksiteId, brusselsDay(ev.startAt));
     res.status(204).end();
   }),
 );

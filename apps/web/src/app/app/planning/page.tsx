@@ -2,7 +2,7 @@
 import { PlanningAgenda } from '@/components/PlanningAgenda';
 import { PlanningList } from '@/components/PlanningList';
 import { SkeletonRows } from '@/components/States';
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
@@ -109,7 +109,11 @@ export default function PlanningPage() {
   const to = addDays(days[days.length - 1]!, 1).toISOString();
 
   const { data: evData, loading, reload } = useApi<{ items: PlanningEv[]; googleSync: boolean }>(`/api/planning?from=${from}&to=${to}`);
-  const events = evData?.items ?? [];
+  // vue liste : pendant que la suite se charge on garde les données déjà affichées (sinon la liste est remplacée par un squelette
+  // et le défilement revient en haut — surtout sur iPhone)
+  const lastEvents = useRef<PlanningEv[]>([]);
+  if (evData) lastEvents.current = evData.items;
+  const events = evData?.items ?? (view === 'planning' ? lastEvents.current : []);
   const [gcalBusy, setGcalBusy] = useState(false);
   async function gcalBackfill(reformat = false) {
     if (reformat && !confirm('Réécrire dans Google Agenda la fiche de tous les événements À VENIR envoyés depuis l’appli, avec la nouvelle présentation ? Les événements du passé et ceux faits à la main dans Google ne sont pas touchés.')) return;
@@ -153,7 +157,9 @@ export default function PlanningPage() {
   const { data: equipData } = useApi<{ items: EquipRow[] }>('/api/equipment');
   const equipmentList = equipData?.items ?? [];
   const { data: absData, reload: reloadAbsences } = useApi<{ items: PlanAbsence[] }>(`/api/absences?from=${from}&to=${to}`);
-  const absences = absData?.items ?? [];
+  const lastAbsences = useRef<PlanAbsence[]>([]);
+  if (absData) lastAbsences.current = absData.items;
+  const absences = absData?.items ?? (view === 'planning' ? lastAbsences.current : []);
 
   function reloadAll() { reload(); reloadPeople(); reloadAbsences(); }
 
@@ -320,7 +326,7 @@ export default function PlanningPage() {
       <button
         key={e.id}
         type="button"
-        className={`plan-chip ${e.kind === 'meeting' ? 'kind-meeting' : `tone-${toneFor(e.worksite.id)}`}${e.status === 'tentative' ? ' tentative' : ''}`}
+        className={`plan-chip ${e.kind === 'meeting' ? 'kind-meeting' : 'kind-intervention'}${e.status === 'tentative' ? ' tentative' : ''}`}
         onClick={() => setDetailEv(e)}
       >
         <span className="t">{hhmm(e.startAt)}–{hhmm(e.endAt)}{e.status === 'tentative' ? ' · ?' : ''}</span>
@@ -500,7 +506,7 @@ export default function PlanningPage() {
         </label>
       </div>
 
-      {loading && !evData ? <SkeletonRows /> : view === 'planning' ? (
+      {loading && !evData && !(view === 'planning' && lastEvents.current.length > 0) ? <SkeletonRows /> : view === 'planning' ? (
         <PlanningList
           days={listDays}
           events={events.filter((e) => eventMatchesWorksiteFilters(e) && (!search || [e.title, e.worksite.title, e.worksite.ref, ...e.assignments.map((a) => a.person.displayName || a.person.firstName)].join(' ').toLowerCase().includes(q)))}
@@ -704,12 +710,8 @@ export default function PlanningPage() {
       )}
 
       <div className="plan-legend">
-        {view === 'month' || view === 'planning' ? (
-          <span><span className="plan-legend-swatch kind-intervention" /> Intervention confirmée</span>
-        ) : (
-          <span>Chaque couleur correspond à un chantier.</span>
-        )}
-        <span><span className="plan-legend-swatch kind-meeting" /> Rendez-vous d’affaire (jaune dans toutes les vues et dans Google Agenda)</span>
+        <span><span className="plan-legend-swatch kind-intervention" /> Intervention</span>
+        <span><span className="plan-legend-swatch kind-meeting" /> Rendez-vous d’affaire</span>
         <span className="plan-dashed-key">À confirmer</span>
         <span>Congés et formations bloquent l’affectation.</span>
       </div>

@@ -17,7 +17,7 @@ export function PlanningAgenda({days, events, onOpen, onNew, onMove}: {
           const unknownSeats=event.vehicles.some(v=>v.vehicle.seats===null);
           const missingDriver=event.vehicles.some(v=>!v.driver);
           const transportWarning=missingDriver || (!unknownSeats && event.vehicles.length>0 && seats<event.assignments.length);
-          return <button key={event.id} draggable onDragStart={e=>e.dataTransfer.setData('text/plain',event.id)} className={`agenda-event ${event.kind==='meeting'?'meeting kind-meeting':''}`} onClick={()=>onOpen(event)}>
+          return <button key={event.id} draggable onDragStart={e=>e.dataTransfer.setData('text/plain',event.id)} className={`agenda-event ${event.kind==='meeting'?'meeting kind-meeting':'kind-intervention'}`} onClick={()=>onOpen(event)}>
             <div className="agenda-event-time">{new Date(event.startAt).toLocaleTimeString('fr-BE',{hour:'2-digit',minute:'2-digit'})} – {new Date(event.endAt).toLocaleTimeString('fr-BE',{hour:'2-digit',minute:'2-digit'})}</div>
             <small>{event.kind==='meeting'?'Rendez-vous':'Travaux'} · {event.worksite.ref}</small>
             <strong>{event.title || event.worksite.title}</strong><span>{event.worksite.city}</span>

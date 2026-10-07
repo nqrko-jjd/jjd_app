@@ -44,7 +44,11 @@ const hhmm = (d: Date) => new Intl.DateTimeFormat('fr-BE', { hour: '2-digit', mi
  *  les interventions gardent la couleur de l'agenda (bleu). À la mise à jour, l'absence de couleur remet celle de l'agenda. */
 export const GCAL_COLOR_MEETING = '5';
 
-export function composeGcalEvent(ev: GcalEventSource): { summary: string; description: string; location: string | undefined; colorId: string | undefined } {
+type GcalComposed = { summary: string; description: string; location: string | undefined; colorId: string | undefined };
+/** Blocs « Mission » et « Ouvriers » déjà composés (fiche regroupant plusieurs créneaux d'un même chantier le même jour). */
+interface BlockOverride { mission?: string; people?: string }
+
+export function composeGcalEvent(ev: GcalEventSource, ov: BlockOverride = {}): GcalComposed {
   const w = ev.worksite;
   // titre : réf - titre du chantier - titre du créneau (sans répéter ce qui est déjà dedans)
   const parts = [ev.kind === 'meeting' ? 'RDV' : w.ref, clean(w.title)];
@@ -66,10 +70,12 @@ export function composeGcalEvent(ev: GcalEventSource): { summary: string; descri
     blocks.push(`📞 Contact sur place : ${list.map((c) => [c.name, c.phone].filter(Boolean).join(' – ')).join(' / ')}`);
   }
 
-  if (clean(ev.tasksNote)) blocks.push(['🛠 Mission :', ...bullets(ev.tasksNote!)].join('\n'));
+  if (ov.mission) blocks.push(ov.mission);
+  else if (clean(ev.tasksNote)) blocks.push(['🛠 Mission :', ...bullets(ev.tasksNote!)].join('\n'));
 
   const people = joinNames(ev.assignments.map((a) => a.person.displayName || a.person.firstName));
-  if (people) blocks.push(`👥 Ouvriers : ${people}`);
+  if (ov.people) blocks.push(ov.people);
+  else if (people) blocks.push(`👥 Ouvriers : ${people}`);
   else if (ev.team) blocks.push(`👥 Équipe : ${ev.team.name}`);
 
   const material = [
@@ -97,4 +103,83 @@ export function composeGcalEvent(ev: GcalEventSource): { summary: string; descri
     : [[w.address, w.box && `bte ${w.box}`].filter(Boolean).join(' '), [w.postalCode, w.city].filter(Boolean).join(' ')].filter(Boolean).join(', ');
 
   return { summary, description: blocks.join('\n\n'), location: location || undefined, colorId: ev.kind === 'meeting' ? GCAL_COLOR_MEETING : undefined };
+}
+
+export type GcalSlot = GcalEventSource & { startAt: Date; endAt: Date };
+
+/** minutes depuis minuit, heure de Bruxelles */
+const brusselsMinutes = (d: Date) => {
+  const [h, m] = new Intl.DateTimeFormat('fr-BE', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'Europe/Brussels' }).format(d).split(':').map(Number);
+  return (h ?? 0) * 60 + (m ?? 0);
+};
+const uniqLines = (texts: (string | null)[]) => [...new Set(texts.flatMap((t) => clean(t).split('\n').map((l) => l.trim()).filter(Boolean)))].join('\n') || null;
+
+/**
+ * UNE seule fiche Google par chantier et par jour : quand plusieurs créneaux se suivent (matin / après-midi, deux équipes…),
+ * ils sont fusionnés — horaire du premier début au dernier fin, et le détail (qui fait quoi, matin ou après-midi) dans la description.
+ * Un seul créneau : identique à composeGcalEvent.
+ */
+export function composeGcalGroup(slots: GcalSlot[]): GcalComposed & { start: Date; end: Date; allDay: boolean } {
+  const sorted = [...slots].sort((a, b) => a.startAt.getTime() - b.startAt.getTime());
+  const first = sorted[0]!;
+  const timed = sorted.filter((s) => !s.allDay);
+  const allDay = timed.length === 0;
+  const range = allDay ? sorted : timed;
+  const start = new Date(Math.min(...range.map((s) => s.startAt.getTime())));
+  const end = new Date(Math.max(...range.map((s) => s.endAt.getTime())));
+  if (sorted.length === 1) return { ...composeGcalEvent(first), start: first.startAt, end: first.endAt, allDay: first.allDay };
+
+  // quand les créneaux n'ont pas tous le même horaire, on précise lequel (AM / PM / heures)
+  const sameRange = sorted.every((s) => s.startAt.getTime() === first.startAt.getTime() && s.endAt.getTime() === first.endAt.getTime());
+  const tag = (s: GcalSlot) => {
+    if (sameRange || s.allDay) return '';
+    if (brusselsMinutes(s.endAt) <= 13 * 60) return 'AM';
+    if (brusselsMinutes(s.startAt) >= 12 * 60) return 'PM';
+    return s.startAt.getTime() === start.getTime() && s.endAt.getTime() === end.getTime() ? '' : `${hhmm(s.startAt)}–${hhmm(s.endAt)}`;
+  };
+
+  const wTitle = clean(first.worksite.title).toLowerCase();
+  const titles = [...new Set(sorted.map((s) => clean(s.title)).filter((t) => t && !wTitle.includes(t.toLowerCase())))];
+
+  // ouvriers : une ligne par créneau, avec son AM / PM
+  const peopleLines: string[] = [];
+  for (const s of sorted) {
+    const who = joinNames(s.assignments.map((a) => a.person.displayName || a.person.firstName)) || (s.team ? `Équipe ${s.team.name}` : '');
+    if (!who) continue;
+    const t = tag(s);
+    const line = t ? `${who} (${t})` : who;
+    if (!peopleLines.includes(line)) peopleLines.push(line);
+  }
+  const people = peopleLines.length === 0 ? undefined : peopleLines.length === 1 ? `👥 Ouvriers : ${peopleLines[0]}` : ['👥 Ouvriers :', ...peopleLines.map((l) => `– ${l}`)].join('\n');
+
+  // mission : un seul texte si identique partout, sinon une section par créneau
+  const missions: { label: string; text: string }[] = [];
+  for (const s of sorted) {
+    const text = clean(s.tasksNote);
+    if (!text || missions.some((m) => m.text === text)) continue;
+    missions.push({ label: [tag(s), titles.length > 1 ? clean(s.title) : ''].filter(Boolean).join(' · '), text });
+  }
+  const mission = missions.length === 0 ? undefined
+    : missions.length === 1 ? ['🛠 Mission :', ...bullets(missions[0]!.text)].join('\n')
+    : ['🛠 Mission :', ...missions.flatMap((m, i) => [`${m.label || `Équipe ${i + 1}`} :`, ...bullets(m.text)])].join('\n');
+
+  const vSeen = new Set<string>();
+  const vehicles = sorted.flatMap((s) => s.vehicles).filter((v) => { const k = `${v.vehicle.plate}|${v.vehicle.model}|${v.vehicle.code}`; if (vSeen.has(k)) return false; vSeen.add(k); return true; });
+  const eqSeen = new Set<string>();
+  const equipment = sorted.flatMap((s) => s.equipment).filter((e) => { if (eqSeen.has(e.equipment.name)) return false; eqSeen.add(e.equipment.name); return true; });
+  const csSeen = new Set<string>();
+  const consumables = sorted.flatMap((s) => s.consumables).filter((c) => { if (csSeen.has(c.consumable.name)) return false; csSeen.add(c.consumable.name); return true; });
+
+  const merged: GcalEventSource = {
+    ...first,
+    title: titles.length === 1 ? titles[0]! : null,
+    allDay,
+    accessNote: uniqLines(sorted.map((s) => s.accessNote)),
+    materialsNote: uniqLines(sorted.map((s) => s.materialsNote)),
+    note: uniqLines(sorted.map((s) => s.note)),
+    departureAt: sorted.find((s) => s.departureAt)?.departureAt ?? null,
+    departureFrom: sorted.find((s) => clean(s.departureFrom))?.departureFrom ?? null,
+    team: null, assignments: [], vehicles, equipment, consumables,
+  };
+  return { ...composeGcalEvent(merged, { mission, people }), start, end, allDay };
 }

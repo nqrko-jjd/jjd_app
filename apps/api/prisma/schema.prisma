@@ -901,9 +901,11 @@ model TimeEntry {
   subcontractor String?
   source        String?
   note          String?
+  planningEventId String? // pointage créé en validant la proposition « d'après le planning » (voir lib/planned-time.ts)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
+  @@index([planningEventId])
   @@index([personId, date])
   @@index([worksiteId])
   @@index([status])

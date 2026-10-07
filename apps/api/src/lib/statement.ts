@@ -1,6 +1,7 @@
 import { prisma } from '../db.js';
 import { round2, computePaidTime } from '@jjd/shared';
 import { worksiteMargin } from './worksite-margin.js';
+import { plannedProposals, brusselsDay, type Proposal } from './planned-time.js';
 
 const dayKey = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -12,9 +13,30 @@ const dayKey = (d: Date) => d.toISOString().slice(0, 10);
  * chantier proche). Ça ne s'applique qu'aux pointages faits dans l'app (pas
  * à l'historique importé de l'Excel, dont le montant réel est déjà connu).
  */
-export async function monthlyStatement(personId: string, year: number, month: number) {
+/** Bornes (AAAA-MM-JJ) du mois pour les propositions du planning : jusqu'à aujourd'hui au plus (rien de « prévu » dans le futur). */
+function plannedRange(year: number, month: number): { from: string; to: string } | null {
+  const from = `${year}-${String(month).padStart(2, '0')}-01`;
+  const last = new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+  const today = brusselsDay(new Date());
+  const to = last < today ? last : today;
+  return from > to ? null : { from, to };
+}
+
+/** Heures prévues au planning, pas encore validées (affichées à part, jamais comptées dans le payé). */
+function plannedTotals(proposals: Proposal[]) {
+  const open = proposals.filter((p) => p.state === 'open');
+  return {
+    plannedHours: round2(open.reduce((s, p) => s + p.hours, 0)),
+    plannedDays: new Set(open.map((p) => p.date)).size,
+    plannedCount: open.length,
+  };
+}
+
+export async function monthlyStatement(personId: string, year: number, month: number, preloadedPlanned?: Proposal[]) {
   const start = new Date(Date.UTC(year, month - 1, 1));
   const end = new Date(Date.UTC(year, month, 1));
+  const range = plannedRange(year, month);
+  const planned = plannedTotals(preloadedPlanned ?? (range ? await plannedProposals(range.from, range.to, { personId }) : []));
 
   const [person, entries] = await Promise.all([
     prisma.person.findUnique({ where: { id: personId }, select: { hourlyRate: true, dailyHours: true } }),
@@ -63,6 +85,7 @@ export async function monthlyStatement(personId: string, year: number, month: nu
     dailyHoursGuarantee: dailyHours,
     guaranteeApplied: pay.guaranteeHours > 0,
     pendingCount: pending,
+    ...planned,
     entryCount: entries.length,
     worksiteCount: byWorksite.size,
     byWorksite: [...byWorksite.values()].map((r) => ({ ...r, hours: round2(r.hours), amount: round2(r.amount) })),
@@ -90,9 +113,12 @@ export async function teamMonthlyStatement(year: number, month: number) {
     include: { adjustments: { where: { settled: false }, select: { amount: true } } },
   });
   const rows = [];
+  const range = plannedRange(year, month);
+  const plannedAll = range ? await plannedProposals(range.from, range.to) : [];
   for (const p of people) {
-    const s = await monthlyStatement(p.id, year, month);
-    if (s.entryCount === 0) continue;
+    const s = await monthlyStatement(p.id, year, month, plannedAll.filter((x) => x.personId === p.id));
+    // quelqu'un qui n'a que des heures prévues au planning (rien de validé encore) apparaît quand même, pour être validé
+    if (s.entryCount === 0 && s.plannedCount === 0) continue;
     const toWithhold = round2(p.adjustments.reduce((sum, a) => sum + a.amount, 0));
     // Certains sous-traitants sont facturés/coûtés à un montant par jour (hourlyRate ×
     // dailyHours, sert au calcul de rentabilité chantier) mais réellement remis en main à un
@@ -120,6 +146,8 @@ export async function teamMonthlyStatement(year: number, month: number) {
       toWithhold,
       netAmount: round2(payoutAmount - toWithhold),
       pending: s.pendingCount,
+      plannedHours: s.plannedHours,
+      plannedDays: s.plannedDays,
     });
   }
   return {

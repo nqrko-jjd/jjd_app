@@ -7,6 +7,8 @@ import { api } from '@/lib/api';
 import { PageHead, Money, formatDateBE, Kpi, Avatar } from '@/lib/ui';
 import { Clock, ClipboardCheck, Building2, Euro, AlertTriangle } from 'lucide-react';
 import { ComboBox } from '@/components/ComboBox';
+import { PlannedTimesheet } from '@/components/PlannedTimesheet';
+import { EntryEditModal } from '@/components/EntryEditModal';
 import { formatHours } from '@jjd/shared';
 
 interface Meta { people: { id: string; name: string }[]; worksites: { id: string; name: string }[] }
@@ -16,7 +18,7 @@ interface Meta { people: { id: string; name: string }[]; worksites: { id: string
 function toDateInput(d: Date) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
 
 interface Pending {
-  id: string; date: string | null; hours: number | null; amount: number | null; task: string | null;
+  id: string; worksiteId: string | null; date: string | null; hours: number | null; amount: number | null; task: string | null;
   geoFlag: boolean; geoDistance: number | null; startLat: number | null; startLng: number | null;
   person: { displayName: string | null; firstName: string; photoThumbUrl: string | null };
   worksite: { ref: string; title: string } | null;
@@ -25,6 +27,7 @@ interface Pending {
 export default function PointagePage() {
   const { data, loading, error, reload } = useApi<{ items: Pending[] }>('/api/timesheet/pending');
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<Pending | null>(null);
   const [flash, setFlash] = useState<{ tone: 'success' | 'crit'; text: string } | null>(null);
   // repliés par défaut, une seule personne ouverte à la fois — comme la liste des décomptes du mois
   const [openPerson, setOpenPerson] = useState<string | null>(null);
@@ -70,6 +73,7 @@ export default function PointagePage() {
   return (
     <>
       {adding && <TimeEntryModal onClose={() => setAdding(false)} onDone={() => { setAdding(false); reload(); }} />}
+      {editing && <EntryEditModal entry={editing} onClose={() => setEditing(null)} onDone={() => { setEditing(null); reload(); }} />}
       <PageHead
         eyebrow="Suivi du temps"
         title="Pointage"
@@ -93,6 +97,8 @@ export default function PointagePage() {
           {flash.text}
         </Banner>
       )}
+
+      <PlannedTimesheet onChanged={reload} />
 
       {items.length > 0 && (
         <div className="kpis" style={{ marginBottom: '1.4rem' }}>
@@ -181,6 +187,7 @@ export default function PointagePage() {
                           <div className="row" style={{ gap: '0.3rem' }}>
                             <button className="btn primary" style={{ padding: '0.2rem 0.5rem', fontSize: '0.78rem' }} onClick={() => act(e.id, 'approve')}>Valider</button>
                             <button className="btn" style={{ padding: '0.2rem 0.5rem', fontSize: '0.78rem' }} onClick={() => act(e.id, 'reject')}>Refuser</button>
+                            <button className="btn ghost" style={{ padding: '0.2rem 0.5rem', fontSize: '0.78rem' }} onClick={() => setEditing(e)} title="Corriger les heures, la date ou le chantier">✎ Modifier</button>
                           </div>
                         </td>
                       </tr>
@@ -230,6 +237,23 @@ function TimeEntryModal({ onClose, onDone }: { onClose: () => void; onDone: () =
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // bureau / chef : valider d'emblée ce qu'on saisit (décoché = file « à valider » comme un pointage terrain)
+  const [approveNow, setApproveNow] = useState(true);
+  const [prefillMsg, setPrefillMsg] = useState<string | null>(null);
+
+  /** Reprend du planning (chantier + date choisis) : les ouvriers affectés, le créneau et la pause. */
+  async function prefillFromPlanning() {
+    setPrefillMsg(null);
+    try {
+      const r = await api<{ items: { personId: string; slots: { start: string; end: string; allDay: boolean }[]; pauseMinutes: number; worksiteTitle: string }[] }>(`/api/timesheet/planned?date=${date}&worksiteId=${worksiteId}`);
+      if (r.items.length === 0) { setPrefillMsg('Rien au planning pour ce chantier ce jour-là.'); return; }
+      setPersonIds([...new Set(r.items.map((i) => i.personId))]);
+      const slot = r.items[0]!.slots.find((s) => !s.allDay);
+      if (slot) { setStart(slot.start); setEnd(slot.end); setPause(String(r.items[0]!.pauseMinutes)); }
+      if (!task.trim()) setTask(r.items[0]!.worksiteTitle);
+      setPrefillMsg(`${new Set(r.items.map((i) => i.personId)).size} ouvrier(s) repris du planning.`);
+    } catch (e) { setPrefillMsg(e instanceof Error ? e.message : 'Impossible de lire le planning.'); }
+  }
 
   useEffect(() => {
     const onEsc = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -267,6 +291,7 @@ function TimeEntryModal({ onClose, onDone }: { onClose: () => void; onDone: () =
             hours,
             task: task.trim() || null,
             note: note.trim() || null,
+            approve: approveNow,
           },
         });
         savedIds.push(personId);
@@ -315,6 +340,12 @@ function TimeEntryModal({ onClose, onDone }: { onClose: () => void; onDone: () =
             <div className="field full" style={{ marginBottom: '0.85rem' }}>
               <label>Chantier</label>
               <ComboBox placeholder="— (frais général)" value={worksiteId} onChange={setWorksiteId} options={meta?.worksites.map((w) => ({ value: w.id, label: w.name })) ?? []} />
+              {worksiteId && date && (
+                <div style={{ marginTop: '0.5rem' }}>
+                  <button type="button" className="btn" onClick={prefillFromPlanning}>Reprendre l’équipe et le créneau du planning</button>
+                  {prefillMsg && <span className="hint" style={{ marginLeft: '0.6rem' }}>{prefillMsg}</span>}
+                </div>
+              )}
             </div>
             <div className="wiz-grid">
               <div className="field">
@@ -352,9 +383,12 @@ function TimeEntryModal({ onClose, onDone }: { onClose: () => void; onDone: () =
           </fieldset>
         </div>
         <div className="modal-foot">
+          <label className="row" style={{ gap: '0.4rem', marginRight: 'auto', fontSize: '0.85rem' }}>
+            <input type="checkbox" checked={approveNow} onChange={(e) => setApproveNow(e.target.checked)} /> Valider directement
+          </label>
           <button type="button" className="btn" onClick={onClose}>Annuler</button>
           <button type="submit" className="btn primary" disabled={busy || personIds.length === 0 || !date || !task.trim()}>
-            {busy ? 'Enregistrement…' : 'Ajouter au relevé'}
+            {busy ? 'Enregistrement…' : approveNow ? 'Enregistrer et valider' : 'Ajouter à la file à valider'}
           </button>
         </div>
       </form>

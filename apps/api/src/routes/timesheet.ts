@@ -7,6 +7,7 @@ import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, STAFF, OFFICE } from '../lib/auth.js';
 import { monthlyStatement, teamMonthlyStatement } from '../lib/statement.js';
+import { plannedProposals, dayDate, type Proposal } from '../lib/planned-time.js';
 import { toCsv, readTableBuffer, pick } from '../lib/table-io.js';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
@@ -144,6 +145,12 @@ timesheetRouter.post(
     const d = timeEntryInput.parse(req.body);
     const person = await prisma.person.findUnique({ where: { id: d.personId } });
     const rate = person?.hourlyRate ?? null;
+    // bureau / chef de chantier : peut valider d'emblée ce qu'il saisit (sinon « à valider », même file qu'un pointage terrain)
+    const approveNow = req.body?.approve === true && ['admin', 'office', 'foreman'].includes(req.user!.role);
+    if (approveNow && req.user!.role === 'foreman') {
+      const ws = d.worksiteId ? await prisma.worksite.findUnique({ where: { id: d.worksiteId }, select: { managerId: true } }) : null;
+      if (!ws || ws.managerId !== req.user!.personId) throw new HttpError(403, 'Vous ne pouvez valider que les heures de vos propres chantiers');
+    }
     const entry = await prisma.timeEntry.create({
       data: {
         personId: d.personId,
@@ -154,10 +161,10 @@ timesheetRouter.post(
         rateUsed: rate,
         task: d.task ?? null,
         note: d.note ?? null,
-        // toujours "à valider", même saisi par le bureau -> passe par la même file de
-        // validation qu'un pointage terrain, pas de raccourci auto-approuvé
-        status: 'submitted',
-        approvedById: null,
+        // « à valider » par défaut, même saisi par le bureau (même file qu'un pointage terrain) ;
+        // validé d'emblée seulement sur demande explicite (case « valider directement »)
+        status: approveNow ? 'approved' : 'submitted',
+        approvedById: approveNow ? req.user!.id : null,
         source: 'manual',
       },
     });
@@ -300,6 +307,102 @@ timesheetRouter.post(
   }),
 );
 
+/* ------------------------------------------------ pointage « d'après le planning » */
+
+const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+const planningScope = (req: import('express').Request) => (req.user!.role === 'foreman' ? (req.user!.personId ?? '__none__') : undefined);
+
+/** Propositions de pointage tirées du planning pour un jour ou une période (à valider en fin de journée). */
+timesheetRouter.get(
+  '/planned',
+  requireAuth('admin', 'office', 'foreman'),
+  asyncHandler(async (req, res) => {
+    const { date, from, to, worksiteId } = req.query as Record<string, string>;
+    const f = from ?? date;
+    const t = to ?? date ?? from;
+    if (!f || !t || !DAY_RE.test(f) || !DAY_RE.test(t)) throw new HttpError(422, 'Date attendue au format AAAA-MM-JJ');
+    const items = await plannedProposals(f, t, { managerId: planningScope(req), worksiteId: worksiteId || undefined });
+    const open = items.filter((i) => i.state === 'open');
+    const perDay: Record<string, number> = {};
+    for (const i of open) perDay[i.date] = (perDay[i.date] ?? 0) + 1;
+    res.json({ items, summary: { open: open.length, covered: items.length - open.length, hours: round2(open.reduce((s, i) => s + i.hours, 0)) }, perDay });
+  }),
+);
+
+/** Crée le vrai pointage correspondant à une proposition (validé) ou « n'a pas travaillé » (refusé : la proposition ne revient pas). */
+async function entryFromProposal(p: Proposal, mode: 'approve' | 'dismiss', userId: string, hours?: number, note?: string) {
+  const person = await prisma.person.findUnique({ where: { id: p.personId }, select: { hourlyRate: true } });
+  const rate = person?.hourlyRate ?? null;
+  const h = mode === 'approve' ? hours ?? p.hours : null;
+  const entry = await prisma.timeEntry.create({
+    data: {
+      personId: p.personId, worksiteId: p.worksiteId, date: dayDate(p.date),
+      hours: h, rateUsed: rate, amount: h != null && rate ? round2(h * rate) : null,
+      task: `Planning · ${p.worksiteTitle}`,
+      note: note ?? (mode === 'dismiss' ? 'N’a pas travaillé (proposition du planning écartée)' : `Validé d’après le planning (${p.slots.map((s) => `${s.start}–${s.end}`).join(', ')})`),
+      status: mode === 'approve' ? 'approved' : 'rejected', approvedById: userId, source: 'planning', planningEventId: p.eventIds[0] ?? null,
+    },
+  });
+  if (mode === 'approve') await refreshWorksiteStatus(p.worksiteId, 'timesheet');
+  return entry;
+}
+
+interface PlannedItem { personId: string; worksiteId: string; date: string; hours?: number; note?: string }
+
+async function applyPlanned(req: import('express').Request, items: PlannedItem[], mode: 'approve' | 'dismiss') {
+  if (!Array.isArray(items) || items.length === 0) throw new HttpError(422, 'Aucune ligne à traiter');
+  if (items.length > 500) throw new HttpError(422, 'Trop de lignes à la fois (500 max)');
+  const byDate = new Map<string, PlannedItem[]>();
+  for (const it of items) {
+    if (!it?.personId || !it?.worksiteId || !DAY_RE.test(it.date ?? '')) throw new HttpError(422, 'Ligne invalide');
+    if (it.hours != null && !(it.hours > 0 && it.hours <= 16)) throw new HttpError(422, 'Heures invalides (entre 0 et 16)');
+    byDate.set(it.date, [...(byDate.get(it.date) ?? []), it]);
+  }
+  let created = 0;
+  let skipped = 0;
+  for (const [day, list] of byDate) {
+    // on repart des propositions actuelles : une ligne déjà traitée ou plus d'actualité est ignorée (jamais de doublon)
+    const open = new Map((await plannedProposals(day, day, { managerId: planningScope(req) })).filter((p) => p.state === 'open').map((p) => [p.key, p]));
+    for (const it of list) {
+      const p = open.get(`${it.personId}|${it.worksiteId}|${day}`);
+      if (!p) { skipped++; continue; }
+      open.delete(p.key);
+      await entryFromProposal(p, mode, req.user!.id, it.hours, it.note?.trim() || undefined);
+      created++;
+    }
+  }
+  return { created, skipped };
+}
+
+timesheetRouter.post(
+  '/planned/validate',
+  requireAuth('admin', 'office', 'foreman'),
+  asyncHandler(async (req, res) => {
+    res.json(await applyPlanned(req, req.body?.items, 'approve'));
+  }),
+);
+
+timesheetRouter.post(
+  '/planned/dismiss',
+  requireAuth('admin', 'office', 'foreman'),
+  asyncHandler(async (req, res) => {
+    res.json(await applyPlanned(req, req.body?.items, 'dismiss'));
+  }),
+);
+
+/** Valide toute la journée d'un coup (toutes les propositions ouvertes, aux heures prévues). */
+timesheetRouter.post(
+  '/planned/validate-day',
+  requireAuth('admin', 'office', 'foreman'),
+  asyncHandler(async (req, res) => {
+    const date = String(req.body?.date ?? '');
+    if (!DAY_RE.test(date)) throw new HttpError(422, 'Date attendue au format AAAA-MM-JJ');
+    const open = (await plannedProposals(date, date, { managerId: planningScope(req) })).filter((p) => p.state === 'open');
+    for (const p of open) await entryFromProposal(p, 'approve', req.user!.id);
+    res.json({ created: open.length, skipped: 0, hours: round2(open.reduce((s, p) => s + p.hours, 0)) });
+  }),
+);
+
 /** File de validation (chef / bureau). */
 timesheetRouter.get(
   '/pending',
@@ -391,12 +494,19 @@ timesheetRouter.patch(
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
     const d = timeEntryInput.partial().parse(req.body);
+    // heures corrigées sans montant précisé : le montant suit (heures × taux de la ligne, à défaut celui de la fiche)
+    let amount = d.amount ?? undefined;
+    if (amount === undefined && d.hours) {
+      const cur = await prisma.timeEntry.findUnique({ where: { id: req.params.id }, select: { rateUsed: true, person: { select: { hourlyRate: true } } } });
+      const rate = cur?.rateUsed ?? cur?.person.hourlyRate ?? null;
+      if (rate) amount = round2(d.hours * rate);
+    }
     const entry = await prisma.timeEntry.update({
       where: { id: req.params.id },
       data: {
         date: d.date ?? undefined,
         hours: d.hours ?? undefined,
-        amount: d.amount ?? undefined,
+        amount,
         task: d.task,
         note: d.note,
         worksiteId: d.worksiteId,

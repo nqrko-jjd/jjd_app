@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { PageHead, Money, Kpi, formatEur, formatDateBE, Avatar } from '@/lib/ui';
-import { ComboBox } from '@/components/ComboBox';
+import { EntryEditModal } from '@/components/EntryEditModal';
 import { formatHours, WORKER_CONTRACT_LABEL } from '@jjd/shared';
 import { Wallet, Users, Clock, AlertTriangle } from 'lucide-react';
 
@@ -15,6 +15,7 @@ interface Team {
     personId: string; name: string; photoThumbUrl: string | null; contractType: string;
     actualHours: number; guaranteeHours: number; guaranteeAmount: number; hourlyRate: number | null; payoutPerDay: number | null; hours: number; days: number;
     amount: number; payoutAmount: number; toWithhold: number; netAmount: number; pending: number;
+    plannedHours?: number; plannedDays?: number;
   }[];
 }
 interface DetailEntry {
@@ -71,13 +72,14 @@ export default function DecomptesPage() {
   const totalHours = rows.reduce((a, r) => a + r.hours, 0);
   const totalDays = rows.reduce((a, r) => a + r.days, 0);
   const pending = rows.reduce((a, r) => a + r.pending, 0);
+  const plannedHours = rows.reduce((a, r) => a + (r.plannedHours ?? 0), 0);
   const hasWithholding = rows.some((r) => r.toWithhold > 0);
   const hasPayoutDiff = rows.some((r) => r.payoutPerDay != null);
 
   return (
     <>
       {editing && (
-        <EditEntryModal
+        <EntryEditModal
           entry={editing.entry}
           onClose={() => setEditing(null)}
           onDone={async () => { const p = editing.personId; setEditing(null); await refreshAfterChange(p); }}
@@ -113,6 +115,7 @@ export default function DecomptesPage() {
           <Kpi ic={Users} label="Personnes" value={rows.length} sub="Ont pointé ce mois-ci" />
           <Kpi ic={Clock} label="Heures rémunérées" value={formatHours(totalHours)} sub={`${formatHours(rows.reduce((sum,r)=>sum+(r.actualHours??r.hours),0))} réellement pointées et validées`} />
           <Kpi ic={AlertTriangle} label="À valider" value={pending} sub={pending > 0 ? 'Pointages en attente' : 'Tout est validé'} warn={pending > 0} />
+          <Kpi ic={Clock} label="Prévu au planning" value={formatHours(plannedHours)} sub={plannedHours > 0 ? 'Pas encore validé : pas compté dans le payé' : 'Rien en attente de validation'} warn={plannedHours > 0} href="/app/pointage" />
         </div>
       )}
 
@@ -199,7 +202,10 @@ function FragmentRow({
         {showPayout && <td style={{ textAlign: 'right' }}>{r.payoutPerDay != null ? <Money value={r.payoutAmount} /> : '—'}</td>}
         {showWithholding && <td style={{ textAlign: 'right' }}>{r.toWithhold > 0 ? <Money value={r.toWithhold} /> : '—'}</td>}
         {showWithholding && <td style={{ textAlign: 'right', fontWeight: r.toWithhold > 0 ? 700 : 400 }}><Money value={r.netAmount} /></td>}
-        <td>{r.pending > 0 && <span className="badge warn">{r.pending} à valider</span>}</td>
+        <td>
+          {r.pending > 0 && <span className="badge warn">{r.pending} à valider</span>}
+          {(r.plannedHours ?? 0) > 0 && <span className="badge" style={{ marginLeft: '0.3rem' }} title="Heures prévues au planning, pas encore validées dans Pointage">{formatHours(r.plannedHours ?? 0)} prévues</span>}
+        </td>
       </tr>
       {open && detail && detail.guaranteeHours > 0 && <tr><td colSpan={9 + Number(showWithholding)*2 + Number(showPayout)} style={{background:'#f2f5ed',padding:16}}>Complément de garantie : <strong>{formatHours(detail.guaranteeHours)}</strong> · <Money value={detail.guaranteeAmount} />. Ce complément ne modifie pas les pointages et n’est pas encore réparti automatiquement entre les chantiers.</td></tr>}
       {open && detail && detail.entries.map((e) => (
@@ -227,78 +233,5 @@ function FragmentRow({
         </tr>
       ))}
     </>
-  );
-}
-
-function EditEntryModal({ entry, onClose, onDone }: { entry: DetailEntry; onClose: () => void; onDone: () => void }) {
-  const { data: meta } = useApi<{ worksites: { id: string; name: string }[] }>('/api/meta/pickers');
-  const [date, setDate] = useState(entry.date ? entry.date.slice(0, 10) : '');
-  const [worksiteId, setWorksiteId] = useState(entry.worksiteId ?? '');
-  const [hours, setHours] = useState(entry.hours != null ? String(entry.hours) : '');
-  const [amount, setAmount] = useState(entry.amount != null ? String(entry.amount) : '');
-  const [task, setTask] = useState(entry.task ?? '');
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setErr(null);
-    try {
-      await api(`/api/timesheet/entries/${entry.id}`, {
-        method: 'PATCH',
-        body: {
-          date: date || undefined,
-          worksiteId: worksiteId || null,
-          hours: hours ? Number(hours) : null,
-          amount: amount ? Number(amount) : null,
-          task: task.trim() || null,
-        },
-      });
-      onDone();
-    } catch (e2) {
-      setErr((e2 as Error).message ?? 'Erreur');
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="modal-scrim">
-      <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={submit} style={{ maxWidth: 440 }}>
-        <div className="modal-head">
-          <h2>Modifier le pointage</h2>
-          <button type="button" className="btn ghost" onClick={onClose} aria-label="Fermer">✕</button>
-        </div>
-        <div className="wiz-body">
-          {err && <div className="plan-form-error">{err}</div>}
-          <div className="wiz-grid">
-            <div className="field">
-              <label>Date</label>
-              <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-            </div>
-            <div className="field">
-              <label>Heures</label>
-              <input className="input" type="number" step="0.25" min="0" value={hours} onChange={(e) => setHours(e.target.value)} />
-            </div>
-          </div>
-          <div className="field full" style={{ marginTop: '0.7rem' }}>
-            <label>Chantier</label>
-            <ComboBox placeholder="— (frais général)" value={worksiteId} onChange={setWorksiteId} options={meta?.worksites.map((w) => ({ value: w.id, label: w.name })) ?? []} />
-          </div>
-          <div className="field" style={{ marginTop: '0.7rem' }}>
-            <label>Montant</label>
-            <input className="input" type="number" step="0.01" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} />
-          </div>
-          <div className="field full" style={{ marginTop: '0.7rem' }}>
-            <label>Tâche</label>
-            <input className="input" value={task} onChange={(e) => setTask(e.target.value)} />
-          </div>
-        </div>
-        <div className="modal-foot">
-          <button type="button" className="btn" onClick={onClose}>Annuler</button>
-          <button type="submit" className="btn primary" disabled={busy}>{busy ? 'Enregistrement…' : 'Enregistrer'}</button>
-        </div>
-      </form>
-    </div>
   );
 }

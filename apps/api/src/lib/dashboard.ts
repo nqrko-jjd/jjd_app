@@ -1,3 +1,4 @@
+import { plannedProposals, brusselsDay } from './planned-time.js';
 import { prisma } from '../db.js';
 import { round2 } from '@jjd/shared';
 import { forecastReceivable } from './consolidated.js';
@@ -151,6 +152,15 @@ export async function bureauDashboard() {
     alerts.push({ kind: 'expiring_docs', severity: 'warning', label: 'Documents légaux qui expirent (30 j)', count: expiringDocs.length, href: '/app/equipe' });
   if (ctExpiring)
     alerts.push({ kind: 'ct_expiring', severity: 'info', label: 'Contrôles techniques à faire (30 j)', count: ctExpiring, href: '/app/flotte' });
+
+  // pointages prévus au planning sur les 7 derniers jours (hier et avant) qui attendent encore d'être validés
+  try {
+    const yesterday = brusselsDay(new Date(Date.now() - 86400000));
+    const weekAgo = brusselsDay(new Date(Date.now() - 7 * 86400000));
+    const planned = (await plannedProposals(weekAgo, yesterday)).filter((p) => p.state === 'open');
+    if (planned.length)
+      alerts.push({ kind: 'planned_time', severity: 'warning', label: 'Pointages du planning à valider', count: planned.length, href: '/app/pointage' });
+  } catch { /* le tableau de bord ne doit jamais échouer pour ça */ }
 
   const order = { critical: 0, warning: 1, info: 2 } as const;
   alerts.sort((a, b) => order[a.severity] - order[b.severity] || (b.amount ?? 0) - (a.amount ?? 0));

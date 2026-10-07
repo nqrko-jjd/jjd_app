@@ -350,7 +350,7 @@ interface FieldEvent {
 
 const ALERT_KIND_ICON: Record<string, LucideIcon> = {
   overdue_invoices: AlertTriangle, overdue_supplier_invoices: CreditCard, to_invoice: Receipt, quotes_follow: Mail,
-  crm_due: Phone, expiring_docs: ShieldAlert, ct_expiring: Truck, on_hold: Eye,
+  crm_due: Phone, expiring_docs: ShieldAlert, ct_expiring: Truck, on_hold: Eye, planned_time: Clock,
 };
 
 const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' });

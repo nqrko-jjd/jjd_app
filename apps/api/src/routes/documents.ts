@@ -14,6 +14,7 @@ import { requireAuth, OFFICE } from '../lib/auth.js';
 import { z } from 'zod';
 import { docInclude, buildLineRows, cloneLineRows, refreshDocTotals, issueDocument, getCompany, syncLedgerEntryForDocument, creditedTtc, partialCreditLines } from '../lib/documents.js';
 import { renderDocumentPdf } from '../lib/pdf.js';
+import { sendViaPeppol, refreshPeppolStatus } from '../lib/peppol.js';
 import { extractDocumentInfo } from '../lib/document-extract.js';
 import { UPLOADS_DIR } from '../lib/media.js';
 import { PAYMENT_TOLERANCE } from '../lib/payment-tolerance.js';
@@ -760,6 +761,8 @@ documentsRouter.post(
   '/:id/send',
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
+    // Peppol : transmission réelle via le point d'accès (échoue sans rien marquer si la clé n'est pas installée ou si Peppol refuse)
+    if (req.body?.peppol === true) { res.json(await sendViaPeppol(req.params.id!, req.user!.id)); return; }
     validateExternalDeliveryRequest(req.body);
     let doc = await prisma.document.findUnique({ where: { id: req.params.id } });
     if (!doc) throw new HttpError(404, 'Document introuvable');
@@ -780,6 +783,17 @@ documentsRouter.post(
       document: updated,
       note: `${DOC_KIND_LABEL[doc.kind]} : envoi externe enregistré. Aucun document transmis par JJD.`,
     });
+  }),
+);
+
+/** Relit le statut de livraison Peppol d'un document déjà transmis. */
+documentsRouter.post(
+  '/:id/peppol/refresh',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const r = await refreshPeppolStatus(req.params.id!);
+    const document = await prisma.document.findUnique({ where: { id: req.params.id }, include: docInclude });
+    res.json({ document, peppol: r });
   }),
 );
 

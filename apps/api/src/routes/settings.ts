@@ -7,6 +7,7 @@ import { requireAuth } from '../lib/auth.js';
 import { getCompany } from '../lib/documents.js';
 import { getDepot } from '../lib/vehicle-cost.js';
 import { geocode } from '../lib/geocode.js';
+import { peppolConfigured } from '../lib/peppol.js';
 
 export const settingsRouter = Router();
 
@@ -31,6 +32,14 @@ settingsRouter.get(
   requireAuth('admin', 'office'),
   asyncHandler(async (_req, res) => {
     res.json({ company: await getCompany() });
+  }),
+);
+
+settingsRouter.get(
+  '/peppol',
+  requireAuth('admin', 'office'),
+  asyncHandler(async (_req, res) => {
+    res.json({ enabled: peppolConfigured() });
   }),
 );
 

@@ -10,6 +10,7 @@ import { backfillWorksiteGeo } from './lib/worksite-geo.js';
 import { pontoConfigured } from './lib/ponto.js';
 import { syncPonto } from './lib/ponto-sync.js';
 import { sweepWorksiteStatuses } from './lib/worksite-status.js';
+import { refreshPendingPeppol } from './lib/peppol.js';
 
 function lanAddresses(): string[] {
   const out: string[] = [];
@@ -96,6 +97,8 @@ if (pontoConfigured()) {
 const runStatusSweep = () => sweepWorksiteStatuses().then((n) => { if (n) console.log(`[statuts] ${n} chantier(s) passé(s) « En cours »`); }).catch((e) => console.error('[statuts] échec :', e.message));
 setTimeout(runStatusSweep, 60_000);
 setInterval(runStatusSweep, 60 * 60_000);
+// statut de livraison des factures transmises par Peppol (sans effet tant que la clé n'est pas installée)
+setInterval(() => { refreshPendingPeppol().then((n) => { if (n) console.log(`[peppol] ${n} statut(s) de livraison mis à jour`); }).catch((e) => console.error('[peppol] échec :', e.message)); }, 30 * 60_000);
 // chantiers actifs sans point GPS : géolocalisés en arrière-plan à partir de leur adresse (1 requête/seconde max, voir lib/geocode.ts)
 setTimeout(() => { backfillWorksiteGeo().then((n) => { if (n) console.log(`[geo] ${n} chantier(s) géolocalisé(s) d'après leur adresse`); }).catch(() => {}); }, 45_000);
 setInterval(() => { runMarkOverdue().catch((e) => console.error('[overdue] échec :', e.message)); }, 60 * 60_000);

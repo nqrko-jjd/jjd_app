@@ -40,6 +40,14 @@ export const env = {
   /** Assistant IA (chat) — brouillons de devis/planning/tâches. Sans clé = masqué. */
   anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? '',
 
+  /** Envoi Peppol via Recommand (point d'accès certifié). ENVOI SEULEMENT — la réception reste chez le comptable. Sans clé = envoi désactivé. */
+  peppol: {
+    baseUrl: process.env.RECOMMAND_API_URL ?? 'https://app.recommand.eu/api/v1',
+    apiKey: process.env.RECOMMAND_API_KEY ?? '',
+    apiSecret: process.env.RECOMMAND_API_SECRET ?? '',
+    companyId: process.env.RECOMMAND_COMPANY_ID ?? '',
+  },
+
   google: {
     saKeyFile: process.env.GOOGLE_SA_KEY_FILE ?? './secrets/google-sa.json',
     calendarId: process.env.GOOGLE_CALENDAR_ID ?? '',

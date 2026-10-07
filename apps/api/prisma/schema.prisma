@@ -642,6 +642,7 @@ model Document {
   customerRef    String? // référence client / bon de commande, affichée sur le document
   structuredComm String? // communication structurée belge +++xxx/xxxx/xxxxx+++
   peppolStatus   String? // null | queued | sent | delivered | error
+  peppolId       String? // identifiant du document chez le point d'accès Peppol (Recommand) une fois transmis
   originalPdf    String? // nom de fichier du PDF TrustUp d'origine (uploads/documents/…)
   sentAt         DateTime?
   acceptedOn     DateTime?

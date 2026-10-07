@@ -51,7 +51,7 @@ interface BlockOverride { mission?: string; people?: string }
 export function composeGcalEvent(ev: GcalEventSource, ov: BlockOverride = {}): GcalComposed {
   const w = ev.worksite;
   // titre : réf - titre du chantier - titre du créneau (sans répéter ce qui est déjà dedans)
-  const parts = [ev.kind === 'meeting' ? 'RDV' : w.ref, clean(w.title)];
+  const parts = [w.ref, clean(w.title)];
   const t = clean(ev.title);
   if (t && !clean(w.title).toLowerCase().includes(t.toLowerCase())) parts.push(t);
   const summary = parts.filter(Boolean).join(' - ');

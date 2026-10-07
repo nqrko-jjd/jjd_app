@@ -8,7 +8,7 @@ const personName = (p: { displayName: string | null; firstName: string }) => p.d
 
 /** Titre complet comme dans Google Agenda : « R-494 - Chantier - Créneau », sans répéter ce qui est déjà dedans. */
 function fullTitle(ev: PlanningEv) {
-  const parts = [ev.kind === 'meeting' ? 'RDV' : ev.worksite.ref, ev.worksite.title];
+  const parts = [ev.worksite.ref, ev.worksite.title];
   if (ev.title && !ev.worksite.title.toLowerCase().includes(ev.title.toLowerCase())) parts.push(ev.title);
   return parts.filter(Boolean).join(' - ');
 }

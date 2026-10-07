@@ -43,7 +43,7 @@ test('fiche Google Agenda : titre complet et blocs avec icônes, comme les ancie
 test('titre : pas de doublon quand le titre du créneau est déjà dans celui du chantier ; RDV préfixé', () => {
   assert.equal(composeGcalEvent({ ...base, title: 'Wavre - Matexi' }).summary, 'R-654 - Wavre - Matexi - Condor');
   assert.equal(composeGcalEvent({ ...base, title: null }).summary, 'R-654 - Wavre - Matexi - Condor');
-  assert.match(composeGcalEvent({ ...base, kind: 'meeting', title: 'Visite architecte' }).summary, /^RDV - Wavre/);
+  assert.match(composeGcalEvent({ ...base, kind: 'meeting', title: 'Visite architecte' }).summary, /^R-654 - Wavre/);
 });
 
 test('blocs vides absents : un créneau sans détail ne produit pas de lignes vides ni d’icônes seules', () => {

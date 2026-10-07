@@ -29,7 +29,8 @@ export function WorksitePicker({
   const current = options.find((o) => o.id === value);
   const label = (w: WsPickerOption) => `${w.ref} · ${w.title}`;
 
-  useEffect(() => { setQuery(current ? label(current) : ''); }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
+  // réévalué aussi quand la liste arrive APRÈS la valeur (formulaire ouvert pré-rempli avant la fin du chargement des chantiers)
+  useEffect(() => { setQuery(current ? label(current) : ''); }, [value, current?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const onClick = (e: MouseEvent) => { if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false); };

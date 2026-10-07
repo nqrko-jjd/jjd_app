@@ -814,7 +814,7 @@ model BankAccount {
 model BankTransaction {
   id                  String       @id @default(cuid())
   externalId          String?      @unique // id de la transaction côté Ponto (idempotence) — ou clé d'import pour une ligne de fichier
-  pontoId             String?      @unique // id Ponto d'une ligne importée d'un fichier (CSV…) reconnue comme la même opération : plus de doublon à la synchro
+  pontoId             String? // id Ponto d'une ligne importée d'un fichier (CSV…) reconnue comme la même opération : plus de doublon à la synchro
   accountId           String?
   account             BankAccount? @relation(fields: [accountId], references: [id])
   bookingDate         DateTime?
@@ -847,6 +847,7 @@ model BankTransaction {
   matches BankTransactionMatch[]
 
   @@index([bookingDate])
+  @@index([pontoId])
   @@index([matchedLedgerId])
   @@index([matchedDocumentId])
   @@index([contactId])

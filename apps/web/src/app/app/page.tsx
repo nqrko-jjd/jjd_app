@@ -8,6 +8,7 @@ import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { PageHead, Money, formatDateBE, Avatar, ProgressCell, Kpi } from '@/lib/ui';
+import { DashboardExplorer } from '@/components/DashboardExplorer';
 import { rowNav } from '@/lib/rowNav';
 import { LEGAL_DOC_LABEL, WORKSITE_STATUS_LABEL, WORKSITE_PROGRESS_PCT, type WorksiteStatus } from '@jjd/shared';
 import {
@@ -506,16 +507,6 @@ function monthTrend(cur: number, prev: number): string | undefined {
 export default function DashboardPage() {
   const { user, person } = useAuth();
   const { data, loading, error, reload } = useApi<Dashboard>(user?.role === 'worker' || user?.role === 'foreman' || user?.role === 'storekeeper' ? null : '/api/dashboard');
-  // historique du CA facturé sur 6 mois pour la tuile hero (facultatif : la tuile reste correcte sans)
-  const { data: trend } = useApi<{ monthly: { month: string; invoiced: number }[] }>(
-    user?.role === 'worker' || user?.role === 'foreman' || user?.role === 'storekeeper' ? null : '/api/finance/analytics?months=6',
-  );
-  const history = trend?.monthly.map((m) => ({
-    label: /^\d{4}-\d{2}$/.test(m.month)
-      ? new Date(Number(m.month.slice(0, 4)), Number(m.month.slice(5, 7)) - 1, 1).toLocaleDateString('fr-BE', { month: 'short' }).replace('.', '')
-      : m.month,
-    value: m.invoiced,
-  }));
   const today = new Date();
   const eyebrow = today.toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' });
   const name = person?.displayName || person?.firstName || user?.email?.split('@')[0] || '';
@@ -545,49 +536,18 @@ export default function DashboardPage() {
       {error && !loading && <ErrorState message={error} onRetry={reload} />}
       {data && (
         <>
-          <div className="kpis">
-            <Kpi
-              ic={BarChart3}
-              label="Facturé ce mois"
-              href="/app/documents?kind=invoice&dashboard=invoiced"
-              value={<Money value={data.kpis.invoicedMonth} />}
-              sub={monthTrend(data.kpis.invoicedMonth, data.kpis.invoicedPrevMonth) ?? 'Pas encore assez d’historique pour comparer'}
-              hero
-              history={history}
-            />
-            <Kpi
-              ic={Wallet}
-              label="Encaissé ce mois"
-              href="/app/documents?kind=invoice&dashboard=collected"
-              value={<Money value={data.kpis.paidMonth} />}
-              sub={data.kpis.invoicedMonth > 0 ? `${Math.round((data.kpis.paidMonth / data.kpis.invoicedMonth) * 100)} % du montant facturé` : 'Aucune facture ce mois-ci'}
-            />
-            <Kpi
-              ic={Building2}
-              label="Chantiers en cours"
-              value={data.kpis.openWorksites}
-              sub={data.kpis.teamsOnSiteToday > 0 ? `${data.kpis.teamsOnSiteToday} équipe${data.kpis.teamsOnSiteToday > 1 ? 's' : ''} sur le terrain aujourd’hui` : 'Aucune équipe sur le terrain aujourd’hui'}
-              href="/app/chantiers?statut=in_progress"
-            />
-            <Kpi ic={Flag} label="Impayés" href="/app/documents?kind=invoice&dashboard=overdue" value={<Money value={data.kpis.overdueAmount} />} sub={`${data.kpis.overdueCount} facture${data.kpis.overdueCount > 1 ? 's' : ''} en retard`} warn />
-            <Kpi
-              ic={CreditCard}
-              label="Fournisseurs en retard"
-              href="/app/achats?paid=0&overdue=1"
-              value={<Money value={data.kpis.supplierOverdueAmount} />}
-              sub={data.kpis.supplierOverdueCount > 0 ? `${data.kpis.supplierOverdueCount} facture${data.kpis.supplierOverdueCount > 1 ? 's' : ''} échue${data.kpis.supplierOverdueCount > 1 ? 's' : ''}` : 'Tout est à jour'}
-              warn={data.kpis.supplierOverdueCount > 0}
-            />
-            <Kpi ic={FileText} label="Devis en attente" href="/app/documents?kind=quote&dashboard=quotes" value={<Money value={data.kpis.quotesPendingAmount} />} sub={`${data.kpis.quotesPendingCount} devis envoyés`} />
-            <Kpi ic={Clock} label="À encaisser" href="/app/documents?kind=invoice&dashboard=receivable" value={<Money value={data.kpis.receivableAmount} />} sub="factures émises non payées" />
-            <Kpi
-              ic={TrendingUp}
-              label="Prévisionnel à facturer"
-              href="/app/finances#previsionnel"
-              value={<Money value={data.kpis.forecastAmount} />}
-              sub={data.kpis.forecastCount > 0 ? `${data.kpis.forecastCount} chantier${data.kpis.forecastCount > 1 ? 's' : ''} sur devis acceptés` : 'Rien de restant sur les devis acceptés'}
-            />
+          <div className="dashboard-summary">
+            <Kpi ic={BarChart3} label="Factures émises · HT" href="/app/documents?kind=invoice&dashboard=invoiced" value={<Money value={data.kpis.invoicedMonth} />} sub="Ce mois · montant facturé, pas encaissé" hero />
+            <div className="dashboard-receivable">
+              <Kpi ic={Wallet} label="Clients · reste à encaisser TTC" href="/app/documents?kind=invoice&dashboard=receivable" value={<Money value={data.kpis.receivableAmount} />} sub="À ce jour · toutes les factures non soldées" />
+              <Link className="dashboard-overdue" href="/app/documents?kind=invoice&dashboard=overdue">Dont <Money value={data.kpis.overdueAmount} /> en retard · {data.kpis.overdueCount} factures</Link>
+            </div>
+            <Kpi ic={CreditCard} label="Fournisseurs · retard TTC" href="/app/achats?paid=0&overdue=1" value={<Money value={data.kpis.supplierOverdueAmount} />} sub={`${data.kpis.supplierOverdueCount} factures échues à régler`} warn={data.kpis.supplierOverdueCount > 0} />
+            <Kpi ic={FileText} label="Devis à suivre · HT" href="/app/documents?kind=quote&dashboard=quotes" value={<Money value={data.kpis.quotesPendingAmount} />} sub={`${data.kpis.quotesPendingCount} devis envoyés · pas encore du CA`} />
           </div>
+          {(user?.role === 'admin' || user?.role === 'office') && <DashboardExplorer />}
+          <div className="dashboard-workload"><Link href="/app/chantiers?statut=in_progress"><Building2 size={18} /> <strong>{data.kpis.openWorksites} chantiers en cours</strong></Link><span>{data.kpis.teamsOnSiteToday} équipes sur le terrain aujourd’hui</span><Link href="/app/planning" className="btn">Voir le planning</Link></div>
+          <div className="dashboard-pipeline"><Link href="/app/finances#previsionnel">Reste à facturer sur devis acceptés · <Money value={data.kpis.forecastAmount} /></Link><Link href="/app/documents?kind=invoice&dashboard=collected">Factures soldées ce mois · <Money value={data.kpis.paidMonth} /> HT</Link></div>
 
           <div className="split" style={{ margin: '1.8rem 0 0.8rem' }}>
             <section className="panel">

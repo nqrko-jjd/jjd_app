@@ -53,6 +53,8 @@ services:
       # Ponto Connect (connexion bancaire) — laisser vide tant que non configuré
       PONTO_CLIENT_ID: ${PONTO_CLIENT_ID:-}
       PONTO_CLIENT_SECRET: ${PONTO_CLIENT_SECRET:-}
+      # « custom » = intégration personnalisée de SA PROPRE organisation (client_id + secret, sans certificat) ; vide = automatique
+      PONTO_MODE: ${PONTO_MODE:-}
       PONTO_REDIRECT_URI: ${SITE_URL}/api/ponto/callback
       PONTO_CERT_FILE: /repo/apps/api/secrets/ponto-certificate.pem
       PONTO_KEY_FILE: /repo/apps/api/secrets/ponto-private-key.pem

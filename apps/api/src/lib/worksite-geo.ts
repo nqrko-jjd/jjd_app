@@ -1,5 +1,6 @@
 import { prisma } from '../db.js';
 import { geocode } from './geocode.js';
+import { buildGeoQueries, labelFitsPostal } from './geo-query.js';
 
 /**
  * Point GPS d'un chantier déduit de son adresse (celle du formulaire, contrôlée par l'autocomplétion — à défaut celle de l'immeuble).
@@ -18,12 +19,15 @@ export async function autoGeocodeWorksite(id: string, opts: { force?: boolean } 
       select: { lat: true, address: true, postalCode: true, city: true, acp: { select: { address: true, postalCode: true, city: true } } },
     });
     if (!ws || (ws.lat != null && !opts.force)) return false;
-    const street = ws.address || ws.acp?.address;
-    const town = [ws.postalCode || ws.acp?.postalCode, ws.city || ws.acp?.city].filter(Boolean).join(' ');
-    if (!street && !town) return false;
-    const q = [street, town, 'Belgique'].filter(Boolean).join(', ');
+    // anciennes adresses en une seule ligne, « bte » collé au numéro… : voir lib/geo-query.ts ; adresse ambiguë (rue sans commune) = pas de point
+    const plan = buildGeoQueries(ws);
+    if (!plan) { failedAt.set(id, Date.now()); return false; }
     // pas de repli sur le centre de la commune : un point faux fausserait le contrôle de pointage (mieux vaut qu'il soit fixé au premier pointage sur place)
-    const hit = await geocode(q);
+    let hit = null;
+    for (const q of plan.queries) {
+      const h = await geocode(q);
+      if (h && labelFitsPostal(h.label, plan.postal)) { hit = h; break; }
+    }
     if (!hit) { failedAt.set(id, Date.now()); return false; }
     await prisma.worksite.update({ where: { id }, data: { lat: hit.lat, lng: hit.lng, geoSetAt: new Date() } });
     failedAt.delete(id);

@@ -82,3 +82,26 @@ test('search_worksites : retrouve le chantier de test par référence', async ()
   const items = result as { id: string; ref: string }[];
   assert.ok(items.some((w) => w.id === worksiteId));
 });
+
+test('outils de chiffres IA : lecture seule, direction uniquement, résultats exacts et bornés',async()=>{
+ const doc=await prisma.document.create({data:{kind:'invoice',direction:'sale',number:'F-ASSIST-1',status:'overdue',worksiteId,totalHt:1000,totalVat:210,totalTtc:1210,paidAmount:200,issuedOn:new Date('2026-05-01'),dueOn:new Date('2026-05-31'),lockedAt:new Date('2026-05-01'),source:'test'}});
+ const unpaid=(await runTool('unpaid_invoices',{},userId)).result as {plusGrosses:{numero:string;resteTtc:number;retardJours:number}[]};
+ const mine=unpaid.plusGrosses.find((d)=>d.numero==='F-ASSIST-1');
+ assert.equal(mine?.resteTtc,1010);
+ assert.ok((mine?.retardJours??0)>0);
+ const found=(await runTool('search_documents',{query:'F-ASSIST-1'},userId)).result as {resultats:{numero:string;ttc:number}[]};
+ assert.equal(found.resultats[0]?.ttc,1210);
+ const fig=(await runTool('worksite_figures',{worksiteId},userId)).result as {chantier:{ref:string};documents:{numero:string}[]};
+ assert.equal(fig.chantier.ref,'R-ASSIST-TEST');
+ assert.ok(fig.documents.some((d)=>d.numero==='F-ASSIST-1'));
+ assert.ok((await runTool('business_summary',{},userId)).result);
+ assert.ok((await runTool('monthly_trends',{months:6},userId)).result);
+ assert.ok((await runTool('planning_range',{from:'2026-10-01',to:'2026-10-31'},userId)).result);
+ await assert.rejects(()=>runTool('team_timesheet',{year:2026,month:13},userId),'mois invalide refusé');
+ await assert.rejects(()=>runTool('search_documents',{query:'x',injection:'DROP'},userId),'paramètres inconnus refusés');
+ const worker=await prisma.user.findFirst({where:{role:'worker',active:true}});
+ if(worker)await assert.rejects(()=>runTool('unpaid_invoices',{},worker.id),'équipe terrain : aucun chiffre');
+ const office=await prisma.user.findFirst({where:{role:{in:['office','admin']},active:true,email:{notIn:['david@jjd-consult.be','julien@jjd-consult.be']}}});
+ if(office)await assert.rejects(()=>runTool('business_summary',{},office.id),'bureau hors direction : refusé');
+ await prisma.document.delete({where:{id:doc.id}});
+});

@@ -10,6 +10,7 @@ import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, OFFICE, STAFF } from '../lib/auth.js';
 import { env } from '../env.js';
 import { z } from 'zod';
+import { DATA_TOOLS, DATA_TOOL_NAMES, runDataTool } from '../lib/assistant-data.js';
 import { assertPilot, isDirection, canUsePilot, isBudgetManager, configuration, quota, begin, reserve, settle, finish, cost, ready, saveConfig, grant, EURO } from '../lib/assistant-quota.js';
 
 export const assistantRouter = Router();
@@ -148,6 +149,7 @@ const SYSTEM_PROMPT_DIRECTION = SYSTEM_PROMPT_BASE + `
 - Avant de créer quoi que ce soit lié à un chantier, un client ou un ouvrier nommé, utilise search_worksites / search_contacts / search_people pour retrouver son id réel. Si aucun résultat ne correspond clairement, demande une précision plutôt que de deviner.
 - Devis : une ligne par poste avec quantité, unité et prix unitaire HT. TVA 21 % par défaut, 6 % seulement pour la rénovation d'un logement privé de plus de 10 ans (signale-le dans assumptions). Si un prix manque, mets ta meilleure estimation et note-la dans assumptions plutôt que de bloquer ; ne pose qu'une ou deux questions si une information essentielle manque (client, surface).
 - Les dates relatives (« jeudi », « demain ») se calculent par rapport à la date du jour donnée ci-dessous, fuseau Europe/Bruxelles.
+- Pour toute question de chiffres (facturé, encaissé, marge, impayés, heures, planning, état d'un chantier, évolution…), utilise les outils de lecture business_summary, monthly_trends, worksite_figures, search_documents, unpaid_invoices, team_timesheet et planning_range, puis réponds avec les chiffres EXACTS renvoyés en précisant HT ou TTC. N'invente ni n'arrondis jamais un chiffre : si un outil ne renvoie rien ou renvoie un résultat tronqué, dis-le et propose d'affiner. La marge d'un chantier se lit sur l'encaissé (margeReelleSurEncaisse). Ces outils sont en lecture seule : tu ne peux rien modifier dans les finances, les factures ou les paiements.
 - Après création, résume en 2-4 lignes ce qui a été préparé et ce qui reste à confirmer.`;
 const SYSTEM_PROMPT_FIELD = SYSTEM_PROMPT_BASE + `
 - Tu t'adresses ici à un membre de l'équipe terrain (ouvrier ou chef d'équipe), pas à la direction. Tu es en lecture seule : tu ne crées ni devis, ni rendez-vous, ni tâche — tu peux seulement répondre, expliquer et préparer du texte à relire. search_worksites ne renvoie que SES propres chantiers (d'après ses pointages et affectations planning) : ne tente jamais de deviner ou de lister les chantiers d'autres personnes. Tu n'as pas accès au carnet clients/fournisseurs ni aux fiches des autres membres de l'équipe — explique-le poliment si on te le demande.`;
@@ -232,6 +234,11 @@ export async function runTool(name: string, input: Record<string, unknown>, user
     if(!direction)throw new HttpError(403,'Création IA réservée à la direction.');
     return runCreateTool(name,input,userId);
   }
+  if(DATA_TOOL_NAMES.has(name)){
+    // Chiffres de l'entreprise (finances, marges, factures, pointage) : lecture seule, direction uniquement.
+    if(!direction)throw new HttpError(403,'Chiffres réservés à la direction.');
+    return {result:await runDataTool(name,input)};
+  }
   const parsed=z.object({query:z.string().trim().min(2).max(150),type:z.enum(['client','supplier']).optional()}).strict().parse(input);
   input=parsed;
   switch (name) {
@@ -301,7 +308,7 @@ assistantRouter.post('/chat',requireAuth(...STAFF),asyncHandler(async(req,res)=>
  const direction=isDirection(u);
  // Hors direction : seulement la recherche de chantiers (déjà cantonnée aux siens côté runTool),
  // pas le carnet clients/fournisseurs ni les fiches des autres membres de l'équipe.
- const tools=direction?[...READ_TOOLS,...CREATE_TOOLS]:READ_TOOLS.filter(t=>t.name==='search_worksites');
+ const tools=direction?[...READ_TOOLS,...DATA_TOOLS,...CREATE_TOOLS]:READ_TOOLS.filter(t=>t.name==='search_worksites');
  const actions:DraftAction[]=[];
  const today=new Date().toLocaleDateString('fr-BE',{timeZone:'Europe/Brussels',weekday:'long',day:'numeric',month:'long',year:'numeric'});
  const systemPrompt=(direction?SYSTEM_PROMPT_DIRECTION:SYSTEM_PROMPT_FIELD)+`

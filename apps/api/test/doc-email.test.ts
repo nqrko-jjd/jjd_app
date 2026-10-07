@@ -25,8 +25,12 @@ before(async () => {
   writeFileSync(path.join(UPLOADS_DIR, 'documents', PDF_NAME), '%PDF-1.4 test');
   ids.ws = (await prisma.worksite.create({ data: { ref: 'R-MAILTEST', title: 'Mail test', source: 'test' } })).id;
   ids.contact = (await prisma.contact.create({ data: { name: 'Client Mail SA', normalizedName: 'client mail sa', type: 'client', email: 'client@exemple.be' } })).id;
-  setMailTransportForTests({ sendMail: async (opts: Record<string, unknown>) => { if (failSmtp) throw new Error('535 authentification refusée'); sent.push(opts); return {}; } } as never);
 });
+// la suite complète tourne en un seul processus : chaque test pose lui-même son état SMTP (jamais dans before)
+function arm(configured: boolean) {
+  env.smtp.host = configured ? 'smtp.test' : ''; env.smtp.user = configured ? 'info@jjd-consult.be' : ''; env.smtp.password = configured ? 'x' : '';
+  setMailTransportForTests({ sendMail: async (opts: Record<string, unknown>) => { if (failSmtp) throw new Error('535 authentification refusée'); sent.push(opts); return {}; } } as never);
+}
 after(async () => {
   setMailTransportForTests(null);
   env.smtp.host = ''; env.smtp.user = ''; env.smtp.password = '';
@@ -48,6 +52,7 @@ async function mkDoc(number: string, opts: { locked?: boolean; kind?: string } =
 }
 
 test('e-mail : sans identifiants SMTP -> 503, rien d’enregistré', async () => {
+  arm(false);
   const id = await mkDoc('FM-1');
   const r = await call('POST', `/api/documents/${id}/email`, { to: ['client@exemple.be'], subject: 'S', message: 'M' });
   assert.equal(r.status, 503);
@@ -56,7 +61,7 @@ test('e-mail : sans identifiants SMTP -> 503, rien d’enregistré', async () =>
 });
 
 test('e-mail : proposition par défaut, validations, échec SMTP sans marquage, puis envoi réel avec PDF joint', async () => {
-  env.smtp.host = 'smtp.test'; env.smtp.user = 'info@jjd-consult.be'; env.smtp.password = 'x';
+  arm(true);
   assert.equal((await call('GET', '/api/settings/email')).body.enabled, true);
   const id = await mkDoc('FM-2');
 
@@ -91,6 +96,7 @@ test('e-mail : proposition par défaut, validations, échec SMTP sans marquage, 
 });
 
 test('e-mail : un devis émis peut aussi être envoyé', async () => {
+  arm(true);
   const id = await mkDoc('DM-1', { kind: 'quote' });
   const r = await call('POST', `/api/documents/${id}/email`, { to: ['client@exemple.be'], subject: 'Devis', message: 'Bonjour' });
   assert.equal(r.status, 200);

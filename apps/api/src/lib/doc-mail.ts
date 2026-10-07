@@ -28,6 +28,8 @@ export const emailInput = z.object({
   subject: z.string().trim().min(1).max(200),
   message: z.string().trim().min(1).max(5000),
   copyToSelf: z.boolean().default(true),
+  /** Devis seulement : ajoute un lien pour accepter et signer en ligne. */
+  sign: z.boolean().default(false),
 }).strict();
 export type EmailInput = z.infer<typeof emailInput>;
 
@@ -58,13 +60,13 @@ export function defaultEmail(d: {
 }
 
 /** Envoie l'e-mail ; lève une erreur (rien d'enregistré) si le serveur SMTP refuse. */
-export async function sendEmailWithPdf(input: EmailInput, pdf: { buffer: Buffer; filename: string }): Promise<void> {
+export async function sendEmailWithPdf(input: Pick<EmailInput, 'to' | 'subject' | 'message' | 'copyToSelf'>, pdf: { buffer: Buffer; filename: string }, withoutAttachment = false): Promise<void> {
   if (!emailConfigured()) throw new HttpError(503, 'Envoi par e-mail non configuré : le serveur d’envoi de la boîte JJD n’est pas encore branché.');
   try {
     await getTransport().sendMail({
       from: fromAddress(), replyTo: fromAddress(), to: input.to, ...(input.copyToSelf ? { bcc: fromAddress() } : {}),
       subject: input.subject, text: input.message,
-      attachments: [{ filename: pdf.filename, content: pdf.buffer, contentType: 'application/pdf' }],
+      ...(withoutAttachment ? {} : { attachments: [{ filename: pdf.filename, content: pdf.buffer, contentType: 'application/pdf' }] }),
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'erreur inconnue';

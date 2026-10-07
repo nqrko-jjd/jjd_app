@@ -1674,3 +1674,25 @@ model PurchaseList {
   @@index([quoteId])
   @@index([shareToken])
 }
+
+/// Signature électronique simple d'un devis par lien personnel : PDF figé à l'envoi + preuve à la signature (lib/quote-sign.ts).
+model QuoteSignature {
+  id            String    @id @default(cuid())
+  documentId    String
+  token         String // lien secret envoyé au client
+  status        String    @default("pending") // pending | signed | declined | revoked
+  pdfFile       String // copie figée du PDF envoyé (uploads/signatures/)
+  pdfHash       String // SHA-256 du PDF figé
+  sentTo        String?
+  expiresAt     DateTime
+  signerName    String?
+  signerComment String?
+  signedAt      DateTime?
+  signerIp      String?
+  signerAgent   String?
+  createdById   String?
+  createdAt     DateTime  @default(now())
+
+  @@index([documentId])
+  @@index([token])
+}

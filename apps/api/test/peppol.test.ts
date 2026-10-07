@@ -92,6 +92,7 @@ async function mkInvoice(number: string) {
 }
 
 test('Peppol : sans clé configurée -> 503 et rien n’est marqué envoyé', async () => {
+  env.peppol.apiKey = ''; env.peppol.apiSecret = ''; env.peppol.companyId = ''; // la suite complète tourne en un seul processus
   const id = await mkInvoice('FP-1');
   const r = await post(`/api/documents/${id}/send`, { peppol: true });
   assert.equal(r.status, 503);

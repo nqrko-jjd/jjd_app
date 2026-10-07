@@ -16,6 +16,7 @@ import { docInclude, buildLineRows, cloneLineRows, refreshDocTotals, issueDocume
 import { renderDocumentPdf } from '../lib/pdf.js';
 import { sendViaPeppol, refreshPeppolStatus } from '../lib/peppol.js';
 import { emailInput, defaultEmail, sendEmailWithPdf, emailConfigured } from '../lib/doc-mail.js';
+import { createSignatureRequest, revokeSignature, signLinkBlock } from '../lib/quote-sign.js';
 import { extractDocumentInfo } from '../lib/document-extract.js';
 import { UPLOADS_DIR } from '../lib/media.js';
 import { PAYMENT_TOLERANCE } from '../lib/payment-tolerance.js';
@@ -812,14 +813,22 @@ documentsRouter.post(
     if (!doc) throw new HttpError(404, 'Document introuvable');
     const delivery = externalDeliveryState(doc);
     const pdf = await getDocPdfBuffer(doc.id);
-    await sendEmailWithPdf(input, pdf);
+    if (input.sign && doc.kind !== 'quote') throw new HttpError(422, 'La signature en ligne ne concerne que les devis.');
+    // signature en ligne : le PDF envoyé est figé et un lien personnel est ajouté au message
+    const sig = input.sign ? await createSignatureRequest(doc.id, req.user!.id, pdf, input.to) : null;
+    try {
+      await sendEmailWithPdf(sig ? { ...input, message: input.message + signLinkBlock(sig.url, sig.expiresAt) } : input, pdf);
+    } catch (e) {
+      if (sig) await revokeSignature(sig.request.id); // l'e-mail n'est pas parti : le lien ne doit pas rester actif
+      throw e;
+    }
     const updated = await prisma.document.update({
       where: { id: doc.id },
       data: delivery.alreadyRecorded ? {} : { status: delivery.status, sentAt: new Date() },
       include: docInclude,
     });
-    await prisma.auditLog.create({ data: { actorId: req.user!.id, action: 'send', entity: 'document', entityId: doc.id, meta: { channel: 'email', to: input.to } } });
-    res.json({ document: updated, note: `${DOC_KIND_LABEL[doc.kind] ?? 'Document'} envoyé par e-mail à ${input.to.join(', ')}.` });
+    await prisma.auditLog.create({ data: { actorId: req.user!.id, action: 'send', entity: 'document', entityId: doc.id, meta: { channel: 'email', to: input.to, signature: sig ? sig.request.id : undefined } } });
+    res.json({ document: updated, note: `${DOC_KIND_LABEL[doc.kind] ?? 'Document'} envoyé par e-mail à ${input.to.join(', ')}${sig ? ', avec un lien de signature en ligne (valable 30 jours)' : ''}.` });
   }),
 );
 

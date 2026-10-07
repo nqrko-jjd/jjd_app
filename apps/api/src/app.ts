@@ -35,6 +35,7 @@ import { assistantRouter } from './routes/assistant.js';
 import { cdcRouter } from './routes/cdc.js';
 import { quoteToolsRouter } from './routes/quote-tools.js';
 import { purchaseListsRouter, publicPurchaseListRouter } from './routes/purchase-lists.js';
+import { quoteSignRouter, publicSignRouter } from './routes/quote-sign.js';
 import { geocodeRouter } from './routes/geocode.js';
 import { usersRouter } from './routes/users.js';
 import { pushRouter } from './routes/push.js';
@@ -94,6 +95,8 @@ export function createApp() {
   app.use('/api/quote-tools', quoteToolsRouter);
   app.use('/api/purchase-lists', purchaseListsRouter);
   app.use('/api/public/purchase-list', publicPurchaseListRouter);
+  app.use('/api/quote-sign', quoteSignRouter);
+  app.use('/api/public/sign', publicSignRouter);
   app.use('/api/geocode', geocodeRouter);
   app.use('/api/users', usersRouter);
 

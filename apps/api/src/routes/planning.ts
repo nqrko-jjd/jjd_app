@@ -7,6 +7,7 @@ import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, STAFF, OFFICE } from '../lib/auth.js';
 import { upsertEvent, deleteEvent, gcalEnabled } from '../lib/gcal.js';
+import { composeGcalEvent } from '../lib/gcal-format.js';
 import { attachPhotoRoutes } from '../lib/photo-upload.js';
 import { vehicleCostBreakdown } from '../lib/vehicle-cost.js';
 import { storeFile, UPLOADS_DIR } from '../lib/media.js';
@@ -25,46 +26,27 @@ async function syncToGoogle(eventId: string) {
   const ev = await prisma.planningEvent.findUnique({
     where: { id: eventId },
     include: {
-      worksite: { select: { ref: true, title: true, address: true, box: true, postalCode: true, city: true } },
+      worksite: {
+        select: {
+          ref: true, title: true, address: true, box: true, postalCode: true, city: true,
+          manager: { select: { displayName: true, firstName: true } },
+          acp: { select: { digicode: true, accessNote: true } },
+        },
+      },
       team: { select: { name: true } },
-      vehicles: { include: { vehicle: { select: { plate: true, model: true } }, driver: { select: { displayName: true, firstName: true } } } },
+      vehicles: { include: { vehicle: { select: { plate: true, model: true, brand: true, code: true } }, driver: { select: { displayName: true, firstName: true } } } },
       assignments: { include: { person: { select: { displayName: true, firstName: true } } } },
       equipment: { include: { equipment: { select: { name: true } } } },
       consumables: { include: { consumable: { select: { name: true, unit: true } } } },
     },
   });
   if (!ev) return;
-  const people = ev.assignments.map((a) => a.person.displayName || a.person.firstName).join(', ');
-  const equipmentList = ev.equipment.map((e) => e.equipment.name).join(', ');
-  const consumablesList = ev.consumables.map((c) => `${c.consumable.name} (${c.qty} ${c.consumable.unit})`).join(', ');
-  const vehiclesList = ev.vehicles.map((v) => {
-    const label = [v.vehicle.plate, v.vehicle.model].filter(Boolean).join(' ');
-    const driver = v.driver ? (v.driver.displayName || v.driver.firstName) : null;
-    return driver ? `${label} (${driver})` : label;
-  }).join(', ');
-  const lines = [
-    ev.team ? `Équipe : ${ev.team.name}` : null,
-    people ? `Ouvriers : ${people}` : null,
-    vehiclesList ? `Véhicule${ev.vehicles.length > 1 ? 's' : ''} : ${vehiclesList}` : null,
-    equipmentList ? `Matériel : ${equipmentList}` : null,
-    consumablesList ? `Consommables : ${consumablesList}` : null,
-    ev.materialsNote ? `Autre matériel : ${ev.materialsNote}` : null,
-    ev.note ? `Instructions : ${ev.note}` : null,
-  ].filter(Boolean);
-  // RDV ailleurs qu'au chantier : sa propre adresse plutôt que celle du chantier
-  const location = ev.kind === 'meeting' && !ev.meetingOnSite
-    ? [
-        [ev.meetingAddress, ev.meetingBox && `bte ${ev.meetingBox}`].filter(Boolean).join(' '),
-        [ev.meetingPostalCode, ev.meetingCity].filter(Boolean).join(' '),
-      ].filter(Boolean).join(', ')
-    : [
-        [ev.worksite.address, ev.worksite.box && `bte ${ev.worksite.box}`].filter(Boolean).join(' '),
-        [ev.worksite.postalCode, ev.worksite.city].filter(Boolean).join(' '),
-      ].filter(Boolean).join(', ');
+  // même présentation que les anciennes fiches Google Agenda (titre complet, blocs avec icônes) : voir lib/gcal-format.ts
+  const { summary, description, location } = composeGcalEvent(ev);
   const gid = await upsertEvent(ev.googleEventId, {
-    summary: `${ev.kind === 'meeting' ? 'RDV' : ev.worksite.ref} — ${ev.title || ev.worksite.title}`,
-    description: lines.join('\n'),
-    location: location || undefined,
+    summary,
+    description,
+    location,
     start: ev.startAt,
     end: ev.endAt,
     allDay: ev.allDay,
@@ -117,9 +99,16 @@ planningRouter.get(
 planningRouter.post(
   '/gcal-backfill',
   requireAuth(...OFFICE),
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
     if (!gcalEnabled()) throw new HttpError(422, 'Synchro Google Agenda non configurée');
-    const missing = await prisma.planningEvent.findMany({ where: { googleEventId: null }, select: { id: true } });
+    // ?reformat=1 : réécrit dans la nouvelle présentation les événements À VENIR déjà envoyés depuis l'appli. Jamais les événements
+    // importés de Google (source « agenda-import » : fiches faites à la main) ni ceux du passé.
+    const reformat = (req.query as Record<string, string>).reformat === '1';
+    const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
+    const missing = await prisma.planningEvent.findMany({
+      where: reformat ? { googleEventId: { not: null }, source: null, startAt: { gte: startOfToday } } : { googleEventId: null },
+      select: { id: true },
+    });
     let synced = 0;
     const errors: string[] = [];
     for (const ev of missing) {

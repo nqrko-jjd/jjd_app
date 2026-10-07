@@ -103,10 +103,11 @@ export default function PlanningPage() {
   const { data: evData, loading, reload } = useApi<{ items: PlanningEv[]; googleSync: boolean }>(`/api/planning?from=${from}&to=${to}`);
   const events = evData?.items ?? [];
   const [gcalBusy, setGcalBusy] = useState(false);
-  async function gcalBackfill() {
+  async function gcalBackfill(reformat = false) {
+    if (reformat && !confirm('Réécrire dans Google Agenda la fiche de tous les événements À VENIR envoyés depuis l’appli, avec la nouvelle présentation ? Les événements du passé et ceux faits à la main dans Google ne sont pas touchés.')) return;
     setGcalBusy(true);
     try {
-      const r = await api<{ total: number; synced: number; errors: string[] }>('/api/planning/gcal-backfill', { method: 'POST' });
+      const r = await api<{ total: number; synced: number; errors: string[] }>(`/api/planning/gcal-backfill${reformat ? '?reformat=1' : ''}`, { method: 'POST' });
       alert(r.total === 0
         ? 'Tout était déjà synchronisé — rien à faire.'
         : `${r.synced}/${r.total} événement(s) envoyé(s) vers Google Agenda.${r.errors.length ? `\n${r.errors.length} échec(s), voir logs serveur.` : ''}`);
@@ -333,9 +334,14 @@ export default function PlanningPage() {
         action={
           <div className="row">
             {evData?.googleSync && (
-              <button className="btn" onClick={gcalBackfill} disabled={gcalBusy} title="Envoie vers Google Agenda les événements jamais synchronisés — ne touche pas à ceux déjà envoyés">
+              <>
+              <button className="btn" onClick={() => gcalBackfill()} disabled={gcalBusy} title="Envoie vers Google Agenda les événements jamais synchronisés — ne touche pas à ceux déjà envoyés">
                 {gcalBusy ? 'Synchronisation…' : '↻ Rattraper Google Agenda'}
               </button>
+              <button className="btn" onClick={() => gcalBackfill(true)} disabled={gcalBusy} title="Réécrit dans Google Agenda les événements à venir déjà envoyés, avec la nouvelle présentation (titre complet, icônes, mission en tirets)">
+                Mettre à jour le format Google
+              </button>
+              </>
             )}
             <button className="btn" onClick={() => setAbsenceModal({})}>+ Congé / formation</button>
             <button className="btn primary" onClick={() => openNew({ date: trackedDay })}>+ Nouvelle affectation</button>

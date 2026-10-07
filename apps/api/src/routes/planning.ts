@@ -8,6 +8,7 @@ import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, STAFF, OFFICE } from '../lib/auth.js';
 import { upsertEvent, deleteEvent, gcalEnabled } from '../lib/gcal.js';
 import { composeGcalEvent, composeGcalGroup } from '../lib/gcal-format.js';
+import { refreshWorksiteStatus } from '../lib/worksite-status.js';
 import { attachPhotoRoutes } from '../lib/photo-upload.js';
 import { vehicleCostBreakdown } from '../lib/vehicle-cost.js';
 import { storeFile, UPLOADS_DIR } from '../lib/media.js';
@@ -207,6 +208,7 @@ planningRouter.post(
       },
     });
     await syncToGoogle(ev.id);
+    await refreshWorksiteStatus(ev.worksiteId, 'event'); // intervention planifiée : le chantier passe « Planifié » / reprend
     res.status(201).json({ event: await withIncludes(ev.id) });
   }),
 );
@@ -256,6 +258,9 @@ planningRouter.patch(
       },
     });
     await syncToGoogle(req.params.id!);
+    const afterEv = await prisma.planningEvent.findUnique({ where: { id: req.params.id }, select: { worksiteId: true } });
+    await refreshWorksiteStatus(afterEv?.worksiteId, 'event');
+    if (before && afterEv && before.worksiteId !== afterEv.worksiteId) await refreshWorksiteStatus(before.worksiteId, 'event');
     // créneau déplacé vers un autre jour / chantier, ou changé de nature : la fiche Google qu'il quitte doit être recalculée
     if (before && before.kind === 'intervention' && !before.source) {
       const after = await prisma.planningEvent.findUnique({ where: { id: req.params.id }, select: { worksiteId: true, startAt: true, kind: true } });
@@ -277,6 +282,7 @@ planningRouter.delete(
     await prisma.planningEvent.delete({ where: { id: req.params.id } });
     // il reste peut-être d'autres créneaux ce jour-là sur ce chantier : la fiche Google commune est recalculée
     if (ev.kind === 'intervention' && !ev.source) await syncGroup(ev.worksiteId, brusselsDay(ev.startAt));
+    await refreshWorksiteStatus(ev.worksiteId, 'event'); // dernière intervention supprimée : retour « À planifier »
     res.status(204).end();
   }),
 );

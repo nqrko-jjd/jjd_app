@@ -1,3 +1,4 @@
+import { refreshWorksiteStatus } from '../lib/worksite-status.js';
 import { Router } from 'express';
 import multer from 'multer';
 import { unzipSync } from 'fflate';
@@ -304,6 +305,7 @@ threadRouter.post(
     });
     if (closing) {
       await prisma.worksite.update({ where: { id: worksiteId }, data: { status: 'done' } });
+      await refreshWorksiteStatus(worksiteId, 'field-done'); // terminé → à facturer (ou facturé / clôturé si déjà réglé)
     }
     res.json({ ok: true });
   }),

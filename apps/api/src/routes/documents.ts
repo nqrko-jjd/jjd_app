@@ -1,3 +1,4 @@
+import { refreshWorksiteStatus } from '../lib/worksite-status.js';
 import { Router } from 'express';
 import { validateExternalDeliveryRequest, externalDeliveryState } from '../lib/document-delivery.js';
 import path from 'node:path';
@@ -537,7 +538,10 @@ documentsRouter.post(
       await prisma.documentLine.createMany({ data: lines });
       await refreshDocTotals(inv.id);
     }
-    if (src.status === 'sent') await prisma.document.update({ where: { id: src.id }, data: { status: 'accepted', acceptedOn: new Date() } });
+    if (src.status === 'sent') {
+      await prisma.document.update({ where: { id: src.id }, data: { status: 'accepted', acceptedOn: new Date() } });
+      await refreshWorksiteStatus(src.worksiteId, 'document');
+    }
     const full = await prisma.document.findUnique({ where: { id: inv.id }, include: docInclude });
     res.status(201).json({ document: full });
   }),
@@ -679,6 +683,7 @@ documentsRouter.post(
       },
       include: docInclude,
     });
+    await refreshWorksiteStatus(updated.worksiteId, 'document'); // devis accepté / refusé : le chantier avance (ou est refusé)
     res.json({ document: updated });
   }),
 );

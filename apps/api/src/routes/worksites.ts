@@ -337,7 +337,7 @@ worksitesRouter.get(
     // juste un condensé des signaux déjà en base (messages de statut du fil, tâches
     // cochées, rapports signés) trié par date, pour donner un aperçu récent sans avoir
     // à ouvrir chaque onglet.
-    const [statusMessages, doneTasks] = await Promise.all([
+    const [statusMessages, doneTasks, autoStatuses] = await Promise.all([
       prisma.message.findMany({
         where: { thread: { worksiteId: ws.id }, kind: 'status' },
         orderBy: { createdAt: 'desc' },
@@ -350,9 +350,11 @@ worksitesRouter.get(
         take: 6,
         select: { id: true, title: true, doneByName: true, doneAt: true },
       }),
+      prisma.auditLog.findMany({ where: { entity: 'worksite', entityId: ws.id, action: 'auto_status' }, orderBy: { at: 'desc' }, take: 6, select: { id: true, at: true, meta: true } }),
     ]);
     const activity = [
       ...statusMessages.map((m) => ({ id: `msg-${m.id}`, label: m.body ?? 'Mise à jour du chantier', by: m.authorName, at: m.createdAt })),
+      ...autoStatuses.map((a) => ({ id: `auto-${a.id}`, label: String((a.meta as { label?: string } | null)?.label ?? 'Statut mis à jour automatiquement'), by: 'Automatique', at: a.at })),
       ...doneTasks.map((t) => ({ id: `task-${t.id}`, label: `Tâche terminée · ${t.title}`, by: t.doneByName, at: t.doneAt as Date })),
       ...ws.reports.filter((r) => r.signedAt).map((r) => ({ id: `report-${r.id}`, label: `Rapport signé${r.clientName ? ` par ${r.clientName}` : ''}`, by: r.authorName, at: r.signedAt as Date })),
     ].sort((a, b) => b.at.getTime() - a.at.getTime()).slice(0, 6);

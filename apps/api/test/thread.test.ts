@@ -33,7 +33,7 @@ after(async () => {
 
 const auth = () => ({ authorization: `Bearer ${token}` });
 
-test('fil : créé à la demande, message posté, clôture -> statut done', async () => {
+test('fil : créé à la demande, message posté, clôture -> chantier terminé, donc « à facturer » (statut automatique)', async () => {
   const g = await fetch(`${base}/api/worksites/${wsId}/thread`, { headers: auth() });
   assert.equal(g.status, 200);
   const first = await g.json();
@@ -57,7 +57,7 @@ test('fil : créé à la demande, message posté, clôture -> statut done', asyn
   assert.equal(close.status, 200);
 
   const ws = await prisma.worksite.findUnique({ where: { id: wsId } });
-  assert.equal(ws?.status, 'done');
+  assert.equal(ws?.status, 'to_invoice');
   const after2 = await (await fetch(`${base}/api/worksites/${wsId}/thread`, { headers: auth() })).json();
   assert.equal(after2.thread.closedAt !== null, true);
   assert.ok(after2.messages.some((m: { kind: string }) => m.kind === 'status'));

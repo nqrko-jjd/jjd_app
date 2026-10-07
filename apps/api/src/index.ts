@@ -7,6 +7,7 @@ import { mailSuggestionsConfigured, syncMailSuggestions } from './lib/lead-mailb
 import { markOverdueInvoices, renumberFaDepositInvoices } from './lib/documents.js';
 import { backfillBankMatches } from './lib/bank-match.js';
 import { backfillWorksiteGeo } from './lib/worksite-geo.js';
+import { sweepWorksiteStatuses } from './lib/worksite-status.js';
 
 function lanAddresses(): string[] {
   const out: string[] = [];
@@ -81,6 +82,10 @@ async function runMarkOverdue() {
   }
 }
 await runMarkOverdue();
+// chantier dont une intervention démarre aujourd'hui : « À planifier » / « Planifié » → « En cours »
+const runStatusSweep = () => sweepWorksiteStatuses().then((n) => { if (n) console.log(`[statuts] ${n} chantier(s) passé(s) « En cours »`); }).catch((e) => console.error('[statuts] échec :', e.message));
+setTimeout(runStatusSweep, 60_000);
+setInterval(runStatusSweep, 60 * 60_000);
 // chantiers actifs sans point GPS : géolocalisés en arrière-plan à partir de leur adresse (1 requête/seconde max, voir lib/geocode.ts)
 setTimeout(() => { backfillWorksiteGeo().then((n) => { if (n) console.log(`[geo] ${n} chantier(s) géolocalisé(s) d'après leur adresse`); }).catch(() => {}); }, 45_000);
 setInterval(() => { runMarkOverdue().catch((e) => console.error('[overdue] échec :', e.message)); }, 60 * 60_000);

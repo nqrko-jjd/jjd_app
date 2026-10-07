@@ -7,6 +7,7 @@ import { prisma, nextCounter } from '../db.js';
 import { HttpError } from './http.js';
 import { PAYMENT_TOLERANCE } from './payment-tolerance.js';
 import { sanitizeLineHtml } from './sanitize.js';
+import { refreshWorksiteStatus } from './worksite-status.js';
 
 /**
  * Prochain numéro libre pour (kind, année). Le compteur est initialisé au-dessus
@@ -321,6 +322,8 @@ export async function syncLedgerEntryForDocument(documentId: string) {
       ...period,
     },
   });
+  // émission, paiement, note de crédit : le statut du chantier suit (facturé, clôturé, à facturer…) — voir lib/worksite-status.ts
+  await refreshWorksiteStatus(doc.worksiteId, 'document');
 }
 
 /**

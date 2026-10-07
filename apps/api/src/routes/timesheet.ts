@@ -1,3 +1,4 @@
+import { refreshWorksiteStatus } from '../lib/worksite-status.js';
 import { Router } from 'express';
 import type { Prisma } from '@prisma/client';
 import multer from 'multer';
@@ -81,6 +82,7 @@ timesheetRouter.post(
         source: 'timer',
       },
     });
+    await refreshWorksiteStatus(entry.worksiteId, 'timesheet'); // premier pointage : le chantier passe « En cours »
     res.status(201).json({ entry, geoFlag, geoDistance, geoInit });
   }),
 );
@@ -159,6 +161,7 @@ timesheetRouter.post(
         source: 'manual',
       },
     });
+    await refreshWorksiteStatus(entry.worksiteId, 'timesheet');
     res.status(201).json({ entry });
   }),
 );

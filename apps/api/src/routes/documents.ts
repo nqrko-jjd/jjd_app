@@ -466,26 +466,40 @@ documentsRouter.post(
   }),
 );
 
-/** Duplication en brouillon (mêmes lignes). */
+/**
+ * Duplication en brouillon (mêmes lignes), dans le MÊME type de document ou dans un autre : { kind: 'quote' | 'invoice' | 'deposit_invoice' | 'credit_note' }.
+ * Une facture dupliquée en devis (ou l'inverse) donne un brouillon indépendant, sans lien avec l'original. Une note de crédit LIÉE à une facture émise
+ * passe par « Note de crédit » sur la facture (montant, lien, plafond) : ici seulement une note de crédit libre.
+ */
+const duplicateInput = z.object({ kind: z.enum(['quote', 'invoice', 'deposit_invoice', 'credit_note']).optional() });
 documentsRouter.post(
   '/:id/duplicate',
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
+    const body = duplicateInput.parse(req.body ?? {});
     const src = await prisma.document.findUnique({ where: { id: req.params.id }, include: { lines: true } });
     if (!src) throw new HttpError(404, 'Document introuvable');
+    const target = body.kind ?? src.kind;
+    const changed = target !== src.kind;
+    if (changed && src.direction === 'purchase') throw new HttpError(422, 'Une facture d’achat ne se transforme pas en document de vente.');
+    if (target === 'credit_note' && changed && (src.kind === 'invoice' || src.kind === 'deposit_invoice') && src.number) {
+      throw new HttpError(422, 'Pour une note de crédit sur une facture émise, utilisez « Note de crédit… » sur la facture : elle garde le lien avec la facture, le montant total ou partiel et le plafond.');
+    }
+    const LABEL: Record<string, string> = { quote: 'devis', invoice: 'facture', deposit_invoice: 'facture d’acompte', credit_note: 'note de crédit' };
     const seq = await nextCounter('doc:draft');
     const copy = await prisma.document.create({
       data: {
-        kind: src.kind,
-        direction: src.direction,
+        kind: target,
+        direction: target === 'credit_note' ? 'credit_note' : changed ? 'sale' : src.direction,
         draftRef: `BROUILLON-${seq}`,
         status: 'draft',
         worksiteId: src.worksiteId,
         contactId: src.contactId,
         title: src.title,
-        intro: src.intro,
+        // le texte d'introduction n'existe que sur un devis
+        intro: target === 'quote' ? src.intro : null,
         terms: src.terms,
-        note: src.note,
+        note: changed ? `Copie du ${LABEL[src.kind] ?? src.kind} ${src.number ?? src.draftRef ?? ''}`.trim() : src.note,
         source: 'manual',
         createdById: req.user!.id,
       },

@@ -509,7 +509,20 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
               {isInvoiceLike && locked && doc.status !== 'credited' && creditRemaining > 0.01 && (
                 <button className="btn" disabled={!!busy} onClick={() => setCreditOpen(true)}>Note de crédit…</button>
               )}
-              <button className="btn" disabled={!!busy} onClick={() => act('/duplicate', {})}>Dupliquer</button>
+              <details className="plan-filter-menu" style={{ display: 'inline-block', position: 'relative' }}>
+                <summary className="btn" title="Copier ce document, dans le même type ou dans un autre">Dupliquer ▾</summary>
+                <div className="plan-filter-panel" style={{ display: 'grid', gap: '0.3rem', minWidth: 220, padding: '0.5rem' }}>
+                  <button className="btn" disabled={!!busy} onClick={() => act('/duplicate', {})}>Dupliquer tel quel</button>
+                  {doc.kind !== 'quote' && <button className="btn" disabled={!!busy} onClick={() => act('/duplicate', { kind: 'quote' })}>Dupliquer en devis</button>}
+                  {doc.kind !== 'invoice' && <button className="btn" disabled={!!busy} onClick={() => act('/duplicate', { kind: 'invoice' })}>Dupliquer en facture</button>}
+                  {doc.kind !== 'deposit_invoice' && <button className="btn" disabled={!!busy} onClick={() => act('/duplicate', { kind: 'deposit_invoice' })}>Dupliquer en facture d’acompte</button>}
+                  {doc.kind !== 'credit_note' && (
+                    isInvoiceLike && locked
+                      ? <button className="btn" disabled={!!busy || doc.status === 'credited'} onClick={() => setCreditOpen(true)}>Note de crédit sur cette facture…</button>
+                      : <button className="btn" disabled={!!busy} onClick={() => act('/duplicate', { kind: 'credit_note' })}>Dupliquer en note de crédit libre</button>
+                  )}
+                </div>
+              </details>
               <button
                 className="btn"
                 onClick={async () => {

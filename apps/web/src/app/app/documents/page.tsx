@@ -110,6 +110,10 @@ function DocumentsInner() {
       ...openActions(`/app/documents/${d.id}`, (h) => router.push(h)),
       'separator',
       { label: 'Dupliquer', onClick: () => post(`/api/documents/${d.id}/duplicate`, {}, true) },
+      ...(d.kind !== 'quote' ? [{ label: 'Dupliquer en devis', onClick: () => post(`/api/documents/${d.id}/duplicate`, { kind: 'quote' }, true) }] : []),
+      ...(d.kind !== 'invoice' ? [{ label: 'Dupliquer en facture', onClick: () => post(`/api/documents/${d.id}/duplicate`, { kind: 'invoice' }, true) }] : []),
+      // une note de crédit sur une facture ÉMISE se fait depuis la facture (« Note de crédit… ») : lien, montant partiel, plafond
+      ...(d.kind === 'quote' ? [{ label: 'Dupliquer en note de crédit libre', onClick: () => post(`/api/documents/${d.id}/duplicate`, { kind: 'credit_note' }, true) }] : []),
       ...(isQuote ? [{ label: 'Convertir en facture', onClick: () => post(`/api/documents/${d.id}/convert`, {}, true) }] : []),
       ...(isQuote && d.status === 'sent'
         ? [

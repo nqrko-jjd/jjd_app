@@ -254,6 +254,13 @@ export function pickMatch(tx: TxLite, candidates: LedgerLite[]): { ledgerId: str
     if (tx.bookingDate && l.date && Math.abs(tx.bookingDate.getTime() - l.date.getTime()) > 45 * DAY) return false;
     return true;
   });
+  // Facture annulée par une note de crédit du MÊME montant : l'encaissement (entrant) va sur la facture, le remboursement (sortant) sur la
+  // note de crédit — sans cela le même montant donnait deux candidats et rien n'était rapproché.
+  if (tx.side === 'in' && near.some((l) => l.direction === 'sale')) {
+    const sales = near.filter((l) => l.direction !== 'credit_note');
+    if (sales.length === 1) return { ledgerId: sales[0]!.id, confidence: 'good' };
+    near.splice(0, near.length, ...sales);
+  }
   if (near.length === 1) return { ledgerId: near[0]!.id, confidence: 'good' };
 
   // Paiement récurrent (loyer, abonnement) : même tiers, même montant chaque mois. On retient l'écriture la plus proche en

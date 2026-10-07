@@ -259,3 +259,13 @@ test('pickMatch : loyer mensuel au même montant -> l’écriture du bon mois (l
   // deux écritures presque aussi proches l’une que l’autre : on ne devine pas
   assert.equal(pickMatch(tx('2025-06-15'), [mk('A', '2025-06-10'), mk('B', '2025-06-20')]), null);
 });
+
+test('pickMatch : facture annulée par une note de crédit du même montant — l’encaissement va sur la facture, le remboursement sur la note de crédit', () => {
+  const day = new Date('2026-09-10');
+  const invoice = L({ id: 'F', direction: 'sale', ttc: 1500, date: day, contactName: 'Client X' });
+  const creditNote = L({ id: 'NC', direction: 'credit_note', ttc: -1500, date: day, contactName: 'Client X' });
+  const payment = { id: 't1', amount: 1500, bookingDate: day, structuredComm: null, counterpartyName: 'Client X', side: 'in' };
+  const refund = { id: 't2', amount: -1500, bookingDate: day, structuredComm: null, counterpartyName: 'Client X', side: 'out' };
+  assert.equal(pickMatch(payment, [invoice, creditNote])?.ledgerId, 'F');
+  assert.equal(pickMatch(refund, [invoice, creditNote])?.ledgerId, 'NC');
+});

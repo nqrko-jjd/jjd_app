@@ -1,3 +1,4 @@
+import { expenseBucket } from './analytics-breakdown.js';
 import { prisma } from '../db.js';
 import { round2 } from '@jjd/shared';
 import { section, SECTION_LABEL, entityOf, isOuvrierRemuneration, isCreditNoteSale, isVehicleFinancing, paidFraction, PAID_OR_PARTIAL, PAID_SHARE_SELECT } from './consolidated.js';
@@ -55,7 +56,7 @@ export async function analytics(input: AnalyticsInput = {}) {
   const keep = (ent: 'jjd' | 'tonton' | 'm7' | 'autre') => !input.entity || ent === input.entity || ent === 'autre';
 
   /* ---------------- séries mensuelles ---------------- */
-  const zero = () => ({ revenue: 0, expenses: 0, invoiced: 0, collected: 0, hours: 0, labourCost: 0 });
+  const zero = () => ({ revenue: 0, expenses: 0, invoiced: 0, collected: 0, hours: 0, labourCost: 0, purchases: 0, payroll: 0, otherExpenses: 0 });
   const byMonth = new Map<string, ReturnType<typeof zero>>();
   for (const k of win.keys) byMonth.set(k, zero());
 
@@ -74,6 +75,9 @@ export async function analytics(input: AnalyticsInput = {}) {
       m.revenue += e.ht; // signe déjà négatif
     } else if (!isVehicleFinancing(e.categoryRaw)) {
       m.expenses += e.ht;
+      // Ventilation de présentation : même population et montants que expenses.
+      // Les pointages estimés ne s’ajoutent pas aux rémunérations enregistrées.
+      m[expenseBucket(section(e.categoryRaw))] += e.ht;
     }
   }
   for (const t of times) {
@@ -95,6 +99,7 @@ export async function analytics(input: AnalyticsInput = {}) {
       collected: round2(m.collected),
       hours: round2(m.hours),
       labourCost: round2(m.labourCost),
+      expenseBreakdown: { purchases: round2(m.purchases), payroll: round2(m.payroll), other: round2(m.otherExpenses) },
     };
   });
 

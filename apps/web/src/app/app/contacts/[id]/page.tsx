@@ -11,6 +11,7 @@ import { FormModal, type FieldDef } from '@/components/FormModal';
 import { CollapsibleSection } from '@/components/CollapsibleSection';
 import { ComboBox } from '@/components/ComboBox';
 import { PhotoHeader } from '@/components/PhotoHeader';
+import { ContactLinks, LinkGroups, type LinkGroup } from '@/components/ContactLinks';
 import { useSort, SortTh } from '@/lib/sort';
 import { CONTACT_FIELDS, composeContactPayload, splitContactName } from '@/lib/forms';
 import { CLIENT_KIND_LABEL, formatVat } from '@jjd/shared';
@@ -64,6 +65,15 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
   const [dupId, setDupId] = useState('');
   const [finalName, setFinalName] = useState('');
   const [mergeBusy, setMergeBusy] = useState(false);
+  const [linksKey, setLinksKey] = useState(0);
+  // aperçu avant fusion : ce qui sera déplacé / complété / non repris
+  const { data: preview } = useApi<{
+    remove: { id: string; name: string };
+    moves: LinkGroup[];
+    fill: { field: string; label: string; value: string }[];
+    differing: { field: string; label: string; keepValue: string; removedValue: string }[];
+    warnings: string[];
+  }>(merging && dupId ? `/api/contacts/merge-preview?keepId=${id}&removeId=${dupId}` : null);
   const { data: allContacts } = useApi<{ items: { id: string; name: string; type: string; vat: string | null; city: string | null }[] }>(merging ? '/api/contacts' : null);
   const [personModal, setPersonModal] = useState<'new' | ContactPerson | null>(null);
   const [portalInfo, setPortalInfo] = useState<{ email: string; portal: string } | null>(null);
@@ -122,7 +132,7 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
     setMergeBusy(true);
     try {
       await api('/api/contacts/merge', { method: 'POST', body: { keepId: id, removeIds: [dupId], name: finalName || undefined } });
-      setMerging(false); setDupId(''); reload();
+      setMerging(false); setDupId(''); setLinksKey((k) => k + 1); reload();
     } catch (e) {
       alert((e as Error).message);
     } finally {
@@ -136,6 +146,8 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
       router.push('/app/contacts');
     } catch (e) {
       alert((e as Error).message);
+      // la fiche dit à quoi elle est rattachée : on amène l'utilisateur sur cette section
+      document.getElementById('contact-links')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }
 
@@ -143,7 +155,7 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
     <>
       {merging && (
         <div className="modal-scrim" onClick={() => setMerging(false)}>
-          <div className="modal" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
+          <div className="modal" style={{ maxWidth: 640, maxHeight: '92vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-head"><h2>Fusionner un doublon dans « {c.name} »</h2><button className="btn ghost" onClick={() => setMerging(false)} aria-label="Fermer">✕</button></div>
             <div style={{ padding: '1rem', display: 'grid', gap: '0.8rem' }}>
               <p className="muted" style={{ margin: 0, fontSize: '0.85rem' }}>La fiche choisie disparaît : ses devis, factures, achats, chantiers et contacts sont rattachés à « {c.name} ». Vous pouvez répéter l’opération pour plusieurs doublons.</p>
@@ -151,6 +163,33 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
                 <ComboBox placeholder="Rechercher une fiche…" value={dupId} onChange={setDupId} options={(allContacts?.items ?? []).filter((x) => x.id !== id).map((x) => ({ value: x.id, label: `${x.name}${x.vat ? ` · ${x.vat}` : ''}${x.city ? ` · ${x.city}` : ''}` }))} />
               </div>
               <div className="field"><label>Nom final de la fiche</label><input className="input" value={finalName} onChange={(e) => setFinalName(e.target.value)} placeholder={c.name} /></div>
+              {dupId && !preview && <p className="muted" style={{ margin: 0 }}>Analyse des deux fiches…</p>}
+              {preview && (
+                <div style={{ display: 'grid', gap: '0.8rem', fontSize: '0.86rem' }}>
+                  <div className="card card-pad" style={{ borderLeft: '3px solid var(--ok)' }}>
+                    <strong>Fiche conservée : « {c.name} »</strong> · fiche supprimée : « {preview.remove.name} ».<br />
+                    <span className="muted">Rien de ce qui est déjà renseigné sur « {c.name} » n’est écrasé : seuls les champs vides sont complétés.</span>
+                  </div>
+                  {preview.warnings.map((w) => <div key={w} className="card card-pad" style={{ borderLeft: '3px solid var(--warn)' }}>{w}</div>)}
+                  <div>
+                    <div className="eyebrow" style={{ marginBottom: '0.35rem' }}>Rattachements de « {preview.remove.name} » déplacés vers « {c.name} »</div>
+                    {preview.moves.length === 0 ? <span className="muted">Aucun rattachement.</span> : <LinkGroups groups={preview.moves} />}
+                  </div>
+                  <div>
+                    <div className="eyebrow" style={{ marginBottom: '0.35rem' }}>Complété à partir de « {preview.remove.name} »</div>
+                    {preview.fill.length === 0 ? <span className="muted">Rien à compléter.</span> : (
+                      <ul style={{ margin: 0, paddingLeft: '1.1rem' }}>{preview.fill.map((f) => <li key={f.field}><strong>{f.label}</strong> : {f.value}</li>)}</ul>
+                    )}
+                  </div>
+                  <div>
+                    <div className="eyebrow" style={{ marginBottom: '0.35rem' }}>Valeurs différentes : celle de « {c.name} » est gardée</div>
+                    {preview.differing.length === 0 ? <span className="muted">Aucun conflit.</span> : (
+                      <ul style={{ margin: 0, paddingLeft: '1.1rem' }}>{preview.differing.map((f) => <li key={f.field}><strong>{f.label}</strong> : <span>gardé « {f.keepValue || '—'} »</span> · <span className="muted">perdu « {f.removedValue} »</span></li>)}</ul>
+                    )}
+                  </div>
+                  <p className="muted" style={{ margin: 0 }}>Tu préfères garder l’autre fiche ? Ferme cette fenêtre, ouvre l’autre fiche et fusionne celle-ci dedans.</p>
+                </div>
+              )}
             </div>
             <div className="modal-foot"><button className="btn" onClick={() => setMerging(false)}>Annuler</button><button className="btn primary" disabled={!dupId || mergeBusy} onClick={doMerge}>{mergeBusy ? 'Fusion…' : 'Fusionner'}</button></div>
           </div>
@@ -242,6 +281,8 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
           </p>
         </div>
       )}
+
+      <ContactLinks id={c.id} refreshKey={linksKey} />
 
       {/* Personnes de contact — utile pour tout type, en particulier les fournisseurs */}
       <div className="section-title">

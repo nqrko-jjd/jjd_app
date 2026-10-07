@@ -9,6 +9,7 @@ import { lookupBelgianVat } from '../lib/vies.js';
 import { attachPhotoRoutes } from '../lib/photo-upload.js';
 import { withQuotedFromDocuments } from '../lib/worksite-margin.js';
 import { mergeContacts } from '../lib/contact-merge.js';
+import { contactLinks, describeLinks, mergePreview } from '../lib/contact-links.js';
 
 const isPaidStr = (s: string | null) =>
   (s ?? '').toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').trim() === 'paye';
@@ -50,6 +51,28 @@ function shapeContact<T extends { linkedAcpId?: string | null; linkedAcp?: unkno
 }
 
 /** Recherche une entreprise par n° de TVA (VIES) pour préremplir un nouveau contact. */
+/** Aperçu d'une fusion : ce qui sera déplacé, complété, et ce qui ne sera pas repris — pour ne rien écraser par erreur. */
+contactsRouter.get(
+  '/merge-preview',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const { keepId, removeId } = req.query as Record<string, string>;
+    if (!keepId || !removeId || keepId === removeId) throw new HttpError(422, 'Deux fiches différentes requises.');
+    const preview = await mergePreview(keepId, removeId);
+    if (!preview) throw new HttpError(404, 'Fiche introuvable.');
+    res.json(preview);
+  }),
+);
+
+/** À quoi cette fiche est rattachée (chantiers, factures, virements…), avec des exemples cliquables. */
+contactsRouter.get(
+  '/:id/links',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    res.json(await contactLinks(req.params.id as string, 8));
+  }),
+);
+
 /** Fusionne des fiches en doublon dans celle-ci (voir lib/contact-merge.ts). */
 contactsRouter.post(
   '/merge',
@@ -288,22 +311,10 @@ contactsRouter.delete(
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
     const id = req.params.id as string;
-    const [worksites, acpWorksites, opportunities, acpOpportunities, documents, ledgerEntries, buildingContacts, buildingUnits, residents, portalUsers, worksiteContactLinks] = await Promise.all([
-      prisma.worksite.count({ where: { clientId: id } }),
-      prisma.worksite.count({ where: { acpId: id } }),
-      prisma.crmOpportunity.count({ where: { contactId: id } }),
-      prisma.crmOpportunity.count({ where: { acpId: id } }),
-      prisma.document.count({ where: { contactId: id } }),
-      prisma.ledgerEntry.count({ where: { contactId: id } }),
-      prisma.buildingContact.count({ where: { contactId: id } }),
-      prisma.buildingUnit.count({ where: { contactId: id } }),
-      prisma.contact.count({ where: { linkedAcpId: id } }),
-      prisma.user.count({ where: { residentOfId: id } }),
-      prisma.worksiteContact.count({ where: { contactId: id } }),
-    ]);
-    const refs = worksites + acpWorksites + opportunities + acpOpportunities + documents + ledgerEntries + buildingContacts + buildingUnits + residents + portalUsers + worksiteContactLinks;
-    if (refs > 0) {
-      throw new HttpError(409, `Ce contact est encore lié à des données (${refs} référence${refs > 1 ? 's' : ''} : chantiers, opportunités, devis/factures, achats, résidents, comptes portail…) — impossible de le supprimer.`);
+    const links = await contactLinks(id, 0);
+    if (links.blocking > 0) {
+      const contact = await prisma.contact.findUnique({ where: { id }, select: { name: true } });
+      throw new HttpError(409, `Impossible de supprimer « ${contact?.name ?? 'cette fiche'} » : elle est encore rattachée à — ${describeLinks(links.groups)}. Le détail est dans la section « Rattachements » de la fiche (en haut) ; fusionne ou détache d'abord ces éléments.`, links);
     }
     await prisma.user.deleteMany({ where: { contactId: id } });
     await prisma.contact.delete({ where: { id } });

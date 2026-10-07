@@ -64,6 +64,9 @@ export async function mergeContacts(keepId: string, removeIds: string[], opts: {
     // champs vides de la fiche conservée complétés ; client + fournisseur => « both »
     const patch: Record<string, unknown> = {};
     for (const f of FILL) if (!(keep as Record<string, unknown>)[f]) { const v = removed.map((r) => (r as Record<string, unknown>)[f]).find(Boolean); if (v) patch[f] = v; }
+    // notes : rien ne se perd — celle de la fiche supprimée est ajoutée à la suite de celle de la fiche conservée
+    const extraNotes = removed.filter((r) => r.note && r.note.trim() && r.note.trim() !== (keep.note ?? '').trim()).map((r) => `[Fiche « ${r.name} » fusionnée] ${r.note!.trim()}`);
+    if (extraNotes.length) patch.note = [keep.note?.trim(), ...extraNotes].filter(Boolean).join('\n\n');
     const types = new Set([keep.type, ...removed.map((r) => r.type)]);
     if (types.size > 1) patch.type = 'both';
     const finalName = opts.name?.trim() || keep.name;

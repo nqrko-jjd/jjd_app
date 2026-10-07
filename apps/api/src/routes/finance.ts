@@ -14,6 +14,7 @@ import { parseScreenshots, screenshotImportAvailable } from '../lib/bank-screens
 import { toCsv, readTableBuffer, pick } from '../lib/table-io.js';
 import { parseAmount, parseLooseDate } from '@jjd/shared';
 import { syncLedgerEntryForDocument } from '../lib/documents.js';
+import { PAYMENT_TOLERANCE } from '../lib/payment-tolerance.js';
 
 export const financeRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -372,6 +373,45 @@ async function splitLedgerTwins<D extends { number: string | null }>(docs: D[]) 
   return { docs: docs.filter((d) => !d.number || !have.has(d.number.trim().toUpperCase())), twins };
 }
 
+/**
+ * Candidates déjà soldées : une écriture du grand livre ou un Document dont les paiements bancaires déjà rapprochés
+ * (à d'AUTRES transactions) couvrent le total, ou une facture marquée payée/créditée, ne se reproposent plus dans les
+ * suggestions automatiques — elles n'ont plus rien à recevoir. (La recherche manuelle, elle, montre tout.)
+ */
+async function alreadySettled(
+  ledgers: { id: string; ttc: number | null; ht: number }[],
+  docs: { id: string; totalTtc: number; status: string }[],
+) {
+  const ledger = new Set<string>();
+  const doc = new Set<string>();
+  const ledgerIds = ledgers.map((l) => l.id);
+  const docIds = docs.map((d) => d.id);
+  const [lm, dm] = await Promise.all([
+    ledgerIds.length
+      ? prisma.bankTransactionMatch.findMany({ where: { ledgerEntryId: { in: ledgerIds } }, select: { ledgerEntryId: true, amount: true, bankTransaction: { select: { amount: true } } } })
+      : [],
+    docIds.length
+      ? prisma.bankTransactionMatch.findMany({
+          where: { OR: [{ documentId: { in: docIds } }, { ledgerEntry: { documentId: { in: docIds } } }] },
+          select: { documentId: true, amount: true, ledgerEntry: { select: { documentId: true } }, bankTransaction: { select: { amount: true } } },
+        })
+      : [],
+  ]);
+  const part = (m: { amount: number | null; bankTransaction: { amount: number | null } }) => Math.abs(m.amount ?? m.bankTransaction.amount ?? 0);
+  const ledgerPaid = new Map<string, number>();
+  for (const m of lm) if (m.ledgerEntryId) ledgerPaid.set(m.ledgerEntryId, (ledgerPaid.get(m.ledgerEntryId) ?? 0) + part(m));
+  for (const l of ledgers) if ((ledgerPaid.get(l.id) ?? 0) + PAYMENT_TOLERANCE >= Math.abs(l.ttc ?? l.ht) && ledgerPaid.has(l.id)) ledger.add(l.id);
+  const docPaid = new Map<string, number>();
+  for (const m of dm) {
+    const id = m.documentId ?? m.ledgerEntry?.documentId;
+    if (id) docPaid.set(id, (docPaid.get(id) ?? 0) + part(m));
+  }
+  for (const d of docs) {
+    if (d.status === 'paid' || d.status === 'credited' || ((docPaid.get(d.id) ?? 0) + PAYMENT_TOLERANCE >= Math.abs(d.totalTtc) && docPaid.has(d.id))) doc.add(d.id);
+  }
+  return { ledger, doc };
+}
+
 /** Suggère des écritures du grand livre à rapprocher d'une transaction. */
 financeRouter.get(
   '/bank/:id/suggestions',
@@ -479,20 +519,10 @@ financeRouter.get(
     const byAmount = await prisma.ledgerEntry.findMany({
       // documentId: null — sinon la même facture ressort 2x (LedgerEntry synchronisée + son Document d'origine, voir docItems plus bas)
       where: { ttc: { gte: amount - 1, lte: amount + 1 }, id: { notIn: usedLedgerIds }, documentId: null, ...window },
-      take: 12, include: inc, orderBy: { date: 'desc' },
+      take: 40, include: inc, orderBy: { date: 'desc' },
     });
     const seen = new Set<string>();
-    const ledgerItems = [...byComm, ...byAmount]
-      .filter((l) => (seen.has(l.id) ? false : seen.add(l.id)))
-      .map((l) => ({
-        kind: 'ledger' as const,
-        id: l.id,
-        label: [l.docNumber, l.supplierName].filter(Boolean).join(' · ') || (l.direction === 'sale' ? 'Vente' : 'Achat'),
-        amount: l.ttc ?? l.ht,
-        date: l.date,
-        direction: l.direction,
-        worksiteRef: l.worksite?.ref ?? l.worksiteRef ?? null,
-      }));
+    const ledgerRaw = [...byComm, ...byAmount].filter((l) => (seen.has(l.id) ? false : seen.add(l.id)));
 
     // factures de vente créées dans l'app (Document) — mêmes critères
     const docWindow = tx.bookingDate
@@ -505,17 +535,28 @@ financeRouter.get(
         totalTtc: { gte: amount - 1, lte: amount + 1 },
         ...docWindow,
       },
-      take: 8,
+      take: 30,
       orderBy: { issuedOn: 'desc' },
       select: { id: true, number: true, kind: true, totalTtc: true, issuedOn: true, status: true, contact: { select: { name: true } }, worksite: { select: { ref: true } } },
     });
     const autoSplit = await splitLedgerTwins(docs);
-    const autoKnown = new Set(ledgerItems.map((l) => l.id));
-    for (const t of autoSplit.twins) {
-      if (autoKnown.has(t.id) || usedLedgerIds.includes(t.id)) continue;
-      ledgerItems.push({ kind: 'ledger' as const, id: t.id, label: [t.docNumber, t.supplierName].filter(Boolean).join(' · ') || 'Vente', amount: t.ttc ?? t.ht, date: t.date, direction: t.direction, worksiteRef: t.worksite?.ref ?? t.worksiteRef ?? null });
-    }
-    const docItems = autoSplit.docs.map((d) => ({
+    const autoKnown = new Set(ledgerRaw.map((l) => l.id));
+    const twinsToAdd = autoSplit.twins.filter((t) => !autoKnown.has(t.id) && !usedLedgerIds.includes(t.id));
+    // ce qui est déjà soldé par d'autres paiements n'est plus proposé
+    const settled = await alreadySettled([...ledgerRaw, ...twinsToAdd], autoSplit.docs);
+    const ledgerItems = [...ledgerRaw, ...twinsToAdd]
+      .filter((l) => !settled.ledger.has(l.id))
+      .slice(0, 12)
+      .map((l) => ({
+        kind: 'ledger' as const,
+        id: l.id,
+        label: [l.docNumber, l.supplierName].filter(Boolean).join(' · ') || (l.direction === 'sale' ? 'Vente' : 'Achat'),
+        amount: l.ttc ?? l.ht,
+        date: l.date,
+        direction: l.direction,
+        worksiteRef: l.worksite?.ref ?? l.worksiteRef ?? null,
+      }));
+    const docItems = autoSplit.docs.filter((d) => !settled.doc.has(d.id)).slice(0, 8).map((d) => ({
       kind: 'document' as const,
       id: d.id,
       label: [d.number, d.contact?.name].filter(Boolean).join(' · ') || 'Facture de vente',

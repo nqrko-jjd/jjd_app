@@ -47,7 +47,7 @@ worksitesRouter.get(
   '/',
   requireAuth(...STAFF),
   asyncHandler(async (req, res) => {
-    const { status, entity, q: qRaw, archived, kind, page: pageStr, pageSize: pageSizeStr } = req.query as Record<string, string>;
+    const { status, entity, q: qRaw, archived, kind, page: pageStr, pageSize: pageSizeStr, sort } = req.query as Record<string, string>;
     const q = qRaw?.toLowerCase();
     // "Clôturé" est un statut comme un autre pour la page Chantiers (onglet "Tous" =
     // archived=all, montre tout) ; archived reste par ailleurs le filtre "actif ?" utilisé
@@ -76,20 +76,26 @@ worksitesRouter.get(
     const paginated = pageStr !== undefined;
     const page = Math.max(1, Math.trunc(Number(pageStr)) || 1);
     const pageSize = paginated ? Math.min(5000, Math.max(20, Math.trunc(Number(pageSizeStr)) || 100)) : 5000;
-    const [items, totalCount] = await Promise.all([
-      prisma.worksite.findMany({
-        where,
-        orderBy: { updatedAt: 'desc' },
-        skip: paginated ? (page - 1) * pageSize : 0,
-        take: pageSize,
-        include: {
-          client: { select: { id: true, name: true } },
-          acp: { select: { id: true, name: true, photoThumbUrl: true } },
-          manager: { select: { id: true, displayName: true, firstName: true } },
-        },
-      }),
+    const include = {
+      client: { select: { id: true, name: true } },
+      acp: { select: { id: true, name: true, photoThumbUrl: true } },
+      manager: { select: { id: true, displayName: true, firstName: true } },
+    };
+    // sort=ref : référence la plus récente (R-861 avant R-860…) en tête, comparée sur le NUMÉRO (R-1000 viendra bien après R-999)
+    let byRef: string[] | null = null;
+    if (sort === 'ref') {
+      const refs = await prisma.worksite.findMany({ where, select: { id: true, ref: true } });
+      const num = (r: string) => Number(/(\d+)\s*$/.exec(r)?.[1] ?? -1);
+      refs.sort((a, b) => num(b.ref) - num(a.ref) || b.ref.localeCompare(a.ref));
+      byRef = refs.slice(paginated ? (page - 1) * pageSize : 0, (paginated ? (page - 1) * pageSize : 0) + pageSize).map((r) => r.id);
+    }
+    const [rows, totalCount] = await Promise.all([
+      byRef
+        ? prisma.worksite.findMany({ where: { id: { in: byRef } }, include })
+        : prisma.worksite.findMany({ where, orderBy: { updatedAt: 'desc' }, skip: paginated ? (page - 1) * pageSize : 0, take: pageSize, include }),
       prisma.worksite.count({ where }),
     ]);
+    const items = byRef ? byRef.map((id) => rows.find((r) => r.id === id)!).filter(Boolean) : rows;
     const invoicedById = await worksiteInvoicedHtBatch(items.map((w) => w.id));
     const withQuotes = await withQuotedFromDocuments(items);
     res.json({

@@ -64,7 +64,12 @@ function ChantiersInner() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(100);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [view, setView] = useState<'cards' | 'list'>('cards');
+  // vue liste par défaut ; le choix (liste / galerie) est mémorisé sur l'appareil
+  const [view, setViewState] = useState<'cards' | 'list'>('list');
+  useEffect(() => {
+    try { if (localStorage.getItem('jjd-chantiers-vue') === 'cards') setViewState('cards'); } catch { /* stockage indisponible */ }
+  }, []);
+  const setView = (v: 'cards' | 'list') => { setViewState(v); try { localStorage.setItem('jjd-chantiers-vue', v); } catch { /* ignoré */ } };
   const ctx = useContextMenu<WS>();
 
   useEffect(() => { setPage(1); setSelected(new Set()); }, [q, status, kind]);
@@ -75,6 +80,7 @@ function ChantiersInner() {
   if (status) params.set('status', status);
   if (activeView?.archived) params.set('archived', activeView.archived);
   params.set('kind', kind);
+  params.set('sort', 'ref'); // R- le plus récent en haut
   params.set('page', String(page));
   params.set('pageSize', String(pageSize));
   const { data, loading, error, reload } = useApi<{ items: WS[]; page: number; pageSize: number; totalPages: number; totalCount: number }>(`/api/worksites?${params}`);
@@ -226,7 +232,7 @@ function ChantiersInner() {
           </div>
         )}
         <div className="worksite-view-switch" role="group" aria-label="Présentation des chantiers">
-          <button type="button" className={view === 'cards' ? 'active' : ''} onClick={() => setView('cards')} aria-label="Vue en cartes" title="Vue en cartes"><LayoutGrid size={17} /></button>
+          <button type="button" className={view === 'cards' ? 'active' : ''} onClick={() => setView('cards')} aria-label="Vue galerie" title="Vue galerie"><LayoutGrid size={17} /></button>
           <button type="button" className={view === 'list' ? 'active' : ''} onClick={() => setView('list')} aria-label="Vue en liste" title="Vue en liste"><List size={18} /></button>
         </div>
       </div>

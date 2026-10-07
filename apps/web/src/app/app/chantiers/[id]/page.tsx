@@ -22,10 +22,10 @@ import {
   WORKSITE_SCOPES, WORKSITE_SCOPE_LABEL, WORKSITE_BILLING_MODES, WORKSITE_BILLING_MODE_LABEL,
   WORKSITE_REQUEST_KINDS, WORKSITE_REQUEST_KIND_LABEL, WORKSITE_BILLING_CADENCES, WORKSITE_BILLING_CADENCE_LABEL,
   WORKSITE_CONTACT_ROLE_LABEL, WORKSITE_CONTACT_FOR_LABEL,
-  ENTITIES, ENTITY_LABEL, formatHours, WORKSITE_PROGRESS_PCT, type WorksiteMargin,
+  ENTITIES, ENTITY_LABEL, formatHours, type WorksiteMargin,
 } from '@jjd/shared';
 import {
-  FileText, Euro, TrendingUp, CheckCircle2, Wallet, Fuel, Percent, MessageSquare,
+  FileText, Euro, TrendingUp, Wallet, Fuel, Percent, MessageSquare,
 } from 'lucide-react';
 
 interface Detail {
@@ -62,6 +62,8 @@ interface Detail {
   }) | null;
   activity: { id: string; label: string; by: string | null; at: string }[];
 }
+
+const eur = (n: number) => n.toLocaleString('fr-BE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
 
 export default function ChantierDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -217,18 +219,24 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
                 sub={data.margin.quotedHt > 0 ? `${Math.round((data.margin.invoicedHt / data.margin.quotedHt) * 100)} % du marché` : 'Rien facturé pour l’instant'}
               />
               <Kpi
-                ic={TrendingUp}
-                label="Encaissé − coûts"
-                value={<Money value={data.margin.realMargin} sign />}
-                sub={data.margin.realMarginPct != null ? `${data.margin.realMarginPct} % de l’encaissé` : 'Non calculable'}
-                neg={data.margin.realMargin < 0}
+                ic={Wallet}
+                label="Reste à encaisser"
+                value={<Money value={Math.max(0, data.margin.invoicedHt - data.margin.paidHt)} />}
+                sub={data.margin.invoicedHt > 0 ? `${eur(data.margin.paidHt)} déjà encaissé sur ${eur(data.margin.invoicedHt)} facturé` : 'Rien facturé pour l’instant'}
+                warn={data.margin.invoicedHt - data.margin.paidHt > 0.5}
               />
-              <Kpi
-                ic={CheckCircle2}
-                label="Avancement"
-                value={`${WORKSITE_PROGRESS_PCT[w.status as keyof typeof WORKSITE_PROGRESS_PCT] ?? 0}%`}
-                sub="Repère selon le statut"
-              />
+              {(() => {
+                // la marge la plus parlante selon l'état du dossier : réelle dès qu'il y a de l'encaissé, sinon sur le facturé, sinon prévue sur le devisé
+                const m = data.margin;
+                const [value, sub] = m.paidHt > 0
+                  ? [m.realMargin, `${m.realMarginPct != null ? `${m.realMarginPct} % · ` : ''}encaissé ${eur(m.paidHt)} − coûts ${eur(m.totalCost)}`]
+                  : m.invoicedHt > 0
+                    ? [m.invoicedMargin, `sur le facturé (rien encaissé) · coûts ${eur(m.totalCost)}`]
+                    : m.quotedHt > 0
+                      ? [m.forecastMargin, `prévue : devisé − coûts engagés (${eur(m.totalCost)})`]
+                      : [0, 'Pas encore de données'];
+                return <Kpi ic={TrendingUp} label="Marge" value={<Money value={value} sign />} sub={sub} neg={value < 0} />;
+              })()}
             </div>
           )}
 
@@ -242,7 +250,11 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
                     <Info label="Immeuble / ACP" value={<Link href={`/app/immeubles/${w.building.id}`}>{w.building.name}{w.building.syndic ? ` · ${w.building.syndic.name}` : ''}</Link>} />
                   )}
                   <Info label="Responsable" value={w.manager?.displayName ?? w.manager?.firstName ?? '—'} />
-                  <Info label="Localisation" value={[w.address, w.box && `bte ${w.box}`, w.unitLabel, w.city].filter(Boolean).join(', ') || '—'} />
+                  <Info label="Localisation" value={(() => {
+                    const full = [w.address, w.box && `bte ${w.box}`, w.unitLabel, w.city].filter(Boolean).join(', ');
+                    const q = [w.address, w.postalCode, w.city].filter(Boolean).join(' ');
+                    return full ? <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`} target="_blank" rel="noreferrer">{full}</a> : '—';
+                  })()} />
                   {nextEvent && nextEvent.assignments.length > 0 && (
                     <Info label="Équipe affectée" value={[...new Set(nextEvent.assignments.map((a) => a.person.displayName || a.person.firstName))].join(', ')} />
                   )}
@@ -330,9 +342,6 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
             </div>
           </div>
 
-          <CollapsibleSection title="Localisation" hint="carte & contrôle de pointage">
-            <LocationSection w={w} onChange={reload} />
-          </CollapsibleSection>
         </>
       )}
 
@@ -565,123 +574,6 @@ const DOC_STATUS: Record<string, string> = {
 const DOC_TONE: Record<string, string> = {
   paid: 'ok', accepted: 'ok', sent: 'primary', overdue: 'crit', declined: 'crit', partial: 'warn',
 };
-
-function LocationSection({ w, onChange }: { w: Detail['worksite']; onChange: () => void }) {
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-  const [manual, setManual] = useState(false);
-  const [lat, setLat] = useState('');
-  const [lng, setLng] = useState('');
-  const hasAddr = !!(w.address || w.city);
-
-  async function geocode() {
-    setBusy(true); setMsg(null);
-    try {
-      const r = await api<{ matched: string }>(`/api/worksites/${w.id}/geocode`, { method: 'POST' });
-      setMsg(`Adresse trouvée : ${r.matched}`);
-      onChange();
-    } catch (e) {
-      setMsg((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function useMyPosition() {
-    if (!navigator.geolocation) { setMsg('Géolocalisation non disponible sur cet appareil.'); return; }
-    setBusy(true); setMsg(null);
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        try {
-          await api(`/api/worksites/${w.id}/geo`, {
-            method: 'PATCH',
-            body: { lat: pos.coords.latitude, lng: pos.coords.longitude },
-          });
-          setMsg('Point GPS enregistré à partir de ta position actuelle.');
-          onChange();
-        } catch (e) {
-          setMsg((e as Error).message);
-        } finally {
-          setBusy(false);
-        }
-      },
-      (e) => { setMsg(`Position refusée ou indisponible (${e.message}).`); setBusy(false); },
-      { enableHighAccuracy: true, timeout: 15000 },
-    );
-  }
-
-  async function saveManual() {
-    const la = Number(lat.replace(',', '.'));
-    const lo = Number(lng.replace(',', '.'));
-    if (!Number.isFinite(la) || !Number.isFinite(lo)) { setMsg('Coordonnées invalides.'); return; }
-    setBusy(true); setMsg(null);
-    try {
-      await api(`/api/worksites/${w.id}/geo`, { method: 'PATCH', body: { lat: la, lng: lo } });
-      setMsg('Point GPS enregistré.');
-      setManual(false); setLat(''); setLng('');
-      onChange();
-    } catch (e) {
-      setMsg((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const bbox = w.lat != null && w.lng != null
-    ? `${w.lng - 0.004},${w.lat - 0.002},${w.lng + 0.004},${w.lat + 0.002}`
-    : null;
-
-  return (
-    <div>
-      {bbox && (
-        <iframe
-          title="Carte du chantier"
-          style={{ width: '100%', height: 260, border: '1px solid var(--line)', borderRadius: 10, marginBottom: '0.8rem' }}
-          src={`https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${w.lat},${w.lng}`}
-        />
-      )}
-      <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.6rem' }}>
-        <div>
-          {w.lat != null && w.lng != null ? (
-            <>
-              <div>Point GPS {w.geoSetAt ? `— ${formatDateBE(w.geoSetAt)}` : ''} · <a href={`https://www.google.com/maps?q=${w.lat},${w.lng}`} target="_blank" rel="noreferrer">{w.lat.toFixed(5)}, {w.lng.toFixed(5)}</a></div>
-              <div className="muted" style={{ fontSize: '0.82rem' }}>Sert de référence au contrôle de pointage.</div>
-            </>
-          ) : (
-            <div className="muted" style={{ fontSize: '0.88rem' }}>
-              Aucun point GPS. Géolocalise l’adresse, enregistre ta position, ou il sera fixé au premier pointage sur place.
-            </div>
-          )}
-          {msg && <div style={{ fontSize: '0.82rem', marginTop: '0.4rem', color: 'var(--ink-2)' }}>{msg}</div>}
-        </div>
-        <div className="row" style={{ gap: '0.4rem', flexWrap: 'wrap' }}>
-          <button className="btn" disabled={busy} onClick={useMyPosition} style={{ padding: '0.25rem 0.7rem', fontSize: '0.8rem' }}>
-            {busy ? '…' : '📍 Utiliser ma position actuelle'}
-          </button>
-          <button className="btn" disabled={busy || !hasAddr} onClick={geocode} style={{ padding: '0.25rem 0.7rem', fontSize: '0.8rem' }}>
-            {busy ? '…' : 'Géolocaliser l’adresse'}
-          </button>
-          <button className="btn ghost" disabled={busy} onClick={() => setManual((v) => !v)} style={{ padding: '0.25rem 0.6rem', fontSize: '0.8rem' }}>
-            {manual ? 'Annuler' : 'Saisir des coordonnées'}
-          </button>
-          {w.lat != null && (
-            <button className="btn ghost" style={{ padding: '0.25rem 0.6rem', fontSize: '0.8rem' }}
-              onClick={async () => { if (confirm('Réinitialiser le point GPS ?')) { await api(`/api/worksites/${w.id}/geo`, { method: 'PATCH', body: { clear: true } }); onChange(); } }}>
-              Réinitialiser
-            </button>
-          )}
-        </div>
-      </div>
-      {manual && (
-        <div className="row" style={{ marginTop: '0.7rem', gap: '0.4rem', alignItems: 'center' }}>
-          <input className="input" style={{ maxWidth: 160 }} placeholder="Latitude" value={lat} onChange={(e) => setLat(e.target.value)} />
-          <input className="input" style={{ maxWidth: 160 }} placeholder="Longitude" value={lng} onChange={(e) => setLng(e.target.value)} />
-          <button className="btn primary" disabled={busy || !lat || !lng} onClick={saveManual} style={{ padding: '0.25rem 0.7rem', fontSize: '0.8rem' }}>Enregistrer</button>
-        </div>
-      )}
-    </div>
-  );
-}
 
 function TransportDetail({ t }: { t: NonNullable<Detail['margin']>['transport'] }) {
   if (!t.trips.length) {

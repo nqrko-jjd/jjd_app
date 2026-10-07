@@ -6,6 +6,7 @@ import { invoiceMailboxConfigured, syncInvoiceMailbox } from './lib/invoice-mail
 import { mailSuggestionsConfigured, syncMailSuggestions } from './lib/lead-mailbox.js';
 import { markOverdueInvoices, renumberFaDepositInvoices } from './lib/documents.js';
 import { backfillBankMatches } from './lib/bank-match.js';
+import { backfillWorksiteGeo } from './lib/worksite-geo.js';
 
 function lanAddresses(): string[] {
   const out: string[] = [];
@@ -80,6 +81,8 @@ async function runMarkOverdue() {
   }
 }
 await runMarkOverdue();
+// chantiers actifs sans point GPS : géolocalisés en arrière-plan à partir de leur adresse (1 requête/seconde max, voir lib/geocode.ts)
+setTimeout(() => { backfillWorksiteGeo().then((n) => { if (n) console.log(`[geo] ${n} chantier(s) géolocalisé(s) d'après leur adresse`); }).catch(() => {}); }, 45_000);
 setInterval(() => { runMarkOverdue().catch((e) => console.error('[overdue] échec :', e.message)); }, 60 * 60_000);
 
 createApp().listen(env.port, '0.0.0.0', () => {

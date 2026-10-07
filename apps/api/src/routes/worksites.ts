@@ -11,6 +11,7 @@ import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, STAFF, OFFICE } from '../lib/auth.js';
 import { worksiteMargin, worksiteInvoicedHtBatch, withQuotedFromDocuments } from '../lib/worksite-margin.js';
 import { geocode } from '../lib/geocode.js';
+import { autoGeocodeWorksite } from '../lib/worksite-geo.js';
 import { syncChantierSafe } from '../lib/bricoloc.js';
 import { toCsv, readTableBuffer, pick } from '../lib/table-io.js';
 
@@ -356,6 +357,7 @@ worksitesRouter.get(
       ...ws.reports.filter((r) => r.signedAt).map((r) => ({ id: `report-${r.id}`, label: `Rapport signé${r.clientName ? ` par ${r.clientName}` : ''}`, by: r.authorName, at: r.signedAt as Date })),
     ].sort((a, b) => b.at.getTime() - a.at.getTime()).slice(0, 6);
 
+    if (ws.lat == null && (ws.address || ws.city)) void autoGeocodeWorksite(ws.id); // anciens chantiers : point GPS posé en arrière-plan, visible au prochain affichage
     const { acp, ...wsRest } = (await withQuotedFromDocuments([ws]))[0]!;
     const shaped = { ...wsRest, contacts: ws.contacts.map(currentContact), building: acp };
     res.json({ worksite: isWorker ? { ...shaped, documents: [] } : shaped, margin, activity: isWorker ? [] : activity });
@@ -492,6 +494,7 @@ worksitesRouter.post(
       data: { actorId: req.user!.id, action: 'create', entity: 'worksite', entityId: ws.id },
     });
     void pushBricoloc(ws.id);
+    void autoGeocodeWorksite(ws.id, { force: true }); // point GPS déduit de l'adresse du formulaire
     res.status(201).json({ worksite: ws });
   }),
 );
@@ -568,6 +571,8 @@ worksitesRouter.patch(
       data: { actorId: req.user!.id, action: 'update', entity: 'worksite', entityId: ws.id, meta: data },
     });
     void pushBricoloc(ws.id);
+    // l'adresse (ou l'immeuble) a changé : le point GPS est recalculé automatiquement
+    if (data.address !== undefined || data.postalCode !== undefined || data.city !== undefined || buildingIdInput !== undefined) void autoGeocodeWorksite(ws.id, { force: true });
     res.json({ worksite: ws });
   }),
 );

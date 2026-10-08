@@ -365,24 +365,27 @@ async function triggerSync(accountId: string): Promise<void> {
   }
 }
 
-/** Récupère les nouvelles transactions d'un compte (pagination + curseur incrémental). */
-export async function fetchAccountTransactions(account: { id: string; externalId: string; syncCursor: string | null }): Promise<NormalizedTx[]> {
+/**
+ * Récupère les nouvelles transactions d'un compte.
+ * Ponto renvoie les transactions de la plus récente à la plus ancienne ; `page[after]` va donc vers le PASSÉ : l'ancien curseur
+ * (dernier élément lu = le plus ancien) ne ramenait jamais rien de neuf. On repart donc toujours du plus récent et on s'arrête à la
+ * première page dont toutes les transactions sont déjà connues (`known` dit lesquelles). Sans `known`, on lit tout (50 pages max).
+ */
+export async function fetchAccountTransactions(
+  account: { id: string; externalId: string },
+  known?: (ids: string[]) => Promise<Set<string>>,
+): Promise<NormalizedTx[]> {
   await triggerSync(account.externalId);
   const out: NormalizedTx[] = [];
-  let url: string | undefined = account.syncCursor
-    ? `${apiBase()}/accounts/${account.externalId}/transactions?page[limit]=100&page[after]=${account.syncCursor}`
-    : `/accounts/${account.externalId}/transactions?page[limit]=100`;
-  let lastId: string | null = account.syncCursor;
+  let url: string | undefined = `/accounts/${account.externalId}/transactions?page[limit]=100`;
   let guard = 0;
   while (url && guard++ < 50) {
     const page: JsonApiList<PontoTxAttr> = await apiGet<JsonApiList<PontoTxAttr>>(url);
-    for (const it of page.data) { out.push(normalizePontoTx(it)); lastId = it.id; }
+    for (const it of page.data) out.push(normalizePontoTx(it));
+    const seen = known && page.data.length ? await known(page.data.map((it) => it.id)) : null;
+    if (seen && page.data.every((it) => seen.has(it.id))) break; // plus rien de nouveau au-delà
     url = page.links?.next;
   }
-  if (lastId && lastId !== account.syncCursor) {
-    await prisma.bankAccount.update({ where: { id: account.id }, data: { syncCursor: lastId, lastSyncAt: new Date() } });
-  } else {
-    await prisma.bankAccount.update({ where: { id: account.id }, data: { lastSyncAt: new Date() } });
-  }
+  await prisma.bankAccount.update({ where: { id: account.id }, data: { lastSyncAt: new Date() } });
   return out;
 }

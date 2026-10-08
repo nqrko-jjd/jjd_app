@@ -5,6 +5,12 @@ import { pairTwins } from './bank-twins.js';
 
 let running = false;
 
+/** Parmi ces identifiants Ponto, ceux que la base connaît déjà (importés directement ou adoptés depuis un fichier). */
+async function knownPontoIds(ids: string[]): Promise<Set<string>> {
+  const rows = await prisma.bankTransaction.findMany({ where: { OR: [{ externalId: { in: ids } }, { pontoId: { in: ids } }] }, select: { externalId: true, pontoId: true } });
+  return new Set(rows.flatMap((r) => [r.externalId, r.pontoId]).filter((x): x is string => !!x));
+}
+
 /** Tire les nouvelles transactions de chaque compte Ponto, les enregistre (sans doublon) puis lance le rapprochement automatique. */
 export async function syncPonto(): Promise<{ accounts: number; imported: number; adopted?: number; match: Awaited<ReturnType<typeof autoMatchAll>> | null }> {
   if (running) return { accounts: 0, imported: 0, match: null }; // une synchro à la fois
@@ -15,7 +21,7 @@ export async function syncPonto(): Promise<{ accounts: number; imported: number;
     let imported = 0;
     let adopted = 0;
     for (const acc of accounts) {
-      const txs = await fetchAccountTransactions({ id: acc.id, externalId: acc.externalId!, syncCursor: acc.syncCursor });
+      const txs = await fetchAccountTransactions({ id: acc.id, externalId: acc.externalId! }, knownPontoIds);
       for (const t of txs) {
         const known = await prisma.bankTransaction.findFirst({ where: { OR: [{ externalId: t.externalId }, { pontoId: t.externalId }] }, select: { id: true } });
         if (known) {

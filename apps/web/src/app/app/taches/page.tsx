@@ -1,5 +1,6 @@
 'use client';
-import { useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ListChecks } from 'lucide-react';
 import { EmptyState, ErrorState, SkeletonRows } from '@/components/States';
@@ -74,7 +75,14 @@ function dueLabel(dueOn: string | null, status: string): { text: string; tone: '
 }
 
 export default function TachesPage() {
-  const [view, setView] = useState<View>('all');
+  return <Suspense fallback={<SkeletonRows rows={5} height={52} />}><TachesInner /></Suspense>;
+}
+
+function TachesInner() {
+  const searchParams = useSearchParams();
+  const requestedView = VIEWS.find((v) => v.key === searchParams.get('view'))?.key ?? 'all';
+  const [view, setView] = useState<View>(requestedView);
+  useEffect(() => { setView(requestedView); }, [requestedView]);
   const { data, loading, error, reload } = useApi<{ items: Task[] }>(`/api/tasks${queryFor(view)}`);
   const { data: pick } = useApi<{
     people: { id: string; name: string }[];
@@ -82,6 +90,14 @@ export default function TachesPage() {
   }>('/api/meta/pickers');
   const [creating, setCreating] = useState(false);
   const [detail, setDetail] = useState<Task | null>(null);
+  const openedTaskId = useRef<string | null>(null);
+  const requestedTaskId = searchParams.get('taskId');
+  useEffect(() => {
+    if (!requestedTaskId) { openedTaskId.current = null; return; }
+    if (!data || loading || view !== requestedView || openedTaskId.current === requestedTaskId) return;
+    const target = data.items.find((t) => t.id === requestedTaskId);
+    if (target) { setDetail(target); openedTaskId.current = requestedTaskId; }
+  }, [requestedTaskId, data, loading, view, requestedView]);
   const [editing, setEditing] = useState<Task | null>(null);
   const [actionError, setActionError] = useState('');
 

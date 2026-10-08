@@ -363,7 +363,7 @@ function DashBar() {
   const [q, setQ] = useState('');
   const { data: unread } = useApi<{ internal: number; client: number }>('/api/messagerie/unread-count');
   const unreadTotal = (unread?.internal ?? 0) + (unread?.client ?? 0);
-  const name = person?.displayName || person?.firstName || user?.email?.split('@')[0] || '';
+  const name = person?.displayName || person?.firstName || (user?.email?.split('@')[0] ?? '').replace(/^./, (c) => c.toUpperCase());
   const role = user?.role === 'admin' ? 'Administration' : 'Bureau';
   return (
     <div className="dash-bar">
@@ -510,7 +510,7 @@ export default function DashboardPage() {
   const priorities = (data?.alerts ?? []).filter(a => !['overdue_invoices', 'overdue_supplier_invoices', 'quotes_follow', 'expiring_docs'].includes(a.kind));
   const today = new Date();
   const eyebrow = today.toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' });
-  const name = person?.displayName || person?.firstName || user?.email?.split('@')[0] || '';
+  const name = person?.displayName || person?.firstName || (user?.email?.split('@')[0] ?? '').replace(/^./, (c) => c.toUpperCase());
 
   if (user?.role === 'storekeeper') return <PreparationsPage />;
   if (user?.role === 'worker') return <WorkerToday />;

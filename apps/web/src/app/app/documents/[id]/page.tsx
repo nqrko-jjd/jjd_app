@@ -1,6 +1,6 @@
 'use client';
 import { SkeletonRows } from '@/components/States';
-import { use, useEffect, useMemo, useState } from 'react';
+import { use, useEffect, useMemo, useState, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api, apiBlobUrl } from '@/lib/api';
@@ -15,9 +15,12 @@ import { CreditNoteModal } from '@/components/CreditNoteModal';
 import { RichText } from '@/components/RichText';
 import { QuotePlanModal } from '@/components/QuotePlanModal';
 import { aiNote, setFlash, AI_WAIT, type AiInfo } from '@/lib/ai-flash';
+import { ChevronDown, MoreHorizontal, CalendarDays, ListChecks, ShoppingCart, BookOpen, Send, Save, Eye } from 'lucide-react';
 import { computeDocTotals, VAT_RATES } from '@jjd/shared';
 
 /** Un <br> ou une balise vide compte comme "rien" — l'utilisateur n'a en réalité rien tapé. */
+
+const hasLineText = (html: string) => html.replace(/<[^>]*>/g, '').replace(/&nbsp;|&#160;|&#xA0;/gi, ' ').replace(/[\u200B-\u200D\uFEFF]/g, '').trim().length > 0;
 
 type Picker = {
   clients: { id: string; name: string }[];
@@ -53,6 +56,19 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
   const [planOpen, setPlanOpen] = useState(false);
   const [creditOpen, setCreditOpen] = useState(false);
   const [billingOpen, setBillingOpen] = useState(false);
+  const [deliveryOpen, setDeliveryOpen] = useState(false);
+  const moreActions = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    const close = (event: MouseEvent | KeyboardEvent) => {
+      const menu = moreActions.current;
+      if (!menu?.open) return;
+      if (event instanceof KeyboardEvent && event.key === 'Escape') {
+        menu.open = false; menu.querySelector('summary')?.focus();
+      } else if (event instanceof MouseEvent && !menu.contains(event.target as Node)) menu.open = false;
+    };
+    document.addEventListener('keydown', close); document.addEventListener('click', close);
+    return () => { document.removeEventListener('keydown', close); document.removeEventListener('click', close); };
+  }, []);
   const [showDiscount, setShowDiscount] = useState(false);
   const [openDesc, setOpenDesc] = useState<Set<number>>(new Set());
   // cahier des charges déjà généré depuis ce devis ?
@@ -122,9 +138,9 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
 
   async function save() {
     // une ligne avec un prix mais sans désignation était écartée en silence à l'enregistrement (« ça ne change rien »)
-    if (lines.some((l) => l.kind === 'item' && !l.label.trim() && (l.unitPriceHt > 0 || l.qty > 1))) {
+    if (lines.some((l) => l.kind === 'item' && !hasLineText(l.label) && (l.unitPriceHt > 0 || l.qty > 1))) {
       setMsg('Chaque ligne avec un montant doit avoir une désignation (colonne « Désignation ») — sinon elle n’est pas enregistrée.');
-      return;
+      return false;
     }
     setBusy('save');
     try {
@@ -146,13 +162,15 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
           billingEmail: doc!.billingEmail,
           customerRef: doc!.customerRef,
           paidAmount: doc!.paidAmount,
-          lines: lines.filter((l) => l.label.trim()),
+          lines: lines.filter((l) => hasLineText(l.label)),
         },
       });
       await reload();
       setMsg('Enregistré.');
+      return true;
     } catch (e) {
       setMsg((e as Error).message);
+      return false;
     } finally {
       setBusy(null);
     }
@@ -166,7 +184,8 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
     if (confirmText && !window.confirm(confirmText)) return;
     setBusy(path);
     try {
-      if (dirty) await save();
+      if (dirty && !await save()) return;
+      setBusy(path);
       const r = await api<{ document?: { id: string }; note?: string; ok?: boolean }>(`/api/documents/${id}${path}`, {
         method: path ? 'POST' : 'PATCH',
         body: body ?? {},
@@ -205,7 +224,8 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
   async function openCdc() {
     setBusy('/cdc');
     try {
-      if (dirty) await save();
+      if (dirty && !await save()) return;
+      setBusy('/cdc');
       setMsg(AI_WAIT);
       const r = await api<{ cdc: { id: string }; existing?: boolean; ai?: AiInfo }>(`/api/cdc/from-quote/${id}`, { method: 'POST', body: {} });
       if (!r.existing) setFlash(aiNote(r.ai));
@@ -215,7 +235,8 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
   async function openPurchaseList() {
     setBusy('/purchase-list');
     try {
-      if (dirty) await save();
+      if (dirty && !await save()) return;
+      setBusy('/purchase-list');
       setMsg(AI_WAIT);
       const r = await api<{ list: { id: string }; existing?: boolean; ai?: AiInfo }>(`/api/purchase-lists/from-quote/${id}`, { method: 'POST', body: {} });
       if (!r.existing) setFlash(aiNote(r.ai));
@@ -223,15 +244,16 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
     } catch (e) { setMsg((e as Error).message); } finally { setBusy(null); }
   }
   async function openPlan() {
-    if (dirty) { setBusy('/plan'); try { await save(); } catch (e) { setMsg((e as Error).message); setBusy(null); return; } setBusy(null); }
+    if (dirty) { setBusy('/plan'); try { if (!await save()) return; } catch (e) { setMsg((e as Error).message); setBusy(null); return; } setBusy(null); }
     setPlanOpen(true);
   }
   const isInvoiceLike = doc.kind === 'invoice' || doc.kind === 'deposit_invoice';
   const remaining = Math.max(0, totals.totalTtc - doc.paidAmount);
   const colspan = showDiscount ? 6 : 5;
+  function prepareDelivery() { setDeliveryOpen(true); requestAnimationFrame(() => document.getElementById('document-delivery')?.scrollIntoView({ behavior: 'smooth', block: 'start' })); }
 
   return (
-    <>
+    <div className="document-editor-clean">
       <div className="row" style={{ justifyContent: 'space-between', marginBottom: '0.9rem' }}>
         <Link href="/app/documents" className="btn ghost">← Devis & factures</Link>
       </div>
@@ -283,6 +305,33 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
         )}
       </div>
       )}
+
+      <div className="doc-commandbar">            <div className="doc-recap-actions">
+              {dirty ? <button className="btn primary" disabled={!!busy} onClick={save}><Save size={16}/>{busy === 'save' ? 'Enregistrement…' : 'Enregistrer les modifications'}</button> : !locked ? <button className="btn primary" disabled={!!busy} onClick={() => act('/issue', {}, 'Émettre : un numéro définitif sera attribué et les lignes verrouillées. Continuer ?')}>Émettre {isQuote ? 'le devis' : 'le document'} <ChevronDown size={15}/></button> : <button className="btn primary" disabled={!!busy} onClick={prepareDelivery}><Send size={16}/>{doc.sentAt ? 'Préparer un nouvel envoi' : 'Préparer l’envoi'}</button>}
+              {dirty && !locked && <button className="btn ghost" disabled={!!busy} onClick={() => act('/issue', {}, 'Émettre : un numéro définitif sera attribué et les lignes verrouillées. Continuer ?')}>Enregistrer et émettre</button>}
+              {!dirty && <span className="doc-saved">Modifications enregistrées</span>}
+              <a className="doc-preview-link" href={`/imprimer/${id}`} target="_blank" rel="noreferrer"><Eye size={16}/>Aperçu du document</a>
+            </div>
+            <details ref={moreActions} className="doc-more-actions"><summary><MoreHorizontal size={18}/>Actions <ChevronDown size={15}/></summary><div className="doc-more-panel">
+              <div className="doc-action-group"><h3>Suivi du document</h3>
+              {locked && isInvoiceLike && doc.status !== 'paid' && <button disabled={!!busy} onClick={() => act('/mark-paid', {})}>Marquer comme payée</button>}
+              {isQuote && <button disabled={!!busy} onClick={() => act('/convert', {})}>Créer une facture à partir du devis</button>}
+              {isQuote && locked && <><button disabled={!!busy} onClick={() => act('/status', { status: 'accepted' })}>Marquer le devis accepté</button><button disabled={!!busy} onClick={() => act('/status', { status: 'declined' })}>Marquer le devis refusé</button></>}
+              {isInvoiceLike && locked && doc.status !== 'credited' && creditRemaining > 0.01 && <button disabled={!!busy} onClick={() => setCreditOpen(true)}>Créer une note de crédit</button>}
+</div>
+              <div className="doc-action-group"><h3>Dupliquer</h3>
+                <button disabled={!!busy} onClick={() => act('/duplicate', {})}>Copier à l’identique</button>
+                {doc.kind !== 'quote' && <button disabled={!!busy} onClick={() => act('/duplicate', { kind: 'quote' })}>Copier en devis</button>}
+                {doc.kind !== 'invoice' && <button disabled={!!busy} onClick={() => act('/duplicate', { kind: 'invoice' })}>Copier en facture</button>}
+                {doc.kind !== 'deposit_invoice' && <button disabled={!!busy} onClick={() => act('/duplicate', { kind: 'deposit_invoice' })}>Copier en facture d’acompte</button>}
+                {doc.kind !== 'credit_note' && !(isInvoiceLike && locked) && <button disabled={!!busy} onClick={() => act('/duplicate', { kind: 'credit_note' })}>Copier en note de crédit libre</button>}
+              </div>
+              <div className="doc-action-group"><h3>PDF et impression</h3>
+                <button onClick={async () => { try { window.open(await apiBlobUrl(`/api/documents/${id}/pdf`), '_blank'); } catch (e) { setMsg((e as Error).message); } }}>Télécharger le PDF</button>
+                {doc.originalPdf && <button onClick={async () => { try { window.open(await apiBlobUrl(`/api/documents/${id}/original.pdf`), '_blank'); } catch (e) { setMsg((e as Error).message); } }}>PDF d’origine (TrustUp)</button>}
+              </div>
+              {!locked && <div className="doc-action-group"><button className="danger" disabled={!!busy} onClick={del}>Supprimer ce brouillon</button></div>}
+            </div></details></div>
 
       <div className="doc-layout">
         <div className="doc-main">
@@ -369,28 +418,25 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
                   (le .tbl-wrap défile alors horizontalement) que de devenir illisible. Les icônes
                   d'action (déplacer/dupliquer/supprimer) sont empilées à la verticale plutôt qu'à
                   l'horizontale pour tenir dans une colonne étroite. */}
-              <table className="tbl document-lines-table" style={{ tableLayout: 'fixed', width: '100%', minWidth: 1060 }}>
+              <table className="tbl document-lines-table" style={{ tableLayout: 'fixed', width: '100%', minWidth: showDiscount ? 900 : 800 }}>
                 <thead>
                   <tr>
-                    <th style={{ width: 32 }}></th>
+                    <th style={{ width: 32 }} aria-label="Numéro de ligne">#</th>
                     <th>Désignation</th>
-                    <th style={{ width: 104, textAlign: 'right' }}>Quantité</th>
-                    <th style={{ width: 100 }}>Unité</th>
-                    <th style={{ width: 122, textAlign: 'right' }}>Prix HT</th>
+                    <th style={{ width: 88, textAlign: 'right' }}>Quantité</th>
+                    <th style={{ width: 80 }}>Unité</th>
+                    <th style={{ width: 106, textAlign: 'right' }}>Prix HT</th>
                     {showDiscount && <th style={{ width: 100, textAlign: 'right' }}>Rem.%</th>}
-                    <th style={{ width: 94 }}>TVA %</th>
-                    <th style={{ width: 120, textAlign: 'right' }}>Total HT</th>
-                    <th style={{ width: 34 }}></th>
+                    <th style={{ width: 78 }}>TVA %</th>
+                    <th style={{ width: 104, textAlign: 'right' }}>Total HT</th>
+                    <th style={{ width: 40 }}></th>
                   </tr>
                 </thead>
                 <tbody>
                   {lines.map((l, i) => (
                     <tr key={i}>
                       <td style={{ padding: '0.3rem' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                          <button className="btn ghost" style={btnMini} onClick={() => moveLine(i, -1)} aria-label="Monter">↑</button>
-                          <button className="btn ghost" style={btnMini} onClick={() => moveLine(i, 1)} aria-label="Descendre">↓</button>
-                        </div>
+                        <span className="doc-line-number">{i + 1}</span>
                       </td>
                       <td>
                         <RichText
@@ -445,8 +491,12 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
                       )}
                       <td style={{ padding: '0.3rem' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                          <button className="btn ghost" style={btnMini} onClick={() => duplicateLine(i)} aria-label="Dupliquer" title="Dupliquer">⧉</button>
-                          <button className="btn ghost" style={btnMini} onClick={() => removeLine(i)} aria-label="Supprimer">✕</button>
+                          <details className="doc-line-menu"><summary aria-label={`Actions ligne ${i + 1}`}><MoreHorizontal size={18}/></summary><div className="doc-line-options">
+                            <button type="button" disabled={i === 0} onClick={() => moveLine(i, -1)}>Monter</button>
+                            <button type="button" disabled={i === lines.length - 1} onClick={() => moveLine(i, 1)}>Descendre</button>
+                            <button type="button" onClick={() => duplicateLine(i)}>Dupliquer la ligne</button>
+                            <button type="button" className="danger" onClick={() => removeLine(i)}>Supprimer la ligne</button>
+                          </div></details>
                         </div>
                       </td>
                     </tr>
@@ -456,9 +506,8 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
             </div>
 
             <div className="row" style={{ gap: '0.4rem', marginTop: '0.7rem', flexWrap: 'wrap' }}>
-              <button className="btn" onClick={() => addLine('item')}>+ Ligne</button>
-              <button className="btn" onClick={() => addLine('section')}>+ Section</button>
-              <button className="btn" onClick={() => addLine('text')}>+ Texte</button>
+              <button className="btn doc-add-line" onClick={() => addLine('item')}>+ Ajouter une ligne</button>
+              <details className="doc-add-options"><summary>Section ou texte <ChevronDown size={14}/></summary><div><button type="button" onClick={() => addLine('section')}>Ajouter une section</button><button type="button" onClick={() => addLine('text')}>Ajouter un texte libre</button></div></details>
               <input
                 className="input"
                 style={{ maxWidth: 220, marginLeft: 'auto' }}
@@ -517,27 +566,20 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
           </div>
           </div>
 
-          <DocumentDelivery doc={doc} busy={!!busy} onExternal={() => act('/send', { confirmedExternal: true })} onError={setMsg} emailEnabled={!!mailCfg?.enabled} onEmail={(m) => act('/email', m)} peppolEnabled={!!peppol?.enabled} onPeppol={() => act('/send', { peppol: true })} onPeppolRefresh={() => act('/peppol/refresh', {})} />
+          <section id="document-delivery" className="doc-delivery-block">
+            <button type="button" className="doc-disclosure" aria-expanded={deliveryOpen} aria-controls="document-delivery-content" onClick={() => setDeliveryOpen(!deliveryOpen)}><Send size={18}/><span><strong>Envoi{isQuote ? ' et signature' : ''}</strong><small>{doc.sentAt ? 'Envoi enregistré · consulter ou renvoyer' : 'Choisir le canal et préparer le message'}</small></span><ChevronDown size={17}/></button>
+            <div id="document-delivery-content" hidden={!deliveryOpen}><DocumentDelivery doc={doc} busy={!!busy} onExternal={() => act('/send', { confirmedExternal: true })} onError={setMsg} emailEnabled={!!mailCfg?.enabled} onEmail={(m) => act('/email', m)} peppolEnabled={!!peppol?.enabled} onPeppol={() => act('/send', { peppol: true })} onPeppolRefresh={() => act('/peppol/refresh', {})} /></div>
+          </section>
 
-          {/* Actions secondaires */}
-          <section className="doc-card">
-            <div className="section-title">Autres actions</div>
-            <div className="row" style={{ gap: '0.5rem', flexWrap: 'wrap' }}>
-              {locked && isInvoiceLike && doc.status !== 'paid' && (
-                <button className="btn" disabled={!!busy} onClick={() => act('/mark-paid', {})}>Marquer payée</button>
-              )}
-              {isQuote && (
-                <button className="btn" disabled={!!busy} onClick={() => act('/convert', {})}>Convertir en facture</button>
-              )}
-              {isQuote && doc.worksite && (
-                <button className="btn" disabled={!!busy} onClick={() => setTasksModal(true)}>Créer des tâches depuis ce devis</button>
+          {isQuote && <details className="doc-tools doc-card"><summary><BookOpen size={18}/><span><strong>Préparer le chantier</strong><small>Cahier des charges, planning, achats et tâches</small></span><ChevronDown size={17}/></summary><div className="doc-tool-actions">              {isQuote && doc.worksite && (
+                <button className="btn" disabled={!!busy} onClick={() => setTasksModal(true)}><ListChecks size={18}/>Créer les tâches</button>
               )}
               {isQuote && (
                 <button
                   className="btn" disabled={!!busy || !doc.worksite} onClick={openCdc}
                   title={doc.worksite ? 'Brouillon de cahier des charges : ce qui est compris ou non, finitions, choix des produits' : 'Rattachez d’abord le devis à un chantier'}
                 >
-                  {cdcList?.items.length ? 'Cahier des charges' : 'Générer le cahier des charges'}
+                  <BookOpen size={18}/>{cdcList?.items.length ? 'Ouvrir le cahier des charges' : 'Préparer le cahier des charges'}
                 </button>
               )}
               {isQuote && (
@@ -545,7 +587,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
                   className="btn" disabled={!!busy || !doc.worksite} onClick={openPlan}
                   title={doc.worksite ? 'Durée et créneaux proposés d’après le budget du devis' : 'Rattachez d’abord le devis à un chantier'}
                 >
-                  Planning prévisionnel…
+                  <CalendarDays size={18}/>Planning prévisionnel
                 </button>
               )}
               {isQuote && (
@@ -553,55 +595,11 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
                   className="btn" disabled={!!busy || !doc.worksite} onClick={openPurchaseList}
                   title={doc.worksite ? 'Matériel à acheter + produits à faire valider par le client' : 'Rattachez d’abord le devis à un chantier'}
                 >
-                  {plList?.items.length ? 'Liste d’achats' : 'Générer la liste d’achats'}
+                  <ShoppingCart size={18}/>{plList?.items.length ? 'Ouvrir la liste d’achats' : 'Préparer la liste d’achats'}
                 </button>
               )}
-              {isQuote && locked && (
-                <>
-                  <button className="btn" disabled={!!busy} onClick={() => act('/status', { status: 'accepted' })}>Accepté</button>
-                  <button className="btn" disabled={!!busy} onClick={() => act('/status', { status: 'declined' })}>Refusé</button>
-                </>
-              )}
-              {isInvoiceLike && locked && doc.status !== 'credited' && creditRemaining > 0.01 && (
-                <button className="btn" disabled={!!busy} onClick={() => setCreditOpen(true)}>Note de crédit…</button>
-              )}
-              <details className="plan-filter-menu" style={{ display: 'inline-block', position: 'relative' }}>
-                <summary className="btn" title="Copier ce document, dans le même type ou dans un autre">Dupliquer ▾</summary>
-                <div className="plan-filter-panel" style={{ display: 'grid', gap: '0.3rem', minWidth: 220, padding: '0.5rem' }}>
-                  <button className="btn" disabled={!!busy} onClick={() => act('/duplicate', {})}>Dupliquer tel quel</button>
-                  {doc.kind !== 'quote' && <button className="btn" disabled={!!busy} onClick={() => act('/duplicate', { kind: 'quote' })}>Dupliquer en devis</button>}
-                  {doc.kind !== 'invoice' && <button className="btn" disabled={!!busy} onClick={() => act('/duplicate', { kind: 'invoice' })}>Dupliquer en facture</button>}
-                  {doc.kind !== 'deposit_invoice' && <button className="btn" disabled={!!busy} onClick={() => act('/duplicate', { kind: 'deposit_invoice' })}>Dupliquer en facture d’acompte</button>}
-                  {doc.kind !== 'credit_note' && (
-                    isInvoiceLike && locked
-                      ? <button className="btn" disabled={!!busy || doc.status === 'credited'} onClick={() => setCreditOpen(true)}>Note de crédit sur cette facture…</button>
-                      : <button className="btn" disabled={!!busy} onClick={() => act('/duplicate', { kind: 'credit_note' })}>Dupliquer en note de crédit libre</button>
-                  )}
-                </div>
-              </details>
-              <button
-                className="btn"
-                onClick={async () => {
-                  try { window.open(await apiBlobUrl(`/api/documents/${id}/pdf`), '_blank'); }
-                  catch (e) { setMsg((e as Error).message); }
-                }}
-              >
-                Télécharger le PDF
-              </button>
-              {doc.originalPdf && (
-                <button
-                  className="btn"
-                  onClick={async () => {
-                    try { window.open(await apiBlobUrl(`/api/documents/${id}/original.pdf`), '_blank'); }
-                    catch (e) { setMsg((e as Error).message); }
-                  }}
-                >
-                  PDF d’origine (TrustUp)
-                </button>
-              )}
-              {!locked && <button className="btn" style={{ marginLeft: 'auto', color: 'var(--crit)' }} onClick={del}>Supprimer</button>}
-            </div>
-          </section>
+</div></details>}
+
         </div>
 
         {/* Récapitulatif — sticky */}
@@ -676,15 +674,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
 
             {dirty && <div className="doc-recap-dirty">Modifications non enregistrées</div>}
 
-            <div className="doc-recap-actions">
-              <button className="btn primary" disabled={busy === 'save'} onClick={save}>{busy === 'save' ? 'Enregistrement…' : 'Enregistrer le brouillon'}</button>
-              {!locked && (
-                <button className="btn" disabled={!!busy} onClick={() => act('/issue', {}, 'Émettre : un numéro définitif sera attribué et les lignes verrouillées. Continuer ?')}>
-                  Émettre {isQuote ? 'le devis' : 'la facture'} →
-                </button>
-              )}
-              <a className="btn" href={`/imprimer/${id}`} target="_blank" rel="noreferrer">Aperçu du document</a>
-            </div>
+
           </div>
         </aside>
       </div>
@@ -699,7 +689,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
           onDone={(count) => { setTasksModal(false); setMsg(`${count} tâche(s) créée(s) sur le chantier — visibles dans l'onglet Tâches de sa fiche.`); }}
         />
       )}
-    </>
+    </div>
   );
 }
 

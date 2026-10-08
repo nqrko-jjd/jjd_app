@@ -401,7 +401,7 @@ function fieldStateBadge(ev: FieldEvent): { tone: string; label: string } {
 /** « Sur le terrain aujourd'hui » : horaire, chantier, équipe, état de pointage. */
 function FieldToday({ items }: { items: FieldEvent[] }) {
   const [expanded, setExpanded] = useState(false);
-  const visible = expanded ? items : items.slice(0, 4);
+  const visible = expanded ? items : items.slice(0, 2);
   return (
     <section className="panel dashboard-day">
       <div className="panelhead">
@@ -440,7 +440,7 @@ function FieldToday({ items }: { items: FieldEvent[] }) {
           })}
         </div>
       )}
-      {items.length > 4 && <button className="dashboard-show-more" onClick={() => setExpanded(!expanded)} aria-expanded={expanded}>{expanded ? 'Réduire' : `Voir les ${items.length} affectations`}</button>}
+      {items.length > 2 && <button className="dashboard-show-more" onClick={() => setExpanded(!expanded)} aria-expanded={expanded}>{expanded ? 'Réduire' : `Voir les ${items.length} affectations`}</button>}
     </section>
   );
 }
@@ -455,15 +455,15 @@ function InProgressBand({ rows, total }: { rows: InProgressRow[]; total: number 
         <Link href="/app/chantiers?statut=in_progress" className="hint">Tous les chantiers →</Link>
       </div>
       <div className="dashboard-sites">
-        {(expanded ? rows : rows.slice(0, 6)).map((w) => (
+        {(expanded ? rows : rows.slice(0, 4)).map((w) => (
           <Link key={w.id} href={`/app/chantiers/${w.id}`} className="dashboard-site" title={`${w.title}${w.manager ? ` · ${w.manager}` : ''}`}>
             <Avatar src={w.photoThumbUrl} label={w.title} size={40} />
-            <span className="dashboard-site-copy"><small>{w.ref}{w.city ? ` · ${w.city}` : ''}</small><strong>{w.title}</strong>{w.client && <span>{w.client}</span>}</span>
+            <span className="dashboard-site-copy"><small>{w.ref}</small><strong>{w.title}</strong>{(w.city || w.client) && <span>{[w.city, w.client].filter(Boolean).join(' · ')}</span>}</span>
             <ChevronRight size={17} />
           </Link>
         ))}
       </div>
-      {rows.length > 6 && <button className="dashboard-show-more" style={{ borderRadius: 12, marginTop: 10 }} onClick={() => setExpanded(!expanded)} aria-expanded={expanded}>{expanded ? 'Réduire' : 'Afficher plus de chantiers'}</button>}
+      {rows.length > 4 && <button className="dashboard-show-more" style={{ borderRadius: 12, marginTop: 10 }} onClick={() => setExpanded(!expanded)} aria-expanded={expanded}>{expanded ? 'Réduire' : 'Afficher plus de chantiers'}</button>}
     </>
   );
 }
@@ -505,6 +505,7 @@ function monthTrend(cur: number, prev: number): string | undefined {
 export default function DashboardPage() {
   const { user, person } = useAuth();
   const { data, loading, error, reload } = useApi<Dashboard>(user?.role === 'worker' || user?.role === 'foreman' || user?.role === 'storekeeper' ? null : '/api/dashboard');
+  const [showAllPriorities, setShowAllPriorities] = useState(false);
   const priorities = (data?.alerts ?? []).filter(a => !['overdue_invoices', 'overdue_supplier_invoices', 'quotes_follow', 'expiring_docs'].includes(a.kind));
   const today = new Date();
   const eyebrow = today.toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -538,8 +539,8 @@ export default function DashboardPage() {
           <div className="dashboard-summary">
             <Kpi ic={BarChart3} label="Facturé ce mois · HT" href="/app/documents?kind=invoice&dashboard=invoiced" value={<Money value={data.kpis.invoicedMonth} />} hero />
             <div className="dashboard-receivable">
-              <Kpi ic={Wallet} label="Clients à encaisser · TTC" href="/app/documents?kind=invoice&dashboard=receivable" value={<Money value={data.kpis.receivableAmount} />} sub="Factures non soldées" />
-              <Link className="dashboard-overdue" href="/app/documents?kind=invoice&dashboard=overdue">Dont <Money value={data.kpis.overdueAmount} /> en retard · {data.kpis.overdueCount} factures</Link>
+              <Kpi ic={Wallet} label="Clients à encaisser · TTC" href="/app/documents?kind=invoice&dashboard=receivable" value={<Money value={data.kpis.receivableAmount} />} />
+              <Link className="dashboard-overdue" href="/app/documents?kind=invoice&dashboard=overdue">En retard : <Money value={data.kpis.overdueAmount} /> · {data.kpis.overdueCount}</Link>
             </div>
             <Kpi ic={CreditCard} label="Fournisseurs échus · TTC" href="/app/achats?paid=0&overdue=1" value={<Money value={data.kpis.supplierOverdueAmount} />} sub={`${data.kpis.supplierOverdueCount} factures à régler`} warn={data.kpis.supplierOverdueCount > 0} />
             <Kpi ic={FileText} label="Devis en attente · HT" href="/app/documents?kind=quote&dashboard=quotes" value={<Money value={data.kpis.quotesPendingAmount} />} sub={`${data.kpis.quotesPendingCount} devis envoyés`} />
@@ -547,22 +548,18 @@ export default function DashboardPage() {
           <div className="dashboard-pipeline"><Link href="/app/finances#previsionnel">Reste à facturer sur devis acceptés · <Money value={data.kpis.forecastAmount} /></Link><Link href="/app/analyse">Voir l’analyse financière <ChevronRight size={15}/></Link></div>
 
           <div className="split dashboard-focus" style={{ margin: '1.2rem 0 0.8rem' }}>
-            <section className="panel">
+            <section className="panel dashboard-priorities">
               <div className="panelhead">
                 <h2>À traiter en priorité <span className="hint">{priorities.length}</span></h2>
                 <small>trié par urgence</small>
               </div>
               {priorities.length === 0 ? (
                 <div className="panel-empty">
-                  <EmptyState
-                    icon={ShieldCheck}
-                    title="Aucune autre action urgente"
-                    text="Les éventuelles factures échues et devis à suivre figurent dans les cartes ci-dessus."
-                  />
+                  <p className="dashboard-clear"><ShieldCheck size={19}/>Pas d’autre action urgente.</p>
                 </div>
               ) : (
                 <div className="alert-list">
-                  {priorities.map((a) => {
+                  {(showAllPriorities ? priorities : priorities.slice(0, 4)).map((a) => {
                     const AlertIc = ALERT_KIND_ICON[a.kind] ?? AlertTriangle;
                     return (
                       <Link key={a.kind} href={a.href} className={`alert ${a.severity}`}>
@@ -575,6 +572,7 @@ export default function DashboardPage() {
                   })}
                 </div>
               )}
+              {priorities.length > 4 && <button className="dashboard-show-more" aria-expanded={showAllPriorities} onClick={() => setShowAllPriorities(!showAllPriorities)}>{showAllPriorities ? 'Réduire' : `Voir les ${priorities.length} priorités`}</button>}
             </section>
 
             <FieldToday items={data.fieldToday ?? []} />

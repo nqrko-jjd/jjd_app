@@ -14,6 +14,7 @@ import {
 } from '@expo-google-fonts/dm-sans';
 import { SessionProvider, useSession } from '@/lib/session';
 import { T } from '@/lib/theme';
+import { Intro } from '@/lib/Intro';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 // Les champs de saisie n'ont pas de variante custom par graisse — DM Sans normale suffit partout.
@@ -69,6 +70,7 @@ export default function RootLayout() {
       <SessionProvider>
         <StatusBar style="dark" />
         <Guard />
+        <Intro />
       </SessionProvider>
     </SafeAreaProvider>
   );

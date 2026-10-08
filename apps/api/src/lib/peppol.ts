@@ -89,7 +89,7 @@ export function peppolExpectedTotals(lines: ReturnType<typeof peppolLines>) {
   return { ht: round2(ht), ttc: round2(ht + vat) };
 }
 
-export function buildPeppolPayload(d: PeppolDoc, co: Pick<Company, 'iban'>) {
+export function buildPeppolPayload(d: PeppolDoc, co: Pick<Company, 'iban'> & { vatNote0?: string | null }) {
   const vat = vatForPeppol(d.billingVat ?? d.contact?.vat);
   const recipient = peppolAddressFromVat(d.billingVat ?? d.contact?.vat);
   if (!d.billingVat && !d.contact?.vat) throw new HttpError(422, 'Numéro de TVA du client manquant : Peppol est réservé aux clients professionnels (les particuliers reçoivent le PDF par e-mail).');
@@ -113,11 +113,15 @@ export function buildPeppolPayload(d: PeppolDoc, co: Pick<Company, 'iban'>) {
   const iban = (co.iban ?? '').replace(/\s+/g, '');
   const note = [d.customerRef && `Réf. client : ${d.customerRef}`, d.worksite?.ref && `Chantier ${d.worksite.ref}`].filter(Boolean).join(' · ');
   const issue = ymd(d.issuedOn ?? new Date());
+  // catégorie AE (autoliquidation) : le réseau refuse le document sans motif d'exonération (code VATEX et/ou texte) au niveau de la TVA
+  const reverseCharge = lines.some((l) => l.vat.category === 'AE');
+  const reason = plain(co.vatNote0 ?? '').replace(/\s+/g, ' ').slice(0, 500) || 'Autoliquidation';
   const common = {
     issueDate: issue,
     currency: 'EUR',
     buyer: { vatNumber: vat, name, street: addr.street, city: addr.city, postalZone: addr.postalZone, country: 'BE' },
     ...(iban ? { paymentMeans: [{ paymentMethod: 'credit_transfer', reference: d.structuredComm ?? d.number, iban }] } : {}),
+    ...(reverseCharge ? { vat: { exemptionReasonCode: 'VATEX-EU-AE', exemptionReason: reason } } : {}),
     lines: lines.map(({ _total, _rate, ...l }) => l), // eslint-disable-line @typescript-eslint/no-unused-vars
     ...(note ? { note } : {}),
   };

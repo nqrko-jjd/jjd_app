@@ -34,6 +34,15 @@ test('lignes Peppol : prix net après remise ; arrondi impossible -> 1 × total 
   assert.equal(c!.vat.category, 'AE');
 });
 
+test('charge utile : une ligne en autoliquidation (AE) porte le motif d’exonération exigé par le réseau ; sans AE, rien', () => {
+  const ae = buildPeppolPayload(baseDoc([L({ vatRate: 0 })], { totalTtc: 200 }), { iban: '', vatNote0: 'Autoliquidation : le client est tenu au paiement\nde la taxe.' });
+  const vat = (ae.document as { vat?: { exemptionReasonCode: string; exemptionReason: string } }).vat;
+  assert.equal(vat?.exemptionReasonCode, 'VATEX-EU-AE'); assert.equal(vat?.exemptionReason, 'Autoliquidation : le client est tenu au paiement de la taxe.');
+  const bare = buildPeppolPayload(baseDoc([L({ vatRate: 0 })], { totalTtc: 200 }), { iban: '' }).document as { vat?: { exemptionReason: string } };
+  assert.equal(bare.vat?.exemptionReason, 'Autoliquidation'); // sans mention configurée : motif minimal
+  assert.equal((buildPeppolPayload(baseDoc(), { iban: '', vatNote0: 'x' }).document as { vat?: unknown }).vat, undefined);
+});
+
 test('charge utile : facture et note de crédit ; refus clair si TVA, adresse ou totaux manquants', () => {
   const p = buildPeppolPayload(baseDoc(), { iban: 'BE68 5390 0754 7034' });
   assert.equal(p.recipient, '0208:1003823997'); assert.equal(p.documentType, 'invoice');

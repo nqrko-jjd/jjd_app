@@ -49,17 +49,17 @@ test('compte client : facturé, reste à encaisser, argent reçu sans facture at
   await mkLedger({ ht: 500, ttc: 530, paymentStatus: 'Payé', docNumber: 'F-CA-2' });
   await mkLedger({ direction: 'credit_note', categoryRaw: 'Note de crédit vente', ht: -100, ttc: -106, paymentStatus: 'Payé', docNumber: 'NC-CA-1' });
   await mkTx(1000, { contactId }); // rien rattaché : 1 000 € sans facture
-  const t2 = await mkTx(2000, { contactId }); // 1 200 € répartis sur une facture, 800 € restent
-  await prisma.bankTransactionMatch.create({ data: { bankTransactionId: t2.id, ledgerEntryId: open.id, amount: 1200 } });
+  const t2 = await mkTx(2000, { contactId }); // 600 € affectés, 1 400 € restent
+  await prisma.bankTransactionMatch.create({ data: { bankTransactionId: t2.id, ledgerEntryId: open.id, amount: 600 } });
   await mkTx(700); // non attribué à ce client : ne compte pas dans son compte
   const r = await j(`/api/contacts/${contactId}`);
   assert.equal(r.status, 200);
   const a = r.body.contact.clientAccount;
   assert.equal(a.invoicedTtc, 1060 + 530 - 106);
-  assert.equal(a.openTtc, 1060);
-  assert.equal(a.unallocatedTotal, 1800);
+  assert.equal(a.openTtc, 460);
+  assert.equal(a.unallocatedTotal, 2400);
   assert.equal(a.unallocated.length, 2);
-  assert.equal(a.balance, 1060 - 1800, 'négatif : le client a versé plus qu’il n’a de factures ouvertes');
+  assert.equal(a.balance, 460 - 2400, 'négatif : le client a versé plus qu’il n’a de factures ouvertes');
 });
 
 test('virement attribué à la main à un client, puis retiré ; client inconnu refusé', async () => {

@@ -69,6 +69,7 @@ export default function FinancesPage() {
         sub="Compte de résultat consolidé"
         action={
           <div className="row">
+            <Link href="/app/finances/fournisseurs" className="btn">Comptes fournisseurs →</Link>
             <Link href="/app/finances/grand-livre" className="btn">Rapprochement grand livre →</Link>
             <Link href="/app/finances/banque" className="btn">Rapprochement bancaire →</Link>
           </div>

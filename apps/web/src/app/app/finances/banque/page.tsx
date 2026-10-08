@@ -88,6 +88,7 @@ function BanqueInner() {
   const [busy, setBusy] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
   const [editTx, setEditTx] = useState<Tx | null>(null);
+  const [allocation, setAllocation] = useState<{ txId: string; matchId?: string; ledgerId?: string; documentId?: string; label: string; amount: number } | null>(null);
   // Arrivée depuis la fiche d'une facture ("payée le …", cliquable) : ne montre que les
   // transactions qui l'ont réglée, prioritaire sur le filtre "matched" habituel.
   const [documentFilter, setDocumentFilter] = useState<string | null>(null);
@@ -99,6 +100,7 @@ function BanqueInner() {
   if (q) qs.set('q', q);
   if (bank) qs.set('bank', bank);
   if (documentFilter) qs.set('documentId', documentFilter);
+  if (sp.get('transactionId')) qs.set('transactionId', sp.get('transactionId')!);
   const { data, loading, error, reload } = useApi<{
     items: Tx[]; matched: number; total: number; byBank: { bank: string | null; _count: number }[];
     page: number; totalPages: number; totalCount: number;
@@ -106,6 +108,7 @@ function BanqueInner() {
   const { data: ponto, reload: reloadPonto } = useApi<PontoStatus>('/api/ponto/status');
   const { data: aiStatus } = useApi<{ enabled: boolean }>('/api/assistant/status');
   const [openTx, setOpenTx] = useState<string | null>(null);
+  useEffect(() => { if (sp.get('transactionId')) setOpenTx(sp.get('transactionId')); }, [sp]);
   const [manualQ, setManualQ] = useState('');
   const suggQs = manualQ.trim() ? `?q=${encodeURIComponent(manualQ.trim())}` : '';
   const { data: sugg, loading: suggLoading, reload: reloadSugg } = useApi<{ items: Suggestion[]; remaining: number }>(openTx ? `/api/finance/bank/${openTx}/suggestions${suggQs}` : null);
@@ -129,6 +132,7 @@ function BanqueInner() {
   async function removeMatch(txId: string, matchId: string) {
     await api(`/api/finance/bank/${txId}/matches/${matchId}`, { method: 'DELETE' });
     reload();
+    reloadSugg();
   }
   function toggleSort(key: string) {
     if (sort === key) setDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -360,7 +364,7 @@ function BanqueInner() {
                                 {isSaleLedgerOnly(m) && <Link className="bank-document-link" href={`/app/documents?q=${encodeURIComponent(m.ledgerEntry!.docNumber || '')}`}>Voir la vente</Link>}
                                 <button className="bank-document-link" onClick={async()=>{try {const docId=matchDocumentId(m);const url=await apiBlobUrl(docId?`/api/documents/${docId}/pdf`:`/api/finance/expenses/${m.ledgerEntry!.id}/pdf`);window.open(url,'_blank','noopener');}catch(e){setFlash((e as Error).message);}}}>Voir le justificatif</button>
                               </div></div>
-                              <span className="tnum" style={{ fontSize: '0.76rem', whiteSpace: 'nowrap' }}><Money value={matchAmount(m)} /></span>
+                              <button className="bank-document-link tnum" title="Modifier le montant affecté" onClick={() => setAllocation({ txId: t.id, matchId: m.id, label: matchLabel(m), amount: matchAmount(m) })}><Money value={matchAmount(m)} /> · Modifier le montant</button>
                               <button
                                 className="btn ghost"
                                 style={{ padding: '0.1rem 0.35rem', fontSize: '0.72rem' }}
@@ -371,15 +375,16 @@ function BanqueInner() {
                               </button>
                             </div>
                           ))}
-                          {t.matches.length > 1 && (
+                          {t.matches.length > 0 && (
                             <div className="muted" style={{ fontSize: '0.74rem' }}>
                               Total rapproché : <Money value={t.matches.reduce((s, m) => s + matchAmount(m), 0)} /> / <Money value={Math.abs(t.amount ?? 0)} />
                             </div>
                           )}
                         </div>
                       )}
-                      {(t.amount ?? 0) > 0 && (
+                      {(t.amount ?? 0) !== 0 && (
                         <BankClientAssign
+                          supplier={(t.amount ?? 0) < 0}
                           txId={t.id}
                           amount={t.amount ?? 0}
                           shares={t.matches.map((m) => m.amount ?? null)}
@@ -404,7 +409,7 @@ function BanqueInner() {
                       <td colSpan={8} style={{ background: 'var(--surface-2)', padding: '0.8rem 0.9rem' }}>
                         <div className="row" style={{ marginBottom: '0.6rem', gap: '0.5rem', alignItems: 'center' }}>
                           <div className="eyebrow" style={{ margin: 0 }}>{manualQ.trim() ? 'Recherche' : 'Factures proposées (achat & vente)'}</div>
-                          {!manualQ.trim() && sugg && t.matches.length > 0 && (
+                          {sugg && (
                             <span className="muted" style={{ fontSize: '0.8rem' }}>reste à affecter : <Money value={sugg.remaining} /></span>
                           )}
                           <input
@@ -426,7 +431,7 @@ function BanqueInner() {
                                 key={`${s.kind}-${s.id}`}
                                 className="btn"
                                 style={{ justifyContent: 'space-between' }}
-                                onClick={() => addMatch(t.id, s.kind === 'ledger' ? { ledgerId: s.id } : { documentId: s.id })}
+                                onClick={() => setAllocation({ txId: t.id, ...(s.kind === 'ledger' ? { ledgerId: s.id } : { documentId: s.id }), label: s.label, amount: Math.min(s.amount ?? 0, sugg.remaining) })}
                               >
                                 <span>
                                   <span className={`badge ${s.direction === 'sale' ? 'ok' : 'plain'}`} style={{ marginRight: 6 }}>
@@ -434,7 +439,7 @@ function BanqueInner() {
                                   </span>
                                   {s.worksiteRef ? `${s.worksiteRef} · ` : ''}{s.label} · {formatDateBE(s.date)}
                                 </span>
-                                <Money value={s.amount} />
+                                <span>Reste à régler : <Money value={s.amount} /></span>
                               </button>
                             ))}
                           </div>
@@ -453,6 +458,17 @@ function BanqueInner() {
         <PaginationBar page={data.page} totalPages={data.totalPages} pageSize={pageSize} onPage={setPage} onPageSize={(s) => { setPageSize(s); setPage(1); }} />
       )}
 
+      {allocation && <FormModal
+        title={'Montant affecté · ' + allocation.label}
+        fields={[{ name: 'amount', label: 'Montant à affecter à cette facture (€)', type: 'number', required: true }]}
+        initial={{ amount: allocation.amount }}
+        onClose={() => setAllocation(null)}
+        onSubmit={async values => {
+          if (allocation.matchId) await api('/api/finance/bank/' + allocation.txId + '/matches/' + allocation.matchId, { method: 'PATCH', body: { amount: values.amount } });
+          else await api('/api/finance/bank/' + allocation.txId + '/matches', { method: 'POST', body: { ledgerId: allocation.ledgerId, documentId: allocation.documentId, amount: values.amount } });
+          setAllocation(null); reload(); reloadSugg();
+        }}
+      />}
       {editTx && (
         <FormModal
           title="Corriger une transaction bancaire"

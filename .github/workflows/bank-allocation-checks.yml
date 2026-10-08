@@ -1,0 +1,43 @@
+name: Bank allocations and supplier accounts
+on:
+  pull_request:
+    paths:
+      - 'apps/api/src/lib/bank-allocation.ts'
+      - 'apps/api/src/lib/bank-match.ts'
+      - 'apps/api/src/lib/client-account.ts'
+      - 'apps/api/src/lib/supplier-account.ts'
+      - 'apps/api/src/routes/finance.ts'
+      - 'apps/api/src/routes/contacts.ts'
+      - 'apps/api/test/bank*.test.ts'
+      - 'apps/api/test/client-account.test.ts'
+      - 'apps/web/src/app/app/finances/**'
+      - 'apps/web/src/app/app/contacts/**'
+      - 'apps/web/src/components/BankClientAssign.tsx'
+      - '.github/workflows/bank-allocation-checks.yml'
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: file:./bank-check.db
+      JJD_SKIP_ENV_FILE: '1'
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run build:shared
+      - run: npm run prisma:generate --workspace @jjd/api
+      - run: npm run db:deploy:safe --workspace @jjd/api
+      - name: Create isolated test account
+        run: |
+          node --import tsx --input-type=module -e "import {prisma} from './apps/api/src/db.ts'; import bcrypt from 'bcryptjs'; await prisma.user.create({data:{email:'david@jjd-consult.be',passwordHash:await bcrypt.hash('jjd',10),role:'admin',isPartner:true}}); await prisma.\$disconnect();"
+      - name: Bank and contact regression tests
+        run: node --test --test-force-exit --test-concurrency=1 --import tsx apps/api/test/bank-allocation.test.ts apps/api/test/bank-match.test.ts apps/api/test/bank-suggestions-settled.test.ts apps/api/test/bank-reconcile.test.ts apps/api/test/client-account.test.ts
+      - run: npm run typecheck
+      - run: npm run build --workspace @jjd/web

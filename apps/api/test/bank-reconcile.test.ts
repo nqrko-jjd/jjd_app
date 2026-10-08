@@ -87,17 +87,19 @@ test('GET /api/finance/bank/:id/suggestions : sans q, hors fenêtre montant/date
 test('recherche : facture historique (Excel) ET Document de même n° -> une seule ligne, l\'écriture du grand livre (jamais le Document)', async () => {
   const c = await prisma.contact.create({ data: { name: 'Client Jumeau Test', normalizedName: 'client jumeau test', type: 'client' } });
   const doc = await prisma.document.create({
-    data: { kind: 'invoice', direction: 'sale', status: 'paid', number: 'FJUMEAU-77', contactId: c.id, issuedOn: new Date('2024-07-24'), lockedAt: new Date('2024-07-24'), totalHt: 2380, totalVat: 142.8, totalTtc: 2522.8, source: 'legacy' },
+    data: { kind: 'invoice', direction: 'sale', status: 'sent', number: 'FJUMEAU-77', contactId: c.id, issuedOn: new Date('2024-07-24'), lockedAt: new Date('2024-07-24'), totalHt: 2380, totalVat: 142.8, totalTtc: 2522.8, source: 'legacy' },
   });
   const led = await prisma.ledgerEntry.create({ data: { direction: 'sale', docNumber: 'FJUMEAU-77', ttc: 2522.8, ht: 2380, supplierName: 'Client Jumeau Test', date: new Date('2024-07-24'), source: 'xlsx' } });
+  const incoming = await prisma.bankTransaction.create({ data: { amount: 2522.8, side: 'in' } });
   try {
-    const r = await jf<{ items: { kind: string; id: string }[] }>(`/api/finance/bank/${txId}/suggestions?q=FJUMEAU-77`);
+    const r = await jf<{ items: { kind: string; id: string }[] }>(`/api/finance/bank/${incoming.id}/suggestions?q=FJUMEAU-77`);
     assert.equal(r.status, 200);
     assert.equal(r.body.items.length, 1, 'une seule ligne pour cette facture');
     assert.equal(r.body.items[0]!.kind, 'ledger');
     assert.equal(r.body.items[0]!.id, led.id);
     assert.ok(!r.body.items.some((i) => i.id === doc.id), 'le Document ne doit plus être proposé');
   } finally {
+    await prisma.bankTransaction.delete({ where: { id: incoming.id } });
     await prisma.ledgerEntry.delete({ where: { id: led.id } });
     await prisma.document.delete({ where: { id: doc.id } });
     await prisma.contact.delete({ where: { id: c.id } });

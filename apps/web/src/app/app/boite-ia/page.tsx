@@ -138,7 +138,7 @@ export default function BoiteIaPage() {
 
             {openId === s.id && (
               <div style={{ marginTop: '0.8rem', paddingTop: '0.8rem', borderTop: '1px solid var(--line)' }}>
-                {s.kind === 'lead' && <LeadForm s={s} busy={busy === s.id} onSubmit={(b) => apply(s, b)} />}
+                {s.kind === 'lead' && <LeadForm s={s} opts={worksiteOpts} busy={busy === s.id} onSubmit={(b) => apply(s, b)} />}
                 {s.kind === 'appointment' && <AppointmentForm s={s} opts={worksiteOpts} newWorksite={openWizard} busy={busy === s.id} onSubmit={(b) => apply(s, b)} />}
                 {s.kind === 'worksite_note' && <NoteForm s={s} opts={worksiteOpts} newWorksite={openWizard} busy={busy === s.id} onSubmit={(b) => apply(s, b)} />}
                 {(s.kind === 'payment_reminder' || s.kind === 'other') && <PlainForm busy={busy === s.id} onSubmit={(b) => apply(s, b)} />}
@@ -193,7 +193,10 @@ function WorksiteChoice({ s, value, onChange, opts, newWorksite }: { s: Suggesti
   );
 }
 
-function LeadForm({ s, busy, onSubmit }: { s: Suggestion; busy: boolean; onSubmit: (b: Record<string, unknown>) => void }) {
+function LeadForm({ s, opts, busy, onSubmit }: { s: Suggestion; opts: WsPickerOption[]; busy: boolean; onSubmit: (b: Record<string, unknown>) => void }) {
+  // une demande de devis a toujours son R- : un chantier déjà pressenti est repris, sinon on en crée un
+  const [mode, setMode] = useState<'new' | 'existing'>(s.worksite ? 'existing' : 'new');
+  const [worksiteId, setWorksiteId] = useState(s.worksite?.id ?? '');
   const [v, setV] = useState({
     title: s.summary ?? '', requesterName: s.extracted?.requesterName ?? '', requesterPhone: s.extracted?.requesterPhone ?? '',
     problemType: s.extracted?.problemType ?? '', urgent: s.extracted?.urgent ?? false, note: '',
@@ -217,8 +220,18 @@ function LeadForm({ s, busy, onSubmit }: { s: Suggestion; busy: boolean; onSubmi
           <input type="checkbox" checked={v.urgent} onChange={(e) => setV({ ...v, urgent: e.target.checked })} /> Urgent
         </label>
       </div>
-      <button className="btn primary" disabled={busy || !v.title.trim()} onClick={() => onSubmit(v)}>
-        {busy ? 'Création…' : 'Créer la piste Pipeline'}
+      <div className="field">
+        <label>Chantier (R-)</label>
+        <div className="row" style={{ gap: '0.4rem', marginBottom: '0.4rem' }}>
+          <button type="button" className={`btn ${mode === 'new' ? 'primary' : ''}`} onClick={() => setMode('new')}>Créer un nouveau R-</button>
+          <button type="button" className={`btn ${mode === 'existing' ? 'primary' : ''}`} onClick={() => setMode('existing')}>Rattacher à un chantier existant</button>
+        </div>
+        {mode === 'existing'
+          ? <WorksitePicker value={worksiteId} onChange={setWorksiteId} options={opts} />
+          : <p className="muted" style={{ fontSize: '0.8rem', margin: 0 }}>Un nouveau chantier est créé au statut <strong>« Devis à rédiger »</strong>, relié à la piste. Le mail et ta note vont dans son « Suivi mails ».</p>}
+      </div>
+      <button className="btn primary" disabled={busy || !v.title.trim() || (mode === 'existing' && !worksiteId)} onClick={() => onSubmit({ ...v, ...(mode === 'existing' ? { worksiteId } : { createWorksite: true }) })}>
+        {busy ? 'Création…' : mode === 'new' ? 'Créer la piste et le nouveau R-' : 'Créer la piste sur ce chantier'}
       </button>
     </div>
   );

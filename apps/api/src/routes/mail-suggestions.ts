@@ -8,6 +8,7 @@ import { Router } from 'express';
 import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, OFFICE } from '../lib/auth.js';
+import { nextWorksiteRef } from '../db.js';
 import { refreshWorksiteStatus } from '../lib/worksite-status.js';
 import { guessWorksiteFromText } from '../lib/worksite-guess.js';
 import { recordWorksiteMail } from '../lib/worksite-mails.js';
@@ -117,10 +118,31 @@ mailSuggestionsRouter.post(
       const fromEmail = fromEmailMatch ? fromEmailMatch[1] : ((s.fromAddress ?? '').includes('@') ? s.fromAddress : null);
       const contact = fromEmail ? await prisma.contact.findFirst({ where: { email: fromEmail } }) : null;
       const title = typeof b.title === 'string' && b.title.trim() ? b.title.trim() : (s.summary ?? `Demande reçue par mail — ${extracted?.requesterName ?? s.fromAddress}`).slice(0, 120);
+      // une demande de devis a toujours son R- : on rattache la piste à un chantier existant, ou on en crée un (« devis à rédiger »)
+      const chosenId = typeof b.worksiteId === 'string' && b.worksiteId ? b.worksiteId : null;
+      let leadWorksiteId: string | null = null;
+      if (chosenId) {
+        const w = await prisma.worksite.findUnique({ where: { id: chosenId }, select: { id: true } });
+        if (!w) throw new HttpError(422, 'Chantier introuvable.');
+        const taken = await prisma.crmOpportunity.findFirst({ where: { worksiteId: w.id }, select: { id: true } });
+        leadWorksiteId = taken ? null : w.id; // une piste par chantier : sinon le mail est quand même rangé dans le suivi du chantier
+        if (taken) b.worksiteLinkSkipped = true;
+        b.keepWorksiteId = w.id;
+      } else if (b.createWorksite !== false) {
+        const ref = await nextWorksiteRef();
+        const created = await prisma.worksite.create({
+          data: {
+            ref, title: title.slice(0, 160), status: 'quote_needed', clientId: contact?.id ?? null, source: 'email-ia',
+            description: [s.summary, s.subject ? `Mail : ${s.subject}` : null, s.fromAddress ? `De : ${s.fromAddress}` : null].filter(Boolean).join('\n'),
+          },
+        });
+        leadWorksiteId = created.id; b.keepWorksiteId = created.id;
+      }
       const opp = await prisma.crmOpportunity.create({
         data: {
           title,
           stage: 'new',
+          worksiteId: leadWorksiteId,
           source: 'email-ia',
           contactId: contact?.id ?? null,
           problemType: typeof b.problemType === 'string' ? b.problemType : extracted?.problemType ?? null,
@@ -134,6 +156,9 @@ mailSuggestionsRouter.post(
         },
       });
       resultRef = opp.id;
+      if (typeof b.keepWorksiteId === 'string') {
+        await recordWorksiteMail({ worksiteId: b.keepWorksiteId, messageId: s.messageId, subject: s.subject, fromAddress: s.fromAddress, receivedAt: s.receivedAt, summary: s.summary, note: typeof b.note === 'string' && b.note.trim() ? b.note.trim() : 'Demande reçue par mail : piste créée dans le pipeline.', userId: req.user!.id });
+      }
     } else if (s.kind === 'appointment') {
       const worksiteId = typeof b.worksiteId === 'string' && b.worksiteId ? b.worksiteId : s.worksiteId;
       if (!worksiteId) throw new HttpError(422, 'Choisis le chantier concerné par ce rendez-vous.');
@@ -190,7 +215,7 @@ mailSuggestionsRouter.post(
 
     const updated = await prisma.mailSuggestion.update({
       where: { id: s.id },
-      data: { status: 'applied', resultRef, worksiteId: (typeof b.worksiteId === 'string' && b.worksiteId) ? b.worksiteId : s.worksiteId },
+      data: { status: 'applied', resultRef, worksiteId: (typeof b.keepWorksiteId === 'string' ? b.keepWorksiteId : null) ?? ((typeof b.worksiteId === 'string' && b.worksiteId) ? b.worksiteId : s.worksiteId) },
     });
     res.json({ suggestion: updated, resultRef });
   }),

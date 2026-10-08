@@ -2,6 +2,7 @@
 import { vehicleLabel } from '@/lib/vehicle';
 import { useMemo, useState } from 'react';
 import { api } from '@/lib/api';
+import { useApi } from '@/lib/use-api';
 import { WorksitePicker, type WsPickerOption } from './WorksitePicker';
 import { AddressAutocomplete } from './AddressAutocomplete';
 import {
@@ -120,12 +121,17 @@ export function PlanningAssignmentModal({
   // le chantier de l'affectation modifiée/dupliquée peut être clôturé/archivé (donc absent de
   // `worksites`, qui ne liste que les chantiers actifs) : on l'ajoute quand même à la liste,
   // sinon le champ chantier apparaît vide alors que la valeur est bien enregistrée.
+  // Un rendez-vous (enlèvement de marchandise, dépôt…) n'a pas toujours de chantier client : on propose alors aussi les « charges »
+  // (postes E-xx, frais sans chantier), le créneau devant toujours se rattacher à un code.
+  const { data: overheadData } = useApi<{ items: WsRef[] }>(f.kind === 'meeting' ? '/api/worksites?kind=overhead' : null);
   const worksiteOptions = useMemo((): WsPickerOption[] => {
     const extra = seed?.worksite;
-    if (extra && !worksites.some((w) => w.id === extra.id)) return [{ ...extra }, ...worksites];
-    return worksites;
+    const base = extra && !worksites.some((w) => w.id === extra.id) ? [{ ...extra }, ...worksites] : worksites;
+    if (f.kind !== 'meeting') return base;
+    const charges = (overheadData?.items ?? []).filter((w) => !base.some((b) => b.id === w.id)).map((w) => ({ id: w.id, ref: w.ref, title: `${w.title} (charge, sans chantier)`, city: w.city ?? null }));
+    return [...base, ...charges];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [worksites, seed?.worksite.id]);
+  }, [worksites, seed?.worksite.id, f.kind, overheadData]);
 
   const filteredPeople = useMemo(() => {
     const q = workerQuery.trim().toLowerCase();
@@ -266,7 +272,7 @@ export function PlanningAssignmentModal({
           <fieldset>
             <legend>01 · {f.kind === 'meeting' ? 'Chantier & créneau du rendez-vous' : 'Chantier & créneau'}</legend>
             <div className="field full" style={{ marginBottom: '0.85rem' }}>
-              <label>Chantier</label>
+              <label>{f.kind === 'meeting' ? 'Chantier (ou charge si pas de chantier : dépôt, enlèvement…)' : 'Chantier'}</label>
               <WorksitePicker
                 value={f.worksiteId}
                 onChange={(v) => setF((cur) => ({ ...cur, worksiteId: v }))}

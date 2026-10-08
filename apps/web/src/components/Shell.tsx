@@ -263,7 +263,7 @@ export function Shell({ children, navigationPaths }: { children: React.ReactNode
         </div>
       </nav>
 
-      <main className={`main${(isWorker || isForeman || isStorekeeper || bureau) ? ' has-bottom-tabs' : ''}${pathname==='/app/messagerie'?' messaging-main':''}`}>{pathname !== '/app/messagerie' && <div className="workspace-bar"><span>Espace de gestion <span className="workspace-dot">·</span> JJD Consult</span><div><span className="workspace-profile">{ROLE_LABEL[user?.role ?? ''] ?? (isStorekeeper ? 'Magasinier' : 'Votre espace')}</span><span className="workspace-avatar" aria-label={loginLabel(user?.email)}>{(loginLabel(user?.email) || 'J').replace(/^\+/, '')[0]?.toUpperCase()}</span></div></div>}{children}</main>
+      <main className={`main${(isWorker || isForeman || isStorekeeper || bureau) ? ' has-bottom-tabs' : ''}${pathname==='/app/messagerie'?' messaging-main':''}`}>{children}</main>
 
       {isWorker && (
         <nav className="bottom-tabs worker">

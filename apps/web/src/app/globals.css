@@ -194,6 +194,8 @@ p { margin: 0; }
   flex-shrink: 0; width: 30px; height: 32px;
   display: grid; place-items: center;
 }
+.org-card:hover { background: rgba(255, 255, 255, 0.1); }
+.org-card:focus-visible { outline: 2px solid var(--nav-fg-active); outline-offset: 3px; }
 .org-name { font-size: 0.83rem; font-weight: 700; color: var(--nav-fg-active); }
 .org-role { font-size: 0.72rem; color: var(--nav-fg); }
 

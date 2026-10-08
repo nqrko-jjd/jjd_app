@@ -469,27 +469,6 @@ function InProgressBand({ rows, total }: { rows: InProgressRow[]; total: number 
   );
 }
 
-/** Les deux actions les plus fréquentes, mises en avant à côté du titre (comme la maquette). */
-function QuickActionsPrimary() {
-  const router = useRouter();
-  const [busy, setBusy] = useState(false);
-  async function newQuote() {
-    setBusy(true);
-    try {
-      const { document } = await api<{ document: { id: string } }>('/api/documents', { method: 'POST', body: { kind: 'quote' } });
-      router.push(`/app/documents/${document.id}`);
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <>
-      <button className="btn primary" disabled={busy} onClick={newQuote}>+ Nouveau devis</button>
-      <Link className="btn" href="/app/chantiers?new=1">+ Nouveau chantier</Link>
-    </>
-  );
-}
-
 const WS_STATUS_TONE: Record<string, string> = { scheduled: 'primary', in_progress: 'ok', on_hold: 'warn' };
 
 type InProgressRow = Dashboard['inProgress'][number];
@@ -524,11 +503,6 @@ export default function DashboardPage() {
         <PageHead
           title={`Bonjour ${name},`}
           sub="Voici les priorités de votre journée."
-          action={
-            <div className="row">
-              <QuickActionsPrimary />
-            </div>
-          }
         />
       </div>
 
@@ -546,7 +520,6 @@ export default function DashboardPage() {
             <Kpi ic={CreditCard} label="Fournisseurs échus · TTC" href="/app/achats?paid=0&overdue=1" value={<Money value={data.kpis.supplierOverdueAmount} />} sub={`${data.kpis.supplierOverdueCount} factures à régler`} warn={data.kpis.supplierOverdueCount > 0} />
             <Kpi ic={FileText} label="Devis en attente · HT" href="/app/documents?kind=quote&dashboard=quotes" value={<Money value={data.kpis.quotesPendingAmount} />} sub={`${data.kpis.quotesPendingCount} devis envoyés`} />
           </div>
-          <div className="dashboard-pipeline"><Link href="/app/finances#previsionnel">Reste à facturer sur devis acceptés · <Money value={data.kpis.forecastAmount} /></Link><Link href="/app/analyse">Voir l’analyse financière <ChevronRight size={15}/></Link></div>
 
           <div className="split dashboard-focus" style={{ margin: '1.2rem 0 0.8rem' }}>
             <section className="panel dashboard-priorities">
@@ -579,6 +552,8 @@ export default function DashboardPage() {
 
             <FieldToday items={data.fieldToday ?? []} />
           </div>
+
+          <div className="dashboard-pipeline"><Link href="/app/finances#previsionnel">Reste à facturer sur devis acceptés · <Money value={data.kpis.forecastAmount} /></Link><Link href="/app/analyse">Voir l’analyse financière <ChevronRight size={15}/></Link></div>
 
           {data.inProgress.length > 0 && <InProgressBand rows={data.inProgress} total={data.kpis.openWorksites} />}
 

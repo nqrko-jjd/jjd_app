@@ -10,6 +10,7 @@ import { PageHead, Money, formatEur, formatDateBE } from '@/lib/ui';
 import { DocStatusBadge, DOC_KIND_LABEL } from '@/lib/doc-ui';
 import { ContextMenu, useContextMenu, openActions, type MenuItem } from '@/components/ContextMenu';
 import { PaginationBar } from '@/components/PaginationBar';
+import { DocumentWorksiteModal } from '@/components/DocumentWorksiteModal';
 import { rowNav } from '@/lib/rowNav';
 import { DOC_STATUS_LABEL } from '@jjd/shared';
 
@@ -18,7 +19,7 @@ interface Row {
   title: string | null; issuedOn: string | null; dueOn: string | null; totalTtc: number; paidAmount: number;
   paidOn: string | null; createdAt: string;
   originalPdf: string | null; source: string | null;
-  worksite: { ref: string } | null; contact: { name: string } | null;
+  worksite: { id: string; ref: string; title: string } | null; contact: { name: string } | null;
 }
 
 const TABS: { key: string; label: string; kind?: string; scope?: string }[] = [
@@ -69,6 +70,8 @@ function DocumentsInner() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(100);
   const [importing, setImporting] = useState(false);
+  const [linkDocument, setLinkDocument] = useState<Row | null>(null);
+  const [linkNotice, setLinkNotice] = useState('');
   const [pendingImport, setPendingImport] = useState<File | null>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
   const active = TABS.find((t) => t.key === tab)!;
@@ -109,6 +112,8 @@ function DocumentsInner() {
     const isInvoice = d.kind === 'invoice' || d.kind === 'deposit_invoice' || d.kind === 'credit_note';
     return [
       ...openActions(`/app/documents/${d.id}`, (h) => router.push(h)),
+      'separator',
+      { label: d.worksite ? 'Changer le chantier lié' : 'Lier à un chantier', onClick: () => { setLinkNotice(''); setLinkDocument(d); } },
       'separator',
       { label: 'Dupliquer', onClick: () => post(`/api/documents/${d.id}/duplicate`, {}, true) },
       ...(d.kind !== 'quote' ? [{ label: 'Dupliquer en devis', onClick: () => post(`/api/documents/${d.id}/duplicate`, { kind: 'quote' }, true) }] : []),
@@ -210,6 +215,12 @@ function DocumentsInner() {
   return (
     <>
       {ctx.menu && <ContextMenu x={ctx.menu.x} y={ctx.menu.y} items={rowMenu(ctx.menu.row)} onClose={ctx.close} />}
+      {linkDocument && <DocumentWorksiteModal
+        document={linkDocument}
+        onClose={() => setLinkDocument(null)}
+        onLinked={(name) => { setLinkNotice(`${linkDocument.number ?? linkDocument.draftRef ?? 'Document'} lié à ${name}.`); reload(); }}
+      />}
+      {linkNotice && <div className="worksite-context-banner" role="status"><span>{linkNotice}</span><button className="btn ghost" onClick={() => setLinkNotice('')} aria-label="Fermer la confirmation">✕</button></div>}
       <PageHead
         eyebrow="Facturation"
         title="Devis & factures"
@@ -338,18 +349,19 @@ function DocumentsInner() {
                 aria-label="Sélectionner"
               />
               <div className="doc-item-body">
-                <div className="doc-item-top">
-                  <Link href={`/app/documents/${d.id}`} className="mono doc-item-num">{d.number ?? d.draftRef ?? '—'}</Link>
+                <div className="doc-item-top" style={{ flexWrap: 'wrap' }}>
+                  <Link href={`/app/documents/${d.id}`} className="mono doc-item-num" style={{ whiteSpace: 'nowrap' }}>{d.number ?? d.draftRef ?? '—'}</Link>
                   {d.originalPdf && <span title="PDF d’origine disponible">📄</span>}
                   {!d.number && <span className="badge plain">{DOC_KIND_LABEL[d.kind]}</span>}
                   {d.worksite
-                    ? <span className="chip" title="Chantier lié">🏗 {d.worksite.ref}</span>
+                    ? <span className="chip" style={{ whiteSpace: 'nowrap' }} title="Chantier lié">🏗 {d.worksite.ref}</span>
                     : <span className="chip" style={{ color: 'var(--ink-3)', borderStyle: 'dashed' }} title="Aucun chantier lié">Sans chantier</span>}
                   {d.source === 'ai-draft' && <span className="badge warn" title="Créé par l'assistant IA — à vérifier avant validation">✨ IA</span>}
                   <DocStatusBadge status={d.status} />
                   {(d.status === 'paid' || d.status === 'partial') && d.paidOn && (
                     <span className="muted" style={{ fontSize: '0.76rem' }}>le {formatDateBE(d.paidOn)}</span>
                   )}
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginLeft: 'auto', flexShrink: 0 }}>
                   <span className="doc-item-amount"><Money value={d.totalTtc} /></span>
                   <button
                     type="button"
@@ -360,6 +372,7 @@ function DocumentsInner() {
                   >
                     …
                   </button>
+                  </span>
                 </div>
                 <div className="doc-item-title">{d.title || DOC_KIND_LABEL[d.kind]}</div>
                 <div className="doc-item-meta">

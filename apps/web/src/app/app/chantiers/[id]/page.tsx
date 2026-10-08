@@ -78,7 +78,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
   const [editingContacts, setEditingContacts] = useState(false);
   const [editing, setEditing] = useState(false);
   const [invoicing, setInvoicing] = useState<string | null>(null);
-  const [tab, setTab] = useState<'overview' | 'tasks' | 'finances' | 'photos' | 'files' | 'discussion'>('overview');
+  const [tab, setTab] = useState<'overview' | 'planning' | 'tasks' | 'finances' | 'photos' | 'files' | 'discussion'>('overview');
   // nombre de documents (pastille de l'onglet « Documents »)
   const { data: filesInfo, reload: reloadFiles } = useApi<{ items: unknown[] }>(`/api/worksites/${id}/files`);
 
@@ -201,6 +201,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
       {w.building?.photoThumbUrl && <details className="worksite-building-photo"><summary>Voir le bâtiment · {w.building.name}</summary><img src={w.building.photoThumbUrl} alt={w.building.name}/><Link href={`/app/immeubles/${w.building.id}`}>Ouvrir la fiche immeuble</Link></details>}
       <div className="page-tabs">
         <button className={`page-tab${tab === 'overview' ? ' active' : ''}`} onClick={() => setTab('overview')}>Vue d’ensemble</button>
+        <button className={`page-tab${tab === 'planning' ? ' active' : ''}`} onClick={() => setTab('planning')}>Planning</button>
         <button className={`page-tab${tab === 'tasks' ? ' active' : ''}`} onClick={() => setTab('tasks')}>Tâches</button>
         <button className={`page-tab${tab === 'finances' ? ' active' : ''}`} onClick={() => setTab('finances')}>Finances & rentabilité</button>
         <button className={`page-tab${tab === 'photos' ? ' active' : ''}`} onClick={() => setTab('photos')}>Photos &amp; rapports <span className="n">{w.reports.length}</span></button>
@@ -241,6 +242,8 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
             </div>
           )}
 
+          <Glance w={w} nextEvent={nextEvent} onTab={setTab} />
+
           <div className="chart-2col wide-left" style={{ alignItems: 'start' }}>
             <div>
               <div className="card card-pad" style={{ marginBottom: '1rem' }}>
@@ -256,9 +259,6 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
                     const q = [w.address, w.postalCode, w.city].filter(Boolean).join(' ');
                     return full ? <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`} target="_blank" rel="noreferrer">{full}</a> : '—';
                   })()} />
-                  {nextEvent && nextEvent.assignments.length > 0 && (
-                    <Info label="Équipe affectée" value={[...new Set(nextEvent.assignments.map((a) => a.person.displayName || a.person.firstName))].join(', ')} />
-                  )}
                   <Info label="Début des travaux" value={formatDateBE(w.startedOn)} />
                   <Info label="Fin prévisionnelle" value={formatDateBE(w.endedOn)} />
                   {(w.billToContact || w.billTo) && (
@@ -266,9 +266,6 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
                       label="Facturé à"
                       value={w.billToContact ? <Link href={`/app/contacts/${w.billToContact.id}`}>{w.billToContact.name}</Link> : w.billTo}
                     />
-                  )}
-                  {w.requestKind && (
-                    <Info label="Type de demande" value={WORKSITE_REQUEST_KIND_LABEL[w.requestKind as keyof typeof WORKSITE_REQUEST_KIND_LABEL] ?? w.requestKind} />
                   )}
                   {w.accessNotes && <Info label="Accès et RDV" value={w.accessNotes} />}
                 </div>
@@ -282,7 +279,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
                       <Info
                         key={c.id}
                         label={WORKSITE_CONTACT_ROLE_LABEL[c.role as keyof typeof WORKSITE_CONTACT_ROLE_LABEL] ?? c.role}
-                        value={<span>{c.contactId ? <Link href={`/app/contacts/${c.contactId}`}>{c.name}</Link> : c.name}{`${c.unitLabel ? ` · ${c.unitLabel}` : ''}${c.phone ? ` · ${c.phone}` : ''}${c.email ? ` · ${c.email}` : ''}${c.contactFor ? ` — ${WORKSITE_CONTACT_FOR_LABEL[c.contactFor as keyof typeof WORKSITE_CONTACT_FOR_LABEL] ?? c.contactFor}` : ''}`}</span>}
+                        value={<span>{c.contactId ? <Link href={`/app/contacts/${c.contactId}`}>{c.name}</Link> : c.name}{c.unitLabel ? ` · ${c.unitLabel}` : ''}{c.phone && <> · <a href={`tel:${c.phone}`}>{c.phone}</a></>}{c.email ? ` · ${c.email}` : ''}{c.contactFor ? ` — ${WORKSITE_CONTACT_FOR_LABEL[c.contactFor as keyof typeof WORKSITE_CONTACT_FOR_LABEL] ?? c.contactFor}` : ''}</span>}
                       />
                     ))}
                   </div>
@@ -307,23 +304,10 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
               )}
 
               {w.description && (
-                <section className="card card-pad" style={{ marginBottom: '1rem' }}>
-                  <div className="eyebrow" style={{ marginBottom: '0.4rem' }}>Description</div>
-                  <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{w.description}</p>
-                </section>
-              )}
-
-              <PlanningGanttCard worksiteId={w.id} />
-
-              <CdcCard worksiteId={w.id} />
-
-              {nextEvent && (
-                <div className="card card-pad">
-                  <div className="section-title" style={{ marginTop: 0 }}>Prochaine étape</div>
-                  <div style={{ fontWeight: 600 }}>{nextEvent.note || 'Intervention planifiée'}</div>
-                  <div className="muted" style={{ fontSize: '0.85rem', marginTop: '0.2rem' }}>{formatDateBE(nextEvent.startAt)}</div>
-                  <Link href="/app/planning" className="hint" style={{ display: 'block', marginTop: '0.6rem' }}>Voir l’affectation des équipes →</Link>
-                </div>
+                <details className="card card-pad" style={{ marginBottom: '1rem' }}>
+                  <summary>Description du chantier</summary>
+                  <p style={{ margin: '0.6rem 0 0', whiteSpace: 'pre-wrap' }}>{w.description}</p>
+                </details>
               )}
             </div>
 
@@ -349,6 +333,8 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
 
         </>
       )}
+
+      {tab === 'planning' && <PlanningTab worksiteId={w.id} />}
 
       {tab === 'tasks' && <WorksiteTasks worksiteId={w.id} />}
 
@@ -503,7 +489,12 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
         </>
       )}
 
-      {tab === 'files' && <WorksiteFiles key={w.id} worksiteId={w.id} onChanged={reloadFiles} />}
+      {tab === 'files' && (
+        <>
+          <CdcCard worksiteId={w.id} />
+          <WorksiteFiles key={w.id} worksiteId={w.id} onChanged={reloadFiles} />
+        </>
+      )}
 
       {tab === 'discussion' && <MessagingWorkspace key={w.id} worksiteId={w.id}/>}
     </>
@@ -614,23 +605,62 @@ function TransportDetail({ t }: { t: NonNullable<Detail['margin']>['transport'] 
   );
 }
 
-/** Cahiers des charges du chantier (générés depuis un devis) : accès direct, ou comment en créer un. */
-/** Planning du chantier en diagramme de Gantt (interventions, regroupées par lot quand elles viennent du devis). */
-function PlanningGanttCard({ worksiteId }: { worksiteId: string }) {
+/** Onglet Planning : le chantier en diagramme de Gantt (interventions, regroupées par lot quand elles viennent du devis). */
+function PlanningTab({ worksiteId }: { worksiteId: string }) {
   const { data } = useApi<{ items: Parameters<typeof eventsToGantt>[0] }>(`/api/planning?worksiteId=${worksiteId}`);
   const rows = useMemo(() => eventsToGantt(data?.items ?? []), [data]);
-  if (!rows.length) return null;
   return (
-    <section className="card card-pad" style={{ marginBottom: '1rem' }}>
+    <section className="card card-pad">
       <div className="row" style={{ justifyContent: 'space-between', marginBottom: '0.5rem' }}>
         <div className="section-title" style={{ margin: 0 }}>Planning</div>
-        <Link href="/app/planning" className="hint">Ouvrir le planning →</Link>
+        <Link href="/app/planning" className="hint">Ouvrir le planning des équipes →</Link>
       </div>
-      <GanttChart rows={rows} />
+      {!data ? <p className="muted" style={{ margin: 0 }}>Chargement…</p>
+        : rows.length === 0 ? <p className="muted" style={{ margin: 0 }}>Aucune intervention planifiée sur ce chantier.</p>
+        : <GanttChart rows={rows} />}
     </section>
   );
 }
 
+/** Ce qu'il faut voir en premier sur un chantier : la prochaine intervention, les tâches ouvertes, ce qui reste à encaisser et le dernier rapport. */
+function Glance({ w, nextEvent, onTab }: { w: Detail['worksite']; nextEvent: Detail['worksite']['events'][number] | null; onTab: (t: 'planning' | 'tasks' | 'finances' | 'photos') => void }) {
+  const { data: tasks } = useApi<{ items: { id: string; title: string; status: string; dueOn: string | null }[] }>(`/api/worksites/${w.id}/tasks`);
+  const now = new Date();
+  const upcoming = nextEvent && new Date(nextEvent.endAt) >= now ? nextEvent : null;
+  const team = upcoming ? [...new Set(upcoming.assignments.map((a) => a.person.displayName || a.person.firstName))] : [];
+  const open = (tasks?.items ?? []).filter((t) => t.status !== 'done');
+  const late = open.filter((t) => t.dueOn && new Date(t.dueOn) < now);
+  const unpaid = w.documents.filter((d) => (d.kind === 'invoice' || d.kind === 'deposit_invoice') && ['sent', 'partial', 'overdue'].includes(d.status));
+  const unpaidHt = unpaid.reduce((sum, d) => sum + d.totalHt, 0);
+  const waiting = w.documents.filter((d) => d.kind === 'quote' && d.status === 'sent');
+  const lastReport = [...w.reports].sort((a, b) => +new Date(b.date) - +new Date(a.date))[0] ?? null;
+  return (
+    <div className="glance">
+      <button type="button" className="glance-tile" onClick={() => onTab('planning')}>
+        <div className="k">Prochaine intervention</div>
+        <div className="v">{upcoming ? formatDateBE(upcoming.startAt) : 'Rien de planifié'}</div>
+        <div className="s">{upcoming ? (team.length ? team.join(', ') : 'Équipe à désigner') : 'Voir le planning →'}</div>
+      </button>
+      <button type="button" className="glance-tile" onClick={() => onTab('tasks')}>
+        <div className="k">Tâches ouvertes</div>
+        <div className="v">{tasks ? open.length : '…'}</div>
+        <div className={`s${late.length ? ' crit' : ''}`}>{!tasks ? ' ' : late.length ? `${late.length} en retard` : open.length ? open.slice(0, 2).map((t) => t.title).join(' · ') : 'Tout est fait'}</div>
+      </button>
+      <button type="button" className="glance-tile" onClick={() => onTab('finances')}>
+        <div className="k">Factures à encaisser</div>
+        <div className="v">{unpaid.length ? `${unpaid.length} · ${eur(unpaidHt)} HT` : 'Aucune'}</div>
+        <div className="s">{waiting.length ? `${waiting.length} devis en attente de réponse` : unpaid.length ? unpaid.slice(0, 2).map((d) => d.number ?? 'brouillon').join(' · ') : 'Rien en attente'}</div>
+      </button>
+      <button type="button" className="glance-tile" onClick={() => onTab('photos')}>
+        <div className="k">Dernier rapport</div>
+        <div className="v">{lastReport ? formatDateBE(lastReport.date) : 'Aucun'}</div>
+        <div className="s">{lastReport ? [lastReport.authorName, lastReport.workDone].filter(Boolean).join(' · ') : 'Les rapports des ouvriers apparaissent ici'}</div>
+      </button>
+    </div>
+  );
+}
+
+/** Cahiers des charges du chantier (générés depuis un devis) : accès direct, ou comment en créer un. */
 function CdcCard({ worksiteId }: { worksiteId: string }) {
   const { data } = useApi<{ items: { id: string; title: string; status: string; updatedAt: string }[] }>(`/api/cdc?worksiteId=${worksiteId}`);
   if (!data) return null;

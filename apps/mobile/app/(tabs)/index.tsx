@@ -243,7 +243,7 @@ export default function Today() {
                   <Feather name="navigation" size={20} color={T.primary} /><Text style={s.roundTxt}>Itinéraire</Text>
                 </Pressable>
               )}
-              <Pressable accessibilityRole="button" accessibilityLabel="Photo" style={({ pressed }) => [s.round, pressed && { opacity: 0.8 }]} onPress={() => router.push(`/fil/${e.worksite.id}` as never)}>
+              <Pressable accessibilityRole="button" accessibilityLabel="Photo" style={({ pressed }) => [s.round, pressed && { opacity: 0.8 }]} onPress={() => router.push(`/photos/${e.worksite.id}?camera=1` as never)}>
                 <Feather name="camera" size={20} color={T.primary} /><Text style={s.roundTxt}>Photo</Text>
               </Pressable>
               <Pressable accessibilityRole="button" accessibilityLabel="Tâches" style={({ pressed }) => [s.round, pressed && { opacity: 0.8 }]} onPress={() => router.push(`/fiche/${e.worksite.id}` as never)}>
@@ -282,7 +282,7 @@ const s = StyleSheet.create({
   arriveBtn: { flexDirection: 'row', gap: 10, backgroundColor: T.gold, borderRadius: 16, paddingVertical: 17, alignItems: 'center', justifyContent: 'center', marginTop: 12 },
   arriveTxt: { color: '#241c05', fontWeight: '800', fontSize: 18 },
   tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  tile: { ...T.shadow, flexGrow: 1, flexBasis: '46%', backgroundColor: T.surface, borderWidth: 1, borderColor: T.line, borderRadius: 20, padding: 14, gap: 6 },
+  tile: { ...T.shadow, flexGrow: 1, flexBasis: 150, backgroundColor: T.surface, borderWidth: 1, borderColor: T.line, borderRadius: 20, padding: 14, gap: 6 },
   tileAlert: { backgroundColor: T.kpiWarnBg, borderColor: T.kpiWarnBorder },
   tileIc: { width: 36, height: 36, borderRadius: 11, backgroundColor: T.primarySoft, alignItems: 'center', justifyContent: 'center' },
   tileLabel: { fontSize: 12, color: T.ink2, fontWeight: '600' },

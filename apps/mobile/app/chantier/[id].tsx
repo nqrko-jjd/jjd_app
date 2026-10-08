@@ -113,6 +113,12 @@ export default function ChantierDetail() {
         <Text style={{ color: '#fff', fontWeight: '700' }}>Ouvrir le fil de chantier</Text>
       </Pressable>
 
+      <Pressable accessibilityRole="button" onPress={() => router.push(`/photos/${id}` as never)} style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: T.surface, borderWidth: 1, borderColor: T.line, borderRadius: 18, padding: 14 }, pressed && { opacity: 0.9 }]}>
+        <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: T.primarySoft, alignItems: 'center', justifyContent: 'center' }}><Feather name="camera" size={19} color={T.primary} /></View>
+        <View style={{ flex: 1 }}><Text style={{ color: T.ink, fontWeight: '800' }}>Photos du chantier</Text><Text style={{ color: T.ink2, fontSize: 12.5 }}>Prendre des photos, voir celles de l’équipe par jour</Text></View>
+        <Feather name="chevron-right" size={20} color={T.ink3} />
+      </Pressable>
+
       {(user?.role === 'admin' || user?.role === 'office') && (
         <Pressable accessibilityRole="button" onPress={() => router.push(`/suivi-mails/${id}` as never)} style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: T.surface, borderWidth: 1, borderColor: T.line, borderRadius: 18, padding: 14 }, pressed && { opacity: 0.9 }]}>
           <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: T.primarySoft, alignItems: 'center', justifyContent: 'center' }}><Feather name="mail" size={19} color={T.primary} /></View>

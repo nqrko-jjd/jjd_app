@@ -66,6 +66,9 @@ export default function EvenementDetail() {
         <Pressable accessibilityRole="button" onPress={() => router.push(`/chantier/${e.worksite.id}` as never)}>
           <Info icon="home" label="Chantier"><Text style={s.val}>{e.worksite.ref} — {e.worksite.title}</Text><Text style={s.link}>Ouvrir la fiche chantier</Text></Info>
         </Pressable>
+        <Pressable accessibilityRole="button" onPress={() => router.push(`/photos/${e.worksite.id}` as never)}>
+          <Info icon="camera" label="Photos"><Text style={s.link}>Voir et ajouter des photos du chantier</Text></Info>
+        </Pressable>
         {!!addr && (
           <Pressable accessibilityRole="button" onPress={() => Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(addr)}`)}>
             <Info icon="navigation" label="Adresse"><Text style={s.val}>{addr}</Text><Text style={s.link}>Itinéraire</Text></Info>

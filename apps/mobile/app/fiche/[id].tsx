@@ -213,6 +213,9 @@ export default function FicheDuJour() {
           <Feather name="message-circle" size={16} color={T.ink} />
           <Text style={{ color: T.ink, fontWeight: '700' }}>Fil de chantier</Text>
         </Pressable>
+        <Pressable style={{ backgroundColor: T.primarySoft, borderRadius: 10, padding: 14, alignItems: 'center', marginBottom: 10 }} onPress={() => router.push(`/photos/${id}` as never)}>
+          <Text style={{ color: T.primary, fontWeight: '700', fontSize: 15 }}>Photos du chantier</Text>
+        </Pressable>
         <Pressable style={{ backgroundColor: T.primary, borderRadius: 10, padding: 14, alignItems: 'center' }} onPress={() => router.push(`/rapport/${id}` as never)}>
           <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Faire le rapport de chantier</Text>
         </Pressable>

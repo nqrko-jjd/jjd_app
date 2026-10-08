@@ -140,7 +140,7 @@ export default function Dashboard() {
 
 const s = StyleSheet.create({
   tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  tile: { ...T.shadow, flexGrow: 1, flexBasis: '46%', backgroundColor: T.surface, borderWidth: 1, borderColor: T.line, borderRadius: 20, padding: 16, gap: 6, minHeight: 112 },
+  tile: { ...T.shadow, flexGrow: 1, flexBasis: 150, backgroundColor: T.surface, borderWidth: 1, borderColor: T.line, borderRadius: 20, padding: 16, gap: 6, minHeight: 112 },
   tileAlert: { backgroundColor: T.kpiWarnBg, borderColor: T.kpiWarnBorder },
   tileIc: { width: 38, height: 38, borderRadius: 12, backgroundColor: T.primarySoft, alignItems: 'center', justifyContent: 'center', marginBottom: 2 },
   tileLabel: { fontSize: 12.5, color: T.ink2, fontWeight: '600' },

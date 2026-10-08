@@ -1,3 +1,5 @@
+import { supplierAccounts } from '../lib/supplier-account.js';
+import { allocationSnapshot } from '../lib/bank-allocation.js';
 import { Router } from 'express';
 import { contactInput, contactPersonInput, normalizeName, round2 } from '@jjd/shared';
 import { prisma } from '../db.js';
@@ -167,6 +169,8 @@ contactsRouter.get(
       },
     });
 
+    const allocations = await allocationSnapshot();
+    const supplierAccount = (await supplierAccounts()).find(a => a.contactId === contact.id);
     let purchaseHt = 0, purchaseTtc = 0, balance = 0;
     const balanceLedger: { id: string; date: Date | null; docNumber: string | null; direction: string; ht: number; ttc: number; balance: number }[] = [];
     for (const e of ledger) {
@@ -181,20 +185,28 @@ contactsRouter.get(
         purchaseTtc += ttc;
         // solde ouvert : une facture déjà marquée payée ne pèse plus dans le compte,
         // une note de crédit reste toujours en déduction (elle n'est jamais "payée")
-        if (!isPaidStr(e.paymentStatus)) {
-          balance += ttc;
-          balanceLedger.push({ id: e.id, date: e.date, docNumber: e.docNumber, direction: e.direction, ht: e.ht ?? 0, ttc, balance: round2(balance) });
+        const paid = allocations.ledgerPaid.has(e.id) ? allocations.ledgerPaid.get(e.id)! : isPaidStr(e.paymentStatus) ? ttc : 0;
+        const remaining = round2(Math.max(0, ttc - paid));
+        if (remaining > 0.01) {
+          balance += remaining;
+          balanceLedger.push({ id: e.id, date: e.date, docNumber: e.docNumber, direction: e.direction, ht: e.ht ?? 0, ttc: remaining, balance: round2(balance) });
         }
       }
     }
 
+    for (const advance of supplierAccount?.advances ?? []) balanceLedger.push({ id: advance.id, date: advance.date, docNumber: 'Acompte disponible', direction: 'payment', ht: 0, ttc: -advance.remaining, balance: 0 });
+    balanceLedger.sort((a,b) => (a.date?.getTime() ?? 0) - (b.date?.getTime() ?? 0));
+    let runningBalance = 0;
+    for (const line of balanceLedger) { runningBalance += line.ttc; line.balance = round2(runningBalance); }
+    balance = supplierAccount?.balance ?? balance;
     const clientAcct = await clientAccount(contact.id);
     res.json({
       contact: {
         ...contact,
         clientAccount: clientAcct,
-        purchases: [...ledger].reverse().map((p) => ({ ...p, paid: isPaidStr(p.paymentStatus), hasPdf: !!p.pdfPath })),
+        purchases: [...ledger].reverse().map((p) => ({ ...p, paid: allocations.ledgerPaid.has(p.id) ? (allocations.ledgerPaid.get(p.id) ?? 0) + 0.01 >= Math.abs(p.ttc ?? p.ht) : isPaidStr(p.paymentStatus), hasPdf: !!p.pdfPath })),
         purchaseBalance: [...balanceLedger].reverse(),
+        supplierAccount,
         purchaseSummary: {
           count: ledger.length,
           ht: round2(purchaseHt),

@@ -1,3 +1,4 @@
+import { allocationSnapshot } from './bank-allocation.js';
 import { round2 } from '@jjd/shared';
 import { prisma } from '../db.js';
 import { isCreditNoteSale, isPaid } from './consolidated.js';
@@ -22,15 +23,18 @@ export function txRemaining(tx: { amount: number | null; matches: { amount: numb
 export async function clientAccount(contactId: string) {
   const ledger = await prisma.ledgerEntry.findMany({
     where: { contactId, direction: { in: ['sale', 'credit_note'] }, source: { not: 'demo' } },
-    select: { direction: true, ht: true, ttc: true, paymentStatus: true, categoryRaw: true, document: { select: { status: true, paidAmount: true, totalTtc: true } } },
+    select: { id: true, direction: true, ht: true, ttc: true, paymentStatus: true, categoryRaw: true, document: { select: { status: true, paidAmount: true, totalTtc: true } } },
   });
+  const snapshot = await allocationSnapshot();
   let invoicedTtc = 0;
   let openTtc = 0;
   for (const e of ledger) {
     const ttc = e.ttc ?? e.ht ?? 0;
     if (e.direction === 'sale') {
       invoicedTtc += ttc;
-      if (!isPaid(e.paymentStatus)) {
+      if (snapshot.ledgerPaid.has(e.id)) {
+        openTtc += Math.max(0, ttc - snapshot.ledgerPaid.get(e.id)!);
+      } else if (!isPaid(e.paymentStatus)) {
         const part = e.document && e.document.status === 'partial' ? Math.min(ttc, e.document.paidAmount) : 0; // payée partiellement : seul le reste est dû
         openTtc += ttc - part;
       }
@@ -44,7 +48,7 @@ export async function clientAccount(contactId: string) {
     select: { id: true, bookingDate: true, bank: true, amount: true, description: true, communication: true, matches: { select: { amount: true } } },
   });
   const unallocated = txs
-    .map((t) => ({ id: t.id, date: t.bookingDate, bank: t.bank, amount: t.amount ?? 0, remaining: txRemaining(t), description: t.description ?? t.communication ?? '' }))
+    .map((t) => ({ id: t.id, date: t.bookingDate, bank: t.bank, amount: t.amount ?? 0, remaining: Math.max(0, round2((t.amount ?? 0) - (snapshot.transactions.get(t.id) ?? 0))), description: t.description ?? t.communication ?? '' }))
     .filter((t) => t.remaining > 0.01);
   const unallocatedTotal = round2(unallocated.reduce((s, t) => s + t.remaining, 0));
   return {

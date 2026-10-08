@@ -40,10 +40,10 @@ test('suggestions de rapprochement : une facture déjà soldée par un autre pai
   assert.match(labels, /FSETTLED-2/, 'facture ouverte du même montant : toujours proposée');
 });
 
-test('facture simplement marquée « payée » : plus proposée non plus ; la recherche manuelle la retrouve toujours', async () => {
+test('facture marquée « payée » : masquée dans les suggestions et la recherche manuelle', async () => {
   await prisma.bankTransactionMatch.deleteMany({ where: { bankTransactionId: ids.txPaid } }); // plus aucun virement rapproché, mais statut payé
   const auto = await get(`/api/finance/bank/${ids.txNew}/suggestions`);
   assert.doesNotMatch(auto.items.map((i) => i.label).join(' | '), /FSETTLED-1/);
   const manual = await get(`/api/finance/bank/${ids.txNew}/suggestions?q=FSETTLED-1`);
-  assert.match(manual.items.map((i) => i.label).join(' | '), /FSETTLED-1/, 'la recherche manuelle montre tout');
+  assert.doesNotMatch(manual.items.map((i) => i.label).join(' | '), /FSETTLED-1/, 'la recherche manuelle exclut les factures soldées');
 });

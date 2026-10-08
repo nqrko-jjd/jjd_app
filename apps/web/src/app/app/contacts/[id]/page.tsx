@@ -40,6 +40,7 @@ interface Detail {
     contactPersons: ContactPerson[];
     purchases: Purchase[];
     purchaseBalance: BalanceLine[];
+    supplierAccount?: { openTtc: number; unallocatedTotal: number; overdue: number };
     purchaseSummary: { count: number; ht: number; ttc: number; balance: number };
     clientAccount: {
       invoicedTtc: number; openTtc: number; unallocatedTotal: number; balance: number;
@@ -367,6 +368,12 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
             />
             <Kpi ic={FileText} label="Factures" value={c.purchaseSummary.count} sub="Achats enregistrés" />
           </div>
+          {c.supplierAccount && <div className="kpis" style={{ marginBottom: '1rem' }}>
+            <Kpi ic={FileText} label="Factures restant à régler" value={<Money value={c.supplierAccount.openTtc} />} />
+            <Kpi ic={Wallet} label="Acomptes disponibles" value={<Money value={c.supplierAccount.unallocatedTotal} />} sub="Paiements à répartir sur les factures" />
+            <Kpi ic={Scale} label="Factures échues" value={<Money value={c.supplierAccount.overdue} />} warn={c.supplierAccount.overdue > 0} />
+          </div>}
+          <div className="row" style={{ marginBottom: '1rem' }}><Link className="btn" href="/app/finances/fournisseurs">Gérer les comptes fournisseurs</Link></div>
           <CollapsibleSection
             title="Historique des achats"
             summary={`${c.purchases.length} ligne${c.purchases.length > 1 ? 's' : ''}`}

@@ -24,6 +24,7 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '../db.js';
 import { round2 } from '@jjd/shared';
 import { syncLedgerEntryForDocument } from './documents.js';
+import { allocationSnapshot, freezeLegacyAllocations } from './bank-allocation.js';
 import { PAYMENT_TOLERANCE } from './payment-tolerance.js';
 
 /**
@@ -55,7 +56,8 @@ export async function recomputeDocumentPayment(documentId: string) {
     select: { amount: true, bankTransaction: { select: { amount: true, bookingDate: true } } },
   });
   // part affectée à cette facture si le virement en solde plusieurs, sinon tout le montant de la transaction
-  const paidAmount = round2(matches.reduce((s, m) => s + (m.amount ?? Math.abs(m.bankTransaction.amount ?? 0)), 0));
+  const snapshot = await allocationSnapshot();
+  const paidAmount = snapshot.docPaid.get(documentId) ?? 0;
   const bookingDates = matches.map((m) => m.bankTransaction.bookingDate).filter((d): d is Date => !!d).sort((a, b) => b.getTime() - a.getTime());
   const paidOn = bookingDates[0] ?? null;
   const status = credited ? 'credited' : matches.length === 0 ? 'sent' : paidAmount + PAYMENT_TOLERANCE >= doc.totalTtc ? 'paid' : 'partial';
@@ -376,12 +378,8 @@ export async function autoMatchAll(
   const updates: { id: string; ledgerId: string; confidence: 'strong' | 'good'; amount?: number }[] = [];
 
   // Déjà payé par écriture (somme des paiements rapprochés) et index des écritures par n° de facture.
-  const ledgerByDocument = new Map(ledgers.filter((l) => l.documentId).map((l) => [l.documentId!, l.id]));
-  const paid = new Map<string, number>();
-  for (const m of await prisma.bankTransactionMatch.findMany({ select: { ledgerEntryId: true, documentId: true, amount: true, bankTransaction: { select: { amount: true } } } })) {
-    const lid = m.ledgerEntryId ?? (m.documentId ? ledgerByDocument.get(m.documentId) : undefined);
-    if (lid) paid.set(lid, (paid.get(lid) ?? 0) + (m.amount ?? Math.abs(m.bankTransaction.amount ?? 0)));
-  }
+  const snapshot = await allocationSnapshot();
+  const paid = new Map(ledgers.map(l => [l.id, snapshot.ledgerPaid.get(l.id) ?? (l.documentId ? snapshot.docPaid.get(l.documentId) ?? 0 : 0)]));
   const byNumber = new Map<string, LedgerLite[]>();
   for (const l of ledgers) {
     const n = docNumberById.get(l.id) ?? '';
@@ -395,8 +393,10 @@ export async function autoMatchAll(
     if (isInternalMovement(tx)) continue;
     const lid = pickCitedMatch(tx, byNumber, outstanding);
     if (!lid) continue;
-    updates.push({ id: tx.id, ledgerId: lid, confidence: 'strong' });
-    paid.set(lid, (paid.get(lid) ?? 0) + Math.abs(tx.amount ?? 0));
+    const amount = round2(Math.min(Math.abs(tx.amount ?? 0), outstanding(ledgers.find(l => l.id === lid)!)));
+    if (amount <= 0.01) continue;
+    updates.push({ id: tx.id, ledgerId: lid, confidence: 'strong', amount });
+    paid.set(lid, (paid.get(lid) ?? 0) + amount);
     citedDone.add(tx.id);
   }
   // paiements groupés / partiels dont le message liste les numéros de facture (ventes), chronologique
@@ -423,7 +423,12 @@ export async function autoMatchAll(
     for (let d = -2; d <= 2; d++) pool.push(...(byAmount.get(amt + d) ?? []));
     const open = pool.filter((l) => (paid.get(l.id) ?? 0) + 0.02 < amountOf(l)); // une écriture déjà soldée par d'autres paiements n'est plus candidate
     const m = pickMatch(tx as TxLite, open);
-    if (m) { updates.push({ id: tx.id, ledgerId: m.ledgerId, confidence: m.confidence }); paid.set(m.ledgerId, (paid.get(m.ledgerId) ?? 0) + Math.abs(tx.amount ?? 0)); }
+    if (m) {
+      const amount = round2(Math.min(Math.abs(tx.amount ?? 0), outstanding(ledgers.find(l => l.id === m.ledgerId)!)));
+      if (amount <= 0.01) continue;
+      updates.push({ id: tx.id, ledgerId: m.ledgerId, confidence: m.confidence, amount });
+      paid.set(m.ledgerId, (paid.get(m.ledgerId) ?? 0) + amount);
+    }
   }
 
   // date de la transaction (pour poser paidOn sur l'écriture rapprochée)
@@ -434,30 +439,39 @@ export async function autoMatchAll(
   // livre. La marquer payée directement ici (sans passer par le Document) désynchronise
   // durablement facture et grand livre — c'est exactement le bug remonté le 2026-09-30
   // (facture restée « envoyée » malgré un rapprochement bancaire réussi).
-  const docUpdates = updates.filter((u) => documentIdByLedger.get(u.ledgerId));
-  const ledgerOnlyUpdates = updates.filter((u) => !documentIdByLedger.get(u.ledgerId));
 
-  // écriture par lots : transactions bancaires + statut « payé » des écritures non liées à une facture
+  const accepted: typeof updates = [];
+  // Revalidate each batch against concurrent manual allocations and freeze its legacy links.
   for (let i = 0; i < updates.length; i += 100) {
     const batch = updates.slice(i, i + 100);
-    await prisma.$transaction([
-      ...batch.map((u) =>
-        prisma.bankTransactionMatch.create({ data: { bankTransactionId: u.id, ledgerEntryId: u.ledgerId, amount: u.amount ?? null } }),
-      ),
-      ...batch.map((u) =>
-        prisma.bankTransaction.update({ where: { id: u.id }, data: { matchConfidence: u.confidence, matchedAt: now } }),
-      ),
-      ...ledgerOnlyUpdates
-        .filter((u) => batch.includes(u) && (paid.get(u.ledgerId) ?? 0) + 0.02 >= (ledgerTotal.get(u.ledgerId) ?? 0))
-        .map((u) =>
-          prisma.ledgerEntry.update({
-            where: { id: u.ledgerId },
-            data: { paymentStatus: 'Payé', paidOn: txDate.get(u.id) ?? now },
-          }),
-        ),
-    ]);
+    const saved = await prisma.$transaction(async db => {
+      const live = await freezeLegacyAllocations(db, batch.map(u => ({ transactionId: u.id, ledgerId: u.ledgerId })));
+      const busy = new Set(live.matches.map(m => m.bankTransactionId));
+      const invoicePaid = new Map(live.ledgerPaid);
+      const used = new Map(live.transactions);
+      const written: typeof updates = [];
+      for (const u of batch) {
+        if (busy.has(u.id)) continue;
+        const tx = await db.bankTransaction.findUnique({ where: { id: u.id } });
+        const l = await db.ledgerEntry.findUnique({ where: { id: u.ledgerId } });
+        if (!tx || !l) continue;
+        const paidAmount = invoicePaid.get(l.id) ?? (l.documentId ? live.docPaid.get(l.documentId) ?? 0 : 0);
+        const remaining = round2(Math.abs(l.ttc ?? l.ht) - paidAmount);
+        const available = round2(Math.abs(tx.amount ?? 0) - (used.get(tx.id) ?? 0));
+        const amount = u.amount ?? Math.min(remaining, available);
+        if (amount <= 0 || amount > remaining || amount > available) continue;
+        await db.bankTransactionMatch.create({ data: { bankTransactionId: u.id, ledgerEntryId: u.ledgerId, amount } });
+        await db.bankTransaction.update({ where: { id: u.id }, data: { matchConfidence: u.confidence, matchedAt: now } });
+        invoicePaid.set(l.id, paidAmount + amount); used.set(tx.id, (used.get(tx.id) ?? 0) + amount);
+        if (!documentIdByLedger.get(l.id)) await db.ledgerEntry.update({ where: { id: l.id }, data: { paymentStatus: paidAmount + amount + 0.01 >= Math.abs(l.ttc ?? l.ht) ? 'Payé' : 'Partiel', paidOn: tx.bookingDate ?? now } });
+        written.push(u);
+      }
+      return written;
+    }, { isolationLevel: 'Serializable', timeout: 30000 });
+    accepted.push(...saved);
   }
 
+  const docUpdates = accepted.filter(u => documentIdByLedger.get(u.ledgerId));
   // factures de vente : on passe par le Document puis on répercute sur le grand livre
   // (syncLedgerEntryForDocument), au lieu d'écrire directement dans LedgerEntry.
   for (const documentId of new Set(docUpdates.map((u) => documentIdByLedger.get(u.ledgerId)!))) {
@@ -471,6 +485,6 @@ export async function autoMatchAll(
     }
   }
 
-  const strong = updates.filter((u) => u.confidence === 'strong').length;
-  return { strong, good: updates.length - strong, scanned: txs.length };
+  const strong = accepted.filter((u) => u.confidence === 'strong').length;
+  return { strong, good: accepted.length - strong, scanned: txs.length };
 }

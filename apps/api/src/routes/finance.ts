@@ -14,9 +14,14 @@ import { parseScreenshots, screenshotImportAvailable } from '../lib/bank-screens
 import { toCsv, readTableBuffer, pick } from '../lib/table-io.js';
 import { parseAmount, parseLooseDate } from '@jjd/shared';
 import { syncLedgerEntryForDocument } from '../lib/documents.js';
+import { supplierAccounts } from '../lib/supplier-account.js';
+import { allocationSnapshot, freezeLegacyAllocations } from '../lib/bank-allocation.js';
 import { PAYMENT_TOLERANCE } from '../lib/payment-tolerance.js';
 
 export const financeRouter = Router();
+financeRouter.get('/suppliers', requireAuth(...OFFICE), asyncHandler(async (_req, res) => {
+  res.json({ items: await supplierAccounts() });
+}));
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 function derive(date: Date) {
@@ -276,6 +281,7 @@ financeRouter.get(
     else if (matched === '0') and.push({ matches: { none: {} } });
     if (from) and.push({ bookingDate: { gte: new Date(from) } });
     if (bank) and.push({ bank });
+    if (typeof req.query.transactionId === 'string') { and.length = 0; and.push({ id: req.query.transactionId }); }
     if (q) and.push({ OR: [{ counterpartyName: { contains: q, ...insensitive } }, { description: { contains: q, ...insensitive } }, { communication: { contains: q, ...insensitive } }] });
     const where: Record<string, unknown> = and.length ? { AND: and } : {};
 
@@ -309,8 +315,9 @@ financeRouter.get(
       prisma.bankTransaction.count(),
       prisma.bankTransaction.count({ where: { matches: { some: {} } } }),
     ]);
+    const allocations = await allocationSnapshot();
     res.json({
-      items,
+      items: items.map(t => ({ ...t, matches: t.matches.map(m => ({ ...m, amount: allocations.amounts.get(m.id) ?? 0 })) })),
       byBank: stats, matched: done, total,
       page, pageSize, totalCount: filteredCount, totalPages: Math.max(1, Math.ceil(filteredCount / pageSize)),
     });
@@ -326,7 +333,8 @@ financeRouter.patch(
   '/bank/:id',
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
-    const existing = await prisma.bankTransaction.findUnique({ where: { id: req.params.id } });
+    const updated = await prisma.$transaction(async db => {
+    const existing = await db.bankTransaction.findUnique({ where: { id: req.params.id } });
     if (!existing) throw new HttpError(404, 'Transaction introuvable');
     const b = req.body as Record<string, unknown>;
     const data: Record<string, unknown> = {};
@@ -340,6 +348,9 @@ financeRouter.patch(
     if ('amount' in b) {
       const amount = parseAmount(b.amount);
       if (amount == null) throw new HttpError(422, 'Montant invalide');
+      const allocation = await freezeLegacyAllocations(db, { transactionId: existing.id });
+      const used = allocation.transactions.get(existing.id) ?? 0;
+      if (Math.abs(amount) < used || used > 0 && Math.sign(amount) !== Math.sign(existing.amount ?? 0)) throw new HttpError(409, 'Modifiez les affectations avant de réduire ou inverser ce paiement');
       data.amount = amount;
       data.side = amount < 0 ? 'out' : 'in';
     }
@@ -347,11 +358,12 @@ financeRouter.patch(
     if ('contactId' in b) {
       if (b.contactId == null || b.contactId === '') data.contactId = null;
       else {
-        if (typeof b.contactId !== 'string' || !(await prisma.contact.findUnique({ where: { id: b.contactId }, select: { id: true } }))) throw new HttpError(422, 'Client introuvable');
+        if (typeof b.contactId !== 'string' || !(await db.contact.findUnique({ where: { id: b.contactId }, select: { id: true } }))) throw new HttpError(422, 'Contact introuvable');
         data.contactId = b.contactId;
       }
     }
-    const updated = await prisma.bankTransaction.update({ where: { id: existing.id }, data });
+    return db.bankTransaction.update({ where: { id: existing.id }, data });
+    }, { isolationLevel: 'Serializable', timeout: 30000 });
     res.json({ transaction: updated });
   }),
 );
@@ -376,40 +388,26 @@ async function splitLedgerTwins<D extends { number: string | null }>(docs: D[]) 
 /**
  * Candidates déjà soldées : une écriture du grand livre ou un Document dont les paiements bancaires déjà rapprochés
  * (à d'AUTRES transactions) couvrent le total, ou une facture marquée payée/créditée, ne se reproposent plus dans les
- * suggestions automatiques — elles n'ont plus rien à recevoir. (La recherche manuelle, elle, montre tout.)
+ * suggestions automatiques — elles n'ont plus rien à recevoir. La recherche manuelle applique les mêmes soldes.
  */
 async function alreadySettled(
-  ledgers: { id: string; ttc: number | null; ht: number }[],
-  docs: { id: string; totalTtc: number; status: string }[],
+  ledgers: { id: string; ttc: number | null; ht: number; direction: string; docNumber: string | null; contactId: string | null; paymentStatus?: string | null }[],
+  docs: { id: string; totalTtc: number; status: string; paidAmount?: number }[],
 ) {
-  const ledger = new Set<string>();
-  const doc = new Set<string>();
-  const ledgerIds = ledgers.map((l) => l.id);
-  const docIds = docs.map((d) => d.id);
-  const [lm, dm] = await Promise.all([
-    ledgerIds.length
-      ? prisma.bankTransactionMatch.findMany({ where: { ledgerEntryId: { in: ledgerIds } }, select: { ledgerEntryId: true, amount: true, bankTransaction: { select: { amount: true } } } })
-      : [],
-    docIds.length
-      ? prisma.bankTransactionMatch.findMany({
-          where: { OR: [{ documentId: { in: docIds } }, { ledgerEntry: { documentId: { in: docIds } } }] },
-          select: { documentId: true, amount: true, ledgerEntry: { select: { documentId: true } }, bankTransaction: { select: { amount: true } } },
-        })
-      : [],
-  ]);
-  const part = (m: { amount: number | null; bankTransaction: { amount: number | null } }) => Math.abs(m.amount ?? m.bankTransaction.amount ?? 0);
-  const ledgerPaid = new Map<string, number>();
-  for (const m of lm) if (m.ledgerEntryId) ledgerPaid.set(m.ledgerEntryId, (ledgerPaid.get(m.ledgerEntryId) ?? 0) + part(m));
-  for (const l of ledgers) if ((ledgerPaid.get(l.id) ?? 0) + PAYMENT_TOLERANCE >= Math.abs(l.ttc ?? l.ht) && ledgerPaid.has(l.id)) ledger.add(l.id);
-  const docPaid = new Map<string, number>();
-  for (const m of dm) {
-    const id = m.documentId ?? m.ledgerEntry?.documentId;
-    if (id) docPaid.set(id, (docPaid.get(id) ?? 0) + part(m));
+  const snapshot = await allocationSnapshot();
+  const numbers = ledgers.filter(l => l.direction === 'sale' && l.docNumber).map(l => l.docNumber!);
+  const originals = numbers.length ? await prisma.document.findMany({ where: { number: { in: numbers }, kind: { in: ['invoice', 'deposit_invoice'] } } }) : [];
+  const ledgerRemaining = new Map(ledgers.map(l => [l.id, snapshot.ledgerPaid.has(l.id) ? Math.max(0, Math.round((Math.abs(l.ttc ?? l.ht) - (snapshot.ledgerPaid.get(l.id) ?? 0)) * 100) / 100) : /^payé$/i.test(l.paymentStatus ?? '') ? 0 : Math.abs(l.ttc ?? l.ht)]));
+  for (const l of ledgers) {
+    if (l.direction !== 'sale' || snapshot.ledgerPaid.has(l.id)) continue;
+    const twins = originals.filter(d => d.number === l.docNumber && (!l.contactId || d.contactId === l.contactId));
+    if (twins.length !== 1) continue;
+    const d = twins[0]!;
+    const paid = snapshot.docPaid.get(d.id) ?? d.paidAmount;
+    ledgerRemaining.set(l.id, ['paid', 'credited', 'draft', 'declined'].includes(d.status) && !snapshot.docPaid.has(d.id) ? 0 : Math.max(0, Math.round((Math.abs(l.ttc ?? l.ht) - paid) * 100) / 100));
   }
-  for (const d of docs) {
-    if (d.status === 'paid' || d.status === 'credited' || ((docPaid.get(d.id) ?? 0) + PAYMENT_TOLERANCE >= Math.abs(d.totalTtc) && docPaid.has(d.id))) doc.add(d.id);
-  }
-  return { ledger, doc };
+  const docRemaining = new Map(docs.map(d => [d.id, ['credited', 'declined', 'draft'].includes(d.status) ? 0 : snapshot.docPaid.has(d.id) ? Math.max(0, Math.round((Math.abs(d.totalTtc) - (snapshot.docPaid.get(d.id) ?? 0)) * 100) / 100) : d.status === 'paid' ? 0 : Math.max(0, Math.abs(d.totalTtc) - (d.paidAmount ?? 0))]));
+  return { ledger: new Set([...ledgerRemaining].filter(([,a]) => a <= 0.01).map(([id]) => id)), doc: new Set([...docRemaining].filter(([,a]) => a <= 0.01).map(([id]) => id)), ledgerRemaining, docRemaining };
 }
 
 /** Suggère des écritures du grand livre à rapprocher d'une transaction. */
@@ -419,6 +417,9 @@ financeRouter.get(
   asyncHandler(async (req, res) => {
     const tx = await prisma.bankTransaction.findUnique({ where: { id: req.params.id }, include: { matches: true } });
     if (!tx) throw new HttpError(404, 'Transaction introuvable');
+    const allocations = await allocationSnapshot();
+    const remaining = Math.max(0, Math.round((Math.abs(tx.amount ?? 0) - (allocations.transactions.get(tx.id) ?? 0)) * 100) / 100);
+    if (remaining <= 0.01) return res.json({ items: [], remaining });
     const inc = { worksite: { select: { ref: true, title: true } } };
 
     // déjà rapproché à CETTE transaction — jamais reproposé (un paiement peut en couvrir
@@ -449,6 +450,7 @@ financeRouter.get(
         prisma.document.findMany({
           where: {
             id: { notIn: usedDocIds },
+            kind: { in: ['invoice', 'deposit_invoice'] },
             OR: [
               { number: { contains: q, ...insensitive } },
               { contact: { name: { contains: q, ...insensitive } } },
@@ -457,28 +459,30 @@ financeRouter.get(
             ],
           },
           take: 15, orderBy: { issuedOn: 'desc' },
-          select: { id: true, number: true, kind: true, totalTtc: true, issuedOn: true, status: true, contact: { select: { name: true } }, worksite: { select: { ref: true } } },
+          select: { id: true, number: true, kind: true, totalTtc: true, issuedOn: true, status: true, paidAmount: true, contact: { select: { name: true } }, worksite: { select: { ref: true } } },
         }),
       ]);
       const split = await splitLedgerTwins(docs);
       const known = new Set(ledgers.map((l) => l.id));
       const twinLedgers = split.twins.filter((t) => !known.has(t.id) && !usedLedgerIds.includes(t.id));
+      const settled = await alreadySettled([...ledgers, ...twinLedgers], split.docs);
       return res.json({
+        remaining,
         items: [
-          ...[...ledgers, ...twinLedgers].map((l) => ({
+          ...[...ledgers, ...twinLedgers].filter(l => !settled.ledger.has(l.id) && l.direction === ((tx.amount ?? 0) < 0 ? "purchase" : "sale")).map((l) => ({
             kind: 'ledger' as const,
             id: l.id,
             label: [l.docNumber, l.supplierName].filter(Boolean).join(' · ') || (l.direction === 'sale' ? 'Vente' : 'Achat'),
-            amount: l.ttc ?? l.ht,
+            amount: settled.ledgerRemaining.get(l.id) ?? 0,
             date: l.date,
             direction: l.direction,
             worksiteRef: l.worksite?.ref ?? l.worksiteRef ?? null,
           })),
-          ...split.docs.map((d) => ({
+          ...split.docs.filter(d => !settled.doc.has(d.id) && (tx.amount ?? 0) > 0).map((d) => ({
             kind: 'document' as const,
             id: d.id,
             label: [d.number, d.contact?.name].filter(Boolean).join(' · ') || 'Facture de vente',
-            amount: d.totalTtc,
+            amount: settled.docRemaining.get(d.id) ?? 0,
             date: d.issuedOn,
             direction: 'sale' as const,
             worksiteRef: d.worksite?.ref ?? null,
@@ -491,23 +495,7 @@ financeRouter.get(
     // déjà partiellement affecté (ex. acompte de 10 000 € réparti sur plusieurs factures) :
     // les propositions par montant visent ce qu'il reste à couvrir, pas le montant total du
     // virement — sinon plus aucune facture ne matcherait après le premier rapprochement.
-    const matchedAmounts = await Promise.all(
-      tx.matches.map(async (m) => {
-        if (m.ledgerEntryId) {
-          const l = await prisma.ledgerEntry.findUnique({ where: { id: m.ledgerEntryId }, select: { ttc: true, ht: true } });
-          return l ? (l.ttc ?? l.ht) : 0;
-        }
-        if (m.documentId) {
-          const d = await prisma.document.findUnique({ where: { id: m.documentId }, select: { totalTtc: true } });
-          return d?.totalTtc ?? 0;
-        }
-        return 0;
-      }),
-    );
-    const alreadyMatched = matchedAmounts.reduce((s, a) => s + a, 0);
-    const fullAmount = Math.abs(tx.amount ?? 0);
-    const remaining = fullAmount - alreadyMatched;
-    const amount = remaining > 0.5 ? remaining : fullAmount;
+    const amount = remaining;
 
     const window = tx.bookingDate
       ? { date: { gte: new Date(tx.bookingDate.getTime() - 20 * 86400000), lte: new Date(tx.bookingDate.getTime() + 20 * 86400000) } }
@@ -530,14 +518,14 @@ financeRouter.get(
       : {};
     const docs = await prisma.document.findMany({
       where: {
-        kind: { in: ['invoice', 'deposit_invoice', 'credit_note'] },
+        kind: { in: ['invoice', 'deposit_invoice'] },
         id: { notIn: usedDocIds },
         totalTtc: { gte: amount - 1, lte: amount + 1 },
         ...docWindow,
       },
       take: 30,
       orderBy: { issuedOn: 'desc' },
-      select: { id: true, number: true, kind: true, totalTtc: true, issuedOn: true, status: true, contact: { select: { name: true } }, worksite: { select: { ref: true } } },
+      select: { id: true, number: true, kind: true, totalTtc: true, issuedOn: true, status: true, paidAmount: true, contact: { select: { name: true } }, worksite: { select: { ref: true } } },
     });
     const autoSplit = await splitLedgerTwins(docs);
     const autoKnown = new Set(ledgerRaw.map((l) => l.id));
@@ -545,22 +533,22 @@ financeRouter.get(
     // ce qui est déjà soldé par d'autres paiements n'est plus proposé
     const settled = await alreadySettled([...ledgerRaw, ...twinsToAdd], autoSplit.docs);
     const ledgerItems = [...ledgerRaw, ...twinsToAdd]
-      .filter((l) => !settled.ledger.has(l.id))
+      .filter((l) => !settled.ledger.has(l.id) && l.direction === ((tx.amount ?? 0) < 0 ? "purchase" : "sale"))
       .slice(0, 12)
       .map((l) => ({
         kind: 'ledger' as const,
         id: l.id,
         label: [l.docNumber, l.supplierName].filter(Boolean).join(' · ') || (l.direction === 'sale' ? 'Vente' : 'Achat'),
-        amount: l.ttc ?? l.ht,
+        amount: settled.ledgerRemaining.get(l.id) ?? 0,
         date: l.date,
         direction: l.direction,
         worksiteRef: l.worksite?.ref ?? l.worksiteRef ?? null,
       }));
-    const docItems = autoSplit.docs.filter((d) => !settled.doc.has(d.id)).slice(0, 8).map((d) => ({
+    const docItems = autoSplit.docs.filter((d) => !settled.doc.has(d.id) && (tx.amount ?? 0) > 0).slice(0, 8).map((d) => ({
       kind: 'document' as const,
       id: d.id,
       label: [d.number, d.contact?.name].filter(Boolean).join(' · ') || 'Facture de vente',
-      amount: d.totalTtc,
+      amount: settled.docRemaining.get(d.id) ?? 0,
       date: d.issuedOn,
       direction: 'sale' as const,
       worksiteRef: d.worksite?.ref ?? null,
@@ -571,92 +559,84 @@ financeRouter.get(
   }),
 );
 
-/**
- * Ajoute une facture au rapprochement d'une transaction bancaire — un même paiement peut en
- * couvrir plusieurs (ex. un acompte de 10 000 € décompté ensuite sur 3 factures reçues) : appeler
- * cette route plusieurs fois pour la même transaction ajoute autant de lignes. Facture d'achat
- * (grand livre) OU facture de vente (Document) ; la cible passe « payée ».
- */
-financeRouter.post(
-  '/bank/:id/matches',
-  requireAuth(...OFFICE),
-  asyncHandler(async (req, res) => {
-    const ledgerId: string | null = req.body.ledgerId ?? null;
-    const documentId: string | null = req.body.documentId ?? null;
-    if (!ledgerId && !documentId) throw new HttpError(422, 'Choisissez une facture à rapprocher');
-    const tx = await prisma.bankTransaction.findUnique({ where: { id: req.params.id } });
+/** Add or edit a share, atomically bounded by both invoice and payment balances. */
+async function saveAllocation(txId: string, body: Record<string, unknown>, matchId?: string) {
+  return prisma.$transaction(async db => {
+    const tx = await db.bankTransaction.findUnique({ where: { id: txId } });
     if (!tx) throw new HttpError(404, 'Transaction introuvable');
-
-    const dup = await prisma.bankTransactionMatch.findFirst({
-      where: { bankTransactionId: tx.id, ledgerEntryId: ledgerId, documentId },
-    });
-    if (dup) throw new HttpError(409, 'Cette facture est déjà rapprochée de cette transaction');
-
-    await prisma.bankTransactionMatch.create({ data: { bankTransactionId: tx.id, ledgerEntryId: ledgerId, documentId } });
-    // un virement entrant rapproché à la facture d'un client lui est attribué (son compte client montrera ensuite ce qui reste sans facture)
-    if (!tx.contactId && (tx.amount ?? 0) > 0) {
-      const cid = documentId
-        ? (await prisma.document.findUnique({ where: { id: documentId }, select: { contactId: true } }))?.contactId
-        : (await prisma.ledgerEntry.findUnique({ where: { id: ledgerId! }, select: { contactId: true } }))?.contactId;
-      if (cid) await prisma.bankTransaction.update({ where: { id: tx.id }, data: { contactId: cid } });
+    const previous = matchId ? await db.bankTransactionMatch.findFirst({ where: { id: matchId, bankTransactionId: txId } }) : null;
+    if (matchId && !previous) throw new HttpError(404, 'Rapprochement introuvable');
+    const ledgerId = previous?.ledgerEntryId ?? (typeof body.ledgerId === 'string' ? body.ledgerId : null);
+    const documentId = previous?.documentId ?? (typeof body.documentId === 'string' ? body.documentId : null);
+    if (!!ledgerId === !!documentId) throw new HttpError(422, 'Choisissez une seule facture');
+    const ledger = ledgerId ? await db.ledgerEntry.findUnique({ where: { id: ledgerId } }) : null;
+    const doc = documentId ? await db.document.findUnique({ where: { id: documentId } }) : null;
+    if (!ledger && !doc) throw new HttpError(404, 'Facture introuvable');
+    if (doc && (!['invoice', 'deposit_invoice'].includes(doc.kind) || ['draft', 'credited', 'declined'].includes(doc.status))) throw new HttpError(422, 'Cette facture ne peut pas recevoir de paiement');
+    if (ledger && !['purchase', 'sale'].includes(ledger.direction)) throw new HttpError(422, 'Choisissez une facture d’achat ou de vente');
+    if ((tx.amount ?? 0) === 0 || ((tx.amount ?? 0) < 0) !== (ledger?.direction === 'purchase')) throw new HttpError(422, 'Le sens du paiement ne correspond pas à la facture');
+    let canonicalDocId = documentId ?? ledger?.documentId;
+    if (!canonicalDocId && ledger?.direction === 'sale' && ledger.docNumber) {
+      const twins = await db.document.findMany({ where: { number: ledger.docNumber, kind: { in: ['invoice', 'deposit_invoice'] }, ...(ledger.contactId ? { contactId: ledger.contactId } : {}) }, select: { id: true } });
+      if (twins.length === 1) canonicalDocId = twins[0]!.id;
     }
-
-    if (ledgerId) {
-      // Une écriture de vente synchronisée depuis une facture (LedgerEntry.documentId non nul,
-      // voir syncLedgerEntryForDocument) : la FACTURE est la source de vérité — on recalcule son
-      // paiement (somme des transactions réellement rapprochées, jamais "payé" d'office), sinon
-      // un 2e/3e versement partiel sur la même facture écrase silencieusement les précédents et
-      // la facture reste invisible depuis le rapprochement bancaire (hasBankMatch à false).
-      // (ou le Document de même numéro quand l'écriture est une facture historique non liée)
-      const docId = await documentIdForLedger(ledgerId);
-      if (docId) await recomputeDocumentPayment(docId);
-      const after = await prisma.ledgerEntry.findUnique({ where: { id: ledgerId }, select: { documentId: true } });
-      if (!after?.documentId) {
-        await prisma.ledgerEntry.update({
-          where: { id: ledgerId },
-          data: { paymentStatus: 'Payé', paidOn: tx.bookingDate ?? new Date() },
-        });
+    const original = doc ?? (canonicalDocId ? await db.document.findUnique({ where: { id: canonicalDocId } }) : null);
+    if (original && ['draft', 'credited', 'declined'].includes(original.status)) throw new HttpError(422, 'Cette facture ne peut pas recevoir de paiement');
+    const snapshot = await freezeLegacyAllocations(db, { transactionId: txId, ledgerId, documentId: canonicalDocId });
+    if (!previous && snapshot.matches.some(m => m.bankTransactionId === txId && (ledgerId && m.ledgerEntryId === ledgerId || canonicalDocId && snapshot.invoiceKeys.get(m.id) === `document:${canonicalDocId}`))) throw new HttpError(409, 'Cette facture est déjà liée à ce paiement : modifiez son montant');
+    const oldAmount = previous ? snapshot.amounts.get(previous.id) ?? 0 : 0;
+    const total = Math.abs(doc?.totalTtc ?? ledger?.ttc ?? ledger?.ht ?? 0);
+    const paid = documentId ? snapshot.docPaid.get(documentId) ?? 0 : snapshot.ledgerPaid.get(ledgerId!) ?? (canonicalDocId ? snapshot.docPaid.get(canonicalDocId) ?? 0 : 0);
+    const hasMatches = documentId ? snapshot.docPaid.has(documentId) : snapshot.ledgerPaid.has(ledgerId!) || !!canonicalDocId && snapshot.docPaid.has(canonicalDocId);
+    const markedPaid = original?.status === 'paid' || /^payé$/i.test(ledger?.paymentStatus ?? '');
+    const invoiceRemaining = Math.max(0, Math.round((total - (hasMatches ? paid : markedPaid ? total : 0) + oldAmount) * 100) / 100);
+    const txRemaining = Math.max(0, Math.round((Math.abs(tx.amount ?? 0) - (snapshot.transactions.get(txId) ?? 0) + oldAmount) * 100) / 100);
+    const requested = body.amount === undefined ? Math.min(invoiceRemaining, txRemaining) : parseAmount(body.amount);
+    if (requested == null || !Number.isFinite(requested) || requested <= 0) throw new HttpError(422, 'Saisissez un montant positif');
+    const amount = Math.round(requested * 100) / 100;
+    if (amount <= 0 || amount > invoiceRemaining || amount > txRemaining) throw new HttpError(409, 'Montant supérieur au solde de la facture ou du paiement');
+    if (previous) await db.bankTransactionMatch.update({ where: { id: previous.id }, data: { amount } });
+    else await db.bankTransactionMatch.create({ data: { bankTransactionId: txId, ledgerEntryId: ledgerId, documentId, amount } });
+    const contactId = ledger?.contactId ?? doc?.contactId;
+    await db.bankTransaction.update({ where: { id: txId }, data: { matchConfidence: 'manual', matchedAt: new Date(), ...(!tx.contactId && contactId ? { contactId } : {}) } });
+    if (ledger && !ledger.documentId) await db.ledgerEntry.update({ where: { id: ledger.id }, data: { paymentStatus: paid - oldAmount + amount + 0.01 >= total ? 'Payé' : 'Partiel', paidOn: tx.bookingDate ?? new Date() } });
+    return { ledgerId, documentId, amount };
+  }, { isolationLevel: 'Serializable', timeout: 30000 });
+}
+async function refreshAllocationDocument(ledgerId: string | null, documentId: string | null) {
+  const id = documentId ?? (ledgerId ? await documentIdForLedger(ledgerId) : null);
+  if (id) await recomputeDocumentPayment(id);
+}
+financeRouter.post('/bank/:id/matches', requireAuth(...OFFICE), asyncHandler(async (req, res) => {
+  const saved = await saveAllocation(req.params.id!, req.body);
+  await refreshAllocationDocument(saved.ledgerId, saved.documentId);
+  res.status(201).json({ ok: true, amount: saved.amount });
+}));
+financeRouter.patch('/bank/:id/matches/:matchId', requireAuth(...OFFICE), asyncHandler(async (req, res) => {
+  const saved = await saveAllocation(req.params.id!, req.body, req.params.matchId);
+  await refreshAllocationDocument(saved.ledgerId, saved.documentId);
+  res.json({ ok: true, amount: saved.amount });
+}));
+financeRouter.delete('/bank/:id/matches/:matchId', requireAuth(...OFFICE), asyncHandler(async (req, res) => {
+  const m = await prisma.$transaction(async db => {
+    await freezeLegacyAllocations(db, { transactionId: req.params.id! });
+    const found = await db.bankTransactionMatch.findFirst({ where: { id: req.params.matchId, bankTransactionId: req.params.id } });
+    if (!found) throw new HttpError(404, 'Rapprochement introuvable');
+    await db.bankTransactionMatch.delete({ where: { id: found.id } });
+    const snapshot = await allocationSnapshot(db);
+    if (found.ledgerEntryId) {
+      const l = await db.ledgerEntry.findUnique({ where: { id: found.ledgerEntryId } });
+      if (l && !l.documentId) {
+        const paid = snapshot.ledgerPaid.get(l.id) ?? 0;
+        await db.ledgerEntry.update({ where: { id: l.id }, data: { paymentStatus: paid === 0 ? 'Non payé' : paid + 0.01 >= Math.abs(l.ttc ?? l.ht) ? 'Payé' : 'Partiel', paidOn: paid > 0 ? l.paidOn : null } });
       }
     }
-    if (documentId) {
-      await recomputeDocumentPayment(documentId);
-    }
-
-    await prisma.bankTransaction.update({ where: { id: tx.id }, data: { matchConfidence: 'manual', matchedAt: new Date() } });
-    res.status(201).json({ ok: true });
-  }),
-);
-
-/** Retire une facture du rapprochement d'une transaction (elle repasse « non payée », ou
- *  « partiel » s'il reste d'autres transactions rapprochées sur la même facture). */
-financeRouter.delete(
-  '/bank/:id/matches/:matchId',
-  requireAuth(...OFFICE),
-  asyncHandler(async (req, res) => {
-    const m = await prisma.bankTransactionMatch.findFirst({ where: { id: req.params.matchId, bankTransactionId: req.params.id } });
-    if (!m) throw new HttpError(404, 'Rapprochement introuvable');
-    const ledgerDocumentId = m.ledgerEntryId ? await documentIdForLedger(m.ledgerEntryId) : null;
-    await prisma.bankTransactionMatch.delete({ where: { id: m.id } });
-
-    if (m.ledgerEntryId) {
-      if (ledgerDocumentId) {
-        await recomputeDocumentPayment(ledgerDocumentId);
-      }
-      if (!(m.ledgerEntryId && (await prisma.ledgerEntry.findUnique({ where: { id: m.ledgerEntryId }, select: { documentId: true } }))?.documentId)) {
-        await prisma.ledgerEntry.update({ where: { id: m.ledgerEntryId }, data: { paymentStatus: 'Non payé', paidOn: null } }).catch(() => {});
-      }
-    }
-    if (m.documentId) {
-      await recomputeDocumentPayment(m.documentId);
-    }
-
-    const remaining = await prisma.bankTransactionMatch.count({ where: { bankTransactionId: req.params.id } });
-    if (remaining === 0) {
-      await prisma.bankTransaction.update({ where: { id: req.params.id }, data: { matchConfidence: null, matchedAt: null } });
-    }
-    res.json({ ok: true });
-  }),
-);
+    if (!await db.bankTransactionMatch.count({ where: { bankTransactionId: req.params.id } })) await db.bankTransaction.update({ where: { id: req.params.id }, data: { matchConfidence: null, matchedAt: null } });
+    return found;
+  }, { isolationLevel: 'Serializable', timeout: 30000 });
+  await refreshAllocationDocument(m.ledgerEntryId, m.documentId);
+  res.json({ ok: true });
+}));
 
 /** Renomme en masse le libellé « banque/carte » (ex. faute de frappe au moment de l'import). */
 financeRouter.post(

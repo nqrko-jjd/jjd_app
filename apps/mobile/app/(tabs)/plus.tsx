@@ -32,6 +32,7 @@ const GROUPS:{title:string;links:LinkItem[]}[]=[
   {href:'/boite-ia',label:'Boîte IA',description:'Les mails qui demandent une action',ic:'inbox',roles:OFFICE},
   {href:'/pipeline',label:'Opportunités',description:'Les demandes à suivre',ic:'trending-up',roles:OFFICE},
   {href:'/documents',label:'Devis & factures',description:'Documents et paiements',ic:'file-text',roles:OFFICE},
+  {href:'/depense/nouvelle',label:'Nouvelle dépense',description:'Photographier un ticket ou saisir une dépense',ic:'camera',roles:TEAM},
   {href:'/achats',label:'Achats & dépenses',description:'Justificatifs et coûts',ic:'shopping-bag',roles:OFFICE},
   {href:'/decomptes',label:'Décomptes du mois',description:'Les journées à contrôler',ic:'credit-card',roles:TEAM},
   {href:'/analyse',label:'Analyse',description:'Facturé, encaissé, marges et devis',ic:'bar-chart-2',roles:OFFICE},

@@ -15,6 +15,7 @@ import { insensitive } from '../lib/search.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, OFFICE, FIELD_OFFICE } from '../lib/auth.js';
 import { storeFile, UPLOADS_DIR } from '../lib/media.js';
+import { readReceipt } from '../lib/ai-receipt.js';
 import { nameOverlap } from '../lib/bank-match.js';
 import { extractDocumentInfo, suggestExpenseCategory } from '../lib/document-extract.js';
 import { toCsv, readTableBuffer, pick } from '../lib/table-io.js';
@@ -541,6 +542,12 @@ expensesRouter.post(
   upload.single('file'),
   asyncHandler(async (req, res) => {
     if (!req.file) throw new HttpError(422, 'Aucun fichier');
+    // photo d'un ticket : lecture par l'IA (direction), sinon saisie à la main
+    if (/^image\/(jpe?g|png|webp)$/.test(req.file.mimetype)) {
+      const r = await readReceipt(req.user!, { mediaType: req.file.mimetype === 'image/jpg' ? 'image/jpeg' : (req.file.mimetype as 'image/jpeg' | 'image/png' | 'image/webp'), data: req.file.buffer.toString('base64') });
+      if (!r.ok) return res.json({ extraction: null, suggestedCategory: null, note: r.reason });
+      return res.json({ extraction: r.extraction, suggestedCategory: r.suggestedCategory, ai: true });
+    }
     const extraction = await extractDocumentInfo(req.file.buffer, req.file.mimetype, ['supplier', 'both']);
     const isPdf = req.file.mimetype === 'application/pdf';
     const suggestedCategory = isPdf ? await suggestExpenseCategory(req.file.buffer, extraction.contactId) : null;

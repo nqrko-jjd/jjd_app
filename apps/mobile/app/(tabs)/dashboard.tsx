@@ -65,6 +65,7 @@ export default function Dashboard() {
     { icon: 'trending-up', label: 'Demandes', value: leads ? `${leads} nouvelle${leads > 1 ? 's' : ''}` : 'Aucune nouvelle', to: '/pipeline', alert: leads > 0 },
     { icon: 'flag', label: 'Impayés', value: data.kpis.overdueCount ? eur(data.kpis.overdueAmount) : 'Aucun', to: '/documents', alert: data.kpis.overdueCount > 0 },
     { icon: 'home', label: 'Chantiers', value: `${data.kpis.openWorksites} en cours`, to: '/chantiers?status=in_progress' },
+    { icon: 'camera', label: 'Nouvelle dépense', value: 'Scanner un ticket', to: '/depense/nouvelle' },
     { icon: 'file-text', label: 'Devis & factures', value: 'Voir la liste', to: '/documents' },
   ];
 

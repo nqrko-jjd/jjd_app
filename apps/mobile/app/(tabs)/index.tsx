@@ -198,6 +198,13 @@ export default function Today() {
           );
         })()}
         {user?.role === 'foreman' && (
+          <Pressable accessibilityRole="button" accessibilityLabel="Nouvelle dépense" onPress={() => router.push('/depense/nouvelle' as never)} style={({ pressed }) => [s.tile, pressed && { transform: [{ scale: 0.97 }] }]}>
+            <View style={s.tileIc}><Feather name="camera" size={18} color={T.primary} /></View>
+            <Text style={s.tileLabel}>Nouvelle dépense</Text>
+            <Text style={s.tileValue}>Scanner un ticket</Text>
+          </Pressable>
+        )}
+        {user?.role === 'foreman' && (
           <Pressable accessibilityRole="button" accessibilityLabel="Mon équipe" onPress={() => router.push('/planning' as never)} style={({ pressed }) => [s.tile, pressed && { transform: [{ scale: 0.97 }] }]}>
             <View style={s.tileIc}><Feather name="users" size={18} color={T.primary} /></View>
             <Text style={s.tileLabel}>Mon équipe aujourd’hui</Text>

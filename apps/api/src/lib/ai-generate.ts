@@ -23,7 +23,9 @@ export function extractJson(text: string): unknown {
   return JSON.parse(t.slice(a, b + 1));
 }
 
-export async function aiGenerateJson<T>(user: AuthUser, o: { system: string; prompt: string; schema: ZodType<T, ZodTypeDef, unknown>; maxOutput: number }): Promise<AiResult<T>> {
+export interface AiImage { mediaType: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif'; data: string }
+
+export async function aiGenerateJson<T>(user: AuthUser, o: { system: string; prompt: string; schema: ZodType<T, ZodTypeDef, unknown>; maxOutput: number; image?: AiImage }): Promise<AiResult<T>> {
   if (!env.anthropicApiKey) return { ok: false, reason: 'L’IA n’est pas configurée sur le serveur.' };
   if (!isDirection(user)) return { ok: false, reason: 'La génération par l’IA est réservée à la direction pour le moment.' };
   if (!ready(await configuration())) return { ok: false, reason: 'L’IA est en attente d’activation : les budgets sont à confirmer dans les réglages.' };
@@ -42,7 +44,10 @@ export async function aiGenerateJson<T>(user: AuthUser, o: { system: string; pro
   let done = false;
   const close = async (reply?: string) => { if (!done) { done = true; await finish(user, id, reply).catch(() => undefined); } };
   try {
-    const request = { model: pricing.model, system: o.system, messages: [{ role: 'user' as const, content: o.prompt }] };
+    const content: Anthropic.MessageParam['content'] = o.image
+      ? [{ type: 'image', source: { type: 'base64', media_type: o.image.mediaType, data: o.image.data } }, { type: 'text', text: o.prompt }]
+      : o.prompt;
+    const request = { model: pricing.model, system: o.system, messages: [{ role: 'user' as const, content }] };
     const counted = await client.messages.countTokens(request);
     if (counted.input_tokens > MAX_INPUT_TOKENS) { await close(); return { ok: false, reason: 'Ce devis est trop volumineux pour la génération par l’IA.' }; }
     await reserve(user, id, Math.max(1, cost(pricing, Math.ceil(counted.input_tokens * 1.2) + 256, o.maxOutput)));

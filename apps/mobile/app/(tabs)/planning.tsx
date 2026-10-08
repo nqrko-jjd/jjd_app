@@ -28,6 +28,7 @@ const KIND = {
 } as const;
 const kindOf = (e: { kind?: string }) => (e.kind === 'meeting' ? KIND.meeting : KIND.intervention);
 
+const dayStr = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const startOfDay = (d: Date) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
 const addDays = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
 const mondayOf = (d: Date) => addDays(startOfDay(d), -((d.getDay() + 6) % 7));
@@ -89,7 +90,9 @@ export default function Planning() {
     else if (view === 'equipe' || view === 'chantiers') setAnchor(addDays(anchor, dir));
     else setAnchor(addDays(anchor, dir * 7));
   }
-  const open = (e: Ev) => router.push((mine ? `/fiche/${e.worksite.id}` : `/chantier/${e.worksite.id}`) as never);
+  // le bureau et les chefs ouvrent la fiche de l'intervention (modifier, dupliquer, confirmer…) ; l'ouvrier ouvre la fiche chantier
+  const open = (e: Ev) => router.push((mine ? `/fiche/${e.worksite.id}` : `/evenement/${e.id}`) as never);
+  const newEvent = () => router.push(`/evenement/edition?date=${dayStr(anchor)}` as never);
 
   const title = view === 'mois'
     ? `${MONTHS[anchor.getMonth()]} ${anchor.getFullYear()}`
@@ -108,7 +111,10 @@ export default function Planning() {
       <View style={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 4, gap: 10 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <Text style={s.title}>{mine ? 'Mon planning' : 'Planning'}</Text>
-          <Pressable accessibilityRole="button" onPress={() => setAnchor(today)} style={s.todayBtn}><Text style={s.todayTxt}>Aujourd’hui</Text></Pressable>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <Pressable accessibilityRole="button" onPress={() => setAnchor(today)} style={s.todayBtn}><Text style={s.todayTxt}>Aujourd’hui</Text></Pressable>
+            {staff && <Pressable accessibilityRole="button" accessibilityLabel="Nouveau" onPress={newEvent} style={s.plus}><Feather name="plus" size={22} color="#fff" /></Pressable>}
+          </View>
         </View>
         <View style={s.seg}>
           {views.map(([k, label]) => (
@@ -154,6 +160,7 @@ export default function Planning() {
           <>
             <Text style={s.dayHeading}>{DAY_LONG[(anchor.getDay() + 6) % 7]} {anchor.toLocaleDateString('fr-BE', { day: '2-digit', month: 'long' })}</Text>
             {dayEvents.length === 0 && <EmptyState title="Journée disponible" description="Aucune affectation pour ce jour." icon="calendar" />}
+            {staff && dayEvents.length === 0 && <Pressable accessibilityRole="button" onPress={newEvent} style={s.addEmpty}><Feather name="plus" size={18} color="#fff" /><Text style={{ color: '#fff', fontWeight: '800' }}>Ajouter une intervention ou un rendez-vous</Text></Pressable>}
             {dayEvents.map((e) => <EventCard key={e.id} e={e} onPress={() => open(e)} />)}
           </>
         )}
@@ -314,6 +321,7 @@ const s = StyleSheet.create({
   evCard: { borderRadius: 18, borderWidth: 1, borderColor: T.line, borderLeftWidth: 6, padding: 14, gap: 4 },
   kindTag: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
   title: { fontSize: 28, fontWeight: '800', color: T.ink },
+  plus: { width: 44, height: 40, borderRadius: 999, backgroundColor: T.primary, alignItems: 'center', justifyContent: 'center' },
   todayBtn: { borderWidth: 1, borderColor: T.line, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8, backgroundColor: T.surface },
   todayTxt: { color: T.primary, fontWeight: '700', fontSize: 13 },
   seg: { flexDirection: 'row', backgroundColor: T.surface2, borderRadius: 14, padding: 3 },
@@ -332,6 +340,7 @@ const s = StyleSheet.create({
   dayHeading: { fontSize: 13, fontWeight: '700', color: T.ink2, textTransform: 'uppercase', letterSpacing: 0.4 },
   ref: { fontSize: 15, lineHeight: 23, fontWeight: '700', color: T.ink, flex: 1 },
   time: { color: T.ink2, fontSize: 12, fontWeight: '600' },
+  addEmpty: { flexDirection: 'row', gap: 8, backgroundColor: T.primary, borderRadius: 16, paddingVertical: 15, alignItems: 'center', justifyContent: 'center' },
   weekHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 6 },
   weekCount: { fontSize: 12, color: T.ink2, fontWeight: '600' },
   monthHead: { flex: 1, textAlign: 'center', fontSize: 11, fontWeight: '700', color: T.ink3, textTransform: 'uppercase' },

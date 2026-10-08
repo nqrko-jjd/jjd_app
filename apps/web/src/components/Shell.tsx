@@ -176,13 +176,13 @@ export function Shell({ children, navigationPaths }: { children: React.ReactNode
       <nav id="app-navigation" aria-label="Navigation principale" className={`sidebar${open ? ' open' : ''}`}>
         <button className="nav-close" aria-label="Fermer le menu" onClick={() => setOpen(false)}><X size={20} /></button>
         <div className="brand"><span className="mark"><img src="/brand/icon-white.png" alt="" /></span><span className="lbl">JJD Consult</span></div>
-        <div className="org-card">
+        <Link className="org-card" href={bureau ? '/app/parametres' : '/app'} onClick={() => setOpen(false)} aria-label={bureau ? 'Ouvrir la fiche société JJD Consult SRL' : 'Revenir à l’accueil JJD Consult'}>
           <span className="mark"><img src="/brand/icon-white.png" alt="" /></span>
           <div>
             <div className="org-name">JJD Consult SRL</div>
             <div className="org-role">{user ? (ROLE_LABEL[user.role] ?? user.role) : '—'}</div>
           </div>
-        </div>
+        </Link>
         <label className="nav-search">
           <Search size={16} aria-hidden="true" />
           <input aria-label="Rechercher une page" placeholder="Rechercher une page…" value={navQuery} onChange={event => setNavQuery(event.target.value)} />

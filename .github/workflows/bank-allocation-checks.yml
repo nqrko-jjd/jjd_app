@@ -13,6 +13,9 @@ on:
       - 'apps/web/src/app/app/finances/**'
       - 'apps/web/src/app/app/contacts/**'
       - 'apps/web/src/components/BankClientAssign.tsx'
+      - 'apps/web/src/components/Shell.tsx'
+      - 'apps/web/src/app/app/page.tsx'
+      - 'apps/web/src/app/globals.css'
       - '.github/workflows/bank-allocation-checks.yml'
 permissions:
   contents: read

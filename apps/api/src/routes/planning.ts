@@ -47,7 +47,7 @@ const brusselsDay = (d: Date) => new Intl.DateTimeFormat('sv-SE', { timeZone: 'E
  * ne forment qu'UNE fiche Google (voir syncGroup) ; les rendez-vous et les fiches importées de Google gardent la leur.
  * Renvoie l'id de la fiche Google qui représente ce créneau.
  */
-async function syncToGoogle(eventId: string): Promise<string | null> {
+export async function syncToGoogle(eventId: string): Promise<string | null> {
   const head = await prisma.planningEvent.findUnique({ where: { id: eventId }, select: { worksiteId: true, startAt: true, kind: true, source: true } });
   if (!head) return null;
   if (head.kind !== 'intervention' || head.source) return syncSingle(eventId);

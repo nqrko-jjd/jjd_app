@@ -69,6 +69,7 @@ function DocumentsInner() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(100);
   const [importing, setImporting] = useState(false);
+  const [pendingImport, setPendingImport] = useState<File | null>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
   const active = TABS.find((t) => t.key === tab)!;
 
@@ -147,10 +148,11 @@ function DocumentsInner() {
     }
   }
 
-  async function importFile(file: File) {
+  async function importFile(file: File, kind: string) {
     setImporting(true);
     try {
       const fd = new FormData();
+      fd.append('kind', kind);
       fd.append('file', file);
       const r = await apiUpload<{
         document: { id: string };
@@ -224,7 +226,7 @@ function DocumentsInner() {
               type="file"
               accept="application/pdf"
               hidden
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) importFile(f); e.target.value = ''; }}
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) setPendingImport(f); e.target.value = ''; }}
             />
             <button className="btn" disabled={importing} onClick={() => importInputRef.current?.click()} title="Importer un PDF externe — client, chantier et montant pré-remplis quand c’est possible">
               {importing ? 'Import…' : '⬆ Importer un PDF'}
@@ -234,6 +236,24 @@ function DocumentsInner() {
           </div>
         }
       />
+
+      {pendingImport && (
+        <div className="modal-scrim" onClick={() => setPendingImport(null)}>
+          <div className="modal" style={{ maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <h2>Que veux-tu importer ?</h2>
+              <button type="button" className="btn ghost" onClick={() => setPendingImport(null)} aria-label="Fermer">✕</button>
+            </div>
+            <div style={{ padding: '1rem', display: 'grid', gap: '0.6rem' }}>
+              <div className="muted" style={{ fontSize: '0.85rem', overflowWrap: 'anywhere' }}>{pendingImport.name}</div>
+              {([['quote', 'Un devis'], ['invoice', 'Une facture'], ['deposit_invoice', 'Une facture d’acompte'], ['credit_note', 'Une note de crédit']] as const).map(([k, label]) => (
+                <button key={k} type="button" className="btn" onClick={() => { const f = pendingImport; setPendingImport(null); importFile(f, k); }}>{label}</button>
+              ))}
+              <button type="button" className="btn ghost" onClick={() => { const f = pendingImport; setPendingImport(null); importFile(f, ''); }}>Laisser l’appli deviner</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {dashboardLabels[dashboard] && <div className="worksite-context-banner"><span><strong>{dashboardLabels[dashboard]}</strong>{dashboard === 'collected' && <small style={{display:'block'}}>Définition actuelle : factures émises ce mois et marquées payées, hors encaissements partiels.</small>}</span><Link href="/app" className="btn ghost">Retour au dashboard</Link><Link href={`/app/documents?kind=${active.kind || 'invoice'}`} className="btn ghost">Retirer le filtre</Link></div>}
       {worksiteId && <div className="worksite-context-banner"><span>Documents filtrés pour ce chantier</span><Link href={`/app/chantiers/${encodeURIComponent(worksiteId)}`} className="btn ghost">Retour au chantier</Link><Link href="/app/documents" className="btn ghost">Tous les documents</Link></div>}

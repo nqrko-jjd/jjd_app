@@ -43,6 +43,7 @@ export default function Today() {
   const [queued, setQueued] = useState(0);
   const [weekHours, setWeekHours] = useState<number | null>(null);
   const [unread, setUnread] = useState(0);
+  const [toValidate, setToValidate] = useState<{ plan: number; hours: number; reports: number } | null>(null);
   const [tick, setTick] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -69,10 +70,23 @@ export default function Today() {
       ]);
       if (mine.status === 'fulfilled') setWeekHours(mine.value.items.filter((e) => e.status !== 'rejected').reduce((t, e) => t + (e.hours ?? 0), 0));
       if (un.status === 'fulfilled') setUnread(un.value.internal);
+      if (user?.role === 'foreman') {
+        const key = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+        const [pl, hr, rp] = await Promise.allSettled([
+          apiGet<{ items: { state: string }[] }>(`/api/timesheet/planned?date=${key}`),
+          apiGet<{ items: unknown[] }>('/api/timesheet/pending'),
+          apiGet<{ items: { reviewStatus: string | null }[] }>('/api/reports/review-queue'),
+        ]);
+        setToValidate({
+          plan: pl.status === 'fulfilled' ? pl.value.items.filter((p) => p.state === 'open').length : 0,
+          hours: hr.status === 'fulfilled' ? hr.value.items.length : 0,
+          reports: rp.status === 'fulfilled' ? rp.value.items.filter((r) => !r.reviewStatus).length : 0,
+        });
+      }
     } catch {
       /* hors ligne : on garde l'état courant */
     }
-  }, [person]);
+  }, [person, user?.role]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
   useEffect(() => {
@@ -172,6 +186,24 @@ export default function Today() {
       ))}
 
       <View style={s.tiles}>
+        {user?.role === 'foreman' && toValidate && (() => {
+          const n = toValidate.plan + toValidate.hours + toValidate.reports;
+          return (
+            <Pressable accessibilityRole="button" accessibilityLabel="À valider" onPress={() => router.push('/valider' as never)} style={({ pressed }) => [s.tile, n > 0 && s.tileAlert, pressed && { transform: [{ scale: 0.97 }] }]}>
+              <View style={[s.tileIc, n > 0 && { backgroundColor: T.kpiWarnIconBg }]}><Feather name="check-square" size={18} color={n > 0 ? T.kpiWarnFg : T.primary} /></View>
+              <Text style={[s.tileLabel, n > 0 && { color: T.kpiWarnFg }]}>À valider</Text>
+              <Text style={[s.tileValue, n > 0 && { color: T.kpiWarnFg }]}>{n > 0 ? `${n} à traiter` : 'Tout est validé'}</Text>
+              {n > 0 && <Text style={{ fontSize: 11.5, color: T.kpiWarnFg }}>{[toValidate.plan && `${toValidate.plan} d’après le planning`, toValidate.hours && `${toValidate.hours} heures`, toValidate.reports && `${toValidate.reports} rapport${toValidate.reports > 1 ? 's' : ''}`].filter(Boolean).join(' · ')}</Text>}
+            </Pressable>
+          );
+        })()}
+        {user?.role === 'foreman' && (
+          <Pressable accessibilityRole="button" accessibilityLabel="Mon équipe" onPress={() => router.push('/planning' as never)} style={({ pressed }) => [s.tile, pressed && { transform: [{ scale: 0.97 }] }]}>
+            <View style={s.tileIc}><Feather name="users" size={18} color={T.primary} /></View>
+            <Text style={s.tileLabel}>Mon équipe aujourd’hui</Text>
+            <Text style={s.tileValue}>{new Set(events.flatMap((e) => (e as unknown as { assignments?: { person: { id: string } }[] }).assignments?.map((a) => a.person.id) ?? [])).size} personnes</Text>
+          </Pressable>
+        )}
         <Pressable accessibilityRole="button" accessibilityLabel="Mes heures" onPress={() => router.push('/heures' as never)} style={({ pressed }) => [s.tile, pressed && { transform: [{ scale: 0.97 }] }]}>
           <View style={s.tileIc}><Feather name="clock" size={18} color={T.primary} /></View>
           <Text style={s.tileLabel}>Mes heures · semaine</Text>
@@ -242,8 +274,8 @@ const s = StyleSheet.create({
   stopBtn: { backgroundColor: T.crit, borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginTop: 8 },
   arriveBtn: { flexDirection: 'row', gap: 10, backgroundColor: T.gold, borderRadius: 16, paddingVertical: 17, alignItems: 'center', justifyContent: 'center', marginTop: 12 },
   arriveTxt: { color: '#241c05', fontWeight: '800', fontSize: 18 },
-  tiles: { flexDirection: 'row', gap: 10 },
-  tile: { ...T.shadow, flex: 1, backgroundColor: T.surface, borderWidth: 1, borderColor: T.line, borderRadius: 20, padding: 14, gap: 6 },
+  tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  tile: { ...T.shadow, flexGrow: 1, flexBasis: '46%', backgroundColor: T.surface, borderWidth: 1, borderColor: T.line, borderRadius: 20, padding: 14, gap: 6 },
   tileAlert: { backgroundColor: T.kpiWarnBg, borderColor: T.kpiWarnBorder },
   tileIc: { width: 36, height: 36, borderRadius: 11, backgroundColor: T.primarySoft, alignItems: 'center', justifyContent: 'center' },
   tileLabel: { fontSize: 12, color: T.ink2, fontWeight: '600' },

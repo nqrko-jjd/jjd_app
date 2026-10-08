@@ -256,14 +256,48 @@ function AppointmentForm({ s, opts, busy, onSubmit }: { s: Suggestion; opts: WsP
 function NoteForm({ s, opts, busy, onSubmit }: { s: Suggestion; opts: WsPickerOption[]; busy: boolean; onSubmit: (b: Record<string, unknown>) => void }) {
   const [worksiteId, setWorksiteId] = useState(s.worksite?.id ?? '');
   const [body, setBody] = useState(s.summary ?? '');
+  const [mode, setMode] = useState<'note' | 'intervention'>('note');
+  const tomorrow = new Date(Date.now() + 86400000);
+  const [iv, setIv] = useState({ title: s.summary ?? 'Intervention', date: toDatetimeLocal(tomorrow.toISOString()).slice(0, 10), start: '08:30', end: '17:00', alsoNote: true });
+  const validIv = !!iv.date && !!iv.start && !!iv.end && iv.end > iv.start && !!iv.title.trim();
   return (
     <div className="grid" style={{ gap: '0.6rem' }}>
+      <div className="row" style={{ gap: '0.4rem' }}>
+        <button type="button" className={`btn ${mode === 'note' ? 'primary' : ''}`} onClick={() => setMode('note')}>Poster une note</button>
+        <button type="button" className={`btn ${mode === 'intervention' ? 'primary' : ''}`} onClick={() => setMode('intervention')}>Créer une intervention</button>
+      </div>
       <div className="field"><label>Chantier</label><WorksitePicker value={worksiteId} onChange={setWorksiteId} options={opts} /></div>
-      <div className="field"><label>Note (postée dans le fil interne du chantier)</label><textarea className="input" rows={3} value={body} onChange={(e) => setBody(e.target.value)} /></div>
-      <button className="btn primary" disabled={busy || !worksiteId || !body.trim()} onClick={() => onSubmit({ worksiteId, body })}>
-        {busy ? 'Envoi…' : 'Poster dans le fil du chantier'}
-      </button>
-      {!worksiteId && <p className="muted" style={{ fontSize: '0.78rem' }}>Choisis le chantier concerné pour activer l’envoi.</p>}
+      {mode === 'note' ? (
+        <>
+          <div className="field"><label>Note (postée dans le fil interne du chantier)</label><textarea className="input" rows={3} value={body} onChange={(e) => setBody(e.target.value)} /></div>
+          <button className="btn primary" disabled={busy || !worksiteId || !body.trim()} onClick={() => onSubmit({ worksiteId, body })}>
+            {busy ? 'Envoi…' : 'Poster dans le fil du chantier'}
+          </button>
+        </>
+      ) : (
+        <>
+          <p className="muted" style={{ fontSize: '0.8rem' }}>
+            Valider ajoute cette intervention au planning du chantier, statut <strong>« à confirmer »</strong> : à toi de désigner l’équipe et de la confirmer ensuite dans Planning.
+          </p>
+          <div className="field"><label>Titre</label><input className="input" value={iv.title} onChange={(e) => setIv({ ...iv, title: e.target.value })} /></div>
+          <div className="row" style={{ gap: '0.6rem' }}>
+            <div className="field" style={{ flex: 1 }}><label>Date</label><input className="input" type="date" value={iv.date} onChange={(e) => setIv({ ...iv, date: e.target.value })} /></div>
+            <div className="field" style={{ flex: 1 }}><label>De</label><input className="input" type="time" value={iv.start} onChange={(e) => setIv({ ...iv, start: e.target.value })} /></div>
+            <div className="field" style={{ flex: 1 }}><label>À</label><input className="input" type="time" value={iv.end} onChange={(e) => setIv({ ...iv, end: e.target.value })} /></div>
+          </div>
+          <div className="field"><label>Mission (reprise du mail, modifiable)</label><textarea className="input" rows={3} value={body} onChange={(e) => setBody(e.target.value)} /></div>
+          <label className="row" style={{ gap: '0.4rem' }}>
+            <input type="checkbox" checked={iv.alsoNote} onChange={(e) => setIv({ ...iv, alsoNote: e.target.checked })} /> Poster aussi la note dans le fil du chantier
+          </label>
+          <button className="btn primary" disabled={busy || !worksiteId || !validIv} onClick={() => onSubmit({
+            worksiteId, asIntervention: true, title: iv.title, body, alsoNote: iv.alsoNote,
+            startAt: new Date(`${iv.date}T${iv.start}:00`).toISOString(), endAt: new Date(`${iv.date}T${iv.end}:00`).toISOString(),
+          })}>
+            {busy ? 'Création…' : 'Ajouter au planning (à confirmer)'}
+          </button>
+        </>
+      )}
+      {!worksiteId && <p className="muted" style={{ fontSize: '0.78rem' }}>Choisis le chantier concerné pour activer la création.</p>}
       {s.worksite && <Link href={`/app/chantiers/${s.worksite.id}`} className="hint">Ouvrir le chantier pressenti →</Link>}
     </div>
   );

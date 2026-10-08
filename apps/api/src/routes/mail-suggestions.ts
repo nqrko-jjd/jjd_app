@@ -8,6 +8,8 @@ import { Router } from 'express';
 import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, OFFICE } from '../lib/auth.js';
+import { refreshWorksiteStatus } from '../lib/worksite-status.js';
+import { guessWorksiteFromText } from '../lib/worksite-guess.js';
 import { MAIL_SUGGESTION_KINDS, type MailExtraction, fetchMailSource, fetchMailAttachment } from '../lib/lead-mailbox.js';
 
 export const mailSuggestionsRouter = Router();
@@ -20,12 +22,19 @@ mailSuggestionsRouter.get(
     const where: Record<string, unknown> = { kind: { not: null } };
     where.status = status && status !== 'all' ? status : 'pending';
     if (kind && (MAIL_SUGGESTION_KINDS as readonly string[]).includes(kind)) where.kind = kind;
-    const items = await prisma.mailSuggestion.findMany({
-      where,
-      orderBy: { receivedAt: 'desc' },
-      take: 300,
-      include: { worksite: { select: { id: true, ref: true, title: true } } },
-    });
+    const include = { worksite: { select: { id: true, ref: true, title: true } } };
+    let items = await prisma.mailSuggestion.findMany({ where, orderBy: { receivedAt: 'desc' }, take: 300, include });
+    // suggestions en attente sans chantier : on tente de le retrouver (sujet, résumé, nom cité) ; jamais imposé, corrigeable à la validation
+    const missing = items.filter((s) => s.status === 'pending' && !s.worksiteId);
+    if (missing.length) {
+      let found = 0;
+      for (const s of missing) {
+        const hint = (s.extracted as { companyOrWorksiteHint?: string | null } | null)?.companyOrWorksiteHint;
+        const worksiteId = await guessWorksiteFromText([s.subject, s.summary, hint]);
+        if (worksiteId) { await prisma.mailSuggestion.update({ where: { id: s.id }, data: { worksiteId } }); found++; }
+      }
+      if (found) items = await prisma.mailSuggestion.findMany({ where, orderBy: { receivedAt: 'desc' }, take: 300, include });
+    }
     res.json({ items });
   }),
 );
@@ -151,8 +160,29 @@ mailSuggestionsRouter.post(
       if (!worksiteId) throw new HttpError(422, 'Choisis le chantier concerné par cette note.');
       const ws = await prisma.worksite.findUnique({ where: { id: worksiteId }, select: { id: true } });
       if (!ws) throw new HttpError(422, 'Chantier introuvable.');
+      const text = (typeof b.body === 'string' && b.body.trim() ? b.body.trim() : s.summary ?? '').slice(0, 4000);
+      if (b.asIntervention === true) {
+        // l'information du mail devient une intervention au planning du chantier, « à confirmer » (rien n'est garanti tant qu'on ne l'a pas confirmée)
+        const startAt = new Date(typeof b.startAt === 'string' ? b.startAt : NaN);
+        const endAt = new Date(typeof b.endAt === 'string' ? b.endAt : NaN);
+        if (Number.isNaN(startAt.getTime()) || Number.isNaN(endAt.getTime()) || endAt <= startAt) throw new HttpError(422, 'Date et horaire de l’intervention invalides.');
+        const ev = await prisma.planningEvent.create({
+          data: {
+            worksiteId, startAt, endAt, status: 'tentative', kind: 'intervention',
+            title: (typeof b.title === 'string' && b.title.trim() ? b.title.trim() : (s.summary ?? 'Intervention')).slice(0, 120),
+            tasksNote: text ? `${text}\n(proposé depuis un mail de ${s.fromAddress ?? '—'} — à confirmer)` : null,
+            createdById: req.user!.id,
+          },
+        });
+        await refreshWorksiteStatus(worksiteId, 'event');
+        resultRef = ev.id;
+        if (b.alsoNote !== true) {
+          const updatedEv = await prisma.mailSuggestion.update({ where: { id: s.id }, data: { status: 'applied', resultRef, worksiteId } });
+          return res.json({ suggestion: updatedEv, resultRef });
+        }
+      }
       const thread = await prisma.thread.upsert({ where: { worksiteId }, create: { worksiteId }, update: {} });
-      const body = (typeof b.body === 'string' && b.body.trim() ? b.body.trim() : s.summary ?? '').slice(0, 4000);
+      const body = text;
       if (!body) throw new HttpError(422, 'Note vide.');
       const u = await prisma.user.findUnique({ where: { id: req.user!.id }, include: { person: true } });
       const authorName = u?.person?.displayName || u?.person?.firstName || u?.email || 'JJD App';
@@ -162,7 +192,7 @@ mailSuggestionsRouter.post(
           body: `📧 ${body}\n(depuis un mail — ${s.fromAddress}, sujet : ${s.subject})`,
         },
       });
-      resultRef = msg.id;
+      resultRef = b.asIntervention === true ? resultRef : msg.id;
     }
     // payment_reminder / other : pas de cible de création dédiée — valider = "pris en compte"
 

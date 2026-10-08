@@ -19,6 +19,7 @@ import { simpleParser, type Attachment } from 'mailparser';
 import { env } from '../env.js';
 import { prisma } from '../db.js';
 import { insensitive } from './search.js';
+import { guessWorksiteFromText } from './worksite-guess.js';
 
 export function mailSuggestionsConfigured(): boolean {
   const m = env.leadsMailbox;
@@ -246,7 +247,7 @@ export async function syncMailSuggestions(sinceDays = 3): Promise<SyncStats> {
           const extraction = body.trim() || attachment ? await extractSuggestion(subject, from, body, attachment) : null;
 
           if (extraction?.isActionable && extraction.kind) {
-            const worksiteId = await guessWorksiteId(extraction.companyOrWorksiteHint);
+            const worksiteId = (await guessWorksiteFromText([subject, extraction.summary, extraction.companyOrWorksiteHint])) ?? (await guessWorksiteId(extraction.companyOrWorksiteHint));
             await prisma.mailSuggestion.create({
               data: {
                 messageId, subject, fromAddress: from, receivedAt: parsed.date ?? null,

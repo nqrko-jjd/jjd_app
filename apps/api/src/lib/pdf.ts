@@ -94,7 +94,6 @@ export async function buildHtml(d: PdfDoc, co: Company): Promise<string> {
     d.kind === 'quote' && d.validUntil ? `<div class="date-line"><span>Valable jusqu’au</span><strong>${formatDateBE(d.validUntil)}</strong></div>` : '',
     d.dueOn ? `<div class="date-line"><span>Date d’échéance</span><strong>${formatDateBE(d.dueOn)}</strong></div>` : '',
     d.worksite ? `<div class="date-line"><span>Chantier</span><strong>${esc(d.worksite.ref)}</strong></div>` : '',
-    d.customerRef ? `<div class="date-line"><span>Réf. client</span><strong>${esc(d.customerRef)}</strong></div>` : '',
   ].join('');
 
   const isInvoiceLike = d.kind === 'invoice' || d.kind === 'deposit_invoice';
@@ -141,6 +140,7 @@ export async function buildHtml(d: PdfDoc, co: Company): Promise<string> {
         </div>
       </section>
       ${d.title ? `<div class="object">${esc(d.title)}</div>` : ''}
+      ${d.customerRef ? `<div class="client-ref">Réf. client : <strong>${esc(d.customerRef)}</strong></div>` : ''}
       ${d.intro ? `<p class="intro">${esc(d.intro)}</p>` : ''}
       <table class="lines">
         <thead><tr>
@@ -222,6 +222,8 @@ const CSS = `
   .bill-to { background: #f5f5ef; border-radius: 10px; padding: 12px 14px; }
 
   .object { font-weight: 700; font-size: 13px; margin: 4px 0 8px; color: #26372f; }
+  .client-ref { font-size: 11px; margin: -4px 0 8px; color: #55655d; }
+  .client-ref strong { color: #26372f; }
   .intro { margin: 0 0 12px; color: #55606e; }
 
   table.lines { width: 100%; border-collapse: collapse; margin-top: 6px; }

@@ -70,7 +70,6 @@ export default function PrintDocument({ params }: { params: Promise<{ id: string
               {d.kind === 'quote' && d.validUntil && <div className="date-line"><span>Valable jusqu’au</span><strong>{formatDateBE(d.validUntil)}</strong></div>}
               {d.dueOn && <div className="date-line"><span>Date d’échéance</span><strong>{formatDateBE(d.dueOn)}</strong></div>}
               {d.worksite && <div className="date-line"><span>Chantier</span><strong>{d.worksite.ref}</strong></div>}
-              {d.customerRef && <div className="date-line"><span>Réf. client</span><strong>{d.customerRef}</strong></div>}
             </div>
           </div>
         </header>
@@ -94,6 +93,7 @@ export default function PrintDocument({ params }: { params: Promise<{ id: string
         </section>
 
         {d.title && <div className="object">{d.title}</div>}
+        {d.customerRef && <div className="client-ref">Réf. client : <strong>{d.customerRef}</strong></div>}
         {d.intro && <p className="intro">{d.intro}</p>}
 
         <table className="lines">
@@ -217,6 +217,8 @@ const CSS = `
   .bill-to { background: #f5f5ef; border-radius: 10px; padding: 12px 14px; }
 
   .object { font-weight: 700; font-size: 13px; margin: 4px 0 8px; color: #26372f; }
+  .client-ref { font-size: 11px; margin: -4px 0 8px; color: #55655d; }
+  .client-ref strong { color: #26372f; }
   .intro { margin: 0 0 12px; color: #55606e; }
 
   table.lines { width: 100%; border-collapse: collapse; margin-top: 6px; }

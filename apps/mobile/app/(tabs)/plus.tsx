@@ -27,6 +27,7 @@ const GROUPS:{title:string;links:LinkItem[]}[]=[
   {href:'/documents',label:'Devis & factures',description:'Documents et paiements',ic:'file-text',roles:OFFICE},
   {href:'/achats',label:'Achats & dépenses',description:'Justificatifs et coûts',ic:'shopping-bag',roles:OFFICE},
   {href:'/decomptes',label:'Décomptes du mois',description:'Les journées à contrôler',ic:'credit-card',roles:TEAM},
+  {href:'/analyse',label:'Analyse',description:'Facturé, encaissé, marges et devis',ic:'bar-chart-2',roles:OFFICE},
   {href:'/controle',label:'File de contrôle',description:'Les informations à vérifier',ic:'flag',roles:OFFICE},
  ]},
 ];

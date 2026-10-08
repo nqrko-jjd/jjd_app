@@ -6,14 +6,10 @@ import { useApi } from '@/lib/use-api';
 import { api, apiBlobUrl } from '@/lib/api';
 import { PageHead, formatDateBE } from '@/lib/ui';
 import { WorksitePicker, type WsPickerOption } from '@/components/WorksitePicker';
+import { NewWorksiteWizard } from '@/components/NewWorksiteWizard';
+import { MailReader, openAttachment, type ReaderAttachment } from '@/components/MailReader';
 import { INTERVENTION_PROBLEM_TYPES, INTERVENTION_PROBLEM_TYPE_LABEL } from '@jjd/shared';
-import { Mail, Sparkles, Paperclip } from 'lucide-react';
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} o`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} Ko`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
-}
+import { Mail, Sparkles, Plus } from 'lucide-react';
 
 type Kind = 'lead' | 'appointment' | 'worksite_note' | 'payment_reminder' | 'other';
 
@@ -27,7 +23,9 @@ interface Suggestion {
   summary: string | null; status: string; extracted: Extracted | null;
   worksite: { id: string; ref: string; title: string } | null;
 }
-type Picker = { worksites: { id: string; name: string; city?: string | null }[] };
+type Picker = { worksites: { id: string; name: string; city?: string | null }[]; people?: { id: string; name: string; role?: string }[] };
+/** Ouvre l'assistant de création de chantier (valeurs reprises du mail) ; `done` reçoit l'id du chantier créé. */
+type NewWorksite = (s: Suggestion, done: (id: string) => void) => void;
 
 const KIND_LABEL: Record<Kind, string> = {
   lead: 'Nouvelle demande', appointment: 'Rendez-vous', worksite_note: 'Note chantier',
@@ -53,7 +51,9 @@ export default function BoiteIaPage() {
   const qs = new URLSearchParams({ status });
   if (kind) qs.set('kind', kind);
   const { data, loading, reload } = useApi<{ items: Suggestion[] }>(`/api/mail-suggestions?${qs}`);
-  const { data: pick } = useApi<Picker>('/api/meta/pickers');
+  const { data: pick, reload: reloadPick } = useApi<Picker>('/api/meta/pickers');
+  const [wizard, setWizard] = useState<{ s: Suggestion; done: (id: string) => void } | null>(null);
+  const openWizard: NewWorksite = (sg, done) => setWizard({ s: sg, done });
   const worksiteOpts: WsPickerOption[] = (pick?.worksites ?? []).map(wsToPicker);
   const [openId, setOpenId] = useState<string | null>(null);
   const [sourceOpenId, setSourceOpenId] = useState<string | null>(null);
@@ -139,54 +139,55 @@ export default function BoiteIaPage() {
             {openId === s.id && (
               <div style={{ marginTop: '0.8rem', paddingTop: '0.8rem', borderTop: '1px solid var(--line)' }}>
                 {s.kind === 'lead' && <LeadForm s={s} busy={busy === s.id} onSubmit={(b) => apply(s, b)} />}
-                {s.kind === 'appointment' && <AppointmentForm s={s} opts={worksiteOpts} busy={busy === s.id} onSubmit={(b) => apply(s, b)} />}
-                {s.kind === 'worksite_note' && <NoteForm s={s} opts={worksiteOpts} busy={busy === s.id} onSubmit={(b) => apply(s, b)} />}
+                {s.kind === 'appointment' && <AppointmentForm s={s} opts={worksiteOpts} newWorksite={openWizard} busy={busy === s.id} onSubmit={(b) => apply(s, b)} />}
+                {s.kind === 'worksite_note' && <NoteForm s={s} opts={worksiteOpts} newWorksite={openWizard} busy={busy === s.id} onSubmit={(b) => apply(s, b)} />}
                 {(s.kind === 'payment_reminder' || s.kind === 'other') && <PlainForm busy={busy === s.id} onSubmit={(b) => apply(s, b)} />}
               </div>
             )}
           </div>
         ))}
       </div>
+
+      {wizard && (
+        <NewWorksiteWizard
+          people={pick?.people ?? []}
+          prefill={{ title: (wizard.s.summary ?? wizard.s.subject ?? '').replace(/^(re|tr|fwd?)\s*:\s*/i, '').slice(0, 120), description: [wizard.s.summary, wizard.s.subject ? `Mail : ${wizard.s.subject}` : null, wizard.s.fromAddress ? `De : ${wizard.s.fromAddress}` : null].filter(Boolean).join('\n') }}
+          onClose={() => setWizard(null)}
+          onCreated={(w) => { const cb = wizard.done; setWizard(null); reloadPick(); if (w) cb(w.id); }}
+        />
+      )}
     </>
   );
 }
 
 function MailSource({ id }: { id: string }) {
   const { data, loading, error } = useApi<{
-    subject: string; from: string; receivedAt: string | null; text: string;
+    subject: string; from: string; to: string; receivedAt: string | null; text: string; html: string | null;
     attachments: { index: number; filename: string; contentType: string; size: number }[];
   }>(`/api/mail-suggestions/${id}/source`);
-  const [openErr, setOpenErr] = useState<string | null>(null);
-
-  async function openAttachment(index: number) {
-    setOpenErr(null);
-    try {
-      const url = await apiBlobUrl(`/api/mail-suggestions/${id}/attachment/${index}`);
-      window.open(url, '_blank', 'noopener');
-    } catch (e) {
-      setOpenErr((e as Error).message);
-    }
-  }
-
+  if (loading) return <p className="muted" style={{ marginTop: '0.7rem' }}>Chargement du mail…</p>;
+  if (error || !data) return <p className="state error" style={{ marginTop: '0.7rem' }}>{error ?? 'Mail introuvable'}</p>;
+  const attachments: ReaderAttachment[] = data.attachments.map((a) => ({
+    name: a.filename, size: a.size, type: a.contentType,
+    onOpen: () => openAttachment(`/api/mail-suggestions/${id}/attachment/${a.index}`, a.filename, a.contentType),
+  }));
   return (
-    <div style={{ marginTop: '0.7rem', padding: '0.7rem 0.9rem', background: 'var(--surface-2)', borderRadius: 8, fontSize: '0.84rem' }}>
-      {loading && 'Chargement du mail…'}
-      {error && <span className="state error">{error}</span>}
-      {data && (
-        <>
-          <div className="muted" style={{ marginBottom: '0.5rem' }}>{data.from} · {formatDateBE(data.receivedAt)} · {data.subject}</div>
-          <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', maxHeight: 320, overflowY: 'auto', margin: 0 }}>{data.text}</pre>
-          {data.attachments.length > 0 && (
-            <div className="row" style={{ gap: '0.4rem', flexWrap: 'wrap', marginTop: '0.6rem', paddingTop: '0.6rem', borderTop: '1px solid var(--line)' }}>
-              {data.attachments.map((a) => (
-                <button key={a.index} type="button" className="btn ghost" style={{ fontSize: '0.78rem' }} onClick={() => openAttachment(a.index)}>
-                  <Paperclip size={13} style={{ marginRight: 4 }} />{a.filename} <span className="muted">({formatSize(a.size)})</span>
-                </button>
-              ))}
-            </div>
-          )}
-          {openErr && <p className="state error" style={{ marginTop: '0.4rem' }}>{openErr}</p>}
-        </>
+    <div style={{ marginTop: '0.8rem' }}>
+      <MailReader subject={data.subject} from={data.from} to={data.to} date={data.receivedAt} html={data.html} text={data.text} attachments={attachments} />
+    </div>
+  );
+}
+
+function WorksiteChoice({ s, value, onChange, opts, newWorksite }: { s: Suggestion; value: string; onChange: (id: string) => void; opts: WsPickerOption[]; newWorksite: NewWorksite }) {
+  return (
+    <div className="field">
+      <label>Chantier</label>
+      <WorksitePicker value={value} onChange={onChange} options={opts} />
+      {!value && (
+        <div className="row" style={{ gap: '0.6rem', marginTop: '0.4rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          <span className="muted" style={{ fontSize: '0.82rem' }}>Aucun chantier ne correspond ?</span>
+          <button type="button" className="btn" onClick={() => newWorksite(s, onChange)}><Plus size={14} style={{ marginRight: 4 }} />Créer un nouveau chantier</button>
+        </div>
       )}
     </div>
   );
@@ -223,7 +224,7 @@ function LeadForm({ s, busy, onSubmit }: { s: Suggestion; busy: boolean; onSubmi
   );
 }
 
-function AppointmentForm({ s, opts, busy, onSubmit }: { s: Suggestion; opts: WsPickerOption[]; busy: boolean; onSubmit: (b: Record<string, unknown>) => void }) {
+function AppointmentForm({ s, opts, newWorksite, busy, onSubmit }: { s: Suggestion; opts: WsPickerOption[]; newWorksite: NewWorksite; busy: boolean; onSubmit: (b: Record<string, unknown>) => void }) {
   const [worksiteId, setWorksiteId] = useState(s.worksite?.id ?? '');
   const [v, setV] = useState({
     title: s.summary ?? 'Rendez-vous', startAt: toDatetimeLocal(s.extracted?.proposedDate ?? null), durationMin: 60, note: s.extracted?.proposedLocation ?? '',
@@ -233,7 +234,7 @@ function AppointmentForm({ s, opts, busy, onSubmit }: { s: Suggestion; opts: WsP
       <p className="muted" style={{ fontSize: '0.8rem' }}>
         Valider ajoute ce rendez-vous au planning du chantier, statut <strong>« à confirmer »</strong> — comme un créneau proposé mais pas encore garanti, à toi de le confirmer ensuite dans Planning.
       </p>
-      <div className="field"><label>Chantier</label><WorksitePicker value={worksiteId} onChange={setWorksiteId} options={opts} /></div>
+      <WorksiteChoice s={s} value={worksiteId} onChange={setWorksiteId} opts={opts} newWorksite={newWorksite} />
       <div className="field"><label>Titre</label><input className="input" value={v.title} onChange={(e) => setV({ ...v, title: e.target.value })} /></div>
       <div className="row" style={{ gap: '0.6rem' }}>
         <div className="field" style={{ flex: 1 }}><label>Date et heure</label><input className="input" type="datetime-local" value={v.startAt} onChange={(e) => setV({ ...v, startAt: e.target.value })} /></div>
@@ -253,12 +254,12 @@ function AppointmentForm({ s, opts, busy, onSubmit }: { s: Suggestion; opts: WsP
   );
 }
 
-function NoteForm({ s, opts, busy, onSubmit }: { s: Suggestion; opts: WsPickerOption[]; busy: boolean; onSubmit: (b: Record<string, unknown>) => void }) {
+function NoteForm({ s, opts, newWorksite, busy, onSubmit }: { s: Suggestion; opts: WsPickerOption[]; newWorksite: NewWorksite; busy: boolean; onSubmit: (b: Record<string, unknown>) => void }) {
   const [worksiteId, setWorksiteId] = useState(s.worksite?.id ?? '');
   const [body, setBody] = useState(s.summary ?? '');
   const [mode, setMode] = useState<'note' | 'intervention'>('note');
   const tomorrow = new Date(Date.now() + 86400000);
-  const [iv, setIv] = useState({ title: s.summary ?? 'Intervention', date: toDatetimeLocal(tomorrow.toISOString()).slice(0, 10), start: '08:30', end: '17:00', alsoNote: true });
+  const [iv, setIv] = useState({ title: s.summary ?? 'Intervention', date: toDatetimeLocal(tomorrow.toISOString()).slice(0, 10), start: '08:30', end: '17:00' });
   const validIv = !!iv.date && !!iv.start && !!iv.end && iv.end > iv.start && !!iv.title.trim();
   return (
     <div className="grid" style={{ gap: '0.6rem' }}>
@@ -266,12 +267,13 @@ function NoteForm({ s, opts, busy, onSubmit }: { s: Suggestion; opts: WsPickerOp
         <button type="button" className={`btn ${mode === 'note' ? 'primary' : ''}`} onClick={() => setMode('note')}>Poster une note</button>
         <button type="button" className={`btn ${mode === 'intervention' ? 'primary' : ''}`} onClick={() => setMode('intervention')}>Créer une intervention</button>
       </div>
-      <div className="field"><label>Chantier</label><WorksitePicker value={worksiteId} onChange={setWorksiteId} options={opts} /></div>
+      <WorksiteChoice s={s} value={worksiteId} onChange={setWorksiteId} opts={opts} newWorksite={newWorksite} />
       {mode === 'note' ? (
         <>
-          <div className="field"><label>Note (postée dans le fil interne du chantier)</label><textarea className="input" rows={3} value={body} onChange={(e) => setBody(e.target.value)} /></div>
+          <div className="field"><label>Note de suivi</label><textarea className="input" rows={3} value={body} onChange={(e) => setBody(e.target.value)} /></div>
+          <p className="muted" style={{ fontSize: '0.8rem', margin: 0 }}>Le mail (avec ses pièces jointes) et cette note sont classés dans l’onglet <strong>« Suivi mails »</strong> du chantier. Le bureau seul les voit : ni le fil de discussion, ni les équipes.</p>
           <button className="btn primary" disabled={busy || !worksiteId || !body.trim()} onClick={() => onSubmit({ worksiteId, body })}>
-            {busy ? 'Envoi…' : 'Poster dans le fil du chantier'}
+            {busy ? 'Enregistrement…' : 'Ajouter au suivi du chantier'}
           </button>
         </>
       ) : (
@@ -286,11 +288,9 @@ function NoteForm({ s, opts, busy, onSubmit }: { s: Suggestion; opts: WsPickerOp
             <div className="field" style={{ flex: 1 }}><label>À</label><input className="input" type="time" value={iv.end} onChange={(e) => setIv({ ...iv, end: e.target.value })} /></div>
           </div>
           <div className="field"><label>Mission (reprise du mail, modifiable)</label><textarea className="input" rows={3} value={body} onChange={(e) => setBody(e.target.value)} /></div>
-          <label className="row" style={{ gap: '0.4rem' }}>
-            <input type="checkbox" checked={iv.alsoNote} onChange={(e) => setIv({ ...iv, alsoNote: e.target.checked })} /> Poster aussi la note dans le fil du chantier
-          </label>
+          <p className="muted" style={{ fontSize: '0.8rem', margin: 0 }}>Le mail et la mission sont aussi classés dans l’onglet « Suivi mails » du chantier (bureau uniquement).</p>
           <button className="btn primary" disabled={busy || !worksiteId || !validIv} onClick={() => onSubmit({
-            worksiteId, asIntervention: true, title: iv.title, body, alsoNote: iv.alsoNote,
+            worksiteId, asIntervention: true, title: iv.title, body,
             startAt: new Date(`${iv.date}T${iv.start}:00`).toISOString(), endAt: new Date(`${iv.date}T${iv.end}:00`).toISOString(),
           })}>
             {busy ? 'Création…' : 'Ajouter au planning (à confirmer)'}

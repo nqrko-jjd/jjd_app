@@ -20,6 +20,7 @@ import { env } from '../env.js';
 import { prisma } from '../db.js';
 import { insensitive } from './search.js';
 import { guessWorksiteFromText } from './worksite-guess.js';
+import { inlineCidImages, mailPlainText, sanitizeMailHtml } from './mail-render.js';
 
 export function mailSuggestionsConfigured(): boolean {
   const m = env.leadsMailbox;
@@ -184,8 +185,11 @@ async function fetchParsedMessage(messageId: string) {
   }
 }
 
+/** Le mail complet (boîte IMAP, lecture seule) — pour en garder une copie lisible dans le suivi d'un chantier. */
+export const fetchParsedMail = (messageId: string) => fetchParsedMessage(messageId);
+
 export async function fetchMailSource(messageId: string): Promise<{
-  subject: string; from: string; receivedAt: Date | null; text: string;
+  subject: string; from: string; to: string; receivedAt: Date | null; text: string; html: string | null;
   attachments: { index: number; filename: string; contentType: string; size: number }[];
 } | null> {
   const parsed = await fetchParsedMessage(messageId);
@@ -193,8 +197,12 @@ export async function fetchMailSource(messageId: string): Promise<{
   return {
     subject: parsed.subject ?? '',
     from: parsed.from?.text ?? '',
+    to: parsed.to ? (Array.isArray(parsed.to) ? parsed.to.map((t) => t.text).join(', ') : parsed.to.text) : '',
     receivedAt: parsed.date ?? null,
-    text: (parsed.text || parsed.html || '').toString(),
+    text: mailPlainText(parsed.text, typeof parsed.html === 'string' ? parsed.html : ''),
+    html: typeof parsed.html === 'string' && parsed.html
+      ? sanitizeMailHtml(inlineCidImages(parsed.html, (parsed.attachments ?? []).filter((a) => a.contentId).map((a) => ({ cid: a.contentId!, contentType: a.contentType, content: a.content }))))
+      : null,
     attachments: (parsed.attachments ?? []).map((a, index) => ({
       index, filename: a.filename ?? `pièce-jointe-${index + 1}`, contentType: a.contentType, size: a.size,
     })),

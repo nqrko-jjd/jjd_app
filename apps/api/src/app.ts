@@ -17,6 +17,7 @@ import { planningRouter, teamsRouter, vehiclesRouter, equipmentRouter, consumabl
 import { timesheetRouter, statementsRouter } from './routes/timesheet.js';
 import { threadRouter } from './routes/thread.js';
 import { worksiteFilesRouter } from './routes/worksite-files.js';
+import { worksiteMailsRouter } from './routes/worksite-mails.js';
 import { messagerieRouter } from './routes/messagerie.js';
 import { portalRouter } from './routes/portal.js';
 import { financeRouter } from './routes/finance.js';
@@ -48,6 +49,7 @@ export function createApp() {
   app.use(attachUser);
 
   app.get('/health', (_req, res) => res.json({ ok: true, service: 'jjd-api' }));
+  app.use('/uploads/_private', (_req, res) => res.status(404).end()); // copies de mails et pièces jointes : seulement par les routes authentifiées
   app.use('/uploads', express.static(UPLOADS_DIR, { maxAge: '7d' }));
 
   app.use('/api/auth', authRouter);
@@ -55,6 +57,7 @@ export function createApp() {
   app.use('/api/portal', portalRouter);
   app.use('/api/worksites/:worksiteId/thread', threadRouter);
   app.use('/api/worksites/:worksiteId/files', worksiteFilesRouter);
+  app.use('/api/worksites/:worksiteId/mails', worksiteMailsRouter);
   app.use('/api/messagerie', messagerieRouter);
   app.use('/api/push', pushRouter);
   app.use('/api/worksites/:worksiteId/reports', worksiteReportsRouter);

@@ -62,15 +62,18 @@ function newContact(): WizContact {
 export function NewWorksiteWizard({
   people,
   initialBuilding,
+  prefill,
   onClose,
   onCreated,
 }: {
   people: { id: string; name: string; role?: string }[];
   initialBuilding?: { id: string; name: string; address?: string | null; postalCode?: string | null; city?: string | null };
+  /** Valeurs de départ (ex. depuis un mail de la Boîte IA). */
+  prefill?: { title?: string; description?: string };
   onClose: () => void;
-  onCreated: () => void;
+  onCreated: (worksite?: { id: string; ref: string; title: string }) => void;
 }) {
-  const [v, setV] = useState<WizState>(() => initialBuilding ? { ...EMPTY, buildingId: initialBuilding.id, buildingLabel: initialBuilding.name, address: initialBuilding.address ?? '', postalCode: initialBuilding.postalCode ?? '', city: initialBuilding.city ?? '' } : EMPTY);
+  const [v, setV] = useState<WizState>(() => initialBuilding ? { ...EMPTY, ...prefill, buildingId: initialBuilding.id, buildingLabel: initialBuilding.name, address: initialBuilding.address ?? '', postalCode: initialBuilding.postalCode ?? '', city: initialBuilding.city ?? '' } : { ...EMPTY, ...prefill });
   const [contactPending, setContactPending] = useState<Record<number, boolean>>({});
   const [step, setStep] = useState(0);
   const [maxStep, setMaxStep] = useState(0);
@@ -140,8 +143,8 @@ export function NewWorksiteWizard({
         billingCadence: v.billingCadence || null,
         billingConditions: v.billingConditions.trim() || null,
       };
-      await api('/api/worksites', { method: 'POST', body });
-      onCreated();
+      const r = await api<{ worksite?: { id: string; ref: string; title: string } }>('/api/worksites', { method: 'POST', body });
+      onCreated(r.worksite);
     } catch (e) {
       setError((e as Error).message ?? 'Erreur');
     } finally {

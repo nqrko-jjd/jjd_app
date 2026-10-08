@@ -502,6 +502,7 @@ model Worksite {
   purchaseOrders PurchaseOrder[] @relation("PurchaseOrderWorksite")
   contacts       WorksiteContact[]
   mailSuggestions MailSuggestion[]
+  mails          WorksiteMail[]
 
   @@index([status])
   @@index([entity])
@@ -1695,4 +1696,28 @@ model QuoteSignature {
 
   @@index([documentId])
   @@index([token])
+}
+
+/// Suivi des e-mails d'un chantier — réservé au bureau, jamais visible des équipes (≠ fil de discussion) :
+/// mails rattachés (copie lisible, pièces jointes comprises) et notes de suivi.
+model WorksiteMail {
+  id          String    @id @default(cuid())
+  worksiteId  String
+  worksite    Worksite  @relation(fields: [worksiteId], references: [id], onDelete: Cascade)
+  kind        String    @default("mail") // mail | note
+  subject     String?
+  fromAddress String?
+  toAddress   String?
+  receivedAt  DateTime?
+  messageId   String? // Message-ID du mail d'origine
+  bodyText    String?
+  bodyHtml    String? // HTML nettoyé, affiché dans un cadre isolé
+  note        String? // note de suivi interne
+  attachments Json? // [{ filename, contentType, size, file? }] — file = chemin sous UPLOADS_DIR/_private
+  createdById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @default(now()) @updatedAt
+
+  @@index([worksiteId, receivedAt])
+  @@index([messageId])
 }

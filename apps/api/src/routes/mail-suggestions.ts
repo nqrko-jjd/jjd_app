@@ -10,6 +10,7 @@ import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, OFFICE } from '../lib/auth.js';
 import { refreshWorksiteStatus } from '../lib/worksite-status.js';
 import { guessWorksiteFromText } from '../lib/worksite-guess.js';
+import { recordWorksiteMail } from '../lib/worksite-mails.js';
 import { MAIL_SUGGESTION_KINDS, type MailExtraction, fetchMailSource, fetchMailAttachment } from '../lib/lead-mailbox.js';
 
 export const mailSuggestionsRouter = Router();
@@ -155,6 +156,7 @@ mailSuggestionsRouter.post(
         },
       });
       resultRef = ev.id;
+      await recordWorksiteMail({ worksiteId, messageId: s.messageId, subject: s.subject, fromAddress: s.fromAddress, receivedAt: s.receivedAt, summary: s.summary, note: 'Rendez-vous proposé au planning (à confirmer).', userId: req.user!.id });
     } else if (s.kind === 'worksite_note') {
       const worksiteId = typeof b.worksiteId === 'string' && b.worksiteId ? b.worksiteId : s.worksiteId;
       if (!worksiteId) throw new HttpError(422, 'Choisis le chantier concerné par cette note.');
@@ -176,23 +178,13 @@ mailSuggestionsRouter.post(
         });
         await refreshWorksiteStatus(worksiteId, 'event');
         resultRef = ev.id;
-        if (b.alsoNote !== true) {
-          const updatedEv = await prisma.mailSuggestion.update({ where: { id: s.id }, data: { status: 'applied', resultRef, worksiteId } });
-          return res.json({ suggestion: updatedEv, resultRef });
-        }
+        // le mail et la note vont dans le suivi du chantier (bureau), pas dans le fil que lisent les équipes
+        await recordWorksiteMail({ worksiteId, messageId: s.messageId, subject: s.subject, fromAddress: s.fromAddress, receivedAt: s.receivedAt, summary: s.summary, note: text ? `Intervention proposée au planning (à confirmer).\n${text}` : 'Intervention proposée au planning (à confirmer).', userId: req.user!.id });
+      } else {
+        if (!text) throw new HttpError(422, 'Note vide.');
+        const rec = await recordWorksiteMail({ worksiteId, messageId: s.messageId, subject: s.subject, fromAddress: s.fromAddress, receivedAt: s.receivedAt, summary: s.summary, note: text, userId: req.user!.id });
+        resultRef = rec.id;
       }
-      const thread = await prisma.thread.upsert({ where: { worksiteId }, create: { worksiteId }, update: {} });
-      const body = text;
-      if (!body) throw new HttpError(422, 'Note vide.');
-      const u = await prisma.user.findUnique({ where: { id: req.user!.id }, include: { person: true } });
-      const authorName = u?.person?.displayName || u?.person?.firstName || u?.email || 'JJD App';
-      const msg = await prisma.message.create({
-        data: {
-          threadId: thread.id, authorId: req.user!.id, authorName, kind: 'text', audience: 'internal',
-          body: `📧 ${body}\n(depuis un mail — ${s.fromAddress}, sujet : ${s.subject})`,
-        },
-      });
-      resultRef = b.asIntervention === true ? resultRef : msg.id;
     }
     // payment_reminder / other : pas de cible de création dédiée — valider = "pris en compte"
 

@@ -3,6 +3,8 @@ import { ScrollView, View, Pressable, Alert } from 'react-native';
 import { Text } from '@/lib/AppText';
 import { Stack, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { apiGet, apiSend } from '@/lib/api';
+import { openApiFile } from '@/lib/files';
+import { Feather } from '@expo/vector-icons';
 import { ScreenHeader, Card, Label, Loading, Row, Badge, Muted, eur, dateBE } from '@/lib/ui';
 import { T } from '@/lib/theme';
 
@@ -63,9 +65,13 @@ export default function DocumentDetail() {
         {d.structuredComm ? <Row k="Communication" v={d.structuredComm} /> : null}
       </Card>
 
+      <Pressable accessibilityRole="button" disabled={busy} onPress={async () => { setBusy(true); try { await openApiFile(`/api/documents/${id}/pdf`, `${d.number ?? d.draftRef ?? 'document'}.pdf`); } catch (e) { Alert.alert('PDF', (e as Error).message); } finally { setBusy(false); } }} style={({ pressed }) => [{ flexDirection: 'row', gap: 10, backgroundColor: T.primary, borderRadius: 16, paddingVertical: 16, alignItems: 'center', justifyContent: 'center' }, pressed && { opacity: 0.9 }, busy && { opacity: 0.5 }]}>
+        <Feather name="file-text" size={20} color="#fff" /><Text style={{ color: '#fff', fontWeight: '800', fontSize: 16 }}>Voir le PDF</Text>
+      </Pressable>
+
       <Label>Lignes</Label>
       {d.lines.length === 0 ? (
-        <Card><Muted>Détail non repris (document importé). Le PDF d’origine est dans TrustUp.</Muted></Card>
+        <Card><Muted>Détail non repris (document importé) : ouvre le PDF pour le consulter.</Muted></Card>
       ) : (
         d.lines.map((l, i) => (
           <Card key={l.id ?? i}>
@@ -109,9 +115,6 @@ export default function DocumentDetail() {
         </View>
       )}
       {!d.lockedAt && <Muted>Brouillon — la création et l’édition des lignes se font sur la version web.</Muted>}
-      {isInvoice && (
-        <Muted>Transmission Peppol pas encore active — TrustUp reste l’émetteur officiel.</Muted>
-      )}
     </ScrollView>
   );
 }

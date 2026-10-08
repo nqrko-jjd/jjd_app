@@ -32,17 +32,20 @@ export default function Dashboard() {
   const [today, setToday] = useState<Ev[]>([]);
   const [pending, setPending] = useState(0);
   const [leads, setLeads] = useState(0);
+  const [inbox, setInbox] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     const start = new Date(); start.setHours(0, 0, 0, 0);
     const end = new Date(start.getTime() + 86400000);
-    const [d, p, v, l] = await Promise.allSettled([
+    const [d, p, v, l, ib] = await Promise.allSettled([
       apiGet<Dash>('/api/dashboard'),
       apiGet<{ items: Ev[] }>(`/api/planning?from=${start.toISOString()}&to=${end.toISOString()}`),
       apiGet<{ items: unknown[] }>('/api/timesheet/pending'),
       apiGet<{ columns: { stage: string; items: unknown[] }[] }>('/api/crm'),
+      apiGet<{ total: number }>('/api/mail-suggestions/counts'),
     ]);
+    if (ib.status === 'fulfilled') setInbox(ib.value.total);
     if (d.status === 'fulfilled') setData(d.value);
     if (p.status === 'fulfilled') setToday([...p.value.items].sort((x, y) => +new Date(x.startAt) - +new Date(y.startAt)));
     if (v.status === 'fulfilled') setPending(v.value.items.length);
@@ -58,6 +61,7 @@ export default function Dashboard() {
   const tiles: { icon: keyof typeof Feather.glyphMap; label: string; value: string; to: string; alert?: boolean }[] = [
     { icon: 'calendar', label: 'Aujourd’hui', value: `${today.length} intervention${today.length > 1 ? 's' : ''}`, to: '/planning' },
     { icon: 'check-square', label: 'À valider', value: pending ? `${pending} pointage${pending > 1 ? 's' : ''}` : 'Rien en attente', to: '/valider', alert: pending > 0 },
+    { icon: 'inbox', label: 'Boîte IA', value: inbox ? `${inbox} à traiter` : 'Rien à traiter', to: '/boite-ia', alert: inbox > 0 },
     { icon: 'trending-up', label: 'Demandes', value: leads ? `${leads} nouvelle${leads > 1 ? 's' : ''}` : 'Aucune nouvelle', to: '/pipeline', alert: leads > 0 },
     { icon: 'flag', label: 'Impayés', value: data.kpis.overdueCount ? eur(data.kpis.overdueAmount) : 'Aucun', to: '/documents', alert: data.kpis.overdueCount > 0 },
     { icon: 'home', label: 'Chantiers', value: `${data.kpis.openWorksites} en cours`, to: '/chantiers?status=in_progress' },

@@ -113,6 +113,14 @@ export default function ChantierDetail() {
         <Text style={{ color: '#fff', fontWeight: '700' }}>Ouvrir le fil de chantier</Text>
       </Pressable>
 
+      {(user?.role === 'admin' || user?.role === 'office') && (
+        <Pressable accessibilityRole="button" onPress={() => router.push(`/suivi-mails/${id}` as never)} style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: T.surface, borderWidth: 1, borderColor: T.line, borderRadius: 18, padding: 14 }, pressed && { opacity: 0.9 }]}>
+          <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: T.primarySoft, alignItems: 'center', justifyContent: 'center' }}><Feather name="mail" size={19} color={T.primary} /></View>
+          <View style={{ flex: 1 }}><Text style={{ color: T.ink, fontWeight: '800' }}>Suivi mails</Text><Text style={{ color: T.ink2, fontSize: 12.5 }}>Mails et notes de ce chantier, avec les pièces jointes</Text></View>
+          <Feather name="chevron-right" size={20} color={T.ink3} />
+        </Pressable>
+      )}
+
       <Card>
         <Row k="Client" v={w.client?.name ?? '—'} />
         <Row k="Immeuble" v={w.building ? `${w.building.name}${w.building.syndic ? ` · ${w.building.syndic.name}` : ''}` : '—'} />

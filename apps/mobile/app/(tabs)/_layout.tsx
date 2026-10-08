@@ -88,14 +88,14 @@ export default function TabsLayout() {
       }}
     >
       <Tabs.Screen name="index" options={worker || foreman ? {...tab('Aujourd’hui', 'grid'),headerShown:false} : hide} />
-      <Tabs.Screen name="heures" options={worker ? tab('Mes heures', 'clock') : hide} />
+      <Tabs.Screen name="heures" options={worker ? tab('Mes heures', 'clock') : { ...hide, title: 'Mes heures' }} />
       <Tabs.Screen name="dashboard" options={office ? {...tab('Accueil', 'grid'),headerShown:false} : hide} />
       <Tabs.Screen name="chantiers" options={staff || worker ? {...tab('Chantiers', 'home'),headerShown:false} : hide} />
       <Tabs.Screen name="planning" options={staff ? {...tab('Planning', 'calendar'),headerShown:false} : hide} />
-      <Tabs.Screen name="valider" options={hide} />
+      <Tabs.Screen name="valider" options={{ ...hide, title: 'À valider' }} />
       <Tabs.Screen name="messages" options={{...tab('Messages', 'message-circle', unread),headerShown:false}} />
       <Tabs.Screen name="plus" options={{...tab('Plus', 'more-horizontal'),headerShown:false}} />
-      <Tabs.Screen name="compte" options={hide} />
+      <Tabs.Screen name="compte" options={{ ...hide, title: 'Mon compte' }} />
     </Tabs>
   );
 }

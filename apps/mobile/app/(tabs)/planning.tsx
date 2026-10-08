@@ -22,6 +22,12 @@ const DAY_SHORT = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 const DAY_LONG = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
 const MONTHS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
 
+const KIND = {
+  intervention: { main: '#3d7fc4', soft: '#e4eef9', ink: '#1f5a96', label: 'Intervention' },
+  meeting: { main: '#e0a800', soft: '#fbf1cc', ink: '#7a5c00', label: 'Rendez-vous' },
+} as const;
+const kindOf = (e: { kind?: string }) => (e.kind === 'meeting' ? KIND.meeting : KIND.intervention);
+
 const startOfDay = (d: Date) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
 const addDays = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
 const mondayOf = (d: Date) => addDays(startOfDay(d), -((d.getDay() + 6) % 7));
@@ -111,6 +117,11 @@ export default function Planning() {
             </Pressable>
           ))}
         </View>
+        <View style={{ flexDirection: 'row', gap: 16, paddingHorizontal: 2 }}>
+          {([KIND.intervention, KIND.meeting] as const).map((k) => (
+            <View key={k.label} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}><View style={{ width: 10, height: 10, borderRadius: 3, backgroundColor: k.main }} /><Text style={{ fontSize: 12, color: T.ink2, fontWeight: '600' }}>{k.label}</Text></View>
+          ))}
+        </View>
         <View style={s.nav}>
           <Pressable accessibilityRole="button" accessibilityLabel="Précédent" style={s.navBtn} onPress={() => shift(-1)}><Feather name="chevron-left" size={20} color={T.ink} /></Pressable>
           <Text style={s.week}>{title}</Text>
@@ -165,26 +176,30 @@ export default function Planning() {
           const first = range.from;
           const month = anchor.getMonth();
           return (
-            <View style={{ gap: 6 }}>
+            <View style={{ gap: 4 }}>
               <View style={{ flexDirection: 'row' }}>{DAY_SHORT.map((d) => <Text key={d} style={s.monthHead}>{d}</Text>)}</View>
               {Array.from({ length: 6 }, (_, w) => (
-                <View key={w} style={{ flexDirection: 'row', gap: 4 }}>
+                <View key={w} style={{ flexDirection: 'row', gap: 3 }}>
                   {Array.from({ length: 7 }, (_, d) => {
                     const date = addDays(first, w * 7 + d);
-                    const n = (byDay.get(key(date)) ?? []).length;
+                    const list = byDay.get(key(date)) ?? [];
                     const out = date.getMonth() !== month;
                     return (
-                      <Pressable key={d} accessibilityRole="button" accessibilityLabel={`${date.getDate()} ${MONTHS[date.getMonth()]}, ${n} intervention${n > 1 ? 's' : ''}`}
+                      <Pressable key={d} accessibilityRole="button" accessibilityLabel={`${date.getDate()} ${MONTHS[date.getMonth()]}, ${list.length} élément${list.length > 1 ? 's' : ''}`}
                         onPress={() => { setAnchor(date); setView('jour'); }}
-                        style={[s.cell, out && { opacity: 0.4 }, sameDay(date, today) && s.cellToday, n > 0 && s.cellOn]}>
+                        style={[s.cell, out && { opacity: 0.4 }, sameDay(date, today) && s.cellToday]}>
                         <Text style={[s.cellNum, sameDay(date, today) && { color: T.primary }]}>{date.getDate()}</Text>
-                        {n > 0 && <View style={s.cellBadge}><Text style={s.cellBadgeTxt}>{n}</Text></View>}
+                        {list.slice(0, 3).map((e) => {
+                          const k = kindOf(e);
+                          return <View key={e.id} style={[s.bar, { backgroundColor: k.soft, borderLeftColor: k.main }]}><Text style={[s.barTxt, { color: k.ink }]} numberOfLines={1}>{e.worksite.ref.replace('R-', '')}</Text></View>;
+                        })}
+                        {list.length > 3 && <Text style={s.more}>+{list.length - 3}</Text>}
                       </Pressable>
                     );
                   })}
                 </View>
               ))}
-              <Muted>Touchez un jour pour voir son détail.</Muted>
+              <Muted>Touchez un jour pour voir son détail. Bleu : intervention · jaune : rendez-vous.</Muted>
             </View>
           );
         })()}
@@ -205,7 +220,7 @@ export default function Planning() {
                   <Text style={{ fontWeight: '800', color: T.ink, fontSize: 15 }}>{name(p)}</Text>
                   {evs.map((e) => (
                     <Pressable key={e.id} accessibilityRole="button" onPress={() => open(e)} style={s.line}>
-                      <Text style={s.lineTime}>{e.allDay ? 'Jour' : hm(e.startAt)}</Text>
+                      <Text style={[s.lineTime, { color: kindOf(e).ink }]}>{e.allDay ? 'Jour' : hm(e.startAt)}</Text>
                       <Text style={{ flex: 1, color: T.ink }} numberOfLines={2}>{e.worksite.ref} · {e.title || e.worksite.title}</Text>
                       <Feather name="chevron-right" size={16} color={T.ink3} />
                     </Pressable>
@@ -260,13 +275,15 @@ export default function Planning() {
 }
 
 function EventCard({ e, onPress, compact }: { e: Ev; onPress: () => void; compact?: boolean }) {
+  const k = kindOf(e);
   return (
     <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [{ opacity: pressed ? 0.9 : 1 }]}>
-      <Card>
+      <View style={[s.evCard, { borderLeftColor: k.main, backgroundColor: k.soft }]}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
           <Text style={s.ref}>{e.worksite.ref} — {e.title || e.worksite.title}</Text>
-          <Text style={s.time}>{e.allDay ? 'Journée' : `${hm(e.startAt)}–${hm(e.endAt)}`}</Text>
+          <Text style={[s.time, { color: k.ink }]}>{e.allDay ? 'Journée' : `${hm(e.startAt)}–${hm(e.endAt)}`}</Text>
         </View>
+        <Text style={[s.kindTag, { color: k.ink }]}>{k.label}</Text>
         {!compact && !!e.worksite.city && <Muted>{e.worksite.city}</Muted>}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
           <Feather name="users" size={12} color={T.ink2} />
@@ -288,12 +305,14 @@ function EventCard({ e, onPress, compact }: { e: Ev; onPress: () => void; compac
             )}
           </View>
         )}
-      </Card>
+      </View>
     </Pressable>
   );
 }
 
 const s = StyleSheet.create({
+  evCard: { borderRadius: 18, borderWidth: 1, borderColor: T.line, borderLeftWidth: 6, padding: 14, gap: 4 },
+  kindTag: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
   title: { fontSize: 28, fontWeight: '800', color: T.ink },
   todayBtn: { borderWidth: 1, borderColor: T.line, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8, backgroundColor: T.surface },
   todayTxt: { color: T.primary, fontWeight: '700', fontSize: 13 },
@@ -316,10 +335,13 @@ const s = StyleSheet.create({
   weekHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 6 },
   weekCount: { fontSize: 12, color: T.ink2, fontWeight: '600' },
   monthHead: { flex: 1, textAlign: 'center', fontSize: 11, fontWeight: '700', color: T.ink3, textTransform: 'uppercase' },
-  cell: { flex: 1, aspectRatio: 0.9, borderRadius: 12, backgroundColor: T.surface, borderWidth: 1, borderColor: T.line, alignItems: 'center', justifyContent: 'center', gap: 4 },
+  cell: { flex: 1, minHeight: 92, borderRadius: 10, backgroundColor: T.surface, borderWidth: 1, borderColor: T.line, alignItems: 'stretch', padding: 3, gap: 2 },
+  bar: { borderLeftWidth: 3, borderRadius: 4, paddingHorizontal: 3, paddingVertical: 1 },
+  barTxt: { fontSize: 9.5, fontWeight: '800' },
+  more: { fontSize: 10, fontWeight: '800', color: T.ink2, textAlign: 'center' },
   cellToday: { borderColor: T.primary, borderWidth: 2 },
   cellOn: { backgroundColor: T.primarySoft },
-  cellNum: { fontSize: 14, fontWeight: '700', color: T.ink },
+  cellNum: { fontSize: 12.5, fontWeight: '800', color: T.ink, textAlign: 'center' },
   cellBadge: { minWidth: 20, paddingHorizontal: 5, height: 18, borderRadius: 9, backgroundColor: T.primary, alignItems: 'center', justifyContent: 'center' },
   cellBadgeTxt: { color: '#fff', fontSize: 10.5, fontWeight: '800' },
   line: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderTopWidth: 1, borderTopColor: T.line },

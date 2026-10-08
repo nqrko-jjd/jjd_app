@@ -35,6 +35,7 @@ export default function TabsLayout() {
   const foreman = role === 'foreman';
   const office = role === 'admin' || role === 'office';
   const staff = foreman || office;
+  const store = role === 'storekeeper';
 
   const [unread, setUnread] = useState(0);
   const loadUnread = useCallback(async () => {
@@ -92,6 +93,9 @@ export default function TabsLayout() {
       <Tabs.Screen name="dashboard" options={office ? {...tab('Accueil', 'grid'),headerShown:false} : hide} />
       <Tabs.Screen name="chantiers" options={staff || worker ? {...tab('Chantiers', 'home'),headerShown:false} : hide} />
       <Tabs.Screen name="planning" options={staff ? {...tab('Planning', 'calendar'),headerShown:false} : hide} />
+      <Tabs.Screen name="magasin" options={store ? { ...tab('Magasin', 'package'), headerShown: false } : hide} />
+      <Tabs.Screen name="preparations" options={store ? { ...tab('Préparations', 'clipboard'), headerShown: false } : hide} />
+      <Tabs.Screen name="scan" options={store ? { ...tab('Scanner', 'maximize'), headerShown: false } : { ...hide, headerShown: false }} />
       <Tabs.Screen name="valider" options={{ ...hide, title: 'À valider' }} />
       <Tabs.Screen name="messages" options={{...tab('Messages', 'message-circle', unread),headerShown:false}} />
       <Tabs.Screen name="plus" options={{...tab('Plus', 'more-horizontal'),headerShown:false}} />

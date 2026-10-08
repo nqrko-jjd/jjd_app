@@ -9,12 +9,18 @@ import { ScreenHeader } from '@/lib/ui';
 type LinkItem={href:string;label:string;description:string;ic:keyof typeof Feather.glyphMap;roles?:string[]};
 const OFFICE=['admin','office'];
 const TEAM=['admin','office','foreman'];
+const STOCK=['admin','office','foreman','storekeeper'];
 const GROUPS:{title:string;links:LinkItem[]}[]=[
  {title:'Mon quotidien',links:[
   {href:'/planning',label:'Planning',description:'Mes journées et affectations',ic:'calendar',roles:['worker','foreman','admin','office']},
   {href:'/valider',label:'À valider',description:'Rapports et pointages de l’équipe',ic:'check-square',roles:TEAM},
   {href:'/heures',label:'Mes heures',description:'Mes pointages sur chantier',ic:'clock',roles:['worker','foreman']},
   {href:'/compte',label:'Mon compte',description:'Profil, langue et préférences',ic:'user'},
+ ]},
+ {title:'Magasin',links:[
+  {href:'/scan',label:'Scanner',description:'Un code : l’article, son stock, entrée ou sortie',ic:'maximize',roles:STOCK},
+  {href:'/preparations',label:'Préparations',description:'Le matériel à préparer pour les chantiers',ic:'package',roles:STOCK},
+  {href:'/articles',label:'Articles',description:'Le stock du magasin et les alertes',ic:'search',roles:[...STOCK,'worker']},
  ]},
  {title:'Chantiers & ressources',links:[
   {href:'/immeubles',label:'Immeubles & projets',description:'Les dossiers regroupés par bâtiment',ic:'home',roles:TEAM},

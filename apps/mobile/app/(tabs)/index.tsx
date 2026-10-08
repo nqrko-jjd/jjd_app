@@ -81,7 +81,7 @@ export default function Today() {
   }, []);
 
   // Le magasinier accède aux messages et à son compte, sans écran de pointage.
-  if (user?.role === 'storekeeper') return <Redirect href="/plus" />;
+  if (user?.role === 'storekeeper') return <Redirect href="/magasin" />;
 
   // Bureau pur (sans fiche terrain) -> tableau de bord
   if (user && ['admin', 'office'].includes(user.role) && user.role !== 'foreman') {

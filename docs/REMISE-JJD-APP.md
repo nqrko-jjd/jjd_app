@@ -16,7 +16,7 @@ Il complète les guides plus détaillés du dossier `docs/` (déploiement, Ponto
 | Planning & pointage | Planning, Pointage | Interventions, rendez-vous (rattachables à une « charge » E-xx si pas de chantier), pointage des heures, décomptes |
 | Équipe, flotte, matériel, stock | Répertoires | Fiches personnes (sous-traitants, employés), véhicules, matériel, stock avec scan et étiquettes |
 | Portail client | /portail | Suivi des interventions et des devis pour les syndics / clients |
-| Application mobile | apps/mobile | Pointage et rapports des équipes |
+| Application mobile (native) | apps/mobile | Application séparée (Expo / React Native, connexion par GSM + code) : accueil, chantiers et fil, planning, heures, messages, validation, devis et factures, contacts… Elle n’a pas le Suivi mails (réservé au bureau) ni la Boîte IA. À ne pas confondre avec le **site** affiché sur un téléphone |
 
 Profils : `admin`, `office` (bureau), `foreman` (chef de chantier), `worker`, `storekeeper`, `client`.
 Le **Suivi mails** et les opérations d'administration sont réservés à admin et bureau. L'IA payante (cahier des charges, liste d'achats, assistant) est réservée à la direction (David et Julien) et plafonnée par un budget mensuel.
@@ -57,13 +57,18 @@ Les corrections de données (déplacer des pointages, scinder un chantier, ratta
 
 Règles : sauvegarde avant écriture, pas de suppression sans accord, chaque commande lancée une seule fois.
 
-## 6. Contrôles effectués le 8 octobre 2026
+## 6. Simulateur de l'application mobile
+
+L'application mobile se teste dans un navigateur, à la taille d'un téléphone : dans le dossier `apps/mobile`, installer une fois le support web (`npm install --no-save react-native-web@~0.21.0 react-dom@19.2.3 @expo/metro-runtime@~57.0.15`), puis lancer `EXPO_PUBLIC_API_URL=http://localhost:4199 npx expo start --web --port 8199` avec l'API locale sur le port 4199. Ouvrir http://localhost:8199.
+
+## 7. Contrôles effectués le 8 octobre 2026
 
 - 34 pages parcourues sur ordinateur et sur mobile : aucune erreur de script, aucune page vide, aucun défilement horizontal.
 - Tests de l'API : 417 réussis sur 433. Les 16 échecs viennent de tests qui supposent des données déjà présentes (fiches de personnes, comptes du portail, opérations bancaires) ; ils n'affectent pas la production.
+- Application mobile parcourue dans le simulateur (15 écrans) : un défaut corrigé (un texte vide pouvait faire planter la fiche chantier sur téléphone).
 - Mises en ligne du jour : toutes réussies.
 
-## 7. Reste à faire / à surveiller
+## 8. Reste à faire / à surveiller
 
 - Ajouter la sauvegarde quotidienne automatique et surveiller le disque (voir §4).
 - Rendre les 16 tests indépendants des données de démonstration.

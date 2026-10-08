@@ -98,7 +98,7 @@ export default function ChantierDetail() {
           </View>
         </View>
         <Text style={s.heroTitle}>{w.title}</Text>
-        {w.client?.name && <Text style={s.heroSub}>{w.client.name}</Text>}
+        {!!w.client?.name && <Text style={s.heroSub}>{w.client.name}</Text>}
       </HeroTile>
 
       <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
@@ -118,14 +118,14 @@ export default function ChantierDetail() {
         <Row k="Immeuble" v={w.building ? `${w.building.name}${w.building.syndic ? ` · ${w.building.syndic.name}` : ''}` : '—'} />
         <Row k="Chef" v={w.manager?.displayName ?? w.manager?.firstName ?? '—'} />
         <Row k="Localisation" v={[w.address, w.box && `bte ${w.box}`, w.unitLabel, w.city].filter(Boolean).join(', ') || '—'} />
-        {team && <Row k="Équipe affectée" v={team} />}
+        {!!team && <Row k="Équipe affectée" v={team} />}
         <Row k="Début / Fin" v={`${dateBE(w.startedOn)} → ${dateBE(w.endedOn)}`} />
         {(w.billToContact || w.billTo) && <Row k="Facturé à" v={w.billToContact?.name ?? w.billTo ?? '—'} />}
-        {w.requestKind && <Row k="Type de demande" v={REQUEST_KIND_LABEL[w.requestKind] ?? w.requestKind} />}
-        {w.accessNotes && <Row k="Accès et RDV" v={w.accessNotes} />}
+        {!!w.requestKind && <Row k="Type de demande" v={REQUEST_KIND_LABEL[w.requestKind] ?? w.requestKind} />}
+        {!!w.accessNotes && <Row k="Accès et RDV" v={w.accessNotes} />}
       </Card>
 
-      {w.description && (
+      {!!w.description && (
         <Card>
           <Label>Description</Label>
           <Text style={{ color: T.ink }}>{w.description}</Text>
@@ -147,8 +147,8 @@ export default function ChantierDetail() {
 
       {(w.ownerName || w.tenantName) && (
         <Card>
-          {w.ownerName && <Row k="Propriétaire" v={`${w.ownerName}${w.ownerPhone ? ` · ${w.ownerPhone}` : ''}`} />}
-          {w.tenantName && <Row k="Locataire (sur place)" v={`${w.tenantName}${w.tenantPhone ? ` · ${w.tenantPhone}` : ''}${w.tenantPhone2 ? ` / ${w.tenantPhone2}` : ''}`} />}
+          {!!w.ownerName && <Row k="Propriétaire" v={`${w.ownerName}${w.ownerPhone ? ` · ${w.ownerPhone}` : ''}`} />}
+          {!!w.tenantName && <Row k="Locataire (sur place)" v={`${w.tenantName}${w.tenantPhone ? ` · ${w.tenantPhone}` : ''}${w.tenantPhone2 ? ` / ${w.tenantPhone2}` : ''}`} />}
         </Card>
       )}
 

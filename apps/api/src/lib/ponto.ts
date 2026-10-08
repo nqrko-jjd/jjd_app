@@ -232,6 +232,9 @@ async function apiGet<T = unknown>(pathname: string): Promise<T> {
   return JSON.parse(r.text) as T;
 }
 
+/** Lecture seule exposée aux scripts de diagnostic (aucune écriture). */
+export const pontoGet = apiGet;
+
 async function apiPost<T = unknown>(pathname: string, body: unknown): Promise<T> {
   const token = await validToken();
   const r = await httpsRequest(`${apiBase()}${pathname}`, {

@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { DashboardMyTasks } from '@/components/DashboardMyTasks';
 import { PageHead, Money, formatDateBE, Avatar, ProgressCell, Kpi } from '@/lib/ui';
 import { rowNav } from '@/lib/rowNav';
 import { LEGAL_DOC_LABEL, WORKSITE_STATUS_LABEL, WORKSITE_PROGRESS_PCT, type WorksiteStatus } from '@jjd/shared';
@@ -549,6 +550,7 @@ export default function DashboardPage() {
 
           <div className="split dashboard-focus" style={{ margin: '1.2rem 0 0.8rem' }}>
             <section className="panel dashboard-priorities">
+              <DashboardMyTasks />
               <div className="panelhead">
                 <h2>À traiter en priorité <span className="hint">{priorities.length}</span></h2>
                 <small>trié par urgence</small>

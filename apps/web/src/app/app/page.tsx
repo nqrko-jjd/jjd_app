@@ -350,6 +350,7 @@ interface FieldEvent {
 }
 
 const ALERT_KIND_ICON: Record<string, LucideIcon> = {
+  forecast_to_invoice: Receipt,
   overdue_invoices: AlertTriangle, overdue_supplier_invoices: CreditCard, to_invoice: Receipt, quotes_follow: Mail,
   crm_due: Phone, expiring_docs: ShieldAlert, ct_expiring: Truck, on_hold: Eye, planned_time: Clock,
 };
@@ -487,6 +488,10 @@ export default function DashboardPage() {
   const { data, loading, error, reload } = useApi<Dashboard>(user?.role === 'worker' || user?.role === 'foreman' || user?.role === 'storekeeper' ? null : '/api/dashboard');
   const [showAllPriorities, setShowAllPriorities] = useState(false);
   const priorities = (data?.alerts ?? []).filter(a => !['overdue_invoices', 'overdue_supplier_invoices', 'quotes_follow', 'expiring_docs'].includes(a.kind));
+  if (data && data.kpis.forecastAmount > 0) priorities.unshift({
+    kind: 'forecast_to_invoice', severity: 'info', label: 'Reste à facturer sur devis acceptés',
+    count: data.kpis.forecastCount, amount: data.kpis.forecastAmount, href: '/app/finances#previsionnel',
+  });
   const today = new Date();
   const eyebrow = today.toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' });
   const name = person?.displayName || person?.firstName || (user?.email?.split('@')[0] ?? '').replace(/^./, (c) => c.toUpperCase());
@@ -526,7 +531,7 @@ export default function DashboardPage() {
               <DashboardMyTasks />
               <div className="panelhead">
                 <h2>À traiter en priorité <span className="hint">{priorities.length}</span></h2>
-                <small>trié par urgence</small>
+                <small>actions à suivre</small>
               </div>
               {priorities.length === 0 ? (
                 <div className="panel-empty">
@@ -539,8 +544,8 @@ export default function DashboardPage() {
                     return (
                       <Link key={a.kind} href={a.href} className={`alert ${a.severity}`}>
                         <span className="sev"><AlertIc size={17} strokeWidth={2} /></span>
-                        <span className="label">{a.label}<span className="n">{a.count} élément{a.count > 1 ? 's' : ''}</span></span>
-                        {a.amount != null && <span className="amount"><Money value={a.amount} /></span>}
+                        <span className="label">{a.label}<span className="n" style={a.kind === 'forecast_to_invoice' ? { display: 'block', marginLeft: 0 } : undefined}>{a.kind === 'forecast_to_invoice' ? <><Money value={a.amount ?? 0} /> HT · {a.count} dossier{a.count > 1 ? 's' : ''}</> : <>{a.count} élément{a.count > 1 ? 's' : ''}</>}</span></span>
+                        {a.amount != null && a.kind !== 'forecast_to_invoice' && <span className="amount"><Money value={a.amount} /></span>}
                         <ChevronRight size={18} strokeWidth={2} className="chev" />
                       </Link>
                     );
@@ -553,7 +558,7 @@ export default function DashboardPage() {
             <FieldToday items={data.fieldToday ?? []} />
           </div>
 
-          <div className="dashboard-pipeline"><Link href="/app/finances#previsionnel">Reste à facturer sur devis acceptés · <Money value={data.kpis.forecastAmount} /></Link><Link href="/app/analyse">Voir l’analyse financière <ChevronRight size={15}/></Link></div>
+          <div className="dashboard-pipeline"><Link href="/app/analyse">Voir l’analyse financière <ChevronRight size={15}/></Link></div>
 
           {data.inProgress.length > 0 && <InProgressBand rows={data.inProgress} total={data.kpis.openWorksites} />}
 

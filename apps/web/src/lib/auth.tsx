@@ -8,6 +8,7 @@ export interface SessionUser {
   email: string;
   role: 'admin' | 'office' | 'foreman' | 'worker' | 'storekeeper' | 'client';
   isPartner: boolean;
+  entityScope?: string | null;
   locale: string;
   personId: string | null;
 }

@@ -11,6 +11,8 @@ export interface AuthUser {
   email: string;
   role: Role;
   isPartner: boolean;
+  /** Limite l'accès aux chantiers d'une entité (jjd | tonton | m7) ; null = tout. */
+  entityScope: string | null;
   personId: string | null;
   contactId: string | null;
   locale: string;
@@ -46,6 +48,7 @@ async function loadUser(token: string): Promise<AuthUser | null> {
       email: u.email,
       role: u.role as Role,
       isPartner: u.isPartner,
+      entityScope: u.entityScope ?? null,
       personId: u.personId,
       contactId: u.contactId,
       locale: u.locale,

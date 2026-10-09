@@ -62,6 +62,7 @@ model User {
   passwordHash String
   role         String    @default("worker")
   isPartner    Boolean   @default(false)
+  entityScope  String? // null = accès à tout ; « tonton » / « jjd » / « m7 » = limité aux chantiers de cette entité (voir lib/entity-scope.ts)
   locale       String    @default("fr")
   active       Boolean   @default(true)
   personId     String?   @unique

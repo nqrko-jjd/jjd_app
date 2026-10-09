@@ -29,7 +29,7 @@ authRouter.post(
       token: signToken(user.id),
       user: {
         id: user.id, email: user.email, role: user.role,
-        isPartner: user.isPartner, locale: user.locale, personId: user.personId,
+        isPartner: user.isPartner, entityScope: user.entityScope ?? null, locale: user.locale, personId: user.personId,
       },
       person,
     });

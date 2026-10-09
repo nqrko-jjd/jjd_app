@@ -23,6 +23,8 @@ export function errorMiddleware(err: unknown, _req: Request, res: Response, _nex
   if (err instanceof HttpError) {
     return res.status(err.status).json({ error: err.message, details: err.details });
   }
+  // enregistrement introuvable (ou hors du périmètre d'un compte cloisonné) : 404 plutôt qu'une erreur serveur
+  if (typeof err === 'object' && err && (err as { code?: string }).code === 'P2025') return res.status(404).json({ error: 'Introuvable' });
   // eslint-disable-next-line no-console
   console.error(err);
   return res.status(500).json({ error: 'Erreur serveur' });

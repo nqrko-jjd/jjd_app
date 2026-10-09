@@ -7,6 +7,7 @@ import { prisma } from '../db.js';
 import { asyncHandler } from '../lib/http.js';
 import { requireAuth, STAFF, OFFICE } from '../lib/auth.js';
 import { bureauDashboard } from '../lib/dashboard.js';
+import { scopeStore } from '../lib/entity-scope.js';
 
 export const dashboardRouter = Router();
 dashboardRouter.get(
@@ -58,16 +59,20 @@ metaRouter.get(
         where: { kind: 'project', source: { not: 'demo' } },
         orderBy: [{ archived: 'asc' }, { updatedAt: 'desc' }],
         take: 5000,
-        select: { id: true, ref: true, title: true, clientId: true, city: true, managerId: true, archived: true, status: true },
+        select: { id: true, ref: true, title: true, clientId: true, acpId: true, city: true, managerId: true, archived: true, status: true },
       }),
       prisma.syndic.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }),
       prisma.promoter.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }),
     ]);
+    // compte limité à une entité : seuls les clients et immeubles de SES chantiers sont proposés
+    const scoped = scopeStore.getStore();
+    const clientIds = new Set(worksites.map((w) => w.clientId).filter(Boolean));
+    const acpIds = new Set(worksites.map((w) => w.acpId).filter(Boolean));
     res.json({
-      clients,
-      buildings,
-      syndics,
-      promoters,
+      clients: scoped ? clients.filter((c) => clientIds.has(c.id)) : clients,
+      buildings: scoped ? buildings.filter((b) => acpIds.has(b.id)) : buildings,
+      syndics: scoped ? [] : syndics,
+      promoters: scoped ? [] : promoters,
       people: people.map((p) => ({ id: p.id, name: p.displayName || `${p.firstName} ${p.lastName ?? ''}`.trim(), role: p.role })),
       worksites: worksites.map((w) => ({ id: w.id, name: `${w.ref} · ${w.title}${w.status === 'closed' ? ' (clôturé)' : w.archived ? ' (archivé)' : ''}`, clientId: w.clientId, city: w.city, managerId: w.managerId })),
     });

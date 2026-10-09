@@ -25,6 +25,7 @@ import { expensesRouter } from './routes/expenses.js';
 import { pontoRouter } from './routes/ponto.js';
 import { documentsRouter, priceItemsRouter } from './routes/documents.js';
 import { settingsRouter } from './routes/settings.js';
+import { entityScopeMiddleware } from './lib/entity-scope.js';
 import { publicRouter } from './routes/public.js';
 import { worksiteReportsRouter, reportsRouter } from './routes/reports.js';
 import { worksiteTasksRouter, tasksRouter, worksitePhasesRouter, phasesRouter } from './routes/tasks.js';
@@ -47,6 +48,7 @@ export function createApp() {
   app.use(express.json({ limit: '2mb' }));
   if (process.env.NODE_ENV !== 'test') app.use(morgan('dev'));
   app.use(attachUser);
+  app.use(entityScopeMiddleware); // comptes limités à une entité : liste blanche de routes + filtrage des données (voir lib/entity-scope.ts)
 
   app.get('/health', (_req, res) => res.json({ ok: true, service: 'jjd-api' }));
   app.use('/uploads/_private', (_req, res) => res.status(404).end()); // copies de mails et pièces jointes : seulement par les routes authentifiées

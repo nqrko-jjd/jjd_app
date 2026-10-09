@@ -17,6 +17,7 @@ import { requireAuth, OFFICE, FIELD_OFFICE } from '../lib/auth.js';
 import { storeFile, UPLOADS_DIR } from '../lib/media.js';
 import { readReceipt } from '../lib/ai-receipt.js';
 import { nameOverlap } from '../lib/bank-match.js';
+import { allocationSnapshot } from '../lib/bank-allocation.js';
 import { extractDocumentInfo, suggestExpenseCategory } from '../lib/document-extract.js';
 import { toCsv, readTableBuffer, pick } from '../lib/table-io.js';
 import { invoiceMailboxConfigured, syncInvoiceMailbox, reprocessEmailEntries, scanInvoiceMailboxHistory, PROCESSED_MAILBOX } from '../lib/invoice-mailbox.js';
@@ -55,7 +56,7 @@ function resolveUpload(rel: string): string {
 /* ------------------------------------------------------------------ liste */
 
 /** Filtre commun à la liste et à l'export CSV. */
-function buildWhere(q: Record<string, string>) {
+function buildWhere(q: Record<string, string>, payments?: Awaited<ReturnType<typeof allocationSnapshot>>) {
   const { q: searchRaw, paid, worksiteId, vehicleId, contactId, category, from, to, year, type, linked } = q;
   // recherche insensible à la casse (y compris accents : le repli SQLite n'insensibilise que
   // l'ASCII, "café"/"CAFÉ" ne matcheraient pas sans ce passage en minuscules côté JS)
@@ -98,9 +99,13 @@ function buildWhere(q: Record<string, string>) {
   if (year) and.push({ year: Number(year) });
   if (from) and.push({ date: { gte: new Date(from) } });
   if (to) and.push({ date: { lte: new Date(to) } });
-  if (paid === '1') and.push({ paymentStatus: { equals: 'Payé' } });
-  if (paid === '0') and.push({ NOT: { paymentStatus: { equals: 'Payé' } } });
-  if (q.overdue === '1') and.push({ direction: 'purchase', dueDate: { not: null, lt: new Date() }, NOT: { paymentStatus: 'Payé' } });
+  const matchedIds = [...(payments?.ledgerPaid.keys() ?? [])];
+  const settledIds = payments ? payments.matches.filter(m => m.ledgerEntry && expensePayment(m.ledgerEntry, payments).paid).map(m => m.ledgerEntryId!) : [];
+  const settled = { OR: [{ id: { in: settledIds } }, { id: { notIn: matchedIds }, paymentStatus: 'Payé' }] };
+  const outstanding = { OR: [{ id: { in: matchedIds, notIn: settledIds } }, { id: { notIn: matchedIds }, OR: [{ paymentStatus: null }, { NOT: { paymentStatus: 'Payé' } }] }] };
+  if (paid === '1') and.push(settled);
+  if (paid === '0') and.push(outstanding);
+  if (q.overdue === '1') and.push({ direction: 'purchase', dueDate: { not: null, lt: new Date() }, ...outstanding });
   if (search) {
     and.push({
       OR: [
@@ -117,16 +122,24 @@ function buildWhere(q: Record<string, string>) {
   return and;
 }
 
+function expensePayment(e: { id: string; ttc: number | null; ht: number; paymentStatus: string | null }, payments: Awaited<ReturnType<typeof allocationSnapshot>>) {
+  const total = Math.abs(e.ttc ?? e.ht);
+  const manuallyPaid = (e.paymentStatus ?? '').toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').trim() === 'paye';
+  const paidAmount = Math.min(total, payments.ledgerPaid.get(e.id) ?? (manuallyPaid ? total : 0));
+  const remainingAmount = Math.round(Math.max(0, total - paidAmount) * 100) / 100;
+  const paid = remainingAmount <= 0.01 && (paidAmount > 0 || manuallyPaid);
+  return { paidAmount, remainingAmount, paid, paymentStatus: paid ? 'Payé' : paidAmount > 0 ? 'Partiel' : 'Non payé' };
+}
+
 expensesRouter.get(
   '/',
   requireAuth(...FIELD_OFFICE),
   asyncHandler(async (req, res) => {
     const { page: pageStr, pageSize: pageSizeStr } = req.query as Record<string, string>;
-    const and = buildWhere(req.query as Record<string, string>);
+    const payments = await allocationSnapshot();
+    const and = buildWhere(req.query as Record<string, string>, payments);
     const page = Math.max(1, Math.trunc(Number(pageStr)) || 1);
     const pageSize = Math.min(5000, Math.max(20, Math.trunc(Number(pageSizeStr)) || 100));
-    const isPaidStr = (s: string | null) =>
-      (s ?? '').toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').trim() === 'paye';
 
     const [items, all] = await Promise.all([
       prisma.ledgerEntry.findMany({
@@ -139,7 +152,7 @@ expensesRouter.get(
       // totaux (KPI) sur l'ensemble du filtre, pas seulement la page affichée
       prisma.ledgerEntry.findMany({
         where: { AND: and },
-        select: { ht: true, ttc: true, paymentStatus: true, direction: true, linkedInvoiceId: true, dueDate: true },
+        select: { id: true, ht: true, ttc: true, paymentStatus: true, direction: true, linkedInvoiceId: true, dueDate: true },
       }),
     ]);
 
@@ -155,6 +168,7 @@ expensesRouter.get(
           return acc;
         }
         const ttc = e.ttc ?? e.ht;
+        const payment = expensePayment(e, payments);
         // une note de crédit réduit toujours les dépenses, qu'elle soit saisie en positif ou en négatif (l'import
         // contient les deux : le signe appliqué par-dessus un montant déjà négatif la comptait comme une dépense)
         if (e.direction === 'credit_note') {
@@ -162,14 +176,14 @@ expensesRouter.get(
           acc.ttc -= Math.abs(ttc);
           // « reste à payer » : seules les notes de crédit non réglées viennent en déduction (celles marquées payées
           // sont déjà soldées avec le fournisseur)
-          if (!isPaidStr(e.paymentStatus)) acc.unpaidTtc -= Math.abs(ttc);
+          acc.unpaidTtc -= payment.remainingAmount;
           return acc;
         }
         acc.ht += e.ht;
         acc.ttc += ttc;
-        if (!isPaidStr(e.paymentStatus)) {
-          acc.unpaidTtc += ttc;
-          if (e.dueDate && e.dueDate < now) { acc.overdueCount += 1; acc.overdueTtc += ttc; }
+        if (!payment.paid) {
+          acc.unpaidTtc += payment.remainingAmount;
+          if (payment.remainingAmount > 0.01 && e.dueDate && e.dueDate < now) { acc.overdueCount += 1; acc.overdueTtc += payment.remainingAmount; }
         }
         return acc;
       },
@@ -181,7 +195,7 @@ expensesRouter.get(
         ...e,
         supplier: e.contact?.name ?? e.supplierName ?? null,
         categoryLabel: e.category?.label ?? e.categoryRaw ?? null,
-        paid: isPaidStr(e.paymentStatus),
+        ...expensePayment(e, payments),
         hasPdf: !!e.pdfPath,
         editable: e.source !== 'xlsx',
       })),
@@ -461,8 +475,9 @@ expensesRouter.get(
       where: { ledgerEntryId: e.id },
       include: { bankTransaction: { select: { id: true, bookingDate: true, amount: true, bank: true, counterpartyName: true, communication: true } } },
     });
-    const bankMatches = matches.map((m) => ({ matchId: m.id, ...m.bankTransaction }));
-    res.json({ expense: { ...e, hasPdf: !!e.pdfPath, editable: e.source !== 'xlsx', bankMatches } });
+    const payments = await allocationSnapshot();
+    const bankMatches = matches.map((m) => ({ matchId: m.id, allocatedAmount: payments.amounts.get(m.id) ?? 0, ...m.bankTransaction }));
+    res.json({ expense: { ...e, ...expensePayment(e, payments), hasPdf: !!e.pdfPath, editable: e.source !== 'xlsx', bankMatches } });
   }),
 );
 
@@ -729,8 +744,9 @@ expensesRouter.patch(
     if ('vatRate' in d) data.vatRate = d.vatRate ?? null;
     if ('notes' in d) data.notes = d.notes ?? null;
     if ('paymentStatus' in d && d.paymentStatus) {
-      data.paymentStatus = d.paymentStatus;
-      data.paidOn = d.paymentStatus === 'Payé' ? (existing.paidOn ?? new Date()) : null;
+      const payments = await allocationSnapshot();
+      data.paymentStatus = payments.ledgerPaid.has(existing.id) ? expensePayment(existing, payments).paymentStatus : d.paymentStatus;
+      data.paidOn = data.paymentStatus !== 'Non payé' ? (existing.paidOn ?? new Date()) : null;
     }
     if (d.contactId !== undefined) {
       data.contactId = d.contactId ?? null;

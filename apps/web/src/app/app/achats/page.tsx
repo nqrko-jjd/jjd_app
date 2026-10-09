@@ -39,6 +39,8 @@ interface Expense {
   paymentStatus: string | null;
   paidOn: string | null;
   paid: boolean;
+  paidAmount: number;
+  remainingAmount: number;
   hasPdf: boolean;
   editable: boolean;
   source: string | null;
@@ -64,7 +66,7 @@ interface BankTx {
   description?: string | null;
   matchedTo?: string[];
 }
-interface BankMatch extends BankTx { matchId: string }
+interface BankMatch extends BankTx { matchId: string; allocatedAmount: number }
 interface PurchaseCandidate {
   code: string; description: string; contactId: string; contactName: string;
   occurrences: { ledgerEntryId: string; date: string | null; docNumber: string | null; qty: number }[];
@@ -403,7 +405,7 @@ function AchatsInner() {
         <input className="input" style={{ maxWidth: 240 }} placeholder="Fournisseur, n°, notes…" value={q} onChange={(e) => setQ(e.target.value)} />
         <select className="select" style={{ maxWidth: 150 }} value={paid} onChange={(e) => setPaid(e.target.value)}>
           <option value="">Payé & non payé</option>
-          <option value="0">Non payé</option>
+          <option value="0">À régler (dont partiel)</option>
           <option value="1">Payé</option>
         </select>
         <select className="select" style={{ maxWidth: 180 }} value={type} onChange={(e) => { setType(e.target.value); if (e.target.value !== 'delivery_slip') setLinked(''); }}>
@@ -521,11 +523,12 @@ function AchatsInner() {
                   <td style={{ textAlign: 'right' }}><Money value={e.ttc ?? e.ht} /></td>
                   <td>
                     <span className={`badge ${e.paid ? 'ok' : isOverdue(e) ? 'crit' : 'warn'}`}>
-                      {e.paid ? 'Payé' : isOverdue(e) ? 'En retard' : 'Non payé'}
+                      {e.paid ? 'Payé' : e.paidAmount > 0 ? 'Partiellement payé' : isOverdue(e) ? 'En retard' : 'Non payé'}
                     </span>
+                    {e.paidAmount > 0 && !e.paid && <div style={{ fontSize: '0.78rem', marginTop: 4 }}>Payé : <Money value={e.paidAmount} /><br />Reste : <Money value={e.remainingAmount} /></div>}
                     {!e.paid && e.dueDate && (
                       <div className="muted" style={{ fontSize: '0.72rem', marginTop: 2, whiteSpace: 'nowrap' }}>
-                        éch. {formatDateBE(e.dueDate)}
+                        {isOverdue(e) ? 'Solde en retard · ' : 'éch. '}{formatDateBE(e.dueDate)}
                       </div>
                     )}
                   </td>
@@ -948,10 +951,10 @@ function ExpenseModal({
           </div>
           <div className="field">
             <label>Statut</label>
-            <select className="select" value={v.paymentStatus} onChange={(e) => set('paymentStatus', e.target.value)}>
+            {bankMatches.length > 0 ? <div className="muted">{expense?.paymentStatus ?? 'Rapproché'} — calculé d’après les paiements liés</div> : <select className="select" value={v.paymentStatus} onChange={(e) => set('paymentStatus', e.target.value)}>
               <option value="Non payé">Non payé</option>
               <option value="Payé">Payé</option>
-            </select>
+            </select>}
           </div>
           <div className="field" style={{ gridColumn: '1 / -1' }}>
             <label>Notes</label>
@@ -971,12 +974,13 @@ function ExpenseModal({
           {expense && (
             <div className="field" style={{ gridColumn: '1 / -1' }}>
               <label>Paiement (rapprochement bancaire)</label>
+              {expense.paidAmount > 0 && <p>Payé : <Money value={expense.paidAmount} /> · Reste à payer : <Money value={expense.remainingAmount} /></p>}
               {bankMatches.length > 0 && (
                 <div className="grid" style={{ gap: '0.4rem', marginBottom: '0.5rem' }}>
                   {bankMatches.map((m) => (
                     <div key={m.matchId} className="row" style={{ gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
                       <span className="badge ok">Rapproché</span>
-                      <span>{formatDateBE(m.bookingDate)} · <Money value={m.amount} sign /> · {m.bank ?? '—'}</span>
+                      <span>{formatDateBE(m.bookingDate)} · <Money value={m.allocatedAmount} /> affectés à cette facture · {m.bank ?? '—'}</span>
                       {m.counterpartyName && <span className="muted">{m.counterpartyName}</span>}
                       <button type="button" className="btn" onClick={() => unlinkPayment(m)}>Délier</button>
                     </div>

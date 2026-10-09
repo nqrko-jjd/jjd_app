@@ -6,6 +6,7 @@ import { Stack, useLocalSearchParams, useFocusEffect, useRouter } from 'expo-rou
 import { apiGet, apiSend } from '@/lib/api';
 import { ScreenHeader, Card, Label, Loading, Row, Muted, dateBE } from '@/lib/ui';
 import { T } from '@/lib/theme';
+import { tr, dateLocale } from '@/lib/i18n';
 
 interface Task { id: string; title: string; status: string; assignees: { id: string; name: string }[] }
 
@@ -87,9 +88,9 @@ export default function FicheDuJour() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ ...T.content, gap: 20 }}>
-      <Stack.Screen options={{ title: w.ref, headerBackTitle: 'Retour' }} />
+      <Stack.Screen options={{ title: w.ref, headerBackTitle: tr('Retour') }} />
 
-      <ScreenHeader title={w.title} eyebrow={w.ref} description="Votre mission et les informations pour intervenir."/>
+      <ScreenHeader title={w.title} eyebrow={w.ref} description={tr("Votre mission et les informations pour intervenir.")}/>
       <Card>
         {w.address ? (
           <Pressable
@@ -106,7 +107,7 @@ export default function FicheDuJour() {
       {d.building?.accessNote ? <Card><Label>Accès</Label><Text style={{ color: T.ink }}>{d.building.accessNote}</Text></Card> : null}
 
       <Card>
-        <Label>À faire{d.today && !d.today.allDay ? ` · ${new Date(d.today.startAt).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' })}–${new Date(d.today.endAt).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' })}` : ''}</Label>
+        <Label>À faire{d.today && !d.today.allDay ? ` · ${new Date(d.today.startAt).toLocaleTimeString(dateLocale(), { hour: '2-digit', minute: '2-digit' })}–${new Date(d.today.endAt).toLocaleTimeString(dateLocale(), { hour: '2-digit', minute: '2-digit' })}` : ''}</Label>
         <Text style={{ color: T.ink }}>{d.today?.toDo || w.description || 'Voir avec le bureau.'}</Text>
         {d.today?.materials ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 }}>
@@ -157,7 +158,7 @@ export default function FicheDuJour() {
           <TextInput
             value={newTaskTitle}
             onChangeText={setNewTaskTitle}
-            placeholder="+ Nouvelle tâche…"
+            placeholder={tr("+ Nouvelle tâche…")}
             placeholderTextColor={T.ink3}
             style={{ borderWidth: 1, borderColor: T.line, borderRadius: 8, padding: 10, fontSize: 15, color: T.ink }}
           />
@@ -190,17 +191,17 @@ export default function FicheDuJour() {
       {d.today && d.today.people.length > 0 ? (
         <Card>
           <Label>Équipe du jour</Label>
-          {d.today.people.map((p, i) => <Phone key={i} label="Ouvrier" name={p.name} phone={p.phone} />)}
+          {d.today.people.map((p, i) => <Phone key={i} label={tr("Ouvrier")} name={p.name} phone={p.phone} />)}
         </Card>
       ) : null}
 
       <Card>
         <Label>Contacts</Label>
-        {d.manager ? <Phone label="Chef de chantier" name={d.manager.name} phone={d.manager.phone} /> : null}
+        {d.manager ? <Phone label={tr("Chef de chantier")} name={d.manager.name} phone={d.manager.phone} /> : null}
         {d.client ? <Phone label="Client" name={d.client.name} phone={d.client.phone} /> : null}
-        {d.owner ? <Phone label="Propriétaire" name={d.owner.name} phone={d.owner.phone} /> : null}
-        {d.tenant ? <Phone label="Locataire" name={d.tenant.name} phone={d.tenant.phone} /> : null}
-        {d.tenant?.phone2 ? <Phone label="Locataire (2)" name={d.tenant.name} phone={d.tenant.phone2} /> : null}
+        {d.owner ? <Phone label={tr("Propriétaire")} name={d.owner.name} phone={d.owner.phone} /> : null}
+        {d.tenant ? <Phone label={tr("Locataire")} name={d.tenant.name} phone={d.tenant.phone} /> : null}
+        {d.tenant?.phone2 ? <Phone label={tr("Locataire (2)")} name={d.tenant.name} phone={d.tenant.phone2} /> : null}
         {(d.building?.contacts ?? []).map((c, i) => <Phone key={i} label={ROLE[c.role] ?? c.role} name={c.name} phone={c.phone} />)}
         {!d.manager && !d.client && !d.owner && !d.tenant && !(d.building?.contacts ?? []).length ? <Muted>Aucun contact renseigné.</Muted> : null}
       </Card>

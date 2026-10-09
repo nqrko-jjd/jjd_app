@@ -6,6 +6,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { apiGet } from '@/lib/api';
 import { Loading, EmptyState } from '@/lib/ui';
 import { T } from '@/lib/theme';
+import { dateLocale } from '@/lib/i18n';
 
 interface Row { id: string; ref: string; status: string; neededOn: string | null; worksite: { ref: string; title: string }; lineCount: number; doneLines: number }
 const STATUS: Record<string, string> = { to_prepare: 'À préparer', preparing: 'En cours', prepared: 'Prête', cancelled: 'Annulée' };
@@ -25,7 +26,7 @@ export default function Preparations() {
     if (!iso) return null;
     const d = new Date(iso); const today = new Date(); today.setHours(0, 0, 0, 0);
     const days = Math.round((d.getTime() - today.getTime()) / 86400000);
-    return { text: days < 0 ? `En retard de ${-days} j` : days === 0 ? 'Pour aujourd’hui' : days === 1 ? 'Pour demain' : `Pour le ${d.toLocaleDateString('fr-BE', { day: '2-digit', month: 'short' })}`, late: days < 0, soon: days <= 1 };
+    return { text: days < 0 ? `En retard de ${-days} j` : days === 0 ? 'Pour aujourd’hui' : days === 1 ? 'Pour demain' : `Pour le ${d.toLocaleDateString(dateLocale(), { day: '2-digit', month: 'short' })}`, late: days < 0, soon: days <= 1 };
   };
 
   return (

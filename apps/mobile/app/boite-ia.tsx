@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { View, ScrollView, Pressable, StyleSheet, RefreshControl, TextInput, Alert } from 'react-native';
+import { View, ScrollView, Pressable, StyleSheet, RefreshControl, TextInput } from 'react-native';
 import { Text } from '@/lib/AppText';
 import { Feather } from '@expo/vector-icons';
 import { Stack, useFocusEffect } from 'expo-router';
@@ -8,6 +8,7 @@ import { Muted, Loading, EmptyState } from '@/lib/ui';
 import { MailView, type MailAttachment } from '@/lib/MailView';
 import { WorksitePick, type Ws } from '@/lib/WorksitePick';
 import { T } from '@/lib/theme';
+import { tr, dateLocale, Alert } from '@/lib/i18n';
 
 type Kind = 'lead' | 'appointment' | 'worksite_note' | 'payment_reminder' | 'other';
 interface Sug {
@@ -19,7 +20,7 @@ interface Source { subject: string; from: string; to: string; receivedAt: string
 
 const KIND: Record<Kind, string> = { lead: 'Nouvelle demande', appointment: 'Rendez-vous', worksite_note: 'Note chantier', payment_reminder: 'Paiement', other: 'Autre' };
 const TABS: [Kind | '', string][] = [['', 'Tous'], ['lead', 'Demandes'], ['appointment', 'RDV'], ['worksite_note', 'Notes'], ['payment_reminder', 'Paiements'], ['other', 'Autre']];
-const dayLabel = (d: Date) => d.toLocaleDateString('fr-BE', { weekday: 'short', day: 'numeric' });
+const dayLabel = (d: Date) => d.toLocaleDateString(dateLocale(), { weekday: 'short', day: 'numeric' });
 const hhmm = (min: number) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
 
 /** Boîte IA sur téléphone : les mails qui demandent une action, à traiter d'un geste. Rien n'est créé sans ta validation. */
@@ -45,7 +46,7 @@ export default function BoiteIa() {
   if (!items) return <Loading />;
   return (
     <View style={{ flex: 1, backgroundColor: T.paper }}>
-      <Stack.Screen options={{ title: 'Boîte IA', headerBackTitle: 'Retour' }} />
+      <Stack.Screen options={{ title: tr('Boîte IA'), headerBackTitle: tr('Retour') }} />
       <View style={{ paddingTop: 12 }}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}>
           {TABS.map(([k, label]) => <Pressable key={label} accessibilityRole="button" onPress={() => { setKind(k); setItems(null); }} style={[s.chip, kind === k && s.chipOn]}><Text style={[s.chipTxt, kind === k && { color: '#fff' }]}>{label}</Text></Pressable>)}
@@ -53,7 +54,7 @@ export default function BoiteIa() {
       </View>
       <ScrollView contentContainerStyle={{ ...T.content, padding: 16, gap: 12 }} keyboardShouldPersistTaps="handled" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} />}>
         {flash && <View style={[s.flash, { backgroundColor: flash.ok ? T.okSoft : T.critSoft }]}><Text style={{ color: flash.ok ? T.ok : T.crit, fontWeight: '700', flex: 1 }}>{flash.text}</Text></View>}
-        {items.length === 0 && <EmptyState title="Rien à traiter" description="Les mails qui demandent une action apparaîtront ici." icon="inbox" />}
+        {items.length === 0 && <EmptyState title={tr("Rien à traiter")} description={tr("Les mails qui demandent une action apparaîtront ici.")} icon="inbox" />}
         {items.map((sg) => (
           <View key={sg.id} style={s.card}>
             <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -62,11 +63,11 @@ export default function BoiteIa() {
               {sg.worksite && <View style={[s.badge, { backgroundColor: T.okSoft }]}><Text style={s.badgeTxt}>{sg.worksite.ref}</Text></View>}
             </View>
             <Text style={s.summary}>{sg.summary ?? sg.subject ?? '(sans résumé)'}</Text>
-            <Muted numberOfLines={2}>{(sg.fromAddress ?? '—').replace(/<.*>/, '').trim()} · {sg.receivedAt ? new Date(sg.receivedAt).toLocaleDateString('fr-BE', { day: '2-digit', month: 'short' }) : ''}{sg.subject ? ` · ${sg.subject}` : ''}</Muted>
+            <Muted numberOfLines={2}>{(sg.fromAddress ?? '—').replace(/<.*>/, '').trim()} · {sg.receivedAt ? new Date(sg.receivedAt).toLocaleDateString(dateLocale(), { day: '2-digit', month: 'short' }) : ''}{sg.subject ? ` · ${sg.subject}` : ''}</Muted>
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <Pressable accessibilityRole="button" onPress={() => { setOpenId(openId === sg.id && mode === 'mail' ? null : sg.id); setMode('mail'); }} style={s.sec}><Feather name="mail" size={16} color={T.primary} /><Text style={s.secTxt}>Le mail</Text></Pressable>
               <Pressable accessibilityRole="button" onPress={() => { setOpenId(openId === sg.id && mode === 'act' ? null : sg.id); setMode('act'); }} style={s.main}><Feather name="check" size={16} color="#fff" /><Text style={s.mainTxt}>Traiter</Text></Pressable>
-              <Pressable accessibilityRole="button" accessibilityLabel="Rejeter" onPress={() => dismiss(sg)} style={s.rej}><Feather name="x" size={18} color={T.crit} /></Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel={tr("Rejeter")} onPress={() => dismiss(sg)} style={s.rej}><Feather name="x" size={18} color={T.crit} /></Pressable>
             </View>
             {openId === sg.id && mode === 'mail' && <MailBox id={sg.id} />}
             {openId === sg.id && mode === 'act' && <Act sg={sg} onApply={(b, ok) => applyIt(sg, b, ok)} />}

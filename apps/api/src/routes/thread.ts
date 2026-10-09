@@ -1,3 +1,4 @@
+import { withTranslations } from '../lib/translate.js';
 import { refreshWorksiteStatus } from '../lib/worksite-status.js';
 import { Router } from 'express';
 import multer from 'multer';
@@ -66,7 +67,7 @@ threadRouter.get(
       prisma.message.findMany({
         where: { threadId: thread.id, audience: 'internal' },
         orderBy: { createdAt: 'asc' },
-        include: { author: { select: { id: true } }, mentions: { select: { userId: true } } },
+        include: { author: { select: { id: true, locale: true } }, mentions: { select: { userId: true } } },
       }),
       prisma.threadParticipant.findMany({
         where: { threadId: thread.id },
@@ -77,7 +78,7 @@ threadRouter.get(
     const mentionNames = await mentionNamesFor(messages);
     res.json({
       thread,
-      messages: messages.map((m) => ({ ...m, mentions: undefined, mentionedNames: mentionNames.get(m.id) ?? [] })),
+      messages: await withTranslations(messages.map((m) => ({ ...m, mentions: undefined, mentionedNames: mentionNames.get(m.id) ?? [] })), req.user!.locale),
       participants: participants.map((p) => p.person),
       readableBy,
     });

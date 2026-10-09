@@ -15,6 +15,8 @@ import {
 import { SessionProvider, useSession } from '@/lib/session';
 import { T } from '@/lib/theme';
 import { Intro } from '@/lib/Intro';
+import { LocaleProvider, useLocale } from '@/lib/i18n';
+import { tr } from '@/lib/i18n';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 // Les champs de saisie n'ont pas de variante custom par graisse — DM Sans normale suffit partout.
@@ -23,6 +25,8 @@ TextInputAny.defaultProps = { ...TextInputAny.defaultProps, style: [{ fontFamily
 
 function Guard() {
   const { user, loading } = useSession();
+  const { applyServerLocale } = useLocale();
+  useEffect(() => { applyServerLocale(user?.locale); }, [user?.locale]); // eslint-disable-line react-hooks/exhaustive-deps
   const segments = useSegments();
   const router = useRouter();
 
@@ -41,7 +45,7 @@ function Guard() {
         headerTitleStyle: { color: T.ink, fontWeight: '700', fontFamily: 'DMSans_700Bold' },
         headerTintColor: T.primary,
         headerShadowVisible: false,
-        headerBackTitle: 'Retour',
+        headerBackTitle: tr('Retour'),
       }}
     >
       <Stack.Screen name="login" options={{ headerShown: false }} />
@@ -67,11 +71,13 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
+      <LocaleProvider>
       <SessionProvider>
         <StatusBar style="dark" />
         <Guard />
         <Intro />
       </SessionProvider>
+      </LocaleProvider>
     </SafeAreaProvider>
   );
 }

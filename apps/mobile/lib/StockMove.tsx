@@ -5,6 +5,7 @@ import { Text } from '@/lib/AppText';
 import { apiGet, apiSend } from '@/lib/api';
 import { T } from './theme';
 import { fmtQty, type StockItem } from './stock';
+import { tr } from './i18n';
 
 type Move = 'out' | 'in';
 
@@ -52,9 +53,9 @@ export function StockMove({ item, defaultUnit, onDone }: { item: StockItem; defa
       </View>
 
       <View style={s.qtyRow}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Moins" onPress={() => bump(-1)} style={s.step}><Feather name="minus" size={24} color={T.primary} /></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel={tr("Moins")} onPress={() => bump(-1)} style={s.step}><Feather name="minus" size={24} color={T.primary} /></Pressable>
         <TextInput value={qty} onChangeText={setQty} keyboardType="decimal-pad" selectTextOnFocus style={s.qty} />
-        <Pressable accessibilityRole="button" accessibilityLabel="Plus" onPress={() => bump(1)} style={s.step}><Feather name="plus" size={24} color={T.primary} /></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel={tr("Plus")} onPress={() => bump(1)} style={s.step}><Feather name="plus" size={24} color={T.primary} /></Pressable>
       </View>
 
       {units.length > 1 && (
@@ -75,7 +76,7 @@ export function StockMove({ item, defaultUnit, onDone }: { item: StockItem; defa
             </Pressable>
           ) : (
             <>
-              <TextInput value={q} onChangeText={setQ} placeholder="Chercher un chantier (réf ou nom)" placeholderTextColor={T.ink3} style={s.search} />
+              <TextInput value={q} onChangeText={setQ} placeholder={tr("Chercher un chantier (réf ou nom)")} placeholderTextColor={T.ink3} style={s.search} />
               {matches.map((w) => (
                 <Pressable key={w.id} accessibilityRole="button" onPress={() => setWs(w)} style={s.option}><Text style={{ color: T.ink }} numberOfLines={2}>{w.name}</Text></Pressable>
               ))}

@@ -5,6 +5,7 @@ import { Feather } from '@expo/vector-icons';
 import { Text } from '@/lib/AppText';
 import { openApiFile } from './files';
 import { T } from './theme';
+import { dateLocale } from './i18n';
 
 export interface MailAttachment { name: string; size: number; type: string; path: string | null; reason?: string | null }
 
@@ -13,7 +14,7 @@ const fullDate = (iso: string | null) => {
   if (!iso) return '';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
-  const s = d.toLocaleString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+  const s = d.toLocaleString(dateLocale(), { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
   return s.charAt(0).toUpperCase() + s.slice(1);
 };
 const sender = (raw: string | null) => {

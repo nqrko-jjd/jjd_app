@@ -6,6 +6,7 @@ import { apiGet } from '@/lib/api';
 import { ScreenHeader, Card, Label, Loading, Row, Badge, Muted, useRouterPush } from '@/lib/ui';
 import { T } from '@/lib/theme';
 import { WORKSITE_STATUS_LABEL } from '@/lib/labels';
+import { tr } from '@/lib/i18n';
 
 const BUILDING_CONTACT_ROLE_LABEL: Record<string, string> = {
   concierge: 'Concierge', president: "Président d'assemblée", council: 'Membre du conseil',
@@ -39,7 +40,7 @@ export default function ImmeubleDetail() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ ...T.content, gap: 20 }}>
-      <Stack.Screen options={{ title: b.name, headerBackTitle: 'Retour' }} />
+      <Stack.Screen options={{ title: b.name, headerBackTitle: tr('Retour') }} />
       <ScreenHeader title={b.name} eyebrow="Immeuble & projet" description={[b.address, b.postalCode, b.city].filter(Boolean).join(' · ')}/>
       <Card>
         <Row k="Adresse" v={[b.address, [b.postalCode, b.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') || '—'} />

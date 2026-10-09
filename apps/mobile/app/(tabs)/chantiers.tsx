@@ -6,6 +6,7 @@ import { apiGet } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { Badge, Muted, eur, ScreenHeader, EmptyState } from '@/lib/ui';
 import { T } from '@/lib/theme';
+import { tr } from '@/lib/i18n';
 
 interface WS {
   id: string; ref: string; title: string; status: string; entity: string;
@@ -23,9 +24,9 @@ const TONE: Record<string, 'ok' | 'warn' | 'crit' | undefined> = {
 };
 
 const FILTERS = [
-  { key: 'all', label: 'Tous', test: () => true },
-  { key: 'open', label: 'En cours', test: (it: WS) => it.status === 'in_progress' },
-  { key: 'to_invoice', label: 'À facturer', test: (it: WS) => it.status === 'to_invoice' },
+  { key: 'all', label: tr('Tous'), test: () => true },
+  { key: 'open', label: tr('En cours'), test: (it: WS) => it.status === 'in_progress' },
+  { key: 'to_invoice', label: tr('À facturer'), test: (it: WS) => it.status === 'to_invoice' },
 ] as const;
 
 export default function Chantiers() {
@@ -69,7 +70,7 @@ export default function Chantiers() {
       <View style={{ paddingHorizontal: 18 }}>
         <TextInput
           style={s.search}
-          placeholder="Rechercher (réf, titre, ville)…"
+          placeholder={tr("Rechercher (réf, titre, ville)…")}
           value={q}
           onChangeText={setQ}
           onSubmitEditing={load}
@@ -80,7 +81,7 @@ export default function Chantiers() {
         data={filtered}
         keyExtractor={(x) => x.id}
         contentContainerStyle={{ ...T.content, padding: 18, paddingTop: 12, gap: 12 }}
-        ListEmptyComponent={<EmptyState title="Aucun chantier trouvé" description="Changez le filtre ou votre recherche." icon="home"/>}
+        ListEmptyComponent={<EmptyState title={tr("Aucun chantier trouvé")} description={tr("Changez le filtre ou votre recherche.")} icon="home"/>}
         renderItem={({ item }) => (
           <Pressable style={s.row} onPress={() => router.push((worker ? `/fil/${item.id}` : `/chantier/${item.id}`) as never)}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>

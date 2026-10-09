@@ -6,6 +6,7 @@ import { apiGet } from '@/lib/api';
 import { ScreenHeader, Card, Label, Loading, Row, Badge } from '@/lib/ui';
 import { WORKSITE_STATUS_LABEL } from '@/lib/labels';
 import { T } from '@/lib/theme';
+import { tr } from '@/lib/i18n';
 
 interface D {
   contact: {
@@ -27,7 +28,7 @@ export default function ContactDetail() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ ...T.content, gap: 20 }}>
-      <Stack.Screen options={{ title: c.name, headerBackTitle: 'Retour' }} />
+      <Stack.Screen options={{ title: c.name, headerBackTitle: tr('Retour') }} />
       <ScreenHeader title={c.name} eyebrow="Contact" description={[c.address, c.postalCode, c.city].filter(Boolean).join(' · ')}/>
       <Card>
         <Row k="E-mail" v={c.email ?? '—'} />

@@ -1722,3 +1722,13 @@ model WorksiteMail {
   @@index([worksiteId, receivedAt])
   @@index([messageId])
 }
+
+/// Traduction mise en cache d'un message du fil pour une langue donnée (fr | en | pt-BR) — voir lib/translate.ts.
+model MessageTranslation {
+  messageId String
+  locale    String
+  body      String
+  createdAt DateTime @default(now())
+
+  @@id([messageId, locale])
+}

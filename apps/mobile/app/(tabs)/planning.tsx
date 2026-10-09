@@ -7,6 +7,7 @@ import { apiGet } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { Card, Muted, Loading, EmptyState } from '@/lib/ui';
 import { T } from '@/lib/theme';
+import { tr, dateLocale } from '@/lib/i18n';
 
 interface Ev {
   id: string; title: string | null; startAt: string; endAt: string; allDay: boolean; kind?: string;
@@ -23,8 +24,8 @@ const DAY_LONG = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', '
 const MONTHS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
 
 const KIND = {
-  intervention: { main: '#3d7fc4', soft: '#e4eef9', ink: '#1f5a96', label: 'Intervention' },
-  meeting: { main: '#e0a800', soft: '#fbf1cc', ink: '#7a5c00', label: 'Rendez-vous' },
+  intervention: { main: '#3d7fc4', soft: '#e4eef9', ink: '#1f5a96', label: tr('Intervention') },
+  meeting: { main: '#e0a800', soft: '#fbf1cc', ink: '#7a5c00', label: tr('Rendez-vous') },
 } as const;
 const kindOf = (e: { kind?: string }) => (e.kind === 'meeting' ? KIND.meeting : KIND.intervention);
 
@@ -34,7 +35,7 @@ const addDays = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.get
 const mondayOf = (d: Date) => addDays(startOfDay(d), -((d.getDay() + 6) % 7));
 const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
 const key = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-const hm = (iso: string) => new Date(iso).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' });
+const hm = (iso: string) => new Date(iso).toLocaleTimeString(dateLocale(), { hour: '2-digit', minute: '2-digit' });
 const name = (p: { displayName: string | null; firstName: string }) => p.displayName || p.firstName;
 
 /** Planning : le même planning que le site, en cinq vues pensées pour le doigt (jour, semaine, mois, par personne, par chantier). */
@@ -98,7 +99,7 @@ export default function Planning() {
     ? `${MONTHS[anchor.getMonth()]} ${anchor.getFullYear()}`
     : view === 'equipe' || view === 'chantiers'
       ? `${DAY_LONG[(anchor.getDay() + 6) % 7]} ${anchor.getDate()} ${MONTHS[anchor.getMonth()].toLowerCase()}`
-      : `${week.toLocaleDateString('fr-BE', { day: '2-digit', month: 'short' })} – ${addDays(week, 6).toLocaleDateString('fr-BE', { day: '2-digit', month: 'short' })}`;
+      : `${week.toLocaleDateString(dateLocale(), { day: '2-digit', month: 'short' })} – ${addDays(week, 6).toLocaleDateString(dateLocale(), { day: '2-digit', month: 'short' })}`;
 
   const views: [View_, string][] = staff
     ? [['jour', 'Jour'], ['semaine', 'Semaine'], ['mois', 'Mois'], ['equipe', 'Équipe'], ['chantiers', 'Chantiers']]
@@ -113,7 +114,7 @@ export default function Planning() {
           <Text style={s.title}>{mine ? 'Mon planning' : 'Planning'}</Text>
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <Pressable accessibilityRole="button" onPress={() => setAnchor(today)} style={s.todayBtn}><Text style={s.todayTxt}>Aujourd’hui</Text></Pressable>
-            {staff && <Pressable accessibilityRole="button" accessibilityLabel="Nouveau" onPress={newEvent} style={s.plus}><Feather name="plus" size={22} color="#fff" /></Pressable>}
+            {staff && <Pressable accessibilityRole="button" accessibilityLabel={tr("Nouveau")} onPress={newEvent} style={s.plus}><Feather name="plus" size={22} color="#fff" /></Pressable>}
           </View>
         </View>
         <View style={s.seg}>
@@ -129,9 +130,9 @@ export default function Planning() {
           ))}
         </View>
         <View style={s.nav}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Précédent" style={s.navBtn} onPress={() => shift(-1)}><Feather name="chevron-left" size={20} color={T.ink} /></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={tr("Précédent")} style={s.navBtn} onPress={() => shift(-1)}><Feather name="chevron-left" size={20} color={T.ink} /></Pressable>
           <Text style={s.week}>{title}</Text>
-          <Pressable accessibilityRole="button" accessibilityLabel="Suivant" style={s.navBtn} onPress={() => shift(1)}><Feather name="chevron-right" size={20} color={T.ink} /></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={tr("Suivant")} style={s.navBtn} onPress={() => shift(1)}><Feather name="chevron-right" size={20} color={T.ink} /></Pressable>
         </View>
       </View>
 
@@ -158,8 +159,8 @@ export default function Planning() {
       >
         {view === 'jour' && (
           <>
-            <Text style={s.dayHeading}>{DAY_LONG[(anchor.getDay() + 6) % 7]} {anchor.toLocaleDateString('fr-BE', { day: '2-digit', month: 'long' })}</Text>
-            {dayEvents.length === 0 && <EmptyState title="Journée disponible" description="Aucune affectation pour ce jour." icon="calendar" />}
+            <Text style={s.dayHeading}>{DAY_LONG[(anchor.getDay() + 6) % 7]} {anchor.toLocaleDateString(dateLocale(), { day: '2-digit', month: 'long' })}</Text>
+            {dayEvents.length === 0 && <EmptyState title={tr("Journée disponible")} description={tr("Aucune affectation pour ce jour.")} icon="calendar" />}
             {staff && dayEvents.length === 0 && <Pressable accessibilityRole="button" onPress={newEvent} style={s.addEmpty}><Feather name="plus" size={18} color="#fff" /><Text style={{ color: '#fff', fontWeight: '800' }}>Ajouter une intervention ou un rendez-vous</Text></Pressable>}
             {dayEvents.map((e) => <EventCard key={e.id} e={e} onPress={() => open(e)} />)}
           </>
@@ -254,7 +255,7 @@ export default function Planning() {
           return (
             <>
               <Text style={s.dayHeading}>{list.length} chantier{list.length > 1 ? 's' : ''} actif{list.length > 1 ? 's' : ''} ce jour</Text>
-              {list.length === 0 && <EmptyState title="Aucun chantier ce jour" description="Aucune affectation n’est prévue." icon="home" />}
+              {list.length === 0 && <EmptyState title={tr("Aucun chantier ce jour")} description={tr("Aucune affectation n’est prévue.")} icon="home" />}
               {list.map(({ w, evs }) => {
                 const team = [...new Set(evs.flatMap((e) => e.assignments.map((a) => name(a.person))))];
                 return (

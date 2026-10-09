@@ -7,6 +7,7 @@ interface User {
   role: string;
   personId: string | null;
   entityScope?: string | null;
+  locale?: string;
 }
 interface Person {
   id: string;

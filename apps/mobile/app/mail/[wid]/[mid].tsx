@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { View, ScrollView, Pressable, StyleSheet, TextInput, Alert } from 'react-native';
+import { View, ScrollView, Pressable, StyleSheet, TextInput } from 'react-native';
 import { Text } from '@/lib/AppText';
 import { Feather } from '@expo/vector-icons';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -7,6 +7,7 @@ import { apiGet, apiSend } from '@/lib/api';
 import { Muted, Loading } from '@/lib/ui';
 import { MailView, type MailAttachment } from '@/lib/MailView';
 import { T } from '@/lib/theme';
+import { tr, dateLocale, Alert } from '@/lib/i18n';
 
 interface Detail {
   id: string; kind: 'mail' | 'note'; subject: string | null; fromAddress: string | null; toAddress: string | null; at: string;
@@ -34,20 +35,20 @@ export default function MailDetail() {
   const noteBox = (
     <View style={s.note}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}><Feather name="edit-3" size={15} color={T.ink} /><Text style={{ fontWeight: '800', color: T.ink }}>{d.kind === 'note' ? 'Note' : 'Note de suivi'}</Text><Text style={{ marginLeft: 'auto', fontSize: 11.5, color: T.ink2 }}>bureau uniquement</Text></View>
-      <TextInput value={note} onChangeText={setNote} multiline placeholder="Ajouter une note de suivi sur ce mail…" placeholderTextColor={T.ink3} style={s.input} />
+      <TextInput value={note} onChangeText={setNote} multiline placeholder={tr("Ajouter une note de suivi sur ce mail…")} placeholderTextColor={T.ink3} style={s.input} />
       {!!msg && <Text style={{ color: T.ink2, fontSize: 12.5 }}>{msg}</Text>}
       <View style={{ flexDirection: 'row', gap: 10 }}>
         <Pressable accessibilityRole="button" disabled={busy || !dirty || (d.kind === 'note' && !note.trim())} onPress={save} style={[s.save, (busy || !dirty) && { opacity: 0.4 }]}><Text style={s.saveTxt}>{dirty ? 'Enregistrer' : 'Enregistrée'}</Text></Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel="Supprimer" onPress={remove} style={s.del}><Feather name="trash-2" size={18} color={T.crit} /></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel={tr("Supprimer")} onPress={remove} style={s.del}><Feather name="trash-2" size={18} color={T.crit} /></Pressable>
       </View>
     </View>
   );
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ padding: 16, gap: 14 }} keyboardShouldPersistTaps="handled">
-      <Stack.Screen options={{ title: d.kind === 'note' ? 'Note' : 'Mail', headerBackTitle: 'Retour' }} />
+      <Stack.Screen options={{ title: d.kind === 'note' ? 'Note' : 'Mail', headerBackTitle: tr('Retour') }} />
       {d.kind === 'note' ? (
-        <View style={{ gap: 6 }}><Text style={{ fontSize: 20, fontWeight: '800', color: T.ink }}>{d.subject?.trim() || 'Note de suivi'}</Text><Muted>{new Date(d.at).toLocaleString('fr-BE', { dateStyle: 'long', timeStyle: 'short' })}</Muted></View>
+        <View style={{ gap: 6 }}><Text style={{ fontSize: 20, fontWeight: '800', color: T.ink }}>{d.subject?.trim() || 'Note de suivi'}</Text><Muted>{new Date(d.at).toLocaleString(dateLocale(), { dateStyle: 'long', timeStyle: 'short' })}</Muted></View>
       ) : (
         <MailView subject={d.subject} from={d.fromAddress} to={d.toAddress} date={d.at} html={d.bodyHtml} text={d.bodyText} attachments={atts} />
       )}

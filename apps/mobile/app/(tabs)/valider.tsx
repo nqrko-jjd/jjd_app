@@ -1,11 +1,12 @@
 import { useCallback, useState } from 'react';
-import { View, Pressable, ScrollView, StyleSheet, RefreshControl, Alert, TextInput, Image } from 'react-native';
+import { View, Pressable, ScrollView, StyleSheet, RefreshControl, TextInput, Image } from 'react-native';
 import { Text } from '@/lib/AppText';
 import { Feather } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { apiGet, apiSend, API_URL } from '@/lib/api';
 import { Muted, Loading, EmptyState, eur, dateBE } from '@/lib/ui';
 import { T } from '@/lib/theme';
+import { tr, dateLocale, Alert } from '@/lib/i18n';
 
 interface Pending {
   id: string; date: string | null; hours: number | null; amount: number | null; task: string | null; geoFlag?: boolean;
@@ -86,9 +87,9 @@ export default function Valider() {
         {seg === 'planning' && (
           <>
             <View style={s.nav}>
-              <Pressable accessibilityRole="button" accessibilityLabel="Jour précédent" onPress={() => setDay(addDays(day, -1))} style={s.navBtn}><Feather name="chevron-left" size={20} color={T.ink} /></Pressable>
-              <Text style={s.navTitle}>{day.toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' })}</Text>
-              <Pressable accessibilityRole="button" accessibilityLabel="Jour suivant" onPress={() => setDay(addDays(day, 1))} style={s.navBtn}><Feather name="chevron-right" size={20} color={T.ink} /></Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel={tr("Jour précédent")} onPress={() => setDay(addDays(day, -1))} style={s.navBtn}><Feather name="chevron-left" size={20} color={T.ink} /></Pressable>
+              <Text style={s.navTitle}>{day.toLocaleDateString(dateLocale(), { weekday: 'long', day: 'numeric', month: 'long' })}</Text>
+              <Pressable accessibilityRole="button" accessibilityLabel={tr("Jour suivant")} onPress={() => setDay(addDays(day, 1))} style={s.navBtn}><Feather name="chevron-right" size={20} color={T.ink} /></Pressable>
             </View>
             {open.length > 0 && (
               <Pressable accessibilityRole="button" disabled={busy === 'day'} onPress={validateDay} style={({ pressed }) => [s.big, pressed && { transform: [{ scale: 0.98 }] }, busy === 'day' && { opacity: 0.5 }]}>
@@ -110,9 +111,9 @@ export default function Valider() {
                     </View>
                   </View>
                   <View style={s.stepRow}>
-                    <Pressable accessibilityRole="button" accessibilityLabel="Moins une demi-heure" onPress={() => setHoursOver({ ...hoursOver, [p.key]: Math.max(0.5, h - 0.5) })} style={s.step}><Feather name="minus" size={20} color={T.primary} /></Pressable>
+                    <Pressable accessibilityRole="button" accessibilityLabel={tr("Moins une demi-heure")} onPress={() => setHoursOver({ ...hoursOver, [p.key]: Math.max(0.5, h - 0.5) })} style={s.step}><Feather name="minus" size={20} color={T.primary} /></Pressable>
                     <Text style={s.hours}>{String(h).replace('.', ',')} h</Text>
-                    <Pressable accessibilityRole="button" accessibilityLabel="Plus une demi-heure" onPress={() => setHoursOver({ ...hoursOver, [p.key]: Math.min(16, h + 0.5) })} style={s.step}><Feather name="plus" size={20} color={T.primary} /></Pressable>
+                    <Pressable accessibilityRole="button" accessibilityLabel={tr("Plus une demi-heure")} onPress={() => setHoursOver({ ...hoursOver, [p.key]: Math.min(16, h + 0.5) })} style={s.step}><Feather name="plus" size={20} color={T.primary} /></Pressable>
                   </View>
                   <View style={{ flexDirection: 'row', gap: 10 }}>
                     <Pressable accessibilityRole="button" disabled={busy === p.key} onPress={() => run(p.key, () => apiSend('/api/timesheet/planned/validate', 'POST', { items: [item(p)] }, false), `${p.personName} validé.`)} style={[s.ok, busy === p.key && { opacity: 0.5 }]}><Feather name="check" size={18} color="#fff" /><Text style={s.okTxt}>Valider</Text></Pressable>
@@ -132,7 +133,7 @@ export default function Valider() {
 
         {seg === 'heures' && (
           <>
-            {pending.length === 0 && <EmptyState title="Rien à valider" description="Tous les pointages sont traités." icon="check-circle" />}
+            {pending.length === 0 && <EmptyState title={tr("Rien à valider")} description={tr("Tous les pointages sont traités.")} icon="check-circle" />}
             {pending.filter((x) => !x.geoFlag).length > 1 && (
               <Pressable accessibilityRole="button" disabled={busy === 'all'} onPress={approveAll} style={({ pressed }) => [s.big, pressed && { transform: [{ scale: 0.98 }] }, busy === 'all' && { opacity: 0.5 }]}>
                 <Feather name="check-circle" size={22} color="#fff" /><Text style={s.bigTxt}>Tout valider</Text>
@@ -155,7 +156,7 @@ export default function Valider() {
 
         {seg === 'rapports' && (
           <>
-            {reports.length === 0 && <EmptyState title="Aucun rapport à relire" description="Les rapports signés par les équipes apparaîtront ici." icon="file-text" />}
+            {reports.length === 0 && <EmptyState title={tr("Aucun rapport à relire")} description={tr("Les rapports signés par les équipes apparaîtront ici.")} icon="file-text" />}
             {reports.map((r) => (
               <View key={r.id} style={s.card}>
                 <Text style={s.name}>{r.worksite.ref} · {r.worksite.title}</Text>
@@ -163,7 +164,7 @@ export default function Valider() {
                 {!!r.workDone && <Text style={{ color: T.ink }} numberOfLines={5}>{r.workDone}</Text>}
                 {needs?.id === r.id ? (
                   <View style={{ gap: 8 }}>
-                    <TextInput value={needs.note} onChangeText={(t) => setNeeds({ id: r.id, note: t })} placeholder="Ce qu’il faut compléter…" placeholderTextColor={T.ink3} multiline style={s.note} autoFocus />
+                    <TextInput value={needs.note} onChangeText={(t) => setNeeds({ id: r.id, note: t })} placeholder={tr("Ce qu’il faut compléter…")} placeholderTextColor={T.ink3} multiline style={s.note} autoFocus />
                     <View style={{ flexDirection: 'row', gap: 10 }}>
                       <Pressable accessibilityRole="button" disabled={!needs.note.trim() || busy === r.id} onPress={() => run(r.id, async () => { await apiSend(`/api/reports/${r.id}/review`, 'POST', { decision: 'needs_info', note: needs.note }, false); setNeeds(null); }, 'Complément demandé.')} style={[s.ok, { backgroundColor: T.accent }, !needs.note.trim() && { opacity: 0.45 }]}><Text style={s.okTxt}>Envoyer</Text></Pressable>
                       <Pressable accessibilityRole="button" onPress={() => setNeeds(null)} style={s.no}><Text style={s.noTxt}>Annuler</Text></Pressable>

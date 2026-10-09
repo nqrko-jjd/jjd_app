@@ -7,9 +7,11 @@ import { apiGet, apiSend } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { Loading } from '@/lib/ui';
 import { T } from '@/lib/theme';
+import { MsgText } from '@/lib/MsgText';
+import { tr, dateLocale } from '@/lib/i18n';
 
 interface Msg {
-  id: string; kind: string; body: string | null; authorId: string | null; authorName: string | null; createdAt: string;
+  id: string; kind: string; body: string | null; authorId: string | null; authorName: string | null; createdAt: string; bodyTranslated?: string | null;
 }
 interface Data {
   thread: { id: string };
@@ -17,7 +19,7 @@ interface Data {
 }
 
 function time(iso: string) {
-  return new Date(iso).toLocaleString('fr-BE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  return new Date(iso).toLocaleString(dateLocale(), { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
 
 export default function FilGeneral() {
@@ -46,7 +48,7 @@ export default function FilGeneral() {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: T.paper }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
-      <Stack.Screen options={{ title: 'Général JJD', headerBackTitle: 'Retour' }} />
+      <Stack.Screen options={{ title: tr('Général JJD'), headerBackTitle: tr('Retour') }} />
       <ScrollView ref={scroll} contentContainerStyle={{ ...T.content, padding: 14, gap: 10 }}>
         {d.messages.length === 0 && <Text style={{ color: T.ink2 }}>Aucun message.</Text>}
         {d.messages.map((m) => {
@@ -54,7 +56,7 @@ export default function FilGeneral() {
           return (
             <View key={m.id} style={[s.msgCol, mine && s.msgColMine]}>
               {!mine && <Text style={s.author}>{m.authorName}</Text>}
-              {m.body ? <Text style={[s.bubble, mine && s.bubbleMine]}>{m.body}</Text> : null}
+              {m.body ? <MsgText body={m.body} translated={m.bodyTranslated} style={[s.bubble, mine && s.bubbleMine]} /> : null}
               <Text style={[s.timeTxt, mine && { alignSelf: 'flex-end' }]}>{time(m.createdAt)}</Text>
             </View>
           );

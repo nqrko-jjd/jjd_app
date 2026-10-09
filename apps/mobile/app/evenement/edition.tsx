@@ -7,6 +7,7 @@ import { apiGet, apiSend } from '@/lib/api';
 import { Muted, Loading } from '@/lib/ui';
 import { WorksitePick, type Ws } from '@/lib/WorksitePick';
 import { T } from '@/lib/theme';
+import { tr, dateLocale } from '@/lib/i18n';
 
 interface Person { id: string; firstName: string; lastName: string | null; displayName: string | null }
 interface Vehicle { id: string; plate: string | null; model: string | null; brand: string | null; code: string | null; name?: string | null }
@@ -16,7 +17,7 @@ interface Ev {
   worksite: { id: string; ref: string; title: string };
   assignments: { person: { id: string } }[]; vehicles: { vehicle: { id: string }; driver: { id: string } | null }[];
 }
-const KIND = { intervention: { main: '#3d7fc4', soft: '#e4eef9', label: 'Intervention' }, meeting: { main: '#e0a800', soft: '#fbf1cc', label: 'Rendez-vous' } } as const;
+const KIND = { intervention: { main: '#3d7fc4', soft: '#e4eef9', label: tr('Intervention') }, meeting: { main: '#e0a800', soft: '#fbf1cc', label: tr('Rendez-vous') } } as const;
 const pn = (p: Person) => p.displayName || p.firstName;
 const dayStr = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
@@ -111,7 +112,7 @@ export default function Edition() {
   if (loading) return <Loading />;
   return (
     <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ ...T.content, padding: 16, gap: 14 }} keyboardShouldPersistTaps="handled">
-      <Stack.Screen options={{ title: id ? 'Modifier' : dupFrom ? 'Dupliquer' : 'Nouveau planning', headerBackTitle: 'Retour' }} />
+      <Stack.Screen options={{ title: id ? 'Modifier' : dupFrom ? 'Dupliquer' : 'Nouveau planning', headerBackTitle: tr('Retour') }} />
 
       <View style={s.seg}>
         {(['intervention', 'meeting'] as const).map((k) => (
@@ -131,7 +132,7 @@ export default function Edition() {
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
           {days.map((d, i) => { const k = dayStr(d); return (
             <Pressable key={k} accessibilityRole="button" onPress={() => setDay(k)} style={[s.dayChip, day === k && { backgroundColor: c.main, borderColor: c.main }]}>
-              <Text style={[s.dayDow, day === k && { color: '#fff' }]}>{i === 0 ? 'Auj.' : d.toLocaleDateString('fr-BE', { weekday: 'short' })}</Text>
+              <Text style={[s.dayDow, day === k && { color: '#fff' }]}>{i === 0 ? 'Auj.' : d.toLocaleDateString(dateLocale(), { weekday: 'short' })}</Text>
               <Text style={[s.dayNum, day === k && { color: '#fff' }]}>{d.getDate()}</Text>
             </Pressable>
           ); })}
@@ -157,7 +158,7 @@ export default function Edition() {
 
       <View style={s.card}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}><Text style={s.lbl}>Équipe</Text><Text style={{ color: c.main, fontWeight: '800' }}>{people.length ? `${people.length} choisi${people.length > 1 ? 's' : ''}` : ''}</Text></View>
-        <TextInput value={q} onChangeText={setQ} placeholder="Chercher une personne" placeholderTextColor={T.ink3} style={s.input} />
+        <TextInput value={q} onChangeText={setQ} placeholder={tr("Chercher une personne")} placeholderTextColor={T.ink3} style={s.input} />
         <View style={s.wrap}>
           {shownPeople.map((p) => {
             const on = people.includes(p.id); const taken = busy.people.get(p.id);
@@ -195,15 +196,15 @@ export default function Edition() {
         <TextInput value={kind === 'meeting' ? note : tasks} onChangeText={kind === 'meeting' ? setNote : setTasks} multiline placeholder={kind === 'meeting' ? 'Nom, téléphone, sujet…' : 'Ce qu’il faut faire, une ligne par tâche'} placeholderTextColor={T.ink3} style={[s.input, s.area]} />
         {kind === 'intervention' && (<>
           <Text style={s.lbl}>Accès / étage</Text>
-          <TextInput value={access} onChangeText={setAccess} placeholder="Digicode, étage, personne à contacter…" placeholderTextColor={T.ink3} style={s.input} />
+          <TextInput value={access} onChangeText={setAccess} placeholder={tr("Digicode, étage, personne à contacter…")} placeholderTextColor={T.ink3} style={s.input} />
           <Text style={s.lbl}>Matériel à prévoir</Text>
-          <TextInput value={materials} onChangeText={setMaterials} placeholder="Échelle, plaques, outils…" placeholderTextColor={T.ink3} style={s.input} />
+          <TextInput value={materials} onChangeText={setMaterials} placeholder={tr("Échelle, plaques, outils…")} placeholderTextColor={T.ink3} style={s.input} />
           <Text style={s.lbl}>Contact sur place</Text>
-          <TextInput value={note} onChangeText={setNote} placeholder="Nom et téléphone" placeholderTextColor={T.ink3} style={s.input} />
+          <TextInput value={note} onChangeText={setNote} placeholder={tr("Nom et téléphone")} placeholderTextColor={T.ink3} style={s.input} />
         </>)}
         {kind === 'meeting' && (<>
           <View style={s.switchRow}><Text style={{ flex: 1, color: T.ink, fontWeight: '700' }}>Sur place (adresse du chantier)</Text><Switch value={onSite} onValueChange={setOnSite} trackColor={{ true: c.main }} /></View>
-          {!onSite && <TextInput value={addr} onChangeText={setAddr} placeholder="Adresse du rendez-vous" placeholderTextColor={T.ink3} style={s.input} />}
+          {!onSite && <TextInput value={addr} onChangeText={setAddr} placeholder={tr("Adresse du rendez-vous")} placeholderTextColor={T.ink3} style={s.input} />}
         </>)}
         <View style={s.switchRow}><View style={{ flex: 1 }}><Text style={{ color: T.ink, fontWeight: '700' }}>À confirmer</Text><Muted>Créneau pas encore garanti</Muted></View><Switch value={tentative} onValueChange={setTentative} trackColor={{ true: T.accent }} /></View>
       </View>

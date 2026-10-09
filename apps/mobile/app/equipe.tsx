@@ -2,6 +2,7 @@ import { View } from 'react-native';
 import { Text } from '@/lib/AppText';
 import { Stack } from 'expo-router';
 import { ResourceList, Muted, eur, useRouterPush } from '@/lib/ui';
+import { tr } from '@/lib/i18n';
 
 interface P {
   id: string; firstName: string; lastName: string | null; displayName: string | null;
@@ -16,7 +17,7 @@ export default function Equipe() {
   const push = useRouterPush();
   return (
     <>
-      <Stack.Screen options={{ title: 'Équipe', headerBackTitle: 'Retour' }} />
+      <Stack.Screen options={{ title: tr('Équipe'), headerBackTitle: tr('Retour') }} />
       <ResourceList<P>
         endpoint="/api/people?active=1"
         search={(p, q) => `${p.firstName} ${p.lastName ?? ''} ${p.displayName ?? ''}`.toLowerCase().includes(q)}

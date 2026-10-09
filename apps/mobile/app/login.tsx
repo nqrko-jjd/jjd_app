@@ -5,6 +5,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSession } from '@/lib/session';
 import { LinearGradient } from 'expo-linear-gradient';
 import { T } from '@/lib/theme';
+import { tr } from '@/lib/i18n';
+import { LanguagePicker } from '@/lib/LanguagePicker';
 
 export default function Login() {
   const { signIn } = useSession();
@@ -30,12 +32,13 @@ export default function Login() {
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={s.inner}>
         <LinearGradient colors={[T.heroFrom,T.heroTo]} style={s.hero}><Image source={require('../assets/splash-logo.png')} style={{width:58,height:64,resizeMode:'contain'}}/><Text style={s.brand}>JJD Consult</Text><Text style={s.heroText}>Votre équipe. Vos chantiers.
 Tout au même endroit.</Text></LinearGradient>
+        <View style={{ marginTop: 14 }}><LanguagePicker compact /></View>
         <Text style={{fontSize:26,fontWeight:'800',color:T.ink,marginTop:14}}>Bienvenue</Text>
         <Text style={s.sub}>Connectez-vous à votre espace de travail.</Text>
         <Text style={s.fieldLabel}>E-mail ou n° de GSM</Text>
         <TextInput
           style={s.input}
-          placeholder="E-mail ou 0475 12 34 56"
+          placeholder={tr("E-mail ou 0475 12 34 56")}
           autoCapitalize="none"
           keyboardType="default"
           value={email}
@@ -45,7 +48,7 @@ Tout au même endroit.</Text></LinearGradient>
         <Text style={s.fieldLabel}>Mot de passe ou code</Text>
         <TextInput
           style={s.input}
-          placeholder="Mot de passe ou code"
+          placeholder={tr("Mot de passe ou code")}
           secureTextEntry
           value={password}
           onChangeText={setPassword}

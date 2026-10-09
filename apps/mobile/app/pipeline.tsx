@@ -5,6 +5,7 @@ import { Stack, useFocusEffect } from 'expo-router';
 import { apiGet } from '@/lib/api';
 import { Card, Label, Loading, eur, dateBE } from '@/lib/ui';
 import { T } from '@/lib/theme';
+import { tr } from '@/lib/i18n';
 
 interface Opp {
   id: string; title: string; stage: string; estimatedValue: number | null;
@@ -36,7 +37,7 @@ export default function Pipeline() {
       contentContainerStyle={{ ...T.content, gap: 20 }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} />}
     >
-      <Stack.Screen options={{ title: 'Pipeline', headerBackTitle: 'Retour' }} />
+      <Stack.Screen options={{ title: 'Pipeline', headerBackTitle: tr('Retour') }} />
       {ORDER.map((stage) => {
         const col = cols.find((c) => c.stage === stage);
         const items = col?.items ?? [];

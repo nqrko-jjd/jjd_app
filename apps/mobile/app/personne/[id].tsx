@@ -5,6 +5,7 @@ import { Stack, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { apiGet } from '@/lib/api';
 import { ScreenHeader, Card, Label, Loading, Row, Badge, PhotoHeader, eur, dateBE } from '@/lib/ui';
 import { T } from '@/lib/theme';
+import { tr } from '@/lib/i18n';
 
 interface D {
   person: {
@@ -30,7 +31,7 @@ export default function PersonneDetail() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ ...T.content, gap: 20 }}>
-      <Stack.Screen options={{ title: p.displayName || p.firstName, headerBackTitle: 'Retour' }} />
+      <Stack.Screen options={{ title: p.displayName || p.firstName, headerBackTitle: tr('Retour') }} />
       <ScreenHeader title={p.displayName || p.firstName} eyebrow="Équipe" description={p.contractType === 'employee' ? 'Salarié' : p.contractType === 'subcontractor' ? 'Sous-traitant' : 'Fiche collaborateur'}/>
       <PhotoHeader basePath={`/api/people/${p.id}`} photoUrl={p.photoUrl} round onChange={load} />
       <Card>

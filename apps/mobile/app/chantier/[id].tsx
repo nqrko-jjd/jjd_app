@@ -7,6 +7,7 @@ import { apiGet } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { Card, HeroTile, Label, Loading, Badge, eur, dateBE } from '@/lib/ui';
 import { T } from '@/lib/theme';
+import { tr, dateLocale } from '@/lib/i18n';
 
 const STATUS_LABEL: Record<string, string> = {
   lead: 'Demande', to_plan: 'À planifier', scheduled: 'Planifié', in_progress: 'En cours',
@@ -61,7 +62,7 @@ interface Detail {
 }
 
 function timeAgo(iso: string): string {
-  return new Date(iso).toLocaleDateString('fr-BE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  return new Date(iso).toLocaleDateString(dateLocale(), { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
 
 export default function ChantierDetail() {
@@ -88,7 +89,7 @@ export default function ChantierDetail() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ ...T.content, gap: 20 }}>
-      <Stack.Screen options={{ title: w.ref, headerBackTitle: 'Retour' }} />
+      <Stack.Screen options={{ title: w.ref, headerBackTitle: tr('Retour') }} />
 
       <HeroTile>
         <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>

@@ -8,6 +8,7 @@ import { apiGet } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { Card, Label, Muted, Loading, ScreenHeader } from '@/lib/ui';
 import { T } from '@/lib/theme';
+import { tr, dateLocale } from '@/lib/i18n';
 
 interface Prep { id: string; ref: string; status: string; neededOn: string | null; worksite: { ref: string; title: string }; lineCount: number; doneLines: number }
 
@@ -27,15 +28,15 @@ export default function Magasin() {
   useFocusEffect(useCallback(() => { load(); }, [load]));
   if (!preps) return <Loading />;
   const first = person?.firstName ?? person?.displayName?.split(' ')[0] ?? user?.email?.split('@')[0]?.replace(/^./, (c) => c.toUpperCase());
-  const today = new Date().toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' });
+  const today = new Date().toLocaleDateString(dateLocale(), { weekday: 'long', day: 'numeric', month: 'long' });
   const todayIso = new Date(); todayIso.setHours(23, 59, 59, 999);
   const urgent = preps.filter((p) => p.neededOn && new Date(p.neededOn) <= todayIso).length;
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ ...T.content, padding: 16, gap: 18 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} />}>
-      <ScreenHeader eyebrow={today} title={first ? `Bonjour ${first},` : 'Bonjour,'} description="Le magasin, en un geste." avatar={first?.slice(0, 1) || 'M'} />
+      <ScreenHeader eyebrow={today} title={first ? `Bonjour ${first},` : 'Bonjour,'} description={tr("Le magasin, en un geste.")} avatar={first?.slice(0, 1) || 'M'} />
 
-      <Pressable accessibilityRole="button" accessibilityLabel="Scanner" onPress={() => go('/scan')} style={({ pressed }) => [pressed && { transform: [{ scale: 0.98 }] }]}>
+      <Pressable accessibilityRole="button" accessibilityLabel={tr("Scanner")} onPress={() => go('/scan')} style={({ pressed }) => [pressed && { transform: [{ scale: 0.98 }] }]}>
         <LinearGradient colors={[T.heroFrom, T.heroTo]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.hero}>
           <View style={s.heroIc}><Feather name="maximize" size={30} color="#fff" /></View>
           <View style={{ flex: 1 }}><Text style={s.heroTitle}>Scanner</Text><Text style={s.heroSub}>Article, étiquette ou rack : entrée et sortie en quelques touches.</Text></View>
@@ -74,7 +75,7 @@ export default function Magasin() {
               <Pressable key={p.id} accessibilityRole="button" onPress={() => go(`/preparation/${p.id}`)} style={({ pressed }) => [s.row, pressed && { opacity: 0.9 }]}>
                 <View style={{ flex: 1, gap: 2 }}>
                   <Text style={{ color: T.ink, fontWeight: '700' }} numberOfLines={2}>{p.worksite.ref} · {p.worksite.title}</Text>
-                  <Muted>{p.ref} · {p.doneLines}/{p.lineCount} prêts{p.neededOn ? ` · pour le ${new Date(p.neededOn).toLocaleDateString('fr-BE', { day: '2-digit', month: 'short' })}` : ''}</Muted>
+                  <Muted>{p.ref} · {p.doneLines}/{p.lineCount} prêts{p.neededOn ? ` · pour le ${new Date(p.neededOn).toLocaleDateString(dateLocale(), { day: '2-digit', month: 'short' })}` : ''}</Muted>
                 </View>
                 <Feather name="chevron-right" size={18} color={T.ink3} />
               </Pressable>

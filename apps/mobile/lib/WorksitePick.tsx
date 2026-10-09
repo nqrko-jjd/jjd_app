@@ -4,6 +4,7 @@ import { Feather } from '@expo/vector-icons';
 import { Text } from '@/lib/AppText';
 import { apiGet } from './api';
 import { T } from './theme';
+import { tr } from './i18n';
 
 export interface Ws { id: string; name: string }
 
@@ -27,7 +28,7 @@ export function WorksitePick({ value, onChange, initial }: { value: Ws | null; o
   }
   return (
     <View style={{ gap: 8 }}>
-      <TextInput value={q} onChangeText={setQ} placeholder="Chercher un chantier (réf ou nom)" placeholderTextColor={T.ink3} style={s.search} />
+      <TextInput value={q} onChangeText={setQ} placeholder={tr("Chercher un chantier (réf ou nom)")} placeholderTextColor={T.ink3} style={s.search} />
       {hits.map((w) => <Pressable key={w.id} accessibilityRole="button" onPress={() => onChange(w)} style={s.option}><Text style={{ color: T.ink }} numberOfLines={2}>{w.name}</Text></Pressable>)}
     </View>
   );

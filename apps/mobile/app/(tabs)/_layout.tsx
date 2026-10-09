@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSession } from '@/lib/session';
 import { apiGet } from '@/lib/api';
 import { T } from '@/lib/theme';
+import { tr } from '@/lib/i18n';
 
 type FeatherName = keyof typeof Feather.glyphMap;
 
@@ -54,7 +55,7 @@ export default function TabsLayout() {
 
   const hide = { href: null as null } as const;
   const tab = (title: string, ic: FeatherName, badge?: number) => ({
-    title,
+    title: tr(title),
     tabBarIcon: ({ color, focused }: { color: ColorValue; focused: boolean }) => <Icon name={ic} color={color} focused={focused} />,
     tabBarBadge: badge && badge > 0 ? badge : undefined,
     tabBarBadgeStyle: { backgroundColor: T.gold, color: '#241c05', fontSize: 10, fontWeight: '800' as const },
@@ -89,17 +90,17 @@ export default function TabsLayout() {
       }}
     >
       <Tabs.Screen name="index" options={worker || foreman ? {...tab('Aujourd’hui', 'grid'),headerShown:false} : hide} />
-      <Tabs.Screen name="heures" options={worker ? tab('Mes heures', 'clock') : { ...hide, title: 'Mes heures' }} />
+      <Tabs.Screen name="heures" options={worker ? tab('Mes heures', 'clock') : { ...hide, title: tr('Mes heures') }} />
       <Tabs.Screen name="dashboard" options={office ? {...tab('Accueil', 'grid'),headerShown:false} : hide} />
       <Tabs.Screen name="chantiers" options={staff || worker ? {...tab('Chantiers', 'home'),headerShown:false} : hide} />
       <Tabs.Screen name="planning" options={staff ? {...tab('Planning', 'calendar'),headerShown:false} : hide} />
       <Tabs.Screen name="magasin" options={store ? { ...tab('Magasin', 'package'), headerShown: false } : hide} />
       <Tabs.Screen name="preparations" options={store ? { ...tab('Préparations', 'clipboard'), headerShown: false } : hide} />
       <Tabs.Screen name="scan" options={store ? { ...tab('Scanner', 'maximize'), headerShown: false } : { ...hide, headerShown: false }} />
-      <Tabs.Screen name="valider" options={{ ...hide, title: 'À valider' }} />
+      <Tabs.Screen name="valider" options={{ ...hide, title: tr('À valider') }} />
       <Tabs.Screen name="messages" options={{...tab('Messages', 'message-circle', unread),headerShown:false}} />
       <Tabs.Screen name="plus" options={{...tab('Plus', 'more-horizontal'),headerShown:false}} />
-      <Tabs.Screen name="compte" options={{ ...hide, title: 'Mon compte' }} />
+      <Tabs.Screen name="compte" options={{ ...hide, title: tr('Mon compte') }} />
     </Tabs>
   );
 }

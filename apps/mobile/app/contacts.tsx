@@ -2,6 +2,7 @@ import { View } from 'react-native';
 import { Text } from '@/lib/AppText';
 import { Stack } from 'expo-router';
 import { ResourceList, Muted, useRouterPush } from '@/lib/ui';
+import { tr } from '@/lib/i18n';
 
 interface C {
   id: string; name: string; kind: string | null; type: string; city: string | null;
@@ -13,7 +14,7 @@ export default function Contacts() {
   const push = useRouterPush();
   return (
     <>
-      <Stack.Screen options={{ title: 'Contacts', headerBackTitle: 'Retour' }} />
+      <Stack.Screen options={{ title: 'Contacts', headerBackTitle: tr('Retour') }} />
       <ResourceList<C>
         endpoint="/api/contacts?type=all"
         search={(c, q) => c.name.toLowerCase().includes(q) || (c.city ?? '').toLowerCase().includes(q)}

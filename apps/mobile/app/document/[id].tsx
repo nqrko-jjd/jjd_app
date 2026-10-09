@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { ScrollView, View, Pressable, Alert } from 'react-native';
+import { ScrollView, View, Pressable } from 'react-native';
 import { Text } from '@/lib/AppText';
 import { Stack, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { apiGet, apiSend } from '@/lib/api';
@@ -7,6 +7,7 @@ import { openApiFile } from '@/lib/files';
 import { Feather } from '@expo/vector-icons';
 import { ScreenHeader, Card, Label, Loading, Row, Badge, Muted, eur, dateBE } from '@/lib/ui';
 import { T } from '@/lib/theme';
+import { tr, Alert } from '@/lib/i18n';
 
 interface Line {
   id?: string; kind: string; label: string; description: string | null;
@@ -50,7 +51,7 @@ export default function DocumentDetail() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ ...T.content, gap: 20 }}>
-      <Stack.Screen options={{ title: `${KIND[d.kind]} ${d.number ?? ''}`.trim(), headerBackTitle: 'Retour' }} />
+      <Stack.Screen options={{ title: `${KIND[d.kind]} ${d.number ?? ''}`.trim(), headerBackTitle: tr('Retour') }} />
 
       <ScreenHeader title={d.number ?? d.draftRef ?? KIND[d.kind]} eyebrow={KIND[d.kind]} description={d.title ?? undefined}/>
       <Card>

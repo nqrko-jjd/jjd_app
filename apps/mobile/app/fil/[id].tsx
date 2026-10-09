@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { View, TextInput, Pressable, ScrollView, Image, StyleSheet, KeyboardAvoidingView, Platform, Alert, Linking } from 'react-native';
+import { View, TextInput, Pressable, ScrollView, Image, StyleSheet, KeyboardAvoidingView, Platform, Linking } from 'react-native';
 import { Text } from '@/lib/AppText';
 import { Feather } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams, useFocusEffect, useRouter } from 'expo-router';
@@ -8,10 +8,12 @@ import { apiGet, apiSend, apiUploadPhoto, API_URL } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { Loading } from '@/lib/ui';
 import { T } from '@/lib/theme';
+import { MsgText } from '@/lib/MsgText';
+import { tr, dateLocale, Alert } from '@/lib/i18n';
 
 interface Msg {
   id: string; kind: string; body: string | null; fileUrl: string | null; thumbUrl: string | null;
-  authorId: string | null; authorName: string | null; createdAt: string;
+  authorId: string | null; authorName: string | null; createdAt: string; bodyTranslated?: string | null;
 }
 interface Data {
   thread: { closedAt: string | null };
@@ -20,7 +22,7 @@ interface Data {
 }
 
 function time(iso: string) {
-  return new Date(iso).toLocaleString('fr-BE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  return new Date(iso).toLocaleString(dateLocale(), { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
 
 export default function Fil() {
@@ -108,8 +110,8 @@ export default function Fil() {
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: T.paper }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
       <Stack.Screen
         options={{
-          title: 'Fil de chantier',
-          headerBackTitle: 'Retour',
+          title: tr('Fil de chantier'),
+          headerBackTitle: tr('Retour'),
           headerRight: () => (
             <Pressable onPress={() => router.push(`/fiche/${id}` as never)} hitSlop={10} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
               <Feather name="info" size={15} color={T.primary} />
@@ -144,7 +146,7 @@ export default function Fil() {
                 </Pressable>
               )}
               {m.body && m.kind !== 'file' ? (
-                <Text style={[s.bubble, mine && s.bubbleMine]}>{m.body}</Text>
+                <MsgText body={m.body} translated={m.bodyTranslated} style={[s.bubble, mine && s.bubbleMine]} />
               ) : null}
               <Text style={[s.timeTxt, mine && { alignSelf: 'flex-end' }]}>{time(m.createdAt)}</Text>
             </View>

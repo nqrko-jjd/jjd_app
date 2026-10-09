@@ -6,6 +6,7 @@ import { Stack, useFocusEffect } from 'expo-router';
 import { apiGet } from '@/lib/api';
 import { Card, Loading, eur } from '@/lib/ui';
 import { T } from '@/lib/theme';
+import { tr } from '@/lib/i18n';
 
 interface Team {
   year: number; month: number; totalAmount: number;
@@ -32,7 +33,7 @@ export default function Decomptes() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ ...T.content, padding: 16, gap: 10 }}>
-      <Stack.Screen options={{ title: 'Décomptes du mois', headerBackTitle: 'Retour' }} />
+      <Stack.Screen options={{ title: tr('Décomptes du mois'), headerBackTitle: tr('Retour') }} />
       <View style={s.nav}>
         <Pressable style={s.btn} onPress={() => shift(-1)}><Feather name="chevron-left" size={18} color={T.ink} /></Pressable>
         <Text style={{ fontWeight: '700', color: T.ink }}>{M[m - 1]} {y}</Text>

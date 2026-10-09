@@ -10,6 +10,7 @@ import { T } from '@/lib/theme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FieldHome } from './index';
 import { useEffect } from 'react';
+import { tr, dateLocale } from '@/lib/i18n';
 
 interface Dash {
   kpis: { invoicedMonth: number; paidMonth: number; overdueAmount: number; overdueCount: number; openWorksites: number; hoursWeek: number };
@@ -17,8 +18,8 @@ interface Dash {
 }
 interface Ev { id: string; title: string | null; startAt: string; allDay: boolean; worksite: { id?: string; ref: string; title: string; city: string | null }; assignments?: { person: { displayName: string | null; firstName: string } }[] }
 
-const TODAY = new Date().toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' });
-const hm = (iso: string) => new Date(iso).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' });
+const todayLabel = () => new Date().toLocaleDateString(dateLocale(), { weekday: 'long', day: 'numeric', month: 'long' });
+const hm = (iso: string) => new Date(iso).toLocaleTimeString(dateLocale(), { hour: '2-digit', minute: '2-digit' });
 
 /** Où mène chaque alerte : on touche la ligne, on arrive directement sur la liste utile. */
 const ALERT_ROUTE: Record<string, string> = {
@@ -62,14 +63,14 @@ function BureauHome() {
 
   // cases d'accès rapide : chacune est un bouton vers la liste correspondante, avec le chiffre qui compte
   const tiles: { icon: keyof typeof Feather.glyphMap; label: string; value: string; to: string; alert?: boolean }[] = [
-    { icon: 'calendar', label: 'Aujourd’hui', value: `${today.length} intervention${today.length > 1 ? 's' : ''}`, to: '/planning' },
-    { icon: 'check-square', label: 'À valider', value: pending ? `${pending} pointage${pending > 1 ? 's' : ''}` : 'Rien en attente', to: '/valider', alert: pending > 0 },
-    { icon: 'inbox', label: 'Boîte IA', value: inbox ? `${inbox} à traiter` : 'Rien à traiter', to: '/boite-ia', alert: inbox > 0 },
-    { icon: 'trending-up', label: 'Demandes', value: leads ? `${leads} nouvelle${leads > 1 ? 's' : ''}` : 'Aucune nouvelle', to: '/pipeline', alert: leads > 0 },
-    { icon: 'flag', label: 'Impayés', value: data.kpis.overdueCount ? eur(data.kpis.overdueAmount) : 'Aucun', to: '/documents', alert: data.kpis.overdueCount > 0 },
-    { icon: 'home', label: 'Chantiers', value: `${data.kpis.openWorksites} en cours`, to: '/chantiers?status=in_progress' },
-    { icon: 'camera', label: 'Nouvelle dépense', value: 'Scanner un ticket', to: '/depense/nouvelle' },
-    { icon: 'file-text', label: 'Devis & factures', value: 'Voir la liste', to: '/documents' },
+    { icon: 'calendar', label: tr('Aujourd’hui'), value: `${today.length} intervention${today.length > 1 ? 's' : ''}`, to: '/planning' },
+    { icon: 'check-square', label: tr('À valider'), value: pending ? `${pending} pointage${pending > 1 ? 's' : ''}` : 'Rien en attente', to: '/valider', alert: pending > 0 },
+    { icon: 'inbox', label: tr('Boîte IA'), value: inbox ? `${inbox} à traiter` : 'Rien à traiter', to: '/boite-ia', alert: inbox > 0 },
+    { icon: 'trending-up', label: tr('Demandes'), value: leads ? `${leads} nouvelle${leads > 1 ? 's' : ''}` : 'Aucune nouvelle', to: '/pipeline', alert: leads > 0 },
+    { icon: 'flag', label: tr('Impayés'), value: data.kpis.overdueCount ? eur(data.kpis.overdueAmount) : 'Aucun', to: '/documents', alert: data.kpis.overdueCount > 0 },
+    { icon: 'home', label: tr('Chantiers'), value: `${data.kpis.openWorksites} en cours`, to: '/chantiers?status=in_progress' },
+    { icon: 'camera', label: tr('Nouvelle dépense'), value: 'Scanner un ticket', to: '/depense/nouvelle' },
+    { icon: 'file-text', label: tr('Devis & factures'), value: 'Voir la liste', to: '/documents' },
   ];
 
   return (
@@ -78,7 +79,7 @@ function BureauHome() {
       contentContainerStyle={{ ...T.content, padding: 16, gap: 18 }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} />}
     >
-      <ScreenHeader eyebrow={TODAY} title={first ? `Bonjour ${first},` : 'Bonjour,'} description="Ce qui demande votre attention aujourd’hui." avatar={first?.slice(0, 1) || 'J'} />
+      <ScreenHeader eyebrow={todayLabel()} title={first ? `Bonjour ${first},` : 'Bonjour,'} description={tr("Ce qui demande votre attention aujourd’hui.")} avatar={first?.slice(0, 1) || 'J'} />
 
       <View style={s.tiles}>
         {tiles.map((t) => (

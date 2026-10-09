@@ -7,6 +7,7 @@ import { apiGet, API_URL } from '@/lib/api';
 import { Muted, Loading, EmptyState } from '@/lib/ui';
 import { fmtQty, type StockItem } from '@/lib/stock';
 import { T } from '@/lib/theme';
+import { tr } from '@/lib/i18n';
 
 /** Tous les articles du magasin : recherche au clavier, filtre « stock bas », une touche pour ouvrir la fiche. */
 export default function Articles() {
@@ -24,9 +25,9 @@ export default function Articles() {
 
   return (
     <View style={{ flex: 1, backgroundColor: T.paper }}>
-      <Stack.Screen options={{ title: 'Articles', headerBackTitle: 'Retour' }} />
+      <Stack.Screen options={{ title: tr('Articles'), headerBackTitle: tr('Retour') }} />
       <View style={{ padding: 16, gap: 10 }}>
-        <View style={s.field}><Feather name="search" size={18} color={T.ink2} /><TextInput value={q} onChangeText={setQ} placeholder="Nom, référence, marque, rack…" placeholderTextColor={T.ink3} style={s.input} /></View>
+        <View style={s.field}><Feather name="search" size={18} color={T.ink2} /><TextInput value={q} onChangeText={setQ} placeholder={tr("Nom, référence, marque, rack…")} placeholderTextColor={T.ink3} style={s.input} /></View>
         <View style={{ flexDirection: 'row', gap: 8 }}>
           {([[false, 'Tous'], [true, 'Stock bas']] as const).map(([k, label]) => (
             <Pressable key={label} accessibilityRole="button" onPress={() => setOnlyLow(k)} style={[s.chip, onlyLow === k && s.chipOn]}><Text style={[s.chipTxt, onlyLow === k && { color: '#fff' }]}>{label}</Text></Pressable>
@@ -39,7 +40,7 @@ export default function Articles() {
           data={shown}
           keyExtractor={(i) => i.id}
           contentContainerStyle={{ padding: 16, paddingTop: 0, gap: 10 }}
-          ListEmptyComponent={<EmptyState title="Aucun article" description="Essaie un autre mot ou enlève le filtre." icon="package" />}
+          ListEmptyComponent={<EmptyState title={tr("Aucun article")} description={tr("Essaie un autre mot ou enlève le filtre.")} icon="package" />}
           renderItem={({ item: i }) => (
             <Pressable accessibilityRole="button" onPress={() => router.push(`/article/${i.id}` as never)} style={({ pressed }) => [s.row, pressed && { opacity: 0.9 }]}>
               {i.photoThumbUrl ? <Image source={{ uri: i.photoThumbUrl.startsWith('http') ? i.photoThumbUrl : `${API_URL}${i.photoThumbUrl}` }} style={s.photo} /> : <View style={[s.photo, { alignItems: 'center', justifyContent: 'center' }]}><Feather name="package" size={20} color={T.ink3} /></View>}

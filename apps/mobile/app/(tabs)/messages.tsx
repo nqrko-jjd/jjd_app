@@ -5,6 +5,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { apiGet } from '@/lib/api';
 import { Muted, Loading, ScreenHeader, EmptyState } from '@/lib/ui';
 import { T } from '@/lib/theme';
+import { tr, dateLocale } from '@/lib/i18n';
 
 interface ThreadItem {
   id: string; kind: string; title: string; sub: string; worksiteId: string | null; ref: string | null;
@@ -17,8 +18,8 @@ function time(iso: string | null) {
   const today = new Date();
   const sameDay = d.toDateString() === today.toDateString();
   return sameDay
-    ? d.toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' })
-    : d.toLocaleDateString('fr-BE', { day: '2-digit', month: '2-digit' });
+    ? d.toLocaleTimeString(dateLocale(), { hour: '2-digit', minute: '2-digit' })
+    : d.toLocaleDateString(dateLocale(), { day: '2-digit', month: '2-digit' });
 }
 
 export default function Messages() {
@@ -42,13 +43,13 @@ export default function Messages() {
   return (
     <View style={{ flex: 1, backgroundColor: T.paper }}>
       <View style={{ paddingHorizontal: 16, paddingTop: 14 }}>
-        <ScreenHeader title="Messages" eyebrow="Votre équipe" description="Le fil JJD et les échanges de vos chantiers."/>
+        <ScreenHeader title="Messages" eyebrow="Votre équipe" description={tr("Le fil JJD et les échanges de vos chantiers.")}/>
 
       </View>
       <View style={{ padding: 18 }}>
         <TextInput
           style={s.search}
-          placeholder="Rechercher une conversation…"
+          placeholder={tr("Rechercher une conversation…")}
           value={q}
           onChangeText={setQ}
           placeholderTextColor={T.ink3}
@@ -58,7 +59,7 @@ export default function Messages() {
         data={filtered}
         keyExtractor={(x) => x.id}
         contentContainerStyle={{ ...T.content, padding: 18, paddingTop: 0, gap: 0 }}
-        ListEmptyComponent={<EmptyState title="Aucune conversation" description="Les échanges de votre équipe apparaîtront ici." icon="message-circle"/>}
+        ListEmptyComponent={<EmptyState title={tr("Aucune conversation")} description={tr("Les échanges de votre équipe apparaîtront ici.")} icon="message-circle"/>}
         renderItem={({ item }) => (
           <Pressable
             style={s.row}

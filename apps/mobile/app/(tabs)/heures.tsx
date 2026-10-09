@@ -6,6 +6,7 @@ import { useFocusEffect } from 'expo-router';
 import { apiGet } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { T } from '@/lib/theme';
+import { dateLocale } from '@/lib/i18n';
 
 const MONTHS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
 
@@ -81,7 +82,7 @@ export default function Heures() {
           <Text style={s.label}>{isCurrentMonth ? 'Ce mois-ci' : `${MONTHS[m - 1]} ${y}`}</Text>
           <View style={s.rowBetween}>
             <Text style={s.big}>{statement.totalHours} h</Text>
-            <Text style={s.big}>{statement.totalAmount.toLocaleString('fr-BE')} €</Text>
+            <Text style={s.big}>{statement.totalAmount.toLocaleString(dateLocale())} €</Text>
           </View>
           {statement.pendingCount > 0 && (
             <Text style={{ color: T.accent }}>{statement.pendingCount} pointage(s) en attente de validation</Text>
@@ -96,7 +97,7 @@ export default function Heures() {
           <View style={s.rowBetween}>
             <Text style={s.wsRef}>{e.worksite?.ref ?? '—'}</Text>
             <Text style={s.muted}>
-              {e.date ? new Date(e.date).toLocaleDateString('fr-BE', { day: '2-digit', month: '2-digit' }) : ''}
+              {e.date ? new Date(e.date).toLocaleDateString(dateLocale(), { day: '2-digit', month: '2-digit' }) : ''}
             </Text>
           </View>
           <Text style={s.muted}>{e.worksite?.title}</Text>

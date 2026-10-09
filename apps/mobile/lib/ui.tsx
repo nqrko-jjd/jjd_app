@@ -1,5 +1,5 @@
 import { useCallback, useState, type ReactNode } from 'react';
-import { View, StyleSheet, ActivityIndicator, Pressable, FlatList, TextInput, RefreshControl, Image, Alert } from 'react-native';
+import { View, StyleSheet, ActivityIndicator, Pressable, FlatList, TextInput, RefreshControl, Image } from 'react-native';
 import { Text } from '@/lib/AppText';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -7,6 +7,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { apiGet, apiUploadPhoto, API_URL } from './api';
 import { T } from './theme';
+import { tr, dateLocale, Alert } from './i18n';
 
 /** Bannière/tuile vert dégradé — mise en avant d'une métrique ou d'un titre de fiche (voir maquette). */
 export function HeroTile({ children, icon }: { children: ReactNode; icon?: keyof typeof Feather.glyphMap }) {
@@ -94,7 +95,7 @@ export function PhotoHeader({
 
 export function ScreenHeader({title,eyebrow,description,avatar}: {title:string;eyebrow?:string;description?:string;avatar?:string}) {
  const router=useRouter();
- return <View style={{flexDirection:'row',alignItems:'flex-start',gap:16,marginBottom:6}}><View style={{flex:1}}>{eyebrow&&<Text style={{fontSize:10.5,color:T.ink2,letterSpacing:1.3,textTransform:'uppercase',fontWeight:'700',marginBottom:7}}>{eyebrow}</Text>}<Text accessibilityRole="header" style={{fontSize:28,fontWeight:'800',letterSpacing:-.9,color:T.ink,lineHeight:35}}>{title}</Text>{description&&<Text style={{fontSize:13,color:T.ink2,lineHeight:20,marginTop:6}}>{description}</Text>}</View>{avatar&&<Pressable accessibilityLabel="Ouvrir mon espace" onPress={()=>router.push('/plus' as never)} style={{width:44,height:44,borderRadius:16,backgroundColor:T.goldSoft,alignItems:'center',justifyContent:'center'}}><Text style={{fontSize:16,fontWeight:'700',color:T.primary}}>{avatar.slice(0,2).toUpperCase()}</Text></Pressable>}</View>;
+ return <View style={{flexDirection:'row',alignItems:'flex-start',gap:16,marginBottom:6}}><View style={{flex:1}}>{eyebrow&&<Text style={{fontSize:10.5,color:T.ink2,letterSpacing:1.3,textTransform:'uppercase',fontWeight:'700',marginBottom:7}}>{eyebrow}</Text>}<Text accessibilityRole="header" style={{fontSize:28,fontWeight:'800',letterSpacing:-.9,color:T.ink,lineHeight:35}}>{title}</Text>{description&&<Text style={{fontSize:13,color:T.ink2,lineHeight:20,marginTop:6}}>{description}</Text>}</View>{avatar&&<Pressable accessibilityLabel={tr("Ouvrir mon espace")} onPress={()=>router.push('/plus' as never)} style={{width:44,height:44,borderRadius:16,backgroundColor:T.goldSoft,alignItems:'center',justifyContent:'center'}}><Text style={{fontSize:16,fontWeight:'700',color:T.primary}}>{avatar.slice(0,2).toUpperCase()}</Text></Pressable>}</View>;
 }
 export function EmptyState({title,description,icon='inbox'}:{title:string;description?:string;icon?:keyof typeof Feather.glyphMap}) {
  return <View style={{padding:30,backgroundColor:T.surface,borderRadius:20,borderWidth:1,borderColor:T.line,alignItems:'center',gap:12}}><View style={{padding:14,borderRadius:18,backgroundColor:T.primarySoft}}><Feather name={icon} size={24} color={T.primary}/></View><Text style={{fontWeight:'700',fontSize:16,textAlign:'center'}}>{title}</Text>{description&&<Text style={{color:T.ink2,fontSize:13,lineHeight:20,textAlign:'center'}}>{description}</Text>}</View>;
@@ -120,12 +121,12 @@ export function Badge({ children, tone }: { children: ReactNode; tone?: 'ok' | '
 
 export function eur(n: number | null | undefined): string {
   if (n == null || Number.isNaN(n)) return '—';
-  return `${n.toLocaleString('fr-BE', { maximumFractionDigits: 2 })} €`;
+  return `${n.toLocaleString(dateLocale(), { maximumFractionDigits: 2 })} €`;
 }
 export function dateBE(d: string | null | undefined): string {
   if (!d) return '—';
   const x = new Date(d);
-  return Number.isNaN(x.getTime()) ? '—' : x.toLocaleDateString('fr-BE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  return Number.isNaN(x.getTime()) ? '—' : x.toLocaleDateString(dateLocale(), { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
 export function Row({ k, v, strong }: { k: string; v: ReactNode; strong?: boolean }) {
@@ -186,7 +187,7 @@ export function ResourceList<Item extends { id: string }>({
         keyExtractor={(x) => x.id}
         contentContainerStyle={[T.content, { paddingTop: search ? 0 : 18, gap: 12 }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} />}
-        ListEmptyComponent={<EmptyState title="Aucun résultat" description="Essayez un autre terme de recherche."/>}
+        ListEmptyComponent={<EmptyState title={tr("Aucun résultat")} description={tr("Essayez un autre terme de recherche.")}/>}
         renderItem={({ item }) => (
           <Pressable style={st.listRow} onPress={() => onPress?.(item)} disabled={!onPress}>
 <View style={{flex:1,minWidth:0,gap:6}}>{render(item)}</View>{onPress && <Feather name="chevron-right" size={18} color={T.ink3}/>}

@@ -2,6 +2,7 @@ import { View } from 'react-native';
 import { Text } from '@/lib/AppText';
 import { Stack } from 'expo-router';
 import { ResourceList, Muted, useRouterPush } from '@/lib/ui';
+import { tr } from '@/lib/i18n';
 
 interface B {
   id: string; name: string; city: string | null;
@@ -13,7 +14,7 @@ export default function Immeubles() {
   const push = useRouterPush();
   return (
     <>
-      <Stack.Screen options={{ title: 'Immeubles / Projets', headerBackTitle: 'Retour' }} />
+      <Stack.Screen options={{ title: tr('Immeubles / Projets'), headerBackTitle: tr('Retour') }} />
       <ResourceList<B>
         endpoint="/api/buildings"
         search={(b, q) => b.name.toLowerCase().includes(q) || (b.city ?? '').toLowerCase().includes(q)}

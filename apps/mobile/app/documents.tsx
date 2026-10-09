@@ -4,6 +4,7 @@ import { Text } from '@/lib/AppText';
 import { Stack } from 'expo-router';
 import { ResourceList, Muted, Badge, eur, dateBE, useRouterPush } from '@/lib/ui';
 import { T } from '@/lib/theme';
+import { tr } from '@/lib/i18n';
 
 interface Doc {
   id: string; kind: string; number: string | null; draftRef: string | null; status: string;
@@ -16,8 +17,8 @@ const TONE: Record<string, 'ok' | 'warn' | 'crit' | 'primary' | undefined> = {
   paid: 'ok', accepted: 'ok', sent: 'primary', overdue: 'crit', declined: 'crit', partial: 'warn',
 };
 const TABS = [
-  { key: 'quote', label: 'Devis' },
-  { key: 'invoice', label: 'Factures' },
+  { key: 'quote', label: tr('Devis') },
+  { key: 'invoice', label: tr('Factures') },
 ];
 
 export default function Documents() {
@@ -26,7 +27,7 @@ export default function Documents() {
 
   return (
     <>
-      <Stack.Screen options={{ title: 'Devis & factures', headerBackTitle: 'Retour' }} />
+      <Stack.Screen options={{ title: tr('Devis & factures'), headerBackTitle: tr('Retour') }} />
       <View style={{ flexDirection: 'row', gap: 8, padding: 12, paddingBottom: 0, backgroundColor: T.paper }}>
         {TABS.map((t) => (
           <Pressable

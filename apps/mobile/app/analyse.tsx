@@ -6,6 +6,7 @@ import { apiGet } from '@/lib/api';
 import { Card, Label, Muted, Loading, eur } from '@/lib/ui';
 import { MonthBars, HBars, compact } from '@/lib/charts';
 import { T } from '@/lib/theme';
+import { tr, dateLocale } from '@/lib/i18n';
 
 interface Analytics {
   range: { months: number };
@@ -46,7 +47,7 @@ export default function Analyse() {
       contentContainerStyle={{ ...T.content, gap: 18 }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} />}
     >
-      <Stack.Screen options={{ title: 'Analyse', headerBackTitle: 'Retour' }} />
+      <Stack.Screen options={{ title: tr('Analyse'), headerBackTitle: tr('Retour') }} />
 
       <View style={{ gap: 10 }}>
         <Seg value={String(months)} onChange={(v) => setMonths(Number(v))} options={[['6', '6 mois'], ['12', '12 mois'], ['24', '24 mois']]} />
@@ -58,11 +59,11 @@ export default function Analyse() {
       {data && (
         <>
           <View style={s.tiles}>
-            <Tile label="CA net" value={eur(data.totals.revenue)} delta={pct(data.totals.revenue, data.prev.revenue)} />
-            <Tile label="Résultat" value={eur(data.totals.result)} delta={pct(data.totals.result, data.prev.result)} bad={data.totals.result < 0} />
-            <Tile label="Marge" value={data.totals.marginPct != null ? `${data.totals.marginPct} %` : '—'} delta={data.totals.marginPct != null && data.prev.marginPct != null ? Math.round(data.totals.marginPct - data.prev.marginPct) : null} suffix=" pt" />
-            <Tile label="Encaissé" value={eur(data.totals.collected)} delta={pct(data.totals.collected, data.prev.collected)} />
-            <Tile label="Heures pointées" value={Math.round(data.totals.hours).toLocaleString('fr-BE')} delta={pct(data.totals.hours, data.prev.hours, 200)} />
+            <Tile label={tr("CA net")} value={eur(data.totals.revenue)} delta={pct(data.totals.revenue, data.prev.revenue)} />
+            <Tile label={tr("Résultat")} value={eur(data.totals.result)} delta={pct(data.totals.result, data.prev.result)} bad={data.totals.result < 0} />
+            <Tile label={tr("Marge")} value={data.totals.marginPct != null ? `${data.totals.marginPct} %` : '—'} delta={data.totals.marginPct != null && data.prev.marginPct != null ? Math.round(data.totals.marginPct - data.prev.marginPct) : null} suffix=" pt" />
+            <Tile label={tr("Encaissé")} value={eur(data.totals.collected)} delta={pct(data.totals.collected, data.prev.collected)} />
+            <Tile label={tr("Heures pointées")} value={Math.round(data.totals.hours).toLocaleString(dateLocale())} delta={pct(data.totals.hours, data.prev.hours, 200)} />
           </View>
           <Muted>Le facturé n’est pas le solde en banque : les règlements se contrôlent dans le rapprochement bancaire du site.</Muted>
 
@@ -96,10 +97,10 @@ export default function Analyse() {
 
           <Label>Devis</Label>
           <View style={s.tiles}>
-            <Tile label="Émis" value={String(data.quotes.sent)} sub={`${data.quotes.pending} en attente`} />
-            <Tile label="Acceptés" value={String(data.quotes.accepted)} sub={`${data.quotes.declined} déclinés / expirés`} />
-            <Tile label="Taux d’acceptation" value={data.quotes.acceptRate != null ? `${data.quotes.acceptRate} %` : '—'} />
-            <Tile label="Pipeline HT" value={eur(data.quotes.pipelineHt)} sub="devis envoyés, non tranchés" />
+            <Tile label={tr("Émis")} value={String(data.quotes.sent)} sub={`${data.quotes.pending} en attente`} />
+            <Tile label={tr("Acceptés")} value={String(data.quotes.accepted)} sub={`${data.quotes.declined} déclinés / expirés`} />
+            <Tile label={tr("Taux d’acceptation")} value={data.quotes.acceptRate != null ? `${data.quotes.acceptRate} %` : '—'} />
+            <Tile label={tr("Pipeline HT")} value={eur(data.quotes.pipelineHt)} sub="devis envoyés, non tranchés" />
           </View>
         </>
       )}

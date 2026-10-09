@@ -2,6 +2,7 @@ import { View } from 'react-native';
 import { Text } from '@/lib/AppText';
 import { Stack } from 'expo-router';
 import { ResourceList, Muted, dateBE, useRouterPush } from '@/lib/ui';
+import { tr } from '@/lib/i18n';
 
 interface V {
   id: string; code: string | null; brand: string | null; model: string | null; plate: string | null;
@@ -12,7 +13,7 @@ export default function Flotte() {
   const push = useRouterPush();
   return (
     <>
-      <Stack.Screen options={{ title: 'Flotte', headerBackTitle: 'Retour' }} />
+      <Stack.Screen options={{ title: tr('Flotte'), headerBackTitle: tr('Retour') }} />
       <ResourceList<V>
         endpoint="/api/vehicles"
         search={(v, q) => `${v.brand} ${v.model} ${v.plate} ${v.driver}`.toLowerCase().includes(q)}

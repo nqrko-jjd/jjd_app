@@ -8,6 +8,7 @@ import { Card, Label, Muted, Loading } from '@/lib/ui';
 import { StockMove } from '@/lib/StockMove';
 import { fmtQty, type StockItem } from '@/lib/stock';
 import { T } from '@/lib/theme';
+import { tr, dateLocale } from '@/lib/i18n';
 
 interface Mv { id: string; type: string; qty: number; unit: string | null; createdAt: string; note: string | null; worksite: { ref: string } | null; createdBy: { email: string } | null }
 
@@ -29,7 +30,7 @@ export default function Article() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ ...T.content, padding: 16, gap: 14 }} keyboardShouldPersistTaps="handled">
-      <Stack.Screen options={{ title: item.ref ?? 'Article', headerBackTitle: 'Retour' }} />
+      <Stack.Screen options={{ title: item.ref ?? 'Article', headerBackTitle: tr('Retour') }} />
       <Card>
         <View style={{ flexDirection: 'row', gap: 14, alignItems: 'center' }}>
           {item.photoThumbUrl ? <Image source={{ uri: item.photoThumbUrl.startsWith('http') ? item.photoThumbUrl : `${API_URL}${item.photoThumbUrl}` }} style={s.photo} /> : <View style={[s.photo, { alignItems: 'center', justifyContent: 'center' }]}><Feather name="package" size={28} color={T.ink3} /></View>}
@@ -54,7 +55,7 @@ export default function Article() {
               <View style={[s.dot, { backgroundColor: m.type === 'in' ? T.ok : m.type === 'out' ? T.accent : T.ink3 }]} />
               <View style={{ flex: 1 }}>
                 <Text style={{ color: T.ink, fontWeight: '700' }}>{TYPE[m.type] ?? m.type} · {fmtQty(m.qty)} {m.unit ?? item.unit}</Text>
-                <Muted>{[new Date(m.createdAt).toLocaleDateString('fr-BE', { day: '2-digit', month: 'short' }), m.worksite?.ref, m.createdBy?.email.split('@')[0]].filter(Boolean).join(' · ')}</Muted>
+                <Muted>{[new Date(m.createdAt).toLocaleDateString(dateLocale(), { day: '2-digit', month: 'short' }), m.worksite?.ref, m.createdBy?.email.split('@')[0]].filter(Boolean).join(' · ')}</Muted>
               </View>
             </View>
           ))}

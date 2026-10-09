@@ -5,6 +5,7 @@ import { Feather } from '@expo/vector-icons';
 import { Stack } from 'expo-router';
 import { ResourceList, Muted, Badge, eur, dateBE } from '@/lib/ui';
 import { T } from '@/lib/theme';
+import { tr } from '@/lib/i18n';
 
 interface Expense {
   id: string; date: string | null; supplier: string | null; categoryLabel: string | null; docNumber: string | null;
@@ -14,8 +15,8 @@ interface Expense {
 }
 
 const TABS = [
-  { key: '', label: 'Toutes' },
-  { key: '0', label: 'Non payées' },
+  { key: '', label: tr('Toutes') },
+  { key: '0', label: tr('Non payées') },
 ] as const;
 
 export default function Achats() {
@@ -23,7 +24,7 @@ export default function Achats() {
 
   return (
     <>
-      <Stack.Screen options={{ title: 'Achats & dépenses', headerBackTitle: 'Retour' }} />
+      <Stack.Screen options={{ title: tr('Achats & dépenses'), headerBackTitle: tr('Retour') }} />
       <View style={{ flexDirection: 'row', gap: 8, padding: 12, paddingBottom: 0, backgroundColor: T.paper }}>
         {TABS.map((t) => (
           <Pressable

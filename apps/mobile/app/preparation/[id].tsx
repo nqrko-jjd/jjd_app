@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { View, ScrollView, Pressable, StyleSheet, Image, Alert, TextInput } from 'react-native';
+import { View, ScrollView, Pressable, StyleSheet, Image, TextInput } from 'react-native';
 import { Text } from '@/lib/AppText';
 import { Feather } from '@expo/vector-icons';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -8,6 +8,7 @@ import { Card, Muted, Loading } from '@/lib/ui';
 import { ScanInput } from '@/lib/ScanInput';
 import { fmtQty, type StockOrder, type OrderLine } from '@/lib/stock';
 import { T } from '@/lib/theme';
+import { tr, dateLocale, Alert } from '@/lib/i18n';
 
 /** Préparer une commande de matériel : on scanne chaque article (ou on règle la quantité au pouce), puis on valide : les sorties de stock vers le chantier se font toutes seules. */
 export default function Preparation() {
@@ -51,19 +52,19 @@ export default function Preparation() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ ...T.content, padding: 16, gap: 14 }} keyboardShouldPersistTaps="handled">
-      <Stack.Screen options={{ title: order.ref, headerBackTitle: 'Retour' }} />
+      <Stack.Screen options={{ title: order.ref, headerBackTitle: tr('Retour') }} />
 
       <Pressable accessibilityRole="button" onPress={() => router.push(`/chantier/${order.worksite.id}` as never)}>
         <Card>
           <Text style={s.ws}>{order.worksite.ref} · {order.worksite.title}</Text>
-          <Muted>{order.neededOn ? `Pour le ${new Date(order.neededOn).toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' })}` : 'Sans date de besoin'}</Muted>
+          <Muted>{order.neededOn ? `Pour le ${new Date(order.neededOn).toLocaleDateString(dateLocale(), { weekday: 'long', day: 'numeric', month: 'long' })}` : 'Sans date de besoin'}</Muted>
           {!!order.note && <Text style={{ color: T.ink, marginTop: 4 }}>{order.note}</Text>}
           <View style={s.track}><View style={[s.fill, { width: `${order.lines.length ? (done / order.lines.length) * 100 : 0}%` }]} /></View>
           <Text style={s.prog}>{done} / {order.lines.length} articles prêts</Text>
         </Card>
       </Pressable>
 
-      {open && <ScanInput onCode={scan} placeholder="Scanner l’article à ajouter" />}
+      {open && <ScanInput onCode={scan} placeholder={tr("Scanner l’article à ajouter")} />}
       {flash && <View style={[s.flash, { backgroundColor: flash.ok ? T.okSoft : T.critSoft }]}><Text style={{ color: flash.ok ? T.ok : T.crit, fontWeight: '700', flex: 1 }}>{flash.text}</Text></View>}
 
       {order.lines.map((l) => {
@@ -81,12 +82,12 @@ export default function Preparation() {
             </View>
             {open ? (
               <View style={s.qtyRow}>
-                <Pressable accessibilityRole="button" accessibilityLabel="Moins" onPress={() => setPicked(l, l.pickedQty - 1)} style={s.step}><Feather name="minus" size={22} color={T.primary} /></Pressable>
+                <Pressable accessibilityRole="button" accessibilityLabel={tr("Moins")} onPress={() => setPicked(l, l.pickedQty - 1)} style={s.step}><Feather name="minus" size={22} color={T.primary} /></Pressable>
                 <View style={{ flex: 1, alignItems: 'center' }}>
                   <Text style={s.picked}>{fmtQty(l.pickedQty)} <Text style={s.of}>/ {fmtQty(l.qty)} {unit}</Text></Text>
                 </View>
-                <Pressable accessibilityRole="button" accessibilityLabel="Plus" onPress={() => setPicked(l, l.pickedQty + 1)} style={s.step}><Feather name="plus" size={22} color={T.primary} /></Pressable>
-                <Pressable accessibilityRole="button" accessibilityLabel="Tout prendre" onPress={() => setPicked(l, l.qty)} style={[s.step, { backgroundColor: T.primary }]}><Feather name="check-circle" size={22} color="#fff" /></Pressable>
+                <Pressable accessibilityRole="button" accessibilityLabel={tr("Plus")} onPress={() => setPicked(l, l.pickedQty + 1)} style={s.step}><Feather name="plus" size={22} color={T.primary} /></Pressable>
+                <Pressable accessibilityRole="button" accessibilityLabel={tr("Tout prendre")} onPress={() => setPicked(l, l.qty)} style={[s.step, { backgroundColor: T.primary }]}><Feather name="check-circle" size={22} color="#fff" /></Pressable>
               </View>
             ) : <Text style={s.picked}>{fmtQty(l.pickedQty)} <Text style={s.of}>/ {fmtQty(l.qty)} {unit}</Text></Text>}
             {!!l.note && <Muted>{l.note}</Muted>}

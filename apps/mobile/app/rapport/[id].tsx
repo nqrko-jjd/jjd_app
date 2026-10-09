@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ScrollView, View, Pressable, TextInput, Alert, Image, ActivityIndicator } from 'react-native';
+import { ScrollView, View, Pressable, TextInput, Image, ActivityIndicator } from 'react-native';
 import { Text } from '@/lib/AppText';
 import { Feather } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
@@ -8,6 +8,7 @@ import SignatureScreen, { type SignatureViewRef } from 'react-native-signature-c
 import { apiGet, apiSend, apiUploadPhoto, API_URL } from '@/lib/api';
 import { Card, Label, Loading, Muted } from '@/lib/ui';
 import { T } from '@/lib/theme';
+import { tr, Alert } from '@/lib/i18n';
 
 interface Report {
   id: string; status: string; workDone: string | null; notes: string | null; clientName: string | null;
@@ -91,7 +92,7 @@ export default function Rapport() {
   if (mode === 'done') {
     return (
       <View style={{ flex: 1, backgroundColor: T.paper, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 14 }}>
-        <Stack.Screen options={{ title: 'Rapport', headerBackTitle: 'Retour' }} />
+        <Stack.Screen options={{ title: tr('Rapport'), headerBackTitle: tr('Retour') }} />
         <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: T.okSoft, alignItems: 'center', justifyContent: 'center' }}>
           <Feather name="check-circle" size={40} color={T.ok} />
         </View>
@@ -107,13 +108,13 @@ export default function Rapport() {
   if (mode === 'sign') {
     return (
       <View style={{ flex: 1, backgroundColor: '#fff' }}>
-        <Stack.Screen options={{ title: 'Signature du client' }} />
+        <Stack.Screen options={{ title: tr('Signature du client') }} />
         <View style={{ padding: 14, gap: 8 }}>
           <Label>Nom de la personne qui signe</Label>
           <TextInput
             value={clientName}
             onChangeText={setClientName}
-            placeholder="ex. M. Dupont"
+            placeholder={tr("ex. M. Dupont")}
             style={{ borderWidth: 1, borderColor: T.line, borderRadius: 8, padding: 10, fontSize: 15 }}
           />
           <Muted>Faites signer le client au doigt dans le cadre ci-dessous.</Muted>
@@ -138,7 +139,7 @@ export default function Rapport() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ ...T.content, gap: 20 }}>
-      <Stack.Screen options={{ title: 'Rapport de chantier', headerBackTitle: 'Retour' }} />
+      <Stack.Screen options={{ title: tr('Rapport de chantier'), headerBackTitle: tr('Retour') }} />
 
       <Card>
         <Label>Travaux réalisés</Label>
@@ -147,7 +148,7 @@ export default function Rapport() {
           onChangeText={setWorkDone}
           onBlur={save}
           multiline
-          placeholder="Ce qui a été fait aujourd'hui…"
+          placeholder={tr("Ce qui a été fait aujourd'hui…")}
           style={{ minHeight: 110, fontSize: 15, color: T.ink, textAlignVertical: 'top' }}
         />
       </Card>
@@ -159,7 +160,7 @@ export default function Rapport() {
           onChangeText={setNotes}
           onBlur={save}
           multiline
-          placeholder="Points à signaler, matériel manquant…"
+          placeholder={tr("Points à signaler, matériel manquant…")}
           style={{ minHeight: 70, fontSize: 15, color: T.ink, textAlignVertical: 'top' }}
         />
       </Card>

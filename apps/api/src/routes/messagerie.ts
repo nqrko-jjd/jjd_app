@@ -1,3 +1,4 @@
+import { withTranslations } from '../lib/translate.js';
 import { Router } from 'express';
 import multer from 'multer';
 import { prisma } from '../db.js';
@@ -151,12 +152,12 @@ messagerieRouter.get(
     const messages = await prisma.message.findMany({
       where: { threadId: thread.id },
       orderBy: { createdAt: 'asc' },
-      include: { mentions: { select: { userId: true } } },
+      include: { author: { select: { id: true, locale: true } }, mentions: { select: { userId: true } } },
     });
     const mentionNames = await mentionNamesFor(messages);
     res.json({
       thread,
-      messages: messages.map((m) => ({ ...m, mentions: undefined, mentionedNames: mentionNames.get(m.id) ?? [] })),
+      messages: await withTranslations(messages.map((m) => ({ ...m, mentions: undefined, mentionedNames: mentionNames.get(m.id) ?? [] })), req.user!.locale),
     });
   }),
 );

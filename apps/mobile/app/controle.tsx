@@ -5,6 +5,7 @@ import { Stack, useFocusEffect } from 'expo-router';
 import { apiGet, apiSend } from '@/lib/api';
 import { Card, Loading, Badge } from '@/lib/ui';
 import { T } from '@/lib/theme';
+import { tr } from '@/lib/i18n';
 
 interface Issue {
   id: string; entity: string; rowRef: string | null; severity: string; message: string;
@@ -33,7 +34,7 @@ export default function Controle() {
       contentContainerStyle={{ ...T.content, padding: 16, gap: 10 }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} />}
     >
-      <Stack.Screen options={{ title: 'File de contrôle', headerBackTitle: 'Retour' }} />
+      <Stack.Screen options={{ title: tr('File de contrôle'), headerBackTitle: tr('Retour') }} />
       <View style={{ flexDirection: 'row', gap: 8 }}>
         <Badge tone="crit">{data.openBySeverity.error ?? 0} erreurs</Badge>
         <Badge tone="warn">{data.openBySeverity.warning ?? 0} avertis.</Badge>

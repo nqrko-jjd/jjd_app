@@ -3,6 +3,7 @@ import { loginSchema, resolveLoginEmail } from '@jjd/shared';
 import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { signToken, verifyPassword, requireAuth } from '../lib/auth.js';
+import { LOCALES } from '../lib/translate.js';
 import { assertLoginAllowed, recordLoginFailure, clearLoginFailures } from '../lib/login-throttle.js';
 
 export const authRouter = Router();
@@ -46,5 +47,17 @@ authRouter.get(
       person = await prisma.person.findUnique({ where: { id: u.personId } });
     }
     res.json({ user: u, person });
+  }),
+);
+
+/** Choix de la langue de l'interface et des messages (fr | en | pt-BR), mémorisé dans le compte. */
+authRouter.patch(
+  '/locale',
+  requireAuth(),
+  asyncHandler(async (req, res) => {
+    const locale = String(req.body?.locale ?? '');
+    if (!(LOCALES as readonly string[]).includes(locale)) throw new HttpError(422, 'Langue non prise en charge');
+    await prisma.user.update({ where: { id: req.user!.id }, data: { locale } });
+    res.json({ locale });
   }),
 );

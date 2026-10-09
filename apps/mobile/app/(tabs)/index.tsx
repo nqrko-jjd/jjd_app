@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { View, Pressable, ScrollView, StyleSheet, RefreshControl, Alert, Linking } from 'react-native';
+import { View, Pressable, ScrollView, StyleSheet, RefreshControl, Linking } from 'react-native';
 import { Text } from '@/lib/AppText';
 import { Feather } from '@expo/vector-icons';
 import { useFocusEffect, Redirect, useRouter } from 'expo-router';
@@ -8,6 +8,7 @@ import { currentPosition } from '@/lib/geo';
 import { useSession } from '@/lib/session';
 import { HeroTile, ScreenHeader, EmptyState } from '@/lib/ui';
 import { T } from '@/lib/theme';
+import { tr, dateLocale, Alert } from '@/lib/i18n';
 
 interface Ev {
   id: string;
@@ -131,7 +132,7 @@ export function FieldHome({ embedded = false }: { embedded?: boolean }) {
     await load();
   }
 
-  const hm = (iso: string) => new Date(iso).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' });
+  const hm = (iso: string) => new Date(iso).toLocaleTimeString(dateLocale(), { hour: '2-digit', minute: '2-digit' });
   // le prochain chantier : celui qui n'est pas encore terminé, sinon le premier de la journée
   const nowMs = Date.now();
   const next = events.find((e) => new Date(e.endAt).getTime() > nowMs) ?? events[0] ?? null;
@@ -142,7 +143,7 @@ export function FieldHome({ embedded = false }: { embedded?: boolean }) {
       contentContainerStyle={{ ...T.content, padding: 16, gap: 20 }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} />}
     >
-      <ScreenHeader eyebrow="Ma journée" title={`Bonjour ${person?.firstName || person?.displayName?.split(' ')[0] || ''}`} description="Vos chantiers et votre pointage du jour." avatar={(person?.firstName || user?.email || 'J').slice(0,1)}/>
+      <ScreenHeader eyebrow="Ma journée" title={`Bonjour ${person?.firstName || person?.displayName?.split(' ')[0] || ''}`} description={tr("Vos chantiers et votre pointage du jour.")} avatar={(person?.firstName || user?.email || 'J').slice(0,1)}/>
       {queued > 0 && (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           <Feather name="clock" size={14} color={T.accent} />
@@ -191,7 +192,7 @@ export function FieldHome({ embedded = false }: { embedded?: boolean }) {
         {lead && toValidate && (() => {
           const n = toValidate.plan + toValidate.hours + toValidate.reports;
           return (
-            <Pressable accessibilityRole="button" accessibilityLabel="À valider" onPress={() => router.push('/valider' as never)} style={({ pressed }) => [s.tile, n > 0 && s.tileAlert, pressed && { transform: [{ scale: 0.97 }] }]}>
+            <Pressable accessibilityRole="button" accessibilityLabel={tr("À valider")} onPress={() => router.push('/valider' as never)} style={({ pressed }) => [s.tile, n > 0 && s.tileAlert, pressed && { transform: [{ scale: 0.97 }] }]}>
               <View style={[s.tileIc, n > 0 && { backgroundColor: T.kpiWarnIconBg }]}><Feather name="check-square" size={18} color={n > 0 ? T.kpiWarnFg : T.primary} /></View>
               <Text style={[s.tileLabel, n > 0 && { color: T.kpiWarnFg }]}>À valider</Text>
               <Text style={[s.tileValue, n > 0 && { color: T.kpiWarnFg }]}>{n > 0 ? `${n} à traiter` : 'Tout est validé'}</Text>
@@ -200,20 +201,20 @@ export function FieldHome({ embedded = false }: { embedded?: boolean }) {
           );
         })()}
         {lead && (
-          <Pressable accessibilityRole="button" accessibilityLabel="Nouvelle dépense" onPress={() => router.push('/depense/nouvelle' as never)} style={({ pressed }) => [s.tile, pressed && { transform: [{ scale: 0.97 }] }]}>
+          <Pressable accessibilityRole="button" accessibilityLabel={tr("Nouvelle dépense")} onPress={() => router.push('/depense/nouvelle' as never)} style={({ pressed }) => [s.tile, pressed && { transform: [{ scale: 0.97 }] }]}>
             <View style={s.tileIc}><Feather name="camera" size={18} color={T.primary} /></View>
             <Text style={s.tileLabel}>Nouvelle dépense</Text>
             <Text style={s.tileValue}>Scanner un ticket</Text>
           </Pressable>
         )}
         {lead && (
-          <Pressable accessibilityRole="button" accessibilityLabel="Mon équipe" onPress={() => router.push('/planning' as never)} style={({ pressed }) => [s.tile, pressed && { transform: [{ scale: 0.97 }] }]}>
+          <Pressable accessibilityRole="button" accessibilityLabel={tr("Mon équipe")} onPress={() => router.push('/planning' as never)} style={({ pressed }) => [s.tile, pressed && { transform: [{ scale: 0.97 }] }]}>
             <View style={s.tileIc}><Feather name="users" size={18} color={T.primary} /></View>
             <Text style={s.tileLabel}>Mon équipe aujourd’hui</Text>
             <Text style={s.tileValue}>{new Set(events.flatMap((e) => (e as unknown as { assignments?: { person: { id: string } }[] }).assignments?.map((a) => a.person.id) ?? [])).size} personnes</Text>
           </Pressable>
         )}
-        <Pressable accessibilityRole="button" accessibilityLabel="Mes heures" onPress={() => router.push('/heures' as never)} style={({ pressed }) => [s.tile, pressed && { transform: [{ scale: 0.97 }] }]}>
+        <Pressable accessibilityRole="button" accessibilityLabel={tr("Mes heures")} onPress={() => router.push('/heures' as never)} style={({ pressed }) => [s.tile, pressed && { transform: [{ scale: 0.97 }] }]}>
           <View style={s.tileIc}><Feather name="clock" size={18} color={T.primary} /></View>
           <Text style={s.tileLabel}>Mes heures · semaine</Text>
           <Text style={s.tileValue}>{weekHours == null ? '…' : Math.round(weekHours * 10) / 10 + ' h'}</Text>
@@ -226,7 +227,7 @@ export function FieldHome({ embedded = false }: { embedded?: boolean }) {
       </View>
 
       <Text style={s.section}>Mes chantiers du jour</Text>
-      {events.length === 0 && <EmptyState title="Aucune affectation aujourd’hui" description="Le planning apparaîtra ici dès sa validation." icon="calendar"/>}
+      {events.length === 0 && <EmptyState title={tr("Aucune affectation aujourd’hui")} description={tr("Le planning apparaîtra ici dès sa validation.")} icon="calendar"/>}
       {events.map((e) => {
         const addr = [e.worksite.address, e.worksite.postalCode, e.worksite.city].filter(Boolean).join(' ');
         return (
@@ -241,18 +242,18 @@ export function FieldHome({ embedded = false }: { embedded?: boolean }) {
             </Pressable>
             <View style={s.actionsRow}>
               {!!addr && (
-                <Pressable accessibilityRole="button" accessibilityLabel="Itinéraire" style={({ pressed }) => [s.round, pressed && { opacity: 0.8 }]} onPress={() => Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(addr)}`)}>
+                <Pressable accessibilityRole="button" accessibilityLabel={tr("Itinéraire")} style={({ pressed }) => [s.round, pressed && { opacity: 0.8 }]} onPress={() => Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(addr)}`)}>
                   <Feather name="navigation" size={20} color={T.primary} /><Text style={s.roundTxt}>Itinéraire</Text>
                 </Pressable>
               )}
               <Pressable accessibilityRole="button" accessibilityLabel="Photo" style={({ pressed }) => [s.round, pressed && { opacity: 0.8 }]} onPress={() => router.push(`/photos/${e.worksite.id}?camera=1` as never)}>
                 <Feather name="camera" size={20} color={T.primary} /><Text style={s.roundTxt}>Photo</Text>
               </Pressable>
-              <Pressable accessibilityRole="button" accessibilityLabel="Tâches" style={({ pressed }) => [s.round, pressed && { opacity: 0.8 }]} onPress={() => router.push(`/fiche/${e.worksite.id}` as never)}>
+              <Pressable accessibilityRole="button" accessibilityLabel={tr("Tâches")} style={({ pressed }) => [s.round, pressed && { opacity: 0.8 }]} onPress={() => router.push(`/fiche/${e.worksite.id}` as never)}>
                 <Feather name="check-square" size={20} color={T.primary} /><Text style={s.roundTxt}>Tâches</Text>
               </Pressable>
               {linked && !running && (
-                <Pressable accessibilityRole="button" accessibilityLabel="Je suis arrivé" style={({ pressed }) => [s.round, s.roundGold, pressed && { opacity: 0.85 }]} onPress={() => start(e.worksite.id)}>
+                <Pressable accessibilityRole="button" accessibilityLabel={tr("Je suis arrivé")} style={({ pressed }) => [s.round, s.roundGold, pressed && { opacity: 0.85 }]} onPress={() => start(e.worksite.id)}>
                   <Feather name="play" size={20} color="#241c05" /><Text style={[s.roundTxt, { color: '#241c05' }]}>Arrivé</Text>
                 </Pressable>
               )}

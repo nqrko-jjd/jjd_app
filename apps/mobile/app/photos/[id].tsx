@@ -8,13 +8,14 @@ import { apiGet, apiUploadPhoto, API_URL } from '@/lib/api';
 import { openApiFile } from '@/lib/files';
 import { Muted, Loading } from '@/lib/ui';
 import { T } from '@/lib/theme';
+import { tr, dateLocale } from '@/lib/i18n';
 
 interface Msg { id: string; kind: string; body: string | null; fileUrl: string | null; thumbUrl: string | null; authorName: string | null; createdAt: string }
 interface Photo { id: string; url: string; thumb: string; tag: string | null; caption: string; by: string | null; at: string }
 interface Pending { uri: string; state: 'wait' | 'sending' | 'fail' }
 const TAGS = ['Avant', 'Pendant', 'Après'] as const;
 const abs = (u: string) => (u.startsWith('http') ? u : `${API_URL}${u}`);
-const dayLabel = (iso: string) => { const d = new Date(iso); const t = new Date(); const y = new Date(); y.setDate(t.getDate() - 1); return d.toDateString() === t.toDateString() ? 'Aujourd’hui' : d.toDateString() === y.toDateString() ? 'Hier' : d.toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' }); };
+const dayLabel = (iso: string) => { const d = new Date(iso); const t = new Date(); const y = new Date(); y.setDate(t.getDate() - 1); return d.toDateString() === t.toDateString() ? 'Aujourd’hui' : d.toDateString() === y.toDateString() ? 'Hier' : d.toLocaleDateString(dateLocale(), { weekday: 'long', day: 'numeric', month: 'long' }); };
 
 /** « Avant · mur nord » → étiquette + légende (l'étiquette vit dans la légende : aucun changement côté serveur). */
 const parse = (m: Msg): Photo => {
@@ -91,11 +92,11 @@ export default function Photos() {
 
   return (
     <View style={{ flex: 1, backgroundColor: T.paper }}>
-      <Stack.Screen options={{ title: 'Photos', headerBackTitle: 'Retour' }} />
+      <Stack.Screen options={{ title: 'Photos', headerBackTitle: tr('Retour') }} />
       <ScrollView contentContainerStyle={{ ...T.content, padding: 16, gap: 14 }} keyboardShouldPersistTaps="handled">
         <View style={{ flexDirection: 'row', gap: 10 }}>
           <Pressable accessibilityRole="button" onPress={shoot} style={({ pressed }) => [s.shoot, pressed && { transform: [{ scale: 0.98 }] }]}><Feather name="camera" size={24} color="#fff" /><Text style={s.shootTxt}>Prendre une photo</Text></Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel="Choisir dans la galerie" onPress={library} style={s.lib}><Feather name="image" size={22} color={T.primary} /></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={tr("Choisir dans la galerie")} onPress={library} style={s.lib}><Feather name="image" size={22} color={T.primary} /></Pressable>
         </View>
 
         {pending.length > 0 && (
@@ -104,7 +105,7 @@ export default function Photos() {
               {pending.map((p, i) => (
                 <View key={p.uri + i}>
                   <Image source={{ uri: p.uri }} style={[s.pthumb, p.state === 'fail' && { borderColor: T.crit, borderWidth: 2 }]} />
-                  <Pressable accessibilityRole="button" accessibilityLabel="Retirer" onPress={() => setPending((x) => x.filter((_, j) => j !== i))} style={s.rm}><Feather name="x" size={13} color="#fff" /></Pressable>
+                  <Pressable accessibilityRole="button" accessibilityLabel={tr("Retirer")} onPress={() => setPending((x) => x.filter((_, j) => j !== i))} style={s.rm}><Feather name="x" size={13} color="#fff" /></Pressable>
                 </View>
               ))}
               <Pressable accessibilityRole="button" onPress={shoot} style={s.more}><Feather name="plus" size={24} color={T.primary} /></Pressable>
@@ -112,7 +113,7 @@ export default function Photos() {
             <View style={{ flexDirection: 'row', gap: 8 }}>
               {TAGS.map((t) => <Pressable key={t} accessibilityRole="button" onPress={() => setTag(tag === t ? null : t)} style={[s.tagBtn, tag === t && s.tagOn]}><Text style={[s.tagTxt, tag === t && { color: '#fff' }]}>{t}</Text></Pressable>)}
             </View>
-            <TextInput value={caption} onChangeText={setCaption} placeholder="Légende (facultatif) : mur nord, compteur…" placeholderTextColor={T.ink3} style={s.input} />
+            <TextInput value={caption} onChangeText={setCaption} placeholder={tr("Légende (facultatif) : mur nord, compteur…")} placeholderTextColor={T.ink3} style={s.input} />
             <Pressable accessibilityRole="button" disabled={!!sending} onPress={send} style={({ pressed }) => [s.send, !!sending && { opacity: 0.6 }, pressed && { transform: [{ scale: 0.98 }] }]}>
               {sending ? <><ActivityIndicator color="#fff" /><Text style={s.sendTxt}>Envoi {sending.n} / {sending.total}…</Text></> : <><Feather name="upload" size={20} color="#fff" /><Text style={s.sendTxt}>Envoyer {pending.length} photo{pending.length > 1 ? 's' : ''}</Text></>}
             </Pressable>
@@ -169,14 +170,14 @@ function Viewer({ list, start, onClose }: { list: Photo[]; start: number; onClos
         )}
       />
       <View style={v.top}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Fermer" onPress={onClose} style={v.btn}><Feather name="x" size={24} color="#fff" /></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel={tr("Fermer")} onPress={onClose} style={v.btn}><Feather name="x" size={24} color="#fff" /></Pressable>
         <Text style={{ color: '#fff', fontWeight: '700' }}>{i + 1} / {list.length}</Text>
-        <Pressable accessibilityRole="button" accessibilityLabel="Partager" onPress={async () => { setErr(null); try { await openApiFile(p.url.replace(API_URL, ''), `photo-${p.id}.webp`, 'image/webp'); } catch (e) { setErr((e as Error).message); } }} style={v.btn}><Feather name="share" size={22} color="#fff" /></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel={tr("Partager")} onPress={async () => { setErr(null); try { await openApiFile(p.url.replace(API_URL, ''), `photo-${p.id}.webp`, 'image/webp'); } catch (e) { setErr((e as Error).message); } }} style={v.btn}><Feather name="share" size={22} color="#fff" /></Pressable>
       </View>
       <View style={v.bottom}>
         {!!p.tag && <Text style={v.tag}>{p.tag}</Text>}
         {!!p.caption && <Text style={v.cap}>{p.caption}</Text>}
-        <Text style={v.meta}>{[p.by, new Date(p.at).toLocaleString('fr-BE', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })].filter(Boolean).join(' · ')}</Text>
+        <Text style={v.meta}>{[p.by, new Date(p.at).toLocaleString(dateLocale(), { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })].filter(Boolean).join(' · ')}</Text>
         {!!err && <Text style={{ color: '#ff8d85' }}>{err}</Text>}
       </View>
     </View>

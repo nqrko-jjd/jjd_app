@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { View, ScrollView, Pressable, StyleSheet, Alert, Linking } from 'react-native';
+import { View, ScrollView, Pressable, StyleSheet, Linking } from 'react-native';
 import { Text } from '@/lib/AppText';
 import { Feather } from '@expo/vector-icons';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -7,6 +7,7 @@ import { apiGet, apiSend } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { Muted, Loading } from '@/lib/ui';
 import { T } from '@/lib/theme';
+import { tr, dateLocale, Alert } from '@/lib/i18n';
 
 interface Ev {
   id: string; title: string | null; startAt: string; endAt: string; allDay: boolean; status: string; kind: string;
@@ -16,8 +17,8 @@ interface Ev {
   assignments: { person: { id: string; displayName: string | null; firstName: string; phone: string | null } }[];
   vehicles: { vehicle: { plate: string | null; model: string | null; brand: string | null; code: string | null }; driver: { displayName: string | null; firstName: string } | null }[];
 }
-const KIND = { intervention: { main: '#3d7fc4', soft: '#e4eef9', ink: '#1f5a96', label: 'Intervention' }, meeting: { main: '#e0a800', soft: '#fbf1cc', ink: '#7a5c00', label: 'Rendez-vous' } } as const;
-const hm = (iso: string) => new Date(iso).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' });
+const KIND = { intervention: { main: '#3d7fc4', soft: '#e4eef9', ink: '#1f5a96', label: tr('Intervention') }, meeting: { main: '#e0a800', soft: '#fbf1cc', ink: '#7a5c00', label: tr('Rendez-vous') } } as const;
+const hm = (iso: string) => new Date(iso).toLocaleTimeString(dateLocale(), { hour: '2-digit', minute: '2-digit' });
 
 /** Fiche d'une intervention ou d'un rendez-vous : tout ce qu'il faut savoir, et les actions au pouce. */
 export default function EvenementDetail() {
@@ -31,7 +32,7 @@ export default function EvenementDetail() {
   if (!e) return msg ? <View style={{ padding: 20 }}><Text style={{ color: T.crit }}>{msg}</Text></View> : <Loading />;
 
   const k = e.kind === 'meeting' ? KIND.meeting : KIND.intervention;
-  const day = new Date(e.startAt).toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' });
+  const day = new Date(e.startAt).toLocaleDateString(dateLocale(), { weekday: 'long', day: 'numeric', month: 'long' });
   const addr = e.kind === 'meeting' && !e.meetingOnSite ? [e.meetingAddress, e.meetingPostalCode, e.meetingCity].filter(Boolean).join(' ') : [e.worksite.address, e.worksite.postalCode, e.worksite.city].filter(Boolean).join(' ');
   const canDelete = user?.role === 'admin' || user?.role === 'office';
   const vlabel = (v: Ev['vehicles'][number]) => [v.vehicle.model || v.vehicle.brand, v.vehicle.plate].filter(Boolean).join(' · ') || v.vehicle.code || 'Véhicule';
@@ -44,7 +45,7 @@ export default function EvenementDetail() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ padding: 16, gap: 14 }}>
-      <Stack.Screen options={{ title: k.label, headerBackTitle: 'Retour' }} />
+      <Stack.Screen options={{ title: k.label, headerBackTitle: tr('Retour') }} />
       <View style={[s.head, { backgroundColor: k.soft, borderLeftColor: k.main }]}>
         <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
           <Text style={[s.kind, { color: k.ink }]}>{k.label}</Text>
@@ -64,14 +65,14 @@ export default function EvenementDetail() {
 
       <View style={s.card}>
         <Pressable accessibilityRole="button" onPress={() => router.push(`/chantier/${e.worksite.id}` as never)}>
-          <Info icon="home" label="Chantier"><Text style={s.val}>{e.worksite.ref} — {e.worksite.title}</Text><Text style={s.link}>Ouvrir la fiche chantier</Text></Info>
+          <Info icon="home" label={tr("Chantier")}><Text style={s.val}>{e.worksite.ref} — {e.worksite.title}</Text><Text style={s.link}>Ouvrir la fiche chantier</Text></Info>
         </Pressable>
         <Pressable accessibilityRole="button" onPress={() => router.push(`/photos/${e.worksite.id}` as never)}>
           <Info icon="camera" label="Photos"><Text style={s.link}>Voir et ajouter des photos du chantier</Text></Info>
         </Pressable>
         {!!addr && (
           <Pressable accessibilityRole="button" onPress={() => Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(addr)}`)}>
-            <Info icon="navigation" label="Adresse"><Text style={s.val}>{addr}</Text><Text style={s.link}>Itinéraire</Text></Info>
+            <Info icon="navigation" label={tr("Adresse")}><Text style={s.val}>{addr}</Text><Text style={s.link}>Itinéraire</Text></Info>
           </Pressable>
         )}
         <Info icon="users" label={`Équipe (${e.assignments.length})`}>
@@ -82,10 +83,10 @@ export default function EvenementDetail() {
             </Pressable>
           ))}
         </Info>
-        {e.vehicles.length > 0 && <Info icon="truck" label="Véhicules">{e.vehicles.map((v, i) => <Text key={i} style={s.val}>{vlabel(v)}{v.driver ? ` · ${v.driver.displayName || v.driver.firstName}` : ''}</Text>)}</Info>}
-        {!!e.tasksNote && <Info icon="check-square" label="Mission"><Text style={s.val}>{e.tasksNote}</Text></Info>}
-        {!!e.accessNote && <Info icon="key" label="Accès"><Text style={s.val}>{e.accessNote}</Text></Info>}
-        {!!e.materialsNote && <Info icon="tool" label="Matériel"><Text style={s.val}>{e.materialsNote}</Text></Info>}
+        {e.vehicles.length > 0 && <Info icon="truck" label={tr("Véhicules")}>{e.vehicles.map((v, i) => <Text key={i} style={s.val}>{vlabel(v)}{v.driver ? ` · ${v.driver.displayName || v.driver.firstName}` : ''}</Text>)}</Info>}
+        {!!e.tasksNote && <Info icon="check-square" label={tr("Mission")}><Text style={s.val}>{e.tasksNote}</Text></Info>}
+        {!!e.accessNote && <Info icon="key" label={tr("Accès")}><Text style={s.val}>{e.accessNote}</Text></Info>}
+        {!!e.materialsNote && <Info icon="tool" label={tr("Matériel")}><Text style={s.val}>{e.materialsNote}</Text></Info>}
         {!!e.note && <Info icon="phone-call" label={e.kind === 'meeting' ? 'Avec' : 'Contact sur place'}><Text style={s.val}>{e.note}</Text></Info>}
       </View>
 

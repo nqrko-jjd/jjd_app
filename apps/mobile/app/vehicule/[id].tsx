@@ -5,6 +5,7 @@ import { Stack, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { apiGet } from '@/lib/api';
 import { ScreenHeader, Card, Label, Loading, Row, Badge, PhotoHeader, eur, dateBE } from '@/lib/ui';
 import { T } from '@/lib/theme';
+import { tr } from '@/lib/i18n';
 
 interface D {
   vehicle: {
@@ -32,7 +33,7 @@ export default function VehiculeDetail() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ ...T.content, gap: 20 }}>
-      <Stack.Screen options={{ title: [v.brand, v.model].filter(Boolean).join(' '), headerBackTitle: 'Retour' }} />
+      <Stack.Screen options={{ title: [v.brand, v.model].filter(Boolean).join(' '), headerBackTitle: tr('Retour') }} />
       <ScreenHeader title={[v.brand, v.model].filter(Boolean).join(' ') || v.plate || 'Véhicule'} eyebrow="Flotte" description={v.plate ?? undefined}/>
       <PhotoHeader basePath={`/api/vehicles/${v.id}`} photoUrl={v.photoUrl} onChange={load} />
       <Card>

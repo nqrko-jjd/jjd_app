@@ -4,6 +4,7 @@ import { useSession } from '@/lib/session';
 import { API_URL } from '@/lib/api';
 import { T } from '@/lib/theme';
 import { loginLabel } from '@/lib/login-label';
+import { LanguagePicker } from '@/lib/LanguagePicker';
 
 export default function Compte() {
   const { user, person, signOut } = useSession();
@@ -14,6 +15,10 @@ export default function Compte() {
         <Text style={s.name}>{person?.displayName || person?.firstName || loginLabel(user?.email)}</Text>
         <Text style={s.muted}>{loginLabel(user?.email)}</Text>
         <Text style={s.muted}>Rôle : {user?.role}</Text>
+      </View>
+      <View style={s.card}>
+        <Text style={s.label}>Langue</Text>
+        <LanguagePicker />
       </View>
       <Text style={[s.muted, { fontSize: 12 }]}>API : {API_URL}</Text>
       <Pressable style={s.btn} onPress={signOut}>

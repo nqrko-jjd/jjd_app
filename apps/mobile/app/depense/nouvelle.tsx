@@ -8,6 +8,7 @@ import { apiGet, apiSend, apiUploadPhoto } from '@/lib/api';
 import { Muted } from '@/lib/ui';
 import { WorksitePick, type Ws } from '@/lib/WorksitePick';
 import { T } from '@/lib/theme';
+import { tr, dateLocale } from '@/lib/i18n';
 
 interface Meta { categories: { code: string; label: string }[]; suppliers: { id: string; name: string }[] }
 interface Extract { extraction: { supplierName?: string | null; contactId?: string | null; contactName?: string | null; issuedOn?: string | null; totalTtc?: number | null; totalHt?: number | null; vatRate?: number | null; docNumber?: string | null } | null; suggestedCategory: { code: string; label: string } | null; note?: string }
@@ -16,7 +17,7 @@ const dayStr = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padSt
 const daysAgo = (n: number) => { const d = new Date(); d.setDate(d.getDate() - n); return dayStr(d); };
 const num = (s: string) => Number(s.replace(',', '.').replace(/[^\d.]/g, ''));
 const r2 = (n: number) => Math.round(n * 100) / 100;
-const eur = (n: number) => n.toLocaleString('fr-BE', { style: 'currency', currency: 'EUR' });
+const eur = (n: number) => n.toLocaleString(dateLocale(), { style: 'currency', currency: 'EUR' });
 
 /** Nouvelle dépense à la volée : photo du ticket (lue automatiquement quand l'IA est disponible) ou saisie rapide au pouce. */
 export default function NouvelleDepense() {
@@ -88,7 +89,7 @@ export default function NouvelleDepense() {
   if (done) {
     return (
       <View style={s.doneWrap}>
-        <Stack.Screen options={{ title: 'Dépense', headerBackTitle: 'Retour' }} />
+        <Stack.Screen options={{ title: tr('Dépense'), headerBackTitle: tr('Retour') }} />
         <View style={s.doneIc}><Feather name="check" size={40} color="#fff" /></View>
         <Text style={s.doneTitle}>Dépense enregistrée</Text>
         <Muted>{supplier} · {eur(total)}</Muted>
@@ -100,7 +101,7 @@ export default function NouvelleDepense() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ ...T.content, padding: 16, gap: 16 }} keyboardShouldPersistTaps="handled">
-      <Stack.Screen options={{ title: 'Nouvelle dépense', headerBackTitle: 'Retour' }} />
+      <Stack.Screen options={{ title: tr('Nouvelle dépense'), headerBackTitle: tr('Retour') }} />
 
       {!photo ? (
         <View style={{ gap: 10 }}>
@@ -124,7 +125,7 @@ export default function NouvelleDepense() {
 
       <View style={s.card}>
         <Text style={s.lbl}>Fournisseur</Text>
-        <TextInput value={supplier} onChangeText={(t) => { setSupplier(t); setContactId(null); }} placeholder="Brico, station-service, quincaillerie…" placeholderTextColor={T.ink3} style={s.input} />
+        <TextInput value={supplier} onChangeText={(t) => { setSupplier(t); setContactId(null); }} placeholder={tr("Brico, station-service, quincaillerie…")} placeholderTextColor={T.ink3} style={s.input} />
         {suppliers.map((x) => <Pressable key={x.id} accessibilityRole="button" onPress={() => { setSupplier(x.name); setContactId(x.id); }} style={s.option}><Text style={{ color: T.ink }}>{x.name}</Text></Pressable>)}
 
         <Text style={s.lbl}>Montant TTC</Text>
@@ -147,15 +148,15 @@ export default function NouvelleDepense() {
           <Pressable accessibilityRole="button" onPress={() => setCat(null)} style={s.picked}><Text style={{ flex: 1, color: T.ink, fontWeight: '700' }}>{catLabel}</Text><Feather name="x" size={18} color={T.ink2} /></Pressable>
         ) : (
           <>
-            <TextInput value={catQ} onChangeText={setCatQ} placeholder="Chercher une catégorie" placeholderTextColor={T.ink3} style={s.input} />
+            <TextInput value={catQ} onChangeText={setCatQ} placeholder={tr("Chercher une catégorie")} placeholderTextColor={T.ink3} style={s.input} />
             {cats.map((c) => <Pressable key={c.code} accessibilityRole="button" onPress={() => setCat(c.code)} style={s.option}><Text style={{ color: T.ink }}>{c.label}</Text></Pressable>)}
           </>
         )}
         <Text style={s.lbl}>Chantier (facultatif)</Text>
         <WorksitePick value={ws} onChange={setWs} />
         <View style={s.switchRow}><View style={{ flex: 1 }}><Text style={{ color: T.ink, fontWeight: '700' }}>Déjà payé</Text><Muted>Ticket de caisse, carte ou espèces</Muted></View><Switch value={paid} onValueChange={setPaid} trackColor={{ true: T.primary }} /></View>
-        <TextInput value={docNumber} onChangeText={setDocNumber} placeholder="N° du ticket ou de la facture (facultatif)" placeholderTextColor={T.ink3} style={s.input} />
-        <TextInput value={comment} onChangeText={setComment} placeholder="Note (facultatif)" placeholderTextColor={T.ink3} style={s.input} />
+        <TextInput value={docNumber} onChangeText={setDocNumber} placeholder={tr("N° du ticket ou de la facture (facultatif)")} placeholderTextColor={T.ink3} style={s.input} />
+        <TextInput value={comment} onChangeText={setComment} placeholder={tr("Note (facultatif)")} placeholderTextColor={T.ink3} style={s.input} />
       </View>
 
       {err && <Text style={{ color: T.crit, fontWeight: '700' }}>{err}</Text>}

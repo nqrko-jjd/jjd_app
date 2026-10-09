@@ -7,6 +7,9 @@ import { useSession } from '@/lib/session';
 import { Feather } from '@expo/vector-icons';
 import { Card, Label, Muted, Loading, eur, ScreenHeader } from '@/lib/ui';
 import { T } from '@/lib/theme';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { FieldHome } from './index';
+import { useEffect } from 'react';
 
 interface Dash {
   kpis: { invoicedMonth: number; paidMonth: number; overdueAmount: number; overdueCount: number; openWorksites: number; hoursWeek: number };
@@ -24,7 +27,7 @@ const ALERT_ROUTE: Record<string, string> = {
 };
 
 /** Accueil direction / bureau : ce qu'il faut traiter aujourd'hui, pas des statistiques (celles-ci sont dans « Plus → Analyse »). */
-export default function Dashboard() {
+function BureauHome() {
   const { person } = useSession();
   const router = useRouter();
   const go = (p: string) => router.push(p as never);
@@ -152,4 +155,35 @@ const s = StyleSheet.create({
   timeTxt: { color: T.primary, fontWeight: '800', fontSize: 13 },
   rowTitle: { color: T.ink, fontWeight: '700' },
   count: { fontWeight: '800', color: T.ink, fontSize: 16 },
+});
+
+/** Direction et bureau : « Bureau » (ce qui demande une décision) ou « Terrain » (mes chantiers du jour, pointer, photos) — le choix est mémorisé. */
+export default function Dashboard() {
+  const { user } = useSession();
+  const [mode, setMode] = useState<'bureau' | 'terrain'>(user?.entityScope ? 'terrain' : 'bureau');
+  useEffect(() => { AsyncStorage.getItem('homeMode').then((v) => { if (v === 'terrain' || v === 'bureau') setMode(v); }).catch(() => {}); }, []);
+  const pick = (m: 'bureau' | 'terrain') => { setMode(m); AsyncStorage.setItem('homeMode', m).catch(() => {}); };
+  return (
+    <View style={{ flex: 1, backgroundColor: T.paper }}>
+      <View style={sw.wrap}>
+        <View style={sw.seg}>
+          {([['bureau', 'Bureau', 'briefcase'], ['terrain', 'Terrain', 'hard-hat']] as const).map(([k, label]) => (
+            <Pressable key={k} accessibilityRole="button" onPress={() => pick(k)} style={[sw.btn, mode === k && sw.on]}>
+              <Feather name={k === 'bureau' ? 'briefcase' : 'map-pin'} size={16} color={mode === k ? '#fff' : T.ink2} />
+              <Text style={[sw.txt, mode === k && { color: '#fff' }]}>{label}</Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+      {mode === 'bureau' ? <BureauHome /> : <FieldHome embedded />}
+    </View>
+  );
+}
+
+const sw = StyleSheet.create({
+  wrap: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 2, alignItems: 'center' },
+  seg: { flexDirection: 'row', backgroundColor: T.surface2, borderRadius: 16, padding: 4, width: '100%', maxWidth: 440 },
+  btn: { flex: 1, flexDirection: 'row', gap: 8, paddingVertical: 11, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  on: { backgroundColor: T.primary },
+  txt: { fontWeight: '800', fontSize: 14.5, color: T.ink2 },
 });

@@ -6,6 +6,7 @@ interface User {
   email: string;
   role: string;
   personId: string | null;
+  entityScope?: string | null;
 }
 interface Person {
   id: string;

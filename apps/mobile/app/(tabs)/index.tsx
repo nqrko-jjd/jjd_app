@@ -34,7 +34,8 @@ function elapsed(fromIso: string): string {
   return `${h} h ${String(m).padStart(2, '0')}`;
 }
 
-export default function Today() {
+/** L'accueil terrain (ouvrier, chef de chantier) — réutilisé tel quel, en vue « Terrain », par la direction et le bureau. */
+export function FieldHome({ embedded = false }: { embedded?: boolean }) {
   const { person, user } = useSession();
   const router = useRouter();
   const [events, setEvents] = useState<Ev[]>([]);
@@ -43,6 +44,7 @@ export default function Today() {
   const [queued, setQueued] = useState(0);
   const [weekHours, setWeekHours] = useState<number | null>(null);
   const [unread, setUnread] = useState(0);
+  const lead = user?.role === 'foreman' || user?.role === 'admin' || user?.role === 'office';
   const [toValidate, setToValidate] = useState<{ plan: number; hours: number; reports: number } | null>(null);
   const [tick, setTick] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
@@ -70,7 +72,7 @@ export default function Today() {
       ]);
       if (mine.status === 'fulfilled') setWeekHours(mine.value.items.filter((e) => e.status !== 'rejected').reduce((t, e) => t + (e.hours ?? 0), 0));
       if (un.status === 'fulfilled') setUnread(un.value.internal);
-      if (user?.role === 'foreman') {
+      if (user?.role === 'foreman' || user?.role === 'admin' || user?.role === 'office') {
         const key = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
         const [pl, hr, rp] = await Promise.allSettled([
           apiGet<{ items: { state: string }[] }>(`/api/timesheet/planned?date=${key}`),
@@ -98,7 +100,7 @@ export default function Today() {
   if (user?.role === 'storekeeper') return <Redirect href="/magasin" />;
 
   // Bureau pur (sans fiche terrain) -> tableau de bord
-  if (user && ['admin', 'office'].includes(user.role) && user.role !== 'foreman') {
+  if (!embedded && user && ['admin', 'office'].includes(user.role) && user.role !== 'foreman') {
     return <Redirect href="/dashboard" />;
   }
 
@@ -186,7 +188,7 @@ export default function Today() {
       ))}
 
       <View style={s.tiles}>
-        {user?.role === 'foreman' && toValidate && (() => {
+        {lead && toValidate && (() => {
           const n = toValidate.plan + toValidate.hours + toValidate.reports;
           return (
             <Pressable accessibilityRole="button" accessibilityLabel="À valider" onPress={() => router.push('/valider' as never)} style={({ pressed }) => [s.tile, n > 0 && s.tileAlert, pressed && { transform: [{ scale: 0.97 }] }]}>
@@ -197,14 +199,14 @@ export default function Today() {
             </Pressable>
           );
         })()}
-        {user?.role === 'foreman' && (
+        {lead && (
           <Pressable accessibilityRole="button" accessibilityLabel="Nouvelle dépense" onPress={() => router.push('/depense/nouvelle' as never)} style={({ pressed }) => [s.tile, pressed && { transform: [{ scale: 0.97 }] }]}>
             <View style={s.tileIc}><Feather name="camera" size={18} color={T.primary} /></View>
             <Text style={s.tileLabel}>Nouvelle dépense</Text>
             <Text style={s.tileValue}>Scanner un ticket</Text>
           </Pressable>
         )}
-        {user?.role === 'foreman' && (
+        {lead && (
           <Pressable accessibilityRole="button" accessibilityLabel="Mon équipe" onPress={() => router.push('/planning' as never)} style={({ pressed }) => [s.tile, pressed && { transform: [{ scale: 0.97 }] }]}>
             <View style={s.tileIc}><Feather name="users" size={18} color={T.primary} /></View>
             <Text style={s.tileLabel}>Mon équipe aujourd’hui</Text>
@@ -260,6 +262,10 @@ export default function Today() {
       })}
     </ScrollView>
   );
+}
+
+export default function Today() {
+  return <FieldHome />;
 }
 
 const s = StyleSheet.create({

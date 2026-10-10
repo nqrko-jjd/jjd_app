@@ -141,3 +141,24 @@ test('suivi des devis sans réponse : étape selon l’ancienneté, devis accept
   assert.ok(list.proposals.some((p: { documentId: string }) => p.documentId === q30.id));
   assert.ok(list.history.some((h: { document: { id: string } }) => h.document.id === q10.id));
 });
+
+test('suivi des devis ancré sur la date d’expiration : seuls les devis encore valables, palier 7 jours avant', async () => {
+  arm(); sent.length = 0;
+  const { computeQuoteProposals, saveFollowupSettings: saveF, getFollowupSettings: getF, DEFAULT_FOLLOWUP_SETTINGS: D } = await import('../src/lib/quote-followups.js');
+  const c = await prisma.contact.create({ data: { name: 'Prospect Expiry', normalizedName: 'prospect expiry', type: 'client', email: 'p@expiry.be' } });
+  created.contacts.push(c.id);
+  const q = async (validInDays: number) => {
+    const d = await prisma.document.create({ data: { kind: 'quote', direction: 'sale', number: `D8${Math.floor(Math.random() * 1e6)}`, status: 'sent', contactId: c.id, lockedAt: new Date(), issuedOn: new Date(Date.now() - 20 * DAY), sentAt: new Date(Date.now() - 20 * DAY), validUntil: new Date(Date.now() + validInDays * DAY), totalTtc: 1000, totalHt: 826, originalPdf: PDF, source: 'test-reminders' } });
+    created.docs.push(d.id);
+    return d;
+  };
+  const soon = await q(5), later = await q(25), expired = await q(-3);
+  await saveF({ ...(await getF()), mode: 'before_expiry', steps: [{ daysAfterSent: 7, subject: 'Votre devis {numero} expire le {expiration}', body: 'Il reste {jours_restants} jours.' }] });
+  const props = await computeQuoteProposals();
+  const by = (id: string) => props.find((p) => p.documentId === id);
+  assert.equal(by(soon.id)?.step, 1, 'expire dans 5 jours : palier « 7 jours avant » atteint');
+  assert.match(by(soon.id)!.body, /Il reste 5 jours/);
+  assert.ok(!by(later.id), 'expire dans 25 jours : trop tôt');
+  assert.ok(!by(expired.id), 'devis déjà expiré : plus relancé');
+  await saveF({ ...D });
+});

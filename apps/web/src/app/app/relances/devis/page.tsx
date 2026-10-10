@@ -8,14 +8,14 @@ import { SkeletonRows, ErrorState, EmptyState } from '@/components/States';
 import { BellRing } from 'lucide-react';
 
 interface Step { daysAfterSent: number; subject: string; body: string }
-interface Settings { autoSend: boolean; copyToSelf: boolean; minDaysBetween: number; maxAgeDays: number; steps: Step[] }
+interface Settings { autoSend: boolean; copyToSelf: boolean; minDaysBetween: number; maxAgeDays: number; mode?: 'after_sent' | 'before_expiry'; steps: Step[] }
 interface Proposal {
   documentId: string; number: string | null; client: string; contactId: string | null; to: string | null; totalTtc: number; sentOn: string; daysSince: number;
   step: number; stepCount: number; subject: string; body: string; blocked: string | null; worksiteRef: string | null; lastFollowupAt: string | null;
 }
 interface HistoryRow { id: string; step: number; status: string; auto: boolean; toEmail: string | null; error: string | null; sentAt: string | null; createdAt: string; balance: number | null; document: { id: string; number: string | null; status: string; contact: { name: string } | null } }
 interface Data { emailConfigured: boolean; settings: Settings; proposals: Proposal[]; history: HistoryRow[] }
-const PLACEHOLDERS = '{client} {numero} {montant} {jours} {envoye} {validite} {chantier} {societe} {telephone}';
+const PLACEHOLDERS = '{client} {numero} {montant} {jours} {envoye} {validite} {expiration} {jours_restants} {chantier} {societe} {telephone}';
 
 /** Suivi des devis envoyés restés sans réponse : une proposition de relance par devis, à valider une par une (ou envoi automatique si activé). */
 export default function QuoteFollowupsPage() {
@@ -141,6 +141,14 @@ function SettingsForm({ initial, onSaved, onError }: { initial: Settings; onSave
         <span><strong>Envoi automatique</strong><br /><span className="muted" style={{ fontSize: '0.86rem' }}>Les suivis partent tout seuls, en semaine entre 8 h et 18 h, une passe par jour (25 maximum). Désactivé : vous validez chaque suivi depuis l’onglet « À relancer ».</span></span>
       </label>
       <label style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}><input type="checkbox" checked={s.copyToSelf} onChange={(e) => setS({ ...s, copyToSelf: e.target.checked })} /> Recevoir une copie de chaque suivi (Cci)</label>
+      <div className="field">
+        <label>Les suivis se comptent…</label>
+        <div className="seg">
+          <button type="button" className={(s.mode ?? 'after_sent') === 'after_sent' ? 'on' : ''} onClick={() => setS({ ...s, mode: 'after_sent' })}>après l’envoi du devis</button>
+          <button type="button" className={s.mode === 'before_expiry' ? 'on' : ''} onClick={() => setS({ ...s, mode: 'before_expiry' })}>avant la date d’expiration</button>
+        </div>
+        <span className="muted" style={{ fontSize: '0.8rem' }}>{s.mode === 'before_expiry' ? 'Seuls les devis encore valables, avec une date de validité, sont relancés (ex. 21 jours puis 7 jours avant l’expiration).' : 'Ex. 7, 21 puis 45 jours après l’envoi ; les devis de plus de la durée ci-dessous ne sont plus relancés.'}</span>
+      </div>
       <div className="row" style={{ gap: '1rem', flexWrap: 'wrap' }}>
         <div className="field"><label>Délai minimum entre deux suivis (jours)</label><input className="input" inputMode="numeric" style={{ width: 120 }} value={s.minDaysBetween} onChange={(e) => setS({ ...s, minDaysBetween: Number(e.target.value) || 1 })} /></div>
         <div className="field"><label>Ne plus relancer un devis de plus de (jours)</label><input className="input" inputMode="numeric" style={{ width: 120 }} value={s.maxAgeDays} onChange={(e) => setS({ ...s, maxAgeDays: Number(e.target.value) || 14 })} /></div>
@@ -150,7 +158,7 @@ function SettingsForm({ initial, onSaved, onError }: { initial: Settings; onSave
           <div key={i} style={{ border: '1px solid var(--line)', borderRadius: 12, padding: '0.8rem', display: 'grid', gap: '0.5rem' }}>
             <div className="row" style={{ alignItems: 'center', gap: '0.6rem' }}>
               <strong>Suivi {i + 1}</strong> à
-              <input className="input" inputMode="numeric" style={{ width: 80 }} value={st.daysAfterSent} onChange={(e) => setStep(i, { daysAfterSent: Number(e.target.value) || 1 })} /> jours après l’envoi du devis
+              <input className="input" inputMode="numeric" style={{ width: 80 }} value={st.daysAfterSent} onChange={(e) => setStep(i, { daysAfterSent: Number(e.target.value) || 1 })} /> {s.mode === 'before_expiry' ? 'jours avant l’expiration du devis' : 'jours après l’envoi du devis'}
               {s.steps.length > 1 && <button type="button" className="btn ghost" style={{ marginLeft: 'auto' }} onClick={() => setS({ ...s, steps: s.steps.filter((_, j) => j !== i) })}>Retirer</button>}
             </div>
             <input className="input" value={st.subject} onChange={(e) => setStep(i, { subject: e.target.value })} aria-label={`Objet du suivi ${i + 1}`} />

@@ -11,11 +11,13 @@ import { getCompany } from './documents.js';
 import { fillTemplate } from './reminders.js';
 
 export interface FollowupStep { daysAfterSent: number; subject: string; body: string }
-export interface FollowupSettings { autoSend: boolean; copyToSelf: boolean; minDaysBetween: number; maxAgeDays: number; steps: FollowupStep[] }
+/** after_sent : les paliers comptent les jours APRÈS l'envoi ; before_expiry : les jours AVANT la date d'expiration du devis. */
+export type FollowupMode = 'after_sent' | 'before_expiry';
+export interface FollowupSettings { autoSend: boolean; copyToSelf: boolean; minDaysBetween: number; maxAgeDays: number; mode?: FollowupMode; steps: FollowupStep[] }
 
 const SIGN = '\n\nCordialement,\n{societe}\n{telephone}';
 export const DEFAULT_FOLLOWUP_SETTINGS: FollowupSettings = {
-  autoSend: false, copyToSelf: true, minDaysBetween: 7, maxAgeDays: 90,
+  autoSend: false, copyToSelf: true, minDaysBetween: 7, maxAgeDays: 90, mode: 'after_sent',
   steps: [
     { daysAfterSent: 7, subject: 'Votre devis {numero} — avez-vous des questions ?',
       body: 'Bonjour,\n\nNous vous avons transmis le devis {numero} ({montant} TTC) il y a {jours} jours{chantier}.\nAvez-vous pu en prendre connaissance ? Nous restons à votre disposition pour en discuter, l’ajuster ou planifier une visite.' + SIGN },
@@ -31,13 +33,15 @@ export async function getFollowupSettings(): Promise<FollowupSettings> {
   const row = await prisma.setting.findUnique({ where: { key: KEY } });
   const v = (row?.value ?? {}) as Partial<FollowupSettings>;
   const steps = Array.isArray(v.steps) && v.steps.length ? v.steps : DEFAULT_FOLLOWUP_SETTINGS.steps;
-  return { ...DEFAULT_FOLLOWUP_SETTINGS, ...v, steps: [...steps].sort((a, b) => a.daysAfterSent - b.daysAfterSent) };
+  const mode: FollowupMode = v.mode === 'before_expiry' ? 'before_expiry' : 'after_sent';
+  // avant l'expiration, le premier palier est le plus éloigné de la date (21 j avant, puis 7 j avant)
+  return { ...DEFAULT_FOLLOWUP_SETTINGS, ...v, mode, steps: [...steps].sort((a, b) => (mode === 'before_expiry' ? b.daysAfterSent - a.daysAfterSent : a.daysAfterSent - b.daysAfterSent)) };
 }
 export async function saveFollowupSettings(input: FollowupSettings): Promise<FollowupSettings> {
   const clean: FollowupSettings = {
-    autoSend: !!input.autoSend, copyToSelf: !!input.copyToSelf,
+    autoSend: !!input.autoSend, copyToSelf: !!input.copyToSelf, mode: input.mode === 'before_expiry' ? 'before_expiry' : 'after_sent',
     minDaysBetween: Math.max(1, Math.round(Number(input.minDaysBetween) || 7)), maxAgeDays: Math.max(14, Math.round(Number(input.maxAgeDays) || 90)),
-    steps: input.steps.slice(0, 6).map((s) => ({ daysAfterSent: Math.max(1, Math.round(Number(s.daysAfterSent))), subject: String(s.subject).slice(0, 200), body: String(s.body).slice(0, 4000) })).sort((a, b) => a.daysAfterSent - b.daysAfterSent),
+    steps: input.steps.slice(0, 6).map((s) => ({ daysAfterSent: Math.max(1, Math.round(Number(s.daysAfterSent))), subject: String(s.subject).slice(0, 200), body: String(s.body).slice(0, 4000) })).sort((a, b) => (input.mode === 'before_expiry' ? b.daysAfterSent - a.daysAfterSent : a.daysAfterSent - b.daysAfterSent)),
   };
   if (!clean.steps.length || clean.steps.some((s) => !s.subject.trim() || !s.body.trim())) throw new HttpError(422, 'Chaque étape de suivi a besoin d’un objet et d’un texte.');
   await prisma.setting.upsert({ where: { key: KEY }, create: { key: KEY, value: clean as never }, update: { value: clean as never } });
@@ -64,8 +68,11 @@ export async function computeQuoteProposals(now = new Date()): Promise<QuoteProp
     const sentOn = d.sentAt ?? d.issuedOn;
     if (!sentOn) continue;
     const daysSince = Math.floor((now.getTime() - sentOn.getTime()) / DAY);
-    if (daysSince > settings.maxAgeDays) continue;
-    const reached = settings.steps.map((s, i) => ({ s, n: i + 1 })).filter((x) => x.s.daysAfterSent <= daysSince);
+    const beforeExpiry = settings.mode === 'before_expiry';
+    // mode « avant l'expiration » : seuls les devis encore valables avec une date de validité sont relancés
+    const daysToExpiry = d.validUntil ? Math.ceil((d.validUntil.getTime() - now.getTime()) / DAY) : null;
+    if (beforeExpiry ? daysToExpiry === null || daysToExpiry < 0 : daysSince > settings.maxAgeDays) continue;
+    const reached = settings.steps.map((s, i) => ({ s, n: i + 1 })).filter((x) => (beforeExpiry ? daysToExpiry! <= x.s.daysAfterSent : x.s.daysAfterSent <= daysSince));
     if (!reached.length) continue;
     const maxDone = Math.max(0, ...d.reminders.map((r) => r.step));
     const next = [...reached].reverse().find((x) => x.n > maxDone);
@@ -74,7 +81,7 @@ export async function computeQuoteProposals(now = new Date()): Promise<QuoteProp
     if (lastSent && (now.getTime() - lastSent.getTime()) / DAY < settings.minDaysBetween) continue;
     const vars = {
       client: d.billingName ?? d.contact?.name ?? '', numero: d.number ?? d.draftRef ?? '', montant: formatEur(d.totalTtc), jours: String(daysSince), envoye: formatDateBE(sentOn),
-      validite: d.validUntil ? formatDateBE(d.validUntil) : '', chantier: d.worksite ? ` (chantier ${d.worksite.ref})` : '', societe: company.name, telephone: company.phone ?? '',
+      validite: d.validUntil ? formatDateBE(d.validUntil) : '', expiration: d.validUntil ? formatDateBE(d.validUntil) : '', jours_restants: String(daysToExpiry ?? ''), chantier: d.worksite ? ` (chantier ${d.worksite.ref})` : '', societe: company.name, telephone: company.phone ?? '',
     };
     const to = d.billingEmail ?? d.contact?.email ?? null;
     out.push({

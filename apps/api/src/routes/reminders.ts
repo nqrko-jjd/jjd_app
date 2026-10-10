@@ -108,7 +108,7 @@ remindersRouter.get(
 );
 
 const followupSettingsInput = z.object({
-  autoSend: z.boolean(), copyToSelf: z.boolean(), minDaysBetween: z.coerce.number().min(1).max(60), maxAgeDays: z.coerce.number().min(14).max(365),
+  autoSend: z.boolean(), copyToSelf: z.boolean(), mode: z.enum(['after_sent', 'before_expiry']).optional(), minDaysBetween: z.coerce.number().min(1).max(60), maxAgeDays: z.coerce.number().min(14).max(365),
   steps: z.array(z.object({ daysAfterSent: z.coerce.number().min(1).max(365), subject: z.string().max(200), body: z.string().max(4000) })).min(1).max(6),
 });
 remindersRouter.put(

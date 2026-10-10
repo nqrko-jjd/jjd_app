@@ -1,11 +1,12 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
-import { formatEur } from '@/lib/ui';
+import { formatEur, formatDateBE } from '@/lib/ui';
+import { DocStatusBadge } from '@/lib/doc-ui';
 
 export interface QuoteBilling {
   totalHt: number; billedHt: number; remainingHt: number; billedPct: number;
-  invoices: { id: string; number: string | null; draftRef: string | null; kind: string; status: string; netHt: number }[];
+  invoices: { id: string; number: string | null; draftRef: string | null; kind: string; status: string; netHt: number; date?: string | null }[];
 }
 
 const PRESETS = [10, 20, 30, 40, 50, 70];
@@ -65,9 +66,18 @@ export function DepositModal({ quote, onClose, onCreated }: {
               Devis {formatEur(billing.totalHt)} HT · déjà facturé {formatEur(billing.billedHt)} ({billing.billedPct} %) · <strong>reste {formatEur(billing.remainingHt)} HT</strong>
             </p>
             {billing.invoices.length > 0 && (
-              <p className="muted" style={{ margin: '0.2rem 0 0', fontSize: '0.8rem' }}>
-                {billing.invoices.map((i) => `${i.number ?? i.draftRef} (${formatEur(i.netHt)})`).join(' · ')}
-              </p>
+              <div style={{ marginTop: '0.5rem', display: 'grid', gap: '0.25rem', fontSize: '0.84rem' }}>
+                <div className="muted" style={{ fontSize: '0.78rem', fontWeight: 600 }}>Déjà facturé sur ce devis (les brouillons comptent) :</div>
+                {billing.invoices.map((i) => (
+                  <div key={i.id} style={{ display: 'flex', gap: '0.7rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <span className="mono" style={{ minWidth: 92 }}>{i.number ?? i.draftRef}</span>
+                    <span className="muted" style={{ minWidth: 76 }}>{i.date ? formatDateBE(i.date) : '—'}</span>
+                    <span style={{ minWidth: 48, textAlign: 'right' }}>{billing.totalHt > 0 ? `${Math.round((i.netHt / billing.totalHt) * 1000) / 10} %` : ''}</span>
+                    <span style={{ minWidth: 92, textAlign: 'right' }}>{formatEur(i.netHt)} HT</span>
+                    <DocStatusBadge status={i.status} />
+                  </div>
+                ))}
+              </div>
             )}
           </div>
           {done ? (

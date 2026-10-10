@@ -101,6 +101,14 @@ test('CF Group: two payments per invoice, balances, edits, settled search and le
     assert.equal(clientBalance.openTtc, 300);
     assert.equal(clientBalance.unallocatedTotal, 300);
     assert.equal(clientBalance.balance, 0);
+    // A settled one-cent residual must not remain payable on the supplier contact.
+    const penny = await invoice('BANK-TEST-PENNY', 28.75);
+    const pennyTx = await prisma.bankTransaction.create({ data: { amount: -28.74, side: 'out', contactId: contact.id } });
+    txIds.push(pennyTx.id);
+    assert.equal((await call(`/api/finance/bank/${pennyTx.id}/matches`, 'POST', { ledgerId: penny.id, amount: 28.74 })).status, 201);
+    assert.equal((await prisma.ledgerEntry.findUniqueOrThrow({ where: { id: penny.id } })).paymentStatus, 'Payé');
+    const pennyAccount = (await call('/api/finance/suppliers')).body.items.find((i: { contactId: string }) => i.contactId === contact.id);
+    assert.equal(pennyAccount.invoices.find((i: { id: string }) => i.id === penny.id).remaining, 0);
   } finally {
     await prisma.bankTransaction.deleteMany({ where: { id: { in: txIds } } });
     await prisma.ledgerEntry.deleteMany({ where: { contactId: contact.id } });

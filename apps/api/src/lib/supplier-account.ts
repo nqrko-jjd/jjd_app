@@ -26,7 +26,8 @@ export async function supplierAccounts() {
     const total = Math.abs(l.ttc ?? l.ht);
     if (l.direction === 'credit_note') { g.credits += total; continue; }
     const paid = snapshot.ledgerPaid.has(l.id) ? snapshot.ledgerPaid.get(l.id)! : isPaid(l.paymentStatus) ? total : 0;
-    const remaining = round2(Math.max(0, total - paid));
+    const residual = round2(Math.max(0, total - paid));
+    const remaining = paid > 0 && residual <= 0.01 ? 0 : residual;
     g.openTtc += remaining;
     g.invoices.push({ id: l.id, number: l.docNumber, date: l.date, dueDate: l.dueDate, total, paid: round2(paid), remaining });
     if (remaining > 0.01 && l.dueDate) {

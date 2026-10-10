@@ -40,6 +40,8 @@ const GROUPS:{title:string;links:LinkItem[]}[]=[
   {href:'/controle',label:tr('File de contrôle'),description:'Les informations à vérifier',ic:'flag',roles:OFFICE},
  ]},
 ];
+/** Rubriques ouvertes à un compte limité à une entité (les autres répondraient « accès réservé »). */
+const SCOPED_OK=['/planning','/valider','/compte','/documents','/depense/nouvelle','/analyse'];
 const ROLE:Record<string,string>={admin:'Administration',office:'Bureau',foreman:'Chef de chantier',worker:'Ouvrier',storekeeper:'Magasinier'};
 export default function Plus(){
  const router=useRouter();const {user,person,signOut}=useSession();
@@ -47,7 +49,7 @@ export default function Plus(){
  return <ScrollView style={{flex:1,backgroundColor:T.paper}} contentContainerStyle={{...T.content,gap:24}}>
   <ScreenHeader title={tr("Mon espace")} eyebrow={ROLE[user?.role??'']??'JJD Consult'} description={tr("Tout ce dont vous avez besoin, au même endroit.")}/>
   <View style={s.identity}><View style={s.avatar}><Text style={s.initials}>{name.slice(0,2).toUpperCase()}</Text></View><View style={{flex:1,gap:4}}><Text style={s.name}>{name}</Text><Text style={s.email}>{user?.email}</Text></View></View>
-  {GROUPS.map(group=>{const links=group.links.filter(l=>!l.roles||l.roles.includes(user?.role??''));if(!links.length)return null;return <View key={group.title} style={{gap:12}}><Text style={s.section}>{group.title}</Text><View style={s.group}>{links.map((l,i)=><Pressable key={l.href} accessibilityRole="button" style={({pressed})=>[s.row,i>0&&s.border,pressed&&{backgroundColor:T.primarySoft}]} onPress={()=>router.push(l.href as never)}><View style={s.icon}><Feather name={l.ic} size={20} color={T.primary}/></View><View style={{flex:1,gap:4}}><Text style={s.label}>{l.label}</Text><Text style={s.description}>{l.description}</Text></View><Feather name="chevron-right" size={18} color={T.ink3}/></Pressable>)}</View></View>})}
+  {GROUPS.map(group=>{const links=group.links.filter(l=>(!l.roles||l.roles.includes(user?.role??''))&&(!user?.entityScope||SCOPED_OK.includes(l.href)));if(!links.length)return null;return <View key={group.title} style={{gap:12}}><Text style={s.section}>{group.title}</Text><View style={s.group}>{links.map((l,i)=><Pressable key={l.href} accessibilityRole="button" style={({pressed})=>[s.row,i>0&&s.border,pressed&&{backgroundColor:T.primarySoft}]} onPress={()=>router.push(l.href as never)}><View style={s.icon}><Feather name={l.ic} size={20} color={T.primary}/></View><View style={{flex:1,gap:4}}><Text style={s.label}>{l.label}</Text><Text style={s.description}>{l.description}</Text></View><Feather name="chevron-right" size={18} color={T.ink3}/></Pressable>)}</View></View>})}
   <Pressable accessibilityRole="button" style={s.logout} onPress={signOut}><Feather name="log-out" size={18} color={T.crit}/><Text style={{color:T.crit,fontWeight:'600'}}>Se déconnecter</Text></Pressable>
  </ScrollView>;
 }

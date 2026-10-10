@@ -164,6 +164,7 @@ export default function Dashboard() {
   const [mode, setMode] = useState<'bureau' | 'terrain'>(user?.entityScope ? 'terrain' : 'bureau');
   useEffect(() => { AsyncStorage.getItem('homeMode').then((v) => { if (v === 'terrain' || v === 'bureau') setMode(v); }).catch(() => {}); }, []);
   const pick = (m: 'bureau' | 'terrain') => { setMode(m); AsyncStorage.setItem('homeMode', m).catch(() => {}); };
+  if (user?.entityScope) return <FieldHome embedded />; // compte limité à une entité : pas de vue « Bureau » (ses données ne lui sont pas ouvertes)
   return (
     <View style={{ flex: 1, backgroundColor: T.paper }}>
       <View style={sw.wrap}>

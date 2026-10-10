@@ -10,7 +10,7 @@ export async function supplierAccounts() {
     prisma.bankTransaction.findMany({ where: { amount: { lt: 0 } }, include: { contact: { select: { id: true, name: true } }, matches: { include: { ledgerEntry: { select: { contactId: true, supplierName: true, direction: true } } } } } }),
     allocationSnapshot(),
     prisma.contact.findMany({ where: { type: { in: ['supplier', 'both'] } }, select: { id: true, name: true } }),
-    prisma.auditLog.findMany({ where: { action: 'supplier_statement_reconciled', entity: 'Contact' }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], select: { entityId: true, meta: true } }),
+    prisma.auditLog.findMany({ where: { action: 'supplier_statement_reconciled', entity: 'Contact' }, orderBy: [{ at: 'desc' }, { id: 'desc' }], select: { entityId: true, meta: true } }),
   ]);
   // Confirmed statements account for historical credits/advances without rewriting bank payments.
   const settlements = new Map<string, { settledCreditIds: string[]; absorbedAdvances: { id: string; amount: number }[] }>();

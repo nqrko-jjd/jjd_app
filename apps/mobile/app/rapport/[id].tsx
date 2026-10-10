@@ -11,7 +11,7 @@ import { T } from '@/lib/theme';
 import { tr, Alert } from '@/lib/i18n';
 
 interface Report {
-  id: string; status: string; workDone: string | null; notes: string | null; clientName: string | null;
+  id: string; status: string; kind?: string; workDone: string | null; notes: string | null; clientName: string | null;
   photos: { id: string; url: string; thumbUrl: string | null }[];
 }
 
@@ -31,7 +31,7 @@ export default function Rapport() {
     (async () => {
       try {
         const list = await apiGet<{ items: Report[] }>(`/api/worksites/${worksiteId}/reports`);
-        const draft = list.items.find((r) => r.status === 'draft');
+        const draft = list.items.find((r) => r.status === 'draft' && r.kind !== 'reception');
         if (draft) {
           setReport(draft);
           setWorkDone(draft.workDone ?? '');

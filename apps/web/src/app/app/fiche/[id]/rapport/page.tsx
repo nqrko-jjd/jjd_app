@@ -8,7 +8,7 @@ import { PageHead } from '@/lib/ui';
 import { SignaturePad } from '@/components/SignaturePad';
 
 interface Report {
-  id: string; status: string; workDone: string | null; notes: string | null; clientName: string | null;
+  id: string; status: string; kind?: string; workDone: string | null; notes: string | null; clientName: string | null;
   photos: { id: string; url: string; thumbUrl: string | null }[];
 }
 
@@ -27,7 +27,7 @@ export default function RapportChantierPage({ params }: { params: Promise<{ id: 
     (async () => {
       try {
         const list = await api<{ items: Report[] }>(`/api/worksites/${worksiteId}/reports`);
-        const draft = list.items.find((r) => r.status === 'draft');
+        const draft = list.items.find((r) => r.status === 'draft' && r.kind !== 'reception');
         if (draft) {
           setReport(draft);
           setWorkDone(draft.workDone ?? '');

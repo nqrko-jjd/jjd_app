@@ -1291,10 +1291,17 @@ model WorksiteReport {
   reviewedAt   DateTime?
   reviewedById String?
   reviewedBy   User?     @relation("ReportReviewer", fields: [reviewedById], references: [id])
+  // PV de réception (kind = 'reception') : rapport à la demande pour valider une prestation avec le client — voir routes/pv.ts
+  kind          String   @default("daily") // daily | reception
+  receptionResult String? // none | with_reserves | refused
+  presentParties String? // personnes présentes à la réception
+  quoteRef      String? // devis / marché / bon de commande concerné
+  placeSigned   String? // « fait à »
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
   photos ReportPhoto[]
+  reserves ReportReserve[]
 
   @@index([worksiteId])
 }
@@ -1790,4 +1797,19 @@ model InvoiceReminder {
 
   @@unique([documentId, step])
   @@index([status])
+}
+
+/// Réserve émise à la réception des travaux ; « levée » quand le travail est repris (PV de levée des réserves).
+model ReportReserve {
+  id          String         @id @default(cuid())
+  reportId    String
+  report      WorksiteReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  position    Int            @default(0)
+  description String
+  photoUrl    String?
+  liftedAt    DateTime?
+  liftedNote  String?
+  createdAt   DateTime       @default(now())
+
+  @@index([reportId])
 }

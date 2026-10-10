@@ -52,7 +52,7 @@ interface Detail {
     documents: { id: string; kind: string; number: string | null; draftRef: string | null; totalHt: number; status: string; issuedOn: string | null }[];
     events: { id: string; startAt: string; endAt: string; note: string | null; vehicle: { plate: string | null } | null; assignments: { person: { displayName: string | null; firstName: string } }[] }[];
     reports: {
-      id: string; date: string; authorName: string; workDone: string | null; status: string;
+      id: string; date: string; authorName: string; workDone: string | null; status: string; kind?: string; receptionResult?: string | null;
       clientName: string | null; signedAt: string | null;
       photos: { id: string; thumbUrl: string | null; url: string }[];
     }[];
@@ -452,6 +452,9 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
             <Link href={`/app/fiche/${w.id}/rapport`} className="btn" title="Texte + photos, comme sur le terrain — la signature n'a de sens que si le client est présent">
               + Nouveau rapport
             </Link>
+            <Link href={`/app/pv/new?worksite=${w.id}`} className="btn primary" title="Valider une prestation avec le client : réserves, signature, PDF">
+              + PV de réception
+            </Link>
           </div>
           {w.reports.length === 0 ? (
             <div className="card card-pad muted">Aucun rapport pour l’instant. Les ouvriers les créent depuis l’app mobile, ou utilisez le bouton ci-dessus.</div>
@@ -465,6 +468,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
                     ? <span className="badge ok">Signé{r.clientName ? ` · ${r.clientName}` : ''}</span>
                     : <span className="badge warn">{tr("Brouillon")}</span>}
                 </div>
+                {r.kind === 'reception' && <div><span className="badge primary">PV de réception{r.receptionResult === 'with_reserves' ? ' · avec réserves' : r.receptionResult === 'refused' ? ' · refusé' : ''}</span></div>}
                 <div className="muted" style={{ fontSize: '0.82rem' }}>par {r.authorName}</div>
                 {r.workDone && <p style={{ fontSize: '0.88rem', margin: '0.4rem 0 0', whiteSpace: 'pre-wrap' }}>{r.workDone.slice(0, 160)}</p>}
                 {r.photos.length > 0 && (
@@ -477,7 +481,9 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
                   </div>
                 )}
                 <div className="row" style={{ gap: '0.4rem', marginTop: '0.6rem' }}>
-                  <a className="btn" style={{ padding: '0.25rem 0.6rem', fontSize: '0.78rem' }} href={`/rapport/${r.id}`} target="_blank" rel="noreferrer">Voir / imprimer →</a>
+                  {r.kind === 'reception'
+                    ? <Link className="btn" style={{ padding: '0.25rem 0.6rem', fontSize: '0.78rem' }} href={`/app/pv/${r.id}`}>Ouvrir le PV →</Link>
+                    : <a className="btn" style={{ padding: '0.25rem 0.6rem', fontSize: '0.78rem' }} href={`/rapport/${r.id}`} target="_blank" rel="noreferrer">Voir / imprimer →</a>}
                   {r.status === 'signed' && (
                     <button
                       className="btn primary"

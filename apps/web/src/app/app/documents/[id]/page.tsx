@@ -21,7 +21,7 @@ import { RichText } from '@/components/RichText';
 import { QuotePlanModal } from '@/components/QuotePlanModal';
 import { aiNote, setFlash, AI_WAIT, type AiInfo } from '@/lib/ai-flash';
 import { ChevronDown, MoreHorizontal, CalendarDays, ListChecks, ShoppingCart, BookOpen, Send, Save, Eye } from 'lucide-react';
-import { computeDocTotals, VAT_RATES } from '@jjd/shared';
+import { computeDocTotals, computeMargin, VAT_RATES } from '@jjd/shared';
 
 /** Un <br> ou une balise vide compte comme "rien" — l'utilisateur n'a en réalité rien tapé. */
 
@@ -81,13 +81,14 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
     return () => { document.removeEventListener('keydown', close); document.removeEventListener('click', close); };
   }, []);
   const [showDiscount, setShowDiscount] = useState(false);
+  const [showCost, setShowCost] = useState(false);
   const [openDesc, setOpenDesc] = useState<Set<number>>(new Set());
   // cahier des charges déjà généré depuis ce devis ?
   const { data: cdcList } = useApi<{ items: { id: string }[] }>(`/api/cdc?quoteId=${id}`);
   const { data: plList } = useApi<{ items: { id: string }[] }>(`/api/purchase-lists?quoteId=${id}`);
   const { data: peppol } = useApi<{ enabled: boolean }>('/api/settings/peppol');
   const { data: mailCfg } = useApi<{ enabled: boolean }>('/api/settings/email');
-  const { data: lib } = useApi<{ items: { id: string; label: string; unit: string | null; unitPriceHt: number; vatRate: number }[] }>(
+  const { data: lib } = useApi<{ items: { id: string; label: string; unit: string | null; unitPriceHt: number; vatRate: number; purchasePriceHt?: number | null }[] }>(
     libQ.length >= 2 ? `/api/price-items?q=${encodeURIComponent(libQ)}` : null,
   );
 
@@ -110,6 +111,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
       setDirty(false);
       setBillingOpen(!!(data.document.billingName || data.document.billingVat || data.document.billingAddress || data.document.billingEmail));
       setShowDiscount(initLines.some((l) => l.discountPct > 0));
+      setShowCost(initLines.some((l) => l.costHt != null));
       setOpenDesc(new Set(initLines.map((l, i) => (l.description ? i : -1)).filter((i) => i >= 0)));
     }
   }, [data]);
@@ -120,6 +122,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
   // les documents émis par l'app, voir `locked`).
   const imported = !!doc?.source && doc.source !== 'manual';
   const totals = useMemo(() => computeDocTotals(lines), [lines]);
+  const margin = useMemo(() => computeMargin(lines), [lines]);
 
   if (!doc) return <SkeletonRows />;
 
@@ -262,7 +265,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
   }
   const isInvoiceLike = doc.kind === 'invoice' || doc.kind === 'deposit_invoice';
   const remaining = Math.max(0, totals.totalTtc - doc.paidAmount);
-  const colspan = showDiscount ? 6 : 5;
+  const colspan = 5 + (showDiscount ? 1 : 0) + (showCost ? 1 : 0);
   function prepareDelivery() { setDeliveryOpen(true); requestAnimationFrame(() => document.getElementById('document-delivery')?.scrollIntoView({ behavior: 'smooth', block: 'start' })); }
 
   return (
@@ -429,6 +432,9 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
               <label className="row" style={{ marginLeft: 'auto', gap: '0.4rem', fontSize: '0.82rem', fontWeight: 600, color: 'var(--ink-2)' }}>
                 <input type="checkbox" checked={showDiscount} onChange={(e) => setShowDiscount(e.target.checked)} /> Remises
               </label>
+              {doc.kind === 'quote' && <label className="row" style={{ gap: '0.4rem', fontSize: '0.82rem', fontWeight: 600, color: 'var(--ink-2)' }} title="Saisissez le prix d'achat de chaque ligne pour connaître la marge prévue du devis">
+                <input type="checkbox" checked={showCost} onChange={(e) => setShowCost(e.target.checked)} /> Prix d’achat (marge)
+              </label>}
             </div>
             <div className="tbl-wrap">
               {/* table-layout: fixed + une seule colonne sans largeur (Désignation) : elle absorbe
@@ -437,7 +443,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
                   (le .tbl-wrap défile alors horizontalement) que de devenir illisible. Les icônes
                   d'action (déplacer/dupliquer/supprimer) sont empilées à la verticale plutôt qu'à
                   l'horizontale pour tenir dans une colonne étroite. */}
-              <table className="tbl document-lines-table" style={{ tableLayout: 'fixed', width: '100%', minWidth: showDiscount ? 900 : 800 }}>
+              <table className="tbl document-lines-table" style={{ tableLayout: 'fixed', width: '100%', minWidth: 800 + (showDiscount ? 100 : 0) + (showCost ? 106 : 0) }}>
                 <thead>
                   <tr>
                     <th style={{ width: 32 }} aria-label="Numéro de ligne">#</th>
@@ -445,6 +451,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
                     <th style={{ width: 88, textAlign: 'right' }}>Quantité</th>
                     <th style={{ width: 80 }}>Unité</th>
                     <th style={{ width: 106, textAlign: 'right' }}>Prix HT</th>
+                    {showCost && <th style={{ width: 106, textAlign: 'right' }}>P.A. HT</th>}
                     {showDiscount && <th style={{ width: 100, textAlign: 'right' }}>Rem.%</th>}
                     <th style={{ width: 78 }}>TVA %</th>
                     <th style={{ width: 104, textAlign: 'right' }}>Total HT</th>
@@ -494,6 +501,9 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
                             </select>
                           </td>
                           <td><input className="input" type="number" style={{ textAlign: 'right' }} value={l.unitPriceHt} onChange={(e) => setLine(i, { unitPriceHt: Number(e.target.value) })} /></td>
+                          {showCost && (
+                            <td><input aria-label={`Prix d’achat ligne ${i + 1}`} className="input" type="number" min="0" step="any" style={{ textAlign: 'right' }} value={l.costHt ?? ''} placeholder="—" onChange={(e) => setLine(i, { costHt: e.target.value === '' ? null : Number(e.target.value) })} /></td>
+                          )}
                           {showDiscount && (
                             <td><input className="input" type="number" style={{ textAlign: 'right' }} value={l.discountPct} onChange={(e) => setLine(i, { discountPct: Number(e.target.value) })} /></td>
                           )}
@@ -545,7 +555,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
                     className="btn ghost"
                     style={{ display: 'block', width: '100%', textAlign: 'left', marginBottom: 2 }}
                     onClick={() => {
-                      setLines([...lines, { kind: 'item', label: it.label, qty: 1, unit: it.unit ?? '', unitPriceHt: it.unitPriceHt, discountPct: 0, vatRate: it.vatRate, priceItemId: it.id }]);
+                      setLines([...lines, { kind: 'item', label: it.label, qty: 1, unit: it.unit ?? '', unitPriceHt: it.unitPriceHt, discountPct: 0, vatRate: it.vatRate, priceItemId: it.id, costHt: it.purchasePriceHt ?? null }]);
                       setDirty(true);
                       setLibQ('');
                     }}
@@ -626,6 +636,20 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
         {/* Récapitulatif — sticky */}
         <aside className="doc-recap">
           {isQuote && <DepositPlanEditor plan={plan} status={doc.billing?.plan ?? []} totalHt={totals.totalHt} vatRatio={totals.totalHt > 0 ? totals.totalTtc / totals.totalHt : 1.21} onChange={(p) => { setPlan(p); setDirty(true); }} disabled={false} />}
+          {isQuote && showCost && (
+            <div className="doc-card" style={{ marginTop: '1rem' }}>
+              <span className="eyebrow" style={{ margin: 0 }}>Rentabilité prévue</span>
+              <div className="kpi" style={{ margin: '0.6rem 0' }}>
+                <div className="value" style={{ color: margin.marginHt < 0 ? 'var(--crit)' : undefined }}>{formatEur(margin.marginHt)}</div>
+                <div className="label">marge HT{margin.marginPct != null ? ` · ${String(margin.marginPct).replace('.', ',')} %` : ''}</div>
+              </div>
+              <div className="doc-recap-rows">
+                <div className="doc-recap-row"><span>Vendu HT</span><span>{formatEur(margin.revenueHt)}</span></div>
+                <div className="doc-recap-row"><span>Coût d’achat</span><span>{formatEur(margin.costHt)}</span></div>
+              </div>
+              {margin.coverage < 0.999 && <p className="muted" style={{ margin: '0.5rem 0 0', fontSize: '0.8rem' }}>{margin.costedLines}/{margin.itemLines} lignes ont un prix d’achat ({Math.round(margin.coverage * 100)} % du montant) : la marge réelle sera plus basse.</p>}
+            </div>
+          )}
           <div className="doc-card">
             <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.9rem' }}>
               <span className="eyebrow" style={{ margin: 0 }}>Récapitulatif</span>

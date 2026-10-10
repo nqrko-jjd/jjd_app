@@ -571,3 +571,20 @@ test('échéancier d’acomptes sur le devis : facturé acompte par acompte, jam
   const solde = await (await fetch(`${base}/api/documents/${q.id}/convert`, { method: 'POST', headers: auth(), body: '{}' })).json();
   assert.equal(solde.document.totalHt, 8000);
 });
+
+test('rentabilité prévue d’un devis : marge = vendu − prix d’achat des lignes qui en ont un', async () => {
+  const q = await (await fetch(`${base}/api/documents`, {
+    method: 'POST', headers: auth(),
+    body: JSON.stringify({ kind: 'quote', worksiteId: wsId, lines: [
+      { label: 'Carrelage', qty: 10, unitPriceHt: 100, vatRate: 0.21, costHt: 60 },
+      { label: 'Main-d’œuvre', qty: 5, unitPriceHt: 80, vatRate: 0.21 },
+      { label: 'Option', qty: 1, unitPriceHt: 500, vatRate: 0.21, costHt: 400, optional: true },
+    ] }),
+  })).json();
+  const d = (await (await fetch(`${base}/api/documents/${q.document.id}`, { headers: auth() })).json()).document;
+  assert.equal(d.margin.revenueHt, 1400, 'ligne optionnelle exclue');
+  assert.equal(d.margin.costHt, 600);
+  assert.equal(d.margin.marginHt, 800);
+  assert.ok(d.margin.coverage > 0.7 && d.margin.coverage < 0.72, 'seule la ligne carrelage (1 000 sur 1 400) a un prix d’achat');
+  assert.equal(d.lines.find((l: { label: string }) => l.label === 'Carrelage').costHt, 60);
+});

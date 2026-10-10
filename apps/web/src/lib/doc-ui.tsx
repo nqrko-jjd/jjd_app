@@ -31,6 +31,7 @@ export interface DocLine {
   totalHt?: number;
   priceItemId?: string | null;
   optional?: boolean;
+  costHt?: number | null;
 }
 
 export interface DocFull {
@@ -74,6 +75,7 @@ export interface DocFull {
   lines: DocLine[];
   depositPlan?: { id?: string; kind: 'pct' | 'amount'; value: number; trigger: string; label?: string | null; invoiceId?: string | null }[] | null;
   retentionPct?: number | null;
+  margin?: { revenueHt: number; costHt: number; marginHt: number; marginPct: number | null; coverage: number; costedLines: number; itemLines: number };
   billing?: { totalHt: number; billedHt: number; remainingHt: number; billedPct: number; invoices: { id: string; number: string | null; draftRef: string | null; kind: string; status: string; netHt: number }[]; plan?: { id: string; kind: 'pct' | 'amount'; value: number; trigger: string; label: string | null; amountHt: number; invoiceId: string | null; invoiceNumber: string | null; invoiceStatus: string | null }[] };
 }
 

@@ -23,7 +23,7 @@ import { PAYMENT_TOLERANCE } from '../lib/payment-tolerance.js';
 import { taskInclude, serializeTask } from './tasks.js';
 import { quoteBillings, planRows } from '../lib/quote-billing.js';
 import { nanoid as planId } from 'nanoid';
-import { DEPOSIT_TRIGGERS } from '@jjd/shared';
+import { DEPOSIT_TRIGGERS, computeMargin } from '@jjd/shared';
 
 export const documentsRouter = Router();
 // Dérivé de UPLOADS_DIR (respecte process.env.UPLOADS_DIR en prod) plutôt que d'un chemin
@@ -328,7 +328,8 @@ documentsRouter.get(
       }
       billing = { ...billing, plan: plan.rows } as typeof billing & { plan: unknown };
     }
-    res.json({ document: { ...doc, hasBankMatch: payments.length > 0, payments, billing }, company });
+    const margin = doc.kind === 'quote' ? computeMargin(doc.lines) : undefined;
+    res.json({ document: { ...doc, hasBankMatch: payments.length > 0, payments, billing, margin }, company });
   }),
 );
 
@@ -586,7 +587,7 @@ documentsRouter.post(
       const ratio = src.totalVat / src.totalHt;
       const stdRate = [0, 0.06, 0.12, 0.21].find((r) => Math.abs(r - ratio) < 0.003);
       if (stdRate !== undefined) {
-        srcLines = [{ id: '', documentId: src.id, position: 0, kind: 'item', label: 'Reprise du montant importé', description: null, qty: 1, unit: 'forfait', unitPriceHt: src.totalHt, discountPct: 0, vatRate: stdRate, optional: false, totalHt: src.totalHt, priceItemId: null }];
+        srcLines = [{ id: '', documentId: src.id, position: 0, kind: 'item', label: 'Reprise du montant importé', description: null, qty: 1, unit: 'forfait', unitPriceHt: src.totalHt, discountPct: 0, vatRate: stdRate, optional: false, costHt: null, totalHt: src.totalHt, priceItemId: null }];
       }
     }
     if (srcLines.length) {

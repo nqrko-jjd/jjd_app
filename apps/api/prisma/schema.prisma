@@ -693,6 +693,7 @@ model DocumentLine {
   discountPct Float      @default(0)
   vatRate     Float      @default(0.21)
   totalHt     Float      @default(0)
+  costHt      Float? // prix d'achat HT unitaire (rentabilité prévue du devis)
   optional    Boolean    @default(false) // ligne optionnelle : affichée mais hors total tant que le client ne la retient pas
   priceItemId String?
   priceItem   PriceItem? @relation(fields: [priceItemId], references: [id])

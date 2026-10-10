@@ -11,6 +11,25 @@ export interface DocLineLike {
   discountPct?: number | null;
   vatRate?: number | null;
   optional?: boolean | null; // ligne optionnelle : exclue des totaux
+  costHt?: number | null; // prix d'achat HT unitaire
+}
+
+/**
+ * Rentabilité prévue d'un devis : marge = total HT des lignes retenues − prix d'achat des lignes qui en ont un.
+ * `coverage` = part (0–1) du chiffre d'affaires dont le prix d'achat est connu : en dessous de 1, la marge est une estimation haute.
+ */
+export function computeMargin(lines: DocLineLike[]): { revenueHt: number; costHt: number; marginHt: number; marginPct: number | null; coverage: number; costedLines: number; itemLines: number } {
+  let revenue = 0, cost = 0, costedRevenue = 0, costed = 0, items = 0;
+  for (const l of lines) {
+    if ((l.kind && l.kind !== 'item') || l.optional) continue;
+    items++;
+    const ht = lineTotalHt(l);
+    revenue += ht;
+    if (l.costHt != null && l.costHt >= 0) { cost += (l.qty ?? 0) * l.costHt; costedRevenue += ht; costed++; }
+  }
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  const margin = revenue - cost;
+  return { revenueHt: r2(revenue), costHt: r2(cost), marginHt: r2(margin), marginPct: revenue > 0 ? r2((margin / revenue) * 100) : null, coverage: revenue > 0 ? costedRevenue / revenue : 0, costedLines: costed, itemLines: items };
 }
 
 /** Total HT d'une ligne (0 pour les lignes de section / texte). */

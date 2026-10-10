@@ -300,6 +300,7 @@ export const documentLineInput = z.object({
   vatRate: z.number().default(0.21),
   priceItemId: z.string().nullish(),
   optional: z.boolean().optional(),
+  costHt: z.number().min(0).nullish(),
 });
 
 /** Déclencheurs d'un acompte prévu sur un devis. */

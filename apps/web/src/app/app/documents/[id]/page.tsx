@@ -14,6 +14,9 @@ import { WorksitePicker, type WsPickerOption } from '@/components/WorksitePicker
 import { DocumentDelivery } from '@/components/DocumentDelivery';
 import { CreditNoteModal } from '@/components/CreditNoteModal';
 import { DepositModal } from '@/components/DepositModal';
+import { InvoiceWizardModal } from '@/components/InvoiceWizardModal';
+import { IssueModal } from '@/components/IssueModal';
+import { DepositPlanEditor, type PlanItem } from '@/components/DepositPlanEditor';
 import { RichText } from '@/components/RichText';
 import { QuotePlanModal } from '@/components/QuotePlanModal';
 import { aiNote, setFlash, AI_WAIT, type AiInfo } from '@/lib/ai-flash';
@@ -58,6 +61,9 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
   const [planOpen, setPlanOpen] = useState(false);
   const [creditOpen, setCreditOpen] = useState(false);
   const [depositOpen, setDepositOpen] = useState(false);
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [issueOpen, setIssueOpen] = useState(false);
+  const [plan, setPlan] = useState<PlanItem[]>([]);
   // lien « Facture d'acompte… » de la liste des devis : ouvre directement la fenêtre de choix du pourcentage
   useEffect(() => { if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('acompte') === '1') setDepositOpen(true); }, []);
   const [billingOpen, setBillingOpen] = useState(false);
@@ -100,6 +106,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
         : null;
       const initLines = d.lines.length ? d.lines : [imported0 ?? emptyLine()];
       setLines(initLines);
+      setPlan(((d.depositPlan ?? []) as PlanItem[]).map((p) => ({ ...p })));
       setDirty(false);
       setBillingOpen(!!(data.document.billingName || data.document.billingVat || data.document.billingAddress || data.document.billingEmail));
       setShowDiscount(initLines.some((l) => l.discountPct > 0));
@@ -167,6 +174,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
           billingEmail: doc!.billingEmail,
           customerRef: doc!.customerRef,
           paidAmount: doc!.paidAmount,
+          ...(doc!.kind === 'quote' ? { depositPlan: plan } : {}),
           lines: lines.filter((l) => hasLineText(l.label)),
         },
       });
@@ -287,6 +295,8 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
         </div>
       )}
 
+      {issueOpen && <IssueModal docId={id} kindLabel={isQuote ? 'ce devis' : 'ce document'} busy={!!busy} onClose={() => setIssueOpen(false)} onConfirm={async () => { setIssueOpen(false); await act('/issue', {}); }} />}
+      {wizardOpen && <InvoiceWizardModal quote={{ id: doc.id, number: doc.number, draftRef: doc.draftRef, status: doc.status, totalHt: doc.totalHt, vatRate: doc.vatRate, billing: doc.billing }} onClose={() => setWizardOpen(false)} onCreated={(nid) => router.push(`/app/documents/${nid}`)} onFreeDeposit={() => { setWizardOpen(false); setDepositOpen(true); }} />}
       {depositOpen && <DepositModal quote={{ id: doc.id, number: doc.number, draftRef: doc.draftRef, vatRate: doc.vatRate, totalHt: doc.totalHt, billing: doc.billing }} onClose={() => setDepositOpen(false)} onCreated={(nid) => router.push(`/app/documents/${nid}`)} />}
       {creditOpen && <CreditNoteModal invoice={{ id: doc.id, number: doc.number, totalTtc: doc.totalTtc }} creditedTtc={creditedTtc} onClose={() => setCreditOpen(false)} onCreated={(nid) => router.push(`/app/documents/${nid}`)} />}
 
@@ -313,9 +323,9 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
       )}
 
       <div className="doc-commandbar">            <div className="doc-recap-actions">
-              {dirty ? <button className="btn primary" disabled={!!busy} onClick={save}><Save size={16}/>{busy === 'save' ? tr("Enregistrement…") : tr("Enregistrer les modifications")}</button> : !locked ? <button className="btn primary" disabled={!!busy} onClick={() => act('/issue', {}, 'Émettre : un numéro définitif sera attribué et les lignes verrouillées. Continuer ?')}>Émettre {isQuote ? 'le devis' : 'le document'} <ChevronDown size={15}/></button> : <button className="btn primary" disabled={!!busy} onClick={prepareDelivery}><Send size={16}/>{doc.sentAt ? 'Préparer un nouvel envoi' : 'Préparer l’envoi'}</button>}
-              {dirty && !locked && <button className="btn ghost" disabled={!!busy} onClick={() => act('/issue', {}, 'Émettre : un numéro définitif sera attribué et les lignes verrouillées. Continuer ?')}>Enregistrer et émettre</button>}
-              {!dirty && isQuote && locked && <><button className="btn" disabled={!!busy} onClick={() => setDepositOpen(true)}>Facture d’acompte</button><button className="btn" disabled={!!busy} onClick={() => router.push(`/app/documents/${id}/avancement`)}>États d’avancement</button><button className="btn" disabled={!!busy} onClick={() => act('/convert', {})}>{doc.billing && doc.billing.billedHt > 0.01 ? 'Facture du solde' : 'Facture finale'}</button></>}
+              {dirty ? <button className="btn primary" disabled={!!busy} onClick={save}><Save size={16}/>{busy === 'save' ? tr("Enregistrement…") : tr("Enregistrer les modifications")}</button> : !locked ? <button className="btn primary" disabled={!!busy} onClick={() => setIssueOpen(true)}>Émettre {isQuote ? 'le devis' : 'le document'} <ChevronDown size={15}/></button> : <button className="btn primary" disabled={!!busy} onClick={prepareDelivery}><Send size={16}/>{doc.sentAt ? 'Préparer un nouvel envoi' : 'Préparer l’envoi'}</button>}
+              {dirty && !locked && <button className="btn ghost" disabled={!!busy} onClick={() => setIssueOpen(true)}>Enregistrer et émettre</button>}
+              {!dirty && isQuote && locked && <button className="btn primary" disabled={!!busy} onClick={() => setWizardOpen(true)}>Facturer…</button>}
               {!dirty && <span className="doc-saved">Modifications enregistrées</span>}
               <a className="doc-preview-link" href={`/imprimer/${id}`} target="_blank" rel="noreferrer"><Eye size={16}/>Aperçu du document</a>
             </div>
@@ -446,6 +456,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
                     <tr key={i}>
                       <td style={{ padding: '0.3rem' }}>
                         <span className="doc-line-number">{i + 1}</span>
+                        {l.optional && <span className="badge warn" style={{ display: 'block', marginTop: 4, fontSize: '0.62rem', padding: '0 4px' }} title="Ligne optionnelle : affichée mais hors total">Option</span>}
                       </td>
                       <td>
                         <RichText
@@ -503,6 +514,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
                           <details className="doc-line-menu"><summary aria-label={`Actions ligne ${i + 1}`}><MoreHorizontal size={18}/></summary><div className="doc-line-options">
                             <button type="button" disabled={i === 0} onClick={() => moveLine(i, -1)}>Monter</button>
                             <button type="button" disabled={i === lines.length - 1} onClick={() => moveLine(i, 1)}>Descendre</button>
+                            {l.kind === 'item' && <button type="button" onClick={() => setLine(i, { optional: !l.optional })}>{l.optional ? 'Rendre la ligne obligatoire' : 'Rendre la ligne optionnelle'}</button>}
                             <button type="button" onClick={() => duplicateLine(i)}>Dupliquer la ligne</button>
                             <button type="button" className="danger" onClick={() => removeLine(i)}>Supprimer la ligne</button>
                           </div></details>
@@ -613,6 +625,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
 
         {/* Récapitulatif — sticky */}
         <aside className="doc-recap">
+          {isQuote && <DepositPlanEditor plan={plan} status={doc.billing?.plan ?? []} totalHt={totals.totalHt} vatRatio={totals.totalHt > 0 ? totals.totalTtc / totals.totalHt : 1.21} onChange={(p) => { setPlan(p); setDirty(true); }} disabled={false} />}
           <div className="doc-card">
             <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.9rem' }}>
               <span className="eyebrow" style={{ margin: 0 }}>Récapitulatif</span>

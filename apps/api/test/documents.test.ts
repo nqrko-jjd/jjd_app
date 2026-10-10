@@ -525,3 +525,49 @@ test('états d’avancement : % cumulé par ligne, montants, acompte déduit au 
   const pdf = await call(`/${st1}/pdf`);
   assert.ok([200, 500].includes(pdf.status)); // PDF = Chromium (absent en local) : on vérifie seulement que la route répond
 });
+
+test('échéancier d’acomptes sur le devis : facturé acompte par acompte, jamais deux fois ; lignes optionnelles hors total ; contrôles avant émission', async () => {
+  const mk = async () => (await (await fetch(`${base}/api/documents`, {
+    method: 'POST', headers: auth(),
+    body: JSON.stringify({ kind: 'quote', worksiteId: wsId, lines: [
+      { label: 'Travaux', qty: 1, unitPriceHt: 8000, vatRate: 0.06 },
+      { label: 'Option terrasse', qty: 1, unitPriceHt: 2000, vatRate: 0.06, optional: true },
+    ] }),
+  })).json()).document as { id: string; totalHt: number };
+  const q = await mk();
+  assert.equal(q.totalHt, 8000, 'la ligne optionnelle ne compte pas dans le total');
+
+  // contrôles avant émission : un devis complet n'a pas d'erreur bloquante, mais des recommandations
+  const checks = await (await fetch(`${base}/api/documents/${q.id}/checks`, { headers: auth() })).json();
+  assert.ok(checks.errors.some((e: string) => /client/i.test(e)), 'pas de client : bloquant');
+  assert.ok(checks.recommendations.some((r: string) => /acompte/i.test(r)));
+
+  const plan = [{ kind: 'pct', value: 30, trigger: 'signature' }, { kind: 'pct', value: 40, trigger: 'start' }];
+  const patched = await fetch(`${base}/api/documents/${q.id}`, { method: 'PATCH', headers: auth(), body: JSON.stringify({ depositPlan: plan }) });
+  assert.equal(patched.status, 200);
+  assert.equal((await fetch(`${base}/api/documents/${q.id}`, { method: 'PATCH', headers: auth(), body: JSON.stringify({ depositPlan: [{ kind: 'pct', value: 70, trigger: 'signature' }, { kind: 'pct', value: 40, trigger: 'start' }] }) })).status, 422, 'plus de 100 %');
+
+  await fetch(`${base}/api/documents/${q.id}/issue`, { method: 'POST', headers: auth(), body: '{}' });
+  const detail = async () => (await (await fetch(`${base}/api/documents/${q.id}`, { headers: auth() })).json()).document;
+  const d1 = await detail();
+  assert.equal(d1.billing.plan.length, 2);
+  assert.equal(d1.billing.plan[0].amountHt, 2400);
+  const [p1, p2] = d1.billing.plan as { id: string }[];
+
+  const inv = await (await fetch(`${base}/api/documents/${q.id}/convert`, { method: 'POST', headers: auth(), body: JSON.stringify({ planId: p1.id }) })).json();
+  assert.equal(inv.document.kind, 'deposit_invoice');
+  assert.equal(inv.document.totalHt, 2400, '30 % de 8 000 (ligne optionnelle exclue)');
+  assert.match(inv.document.lines[0].label, /30 %.*signature/);
+  const d2 = await detail();
+  assert.equal(d2.billing.plan[0].invoiceId, inv.document.id);
+  assert.equal((await fetch(`${base}/api/documents/${q.id}/convert`, { method: 'POST', headers: auth(), body: JSON.stringify({ planId: p1.id }) })).status, 422, 'déjà facturé');
+  assert.equal((await fetch(`${base}/api/documents/${q.id}`, { method: 'PATCH', headers: auth(), body: JSON.stringify({ depositPlan: [{ id: p2.id, kind: 'pct', value: 40, trigger: 'start' }] }) })).status, 409, 'un acompte facturé ne se retire pas');
+
+  // brouillon supprimé : la ligne redevient « à facturer »
+  await fetch(`${base}/api/documents/${inv.document.id}`, { method: 'DELETE', headers: auth() });
+  assert.equal((await detail()).billing.plan[0].invoiceId, null);
+
+  // solde : la ligne optionnelle n'est pas facturée
+  const solde = await (await fetch(`${base}/api/documents/${q.id}/convert`, { method: 'POST', headers: auth(), body: '{}' })).json();
+  assert.equal(solde.document.totalHt, 8000);
+});

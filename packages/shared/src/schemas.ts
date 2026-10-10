@@ -299,7 +299,20 @@ export const documentLineInput = z.object({
   discountPct: z.number().min(0).max(100).default(0),
   vatRate: z.number().default(0.21),
   priceItemId: z.string().nullish(),
+  optional: z.boolean().optional(),
 });
+
+/** Déclencheurs d'un acompte prévu sur un devis. */
+export const DEPOSIT_TRIGGERS = { signature: 'à la signature', order: 'à la commande', start: 'au début des travaux', half: 'à la moitié des travaux', custom: 'libellé personnalisé' } as const;
+export const depositPlanItem = z.object({
+  id: z.string().optional(),
+  kind: z.enum(['pct', 'amount']).default('pct'),
+  value: z.coerce.number().positive(),
+  trigger: z.enum(['signature', 'order', 'start', 'half', 'custom']).default('signature'),
+  label: z.string().trim().max(120).nullish(),
+  invoiceId: z.string().nullish(),
+});
+export type DepositPlanItem = z.infer<typeof depositPlanItem>;
 
 export const documentInput = z.object({
   kind: z.enum(['quote', 'invoice', 'credit_note', 'deposit_invoice']).default('quote'),
@@ -320,6 +333,8 @@ export const documentInput = z.object({
   billingAddress: z.string().trim().nullish(),
   billingEmail: z.string().trim().nullish(),
   customerRef: z.string().trim().nullish(),
+  depositPlan: z.array(depositPlanItem).max(8).nullish(),
+  retentionPct: z.coerce.number().min(0).max(30).nullish(),
   // acompte déjà réglé, saisi directement pendant la rédaction (distinct de /mark-paid, qui
   // ajoute un règlement a posteriori sur un document déjà émis)
   paidAmount: z.coerce.number().nonnegative().nullish(),

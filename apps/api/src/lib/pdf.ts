@@ -10,7 +10,7 @@
  */
 import puppeteer from 'puppeteer-core';
 import { sanitizeLineHtml } from './sanitize.js';
-import { computeDocTotals, formatEur, formatDateBE, DOC_KIND_LABEL, vatLegalNotes, DOCUMENT_LOGO, DOCUMENT_TERMS, type DocLineLike } from '@jjd/shared';
+import { computeDocTotals, formatEur, formatDateBE, DOC_KIND_LABEL, vatLegalNotes, DOCUMENT_LOGO, DOCUMENT_TERMS, DEPOSIT_TRIGGERS, type DocLineLike } from '@jjd/shared';
 import type { Company } from './documents.js';
 import { renderEpcQrDataUrl, isValidBelgianIban } from './epc-qr.js';
 
@@ -36,6 +36,7 @@ export interface PdfDoc {
   billingEmail: string | null;
   customerRef: string | null;
   vatRate?: number | null;
+  depositPlan?: unknown;
   worksite: { ref: string } | null;
   contact: { name: string; vat: string | null; address: string | null; box: string | null; postalCode: string | null; city: string | null } | null;
   lines: PdfDocLine[];
@@ -69,15 +70,28 @@ export async function buildHtml(d: PdfDoc, co: Company): Promise<string> {
     const disc = l.discountPct ?? 0;
     const vat = l.vatRate ?? 0;
     const ht = qty * pu * (1 - disc / 100);
-    return `<tr>
-      <td><div class="ln-label">${sanitizeLineHtml(l.label)}</div>${l.description ? `<div class="desc">${sanitizeLineHtml(l.description)}</div>` : ''}</td>
+    const opt = !!l.optional;
+    return `<tr${opt ? ' class="ln-opt"' : ''}>
+      <td><div class="ln-label">${opt ? '<span class="opt-tag">Option</span> ' : ''}${sanitizeLineHtml(l.label)}</div>${l.description ? `<div class="desc">${sanitizeLineHtml(l.description)}</div>` : ''}</td>
       <td class="c-num c-qty">${qty}${l.unit ? ` <span class="unit">${esc(l.unit)}</span>` : ''}</td>
       <td class="c-num">${formatEur(pu)}</td>
       ${hasDiscount ? `<td class="c-num">${disc ? `${disc}%` : '—'}</td>` : ''}
       <td class="c-num">${vat === 0 ? 'Autoliqu.' : `${Math.round(vat * 100)}%`}</td>
-      <td class="c-num">${formatEur(ht)}</td>
+      <td class="c-num">${opt ? '* ' : ''}${formatEur(ht)}</td>
     </tr>`;
   }).join('');
+
+  // acomptes prévus au devis (montant HT converti en TTC au taux moyen du devis)
+  const ttcRatio = totals.totalHt > 0 ? totals.totalTtc / totals.totalHt : 1;
+  const planItems = d.kind === 'quote' && Array.isArray(d.depositPlan) ? (d.depositPlan as { kind?: string; value?: number; trigger?: string; label?: string | null }[]) : [];
+  const planBlock = planItems.length
+    ? `<div class="plan"><div class="lbl">Acomptes prévus</div>${planItems.map((p) => {
+        const ht = p.kind === 'amount' ? Number(p.value) || 0 : (totals.totalHt * (Number(p.value) || 0)) / 100;
+        const when = p.trigger === 'custom' ? (p.label ?? '') : (DEPOSIT_TRIGGERS as Record<string, string>)[p.trigger ?? 'signature'] ?? '';
+        return `<div class="plan-row"><span>${p.kind === 'amount' ? '' : `${esc(String(p.value))} % `}${esc(when)}</span><strong>${formatEur(ht * ttcRatio)} TTC</strong></div>`;
+      }).join('')}</div>`
+    : '';
+  const hasOptional = d.lines.some((l) => l.kind === 'item' && l.optional);
 
   const vatRows = Object.entries(totals.vatBreakdown)
     .map(([rate, b]) => Number(rate) === 0 ? `<tr><td colspan="2">TVA : autoliquidation</td></tr>` : `<tr><td>TVA ${Math.round(Number(rate) * 100)}%</td><td>${formatEur(b.vat)}</td></tr>`)
@@ -160,6 +174,8 @@ export async function buildHtml(d: PdfDoc, co: Company): Promise<string> {
           <tr class="grand"><td>Total TTC</td><td>${formatEur(totals.totalTtc)}</td></tr>
         </tbody></table>
       </div>
+      ${hasOptional ? '<p class="vat-note">* Option non incluse dans le total.</p>' : ''}
+      ${planBlock}
       ${d.kind === 'quote'
         ? `<div class="sign-row">
              <div class="sign-box"><div>Mention « Bon pour accord »</div><div>Date et signature</div><div class="sign-date">...... / ...... / ............</div><div class="sign-space"></div></div>
@@ -182,6 +198,11 @@ const CSS = `
   .general-terms h1 { font-size:13px; color:#173f34; margin:0 0 4mm; }
   .cg-cols { width:178mm; height:248mm; column-count:2; column-gap:6mm; column-fill:auto; font-size:8px; overflow:hidden; }
   .general-terms p { margin:0 0 1.6mm; orphans:1; widows:1; text-align:justify; }
+  .opt-tag { display:inline-block; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:#7a5c00; background:#fbf1cc; border-radius:4px; padding:0 4px; }
+  .ln-opt td { background:#fcfbf4; }
+  .plan { margin-top:12px; padding:8px 12px; border:1px solid #e5e7df; border-radius:8px; max-width:340px; break-inside:avoid; font-size:11px; }
+  .plan .lbl { font-weight:700; color:#173f34; margin-bottom:4px; }
+  .plan-row { display:flex; justify-content:space-between; gap:12px; padding:2px 0; }
   .sign-row { display:flex; gap:18px; align-items:flex-start; margin-top:14px; break-inside:avoid; }
   .sign-box { flex:none; width:190px; border:1px solid #cfd5cc; border-radius:8px; padding:8px 10px; font-size:10px; color:#55606e; }
   .sign-box .sign-date { margin-top:4px; color:#26372f; letter-spacing:.04em; }

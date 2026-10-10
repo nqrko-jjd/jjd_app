@@ -74,12 +74,13 @@ export function buildLineRows(documentId: string, lines: DocumentLineInput[]) {
     vatRate: l.vatRate,
     totalHt: lineTotalHt(l),
     priceItemId: l.priceItemId ?? null,
+    optional: !!l.optional,
   }));
 }
 
 interface StoredLine {
   kind: string; label: string; description: string | null; qty: number; unit: string | null;
-  unitPriceHt: number; discountPct: number; vatRate: number; priceItemId: string | null;
+  unitPriceHt: number; discountPct: number; vatRate: number; priceItemId: string | null; optional?: boolean;
 }
 
 /** Recopie des lignes existantes vers un nouveau document (totaux recalculés). */
@@ -89,7 +90,7 @@ export function cloneLineRows(documentId: string, lines: StoredLine[], override?
     return {
       documentId, position: i, kind: l.kind, label: l.label, description: l.description ?? null,
       qty: l.qty, unit: l.unit ?? null, unitPriceHt: l.unitPriceHt, discountPct: l.discountPct,
-      vatRate: l.vatRate, priceItemId: l.priceItemId ?? null,
+      vatRate: l.vatRate, priceItemId: l.priceItemId ?? null, optional: !!l.optional,
       totalHt: lineTotalHt(l),
     };
   });

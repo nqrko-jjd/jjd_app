@@ -29,3 +29,25 @@ export async function quoteBillings(quotes: { id: string; totalHt: number }[]): 
   }
   return out;
 }
+
+export interface PlanRow { id: string; kind: 'pct' | 'amount'; value: number; trigger: string; label: string | null; amountHt: number; invoiceId: string | null; invoiceNumber: string | null; invoiceStatus: string | null }
+
+/** Échéancier d'acomptes d'un devis, avec le montant HT de chaque ligne et la facture déjà créée (si elle existe encore). */
+export async function planRows(quote: { totalHt: number; depositPlan: unknown }): Promise<{ rows: PlanRow[]; stale: boolean }> {
+  const raw = Array.isArray(quote.depositPlan) ? (quote.depositPlan as Record<string, unknown>[]) : [];
+  const ids = raw.map((r) => r.invoiceId).filter((x): x is string => typeof x === 'string');
+  const invs = ids.length ? await prisma.document.findMany({ where: { id: { in: ids } }, select: { id: true, number: true, draftRef: true, status: true } }) : [];
+  let stale = false;
+  const rows = raw.map((r) => {
+    const inv = typeof r.invoiceId === 'string' ? invs.find((i) => i.id === r.invoiceId) : undefined;
+    if (typeof r.invoiceId === 'string' && !inv) stale = true; // facture brouillon supprimée depuis
+    const kind = r.kind === 'amount' ? 'amount' : 'pct';
+    const value = Number(r.value) || 0;
+    return {
+      id: String(r.id ?? ''), kind, value, trigger: String(r.trigger ?? 'signature'), label: typeof r.label === 'string' ? r.label : null,
+      amountHt: kind === 'pct' ? round2((quote.totalHt * value) / 100) : round2(value),
+      invoiceId: inv ? inv.id : null, invoiceNumber: inv ? (inv.number ?? inv.draftRef) : null, invoiceStatus: inv?.status ?? null,
+    } as PlanRow;
+  });
+  return { rows, stale };
+}

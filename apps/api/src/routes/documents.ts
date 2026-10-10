@@ -21,7 +21,9 @@ import { extractDocumentInfo } from '../lib/document-extract.js';
 import { UPLOADS_DIR } from '../lib/media.js';
 import { PAYMENT_TOLERANCE } from '../lib/payment-tolerance.js';
 import { taskInclude, serializeTask } from './tasks.js';
-import { quoteBillings } from '../lib/quote-billing.js';
+import { quoteBillings, planRows } from '../lib/quote-billing.js';
+import { nanoid as planId } from 'nanoid';
+import { DEPOSIT_TRIGGERS } from '@jjd/shared';
 
 export const documentsRouter = Router();
 // Dérivé de UPLOADS_DIR (respecte process.env.UPLOADS_DIR en prod) plutôt que d'un chemin
@@ -251,6 +253,38 @@ documentsRouter.get(
   }),
 );
 
+/**
+ * Contrôles avant émission : `errors` bloquent (document vide, pas de client), `recommendations` avertissent sans bloquer
+ * (adresse du client, validité du devis, chantier, e-mail, acomptes). Sert à la fenêtre « Un dernier coup d'œil ».
+ */
+documentsRouter.get(
+  '/:id/checks',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const d = await prisma.document.findUnique({ where: { id: req.params.id }, include: { lines: true, contact: true, worksite: { select: { id: true } } } });
+    if (!d) throw new HttpError(404, 'Document introuvable');
+    const errors: string[] = [];
+    const recommendations: string[] = [];
+    const items = d.lines.filter((l) => l.kind === 'item' && !l.optional);
+    if (!items.length) errors.push('Le document n’a aucune ligne chiffrée.');
+    if (!d.contact && !d.billingName) errors.push('Aucun client n’est renseigné.');
+    const hasAddress = !!(d.billingAddress || d.contact?.address);
+    if (d.contact || d.billingName) {
+      if (!hasAddress) recommendations.push('L’adresse du client est incomplète : elle figurera vide sur le document.');
+      if (!(d.billingEmail || d.contact?.email)) recommendations.push('Aucune adresse e-mail pour ce client : l’envoi par e-mail ne sera pas possible.');
+    }
+    if (d.kind === 'quote') {
+      if (!d.validUntil) recommendations.push('Indiquez une date de validité du devis.');
+      if (!d.worksite) recommendations.push('Liez le devis à un chantier pour suivre sa rentabilité et sa facturation.');
+      const plan = Array.isArray(d.depositPlan) ? d.depositPlan : [];
+      if (!plan.length) recommendations.push('Aucun acompte prévu : vous pouvez en définir dans « Acomptes prévus ».');
+    }
+    if ((d.kind === 'invoice' || d.kind === 'deposit_invoice') && !d.dueOn) recommendations.push('Aucune échéance : elle sera calculée automatiquement.');
+    if (d.lines.some((l) => l.optional)) recommendations.push('Les lignes optionnelles sont affichées mais ne comptent pas dans le total.');
+    res.json({ errors, recommendations });
+  }),
+);
+
 documentsRouter.get(
   '/:id',
   requireAuth(...OFFICE),
@@ -284,7 +318,16 @@ documentsRouter.get(
         counterparty: m.bankTransaction.counterpartyName,
       }))
       .sort((a, b) => (a.date?.getTime() ?? 0) - (b.date?.getTime() ?? 0));
-    const billing = doc.kind === 'quote' ? (await quoteBillings([doc])).get(doc.id) : undefined;
+    let billing = doc.kind === 'quote' ? (await quoteBillings([doc])).get(doc.id) : undefined;
+    if (billing && doc.kind === 'quote') {
+      const plan = await planRows(doc);
+      if (plan.stale) {
+        // une facture d'acompte brouillon a été supprimée : la ligne de l'échéancier redevient « à facturer »
+        const cleaned = (doc.depositPlan as Record<string, unknown>[]).map((r) => (typeof r.invoiceId === 'string' && !plan.rows.some((x) => x.invoiceId === r.invoiceId) ? { ...r, invoiceId: null } : r));
+        await prisma.document.update({ where: { id: doc.id }, data: { depositPlan: cleaned as never } });
+      }
+      billing = { ...billing, plan: plan.rows } as typeof billing & { plan: unknown };
+    }
     res.json({ document: { ...doc, hasBankMatch: payments.length > 0, payments, billing }, company });
   }),
 );
@@ -402,6 +445,19 @@ documentsRouter.patch(
       });
     }
 
+    if (data.lines && existing.kind === 'quote' && (await prisma.progressStatement.count({ where: { quoteId: existing.id } })) > 0) {
+      throw new HttpError(409, 'Des états d’avancement existent sur ce devis : ses lignes ne se modifient plus (créez un devis complémentaire).');
+    }
+    let depositPlan: unknown = undefined;
+    if (data.depositPlan !== undefined) {
+      const items = (data.depositPlan ?? []).map((i) => ({ id: i.id || planId(8), kind: i.kind, value: i.value, trigger: i.trigger, label: i.label?.trim() || null, invoiceId: i.invoiceId ?? null }));
+      if (items.filter((i) => i.kind === 'pct').reduce((t, i) => t + i.value, 0) > 100.0001) throw new HttpError(422, 'Les acomptes dépassent 100 % du devis.');
+      // on ne peut pas retirer une ligne déjà facturée
+      const prev = Array.isArray(existing.depositPlan) ? (existing.depositPlan as { id?: string; invoiceId?: string | null }[]) : [];
+      for (const p of prev) if (p.invoiceId && !items.some((i) => i.id === p.id)) throw new HttpError(409, 'Un acompte de l’échéancier est déjà facturé : il ne peut plus être retiré.');
+      depositPlan = items.map((i) => { const p = prev.find((x) => x.id === i.id); return p?.invoiceId ? { ...i, invoiceId: p.invoiceId } : i; });
+    }
+
     // Échéance repoussée dans le futur sur une facture déjà "en retard" : la repasse
     // sent/partial selon ce qui a déjà été payé (sinon elle resterait faussement en retard).
     const dueMovedToFuture = data.dueOn !== undefined && data.dueOn !== null && data.dueOn >= new Date();
@@ -425,6 +481,8 @@ documentsRouter.patch(
         billingEmail: data.billingEmail === undefined ? undefined : data.billingEmail,
         customerRef: data.customerRef === undefined ? undefined : data.customerRef,
         paidAmount: data.paidAmount ?? undefined,
+        depositPlan: depositPlan as never,
+        retentionPct: data.retentionPct === undefined ? undefined : data.retentionPct,
         status: revertOverdue ? (existing.paidAmount > 0 ? 'partial' : 'sent') : undefined,
       },
     });
@@ -528,7 +586,7 @@ documentsRouter.post(
       const ratio = src.totalVat / src.totalHt;
       const stdRate = [0, 0.06, 0.12, 0.21].find((r) => Math.abs(r - ratio) < 0.003);
       if (stdRate !== undefined) {
-        srcLines = [{ id: '', documentId: src.id, position: 0, kind: 'item', label: 'Reprise du montant importé', description: null, qty: 1, unit: 'forfait', unitPriceHt: src.totalHt, discountPct: 0, vatRate: stdRate, totalHt: src.totalHt, priceItemId: null }];
+        srcLines = [{ id: '', documentId: src.id, position: 0, kind: 'item', label: 'Reprise du montant importé', description: null, qty: 1, unit: 'forfait', unitPriceHt: src.totalHt, discountPct: 0, vatRate: stdRate, optional: false, totalHt: src.totalHt, priceItemId: null }];
       }
     }
     if (srcLines.length) {
@@ -553,7 +611,11 @@ documentsRouter.post(
     if (!src) throw new HttpError(404, 'Document introuvable');
     if (src.kind !== 'quote') throw new HttpError(422, 'Seul un devis se convertit en facture');
     const billing = (await quoteBillings([src])).get(src.id)!;
-    const depositPct = Number(req.body?.depositPct);
+    const planItemId = typeof req.body?.planId === 'string' ? req.body.planId : null;
+    const plan = planItemId ? (await planRows(src)).rows.find((r) => r.id === planItemId) : undefined;
+    if (planItemId && !plan) throw new HttpError(404, 'Acompte prévu introuvable sur ce devis.');
+    if (plan?.invoiceId) throw new HttpError(422, 'Cet acompte est déjà facturé.');
+    const depositPct = plan ? (plan.kind === 'pct' ? plan.value : src.totalHt > 0 ? (plan.amountHt / src.totalHt) * 100 : 0) : Number(req.body?.depositPct);
     const isDeposit = depositPct > 0 || (req.body?.kind as string) === 'deposit_invoice';
     if (isDeposit && !(depositPct > 0 && depositPct <= 100)) throw new HttpError(422, 'Choisissez un pourcentage d’acompte entre 1 et 100.');
     if (billing.invoices.length > 0 && billing.remainingHt <= 0.01) throw new HttpError(422, 'Ce devis est déjà entièrement facturé.');
@@ -578,18 +640,20 @@ documentsRouter.post(
     const eur = (n: number) => n.toLocaleString('fr-BE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     let lines;
     if (isDeposit) {
-      const amount = Math.round(billing.remainingHt * (depositPct / 100) * 100) / 100;
+      // acompte PRÉVU au devis : % (ou montant) du devis ; acompte libre : % de ce qu'il reste à facturer
+      const amount = plan ? plan.amountHt : Math.round(billing.remainingHt * (depositPct / 100) * 100) / 100;
       lines = cloneLineRows(inv.id, [{
         kind: 'item',
-        // même formulation que TrustUp : numéroté, avec le pourcentage et le devis d'origine
-        label: `Facture d’acompte n° ${billing.invoices.filter((i) => i.kind === 'deposit_invoice').length + 1} de ${depositPct} %, sur base du devis ${ref}${billing.billedHt > 0.01 ? ` (solde restant : ${eur(billing.remainingHt)} € HT)` : ''}`,
+        label: plan
+          ? `Acompte${plan.kind === 'pct' ? ` de ${plan.value} %` : ''} ${plan.trigger === 'custom' ? (plan.label ?? '') : (DEPOSIT_TRIGGERS as Record<string, string>)[plan.trigger] ?? ''}, sur base du devis ${ref}`.replace(/\s+/g, ' ')
+          : `Facture d’acompte n° ${billing.invoices.filter((i) => i.kind === 'deposit_invoice').length + 1} de ${depositPct} %, sur base du devis ${ref}${billing.billedHt > 0.01 ? ` (solde restant : ${eur(billing.remainingHt)} € HT)` : ''}`,
         description: null, qty: 1, unit: 'forfait',
         unitPriceHt: amount,
         discountPct: 0, vatRate: src.vatRate ?? 0.21, priceItemId: null,
       }]);
     } else {
       lines = cloneLineRows(inv.id, [
-        ...src.lines,
+        ...src.lines.filter((l) => !l.optional),
         ...billing.invoices.filter((i) => i.netHt > 0.005).map((i) => ({
           kind: 'item' as const, label: `${i.kind === 'deposit_invoice' ? 'Acompte déjà facturé' : 'Déjà facturé'} (${i.number ?? i.draftRef})`, description: null, qty: 1, unit: 'forfait',
           unitPriceHt: -i.netHt, discountPct: 0, vatRate: i.vatRate ?? src.vatRate ?? 0.21, priceItemId: null,
@@ -599,6 +663,10 @@ documentsRouter.post(
     if (lines.length) {
       await prisma.documentLine.createMany({ data: lines });
       await refreshDocTotals(inv.id);
+    }
+    if (plan) {
+      const items = (src.depositPlan as Record<string, unknown>[]).map((r) => (r.id === plan.id ? { ...r, invoiceId: inv.id } : r));
+      await prisma.document.update({ where: { id: src.id }, data: { depositPlan: items as never } });
     }
     if (src.status === 'sent') {
       await prisma.document.update({ where: { id: src.id }, data: { status: 'accepted', acceptedOn: new Date() } });

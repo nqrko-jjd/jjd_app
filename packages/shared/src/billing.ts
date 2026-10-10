@@ -10,6 +10,7 @@ export interface DocLineLike {
   unitPriceHt?: number | null;
   discountPct?: number | null;
   vatRate?: number | null;
+  optional?: boolean | null; // ligne optionnelle : exclue des totaux
 }
 
 /** Total HT d'une ligne (0 pour les lignes de section / texte). */
@@ -34,6 +35,7 @@ export function computeDocTotals(lines: DocLineLike[]): DocTotals {
   const breakdown: Record<string, { base: number; vat: number }> = {};
   for (const l of lines) {
     if (l.kind && l.kind !== 'item') continue;
+    if (l.optional) continue;
     const base = lineTotalHt(l);
     const rate = l.vatRate ?? 0;
     const key = String(rate);

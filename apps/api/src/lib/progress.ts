@@ -19,7 +19,7 @@ export function statementNumber(quote: { number: string | null; draftRef: string
 export interface QuoteItemLine { id: string; position: number; label: string; qty: number; unit: string | null; unitPriceHt: number; discountPct: number; vatRate: number; totalHt: number }
 
 export async function quoteItems(quoteId: string): Promise<QuoteItemLine[]> {
-  const lines = await prisma.documentLine.findMany({ where: { documentId: quoteId, kind: 'item' }, orderBy: { position: 'asc' } });
+  const lines = await prisma.documentLine.findMany({ where: { documentId: quoteId, kind: 'item', optional: false }, orderBy: { position: 'asc' } });
   return lines.map((l) => ({ id: l.id, position: l.position, label: l.label, qty: l.qty, unit: l.unit, unitPriceHt: l.unitPriceHt, discountPct: l.discountPct, vatRate: l.vatRate, totalHt: l.totalHt }));
 }
 

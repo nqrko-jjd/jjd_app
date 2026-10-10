@@ -651,6 +651,8 @@ model Document {
   acceptedOn     DateTime?
   declinedReason String?
   lockedAt       DateTime? // émission = verrou : plus de modif des lignes
+  depositPlan    Json? // devis : échéancier d'acomptes [{id, kind: pct|amount, value, trigger, label?, invoiceId?}]
+  retentionPct   Float? // retenue de garantie (% du TTC retenu sur chaque facture liée)
   parentId       String?
   parent         Document?         @relation("DocumentLineage", fields: [parentId], references: [id])
   children       Document[]        @relation("DocumentLineage")
@@ -691,6 +693,7 @@ model DocumentLine {
   discountPct Float      @default(0)
   vatRate     Float      @default(0.21)
   totalHt     Float      @default(0)
+  optional    Boolean    @default(false) // ligne optionnelle : affichée mais hors total tant que le client ne la retient pas
   priceItemId String?
   priceItem   PriceItem? @relation(fields: [priceItemId], references: [id])
 

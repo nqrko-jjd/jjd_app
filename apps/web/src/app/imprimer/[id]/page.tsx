@@ -3,7 +3,7 @@ import { use, useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { formatEur, formatDateBE } from '@/lib/ui';
 import { DOC_KIND_LABEL, type DocFull, type Company } from '@/lib/doc-ui';
-import { computeDocTotals, vatLegalNotes, DOCUMENT_LOGO, DOCUMENT_TERMS } from '@jjd/shared';
+import { computeDocTotals, vatLegalNotes, DOCUMENT_LOGO, DOCUMENT_TERMS, DEPOSIT_TRIGGERS } from '@jjd/shared';
 
 export default function PrintDocument({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -117,8 +117,9 @@ export default function PrintDocument({ params }: { params: Promise<{ id: string
               if (l.kind === 'text') return <tr key={i} className="ln-text"><td colSpan={colspan} dangerouslySetInnerHTML={{ __html: l.label }} /></tr>;
               const ht = l.qty * l.unitPriceHt * (1 - l.discountPct / 100);
               return (
-                <tr key={i}>
+                <tr key={i} style={l.optional ? { background: '#fcfbf4' } : undefined}>
                   <td>
+                    {l.optional && <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', color: '#7a5c00', background: '#fbf1cc', borderRadius: 4, padding: '0 4px', marginRight: 4 }}>Option</span>}
                     <div className="ln-label" dangerouslySetInnerHTML={{ __html: l.label }} />
                     {l.description && <div className="desc" dangerouslySetInnerHTML={{ __html: l.description }} />}
                   </td>
@@ -126,7 +127,7 @@ export default function PrintDocument({ params }: { params: Promise<{ id: string
                   <td className="c-num">{formatEur(l.unitPriceHt)}</td>
                   {hasDiscount && <td className="c-num">{l.discountPct ? `${l.discountPct}%` : '—'}</td>}
                   <td className="c-num">{l.vatRate === 0 ? 'Autoliqu.' : `${Math.round(l.vatRate * 100)}%`}</td>
-                  <td className="c-num">{formatEur(ht)}</td>
+                  <td className="c-num">{l.optional ? '* ' : ''}{formatEur(ht)}</td>
                 </tr>
               );
             })}
@@ -144,6 +145,18 @@ export default function PrintDocument({ params }: { params: Promise<{ id: string
             </tbody>
           </table>
         </div>
+
+        {items.some((l) => l.kind === 'item' && l.optional) && <p className="vat-note">* Option non incluse dans le total.</p>}
+        {d.kind === 'quote' && Array.isArray(d.depositPlan) && d.depositPlan.length > 0 && (
+          <div style={{ marginTop: 12, padding: '8px 12px', border: '1px solid #e5e7df', borderRadius: 8, maxWidth: 340, fontSize: 11, breakInside: 'avoid' }}>
+            <div style={{ fontWeight: 700, color: '#173f34', marginBottom: 4 }}>Acomptes prévus</div>
+            {d.depositPlan.map((p, i) => {
+              const ht = p.kind === 'amount' ? p.value : (totals.totalHt * p.value) / 100;
+              const when = p.trigger === 'custom' ? (p.label ?? '') : (DEPOSIT_TRIGGERS as Record<string, string>)[p.trigger] ?? '';
+              return <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '2px 0' }}><span>{p.kind === 'amount' ? '' : `${p.value} % `}{when}</span><strong>{formatEur(ht * (totals.totalHt > 0 ? totals.totalTtc / totals.totalHt : 1))} TTC</strong></div>;
+            })}
+          </div>
+        )}
 
         {d.kind === 'quote' ? (
           <div className="sign-row">

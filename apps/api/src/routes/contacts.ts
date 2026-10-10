@@ -179,8 +179,9 @@ contactsRouter.get(
       if (e.direction === 'credit_note') {
         purchaseHt -= e.ht ?? 0;
         purchaseTtc -= ttc;
-        balance -= ttc;
-        balanceLedger.push({ id: e.id, date: e.date, docNumber: e.docNumber, direction: e.direction, ht: -(e.ht ?? 0), ttc: -ttc, balance: round2(balance) });
+        if (supplierAccount?.reconciledCreditIds.includes(e.id)) continue;
+        balance -= Math.abs(ttc);
+        balanceLedger.push({ id: e.id, date: e.date, docNumber: e.docNumber, direction: e.direction, ht: -(e.ht ?? 0), ttc: -Math.abs(ttc), balance: round2(balance) });
       } else {
         purchaseHt += e.ht ?? 0;
         purchaseTtc += ttc;

@@ -5,12 +5,19 @@ import { isPaid } from './consolidated.js';
 import { purchaseRemaining, PURCHASE_PAYMENT_TOLERANCE } from './payment-tolerance.js';
 
 export async function supplierAccounts() {
-  const [ledger, txs, snapshot, contacts] = await Promise.all([
+  const [ledger, txs, snapshot, contacts, reconciliations] = await Promise.all([
     prisma.ledgerEntry.findMany({ where: { direction: { in: ['purchase', 'credit_note'] }, source: { not: 'demo' }, OR: [{ documentId: null }, { direction: 'purchase' }] }, include: { contact: { select: { id: true, name: true } } } }),
     prisma.bankTransaction.findMany({ where: { amount: { lt: 0 } }, include: { contact: { select: { id: true, name: true } }, matches: { include: { ledgerEntry: { select: { contactId: true, supplierName: true, direction: true } } } } } }),
     allocationSnapshot(),
     prisma.contact.findMany({ where: { type: { in: ['supplier', 'both'] } }, select: { id: true, name: true } }),
+    prisma.auditLog.findMany({ where: { action: 'supplier_statement_reconciled', entity: 'Contact' }, orderBy: [{ at: 'desc' }, { id: 'desc' }], select: { entityId: true, meta: true } }),
   ]);
+  // Confirmed statements account for historical credits/advances without rewriting bank payments.
+  const settlements = new Map<string, { settledCreditIds: string[]; absorbedAdvances: { id: string; amount: number }[] }>();
+  for (const r of reconciliations) {
+    const meta = r.meta as { accountSettlement?: { settledCreditIds: string[]; absorbedAdvances: { id: string; amount: number }[] } } | null;
+    if (r.entityId && !settlements.has(r.entityId) && meta?.accountSettlement) settlements.set(r.entityId, meta.accountSettlement);
+  }
   const groups = new Map<string, { id: string; contactId: string | null; name: string; openTtc: number; overdue: number; dueSoon: number; credits: number; unallocatedTotal: number; balance: number; nextDue: Date | null; invoices: { id: string; number: string | null; date: Date | null; dueDate: Date | null; total: number; paid: number; remaining: number }[]; advances: { id: string; date: Date | null; bank: string | null; amount: number; remaining: number }[] }>();
   const group = (id: string | null, name: string) => {
     const key = id ?? `name:${name.trim().toLowerCase()}`;
@@ -25,7 +32,10 @@ export async function supplierAccounts() {
     if (l.direction === 'credit_note' && /vente/i.test(l.categoryRaw ?? '')) continue;
     const g = group(l.contactId, l.contact?.name ?? l.supplierName ?? 'Fournisseur à identifier');
     const total = Math.abs(l.ttc ?? l.ht);
-    if (l.direction === 'credit_note') { g.credits += total; continue; }
+    if (l.direction === 'credit_note') {
+      if (!settlements.get(l.contactId ?? '')?.settledCreditIds.includes(l.id)) g.credits += total;
+      continue;
+    }
     const paid = snapshot.ledgerPaid.has(l.id) ? snapshot.ledgerPaid.get(l.id)! : isPaid(l.paymentStatus) ? total : 0;
     const remaining = purchaseRemaining(total, paid);
     g.openTtc += remaining;
@@ -45,12 +55,13 @@ export async function supplierAccounts() {
       if (ids.length !== 1 || !ids[0] || suppliers.length !== t.matches.length) continue;
       cid = ids[0]; name = contacts.find(c => c.id === cid)?.name ?? suppliers[0]?.supplierName ?? undefined;
     }
-    const remaining = round2(Math.max(0, Math.abs(t.amount ?? 0) - (snapshot.transactions.get(t.id) ?? 0)));
+    const absorbed = settlements.get(cid ?? '')?.absorbedAdvances.find(a => a.id === t.id)?.amount ?? 0;
+    const remaining = round2(Math.max(0, Math.abs(t.amount ?? 0) - (snapshot.transactions.get(t.id) ?? 0) - absorbed));
     if (remaining <= 0.01) continue;
     if (remaining <= PURCHASE_PAYMENT_TOLERANCE && t.matches.length > 0 && t.matches.every(m => { const l = ledger.find(l => l.id === m.ledgerEntryId); return !!l && l.direction === 'purchase' && purchaseRemaining(Math.abs(l.ttc ?? l.ht), snapshot.ledgerPaid.get(l.id) ?? 0) === 0; })) continue;
     const g = group(cid, name ?? 'Fournisseur');
     g.unallocatedTotal += remaining;
     g.advances.push({ id: t.id, date: t.bookingDate, bank: t.bank, amount: Math.abs(t.amount ?? 0), remaining });
   }
-  return [...groups.values()].map(g => ({ ...g, openTtc: round2(g.openTtc), overdue: round2(g.overdue), dueSoon: round2(g.dueSoon), credits: round2(g.credits), unallocatedTotal: round2(g.unallocatedTotal), balance: round2(g.openTtc - g.credits - g.unallocatedTotal), invoices: g.invoices.sort((a,b) => (a.dueDate?.getTime() ?? Infinity) - (b.dueDate?.getTime() ?? Infinity)) })).sort((a,b) => b.overdue - a.overdue || a.name.localeCompare(b.name));
+  return [...groups.values()].map(g => ({ ...g, reconciledCreditIds: settlements.get(g.contactId ?? '')?.settledCreditIds ?? [], openTtc: round2(g.openTtc), overdue: round2(g.overdue), dueSoon: round2(g.dueSoon), credits: round2(g.credits), unallocatedTotal: round2(g.unallocatedTotal), balance: round2(g.openTtc - g.credits - g.unallocatedTotal), invoices: g.invoices.sort((a,b) => (a.dueDate?.getTime() ?? Infinity) - (b.dueDate?.getTime() ?? Infinity)) })).sort((a,b) => b.overdue - a.overdue || a.name.localeCompare(b.name));
 }

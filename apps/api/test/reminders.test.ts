@@ -115,3 +115,29 @@ test('envoi automatique : seulement si activé, et une seule passe par jour', as
   assert.equal(await runAutoReminders(getDocPdfBuffer, tuesday), 0, 'une seule passe par jour');
   await saveReminderSettings({ ...DEFAULT_REMINDER_SETTINGS });
 });
+
+test('suivi des devis sans réponse : étape selon l’ancienneté, devis acceptés / trop anciens exclus, envoi consigné', async () => {
+  arm(); sent.length = 0;
+  const c = await prisma.contact.create({ data: { name: 'Prospect Devis SA', normalizedName: 'prospect devis sa', type: 'client', email: 'prospect@devis.be' } });
+  created.contacts.push(c.id);
+  const quote = async (daysAgo: number, status = 'sent') => {
+    const d = await prisma.document.create({ data: { kind: 'quote', direction: 'sale', number: `D9${Math.floor(Math.random() * 1e6)}`, status, title: 'Devis test', contactId: c.id, lockedAt: new Date(), issuedOn: new Date(Date.now() - daysAgo * DAY), sentAt: new Date(Date.now() - daysAgo * DAY), totalHt: 5000, totalVat: 1050, totalTtc: 6050, originalPdf: PDF, source: 'test-reminders' } });
+    created.docs.push(d.id);
+    return d;
+  };
+  const { computeQuoteProposals } = await import('../src/lib/quote-followups.js');
+  const q10 = await quote(10), q30 = await quote(30), q3 = await quote(3), accepted = await quote(30, 'accepted'), cold = await quote(200);
+  const props = await computeQuoteProposals();
+  const by = (id: string) => props.find((p) => p.documentId === id);
+  assert.equal(by(q10.id)?.step, 1);
+  assert.equal(by(q30.id)?.step, 2);
+  assert.ok(!by(q3.id) && !by(accepted.id) && !by(cold.id));
+  assert.match(by(q30.id)!.subject, /D9\d+/);
+  const r = await call('/quotes/send', 'POST', { documentId: q10.id, step: 1 });
+  assert.equal(r.status, 200);
+  assert.equal(sent.length, 1);
+  assert.ok(!(await computeQuoteProposals()).some((p) => p.documentId === q10.id));
+  const list = await (await call('/quotes')).json();
+  assert.ok(list.proposals.some((p: { documentId: string }) => p.documentId === q30.id));
+  assert.ok(list.history.some((h: { document: { id: string } }) => h.document.id === q10.id));
+});

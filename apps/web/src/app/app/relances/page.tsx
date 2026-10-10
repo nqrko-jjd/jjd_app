@@ -44,6 +44,7 @@ export default function RemindersPage() {
         eyebrow="Facturation"
         title="Relances de paiement"
         sub={`${data.proposals.length} facture${data.proposals.length > 1 ? 's' : ''} à relancer · ${formatEur(totalDue)} TTC · ${data.settings.autoSend ? 'envoi automatique activé' : 'à valider une par une'}`}
+        action={<div className="row"><Link className="btn" href="/app/relances/devis">Devis sans réponse</Link></div>}
       />
       {!data.emailConfigured && <div className="badge warn" style={{ marginBottom: '1rem', padding: '0.5rem 0.8rem' }}>L’envoi par e-mail n’est pas configuré sur ce serveur : les relances ne peuvent pas partir.</div>}
       {msg && <div className={`badge ${msg.ok ? 'ok' : 'crit'}`} style={{ marginBottom: '1rem', padding: '0.5rem 0.8rem' }}>{msg.text}</div>}

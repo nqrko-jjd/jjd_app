@@ -84,6 +84,7 @@ const NAV: Group[] = [
       { href: '/app/documents', label: 'Devis & factures', ic: FileText, roles: ['admin', 'office'] },
       { href: '/app/avancements', label: 'États d’avancement', ic: ListChecks, roles: ['admin', 'office'] },
       { href: '/app/relances', label: 'Relances de paiement', ic: BellRing, roles: ['admin', 'office'] },
+      { href: '/app/relances/devis', label: 'Devis sans réponse', ic: BellRing, roles: ['admin', 'office'] },
       { href: '/app/achats', label: 'Achats / Dépenses', ic: Wallet, roles: ['admin', 'office'] },
       { href: '/app/analyse', label: 'Analyse', ic: BarChart3, roles: ['admin', 'office'] },
       { href: '/app/finances', label: 'Finances', ic: Euro, roles: ['admin', 'office'] },

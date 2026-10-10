@@ -21,6 +21,7 @@ import { extractDocumentInfo } from '../lib/document-extract.js';
 import { UPLOADS_DIR } from '../lib/media.js';
 import { PAYMENT_TOLERANCE } from '../lib/payment-tolerance.js';
 import { taskInclude, serializeTask } from './tasks.js';
+import { quoteBillings } from '../lib/quote-billing.js';
 
 export const documentsRouter = Router();
 // Dérivé de UPLOADS_DIR (respecte process.env.UPLOADS_DIR en prod) plutôt que d'un chemin
@@ -243,7 +244,10 @@ documentsRouter.get(
       }),
       prisma.document.count({ where }),
     ]);
-    res.json({ items, page, pageSize, totalCount, totalPages: Math.max(1, Math.ceil(totalCount / pageSize)) });
+    // devis : part déjà facturée (barre verte dans la liste)
+    const billings = await quoteBillings(items.filter((d) => d.kind === 'quote'));
+    const rows = items.map((d) => { const b = billings.get(d.id); return b ? { ...d, billedHt: b.billedHt, billedPct: b.billedPct } : d; });
+    res.json({ items: rows, page, pageSize, totalCount, totalPages: Math.max(1, Math.ceil(totalCount / pageSize)) });
   }),
 );
 
@@ -280,7 +284,8 @@ documentsRouter.get(
         counterparty: m.bankTransaction.counterpartyName,
       }))
       .sort((a, b) => (a.date?.getTime() ?? 0) - (b.date?.getTime() ?? 0));
-    res.json({ document: { ...doc, hasBankMatch: payments.length > 0, payments }, company });
+    const billing = doc.kind === 'quote' ? (await quoteBillings([doc])).get(doc.id) : undefined;
+    res.json({ document: { ...doc, hasBankMatch: payments.length > 0, payments, billing }, company });
   }),
 );
 
@@ -535,7 +540,11 @@ documentsRouter.post(
   }),
 );
 
-/** Devis accepté -> facture brouillon liée. */
+/**
+ * Devis -> facture brouillon liée, en une ou plusieurs fois.
+ *  - { depositPct } : facture d'ACOMPTE de ce pourcentage de ce qu'il RESTE à facturer sur le devis (1er acompte : % du devis ; suivants : % du solde restant).
+ *  - sans pourcentage : facture complète ; si des factures ont déjà été faites sur ce devis, c'est le SOLDE : lignes du devis + une ligne négative par acompte déjà facturé.
+ */
 documentsRouter.post(
   '/:id/convert',
   requireAuth(...OFFICE),
@@ -543,7 +552,12 @@ documentsRouter.post(
     const src = await prisma.document.findUnique({ where: { id: req.params.id }, include: { lines: true } });
     if (!src) throw new HttpError(404, 'Document introuvable');
     if (src.kind !== 'quote') throw new HttpError(422, 'Seul un devis se convertit en facture');
-    const target = (req.body?.kind as string) === 'deposit_invoice' ? 'deposit_invoice' : 'invoice';
+    const billing = (await quoteBillings([src])).get(src.id)!;
+    const depositPct = Number(req.body?.depositPct);
+    const isDeposit = depositPct > 0 || (req.body?.kind as string) === 'deposit_invoice';
+    if (isDeposit && !(depositPct > 0 && depositPct <= 100)) throw new HttpError(422, 'Choisissez un pourcentage d’acompte entre 1 et 100.');
+    if (billing.invoices.length > 0 && billing.remainingHt <= 0.01) throw new HttpError(422, 'Ce devis est déjà entièrement facturé.');
+    const target = isDeposit ? 'deposit_invoice' : 'invoice';
     const seq = await nextCounter('doc:draft');
     const inv = await prisma.document.create({
       data: {
@@ -560,16 +574,27 @@ documentsRouter.post(
         createdById: req.user!.id,
       },
     });
-    const depositPct = Number(req.body?.depositPct);
-    const lines = target === 'deposit_invoice' && depositPct > 0
-      ? cloneLineRows(inv.id, [{
-          kind: 'item',
-          label: `Acompte ${depositPct} % sur devis ${src.number || src.draftRef}`,
-          description: null, qty: 1, unit: 'forfait',
-          unitPriceHt: Math.round(src.totalHt * (depositPct / 100) * 100) / 100,
-          discountPct: 0, vatRate: src.vatRate ?? 0.21, priceItemId: null,
-        }])
-      : cloneLineRows(inv.id, src.lines);
+    const ref = src.number || src.draftRef;
+    const eur = (n: number) => n.toLocaleString('fr-BE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    let lines;
+    if (isDeposit) {
+      const amount = Math.round(billing.remainingHt * (depositPct / 100) * 100) / 100;
+      lines = cloneLineRows(inv.id, [{
+        kind: 'item',
+        label: billing.billedHt > 0.01 ? `Acompte ${depositPct} % sur le solde du devis ${ref} (reste ${eur(billing.remainingHt)} € HT)` : `Acompte ${depositPct} % sur devis ${ref}`,
+        description: null, qty: 1, unit: 'forfait',
+        unitPriceHt: amount,
+        discountPct: 0, vatRate: src.vatRate ?? 0.21, priceItemId: null,
+      }]);
+    } else {
+      lines = cloneLineRows(inv.id, [
+        ...src.lines,
+        ...billing.invoices.filter((i) => i.netHt > 0.005).map((i) => ({
+          kind: 'item' as const, label: `Acompte déjà facturé (${i.number ?? i.draftRef})`, description: null, qty: 1, unit: 'forfait',
+          unitPriceHt: -i.netHt, discountPct: 0, vatRate: i.vatRate ?? src.vatRate ?? 0.21, priceItemId: null,
+        })),
+      ] as typeof src.lines);
+    }
     if (lines.length) {
       await prisma.documentLine.createMany({ data: lines });
       await refreshDocTotals(inv.id);

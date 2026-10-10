@@ -446,3 +446,34 @@ test('remplacer le PDF d’origine d’un document importé', async () => {
   bad.append('file', new Blob(['x'], { type: 'text/plain' }), 'x.txt');
   assert.equal((await fetch(`${base}/api/documents/${dep.id}/original.pdf`, { method: 'POST', headers: { authorization: `Bearer ${token}` }, body: bad })).status, 422);
 });
+
+test('devis facturé en plusieurs fois : acompte 50 %, puis 10 % du solde, puis le solde déduit les acomptes', async () => {
+  const quote = await (await fetch(`${base}/api/documents`, {
+    method: 'POST', headers: auth(),
+    body: JSON.stringify({ kind: 'quote', worksiteId: wsId, lines: [{ label: 'Travaux', qty: 1, unitPriceHt: 10000, vatRate: 0.21 }] }),
+  })).json();
+  const qid = quote.document.id as string;
+  await fetch(`${base}/api/documents/${qid}/issue`, { method: 'POST', headers: auth(), body: '{}' });
+  const convert = (body: object) => fetch(`${base}/api/documents/${qid}/convert`, { method: 'POST', headers: auth(), body: JSON.stringify(body) });
+  const billing = async () => (await (await fetch(`${base}/api/documents/${qid}`, { headers: auth() })).json()).document.billing;
+
+  const a1 = await (await convert({ depositPct: 50 })).json();
+  assert.equal(a1.document.kind, 'deposit_invoice');
+  assert.equal(a1.document.totalHt, 5000);
+  assert.equal((await billing()).billedPct, 50);
+
+  const a2 = await (await convert({ depositPct: 10 })).json();
+  assert.equal(a2.document.totalHt, 500, '10 % de ce qu’il reste (5 000), pas du devis');
+  assert.match(a2.document.lines[0].label, /solde/);
+  const b = await billing();
+  assert.equal(b.billedHt, 5500); assert.equal(b.remainingHt, 4500); assert.equal(b.billedPct, 55);
+
+  const solde = await (await convert({})).json();
+  assert.equal(solde.document.kind, 'invoice');
+  assert.equal(solde.document.totalHt, 4500, 'le solde = devis moins les acomptes déjà facturés');
+  assert.equal(solde.document.lines.filter((l: { unitPriceHt: number }) => l.unitPriceHt < 0).length, 2);
+  assert.equal((await billing()).billedPct, 100);
+
+  assert.equal((await convert({ depositPct: 20 })).status, 422, 'devis déjà entièrement facturé');
+  assert.equal((await convert({ depositPct: 150 })).status, 422);
+});

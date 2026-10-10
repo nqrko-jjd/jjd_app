@@ -12,6 +12,7 @@ import { AssigneePicker } from '@/components/AssigneePicker';
 import { WorksitePicker, type WsPickerOption } from '@/components/WorksitePicker';
 import { DocumentDelivery } from '@/components/DocumentDelivery';
 import { CreditNoteModal } from '@/components/CreditNoteModal';
+import { DepositModal } from '@/components/DepositModal';
 import { RichText } from '@/components/RichText';
 import { QuotePlanModal } from '@/components/QuotePlanModal';
 import { aiNote, setFlash, AI_WAIT, type AiInfo } from '@/lib/ai-flash';
@@ -55,6 +56,9 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
   const [tasksModal, setTasksModal] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
   const [creditOpen, setCreditOpen] = useState(false);
+  const [depositOpen, setDepositOpen] = useState(false);
+  // lien « Facture d'acompte… » de la liste des devis : ouvre directement la fenêtre de choix du pourcentage
+  useEffect(() => { if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('acompte') === '1') setDepositOpen(true); }, []);
   const [billingOpen, setBillingOpen] = useState(false);
   const [deliveryOpen, setDeliveryOpen] = useState(false);
   const moreActions = useRef<HTMLDetailsElement>(null);
@@ -282,6 +286,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
         </div>
       )}
 
+      {depositOpen && <DepositModal quote={{ id: doc.id, number: doc.number, draftRef: doc.draftRef, vatRate: doc.vatRate, totalHt: doc.totalHt, billing: doc.billing }} onClose={() => setDepositOpen(false)} onCreated={(nid) => router.push(`/app/documents/${nid}`)} />}
       {creditOpen && <CreditNoteModal invoice={{ id: doc.id, number: doc.number, totalTtc: doc.totalTtc }} creditedTtc={creditedTtc} onClose={() => setCreditOpen(false)} onCreated={(nid) => router.push(`/app/documents/${nid}`)} />}
 
       {(doc.parent || doc.children.length > 0) && (
@@ -315,7 +320,8 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
             <details ref={moreActions} className="doc-more-actions"><summary><MoreHorizontal size={18}/>Actions <ChevronDown size={15}/></summary><div className="doc-more-panel">
               <div className="doc-action-group"><h3>Suivi du document</h3>
               {locked && isInvoiceLike && doc.status !== 'paid' && <button disabled={!!busy} onClick={() => act('/mark-paid', {})}>Marquer comme payée</button>}
-              {isQuote && <button disabled={!!busy} onClick={() => act('/convert', {})}>Créer une facture à partir du devis</button>}
+              {isQuote && <button disabled={!!busy} onClick={() => { moreActions.current?.removeAttribute('open'); setDepositOpen(true); }}>Créer une facture d’acompte (%)…</button>}
+              {isQuote && <button disabled={!!busy} onClick={() => act('/convert', {})}>{doc.billing && doc.billing.billedHt > 0.01 ? `Facturer le solde (${formatEur(doc.billing.remainingHt)} HT)` : 'Créer une facture à partir du devis'}</button>}
               {isQuote && locked && <><button disabled={!!busy} onClick={() => act('/status', { status: 'accepted' })}>Marquer le devis accepté</button><button disabled={!!busy} onClick={() => act('/status', { status: 'declined' })}>Marquer le devis refusé</button></>}
               {isInvoiceLike && locked && doc.status !== 'credited' && creditRemaining > 0.01 && <button disabled={!!busy} onClick={() => setCreditOpen(true)}>Créer une note de crédit</button>}
 </div>

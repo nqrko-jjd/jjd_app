@@ -71,6 +71,7 @@ export interface DocFull {
   parent: { id: string; kind: string; number: string | null; draftRef: string | null } | null;
   children: { id: string; kind: string; number: string | null; draftRef: string | null; status: string; totalTtc?: number; issuedOn?: string | null; lockedAt?: string | null }[];
   lines: DocLine[];
+  billing?: { totalHt: number; billedHt: number; remainingHt: number; billedPct: number; invoices: { id: string; number: string | null; draftRef: string | null; kind: string; status: string; netHt: number }[] };
 }
 
 export interface Company {

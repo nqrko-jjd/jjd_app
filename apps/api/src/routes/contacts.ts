@@ -1,5 +1,6 @@
 import { supplierAccounts } from '../lib/supplier-account.js';
 import { allocationSnapshot } from '../lib/bank-allocation.js';
+import { purchaseRemaining } from '../lib/payment-tolerance.js';
 import { Router } from 'express';
 import { contactInput, contactPersonInput, normalizeName, round2 } from '@jjd/shared';
 import { prisma } from '../db.js';
@@ -186,7 +187,7 @@ contactsRouter.get(
         // solde ouvert : une facture déjà marquée payée ne pèse plus dans le compte,
         // une note de crédit reste toujours en déduction (elle n'est jamais "payée")
         const paid = allocations.ledgerPaid.has(e.id) ? allocations.ledgerPaid.get(e.id)! : isPaidStr(e.paymentStatus) ? ttc : 0;
-        const remaining = round2(Math.max(0, ttc - paid));
+        const remaining = purchaseRemaining(ttc, paid);
         if (remaining > 0.01) {
           balance += remaining;
           balanceLedger.push({ id: e.id, date: e.date, docNumber: e.docNumber, direction: e.direction, ht: e.ht ?? 0, ttc: remaining, balance: round2(balance) });
@@ -204,7 +205,7 @@ contactsRouter.get(
       contact: {
         ...contact,
         clientAccount: clientAcct,
-        purchases: [...ledger].reverse().map((p) => ({ ...p, paid: allocations.ledgerPaid.has(p.id) ? (allocations.ledgerPaid.get(p.id) ?? 0) + 0.01 >= Math.abs(p.ttc ?? p.ht) : isPaidStr(p.paymentStatus), hasPdf: !!p.pdfPath })),
+        purchases: [...ledger].reverse().map((p) => ({ ...p, paid: allocations.ledgerPaid.has(p.id) ? purchaseRemaining(Math.abs(p.ttc ?? p.ht), allocations.ledgerPaid.get(p.id) ?? 0) === 0 : isPaidStr(p.paymentStatus), hasPdf: !!p.pdfPath })),
         purchaseBalance: [...balanceLedger].reverse(),
         supplierAccount,
         purchaseSummary: {

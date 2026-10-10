@@ -16,6 +16,7 @@ import { parseAmount, parseLooseDate } from '@jjd/shared';
 import { syncLedgerEntryForDocument } from '../lib/documents.js';
 import { supplierAccounts } from '../lib/supplier-account.js';
 import { allocationSnapshot, freezeLegacyAllocations } from '../lib/bank-allocation.js';
+import { purchaseRemaining } from '../lib/payment-tolerance.js';
 import { PAYMENT_TOLERANCE } from '../lib/payment-tolerance.js';
 
 export const financeRouter = Router();
@@ -397,7 +398,7 @@ async function alreadySettled(
   const snapshot = await allocationSnapshot();
   const numbers = ledgers.filter(l => l.direction === 'sale' && l.docNumber).map(l => l.docNumber!);
   const originals = numbers.length ? await prisma.document.findMany({ where: { number: { in: numbers }, kind: { in: ['invoice', 'deposit_invoice'] } } }) : [];
-  const ledgerRemaining = new Map(ledgers.map(l => [l.id, snapshot.ledgerPaid.has(l.id) ? Math.max(0, Math.round((Math.abs(l.ttc ?? l.ht) - (snapshot.ledgerPaid.get(l.id) ?? 0)) * 100) / 100) : /^payé$/i.test(l.paymentStatus ?? '') ? 0 : Math.abs(l.ttc ?? l.ht)]));
+  const ledgerRemaining = new Map(ledgers.map(l => [l.id, snapshot.ledgerPaid.has(l.id) ? (l.direction === 'purchase' ? purchaseRemaining(Math.abs(l.ttc ?? l.ht), snapshot.ledgerPaid.get(l.id) ?? 0) : Math.max(0, Math.round((Math.abs(l.ttc ?? l.ht) - (snapshot.ledgerPaid.get(l.id) ?? 0)) * 100) / 100)) : /^payé$/i.test(l.paymentStatus ?? '') ? 0 : Math.abs(l.ttc ?? l.ht)]));
   for (const l of ledgers) {
     if (l.direction !== 'sale' || snapshot.ledgerPaid.has(l.id)) continue;
     const twins = originals.filter(d => d.number === l.docNumber && (!l.contactId || d.contactId === l.contactId));
@@ -599,7 +600,7 @@ async function saveAllocation(txId: string, body: Record<string, unknown>, match
     else await db.bankTransactionMatch.create({ data: { bankTransactionId: txId, ledgerEntryId: ledgerId, documentId, amount } });
     const contactId = ledger?.contactId ?? doc?.contactId;
     await db.bankTransaction.update({ where: { id: txId }, data: { matchConfidence: 'manual', matchedAt: new Date(), ...(!tx.contactId && contactId ? { contactId } : {}) } });
-    if (ledger && !ledger.documentId) await db.ledgerEntry.update({ where: { id: ledger.id }, data: { paymentStatus: paid - oldAmount + amount + 0.01 >= total ? 'Payé' : 'Partiel', paidOn: tx.bookingDate ?? new Date() } });
+    if (ledger && !ledger.documentId) await db.ledgerEntry.update({ where: { id: ledger.id }, data: { paymentStatus: (ledger.direction === 'purchase' ? purchaseRemaining(total, paid - oldAmount + amount) === 0 : paid - oldAmount + amount + 0.01 >= total) ? 'Payé' : 'Partiel', paidOn: tx.bookingDate ?? new Date() } });
     return { ledgerId, documentId, amount };
   }, { isolationLevel: 'Serializable', timeout: 30000 });
 }
@@ -628,7 +629,7 @@ financeRouter.delete('/bank/:id/matches/:matchId', requireAuth(...OFFICE), async
       const l = await db.ledgerEntry.findUnique({ where: { id: found.ledgerEntryId } });
       if (l && !l.documentId) {
         const paid = snapshot.ledgerPaid.get(l.id) ?? 0;
-        await db.ledgerEntry.update({ where: { id: l.id }, data: { paymentStatus: paid === 0 ? 'Non payé' : paid + 0.01 >= Math.abs(l.ttc ?? l.ht) ? 'Payé' : 'Partiel', paidOn: paid > 0 ? l.paidOn : null } });
+        await db.ledgerEntry.update({ where: { id: l.id }, data: { paymentStatus: paid === 0 ? 'Non payé' : (l.direction === 'purchase' ? purchaseRemaining(Math.abs(l.ttc ?? l.ht), paid) === 0 : paid + 0.01 >= Math.abs(l.ttc ?? l.ht)) ? 'Payé' : 'Partiel', paidOn: paid > 0 ? l.paidOn : null } });
       }
     }
     if (!await db.bankTransactionMatch.count({ where: { bankTransactionId: req.params.id } })) await db.bankTransaction.update({ where: { id: req.params.id }, data: { matchConfidence: null, matchedAt: null } });

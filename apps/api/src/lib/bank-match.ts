@@ -25,7 +25,7 @@ import { prisma } from '../db.js';
 import { round2 } from '@jjd/shared';
 import { syncLedgerEntryForDocument } from './documents.js';
 import { allocationSnapshot, freezeLegacyAllocations } from './bank-allocation.js';
-import { PAYMENT_TOLERANCE } from './payment-tolerance.js';
+import { PAYMENT_TOLERANCE, purchaseRemaining } from './payment-tolerance.js';
 
 /**
  * Recalcule `paidAmount`/`status`/`paidOn` d'une facture de vente à partir des
@@ -463,7 +463,7 @@ export async function autoMatchAll(
         await db.bankTransactionMatch.create({ data: { bankTransactionId: u.id, ledgerEntryId: u.ledgerId, amount } });
         await db.bankTransaction.update({ where: { id: u.id }, data: { matchConfidence: u.confidence, matchedAt: now } });
         invoicePaid.set(l.id, paidAmount + amount); used.set(tx.id, (used.get(tx.id) ?? 0) + amount);
-        if (!documentIdByLedger.get(l.id)) await db.ledgerEntry.update({ where: { id: l.id }, data: { paymentStatus: paidAmount + amount + 0.01 >= Math.abs(l.ttc ?? l.ht) ? 'Payé' : 'Partiel', paidOn: tx.bookingDate ?? now } });
+        if (!documentIdByLedger.get(l.id)) await db.ledgerEntry.update({ where: { id: l.id }, data: { paymentStatus: (l.direction === 'purchase' ? purchaseRemaining(Math.abs(l.ttc ?? l.ht), paidAmount + amount) === 0 : paidAmount + amount + 0.01 >= Math.abs(l.ttc ?? l.ht)) ? 'Payé' : 'Partiel', paidOn: tx.bookingDate ?? now } });
         written.push(u);
       }
       return written;

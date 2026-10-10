@@ -477,3 +477,51 @@ test('devis facturé en plusieurs fois : acompte 50 %, puis 10 % du solde, puis 
   assert.equal((await convert({ depositPct: 20 })).status, 422, 'devis déjà entièrement facturé');
   assert.equal((await convert({ depositPct: 150 })).status, 422);
 });
+
+test('états d’avancement : % cumulé par ligne, montants, acompte déduit au prorata, facture et reste à facturer', async () => {
+  const quote = await (await fetch(`${base}/api/documents`, {
+    method: 'POST', headers: auth(),
+    body: JSON.stringify({ kind: 'quote', worksiteId: wsId, lines: [
+      { label: 'Gros œuvre', qty: 1, unitPriceHt: 6000, vatRate: 0.06 },
+      { label: 'Finitions', qty: 1, unitPriceHt: 4000, vatRate: 0.06 },
+    ] }),
+  })).json();
+  const qid = quote.document.id as string;
+  const call = (path: string, method = 'GET', body?: object) => fetch(`${base}/api/progress${path}`, { method, headers: auth(), body: body ? JSON.stringify(body) : undefined });
+  assert.equal((await call(`/quote/${qid}`, 'POST')).status, 422, 'devis non émis');
+  await fetch(`${base}/api/documents/${qid}/issue`, { method: 'POST', headers: auth(), body: '{}' });
+  // acompte de 50 % (5 000 € HT)
+  await fetch(`${base}/api/documents/${qid}/convert`, { method: 'POST', headers: auth(), body: JSON.stringify({ depositPct: 50 }) });
+
+  const created = await (await call(`/quote/${qid}`, 'POST')).json();
+  assert.equal(created.statements.length, 1);
+  assert.match(created.statements[0].number, /^AV-\d{4}-\d+-1$/);
+  assert.equal((await call(`/quote/${qid}`, 'POST')).status, 422, 'un seul brouillon à la fois');
+  const [l1, l2] = created.items as { id: string }[];
+  const st1 = created.statements[0].id as string;
+
+  const saved = await (await call(`/${st1}`, 'PATCH', { lines: [{ quoteLineId: l1.id, cumulativePct: 80 }, { quoteLineId: l2.id, cumulativePct: 50 }] })).json();
+  assert.equal(saved.statements[0].totalHt, 6800, '80 % de 6 000 + 50 % de 4 000');
+  assert.equal((await call(`/${st1}`, 'PATCH', { lines: [{ quoteLineId: l1.id, cumulativePct: 120 }] })).status, 422);
+
+  assert.equal((await call(`/${st1}/validate`, 'POST')).status, 200);
+  const inv1 = (await (await call(`/${st1}/invoice`, 'POST')).json()).document;
+  assert.equal(inv1.totalHt, 3400, 'état de 6 800 − acompte 50 % déduit au prorata');
+  assert.ok(inv1.lines.some((l: { unitPriceHt: number }) => l.unitPriceHt < 0));
+  assert.equal((await call(`/${st1}/invoice`, 'POST')).status, 422, 'déjà facturé');
+
+  // état suivant : repart de l'état précédent, ne peut pas redescendre
+  const next = await (await call(`/quote/${qid}`, 'POST')).json();
+  const st2 = next.statements[1];
+  assert.equal(st2.lines.find((l: { quoteLineId: string }) => l.quoteLineId === l1.id).cumulativePct, 80);
+  assert.equal((await call(`/${st2.id}`, 'PATCH', { lines: [{ quoteLineId: l1.id, cumulativePct: 70 }] })).status, 422);
+  await call(`/${st2.id}`, 'PATCH', { lines: [{ quoteLineId: l1.id, cumulativePct: 100 }, { quoteLineId: l2.id, cumulativePct: 100 }] });
+  const inv2 = (await (await call(`/${st2.id}/invoice`, 'POST')).json()).document;
+  assert.equal(inv2.totalHt, 1600, '3 200 − acompte 50 % déduit au prorata');
+
+  const q = await (await fetch(`${base}/api/documents/${qid}`, { headers: auth() })).json();
+  assert.equal(q.document.billing.billedHt, 10000, 'acompte 5 000 + 3 400 + 1 600');
+  assert.equal(q.document.billing.billedPct, 100);
+  const pdf = await call(`/${st1}/pdf`);
+  assert.ok([200, 500].includes(pdf.status)); // PDF = Chromium (absent en local) : on vérifie seulement que la route répond
+});

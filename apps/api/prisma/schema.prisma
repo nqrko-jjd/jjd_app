@@ -664,6 +664,7 @@ model Document {
   lines          DocumentLine[]
   bankMatches    BankTransaction[] @relation("DocumentBankMatches")
   bankMatchLines BankTransactionMatch[] @relation("DocumentBankMatchLines")
+  progressStatements ProgressStatement[]
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
 
@@ -1731,4 +1732,34 @@ model MessageTranslation {
   createdAt DateTime @default(now())
 
   @@id([messageId, locale])
+}
+
+/// État d'avancement d'un devis : avancement cumulé (en %) de chaque ligne du devis, facturé au fil des mois (voir lib/progress.ts).
+model ProgressStatement {
+  id         String   @id @default(cuid())
+  quoteId    String
+  quote      Document @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  seq        Int // rang de l'état sur ce devis (1, 2, 3…)
+  number     String   @unique // AV-2026-277-1
+  status     String   @default("draft") // draft | validated | invoiced
+  invoiceId  String? // facture créée depuis cet état
+  note       String?
+  createdAt  DateTime @default(now())
+  validatedAt DateTime?
+
+  lines ProgressStatementLine[]
+
+  @@unique([quoteId, seq])
+  @@index([status])
+}
+
+model ProgressStatementLine {
+  id            String            @id @default(cuid())
+  statementId   String
+  statement     ProgressStatement @relation(fields: [statementId], references: [id], onDelete: Cascade)
+  quoteLineId   String
+  cumulativePct Float // avancement cumulé de la ligne à la fin de cet état (0–100)
+  amountHt      Float // montant de CET état pour la ligne = total ligne × (cumulé − cumulé précédent)
+
+  @@unique([statementId, quoteLineId])
 }

@@ -24,6 +24,7 @@ import { financeRouter } from './routes/finance.js';
 import { expensesRouter } from './routes/expenses.js';
 import { pontoRouter } from './routes/ponto.js';
 import { documentsRouter, priceItemsRouter } from './routes/documents.js';
+import { progressRouter } from './routes/progress.js';
 import { settingsRouter } from './routes/settings.js';
 import { entityScopeMiddleware } from './lib/entity-scope.js';
 import { publicRouter } from './routes/public.js';
@@ -79,6 +80,7 @@ export function createApp() {
   app.use('/api/finance', financeRouter);
   app.use('/api/ponto', pontoRouter);
   app.use('/api/documents', documentsRouter);
+  app.use('/api/progress', progressRouter);
   app.use('/api/price-items', priceItemsRouter);
   app.use('/api/settings', settingsRouter);
   app.use('/api/planning', planningRouter);

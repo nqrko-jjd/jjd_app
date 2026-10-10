@@ -591,7 +591,7 @@ documentsRouter.post(
       lines = cloneLineRows(inv.id, [
         ...src.lines,
         ...billing.invoices.filter((i) => i.netHt > 0.005).map((i) => ({
-          kind: 'item' as const, label: `Acompte déjà facturé (${i.number ?? i.draftRef})`, description: null, qty: 1, unit: 'forfait',
+          kind: 'item' as const, label: `${i.kind === 'deposit_invoice' ? 'Acompte déjà facturé' : 'Déjà facturé'} (${i.number ?? i.draftRef})`, description: null, qty: 1, unit: 'forfait',
           unitPriceHt: -i.netHt, discountPct: 0, vatRate: i.vatRate ?? src.vatRate ?? 0.21, priceItemId: null,
         })),
       ] as typeof src.lines);

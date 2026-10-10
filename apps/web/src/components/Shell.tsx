@@ -82,6 +82,7 @@ const NAV: Group[] = [
       { href: '/app/crm', label: 'Pipeline', ic: TrendingUp },
       { href: '/app/boite-ia', label: 'Boîte IA', ic: Sparkles, roles: ['admin', 'office'] },
       { href: '/app/documents', label: 'Devis & factures', ic: FileText, roles: ['admin', 'office'] },
+      { href: '/app/avancements', label: 'États d’avancement', ic: ListChecks, roles: ['admin', 'office'] },
       { href: '/app/achats', label: 'Achats / Dépenses', ic: Wallet, roles: ['admin', 'office'] },
       { href: '/app/analyse', label: 'Analyse', ic: BarChart3, roles: ['admin', 'office'] },
       { href: '/app/finances', label: 'Finances', ic: Euro, roles: ['admin', 'office'] },

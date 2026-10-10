@@ -55,8 +55,7 @@ export async function supplierAccounts() {
       if (ids.length !== 1 || !ids[0] || suppliers.length !== t.matches.length) continue;
       cid = ids[0]; name = contacts.find(c => c.id === cid)?.name ?? suppliers[0]?.supplierName ?? undefined;
     }
-    const absorbed = settlements.get(cid ?? '')?.absorbedAdvances.find(a => a.id === t.id)?.amount ?? 0;
-    const remaining = round2(Math.max(0, Math.abs(t.amount ?? 0) - (snapshot.transactions.get(t.id) ?? 0) - absorbed));
+    const remaining = round2(Math.max(0, Math.abs(t.amount ?? 0) - (snapshot.transactions.get(t.id) ?? 0)));
     if (remaining <= 0.01) continue;
     if (remaining <= PURCHASE_PAYMENT_TOLERANCE && t.matches.length > 0 && t.matches.every(m => { const l = ledger.find(l => l.id === m.ledgerEntryId); return !!l && l.direction === 'purchase' && purchaseRemaining(Math.abs(l.ttc ?? l.ht), snapshot.ledgerPaid.get(l.id) ?? 0) === 0; })) continue;
     const g = group(cid, name ?? 'Fournisseur');

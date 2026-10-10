@@ -44,6 +44,20 @@ export async function allocationSnapshot(db: Prisma.TransactionClient = prisma) 
     if (m.ledgerEntryId) ledgerPaid.set(m.ledgerEntryId, result.invoices.get(key) ?? 0);
     if (key.startsWith('document:')) docPaid.set(key.slice(9), result.invoices.get(key) ?? 0);
   }
+  // Historical advances absorbed by a confirmed supplier statement are already consumed.
+  const reconciliations = await db.auditLog.findMany({ where: { action: 'supplier_statement_reconciled', entity: 'Contact' }, orderBy: [{ at: 'desc' }, { id: 'desc' }], select: { entityId: true, meta: true } });
+  const seen = new Set<string>();
+  const absorbed = new Map<string, number>();
+  for (const r of reconciliations) {
+    const meta = r.meta as { accountSettlement?: { absorbedAdvances: { id: string; amount: number }[] } } | null;
+    if (!r.entityId || seen.has(r.entityId) || !meta?.accountSettlement) continue;
+    seen.add(r.entityId);
+    for (const a of meta.accountSettlement.absorbedAdvances) if (Number.isFinite(a.amount) && a.amount > 0) absorbed.set(a.id, a.amount);
+  }
+  if (absorbed.size) {
+    const banks = await db.bankTransaction.findMany({ where: { id: { in: [...absorbed.keys()] } }, select: { id: true, amount: true } });
+    for (const bank of banks) result.transactions.set(bank.id, Math.min(cents(bank.amount ?? 0), cents(result.transactions.get(bank.id) ?? 0) + cents(absorbed.get(bank.id) ?? 0)) / 100);
+  }
   return { ...result, matches, ledgerPaid, docPaid, invoiceKeys: new Map(matches.map(m => [m.id, keyFor(m)])) };
 }
 

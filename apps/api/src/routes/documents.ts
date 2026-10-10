@@ -581,7 +581,8 @@ documentsRouter.post(
       const amount = Math.round(billing.remainingHt * (depositPct / 100) * 100) / 100;
       lines = cloneLineRows(inv.id, [{
         kind: 'item',
-        label: billing.billedHt > 0.01 ? `Acompte ${depositPct} % sur le solde du devis ${ref} (reste ${eur(billing.remainingHt)} € HT)` : `Acompte ${depositPct} % sur devis ${ref}`,
+        // même formulation que TrustUp : numéroté, avec le pourcentage et le devis d'origine
+        label: `Facture d’acompte n° ${billing.invoices.filter((i) => i.kind === 'deposit_invoice').length + 1} de ${depositPct} %, sur base du devis ${ref}${billing.billedHt > 0.01 ? ` (solde restant : ${eur(billing.remainingHt)} € HT)` : ''}`,
         description: null, qty: 1, unit: 'forfait',
         unitPriceHt: amount,
         discountPct: 0, vatRate: src.vatRate ?? 0.21, priceItemId: null,

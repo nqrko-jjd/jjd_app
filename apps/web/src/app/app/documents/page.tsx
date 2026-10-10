@@ -338,7 +338,6 @@ function DocumentsInner() {
             <div
               key={d.id}
               className={`doc-item${ctx.menu?.row.id === d.id ? ' ctx-target' : ''}`}
-              style={d.kind === 'quote' && (d.billedPct ?? 0) > 0 ? { backgroundImage: `linear-gradient(90deg, rgba(47,143,91,0.20) ${d.billedPct}%, transparent ${d.billedPct}%)`, backgroundRepeat: 'no-repeat' } : undefined}
               onClick={rowNav(`/app/documents/${d.id}`, (h) => router.push(h))}
               onContextMenu={(e) => ctx.open(e, d)}
             >
@@ -359,8 +358,9 @@ function DocumentsInner() {
                     ? <span className="chip" style={{ whiteSpace: 'nowrap' }} title="Chantier lié">🏗 {d.worksite.ref}</span>
                     : <span className="chip" style={{ color: 'var(--ink-3)', borderStyle: 'dashed' }} title="Aucun chantier lié">Sans chantier</span>}
                   {d.source === 'ai-draft' && <span className="badge warn" title="Créé par l'assistant IA — à vérifier avant validation">✨ IA</span>}
-                  <DocStatusBadge status={d.status} />
-                  {d.kind === 'quote' && (d.billedPct ?? 0) > 0 && <span className="badge ok" title={`${formatEur(d.billedHt ?? 0)} HT déjà facturé`}>Facturé {d.billedPct} %</span>}
+                  {d.kind === 'quote' && (d.billedPct ?? 0) > 0
+                    ? <span className={`badge ${d.status === 'accepted' ? 'ok' : 'primary'}`} title={`${d.billedPct} % facturé (${formatEur(d.billedHt ?? 0)} HT)`} style={{ backgroundImage: `linear-gradient(90deg, ${d.status === 'accepted' ? 'rgba(47,143,91,0.55)' : 'rgba(61,127,196,0.5)'} ${d.billedPct}%, transparent ${d.billedPct}%)` }}>{DOC_STATUS_LABEL[d.status] ?? d.status}</span>
+                    : <DocStatusBadge status={d.status} />}
                   {(d.status === 'paid' || d.status === 'partial') && d.paidOn && (
                     <span className="muted" style={{ fontSize: '0.76rem' }}>le {formatDateBE(d.paidOn)}</span>
                   )}

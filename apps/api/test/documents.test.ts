@@ -464,7 +464,7 @@ test('devis facturé en plusieurs fois : acompte 50 %, puis 10 % du solde, puis 
 
   const a2 = await (await convert({ depositPct: 10 })).json();
   assert.equal(a2.document.totalHt, 500, '10 % de ce qu’il reste (5 000), pas du devis');
-  assert.match(a2.document.lines[0].label, /solde/);
+  assert.match(a2.document.lines[0].label, /acompte n° 2 de 10 %/);
   const b = await billing();
   assert.equal(b.billedHt, 5500); assert.equal(b.remainingHt, 4500); assert.equal(b.billedPct, 55);
 

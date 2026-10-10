@@ -291,6 +291,7 @@ model Contact {
   note           String?
   trustupId      String?
   source         String?
+  reminderMode   String? // null = relances de paiement selon le calendrier général ; 'off' = ne jamais relancer ce client
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -665,6 +666,7 @@ model Document {
   bankMatches    BankTransaction[] @relation("DocumentBankMatches")
   bankMatchLines BankTransactionMatch[] @relation("DocumentBankMatchLines")
   progressStatements ProgressStatement[]
+  reminders      InvoiceReminder[]
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
 
@@ -1762,4 +1764,26 @@ model ProgressStatementLine {
   amountHt      Float // montant de CET état pour la ligne = total ligne × (cumulé − cumulé précédent)
 
   @@unique([statementId, quoteLineId])
+}
+
+/// Relance de paiement d'une facture impayée (étape 1, 2, 3… du calendrier de relances) — voir lib/reminders.ts.
+model InvoiceReminder {
+  id         String    @id @default(cuid())
+  documentId String
+  document   Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  step       Int
+  status     String // sent | skipped | failed
+  auto       Boolean   @default(false) // envoyée par le calendrier automatique (sinon : validée à la main)
+  toEmail    String?
+  subject    String?
+  body       String?
+  daysLate   Int? // jours de retard au moment de la relance
+  balance    Float? // reste dû TTC au moment de la relance
+  error      String?
+  sentById   String?
+  createdAt  DateTime  @default(now())
+  sentAt     DateTime?
+
+  @@unique([documentId, step])
+  @@index([status])
 }

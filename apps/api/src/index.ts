@@ -5,6 +5,8 @@ import { prisma } from './db.js';
 import { invoiceMailboxConfigured, syncInvoiceMailbox } from './lib/invoice-mailbox.js';
 import { mailSuggestionsConfigured, syncMailSuggestions } from './lib/lead-mailbox.js';
 import { markOverdueInvoices, renumberFaDepositInvoices } from './lib/documents.js';
+import { runAutoReminders } from './lib/reminders.js';
+import { getDocPdfBuffer } from './routes/documents.js';
 import { backfillBankMatches } from './lib/bank-match.js';
 import { backfillWorksiteGeo } from './lib/worksite-geo.js';
 import { pontoConfigured } from './lib/ponto.js';
@@ -102,6 +104,10 @@ setInterval(() => { refreshPendingPeppol().then((n) => { if (n) console.log(`[pe
 // chantiers actifs sans point GPS : géolocalisés en arrière-plan à partir de leur adresse (1 requête/seconde max, voir lib/geocode.ts)
 setTimeout(() => { backfillWorksiteGeo().then((n) => { if (n) console.log(`[geo] ${n} chantier(s) géolocalisé(s) d'après leur adresse`); }).catch(() => {}); }, 45_000);
 setInterval(() => { runMarkOverdue().catch((e) => console.error('[overdue] échec :', e.message)); }, 60 * 60_000);
+// relances de paiement automatiques (désactivées tant que le bureau n'a pas activé le mode automatique dans « Relances »)
+const runReminders = () => runAutoReminders(getDocPdfBuffer).then((n) => { if (n) console.log(`[relances] ${n} relance(s) envoyée(s)`); }).catch((e) => console.error('[relances] échec :', e.message));
+setTimeout(runReminders, 120_000);
+setInterval(runReminders, 30 * 60_000);
 
 createApp().listen(env.port, '0.0.0.0', () => {
   // eslint-disable-next-line no-console

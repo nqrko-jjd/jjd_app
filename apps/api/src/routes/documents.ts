@@ -34,7 +34,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 
 /* ---------------------------------------------------------------- Documents */
 
 /** Buffer PDF d'un document : celui de TrustUp s'il existe, sinon généré à la volée. */
-async function getDocPdfBuffer(docId: string): Promise<{ buffer: Buffer; filename: string }> {
+export async function getDocPdfBuffer(docId: string): Promise<{ buffer: Buffer; filename: string }> {
   const doc = await prisma.document.findUnique({ where: { id: docId }, include: docInclude });
   if (!doc) throw new HttpError(404, 'Document introuvable');
   const filename = `${(doc.number ?? doc.draftRef ?? doc.id).replace(/[/\\]/g, '-')}.pdf`;

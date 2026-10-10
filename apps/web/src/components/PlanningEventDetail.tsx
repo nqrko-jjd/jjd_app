@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { vehicleLabel } from '@/lib/vehicle';
 import Link from 'next/link';
 import { api } from '@/lib/api';
@@ -32,8 +33,8 @@ export function PlanningEventDetail({
     <div className="modal-scrim" onClick={onClose}>
       <div className="modal" style={{ maxWidth: 480 }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
-          <h2>{isMeeting ? 'Rendez-vous' : 'Affectation'} · {ev.worksite.ref}</h2>
-          <button className="btn ghost" onClick={onClose} aria-label="Fermer">✕</button>
+          <h2>{isMeeting ? tr("Rendez-vous") : 'Affectation'} · {ev.worksite.ref}</h2>
+          <button className="btn ghost" onClick={onClose} aria-label={tr("Fermer")}>✕</button>
         </div>
         <div className="modal-body" style={{ display: 'block', maxHeight: '72vh', overflowY: 'auto' }}>
           <div className="plan-detail-heading">
@@ -135,10 +136,8 @@ export function PlanningEventDetail({
               await api(`/api/planning/${ev.id}`, { method: 'DELETE' });
               onDeleted();
             }}
-          >
-            Retirer
-          </button>
-          <button className="btn" onClick={onDuplicate}>Dupliquer</button>
+          > {tr("Retirer")} </button>
+          <button className="btn" onClick={onDuplicate}>{tr("Dupliquer")}</button>
           <button className="btn primary" onClick={onEdit}>{isMeeting ? 'Modifier le rendez-vous' : 'Modifier l’affectation'}</button>
         </div>
         <div className="modal-foot" style={{ borderTop: 'none', paddingTop: 0, justifyContent: 'space-between' }}>

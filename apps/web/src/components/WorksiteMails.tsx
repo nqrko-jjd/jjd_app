@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { useEffect, useMemo, useState } from 'react';
 import { Mail, Paperclip, Plus, Search, StickyNote, Trash2, ArrowLeft, Lock } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -42,8 +43,8 @@ export function WorksiteMails({ worksiteId, onChanged }: { worksiteId: string; o
           <div className="mx-sub"><Lock size={12} /> Visible du bureau uniquement — jamais des chefs de chantier ni des ouvriers.</div>
         </div>
         <div className="row" style={{ gap: '0.5rem', flexWrap: 'wrap' }}>
-          <label className="mx-search"><Search size={15} /><input className="input" placeholder="Rechercher…" aria-label="Rechercher dans les mails" value={q} onChange={(e) => setQ(e.target.value)} /></label>
-          <button className="btn primary" onClick={() => { setComposing(true); setSel(null); }}><Plus size={15} style={{ marginRight: 4 }} />Ajouter une note</button>
+          <label className="mx-search"><Search size={15} /><input className="input" placeholder={tr("Rechercher…")} aria-label="Rechercher dans les mails" value={q} onChange={(e) => setQ(e.target.value)} /></label>
+          <button className="btn primary" onClick={() => { setComposing(true); setSel(null); }}><Plus size={15} style={{ marginRight: 4 }} />{tr("Ajouter une note")}</button>
         </div>
       </div>
 
@@ -115,8 +116,8 @@ function NoteComposer({ base, onCancel, onSaved }: { base: string; onCancel: () 
         <div className="field"><label>Note</label><textarea className="input" rows={7} autoFocus value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ce qui a été dit ou décidé…" /></div>
         {err && <p className="state error" role="alert">{err}</p>}
         <div className="row" style={{ gap: '0.5rem' }}>
-          <button className="btn primary" disabled={busy || !note.trim()} onClick={save}>{busy ? 'Enregistrement…' : 'Enregistrer la note'}</button>
-          <button className="btn ghost" onClick={onCancel}>Annuler</button>
+          <button className="btn primary" disabled={busy || !note.trim()} onClick={save}>{busy ? tr("Enregistrement…") : 'Enregistrer la note'}</button>
+          <button className="btn ghost" onClick={onCancel}>{tr("Annuler")}</button>
         </div>
       </div>
     </div>
@@ -152,11 +153,11 @@ function MailDetail({ base, id, onGone, onSaved }: { base: string; id: string; o
 
   const noteBox = (
     <section className="mx-note">
-      <div className="mx-note-head"><StickyNote size={15} /> {d.kind === 'note' ? 'Note' : 'Note de suivi'}<span className="mx-note-lock"><Lock size={11} /> bureau uniquement</span></div>
-      <textarea className="input" rows={d.kind === 'note' ? 8 : 3} value={note ?? ''} onChange={(e) => setNote(e.target.value)} placeholder="Ajouter une note de suivi sur ce mail…" />
+      <div className="mx-note-head"><StickyNote size={15} /> {d.kind === 'note' ? 'Note' : tr("Note de suivi")}<span className="mx-note-lock"><Lock size={11} /> {tr("bureau uniquement")}</span></div>
+      <textarea className="input" rows={d.kind === 'note' ? 8 : 3} value={note ?? ''} onChange={(e) => setNote(e.target.value)} placeholder={tr("Ajouter une note de suivi sur ce mail…")} />
       {err && <p className="state error" role="alert" style={{ margin: '0.4rem 0 0' }}>{err}</p>}
       <div className="row" style={{ gap: '0.5rem', marginTop: '0.5rem', justifyContent: 'space-between', flexWrap: 'wrap' }}>
-        <button className="btn primary" disabled={busy || !dirty || (d.kind === 'note' && !(note ?? '').trim())} onClick={saveNote}>{busy ? 'Enregistrement…' : dirty ? 'Enregistrer la note' : 'Enregistrée'}</button>
+        <button className="btn primary" disabled={busy || !dirty || (d.kind === 'note' && !(note ?? '').trim())} onClick={saveNote}>{busy ? tr("Enregistrement…") : dirty ? 'Enregistrer la note' : tr("Enregistrée")}</button>
         <button className="btn ghost" disabled={busy} onClick={remove}><Trash2 size={14} style={{ marginRight: 4 }} />{d.kind === 'note' ? 'Supprimer la note' : 'Retirer du suivi'}</button>
       </div>
     </section>

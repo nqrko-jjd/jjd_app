@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { use, useRef, useState } from 'react';
 import Link from 'next/link';
 import '../../warehouse-workflow.css';
@@ -135,7 +136,7 @@ export default function PreparationDetail({ params }: { params: Promise<{ id: st
 
       <div style={{ margin: '1.1rem 0' }}>
         <div className="row" style={{ justifyContent: 'space-between', marginBottom: 6 }}>
-          <strong>{done} / {total} articles prêts</strong>
+          <strong>{done} / {total} {tr("articles prêts")}</strong>
           <span className="muted">{pct} %</span>
         </div>
         <div style={{ height: 10, borderRadius: 999, background: 'var(--surface-2)', overflow: 'hidden' }}>
@@ -150,7 +151,7 @@ export default function PreparationDetail({ params }: { params: Promise<{ id: st
         </>
       )}
 
-      <div className="warehouse-list-heading"><strong>{open ? `${short.length} article${short.length > 1 ? 's' : ''} restant${short.length > 1 ? 's' : ''}` : 'Articles préparés'}</strong>{open && done > 0 && <button type="button" className="btn ghost" onClick={() => setShowReady((v) => !v)}>{showReady ? 'Masquer' : 'Voir'} les {done} prêts</button>}{scanning > 0 && <span role="status">{scanning} lecture{scanning > 1 ? 's' : ''}…</span>}</div>
+      <div className="warehouse-list-heading"><strong>{open ? `${short.length} article${short.length > 1 ? 's' : ''} restant${short.length > 1 ? 's' : ''}` : 'Articles préparés'}</strong>{open && done > 0 && <button type="button" className="btn ghost" onClick={() => setShowReady((v) => !v)}>{showReady ? 'Masquer' : 'Voir'} les {done} {tr("prêts")}</button>}{scanning > 0 && <span role="status">{scanning} lecture{scanning > 1 ? 's' : ''}…</span>}</div>
       <div style={{ display: 'grid', gap: '0.6rem', marginBottom: '1.4rem' }}>
         {order.lines.filter((l) => !open || showReady || l.pickedQty + EPS < l.qty).map((l) => {
           const complete = l.pickedQty + EPS >= l.qty;
@@ -175,7 +176,7 @@ export default function PreparationDetail({ params }: { params: Promise<{ id: st
                   {complete && <span className="badge ok">✓ complet</span>}
                 </div>
               </div>
-              {open && canPick && <div className="warehouse-line-actions">{!complete && <button type="button" className="btn" disabled={busy || scanning > 0 || loading} onClick={() => setPicked(l, l.qty)}>Tout préparer</button>}<button type="button" className="btn ghost" disabled={busy || scanning > 0} onClick={() => setEditing(editing === l.id ? null : l.id)}>{editing === l.id ? 'Fermer' : 'Ajuster'}</button>{!complete && <span className="muted">Reste {fmt(l.qty - l.pickedQty)} {unit}</span>}</div>}
+              {open && canPick && <div className="warehouse-line-actions">{!complete && <button type="button" className="btn" disabled={busy || scanning > 0 || loading} onClick={() => setPicked(l, l.qty)}>Tout préparer</button>}<button type="button" className="btn ghost" disabled={busy || scanning > 0} onClick={() => setEditing(editing === l.id ? null : l.id)}>{editing === l.id ? tr("Fermer") : 'Ajuster'}</button>{!complete && <span className="muted">Reste {fmt(l.qty - l.pickedQty)} {unit}</span>}</div>}
               {open && canPick && editing === l.id && (
                 <fieldset disabled={busy || scanning > 0} className="warehouse-edit-lock"><div className="row" style={{ gap: '0.4rem', marginTop: '0.6rem', alignItems: 'center' }}>
                   <span className="muted" style={{ fontSize: '0.8rem' }}>Quantité préparée :</span>
@@ -199,7 +200,7 @@ export default function PreparationDetail({ params }: { params: Promise<{ id: st
       {open && canPick && (
         <div className="row warehouse-actionbar" style={{ gap: '0.6rem', position: 'sticky', bottom: '0.8rem', background: 'var(--paper)', padding: '0.6rem 0' }}>
           <button className="btn primary" style={{ flex: 1, padding: '0.9rem', fontSize: '1.05rem' }} disabled={busy || scanning > 0 || loading || done === 0 && order.lines.every((l) => l.pickedQty === 0)} onClick={complete}>
-            {busy ? 'Validation…' : short.length ? `Terminer (manque ${short.length})` : 'Terminer la préparation'}
+            {busy ? tr("Validation…") : short.length ? `Terminer (manque ${short.length})` : 'Terminer la préparation'}
           </button>
         </div>
       )}

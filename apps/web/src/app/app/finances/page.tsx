@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { SkeletonRows } from '@/components/States';
 import { Fragment, useState } from 'react';
 import Link from 'next/link';
@@ -86,7 +87,7 @@ export default function FinancesPage() {
           {MONTHS.slice(1).map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
         </select>
         <select className="select" style={{ maxWidth: 160 }} value={entity} onChange={(e) => setEntity(e.target.value)}>
-          <option value="">Toutes entités</option>
+          <option value="">{tr("Toutes entités")}</option>
           <option value="jjd">JJD</option>
           <option value="tonton">Tonton</option>
           <option value="m7">M7</option>
@@ -108,13 +109,13 @@ export default function FinancesPage() {
             />
             <Kpi
               ic={TrendingDown}
-              label="Dépenses"
+              label={tr("Dépenses")}
               value={<Money value={data.expenses.total} />}
               sub={`Réparties sur ${data.expenses.sections.length} poste${data.expenses.sections.length > 1 ? 's' : ''}`}
             />
             <Kpi
               ic={Scale}
-              label="Résultat"
+              label={tr("Résultat")}
               value={<Money value={data.result} />}
               sub={data.margin != null ? `Marge ${data.margin} %` : 'Marge non calculable'}
               neg={data.result < 0}
@@ -122,7 +123,7 @@ export default function FinancesPage() {
             />
             <Kpi
               ic={Percent}
-              label="Marge"
+              label={tr("Marge")}
               value={data.margin != null ? `${data.margin} %` : '—'}
               sub={`Résultat ${formatEur(data.result)}`}
               neg={(data.margin ?? 0) < 0}
@@ -140,11 +141,11 @@ export default function FinancesPage() {
                   <tr><td className="muted">Notes de crédit vente</td><td style={{ textAlign: 'right' }}><Money value={data.revenue.creditNotes} /></td></tr>
                 )}
               </tbody>
-              <tfoot><tr><td>CA net</td><td style={{ textAlign: 'right' }}><Money value={data.revenue.net} /></td></tr></tfoot>
+              <tfoot><tr><td>{tr("CA net")}</td><td style={{ textAlign: 'right' }}><Money value={data.revenue.net} /></td></tr></tfoot>
             </table>
           </div>
 
-          <div className="section-title">Dépenses <span className="hint">cliquer pour le détail</span></div>
+          <div className="section-title">{tr("Dépenses")} <span className="hint">cliquer pour le détail</span></div>
           <div className="tbl-wrap" style={{ marginBottom: '1.6rem' }}>
             <table className="tbl">
               <tbody>
@@ -183,7 +184,7 @@ export default function FinancesPage() {
                 <table className="tbl">
                   <thead>
                     <tr>
-                      <th>Chantier</th>
+                      <th>{tr("Chantier")}</th>
                       <th style={{ textAlign: 'right' }}>Devis accepté HT</th>
                       <th style={{ textAlign: 'right' }}>Déjà facturé HT</th>
                       <th style={{ textAlign: 'right' }}>Reste à facturer</th>
@@ -198,7 +199,7 @@ export default function FinancesPage() {
                           ) : (
                             <div style={{ minWidth: 260 }}>
                               <div>
-                                {it.documentId ? <Link href={`/app/documents/${it.documentId}`} style={{ fontWeight: 600 }}>{it.number ?? 'Devis'}</Link> : it.ref}
+                                {it.documentId ? <Link href={`/app/documents/${it.documentId}`} style={{ fontWeight: 600 }}>{it.number ?? tr("Devis")}</Link> : it.ref}
                                 {it.client && <> · {it.client}</>} <span className="muted">— devis sans chantier lié</span>
                               </div>
                               {it.subject && <div className="muted" style={{ fontSize: '0.78rem', margin: '0.1rem 0 0.3rem' }}>{it.subject}</div>}
@@ -247,7 +248,7 @@ export default function FinancesPage() {
                     <Money value={share.tonton.solde} sign />
                   </div>
                   <div className="muted" style={{ fontSize: '0.8rem', marginBottom: '0.5rem' }}>
-                    {share.tonton.solde > 0 ? 'Reste à lui verser' : share.tonton.solde < 0 ? 'Il a reçu plus que dû' : 'À jour'}
+                    {share.tonton.solde > 0 ? 'Reste à lui verser' : share.tonton.solde < 0 ? 'Il a reçu plus que dû' : tr("À jour")}
                   </div>
                   <div className="row" style={{ justifyContent: 'space-between' }}><span>Part GT (⅓)</span><strong><Money value={share.tonton.partGt} /></strong></div>
                   <div className="row" style={{ justifyContent: 'space-between' }}><span>+ Matériel avancé</span><strong><Money value={share.tonton.materielTonton} /></strong></div>
@@ -265,7 +266,7 @@ export default function FinancesPage() {
                       <table className="tbl">
                         <thead>
                           <tr>
-                            <th>Chantier</th>
+                            <th>{tr("Chantier")}</th>
                             <th style={{ textAlign: 'right' }}>Vendu HT</th>
                             <th style={{ textAlign: 'right' }}>Acheté HT</th>
                             <th style={{ textAlign: 'right' }}>Main d'œuvre</th>

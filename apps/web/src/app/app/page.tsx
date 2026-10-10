@@ -1,4 +1,5 @@
 'use client';
+import { tr, dateLocale } from '@/lib/ui-language';
 import PreparationsPage from './stock/preparations/page';
 import { SkeletonRows, ErrorState, EmptyState } from '@/components/States';
 import { useEffect, useState } from 'react';
@@ -108,7 +109,7 @@ function WorkerToday() {
 
   return (
     <>
-      <PageHead eyebrow="Mon espace ouvrier" title={`Bonjour ${person?.displayName || person?.firstName || ''},`} sub={now.toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' })} />
+      <PageHead eyebrow={tr("Mon espace ouvrier")} title={`Bonjour ${person?.displayName || person?.firstName || ''},`} sub={now.toLocaleDateString(dateLocale(), { weekday: 'long', day: 'numeric', month: 'long' })} />
 
       {actionError && <p className="banner crit" role="alert">{actionError}</p>}
       {timerError && <ErrorState message={timerError} onRetry={reloadTimer}/>}
@@ -122,34 +123,32 @@ function WorkerToday() {
 
       {timer && linked && !timerError && (running ? (
         <div className="detail-hero worker-clock" style={{ marginBottom: '1.2rem' }}>
-          <div className="eyebrow"><span className="worker-live-dot" /> Sur chantier</div>
+          <div className="eyebrow"><span className="worker-live-dot" /> {tr("Sur chantier")}</div>
           <div style={{ fontWeight: 700, fontSize: '1.1rem', margin: '0.2rem 0', color: '#fff' }}>{running.worksite?.ref} — {running.worksite?.title}</div>
           <div className="mono" style={{ fontSize: '2.6rem', fontWeight: 800, fontVariantNumeric: 'tabular-nums', margin: '0.4rem 0', color: '#fff' }}>{elapsed(running.startedAt)}</div>
           <div className="row" style={{ gap: '0.6rem' }}>
-            <button className="btn" style={{ background: 'var(--crit)', color: '#fff', borderColor: 'var(--crit)' }} disabled={timerBusy} onClick={stop}>{timerBusy ? 'Enregistrement…' : 'Je quitte le chantier'}</button>
-            <Link href="/app/mes-heures" className="btn" style={{ background: 'rgba(255,255,255,0.1)', borderColor: 'rgba(255,255,255,0.25)', color: '#fff' }}>Mes heures →</Link>
+            <button className="btn" style={{ background: 'var(--crit)', color: '#fff', borderColor: 'var(--crit)' }} disabled={timerBusy} onClick={stop}>{timerBusy ? tr("Enregistrement…") : tr("Je quitte le chantier")}</button>
+            <Link href="/app/mes-heures" className="btn" style={{ background: 'rgba(255,255,255,0.1)', borderColor: 'rgba(255,255,255,0.25)', color: '#fff' }}>{tr("Mes heures →")}</Link>
           </div>
         </div>
       ) : (
         <div className="detail-hero worker-clock" style={{ marginBottom: '1.2rem' }}>
-          <div className="eyebrow">{singleWs ? 'Prêt pour le chantier' : 'Mon pointage'}</div>
+          <div className="eyebrow">{singleWs ? tr("Prêt pour le chantier") : tr("Mon pointage")}</div>
           <div className="mono" style={{ fontSize: '2.6rem', fontWeight: 800, fontVariantNumeric: 'tabular-nums', margin: '0.4rem 0', color: '#fff' }}>00:00:00</div>
           {linked && singleWs ? (
             <>
               <div className="sub">{singleWs.ref} · {singleWs.title}</div>
-              <button className="btn gold" style={{ marginTop: '0.8rem' }} disabled={timerBusy} onClick={() => start(singleWs.id)}>
-                Je suis arrivé sur chantier
-              </button>
+              <button className="btn gold" style={{ marginTop: '0.8rem' }} disabled={timerBusy} onClick={() => start(singleWs.id)}> {tr("Je suis arrivé sur chantier")} </button>
             </>
           ) : (
-            <div className="sub">{plan?.items.length ? 'Pointe à ton arrivée sur le chantier, puis à ton départ.' : 'Aucun chantier prévu aujourd’hui. Retrouve tes affectations dans Mes chantiers.'}</div>
+            <div className="sub">{plan?.items.length ? tr("Pointe à ton arrivée sur le chantier, puis à ton départ.") : tr("Aucun chantier prévu aujourd’hui. Retrouve tes affectations dans Mes chantiers.")}</div>
           )}
         </div>
       ))}
 
-      <div className="section-title">Mes chantiers du jour</div>
+      <div className="section-title">{tr("Mes chantiers du jour")}</div>
       {planLoading && !plan && <SkeletonRows rows={2} height={100}/>}
-      {!planLoading && !planError && plan?.items.length === 0 && <div className="card card-pad worker-day-empty"><span className="worker-empty-icon"><HardHat size={24} /></span><strong>Pas de chantier prévu aujourd’hui</strong><p className="muted">Si ton affectation a changé, vérifie tes chantiers ou contacte le bureau.</p><Link className="btn" href="/app/mes-chantiers">Voir mes chantiers <ChevronRight size={16}/></Link></div>}
+      {!planLoading && !planError && plan?.items.length === 0 && <div className="card card-pad worker-day-empty"><span className="worker-empty-icon"><HardHat size={24} /></span><strong>{tr("Pas de chantier prévu aujourd’hui")}</strong><p className="muted">{tr("Si ton affectation a changé, vérifie tes chantiers ou contacte le bureau.")}</p><Link className="btn" href="/app/mes-chantiers">{tr("Voir mes chantiers")} <ChevronRight size={16}/></Link></div>}
       {plan?.items.map((e) => (
         <div key={e.id} className="card worker-mission" style={{ marginBottom: '0.7rem', overflow: 'hidden' }}>
           {e.worksite.acp?.photoThumbUrl && (
@@ -166,9 +165,9 @@ function WorkerToday() {
             </div>
             <div className="row" style={{ gap: '0.5rem', marginTop: '0.6rem' }}>
               {linked && !running && (
-                <button className="btn primary" style={{ flex: 1 }} disabled={timerBusy} onClick={() => start(e.worksite.id)}>Je suis arrivé</button>
+                <button className="btn primary" style={{ flex: 1 }} disabled={timerBusy} onClick={() => start(e.worksite.id)}>{tr("Je suis arrivé")}</button>
               )}
-              <Link href={`/app/fiche/${e.worksite.id}`} className="btn" style={{ flex: 1, textAlign: 'center' }}>Fiche du jour ›</Link>
+              <Link href={`/app/fiche/${e.worksite.id}`} className="btn" style={{ flex: 1, textAlign: 'center' }}>{tr("Fiche du jour ›")}</Link>
             </div>
           </div>
         </div>
@@ -179,15 +178,15 @@ function WorkerToday() {
           <Link href={`/app/fiche/${singleWs.id}/rapport`} className="quick-action">
             <span className="ic"><FileText size={20} strokeWidth={2} /></span>
             <span>
-              <strong>Faire mon rapport</strong>
-              <small>Travaux, photos et remarques</small>
+              <strong>{tr("Faire mon rapport")}</strong>
+              <small>{tr("Travaux, photos et remarques")}</small>
             </span>
           </Link>
           <Link href={`/app/fiche/${singleWs.id}#fil-chantier`} className="quick-action">
             <span className="ic"><MessageSquare size={20} strokeWidth={2} /></span>
             <span>
-              <strong>Contacter l’équipe</strong>
-              <small>Échanger sur ce chantier</small>
+              <strong>{tr("Contacter l’équipe")}</strong>
+              <small>{tr("Échanger sur ce chantier")}</small>
             </span>
           </Link>
         </div>
@@ -196,7 +195,7 @@ function WorkerToday() {
       {singleWs && tasks.length > 0 && (
         <>
           <div className="row" style={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
-            <div className="section-title" style={{ marginBottom: 0 }}>Mes tâches du jour</div>
+            <div className="section-title" style={{ marginBottom: 0 }}>{tr("Mes tâches du jour")}</div>
             <span className="muted" style={{ fontSize: '0.82rem' }}>{tasksDone} / {tasks.length} terminées</span>
           </div>
           <div className="row" style={{ gap: '0.4rem', margin: '0.5rem 0 0.7rem' }}>
@@ -279,7 +278,7 @@ function ForemanToday() {
       <div className="quick-actions">
         <Link href="/app/mon-equipe" className="quick-action">
           <span className="ic"><Users size={20} strokeWidth={2} /></span>
-          <span><strong>Mon équipe</strong><small>Affectations du jour</small></span>
+          <span><strong>{tr("Mon équipe")}</strong><small>Affectations du jour</small></span>
         </Link>
         <Link href="/app/rapports" className="quick-action">
           <span className="ic"><FileText size={20} strokeWidth={2} /></span>
@@ -292,7 +291,7 @@ function ForemanToday() {
       </div>
 
       <div className="row" style={{ justifyContent: 'space-between', margin: '1.8rem 0 0.8rem' }}>
-        <div className="section-title" style={{ margin: 0 }}>Mes chantiers <span className="hint">{worksites.length}</span></div>
+        <div className="section-title" style={{ margin: 0 }}>{tr("Mes chantiers")} <span className="hint">{worksites.length}</span></div>
         <Link href="/app/planning" className="hint">Voir le planning →</Link>
       </div>
       {worksites.length === 0 ? (
@@ -302,7 +301,7 @@ function ForemanToday() {
           <table className="tbl">
             <thead>
               <tr>
-                <th>Chantier</th>
+                <th>{tr("Chantier")}</th>
                 <th>Statut</th>
                 <th>Avancement</th>
                 <th />
@@ -407,7 +406,7 @@ function FieldToday({ items }: { items: FieldEvent[] }) {
   return (
     <section className="panel dashboard-day">
       <div className="panelhead">
-        <h2>Aujourd’hui <span className="hint">{items.length}</span></h2>
+        <h2>{tr("Aujourd’hui")} <span className="hint">{items.length}</span></h2>
         <Link href="/app/planning" className="hint">Ouvrir le planning →</Link>
       </div>
       {items.length === 0 ? (
@@ -421,8 +420,8 @@ function FieldToday({ items }: { items: FieldEvent[] }) {
             return (
               <div key={ev.id} className="field-row">
                 <div className="when">
-                  {ev.allDay ? 'Journée' : `${hhmm(ev.startAt)} – ${hhmm(ev.endAt)}`}
-                  {ev.tentative && <small>À confirmer</small>}
+                  {ev.allDay ? tr("Journée") : `${hhmm(ev.startAt)} – ${hhmm(ev.endAt)}`}
+                  {ev.tentative && <small>{tr("À confirmer")}</small>}
                 </div>
                 <div className="ws">
                   <Link href={`/app/chantiers/${ev.worksite.id}`}>{ev.worksite.title}</Link>
@@ -479,7 +478,7 @@ function monthTrend(cur: number, prev: number): string | undefined {
   if (prev < 1000) return undefined;
   const pct = Math.round(((cur - prev) / prev) * 100);
   if (Math.abs(pct) > 300) return undefined;
-  const prevMonthLabel = new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toLocaleDateString('fr-BE', { month: 'long' });
+  const prevMonthLabel = new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toLocaleDateString(dateLocale(), { month: 'long' });
   return `${pct >= 0 ? '↗' : '↘'} ${pct >= 0 ? '+' : ''}${pct} % par rapport à ${prevMonthLabel}`;
 }
 
@@ -493,7 +492,7 @@ export default function DashboardPage() {
     count: data.kpis.forecastCount, amount: data.kpis.forecastAmount, href: '/app/finances#previsionnel',
   });
   const today = new Date();
-  const eyebrow = today.toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' });
+  const eyebrow = today.toLocaleDateString(dateLocale(), { weekday: 'long', day: 'numeric', month: 'long' });
   const name = person?.displayName || person?.firstName || (user?.email?.split('@')[0] ?? '').replace(/^./, (c) => c.toUpperCase());
 
   if (user?.role === 'storekeeper') return <PreparationsPage />;
@@ -544,7 +543,7 @@ export default function DashboardPage() {
                     return (
                       <Link key={a.kind} href={a.href} className={`alert ${a.severity}`}>
                         <span className="sev"><AlertIc size={17} strokeWidth={2} /></span>
-                        <span className="label">{a.label}<span className="n" style={a.kind === 'forecast_to_invoice' ? { display: 'block', marginLeft: 0 } : undefined}>{a.kind === 'forecast_to_invoice' ? <><Money value={a.amount ?? 0} /> HT · {a.count} dossier{a.count > 1 ? 's' : ''}</> : <>{a.count} élément{a.count > 1 ? 's' : ''}</>}</span></span>
+                        <span className="label">{a.label}<span className="n" style={a.kind === 'forecast_to_invoice' ? { display: 'block', marginLeft: 0 } : undefined}>{a.kind === 'forecast_to_invoice' ? <><Money value={a.amount ?? 0} /> HT · {a.count} dossier{a.count > 1 ? 's' : ''}</> : <>{a.count} {tr("élément")}{a.count > 1 ? 's' : ''}</>}</span></span>
                         {a.amount != null && a.kind !== 'forecast_to_invoice' && <span className="amount"><Money value={a.amount} /></span>}
                         <ChevronRight size={18} strokeWidth={2} className="chev" />
                       </Link>

@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { useEffect, useRef, useState } from 'react';
 import type { PlanningEv, PlanAbsence } from './planningTypes';
 
@@ -116,7 +117,7 @@ export function PlanningList({ days, events, absences, absenceLabel, busy, onOpe
             {abs.map((a) => (
               <button key={a.id} type="button" className="plan-list-row absence" onClick={() => onOpenAbsence(a)}>
                 <span className="plan-list-dot" />
-                <span className="plan-list-time">Toute la journée</span>
+                <span className="plan-list-time">{tr("Toute la journée")}</span>
                 <span className="plan-list-title"><strong>{absenceLabel(a.kind)}</strong> {personName(a.person)}</span>
                 <span className="plan-list-where" /><span className="plan-list-people" />
               </button>
@@ -140,7 +141,7 @@ export function PlanningList({ days, events, absences, absenceLabel, busy, onOpe
                     onClick={() => (multi ? setOpen((o) => { const n = new Set(o); if (n.has(row.key)) n.delete(row.key); else n.add(row.key); return n; }) : onOpen(ev))}
                   >
                     <span className="plan-list-dot" />
-                    <span className="plan-list-time">{ev.allDay && !multi ? 'Toute la journée' : `${hhmm(row.start)} – ${hhmm(row.end)}`}</span>
+                    <span className="plan-list-time">{ev.allDay && !multi ? tr("Toute la journée") : `${hhmm(row.start)} – ${hhmm(row.end)}`}</span>
                     <span className="plan-list-title">{groupTitle(row)}{tentative ? ' · à confirmer' : ''}{multi ? ` · ${row.evs.length} créneaux ${expanded ? '▴' : '▾'}` : ''}</span>
                     <span className="plan-list-where">{where}</span>
                     <span className="plan-list-people" title={people}>{people || 'Équipe à affecter'}</span>
@@ -148,7 +149,7 @@ export function PlanningList({ days, events, absences, absenceLabel, busy, onOpe
                   {expanded && row.evs.map((x) => (
                     <button key={x.id} type="button" className={`plan-list-row plan-list-sub kind-${x.kind}${x.status === 'tentative' ? ' tentative' : ''}`} onClick={() => onOpen(x)}>
                       <span />
-                      <span className="plan-list-time">{x.allDay ? 'Toute la journée' : `${hhmm(x.startAt)} – ${hhmm(x.endAt)}`}</span>
+                      <span className="plan-list-time">{x.allDay ? tr("Toute la journée") : `${hhmm(x.startAt)} – ${hhmm(x.endAt)}`}</span>
                       <span className="plan-list-title">{[slotTag(x, row), x.title].filter(Boolean).join(' · ') || 'Créneau'}</span>
                       <span className="plan-list-where" />
                       <span className="plan-list-people">{slotNames(x) || 'Équipe à affecter'}</span>

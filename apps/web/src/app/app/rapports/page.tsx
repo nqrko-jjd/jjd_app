@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
@@ -90,8 +91,8 @@ function ReviewCard({ r, reload }: { r: ReportRow; reload: () => void }) {
             value={note} onChange={(e) => setNote(e.target.value)}
           />
           <div className="row" style={{ gap: '0.5rem', marginTop: '0.5rem' }}>
-            <button type="button" className="btn primary" disabled={busy || !note.trim()} onClick={askInfo}>Envoyer</button>
-            <button type="button" className="btn ghost" onClick={() => setAsking(false)}>Annuler</button>
+            <button type="button" className="btn primary" disabled={busy || !note.trim()} onClick={askInfo}>{tr("Envoyer")}</button>
+            <button type="button" className="btn ghost" onClick={() => setAsking(false)}>{tr("Annuler")}</button>
           </div>
         </div>
       )}
@@ -109,7 +110,7 @@ export default function RapportsAValiderPage() {
 
   return (
     <>
-      <PageHead eyebrow="Chef de chantier" title="Rapports d’intervention" sub="Vérifier, valider ou demander une précision." />
+      <PageHead eyebrow={tr("Chef de chantier")} title="Rapports d’intervention" sub="Vérifier, valider ou demander une précision." />
 
       <div className="row" style={{ gap: '0.4rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
         {TABS.map((t) => (

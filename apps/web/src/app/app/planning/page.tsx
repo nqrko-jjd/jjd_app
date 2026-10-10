@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { PlanningAgenda } from '@/components/PlanningAgenda';
 import { PlanningList } from '@/components/PlanningList';
 import { SkeletonRows } from '@/components/States';
@@ -454,18 +455,18 @@ export default function PlanningPage() {
 
       <div className="plan-topbar">
         <div className="plan-nav" role="group" aria-label="Navigation dans le temps">
-          <button type="button" className="btn" onClick={navPrev} aria-label="Précédent">←</button>
+          <button type="button" className="btn" onClick={navPrev} aria-label={tr("Précédent")}>←</button>
           <button type="button" className="btn" onClick={navToday}>{view === 'month' || view === 'day' || view === 'planning' ? "Aujourd'hui" : 'Cette semaine'}</button>
-          <button type="button" className="btn" onClick={navNext} aria-label="Suivant">→</button>
+          <button type="button" className="btn" onClick={navNext} aria-label={tr("Suivant")}>→</button>
         </div>
         <div className="plan-period">
           <label className="plan-view-select">
             <span>Affichage</span>
             <select className="select" value={viewKey} onChange={(e) => changeView(e.target.value)} aria-label="Format d’affichage du planning">
               <option value="planning">Planning (liste)</option>
-              <option value="day">Jour</option>
-              <option value="week">Semaine</option>
-              <option value="month">Mois</option>
+              <option value="day">{tr("Jour")}</option>
+              <option value="week">{tr("Semaine")}</option>
+              <option value="month">{tr("Mois")}</option>
               <optgroup label="Grilles">
                 <option value="worksites">Par chantier</option>
                 <option value="workers">Par ouvrier et sous-traitant</option>
@@ -488,7 +489,7 @@ export default function PlanningPage() {
         )}
         {view === 'workers' && (
           <select className="select" value={specialtyFilter} onChange={(e) => setSpecialtyFilter(e.target.value)}>
-            <option value="">Tous</option>
+            <option value="">{tr("Tous")}</option>
             {specialtyOptions.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
         )}
@@ -638,7 +639,7 @@ export default function PlanningPage() {
               <thead>
                 <tr>
                   <th>
-                    {view === 'workers' ? 'Ouvriers' : view === 'worksites' ? 'Chantiers' : 'Véhicules & matériel'}{' '}
+                    {view === 'workers' ? 'Ouvriers' : view === 'worksites' ? tr("Chantiers") : 'Véhicules & matériel'}{' '}
                     {view === 'workers' ? workerRows.length : view === 'worksites' ? worksiteRows.length : resourceRows.length}
                   </th>
                   {days.map((d) => {
@@ -755,9 +756,9 @@ export default function PlanningPage() {
       )}
 
       <div className="plan-legend">
-        <span><span className="plan-legend-swatch kind-intervention" /> Intervention</span>
+        <span><span className="plan-legend-swatch kind-intervention" /> {tr("Intervention")}</span>
         <span><span className="plan-legend-swatch kind-meeting" /> Rendez-vous d’affaire</span>
-        <span className="plan-dashed-key">À confirmer</span>
+        <span className="plan-dashed-key">{tr("À confirmer")}</span>
         <span>Congés et formations bloquent l’affectation.</span>
       </div>
 
@@ -803,7 +804,7 @@ export default function PlanningPage() {
                   <h2>{info.title}</h2>
                   <div className="muted" style={{ fontSize: '0.8rem' }}>{new Date(`${trackedDay}T00:00:00`).toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
                 </div>
-                <button className="btn ghost" onClick={() => setKpiInfo(null)} aria-label="Fermer">✕</button>
+                <button className="btn ghost" onClick={() => setKpiInfo(null)} aria-label={tr("Fermer")}>✕</button>
               </div>
               <div className="modal-body" style={{ display: 'block', maxHeight: '72vh', overflowY: 'auto' }}>
                 {info.sections.map((sec) => (
@@ -832,7 +833,7 @@ export default function PlanningPage() {
           <div className="modal" style={{ maxWidth: 420 }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-head">
               <h2>{new Date(`${dayAgenda}T00:00:00`).toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' })}</h2>
-              <button className="btn ghost" onClick={() => setDayAgenda(null)} aria-label="Fermer">✕</button>
+              <button className="btn ghost" onClick={() => setDayAgenda(null)} aria-label={tr("Fermer")}>✕</button>
             </div>
             <div className="modal-body" style={{ display: 'block', maxHeight: '72vh', overflowY: 'auto' }}>
               {renderChips(dayAgenda, eventsFor(dayAgenda, eventMatchesWorksiteFilters).sort((a, b) => a.startAt.localeCompare(b.startAt)))}

@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { Building2, MapPin, Plus, Clock3, Search } from 'lucide-react';
 import { SkeletonRows, EmptyState, ErrorState } from '@/components/States';
 import { use, useState } from 'react';
@@ -94,8 +95,8 @@ export default function ImmeubleDetail({ params }: { params: Promise<{ id: strin
       <div className="row" style={{ justifyContent: 'space-between', marginBottom: '0.9rem', flexWrap: 'wrap' }}>
         <Link href="/app/immeubles" className="btn ghost">← Immeubles</Link>
         <div className="row">
-          <button className="btn" onClick={() => setModal({ kind: 'building' })}>Modifier</button>
-          {tab === 'info' && <button className="btn" onClick={removeBuilding}>Supprimer</button>}
+          <button className="btn" onClick={() => setModal({ kind: 'building' })}>{tr("Modifier")}</button>
+          {tab === 'info' && <button className="btn" onClick={removeBuilding}>{tr("Supprimer")}</button>}
           <button className="btn primary" onClick={() => setCreatingWorksite(true)}><Plus size={17}/>Nouvelle intervention</button>
         </div>
       </div>
@@ -115,7 +116,7 @@ export default function ImmeubleDetail({ params }: { params: Promise<{ id: strin
         <section className="card building-hub-panel"><div className="building-hub-panel-head"><div><span className="eyebrow">SUIVI DES TRAVAUX</span><h2>Ce qui se passe ici</h2></div><button className="btn ghost" onClick={() => showWorksites('all')}>Tous les dossiers</button></div>
           {waiting.length > 0 && <button className="building-hub-watch" onClick={() => showWorksites('waiting')}><Clock3 size={20}/><span><strong>{waiting.length} dossier{waiting.length > 1 ? 's' : ''} en attente / observation</strong><small>Retrouvez les consignes avant de programmer la reprise.</small></span></button>}
           {(active.length ? active : b.worksites).slice(0,5).map(w => <Link className="building-hub-case" href={`/app/chantiers/${w.id}`} key={w.id}><span className="building-hub-case-icon"><Building2 size={20}/></span><div><small>{w.ref}</small><strong>{w.title}</strong><small>{w.manager?.displayName ?? w.manager?.firstName ?? 'Responsable à définir'}</small></div><StatusBadge status={w.status}/></Link>)}
-          {!b.worksites.length && <div className="building-hub-empty"><Building2 size={28}/><h3>Aucun dossier pour le moment</h3><p>Créez la première intervention avec l’adresse déjà renseignée.</p><button className="btn primary" onClick={() => setCreatingWorksite(true)}>Créer une intervention</button></div>}
+          {!b.worksites.length && <div className="building-hub-empty"><Building2 size={28}/><h3>Aucun dossier pour le moment</h3><p>Créez la première intervention avec l’adresse déjà renseignée.</p><button className="btn primary" onClick={() => setCreatingWorksite(true)}>{tr("Créer une intervention")}</button></div>}
         </section>
         <aside><section className="card building-hub-panel"><div className="building-hub-panel-head"><div><span className="eyebrow">SUR PLACE</span><h2>Les interlocuteurs</h2></div><button className="btn ghost" onClick={() => setTab('contacts')}>Gérer</button></div>{b.contacts.slice(0,3).map(c => <div className="building-hub-person" key={c.id}><span>{c.name.split(' ').filter(Boolean).slice(0,2).map(n=>n[0]).join('')}</span><div><strong>{c.name}</strong><small>{BUILDING_CONTACT_ROLE_LABEL[c.role as keyof typeof BUILDING_CONTACT_ROLE_LABEL] ?? c.role}</small>{c.phone && <a href={`tel:${c.phone}`}>{c.phone}</a>}</div></div>)}{!b.contacts.length && <p className="muted">Ajoutez le concierge, le président ou le gestionnaire.</p>}<button className="btn" onClick={() => setModal({kind:'contact'})}><Plus size={16}/>Ajouter un contact</button></section>
         <section className="card building-hub-panel building-hub-access"><span className="eyebrow">AVANT LE PASSAGE</span><h2>Accès au bâtiment</h2><p>{b.accessNote || 'Les consignes d’accès ne sont pas encore renseignées.'}</p>{b.digicode && <div><small>Digicode</small><strong>{b.digicode}</strong></div>}<button className="btn ghost" onClick={() => setTab('info')}>Consulter la fiche</button></section></aside>
@@ -130,8 +131,8 @@ export default function ImmeubleDetail({ params }: { params: Promise<{ id: strin
       />
 
       <div className="info-grid" style={{ marginBottom: '1.6rem' }}>
-        {b.syndic && <Info label="Syndic" value={<>{b.syndic.name}<br /><span className="muted" style={{ fontSize: '0.8rem' }}>{b.syndic.email ?? b.syndic.phone ?? ''}</span></>} />}
-        {b.promoter && <Info label="Promoteur" value={<>{b.promoter.name}<br /><span className="muted" style={{ fontSize: '0.8rem' }}>{b.promoter.email ?? b.promoter.phone ?? ''}</span></>} />}
+        {b.syndic && <Info label={tr("Syndic")} value={<>{b.syndic.name}<br /><span className="muted" style={{ fontSize: '0.8rem' }}>{b.syndic.email ?? b.syndic.phone ?? ''}</span></>} />}
+        {b.promoter && <Info label={tr("Promoteur")} value={<>{b.promoter.name}<br /><span className="muted" style={{ fontSize: '0.8rem' }}>{b.promoter.email ?? b.promoter.phone ?? ''}</span></>} />}
         {b.reference && <Info label="Référence" value={b.reference} />}
         {b.lotCount != null && <Info label="Lots" value={String(b.lotCount)} />}
         {b.digicode && <Info label="Digicode" value={b.digicode} />}
@@ -139,7 +140,7 @@ export default function ImmeubleDetail({ params }: { params: Promise<{ id: strin
       </div>
       {b.accessNote && (
         <div className="card card-pad" style={{ marginBottom: '1.6rem' }}>
-          <div className="section-title">Accès</div>
+          <div className="section-title">{tr("Accès")}</div>
           <p style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{b.accessNote}</p>
         </div>
       )}
@@ -164,7 +165,7 @@ export default function ImmeubleDetail({ params }: { params: Promise<{ id: strin
               {c.email && <div className="muted" style={{ fontSize: '0.85rem' }}>{c.email}</div>}
               {c.note && <div className="muted" style={{ fontSize: '0.82rem', marginTop: '0.3rem' }}>{c.note}</div>}
               <div className="row" style={{ marginTop: '0.5rem', gap: '0.3rem' }}>
-                <button className="btn ghost" style={mini} onClick={() => setModal({ kind: 'contact', row: c })}>Modifier</button>
+                <button className="btn ghost" style={mini} onClick={() => setModal({ kind: 'contact', row: c })}>{tr("Modifier")}</button>
                 <button className="btn ghost" style={mini} onClick={async () => { if (confirm('Supprimer ?')) { await api(`/api/buildings/${id}/contacts/${c.id}`, { method: 'DELETE' }); reload(); } }}>✕</button>
               </div>
             </div>
@@ -184,7 +185,7 @@ export default function ImmeubleDetail({ params }: { params: Promise<{ id: strin
         <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', marginBottom: '1.6rem' }}>
           {b.linkedContacts.map((c) => (
             <div key={c.id} className="card card-pad">
-              <div className="eyebrow">{c.kind ? CLIENT_KIND_LABEL[c.kind as keyof typeof CLIENT_KIND_LABEL] : c.type === 'supplier' ? 'Fournisseur' : 'Contact'}</div>
+              <div className="eyebrow">{c.kind ? CLIENT_KIND_LABEL[c.kind as keyof typeof CLIENT_KIND_LABEL] : c.type === 'supplier' ? tr("Fournisseur") : 'Contact'}</div>
               <div style={{ fontWeight: 700, margin: '0.2rem 0' }}><Link href={`/app/contacts/${c.id}`}>{c.name}</Link></div>
               {c.phone && <div><a href={`tel:${c.phone}`}>{c.phone}</a></div>}
               {c.email && <div className="muted" style={{ fontSize: '0.85rem' }}>{c.email}</div>}
@@ -229,7 +230,7 @@ export default function ImmeubleDetail({ params }: { params: Promise<{ id: strin
                   </td>
                   <td>{u.occupantKind ? OCCUPANT_KIND_LABEL[u.occupantKind as keyof typeof OCCUPANT_KIND_LABEL] : '—'}</td>
                   <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                    <button className="btn ghost" style={mini} onClick={() => setModal({ kind: 'unit', row: u })}>Modifier</button>
+                    <button className="btn ghost" style={mini} onClick={() => setModal({ kind: 'unit', row: u })}>{tr("Modifier")}</button>
                     <button className="btn ghost" style={mini} onClick={async () => { if (confirm('Supprimer ?')) { await api(`/api/buildings/${id}/units/${u.id}`, { method: 'DELETE' }); reload(); } }}>✕</button>
                   </td>
                 </tr>
@@ -335,7 +336,7 @@ function PortalAccessSection({ buildingId }: { buildingId: string }) {
         {(data?.users ?? []).map((u) => (
           <div key={u.id} className="row" style={{ justifyContent: 'space-between', padding: '0.4rem 0', borderTop: '1px solid var(--line)' }}>
             <span>{u.email} <span className={`badge ${u.portalAccess === 'full' ? 'primary' : 'plain'}`}>{u.portalAccess === 'full' ? 'Complet' : 'Limité'}</span></span>
-            <button className="btn ghost" style={mini} onClick={async () => { if (confirm('Retirer cet accès ?')) { await api(`/api/buildings/${buildingId}/portal-access/${u.id}`, { method: 'DELETE' }); reload(); } }}>Retirer</button>
+            <button className="btn ghost" style={mini} onClick={async () => { if (confirm('Retirer cet accès ?')) { await api(`/api/buildings/${buildingId}/portal-access/${u.id}`, { method: 'DELETE' }); reload(); } }}>{tr("Retirer")}</button>
           </div>
         ))}
         <div className="row" style={{ marginTop: '0.8rem', gap: '0.5rem' }}>

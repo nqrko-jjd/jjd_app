@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { ContactsDialog } from '@/components/ContactRoleEditor';
 import { HardHat } from 'lucide-react';
 import { SkeletonRows, EmptyState, ErrorState } from '@/components/States';
@@ -182,7 +183,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
               Résumé facturation →
             </a>
           )}
-          <button className="btn" onClick={() => setEditing(true)}>Modifier</button>
+          <button className="btn" onClick={() => setEditing(true)}>{tr("Modifier")}</button>
         </div>
       </div>
 
@@ -207,12 +208,12 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
       {w.building?.photoThumbUrl && <details className="worksite-building-photo"><summary>Voir le bâtiment · {w.building.name}</summary><img src={w.building.photoThumbUrl} alt={w.building.name}/><Link href={`/app/immeubles/${w.building.id}`}>Ouvrir la fiche immeuble</Link></details>}
       <div className="page-tabs">
         <button className={`page-tab${tab === 'overview' ? ' active' : ''}`} onClick={() => setTab('overview')}>Vue d’ensemble</button>
-        <button className={`page-tab${tab === 'planning' ? ' active' : ''}`} onClick={() => setTab('planning')}>Planning</button>
-        <button className={`page-tab${tab === 'tasks' ? ' active' : ''}`} onClick={() => setTab('tasks')}>Tâches</button>
+        <button className={`page-tab${tab === 'planning' ? ' active' : ''}`} onClick={() => setTab('planning')}>{tr("Planning")}</button>
+        <button className={`page-tab${tab === 'tasks' ? ' active' : ''}`} onClick={() => setTab('tasks')}>{tr("Tâches")}</button>
         <button className={`page-tab${tab === 'finances' ? ' active' : ''}`} onClick={() => setTab('finances')}>Finances & rentabilité</button>
         <button className={`page-tab${tab === 'photos' ? ' active' : ''}`} onClick={() => setTab('photos')}>Photos &amp; rapports <span className="n">{w.reports.length}</span></button>
         <button className={`page-tab${tab === 'files' ? ' active' : ''}`} onClick={() => setTab('files')}>Documents{filesInfo?.items.length ? <> <span className="n">{filesInfo.items.length}</span></> : null}</button>
-        {canSeeMails && <button className={`page-tab${tab === 'mails' ? ' active' : ''}`} onClick={() => setTab('mails')}>Suivi mails{mailsInfo?.items.length ? <> <span className="n">{mailsInfo.items.length}</span></> : null}</button>}
+        {canSeeMails && <button className={`page-tab${tab === 'mails' ? ' active' : ''}`} onClick={() => setTab('mails')}>{tr("Suivi mails")}{mailsInfo?.items.length ? <> <span className="n">{mailsInfo.items.length}</span></> : null}</button>}
         <button className={`page-tab${tab === 'discussion' ? ' active' : ''}`} onClick={() => setTab('discussion')}>Discussion</button>
       </div>
 
@@ -244,7 +245,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
                     : m.quotedHt > 0
                       ? [m.forecastMargin, `prévue : devisé − coûts engagés (${eur(m.totalCost)})`]
                       : [0, 'Pas encore de données'];
-                return <Kpi ic={TrendingUp} label="Marge" value={<Money value={value} sign />} sub={sub} neg={value < 0} />;
+                return <Kpi ic={TrendingUp} label={tr("Marge")} value={<Money value={value} sign />} sub={sub} neg={value < 0} />;
               })()}
             </div>
           )}
@@ -280,7 +281,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
 
               {(
                 <div className="card card-pad" style={{ marginBottom: '1rem' }}>
-                  <div className="wiz-section-head"><div className="section-title" style={{ marginTop: 0 }}>Personnes de contact</div><button className="btn" onClick={() => setEditingContacts(true)}>Gérer les contacts</button></div>{w.contacts.length === 0 && <p className="muted">Ajoutez les personnes à joindre pour les rendez-vous et le suivi.</p>}
+                  <div className="wiz-section-head"><div className="section-title" style={{ marginTop: 0 }}>{tr("Personnes de contact")}</div><button className="btn" onClick={() => setEditingContacts(true)}>Gérer les contacts</button></div>{w.contacts.length === 0 && <p className="muted">Ajoutez les personnes à joindre pour les rendez-vous et le suivi.</p>}
                   <div className="info-grid">
                     {w.contacts.map((c) => (
                       <Info
@@ -319,7 +320,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
             </div>
 
             <div className="card card-pad">
-              <div className="section-title" style={{ marginTop: 0 }}>Dernière activité</div>
+              <div className="section-title" style={{ marginTop: 0 }}>{tr("Dernière activité")}</div>
               {data.activity.length === 0 ? (
                 <p className="muted" style={{ margin: 0 }}>Rien de récent.</p>
               ) : (
@@ -398,7 +399,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
             const table = (list: typeof quotes) => (
               <div className="tbl-wrap" style={list.length > 10 ? { maxHeight: 380, overflowY: 'auto' } : undefined}>
                 <table className="tbl">
-                  <thead><tr><th>Type</th><th>Numéro</th><th>Date</th><th style={{ textAlign: 'right' }}>HT</th><th>Statut</th></tr></thead>
+                  <thead><tr><th>Type</th><th>Numéro</th><th>{tr("Date")}</th><th style={{ textAlign: 'right' }}>HT</th><th>Statut</th></tr></thead>
                   <tbody>
                     {list.map((d) => (
                       <tr key={d.id}>
@@ -419,14 +420,14 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
             return (
               <>
                 <CollapsibleSection
-                  title="Devis"
+                  title={tr("Devis")}
                   defaultOpen
                   summary={quotes.length ? `${quotes.length} · ${formatEuro(quotes.reduce((sum, d) => sum + d.totalHt, 0))} HT${byStatus(quotes) ? ` — ${byStatus(quotes)}` : ''}` : 'Aucun'}
                 >
                   {quotes.length === 0 ? <p className="muted" style={{ margin: 0 }}>Aucun devis rattaché.</p> : table(quotes)}
                 </CollapsibleSection>
                 <CollapsibleSection
-                  title="Factures"
+                  title={tr("Factures")}
                   hint="acomptes et notes de crédit compris"
                   defaultOpen
                   summary={invoices.length ? `${invoices.length} · ${formatEuro(invoices.reduce((sum, d) => sum + signed(d), 0))} HT${byStatus(invoices) ? ` — ${byStatus(invoices)}` : ''}` : 'Aucune'}
@@ -462,7 +463,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
                   <strong>{formatDateBE(r.date)}</strong>
                   {r.status === 'signed'
                     ? <span className="badge ok">Signé{r.clientName ? ` · ${r.clientName}` : ''}</span>
-                    : <span className="badge warn">Brouillon</span>}
+                    : <span className="badge warn">{tr("Brouillon")}</span>}
                 </div>
                 <div className="muted" style={{ fontSize: '0.82rem' }}>par {r.authorName}</div>
                 {r.workDone && <p style={{ fontSize: '0.88rem', margin: '0.4rem 0 0', whiteSpace: 'pre-wrap' }}>{r.workDone.slice(0, 160)}</p>}
@@ -537,7 +538,7 @@ function WorksiteExpenses({ worksiteId }: { worksiteId: string }) {
   );
   return (
     <CollapsibleSection
-      title="Dépenses"
+      title={tr("Dépenses")}
       summary={data ? `${data.items.length} · ${formatEuro(data.totals.ht)} HT` : undefined}
     >
       {!data ? <p className="muted" style={{ margin: 0 }}>Chargement…</p>
@@ -545,7 +546,7 @@ function WorksiteExpenses({ worksiteId }: { worksiteId: string }) {
         : (
           <div className="tbl-wrap">
             <table className="tbl">
-              <thead><tr><th>Date</th><th>Fournisseur</th><th>Catégorie</th><th style={{ textAlign: 'right' }}>HT</th><th style={{ textAlign: 'right' }}>TTC</th><th>Statut</th></tr></thead>
+              <thead><tr><th>{tr("Date")}</th><th>{tr("Fournisseur")}</th><th>{tr("Catégorie")}</th><th style={{ textAlign: 'right' }}>HT</th><th style={{ textAlign: 'right' }}>TTC</th><th>Statut</th></tr></thead>
               <tbody>
                 {data.items.map((e) => (
                   <tr key={e.id}>
@@ -554,7 +555,7 @@ function WorksiteExpenses({ worksiteId }: { worksiteId: string }) {
                     <td>{e.categoryLabel ?? '—'}</td>
                     <td style={{ textAlign: 'right' }}><Money value={e.ht} /></td>
                     <td style={{ textAlign: 'right' }}><Money value={e.ttc ?? e.ht} /></td>
-                    <td><span className={`badge ${e.paid ? 'ok' : 'warn'}`}>{e.paid ? 'Payé' : 'Non payé'}</span></td>
+                    <td><span className={`badge ${e.paid ? 'ok' : 'warn'}`}>{e.paid ? tr("Payé") : tr("Non payé")}</span></td>
                   </tr>
                 ))}
               </tbody>
@@ -595,7 +596,7 @@ function TransportDetail({ t }: { t: NonNullable<Detail['margin']>['transport'] 
     >
       <div className="tbl-wrap">
         <table className="tbl">
-          <thead><tr><th>Date</th><th>Véhicule</th><th style={{ textAlign: 'right' }}>Km A/R</th><th style={{ textAlign: 'right' }}>Route</th><th style={{ textAlign: 'right' }}>Fixe/jour</th><th style={{ textAlign: 'right' }}>Total</th></tr></thead>
+          <thead><tr><th>{tr("Date")}</th><th>{tr("Véhicule")}</th><th style={{ textAlign: 'right' }}>Km A/R</th><th style={{ textAlign: 'right' }}>Route</th><th style={{ textAlign: 'right' }}>Fixe/jour</th><th style={{ textAlign: 'right' }}>Total</th></tr></thead>
           <tbody>
             {t.trips.map((tr, i) => (
               <tr key={i}>
@@ -621,7 +622,7 @@ function PlanningTab({ worksiteId }: { worksiteId: string }) {
   return (
     <section className="card card-pad">
       <div className="row" style={{ justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-        <div className="section-title" style={{ margin: 0 }}>Planning</div>
+        <div className="section-title" style={{ margin: 0 }}>{tr("Planning")}</div>
         <Link href="/app/planning" className="hint">Ouvrir le planning des équipes →</Link>
       </div>
       {!data ? <p className="muted" style={{ margin: 0 }}>Chargement…</p>
@@ -658,11 +659,11 @@ function Glance({ w, nextEvent, onTab }: { w: Detail['worksite']; nextEvent: Det
       <button type="button" className="glance-tile" onClick={() => onTab('finances')}>
         <div className="k">Factures à encaisser</div>
         <div className="v">{unpaid.length ? `${unpaid.length} · ${eur(unpaidHt)} HT` : 'Aucune'}</div>
-        <div className="s">{waiting.length ? `${waiting.length} devis en attente de réponse` : unpaid.length ? unpaid.slice(0, 2).map((d) => d.number ?? 'brouillon').join(' · ') : 'Rien en attente'}</div>
+        <div className="s">{waiting.length ? `${waiting.length} devis en attente de réponse` : unpaid.length ? unpaid.slice(0, 2).map((d) => d.number ?? 'brouillon').join(' · ') : tr("Rien en attente")}</div>
       </button>
       <button type="button" className="glance-tile" onClick={() => onTab('photos')}>
         <div className="k">Dernier rapport</div>
-        <div className="v">{lastReport ? formatDateBE(lastReport.date) : 'Aucun'}</div>
+        <div className="v">{lastReport ? formatDateBE(lastReport.date) : tr("Aucun")}</div>
         <div className="s">{lastReport ? [lastReport.authorName, lastReport.workDone].filter(Boolean).join(' · ') : 'Les rapports des ouvriers apparaissent ici'}</div>
       </button>
     </div>
@@ -683,7 +684,7 @@ function CdcCard({ worksiteId }: { worksiteId: string }) {
           {data.items.map((c) => (
             <Link key={c.id} href={`/app/cdc/${c.id}`} className="row" style={{ justifyContent: 'space-between', gap: '0.6rem' }}>
               <span>{c.title}</span>
-              <span className={`badge ${c.status === 'validated' ? 'ok' : 'warn'}`}>{c.status === 'validated' ? 'Validé' : 'Brouillon'}</span>
+              <span className={`badge ${c.status === 'validated' ? 'ok' : 'warn'}`}>{c.status === 'validated' ? 'Validé' : tr("Brouillon")}</span>
             </Link>
           ))}
         </div>

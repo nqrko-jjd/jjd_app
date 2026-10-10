@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
 import { PageHead, Avatar } from '@/lib/ui';
@@ -15,7 +16,7 @@ export default function MonEquipePage() {
 
   return (
     <>
-      <PageHead eyebrow="Chef de chantier" title="Mon équipe" sub="Affectations et suivi du jour." />
+      <PageHead eyebrow={tr("Chef de chantier")} title={tr("Mon équipe")} sub="Affectations et suivi du jour." />
       {data && items.length === 0 && <div className="card card-pad muted">Personne n’est affecté sur vos chantiers aujourd’hui.</div>}
       {items.map((m) => (
         <div key={m.id} className="card card-pad" style={{ marginBottom: '0.7rem' }}>
@@ -25,7 +26,7 @@ export default function MonEquipePage() {
               <div style={{ fontWeight: 700 }}>{m.name}</div>
               <div className="muted">{PERSON_ROLE_LABEL[m.role as keyof typeof PERSON_ROLE_LABEL] ?? m.role}</div>
             </div>
-            <span className="badge ok" style={{ marginLeft: 'auto' }}>Sur chantier</span>
+            <span className="badge ok" style={{ marginLeft: 'auto' }}>{tr("Sur chantier")}</span>
           </div>
           <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginTop: '0.7rem', paddingTop: '0.6rem', borderTop: '1px solid var(--line)' }}>
             <div className="muted">{m.worksite.ref} · {m.worksite.title}</div>

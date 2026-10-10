@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
@@ -39,8 +40,8 @@ export function ContactsDialog({ title, initial, building = false, onClose, onSa
   const [pending, setPending] = useState<Record<number, boolean>>({});
   const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
   return <div className="modal-scrim"><form className="modal wiz" role="dialog" aria-modal="true" aria-label={title} onSubmit={async e => { e.preventDefault(); e.stopPropagation(); if (busy || Object.values(pending).some(Boolean)) return; if (rows.some(r => !r.name.trim())) { setError('Sélectionnez une personne pour chaque ligne.'); return; } setBusy(true); setError(''); try { await onSave(rows.map(({ contactId, role, name, phone, email, contactFor, note, unitLabel }) => ({ contactId, role, name, phone, email, contactFor, note, unitLabel }))); onClose(); } catch (e) { setError((e as Error).message); setBusy(false); } }}>
-    <div className="modal-head"><h2>{title}</h2><button className="btn ghost" type="button" onClick={onClose} aria-label="Fermer">✕</button></div>
+    <div className="modal-head"><h2>{title}</h2><button className="btn ghost" type="button" onClick={onClose} aria-label={tr("Fermer")}>✕</button></div>
     <div className="wiz-body"><p className="wiz-hint">Une fiche par personne. Les coordonnées restent gérées dans Contacts ; le rôle dépend de ce dossier. Aucun accès au portail n’est créé ici.</p>{rows.map((row, i) => <section className="wiz-contact" key={i}><ContactRoleEditor onPending={v => setPending(prev => ({ ...prev, [i]: v }))} building={building} value={row} onChange={next => setRows(prev => prev.map((r, j) => j === i ? next : r))}/>{!building && <button className="btn ghost" type="button" disabled={Object.values(pending).some(Boolean)} onClick={() => setRows(prev => prev.filter((_, j) => j !== i))}>Retirer du chantier</button>}</section>)}{!building && <button className="btn" type="button" disabled={Object.values(pending).some(Boolean)} onClick={() => setRows(prev => [...prev, { role: 'sur_place', name: '', contactFor: 'rdv_acces' }])}>Ajouter une personne</button>}{error && <div className="wiz-error" role="alert">{error}</div>}</div>
-    <div className="modal-foot"><button className="btn" type="button" onClick={onClose}>Annuler</button><button className="btn primary" disabled={busy || Object.values(pending).some(Boolean)}>{busy ? 'Enregistrement…' : 'Enregistrer'}</button></div>
+    <div className="modal-foot"><button className="btn" type="button" onClick={onClose}>{tr("Annuler")}</button><button className="btn primary" disabled={busy || Object.values(pending).some(Boolean)}>{busy ? tr("Enregistrement…") : tr("Enregistrer")}</button></div>
   </form></div>;
 }

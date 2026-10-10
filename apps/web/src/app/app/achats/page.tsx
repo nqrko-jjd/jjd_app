@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { vehicleName } from '@/lib/vehicle';
 import { SkeletonRows, ErrorState, EmptyState } from '@/components/States';
 import { Suspense, useEffect, useState } from 'react';
@@ -378,7 +379,7 @@ function AchatsInner() {
         <div role="button" tabIndex={0} style={{ cursor: 'pointer' }} title="Filtrer sur les factures non payées" onClick={() => setPaid('0')}>
           <Kpi
             ic={CreditCard}
-            label="En retard"
+            label={tr("En retard")}
             value={<Money value={data?.totals.overdueTtc ?? 0} />}
             sub={(data?.totals.overdueCount ?? 0) > 0 ? `${data?.totals.overdueCount} facture${(data?.totals.overdueCount ?? 0) > 1 ? 's' : ''} échue${(data?.totals.overdueCount ?? 0) > 1 ? 's' : ''}` : 'Rien en retard'}
             warn={(data?.totals.overdueCount ?? 0) > 0}
@@ -406,7 +407,7 @@ function AchatsInner() {
         <select className="select" style={{ maxWidth: 150 }} value={paid} onChange={(e) => setPaid(e.target.value)}>
           <option value="">Payé & non payé</option>
           <option value="0">À régler (dont partiel)</option>
-          <option value="1">Payé</option>
+          <option value="1">{tr("Payé")}</option>
         </select>
         <select className="select" style={{ maxWidth: 180 }} value={type} onChange={(e) => { setType(e.target.value); if (e.target.value !== 'delivery_slip') setLinked(''); }}>
           <option value="">Tous les types</option>
@@ -470,11 +471,11 @@ function AchatsInner() {
                     aria-label="Tout sélectionner (pièces jointes disponibles)"
                   />
                 </th>
-                <SortTh k="date" sort={sort} filter={colFilter}>Date</SortTh>
-                <SortTh k="supplier" sort={sort} filter={colFilter}>Fournisseur</SortTh>
+                <SortTh k="date" sort={sort} filter={colFilter}>{tr("Date")}</SortTh>
+                <SortTh k="supplier" sort={sort} filter={colFilter}>{tr("Fournisseur")}</SortTh>
                 <SortTh k="docNumber" sort={sort} filter={colFilter}>N°</SortTh>
-                <SortTh k="worksite" sort={sort} filter={colFilter}>Chantier</SortTh>
-                <SortTh k="category" sort={sort} filter={colFilter}>Catégorie</SortTh>
+                <SortTh k="worksite" sort={sort} filter={colFilter}>{tr("Chantier")}</SortTh>
+                <SortTh k="category" sort={sort} filter={colFilter}>{tr("Catégorie")}</SortTh>
                 <SortTh k="ht" sort={sort} align="right" filter={colFilter}>HT</SortTh>
                 <SortTh k="ttc" sort={sort} align="right" filter={colFilter}>TTC</SortTh>
                 <SortTh k="status" sort={sort}>Statut</SortTh>
@@ -523,7 +524,7 @@ function AchatsInner() {
                   <td style={{ textAlign: 'right' }}><Money value={e.ttc ?? e.ht} /></td>
                   <td>
                     <span className={`badge ${e.paid ? 'ok' : isOverdue(e) ? 'crit' : 'warn'}`}>
-                      {e.paid ? 'Payé' : e.paidAmount > 0 ? 'Partiellement payé' : isOverdue(e) ? 'En retard' : 'Non payé'}
+                      {e.paid ? tr("Payé") : e.paidAmount > 0 ? tr("Partiellement payé") : isOverdue(e) ? tr("En retard") : tr("Non payé")}
                     </span>
                     {e.paidAmount > 0 && !e.paid && <div style={{ fontSize: '0.78rem', marginTop: 4 }}>Payé : <Money value={e.paidAmount} /><br />Reste : <Money value={e.remainingAmount} /></div>}
                     {!e.paid && e.dueDate && (
@@ -814,8 +815,8 @@ function ExpenseModal({
     <div className="modal-scrim">
       <form className="modal" style={{ maxWidth: 640 }} onClick={(e) => e.stopPropagation()} onSubmit={submit}>
         <div className="modal-head">
-          <h2>{expense ? 'Modifier la dépense' : prefillFrom ? `Facture reçue — bordereau ${prefillFrom.docNumber ?? ''}` : 'Nouvelle dépense'}</h2>
-          <button type="button" className="btn ghost" onClick={onClose} aria-label="Fermer">✕</button>
+          <h2>{expense ? 'Modifier la dépense' : prefillFrom ? `Facture reçue — bordereau ${prefillFrom.docNumber ?? ''}` : tr("Nouvelle dépense")}</h2>
+          <button type="button" className="btn ghost" onClick={onClose} aria-label={tr("Fermer")}>✕</button>
         </div>
         {prefillFrom && (
           <div className="banner success" style={{ margin: '0 1.2rem 0.6rem' }}>
@@ -840,7 +841,7 @@ function ExpenseModal({
             </select>
           </div>
           <div className="field" style={{ gridColumn: '1 / -1' }}>
-            <label>Fournisseur</label>
+            <label>{tr("Fournisseur")}</label>
             <ComboBox
               allowFree
               placeholder="chercher ou saisir un nom"
@@ -857,7 +858,7 @@ function ExpenseModal({
             <input className="input" value={v.docNumber} onChange={(e) => set('docNumber', e.target.value)} />
           </div>
           <div className="field">
-            <label>Catégorie</label>
+            <label>{tr("Catégorie")}</label>
             <select className="select" value={v.categoryCode} onChange={(e) => set('categoryCode', e.target.value)}>
               <option value="">{v.categoryRaw || '—'}</option>
               {meta.categories.map((c) => <option key={c.code} value={c.code}>{c.label}</option>)}
@@ -874,7 +875,7 @@ function ExpenseModal({
                   <div key={i} className="row" style={{ gap: '0.4rem' }}>
                     <ComboBox
                       style={{ flex: 1 }}
-                      placeholder="Chantier"
+                      placeholder={tr("Chantier")}
                       value={s.worksiteId}
                       onChange={(val) => setSplits((prev) => prev!.map((x, j) => (j === i ? { ...x, worksiteId: val } : x)))}
                       options={meta.worksites.map((w) => ({ value: w.id, label: w.name }))}
@@ -908,9 +909,7 @@ function ExpenseModal({
             </div>
           ) : (
             <div className="field" style={{ gridColumn: '1 / -1' }}>
-              <label>
-                Chantier
-                {(!expense || expense.editable) && (
+              <label> {tr("Chantier")} {(!expense || expense.editable) && (
                   <button
                     type="button"
                     className="btn ghost"
@@ -946,14 +945,14 @@ function ExpenseModal({
             <input className="input" type="number" step="any" value={v.vatRecup} onChange={(e) => set('vatRecup', e.target.value)} />
           </div>
           <div className="field">
-            <label>Montant TTC</label>
+            <label>{tr("Montant TTC")}</label>
             <input className="input" type="number" step="any" value={v.ttc} onChange={(e) => set('ttc', e.target.value)} />
           </div>
           <div className="field">
             <label>Statut</label>
             {bankMatches.length > 0 ? <div className="muted">{expense?.paymentStatus ?? 'Rapproché'} — calculé d’après les paiements liés</div> : <select className="select" value={v.paymentStatus} onChange={(e) => set('paymentStatus', e.target.value)}>
-              <option value="Non payé">Non payé</option>
-              <option value="Payé">Payé</option>
+              <option value="Non payé">{tr("Non payé")}</option>
+              <option value="Payé">{tr("Payé")}</option>
             </select>}
           </div>
           <div className="field" style={{ gridColumn: '1 / -1' }}>
@@ -1022,8 +1021,8 @@ function ExpenseModal({
                     Inclure les paiements déjà rapprochés à une autre facture
                   </label>
                   <div className="row" style={{ gap: '0.5rem' }}>
-                    <button type="button" className="btn primary" disabled={payBusy} onClick={runPaymentSearch}>{payBusy ? 'Recherche…' : 'Chercher'}</button>
-                    <button type="button" className="btn ghost" onClick={() => { setPayOpen(false); setPayRes(null); }}>Fermer</button>
+                    <button type="button" className="btn primary" disabled={payBusy} onClick={runPaymentSearch}>{payBusy ? tr("Recherche…") : tr("Chercher")}</button>
+                    <button type="button" className="btn ghost" onClick={() => { setPayOpen(false); setPayRes(null); }}>{tr("Fermer")}</button>
                   </div>
                   {payRes && (payRes.length === 0 ? (
                     <span className="muted">Aucun mouvement ne correspond à cette recherche.</span>
@@ -1057,8 +1056,8 @@ function ExpenseModal({
         </div>
         {err && <div className="badge crit" style={{ margin: '0 1.15rem', padding: '0.4rem 0.7rem' }}>{err}</div>}
         <div className="modal-foot">
-          <button type="button" className="btn" onClick={onClose}>Annuler</button>
-          <button type="submit" className="btn primary" disabled={busy}>{busy ? 'Enregistrement…' : 'Enregistrer'}</button>
+          <button type="button" className="btn" onClick={onClose}>{tr("Annuler")}</button>
+          <button type="submit" className="btn primary" disabled={busy}>{busy ? tr("Enregistrement…") : tr("Enregistrer")}</button>
         </div>
       </form>
     </div>
@@ -1107,7 +1106,7 @@ function LinkSlipModal({ slip, onClose, onLinked }: { slip: Expense; onClose: ()
       <div className="modal" style={{ maxWidth: 560 }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h2>Lier le bordereau {slip.docNumber ?? ''} à une facture</h2>
-          <button type="button" className="btn ghost" onClick={onClose} aria-label="Fermer">✕</button>
+          <button type="button" className="btn ghost" onClick={onClose} aria-label={tr("Fermer")}>✕</button>
         </div>
         <div className="modal-body" style={{ gridTemplateColumns: '1fr' }}>
           <div className="row" style={{ gap: '0.5rem', flexWrap: 'wrap' }}>
@@ -1119,7 +1118,7 @@ function LinkSlipModal({ slip, onClose, onLinked }: { slip: Expense; onClose: ()
               </label>
             )}
           </div>
-          {loading && <p className="muted">Recherche…</p>}
+          {loading && <p className="muted">{tr("Recherche…")}</p>}
           {!loading && data && data.items.length === 0 && <p className="muted">Aucune facture d’achat ne correspond.</p>}
           {!loading && data && data.items.length > 0 && (
             <div style={{ display: 'grid', gap: '0.4rem', maxHeight: 320, overflowY: 'auto' }}>
@@ -1141,7 +1140,7 @@ function LinkSlipModal({ slip, onClose, onLinked }: { slip: Expense; onClose: ()
           {err && <div className="badge crit" style={{ padding: '0.4rem 0.7rem' }}>{err}</div>}
         </div>
         <div className="modal-foot">
-          <button type="button" className="btn" onClick={onClose}>Annuler</button>
+          <button type="button" className="btn" onClick={onClose}>{tr("Annuler")}</button>
         </div>
       </div>
     </div>
@@ -1168,7 +1167,7 @@ function PurchaseCandidatesModal({ onClose }: { onClose: () => void }) {
       <div className="modal" style={{ maxWidth: 680 }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h2>Articles récurrents non suivis</h2>
-          <button type="button" className="btn ghost" onClick={onClose} aria-label="Fermer">✕</button>
+          <button type="button" className="btn ghost" onClick={onClose} aria-label={tr("Fermer")}>✕</button>
         </div>
         <div className="modal-body" style={{ display: 'block', maxHeight: '70vh', overflowY: 'auto' }}>
           <p className="muted" style={{ marginTop: 0, fontSize: '0.85rem' }}>
@@ -1183,7 +1182,7 @@ function PurchaseCandidatesModal({ onClose }: { onClose: () => void }) {
           ) : items ? (
             <div className="tbl-wrap">
               <table className="tbl">
-                <thead><tr><th>Article</th><th>Fournisseur</th><th>Réf.</th><th style={{ textAlign: 'right' }}>Factures</th><th></th></tr></thead>
+                <thead><tr><th>{tr("Article")}</th><th>{tr("Fournisseur")}</th><th>Réf.</th><th style={{ textAlign: 'right' }}>{tr("Factures")}</th><th></th></tr></thead>
                 <tbody>
                   {items.map((c) => (
                     <tr key={`${c.contactId}-${c.code}`}>
@@ -1207,7 +1206,7 @@ function PurchaseCandidatesModal({ onClose }: { onClose: () => void }) {
           ) : null}
         </div>
         <div className="modal-foot">
-          <button type="button" className="btn" onClick={onClose}>Fermer</button>
+          <button type="button" className="btn" onClick={onClose}>{tr("Fermer")}</button>
         </div>
       </div>
     </div>

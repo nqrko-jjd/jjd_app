@@ -3,9 +3,10 @@ import { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Shell } from '@/components/Shell';
 import { useRequireAuth } from '@/lib/auth';
+import { AppLanguage } from '@/components/AppLanguage';
 
 /** Espaces accessibles au magasinier : tout le reste (chantiers, devis, finances…) lui est fermé côté API. */
-const STOREKEEPER_PREFIXES = ['/app/stock', '/app/materiel'];
+const STOREKEEPER_PREFIXES = ['/app/stock', '/app/materiel', '/app/profil'];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useRequireAuth();
@@ -20,5 +21,5 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   if (loading) return <div className="empty">Chargement…</div>;
   if (!user || blocked) return <div className="empty">Redirection…</div>;
 
-  return <Shell>{children}</Shell>;
+  return <AppLanguage><Shell>{children}</Shell></AppLanguage>;
 }

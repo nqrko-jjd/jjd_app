@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { Fragment, useState } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, CalendarClock, Wallet, Scale } from 'lucide-react';
@@ -31,10 +32,10 @@ export default function SuppliersPage() {
         <Kpi ic={Wallet} label="Acomptes disponibles" value={<Money value={sum(s => s.unallocatedTotal)} />} sub="Paiements à répartir sur les factures" />
       </div>
       <div className="row" style={{ marginBottom: '1rem', flexWrap: 'wrap' }}>
-        <label>Fournisseur<input className="input" value={query} onChange={e => setQuery(e.target.value)} placeholder="CF Group, BigMat…" /></label>
+        <label>{tr("Fournisseur")}<input className="input" value={query} onChange={e => setQuery(e.target.value)} placeholder="CF Group, BigMat…" /></label>
         <label>Afficher<select className="select" value={filter} onChange={e => setFilter(e.target.value)}><option value="open">Comptes avec un solde ou crédit</option><option value="overdue">Factures échues</option><option value="credit">Crédit chez le fournisseur</option><option value="all">Tous les fournisseurs</option></select></label>
       </div>
-      <div className="card tbl-wrap"><table className="tbl"><thead><tr><th>Fournisseur</th><th>Factures ouvertes</th><th>Échues</th><th>Prochaine échéance</th><th>Acomptes / NC</th><th>Solde net</th><th>Détail</th></tr></thead><tbody>
+      <div className="card tbl-wrap"><table className="tbl"><thead><tr><th>{tr("Fournisseur")}</th><th>Factures ouvertes</th><th>Échues</th><th>Prochaine échéance</th><th>Acomptes / NC</th><th>Solde net</th><th>{tr("Détail")}</th></tr></thead><tbody>
         {rows.length === 0 && <tr><td colSpan={7} className="muted">Aucun fournisseur pour ces critères.</td></tr>}
         {rows.map(s => <Fragment key={s.id}><tr>
           <td>{s.contactId ? <Link href={`/app/contacts/${s.contactId}`}><strong>{s.name}</strong></Link> : <strong>{s.name}</strong>}</td>
@@ -42,9 +43,9 @@ export default function SuppliersPage() {
           <td>{s.nextDue ? formatDateBE(s.nextDue) : s.invoices.some(i => i.remaining > 0 && !i.dueDate) ? 'Échéance à renseigner' : '—'}</td>
           <td className="tnum"><Money value={s.unallocatedTotal + s.credits} /></td>
           <td className="tnum"><strong><Money value={Math.abs(s.balance)} /></strong><div className="muted">{s.balance < 0 ? 'Crédit chez le fournisseur' : s.balance > 0 ? 'À régler' : 'Compte soldé'}</div></td>
-          <td><button className="btn" aria-expanded={expanded === s.id} onClick={() => setExpanded(expanded === s.id ? null : s.id)}>{expanded === s.id ? 'Fermer' : 'Voir le compte'}</button></td>
+          <td><button className="btn" aria-expanded={expanded === s.id} onClick={() => setExpanded(expanded === s.id ? null : s.id)}>{expanded === s.id ? tr("Fermer") : 'Voir le compte'}</button></td>
         </tr>{expanded === s.id && <tr><td colSpan={7} style={{ background: 'var(--surface-2)', padding: '1rem' }}>
-          <h3>Factures de {s.name}</h3><div className="tbl-wrap"><table className="tbl"><thead><tr><th>Facture</th><th>Date</th><th>Échéance</th><th>Total</th><th>Affecté</th><th>Reste à régler</th></tr></thead><tbody>
+          <h3>Factures de {s.name}</h3><div className="tbl-wrap"><table className="tbl"><thead><tr><th>{tr("Facture")}</th><th>{tr("Date")}</th><th>Échéance</th><th>Total</th><th>Affecté</th><th>Reste à régler</th></tr></thead><tbody>
             {s.invoices.map(i => <tr key={i.id}><td><Link href={`/app/achats?q=${encodeURIComponent(i.number ?? s.name)}`}>{i.number ?? 'Voir la facture'}</Link></td><td>{formatDateBE(i.date)}</td><td>{i.dueDate ? formatDateBE(i.dueDate) : 'À renseigner'}</td><td><Money value={i.total} /></td><td><Money value={i.paid} /></td><td><Money value={i.remaining} /></td></tr>)}
           </tbody></table></div>
           <h3>Acomptes disponibles : <Money value={s.unallocatedTotal} /></h3>

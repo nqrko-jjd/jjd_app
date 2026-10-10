@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { useState } from 'react';
 import { api } from '@/lib/api';
 import { AddressAutocomplete } from './AddressAutocomplete';
@@ -157,7 +158,7 @@ export function NewWorksiteWizard({
       <div className="modal wiz" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h2>Nouveau chantier</h2>
-          <button type="button" className="btn ghost" onClick={onClose} aria-label="Fermer">✕</button>
+          <button type="button" className="btn ghost" onClick={onClose} aria-label={tr("Fermer")}>✕</button>
         </div>
         <div className="wiz-body">
           <div className="wiz-steps">
@@ -281,7 +282,7 @@ export function NewWorksiteWizard({
                 />
               </div>
               <div className="wiz-section-head full">
-                <strong>Personnes de contact</strong>
+                <strong>{tr("Personnes de contact")}</strong>
                 <button type="button" className="btn ghost" disabled={Object.values(contactPending).some(Boolean)} onClick={() => patch({ contacts: [...v.contacts, newContact()] })}>＋ Ajouter</button>
               </div>
               {v.contacts.length === 0 && (
@@ -291,7 +292,7 @@ export function NewWorksiteWizard({
                 <section className="wiz-contact full" key={i}>
                   <div className="wiz-section-head">
                     <strong>Contact {i + 1}</strong>
-                    <button type="button" className="btn ghost" disabled={Object.values(contactPending).some(Boolean)} onClick={() => patch({ contacts: v.contacts.filter((_, idx) => idx !== i) })}>Retirer</button>
+                    <button type="button" className="btn ghost" disabled={Object.values(contactPending).some(Boolean)} onClick={() => patch({ contacts: v.contacts.filter((_, idx) => idx !== i) })}>{tr("Retirer")}</button>
                   </div>
                   <ContactRoleEditor onPending={pending => setContactPending(prev => ({ ...prev, [i]: pending }))} value={c} onChange={(next) => patchContact(i, next)} />
                 </section>
@@ -376,7 +377,7 @@ export function NewWorksiteWizard({
                 <div>Les informations restent modifiables depuis la fiche du chantier.</div>
               </div>
               <dl className="wiz-summary">
-                <dt>Demande</dt>
+                <dt>{tr("Demande")}</dt>
                 <dd>{v.title || '—'} · {WORKSITE_REQUEST_KIND_LABEL[v.requestKind as keyof typeof WORKSITE_REQUEST_KIND_LABEL] ?? v.requestKind}</dd>
                 <dt>Client / donneur d’ordre</dt>
                 <dd>{v.clientLabel || '—'}</dd>
@@ -388,15 +389,15 @@ export function NewWorksiteWizard({
                 <dd>{people.find((p) => p.id === v.managerId)?.name ?? 'À préciser'} · {WORKSITE_PRIORITY_LABEL[v.priority as keyof typeof WORKSITE_PRIORITY_LABEL]}</dd>
                 <dt>Contacts</dt>
                 <dd>
-                  {v.contacts.length === 0 ? 'Aucun' : v.contacts.map((c, i) => (
+                  {v.contacts.length === 0 ? tr("Aucun") : v.contacts.map((c, i) => (
                     <div key={i}>{WORKSITE_CONTACT_ROLE_LABEL[c.role as keyof typeof WORKSITE_CONTACT_ROLE_LABEL]} : {c.name}{c.phone ? ` · ${c.phone}` : ''}</div>
                   ))}
                 </dd>
-                <dt>Accès</dt>
+                <dt>{tr("Accès")}</dt>
                 <dd>{v.accessNotes || 'À préciser'}</dd>
                 <dt>Mode de travail</dt>
                 <dd>{WORKSITE_BILLING_MODE_LABEL[v.billingMode as keyof typeof WORKSITE_BILLING_MODE_LABEL] ?? '—'}</dd>
-                <dt>Devis</dt>
+                <dt>{tr("Devis")}</dt>
                 <dd>{v.quotedHt ? `${v.quotedHt} € HT` : 'Montant à préciser'}{v.quoteRef ? ` · ${v.quoteRef}` : ''}</dd>
                 <dt>Destinataire de facturation</dt>
                 <dd>{v.billToLabel || v.clientLabel || '—'}{v.billToAttn ? ` · ${v.billToAttn}` : ''}</dd>
@@ -411,7 +412,7 @@ export function NewWorksiteWizard({
           )}
         </div>
         <div className="modal-foot">
-          <button type="button" className="btn" onClick={onClose}>Annuler</button>
+          <button type="button" className="btn" onClick={onClose}>{tr("Annuler")}</button>
           {step > 0 && <button type="button" className="btn" disabled={Object.values(contactPending).some(Boolean)} onClick={goBack}>← Retour</button>}
           {step < STEPS.length - 1 ? (
             <button type="button" className="btn primary" disabled={Object.values(contactPending).some(Boolean)} onClick={goNext}>Continuer →</button>

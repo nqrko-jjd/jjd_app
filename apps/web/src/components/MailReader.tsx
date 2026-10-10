@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Paperclip, FileText, Image as ImageIcon, FileSpreadsheet, File as FileIcon } from 'lucide-react';
 import { apiBlobUrl } from '@/lib/api';
@@ -105,7 +106,7 @@ export function MailReader({ subject, from, to, date, html, text, attachments = 
 
       {attachments.length > 0 && (
         <div className="mx-atts" aria-label="Pièces jointes">
-          <div className="mx-atts-title"><Paperclip size={14} /> {attachments.length} pièce{attachments.length > 1 ? 's' : ''} jointe{attachments.length > 1 ? 's' : ''}</div>
+          <div className="mx-atts-title"><Paperclip size={14} /> {attachments.length} {tr("pièce")}{attachments.length > 1 ? 's' : ''} jointe{attachments.length > 1 ? 's' : ''}</div>
           <div className="mx-att-list">
             {attachments.map((a, i) => {
               const Icon = iconFor(a.type, a.name);
@@ -123,7 +124,7 @@ export function MailReader({ subject, from, to, date, html, text, attachments = 
       )}
 
       <div className="mx-body">
-        {html ? <HtmlBody html={html} /> : text ? <div className="mx-text">{text}</div> : <p className="muted" style={{ margin: 0, padding: '1rem' }}>Ce mail n’a pas de texte.</p>}
+        {html ? <HtmlBody html={html} /> : text ? <div className="mx-text">{text}</div> : <p className="muted" style={{ margin: 0, padding: '1rem' }}>{tr("Ce mail n’a pas de texte.")}</p>}
       </div>
       {children}
     </article>

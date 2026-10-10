@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -38,13 +39,13 @@ export default function PreparationsPage() {
     <>
       {creating && <NewOrderModal onClose={() => setCreating(false)} onCreated={(id) => router.push(`/app/stock/preparations/${id}`)} />}
       <PageHead
-        eyebrow="Magasin"
+        eyebrow={tr("Magasin")}
         title="Préparations de commande"
         sub="Le bureau crée la liste pour un chantier, le magasinier la prépare en scannant chaque article"
         action={canManage ? <button className="btn primary" onClick={() => setCreating(true)}>+ Nouvelle préparation</button> : undefined}
       />
       <div className="msg-filter-chips" style={{ marginBottom: '1rem' }}>
-        <button className={tab === 'open' ? 'on' : ''} onClick={() => setTab('open')}>À préparer</button>
+        <button className={tab === 'open' ? 'on' : ''} onClick={() => setTab('open')}>{tr("À préparer")}</button>
         <button className={tab === 'prepared' ? 'on' : ''} onClick={() => setTab('prepared')}>Préparées</button>
       </div>
       {loading && !data && <SkeletonRows />}
@@ -71,7 +72,7 @@ export default function PreparationsPage() {
               </div>
               <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                 <div style={{ fontSize: '1.4rem', fontWeight: 800 }}>{o.doneLines}/{o.lineCount}</div>
-                <div className="muted" style={{ fontSize: '0.75rem' }}>articles prêts</div>
+                <div className="muted" style={{ fontSize: '0.75rem' }}>{tr("articles prêts")}</div>
               </div>
             </div>
           </Link>
@@ -247,7 +248,7 @@ function NewOrderModal({ onClose, onCreated }: { onClose: () => void; onCreated:
       <form className="modal wiz" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
         <div className="modal-head">
           <h2>Nouvelle préparation de commande</h2>
-          <button type="button" className="btn ghost" onClick={onClose} aria-label="Fermer">✕</button>
+          <button type="button" className="btn ghost" onClick={onClose} aria-label={tr("Fermer")}>✕</button>
         </div>
         <div className="wiz-body">
           <div className="plan-form-intro">
@@ -285,7 +286,7 @@ function NewOrderModal({ onClose, onCreated }: { onClose: () => void; onCreated:
           <fieldset>
             <legend>02 · Articles à préparer</legend>
             <div className="row" style={{ gap: '0.5rem', marginBottom: '0.4rem', fontSize: '0.76rem', fontWeight: 700, color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
-              <div style={{ flex: 1 }}>Article</div>
+              <div style={{ flex: 1 }}>{tr("Article")}</div>
               <div style={{ width: 90 }}>Quantité</div>
               <div style={{ width: 130 }}>Unité</div>
               <div style={{ width: 30 }} />
@@ -330,7 +331,7 @@ function NewOrderModal({ onClose, onCreated }: { onClose: () => void; onCreated:
           </fieldset>
         </div>
         <div className="modal-foot">
-          <button type="button" className="btn" onClick={onClose}>Annuler</button>
+          <button type="button" className="btn" onClick={onClose}>{tr("Annuler")}</button>
           <button type="submit" className="btn primary" disabled={busy}>{busy ? 'Création…' : 'Créer la préparation'}</button>
         </div>
       </form>

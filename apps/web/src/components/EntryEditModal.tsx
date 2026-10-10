@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { useState } from 'react';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
@@ -44,22 +45,22 @@ export function EntryEditModal({ entry, onClose, onDone }: { entry: EditableEntr
       <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={submit} style={{ maxWidth: 440 }}>
         <div className="modal-head">
           <h2>Modifier le pointage</h2>
-          <button type="button" className="btn ghost" onClick={onClose} aria-label="Fermer">✕</button>
+          <button type="button" className="btn ghost" onClick={onClose} aria-label={tr("Fermer")}>✕</button>
         </div>
         <div className="wiz-body">
           {err && <div className="plan-form-error">{err}</div>}
           <div className="wiz-grid">
             <div className="field">
-              <label>Date</label>
+              <label>{tr("Date")}</label>
               <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
             </div>
             <div className="field">
-              <label>Heures</label>
+              <label>{tr("Heures")}</label>
               <input className="input" type="number" step="0.25" min="0" value={hours} onChange={(e) => setHours(e.target.value)} />
             </div>
           </div>
           <div className="field full" style={{ marginTop: '0.7rem' }}>
-            <label>Chantier</label>
+            <label>{tr("Chantier")}</label>
             <ComboBox placeholder="— (frais général)" value={worksiteId} onChange={setWorksiteId} options={meta?.worksites.map((w) => ({ value: w.id, label: w.name })) ?? []} />
           </div>
           <div className="field" style={{ marginTop: '0.7rem' }}>
@@ -72,8 +73,8 @@ export function EntryEditModal({ entry, onClose, onDone }: { entry: EditableEntr
           </div>
         </div>
         <div className="modal-foot">
-          <button type="button" className="btn" onClick={onClose}>Annuler</button>
-          <button type="submit" className="btn primary" disabled={busy}>{busy ? 'Enregistrement…' : 'Enregistrer'}</button>
+          <button type="button" className="btn" onClick={onClose}>{tr("Annuler")}</button>
+          <button type="submit" className="btn primary" disabled={busy}>{busy ? tr("Enregistrement…") : tr("Enregistrer")}</button>
         </div>
       </form>
     </div>

@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { useRef, useState } from 'react';
 import { api, apiBlobUrl, apiUpload } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -80,8 +81,8 @@ export function PurchaseOrderFiles({ orderId, files, onChanged }: { orderId: str
                   <td className="mono" style={{ whiteSpace: 'nowrap' }}>{sizeLabel(f.size)}</td>
                   <td style={{ whiteSpace: 'nowrap' }}>{formatDateBE(f.createdAt)}</td>
                   <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
-                    <button className="btn" onClick={() => open(f)}>Ouvrir</button>
-                    {canEdit && <>{' '}<button className="btn ghost" onClick={() => remove(f)} aria-label="Supprimer">🗑</button></>}
+                    <button className="btn" onClick={() => open(f)}>{tr("Ouvrir")}</button>
+                    {canEdit && <>{' '}<button className="btn ghost" onClick={() => remove(f)} aria-label={tr("Supprimer")}>🗑</button></>}
                   </td>
                 </tr>
               ))}

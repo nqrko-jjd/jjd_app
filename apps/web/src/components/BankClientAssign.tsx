@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { useState } from 'react';
 import { api } from '@/lib/api';
 import { Money } from '@/lib/ui';
@@ -41,7 +42,7 @@ export function BankClientAssign({ txId, amount, shares, contact, onDone, suppli
         </div>
       )}
       <div className="muted">
-        {contact ? <>{supplier ? 'Fournisseur' : 'Client'} : <strong>{contact.name}</strong>{' '}<button type="button" className="bank-document-link" disabled={busy} onClick={() => setPicking((v) => !v)}>changer</button>{' · '}<button type="button" className="bank-document-link" disabled={busy} onClick={() => assign(null)}>retirer</button></>
+        {contact ? <>{supplier ? tr("Fournisseur") : 'Client'} : <strong>{contact.name}</strong>{' '}<button type="button" className="bank-document-link" disabled={busy} onClick={() => setPicking((v) => !v)}>changer</button>{' · '}<button type="button" className="bank-document-link" disabled={busy} onClick={() => assign(null)}>retirer</button></>
           : remaining > 0.01 ? <button type="button" className="bank-document-link" disabled={busy} onClick={() => setPicking((v) => !v)}>{supplier ? 'Attribuer à un fournisseur…' : 'Attribuer à un client…'}</button> : null}
       </div>
       {picking && (

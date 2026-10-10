@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { SkeletonRows, EmptyState } from '@/components/States';
 import { useState } from 'react';
 import Link from 'next/link';
@@ -105,7 +106,7 @@ export default function StockPage() {
       </div>
 
       <div className="msg-filter-chips" style={{ marginBottom: '1rem' }}>
-        <button className={stockFilter === 'all' ? 'on' : ''} onClick={() => setStockFilter('all')}>Tous</button>
+        <button className={stockFilter === 'all' ? 'on' : ''} onClick={() => setStockFilter('all')}>{tr("Tous")}</button>
         <button className={stockFilter === 'low' ? 'on' : ''} onClick={() => setStockFilter('low')}>À réapprovisionner</button>
         <button className={stockFilter === 'ok' ? 'on' : ''} onClick={() => setStockFilter('ok')}>Disponible</button>
       </div>
@@ -123,7 +124,7 @@ export default function StockPage() {
       {loading && <SkeletonRows />}
       {data && filteredItems.length === 0 && <EmptyState
           icon={Warehouse}
-          title="Aucun article"
+          title={tr("Aucun article")}
           text="Aucun article de stock ne correspond à cette recherche ou à ce filtre. Ajoutez un article pour suivre ses entrées et sorties."
           action={<button className="btn primary" onClick={() => setCreating(true)}>+ Nouvel article</button>}
         />}
@@ -171,8 +172,8 @@ export default function StockPage() {
             <thead>
               <tr>
                 <SortTh k="ref" sort={sort} filter={colFilter}>Réf.</SortTh>
-                <SortTh k="name" sort={sort} filter={colFilter}>Article</SortTh>
-                <SortTh k="category" sort={sort} filter={colFilter}>Catégorie</SortTh>
+                <SortTh k="name" sort={sort} filter={colFilter}>{tr("Article")}</SortTh>
+                <SortTh k="category" sort={sort} filter={colFilter}>{tr("Catégorie")}</SortTh>
                 <SortTh k="qty" sort={sort} align="right" filter={colFilter}>Quantité</SortTh>
                 <SortTh k="value" sort={sort} align="right" filter={colFilter}>Valeur</SortTh>
                 {showInactive && <th></th>}

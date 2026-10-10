@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { SkeletonRows, ErrorState } from '@/components/States';
 import { useState } from 'react';
 import Link from 'next/link';
@@ -37,7 +38,7 @@ export default function PvPage() {
         <div className="tbl-wrap">
           <table className="tbl">
             <thead>
-              <tr><th>Date</th><th>Véhicule</th><th>Type</th><th>À payer à</th><th>Réf</th><th style={{ textAlign: 'right' }}>Montant</th><th>Statut</th></tr>
+              <tr><th>{tr("Date")}</th><th>{tr("Véhicule")}</th><th>Type</th><th>À payer à</th><th>Réf</th><th style={{ textAlign: 'right' }}>Montant</th><th>Statut</th></tr>
             </thead>
             <tbody>
               {data.items.map((f) => (
@@ -55,7 +56,7 @@ export default function PvPage() {
                   <td>{f.payTo ?? '—'}</td>
                   <td className="mono" style={{ fontSize: '0.78rem' }}>{f.reference ?? '—'}</td>
                   <td style={{ textAlign: 'right' }}><Money value={f.amount} /></td>
-                  <td>{f.status === 'Payé' ? <span className="badge ok">Payé</span> : <span className="badge crit">Impayé</span>}</td>
+                  <td>{f.status === 'Payé' ? <span className="badge ok">{tr("Payé")}</span> : <span className="badge crit">{tr("Impayé")}</span>}</td>
                 </tr>
               ))}
             </tbody>

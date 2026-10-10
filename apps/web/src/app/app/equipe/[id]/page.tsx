@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { SkeletonRows, EmptyState, ErrorState } from '@/components/States';
 import { use, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -240,7 +241,7 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
           <button className="btn" onClick={async () => { await api(`/api/people/${id}`, { method: 'PATCH', body: { active: !p.active } }); reload(); }}>
             {p.active ? 'Marquer ancien' : 'Réactiver'}
           </button>
-          <button className="btn" onClick={() => setEditing(true)}>Modifier</button>
+          <button className="btn" onClick={() => setEditing(true)}>{tr("Modifier")}</button>
         </div>
       </div>
 
@@ -273,9 +274,9 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
           <Info label="Taux horaire" value={p.hourlyRate != null ? <Money value={p.hourlyRate} /> : <span className="badge warn">à définir</span>} />
           <Info label="Heures payées / jour presté" value={`${p.dailyHours} h`} />
           <Info label="Spécialités" value={(p.specialties ?? []).join(', ') || '—'} />
-          <Info label="Téléphone" value={p.phone ?? '—'} />
+          <Info label={tr("Téléphone")} value={p.phone ?? '—'} />
           <Info label="E-mail" value={p.email ?? '—'} />
-          <Info label="Adresse" value={[p.address, p.box && `bte ${p.box}`].filter(Boolean).join(', ') || '—'} />
+          <Info label={tr("Adresse")} value={[p.address, p.box && `bte ${p.box}`].filter(Boolean).join(', ') || '—'} />
           <Info label="Langues" value={(p.languages ?? []).join(', ') || '—'} />
           <Info label="Contact d'urgence" value={p.emergencyContact ?? '—'} />
           <Info
@@ -306,10 +307,10 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
               {upcomingEvents.slice(0, 6).map((e) => (
                 <div key={e.id} className="row" style={{ justifyContent: 'space-between', fontSize: '0.85rem' }}>
                   <div>
-                    <strong>{dayOf(e.startAt) === today ? 'Aujourd’hui' : dayShort(dayOf(e.startAt))}</strong> · {hhmm(e.startAt)}–{hhmm(e.endAt)}
+                    <strong>{dayOf(e.startAt) === today ? tr("Aujourd’hui") : dayShort(dayOf(e.startAt))}</strong> · {hhmm(e.startAt)}–{hhmm(e.endAt)}
                     <div className="muted" style={{ fontSize: '0.8rem' }}><span className="mono">{e.worksite.ref}</span> · {e.worksite.city ?? e.worksite.title}</div>
                   </div>
-                  {e.status === 'tentative' && <span className="badge plain">À confirmer</span>}
+                  {e.status === 'tentative' && <span className="badge plain">{tr("À confirmer")}</span>}
                 </div>
               ))}
             </div>
@@ -367,14 +368,14 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
           <div className="kpis" style={{ marginBottom: '1rem' }}>
             <Kpi ic={Wallet} label="Total perçu" value={<Money value={earnings.total.amount} />} sub={`${formatEur(earnings.total.amount / earnings.total.years)} / an en moyenne`} />
             <Kpi ic={Sigma} label="Heures payées" value={formatHours(earnings.total.hours)} sub={`${formatHours(earnings.total.hours / earnings.total.worksites)} / chantier`} />
-            <Kpi ic={Building2} label="Chantiers" value={earnings.total.worksites} sub="Sur toute la période" />
+            <Kpi ic={Building2} label={tr("Chantiers")} value={earnings.total.worksites} sub="Sur toute la période" />
             <Kpi ic={CalendarDays} label="Années" value={earnings.total.years} sub="Historique disponible" />
           </div>
 
           <div className="grid" style={{ gridTemplateColumns: '1fr 1.4fr', gap: '1.2rem', alignItems: 'start' }}>
             <div className="tbl-wrap">
               <table className="tbl">
-                <thead><tr><th>Année</th><th style={{ textAlign: 'right' }}>Heures</th><th style={{ textAlign: 'right' }}>Montant</th><th style={{ textAlign: 'right' }}>Chantiers</th></tr></thead>
+                <thead><tr><th>Année</th><th style={{ textAlign: 'right' }}>{tr("Heures")}</th><th style={{ textAlign: 'right' }}>Montant</th><th style={{ textAlign: 'right' }}>{tr("Chantiers")}</th></tr></thead>
                 <tbody>
                   {earnings.byYear.map((y) => (
                     <tr key={y.year}>
@@ -393,8 +394,8 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
                 <table className="tbl">
                   <thead>
                     <tr>
-                      <SortTh k="ref" sort={worksiteSort}>Chantier</SortTh>
-                      <SortTh k="hours" sort={worksiteSort} align="right">Heures</SortTh>
+                      <SortTh k="ref" sort={worksiteSort}>{tr("Chantier")}</SortTh>
+                      <SortTh k="hours" sort={worksiteSort} align="right">{tr("Heures")}</SortTh>
                       <SortTh k="amount" sort={worksiteSort} align="right">Montant</SortTh>
                       <SortTh k="margin" sort={worksiteSort} align="right">Rentabilité du chantier</SortTh>
                     </tr>
@@ -439,7 +440,7 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
         ) : (
           <div className="tbl-wrap">
             <table className="tbl">
-              <thead><tr><th>Date</th><th>Type</th><th style={{ textAlign: 'right' }}>Montant</th><th>Note</th><th>Statut</th><th /></tr></thead>
+              <thead><tr><th>{tr("Date")}</th><th>Type</th><th style={{ textAlign: 'right' }}>Montant</th><th>Note</th><th>Statut</th><th /></tr></thead>
               <tbody>
                 {p.adjustments.map((a) => (
                   <tr key={a.id}>
@@ -454,7 +455,7 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
                     </td>
                     <td style={{ textAlign: 'right' }}>
                       <div className="row" style={{ gap: '0.3rem', justifyContent: 'flex-end' }}>
-                        <button className="btn ghost" style={{ padding: '0.15rem 0.45rem', fontSize: '0.75rem' }} onClick={() => setAdjModal(a)}>Modifier</button>
+                        <button className="btn ghost" style={{ padding: '0.15rem 0.45rem', fontSize: '0.75rem' }} onClick={() => setAdjModal(a)}>{tr("Modifier")}</button>
                         <button className="btn ghost" style={{ padding: '0.15rem 0.45rem', fontSize: '0.75rem' }} onClick={() => removeAdjustment(a.id)}>✕</button>
                       </div>
                     </td>
@@ -467,9 +468,7 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
       </section>
 
       <section style={{ marginBottom: '1.4rem' }}>
-        <div className="section-title">
-          Documents légaux
-          <button className="btn primary" style={{ marginLeft: 'auto', padding: '0.2rem 0.7rem', fontSize: '0.8rem' }} onClick={() => setAddingDoc(true)}>+ Ajouter</button>
+        <div className="section-title"> {tr("Documents légaux")} <button className="btn primary" style={{ marginLeft: 'auto', padding: '0.2rem 0.7rem', fontSize: '0.8rem' }} onClick={() => setAddingDoc(true)}>+ Ajouter</button>
         </div>
         {p.legalDocs.length === 0 ? (
           <div className="card card-pad muted">Aucun document enregistré (A1, Limosa, VCA, permis…).</div>
@@ -486,7 +485,7 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
                       <td className="mono">{d.number ?? '—'}</td>
                       <td className="tnum">{d.expiresOn ? <span className={soon ? 'badge crit' : ''}>{formatDateBE(d.expiresOn)}</span> : '—'}</td>
                       <td><DocFile docId={d.id} hasFile={!!d.fileUrl} personId={id} onView={() => viewDocFile(d.id)} onUploaded={reload} /></td>
-                      <td style={{ textAlign: 'right' }}><button className="btn ghost" onClick={() => removeDoc(d.id)} aria-label="Supprimer">✕</button></td>
+                      <td style={{ textAlign: 'right' }}><button className="btn ghost" onClick={() => removeDoc(d.id)} aria-label={tr("Supprimer")}>✕</button></td>
                     </tr>
                   );
                 })}
@@ -520,7 +519,7 @@ function DocFile({ personId, docId, hasFile, onView, onUploaded }: { personId: s
       <input ref={inputRef} type="file" accept="application/pdf,image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); }} />
       {hasFile && <button className="btn" style={{ padding: '0.15rem 0.5rem', fontSize: '0.76rem' }} onClick={onView}>Voir 📎</button>}
       <button className="btn" style={{ padding: '0.15rem 0.5rem', fontSize: '0.76rem' }} disabled={busy} onClick={() => inputRef.current?.click()}>
-        {busy ? 'Envoi…' : hasFile ? 'Remplacer' : 'Joindre'}
+        {busy ? tr("Envoi…") : hasFile ? 'Remplacer' : 'Joindre'}
       </button>
     </div>
   );

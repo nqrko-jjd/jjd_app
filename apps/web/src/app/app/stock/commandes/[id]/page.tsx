@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { use, useRef, useState } from 'react';
 import Link from 'next/link';
 import '../../warehouse-workflow.css';
@@ -167,7 +168,7 @@ export default function CommandeDetail({ params }: { params: Promise<{ id: strin
           <a className="btn" href={`/imprimer/commande/${order.id}`} target="_blank" rel="noreferrer">🖨️ Imprimer</a>
           {canOrder && order.status === 'draft' && <button className="btn primary" disabled={busy || scanning > 0} onClick={() => act('place')}>Marquer comme commandée</button>}
           {canOrder && order.status === 'partial' && <button className="btn" disabled={busy || scanning > 0} onClick={() => act('close', 'Clôturer cette commande ? Le reste ne sera plus attendu.')}>Clôturer (reste non livré)</button>}
-          {canOrder && (order.status === 'draft' || order.status === 'ordered') && <button className="btn" disabled={busy || scanning > 0} onClick={() => act('cancel', 'Annuler cette commande ?')}>Annuler</button>}
+          {canOrder && (order.status === 'draft' || order.status === 'ordered') && <button className="btn" disabled={busy || scanning > 0} onClick={() => act('cancel', 'Annuler cette commande ?')}>{tr("Annuler")}</button>}
         </div>
       </div>
 
@@ -230,7 +231,7 @@ export default function CommandeDetail({ params }: { params: Promise<{ id: strin
                   {done && <span className="badge ok">✓ complet</span>}
                 </div>
               </div>
-              {open && canManage && <div className="warehouse-line-actions">{!done && <button className="btn" disabled={busy || scanning > 0} onClick={() => setPending((m) => ({ ...m, [l.id]: Math.max(0, l.qty - l.receivedQty) }))}>Tout reçu</button>}<button className="btn ghost" disabled={busy || scanning > 0} onClick={() => setEditing(editing === l.id ? null : l.id)}>{editing === l.id ? 'Fermer' : 'Ajuster'}</button>{p > 0 && <span className="badge ok">{fmt(p)} {unit} à valider</span>}</div>}
+              {open && canManage && <div className="warehouse-line-actions">{!done && <button className="btn" disabled={busy || scanning > 0} onClick={() => setPending((m) => ({ ...m, [l.id]: Math.max(0, l.qty - l.receivedQty) }))}>Tout reçu</button>}<button className="btn ghost" disabled={busy || scanning > 0} onClick={() => setEditing(editing === l.id ? null : l.id)}>{editing === l.id ? tr("Fermer") : 'Ajuster'}</button>{p > 0 && <span className="badge ok">{fmt(p)} {unit} {tr("à valider")}</span>}</div>}
               {open && canManage && editing === l.id && (
                 <fieldset className="warehouse-edit-lock" disabled={busy || scanning > 0}><div className="row" style={{ gap: '0.4rem', marginTop: '0.6rem', alignItems: 'center' }}>
                   <span className="muted" style={{ fontSize: '0.8rem' }}>Reçu maintenant :</span>
@@ -253,7 +254,7 @@ export default function CommandeDetail({ params }: { params: Promise<{ id: strin
           <div className="row" style={{ gap: '0.6rem', alignItems: 'center' }}>
             <input className="input" style={{ maxWidth: 260 }} placeholder="N° du bon de livraison (facultatif)" value={deliveryNote} disabled={busy} onChange={(e) => setDeliveryNote(e.target.value)} />
             <button className="btn primary" style={{ flex: 1, padding: '0.9rem', fontSize: '1.05rem' }} disabled={busy || scanning > 0 || loading || pendingCount === 0} onClick={receive}>
-              {busy ? 'Enregistrement…' : pendingCount ? `Valider la réception (${pendingCount} ligne${pendingCount > 1 ? 's' : ''})` : 'Scannez ou saisissez ce qui est arrivé'}
+              {busy ? tr("Enregistrement…") : pendingCount ? `Valider la réception (${pendingCount} ligne${pendingCount > 1 ? 's' : ''})` : 'Scannez ou saisissez ce qui est arrivé'}
             </button>
           </div>
         </div>

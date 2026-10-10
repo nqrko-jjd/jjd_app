@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { useMemo, useState } from 'react';
 
 type Worksite = { id: string; ref: string; title: string; city: string | null; client: { name: string } | null };
@@ -74,7 +75,7 @@ export function WorksitePicker({
           ))}
         </div>
       )}
-      <button type="button" className="btn" onClick={onCancel}>Annuler</button>
+      <button type="button" className="btn" onClick={onCancel}>{tr("Annuler")}</button>
     </div>
   );
 }
@@ -114,7 +115,7 @@ export function LocationPicker({
       />
       <div className="row" style={{ gap: 8 }}>
         <button type="button" className="btn primary" disabled={!loc.trim()} onClick={submit}>Confirmer le retour</button>
-        <button type="button" className="btn" onClick={onCancel}>Annuler</button>
+        <button type="button" className="btn" onClick={onCancel}>{tr("Annuler")}</button>
       </div>
     </div>
   );

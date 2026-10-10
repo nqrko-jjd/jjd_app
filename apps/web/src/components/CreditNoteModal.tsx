@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { formatEur } from '@/lib/ui';
@@ -52,7 +53,7 @@ export function CreditNoteModal({ invoice, creditedTtc, onClose, onCreated }: {
       <form className="modal" style={{ maxWidth: 560 }} onClick={(e) => e.stopPropagation()} onSubmit={submit}>
         <div className="modal-head">
           <h2>Note de crédit sur la facture {invoice.number}</h2>
-          <button type="button" className="btn ghost" onClick={onClose} aria-label="Fermer">✕</button>
+          <button type="button" className="btn ghost" onClick={onClose} aria-label={tr("Fermer")}>✕</button>
         </div>
         <div className="modal-body">
           <div className="field" style={{ gridColumn: '1 / -1' }}>
@@ -92,7 +93,7 @@ export function CreditNoteModal({ invoice, creditedTtc, onClose, onCreated }: {
         </div>
         {err && <div className="badge crit" style={{ margin: '0 1.15rem', padding: '0.4rem 0.7rem' }}>{err}</div>}
         <div className="modal-foot">
-          <button type="button" className="btn" onClick={onClose}>Annuler</button>
+          <button type="button" className="btn" onClick={onClose}>{tr("Annuler")}</button>
           <button type="submit" className="btn primary" disabled={busy}>{busy ? 'Création…' : issue ? 'Créer et émettre' : 'Créer la note de crédit'}</button>
         </div>
       </form>

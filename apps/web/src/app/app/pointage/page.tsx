@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { SkeletonRows, ErrorState, EmptyState, Banner } from '@/components/States';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -76,7 +77,7 @@ export default function PointagePage() {
       {editing && <EntryEditModal entry={editing} onClose={() => setEditing(null)} onDone={() => { setEditing(null); reload(); }} />}
       <PageHead
         eyebrow="Suivi du temps"
-        title="Pointage"
+        title={tr("Pointage")}
         sub="Heures à valider avant le décompte de paie"
         action={
           <div className="row">
@@ -102,8 +103,8 @@ export default function PointagePage() {
 
       {items.length > 0 && (
         <div className="kpis" style={{ marginBottom: '1.4rem' }}>
-          <Kpi ic={Clock} label="Heures" value={formatHours(totalHours)} sub={`${byPerson.size} collaborateur${byPerson.size > 1 ? 's' : ''}`} hero />
-          <Kpi ic={ClipboardCheck} label="À valider" value={items.length} sub="Lignes de pointage" />
+          <Kpi ic={Clock} label={tr("Heures")} value={formatHours(totalHours)} sub={`${byPerson.size} collaborateur${byPerson.size > 1 ? 's' : ''}`} hero />
+          <Kpi ic={ClipboardCheck} label={tr("À valider")} value={items.length} sub="Lignes de pointage" />
           <Kpi ic={Building2} label="Chantiers concernés" value={worksiteCount} sub="En attente de validation" />
           <Kpi ic={Euro} label="Montant" value={<Money value={totalAmount} />} sub="HT, avant validation" />
           <Kpi
@@ -122,7 +123,7 @@ export default function PointagePage() {
       {data && items.length === 0 && (
         <EmptyState
           icon={ClipboardCheck}
-          title="Rien à valider"
+          title={tr("Rien à valider")}
           text="Tous les pointages sont validés. Cette file se remplit dès qu’un ouvrier arrête son compteur, ou quand vous saisissez des heures."
           action={<button className="btn primary" onClick={() => setAdding(true)}>Saisir des heures</button>}
           secondary={<Link href="/app/pointage/decomptes" className="btn">Voir les décomptes du mois</Link>}
@@ -160,7 +161,7 @@ export default function PointagePage() {
               <div className="tbl-wrap">
                 <table className="tbl">
                   <thead>
-                    <tr><th>Date</th><th>Chantier</th><th>Tâche</th><th>Lieu</th><th style={{ textAlign: 'right' }}>Heures</th><th style={{ textAlign: 'right' }}>Montant</th><th></th></tr>
+                    <tr><th>{tr("Date")}</th><th>{tr("Chantier")}</th><th>Tâche</th><th>Lieu</th><th style={{ textAlign: 'right' }}>{tr("Heures")}</th><th style={{ textAlign: 'right' }}>Montant</th><th></th></tr>
                   </thead>
                   <tbody>
                     {entries.map((e) => (
@@ -185,8 +186,8 @@ export default function PointagePage() {
                         <td style={{ textAlign: 'right' }}><Money value={e.amount} /></td>
                         <td>
                           <div className="row" style={{ gap: '0.3rem' }}>
-                            <button className="btn primary" style={{ padding: '0.2rem 0.5rem', fontSize: '0.78rem' }} onClick={() => act(e.id, 'approve')}>Valider</button>
-                            <button className="btn" style={{ padding: '0.2rem 0.5rem', fontSize: '0.78rem' }} onClick={() => act(e.id, 'reject')}>Refuser</button>
+                            <button className="btn primary" style={{ padding: '0.2rem 0.5rem', fontSize: '0.78rem' }} onClick={() => act(e.id, 'approve')}>{tr("Valider")}</button>
+                            <button className="btn" style={{ padding: '0.2rem 0.5rem', fontSize: '0.78rem' }} onClick={() => act(e.id, 'reject')}>{tr("Refuser")}</button>
                             <button className="btn ghost" style={{ padding: '0.2rem 0.5rem', fontSize: '0.78rem' }} onClick={() => setEditing(e)} title="Corriger les heures, la date ou le chantier">✎ Modifier</button>
                           </div>
                         </td>
@@ -309,7 +310,7 @@ function TimeEntryModal({ onClose, onDone }: { onClose: () => void; onDone: () =
       <form className="modal wiz" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
         <div className="modal-head">
           <h2>Saisir des heures</h2>
-          <button type="button" className="btn ghost" onClick={onClose} aria-label="Fermer">✕</button>
+          <button type="button" className="btn ghost" onClick={onClose} aria-label={tr("Fermer")}>✕</button>
         </div>
         <div className="wiz-body">
           <div className="plan-form-intro">
@@ -338,7 +339,7 @@ function TimeEntryModal({ onClose, onDone }: { onClose: () => void; onDone: () =
           <fieldset>
             <legend>02 · Chantier & créneau</legend>
             <div className="field full" style={{ marginBottom: '0.85rem' }}>
-              <label>Chantier</label>
+              <label>{tr("Chantier")}</label>
               <ComboBox placeholder="— (frais général)" value={worksiteId} onChange={setWorksiteId} options={meta?.worksites.map((w) => ({ value: w.id, label: w.name })) ?? []} />
               {worksiteId && date && (
                 <div style={{ marginTop: '0.5rem' }}>
@@ -386,9 +387,9 @@ function TimeEntryModal({ onClose, onDone }: { onClose: () => void; onDone: () =
           <label className="row" style={{ gap: '0.4rem', marginRight: 'auto', fontSize: '0.85rem' }}>
             <input type="checkbox" checked={approveNow} onChange={(e) => setApproveNow(e.target.checked)} /> Valider directement
           </label>
-          <button type="button" className="btn" onClick={onClose}>Annuler</button>
+          <button type="button" className="btn" onClick={onClose}>{tr("Annuler")}</button>
           <button type="submit" className="btn primary" disabled={busy || personIds.length === 0 || !date || !task.trim()}>
-            {busy ? 'Enregistrement…' : approveNow ? 'Enregistrer et valider' : 'Ajouter à la file à valider'}
+            {busy ? tr("Enregistrement…") : approveNow ? 'Enregistrer et valider' : 'Ajouter à la file à valider'}
           </button>
         </div>
       </form>

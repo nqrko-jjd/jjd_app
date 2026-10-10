@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { SkeletonRows, ErrorState, EmptyState } from '@/components/States';
 import { Suspense, useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -192,7 +193,7 @@ function EquipeInner() {
       )}
       <PageHead
         eyebrow="Les personnes"
-        title="Équipe"
+        title={tr("Équipe")}
         sub={data ? `${people.filter((p) => p.active).length} actifs · clic droit pour les actions rapides` : undefined}
         action={
           <div className="row">
@@ -212,14 +213,14 @@ function EquipeInner() {
         <select className="select" style={{ maxWidth: 150 }} value={active} onChange={(e) => setActive(e.target.value)}>
           <option value="1">Actifs</option>
           <option value="0">Anciens</option>
-          <option value="">Tous</option>
+          <option value="">{tr("Tous")}</option>
         </select>
         <div className="row" style={{ gap: '0.3rem' }}>
-          <button type="button" className="btn ghost" onClick={() => setDay((d) => addDaysStr(d, -1))} aria-label="Jour précédent"><ChevronLeft size={16} strokeWidth={2} /></button>
+          <button type="button" className="btn ghost" onClick={() => setDay((d) => addDaysStr(d, -1))} aria-label={tr("Jour précédent")}><ChevronLeft size={16} strokeWidth={2} /></button>
           <strong style={{ minWidth: 130, textAlign: 'center', textTransform: 'capitalize' }}>{dayShort(day)}</strong>
-          <button type="button" className="btn ghost" onClick={() => setDay((d) => addDaysStr(d, 1))} aria-label="Jour suivant"><ChevronRight size={16} strokeWidth={2} /></button>
+          <button type="button" className="btn ghost" onClick={() => setDay((d) => addDaysStr(d, 1))} aria-label={tr("Jour suivant")}><ChevronRight size={16} strokeWidth={2} /></button>
         </div>
-        <button type="button" className="btn" onClick={() => setDay(toDateInput(new Date()))}>Aujourd’hui</button>
+        <button type="button" className="btn" onClick={() => setDay(toDateInput(new Date()))}>{tr("Aujourd’hui")}</button>
         <ViewToggle mode={mode} onChange={setMode} />
       </div>
 
@@ -238,7 +239,7 @@ function EquipeInner() {
       </div>
 
       <div className="msg-filter-chips" style={{ marginBottom: '1.1rem' }}>
-        <button className={statusFilter === 'all' ? 'on' : ''} onClick={() => setStatusFilter('all')}>Tous</button>
+        <button className={statusFilter === 'all' ? 'on' : ''} onClick={() => setStatusFilter('all')}>{tr("Tous")}</button>
         <button className={statusFilter === 'available' ? 'on' : ''} onClick={() => setStatusFilter('available')}>Disponible</button>
         <button className={statusFilter === 'assigned' ? 'on' : ''} onClick={() => setStatusFilter('assigned')}>Affecté</button>
         <button className={statusFilter === 'unavailable' ? 'on' : ''} onClick={() => setStatusFilter('unavailable')}>Indisponible</button>
@@ -286,11 +287,11 @@ function EquipeInner() {
           <table className="tbl">
             <thead>
               <tr>
-                <SortTh k="name" sort={sort} filter={colFilter}>Nom</SortTh>
+                <SortTh k="name" sort={sort} filter={colFilter}>{tr("Nom")}</SortTh>
                 <th>Statut</th>
                 <SortTh k="role" sort={sort} filter={colFilter}>Rôle</SortTh>
                 <SortTh k="specialties" sort={sort} filter={colFilter}>Spécialités</SortTh>
-                <SortTh k="contract" sort={sort} filter={colFilter}>Contrat</SortTh>
+                <SortTh k="contract" sort={sort} filter={colFilter}>{tr("Contrat")}</SortTh>
                 <SortTh k="rate" sort={sort} align="right" filter={colFilter}>Taux</SortTh>
                 <SortTh k="languages" sort={sort} filter={colFilter}>Langues</SortTh>
                 <SortTh k="docs" sort={sort} filter={colFilter}>Docs</SortTh>
@@ -320,7 +321,7 @@ function EquipeInner() {
                     <td>{PERSON_ROLE_LABEL[p.role as keyof typeof PERSON_ROLE_LABEL] ?? p.role}</td>
                     <td style={{ fontSize: '0.82rem' }}>{(p.specialties ?? []).join(', ') || '—'}</td>
                     <td>{WORKER_CONTRACT_LABEL[p.contractType as keyof typeof WORKER_CONTRACT_LABEL] ?? p.contractType}</td>
-                    <td style={{ textAlign: 'right' }}>{p.hourlyRate != null ? <Money value={p.hourlyRate} /> : <span className="badge warn">à définir</span>}</td>
+                    <td style={{ textAlign: 'right' }}>{p.hourlyRate != null ? <Money value={p.hourlyRate} /> : <span className="badge warn">{tr("à définir")}</span>}</td>
                     <td className="mono" style={{ fontSize: '0.8rem' }}>{(p.languages ?? []).join(' ') || '—'}</td>
                     <td className="tnum">{p._count.legalDocs || ''}</td>
                     <td className="tnum">{p._count.timeEntries || ''}</td>

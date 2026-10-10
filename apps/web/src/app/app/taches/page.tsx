@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -142,7 +143,7 @@ function TachesInner() {
     <>
       <PageHead
         eyebrow="Organisation"
-        title="Tâches"
+        title={tr("Tâches")}
         sub="Les prochaines actions et les responsables."
         action={<button className="btn primary" onClick={() => setCreating(true)}>+ Nouvelle tâche</button>}
       />
@@ -216,7 +217,7 @@ function TaskDetailModal({
       <div className="modal" style={{ maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h2>Tâche{t.worksite ? ` · ${t.worksite.ref}` : ''}</h2>
-          <button className="btn ghost" onClick={onClose} aria-label="Fermer">✕</button>
+          <button className="btn ghost" onClick={onClose} aria-label={tr("Fermer")}>✕</button>
         </div>
         <div className="modal-body" style={{ display: 'block' }}>
           <div style={{ fontWeight: 600, marginBottom: '0.3rem' }}>{t.title}</div>
@@ -236,8 +237,8 @@ function TaskDetailModal({
           )}
         </div>
         <div className="modal-foot">
-          <button className="btn" onClick={onClose}>Fermer</button>
-          <button className="btn" onClick={onEdit}>Modifier</button>
+          <button className="btn" onClick={onClose}>{tr("Fermer")}</button>
+          <button className="btn" onClick={onEdit}>{tr("Modifier")}</button>
           <button className="btn primary" onClick={onToggleDone}>{t.status === 'done' ? 'Remettre à faire' : 'Terminer la tâche'}</button>
         </div>
       </div>
@@ -304,7 +305,7 @@ function TaskFormModal({
       <form className="modal" style={{ maxWidth: 540 }} onClick={(e) => e.stopPropagation()} onSubmit={(e) => { e.preventDefault(); submit(false); }}>
         <div className="modal-head">
           <h2>{existing ? 'Modifier la tâche' : 'Nouvelle tâche'}</h2>
-          <button type="button" className="btn ghost" onClick={onClose} aria-label="Fermer">✕</button>
+          <button type="button" className="btn ghost" onClick={onClose} aria-label={tr("Fermer")}>✕</button>
         </div>
         <div className="modal-body" style={{ display: 'grid', gap: '1.1rem', gridTemplateColumns: '1fr' }}>
           {error && <div className="plan-form-error">{error}</div>}
@@ -325,7 +326,7 @@ function TaskFormModal({
             </div>
           )}
           <div className="field">
-            <label>Chantier <span className="muted" style={{ fontWeight: 400, fontSize: '0.8rem' }}>— vide = tâche générale</span></label>
+            <label>{tr("Chantier")} <span className="muted" style={{ fontWeight: 400, fontSize: '0.8rem' }}>— vide = tâche générale</span></label>
             <ComboBox
               placeholder="Choisir un chantier…"
               value={worksiteId}
@@ -354,8 +355,8 @@ function TaskFormModal({
           </div>
           <div className="row" style={{ gap: '0.4rem', marginTop: '-0.6rem' }}>
             <span className="muted" style={{ fontSize: '0.8rem', alignSelf: 'center' }}>Échéance rapide</span>
-            <button type="button" className="btn" onClick={() => setDueOn(toDateInput(new Date()))}>Aujourd’hui</button>
-            <button type="button" className="btn" onClick={() => { const d = new Date(); d.setDate(d.getDate() + 1); setDueOn(toDateInput(d)); }}>Demain</button>
+            <button type="button" className="btn" onClick={() => setDueOn(toDateInput(new Date()))}>{tr("Aujourd’hui")}</button>
+            <button type="button" className="btn" onClick={() => { const d = new Date(); d.setDate(d.getDate() + 1); setDueOn(toDateInput(d)); }}>{tr("Demain")}</button>
             <button type="button" className="btn" onClick={() => setDueOn('')}>Sans date</button>
           </div>
           <div className="field">
@@ -378,9 +379,9 @@ function TaskFormModal({
           <p className="hint" style={{ margin: 0 }}>Cette tâche sera visible dans le dossier du chantier. Elle ne réserve pas de créneau ni de matériel dans le planning.</p>
         </div>
         <div className="modal-foot">
-          <button type="button" className="btn" onClick={onClose}>Annuler</button>
+          <button type="button" className="btn" onClick={onClose}>{tr("Annuler")}</button>
           {!existing && <button type="button" className="btn" disabled={busy} onClick={() => submit(true)}>Créer et continuer</button>}
-          <button type="submit" className="btn primary" disabled={busy}>{busy ? '…' : existing ? 'Enregistrer' : 'Créer la tâche'}</button>
+          <button type="submit" className="btn primary" disabled={busy}>{busy ? '…' : existing ? tr("Enregistrer") : 'Créer la tâche'}</button>
         </div>
       </form>
     </div>

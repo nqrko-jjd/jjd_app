@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { SkeletonRows } from '@/components/States';
 import { Suspense, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -302,7 +303,7 @@ function MessagerieInner({worksiteId, compact=false, active=true}: {worksiteId?:
             <input placeholder="Rechercher une conversation" value={search} onChange={(e) => setSearch(e.target.value)} />
           </label>
           <div className="msg-filter-chips">
-            <button className={filter === 'all' ? 'on' : ''} onClick={() => { setFilter('all'); setSelected(null); }}>Toutes</button>
+            <button className={filter === 'all' ? 'on' : ''} onClick={() => { setFilter('all'); setSelected(null); }}>{tr("Toutes")}</button>
             <button className={filter === 'unread' ? 'on' : ''} onClick={() => { setFilter('unread'); setSelected(null); }}>Non lus{totalUnread ? ` · ${totalUnread}` : ''}</button>
             <button className={filter === 'archived' ? 'on' : ''} onClick={() => { setFilter('archived'); setSelected(null); }}>Archivés</button>
           </div>

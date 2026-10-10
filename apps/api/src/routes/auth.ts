@@ -1,5 +1,6 @@
 import { Router } from 'express';
-import { loginSchema, resolveLoginEmail } from '@jjd/shared';
+import { loginSchema, resolveLoginEmail, normalizeName } from '@jjd/shared';
+import { z } from 'zod';
 import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { signToken, verifyPassword, requireAuth } from '../lib/auth.js';
@@ -7,6 +8,27 @@ import { LOCALES } from '../lib/translate.js';
 import { assertLoginAllowed, recordLoginFailure, clearLoginFailures } from '../lib/login-throttle.js';
 
 export const authRouter = Router();
+
+const ownProfile = z.object({
+  firstName: z.string().trim().min(1).max(100),
+  lastName: z.string().trim().max(100).nullable(),
+  phone: z.string().trim().max(50).nullable(),
+  email: z.union([z.string().trim().email().max(254), z.literal(''), z.null()]),
+}).strict();
+
+/** Personal contact details only: role, payroll, login and other people are not editable here. */
+authRouter.patch('/profile', requireAuth(), asyncHandler(async (req, res) => {
+  const result = ownProfile.safeParse(req.body);
+  if (!result.success) throw new HttpError(422, 'Informations du profil invalides');
+  if (!req.user!.personId) throw new HttpError(409, 'Aucune fiche personnelle liée à ce compte');
+  const input = result.data;
+  const person = await prisma.person.update({ where: { id: req.user!.personId }, data: {
+    firstName: input.firstName, lastName: input.lastName || null,
+    phone: input.phone || null, email: input.email || null,
+    normalizedName: normalizeName(`${input.firstName} ${input.lastName ?? ''}`.trim()),
+  } });
+  res.json({ person });
+}));
 
 authRouter.post(
   '/login',

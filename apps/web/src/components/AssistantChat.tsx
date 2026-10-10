@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
@@ -49,7 +50,7 @@ export function AssistantChat({ open, onClose }: { open: boolean; onClose: () =>
       <div className="assistant-panel">
         <div className="modal-head">
           <h2>Assistant IA</h2>
-          <button type="button" className="btn ghost" onClick={onClose} aria-label="Fermer">✕</button>
+          <button type="button" className="btn ghost" onClick={onClose} aria-label={tr("Fermer")}>✕</button>
         </div>
 
         <div className="assistant-body">
@@ -87,7 +88,7 @@ export function AssistantChat({ open, onClose }: { open: boolean; onClose: () =>
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
           />
-          <button className="btn primary" disabled={busy || !input.trim()} onClick={send}>Envoyer</button>
+          <button className="btn primary" disabled={busy || !input.trim()} onClick={send}>{tr("Envoyer")}</button>
         </div>
       </div>
     </>

@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
@@ -103,7 +104,7 @@ export function PlannedTimesheet({ onChanged }: { onChanged: () => void }) {
               const n = strip.data?.perDay[d] ?? 0;
               return (
                 <button key={d} type="button" className={`btn${d === day ? ' primary' : ''}`} onClick={() => { setDay(d); setUnchecked(new Set()); setHoursEdit({}); setFlash(null); }} style={{ padding: '0.3rem 0.65rem' }}>
-                  {d === today ? 'Aujourd’hui' : dayLabel(d)}
+                  {d === today ? tr("Aujourd’hui") : dayLabel(d)}
                   {n > 0 && <span className="badge warn" style={{ marginLeft: '0.4rem' }}>{n}</span>}
                 </button>
               );
@@ -164,8 +165,8 @@ export function PlannedTimesheet({ onChanged }: { onChanged: () => void }) {
                               </td>
                               <td>
                                 <div className="row" style={{ gap: '0.3rem', justifyContent: 'flex-end' }}>
-                                  <button className="btn primary" style={{ padding: '0.2rem 0.55rem', fontSize: '0.78rem' }} disabled={busy} onClick={() => validateOne(i)}>Valider</button>
-                                  <button className="btn" style={{ padding: '0.2rem 0.55rem', fontSize: '0.78rem' }} disabled={busy} onClick={() => dismissOne(i)} title="Absent, malade, resté au dépôt… : aucune heure comptée">N’a pas travaillé</button>
+                                  <button className="btn primary" style={{ padding: '0.2rem 0.55rem', fontSize: '0.78rem' }} disabled={busy} onClick={() => validateOne(i)}>{tr("Valider")}</button>
+                                  <button className="btn" style={{ padding: '0.2rem 0.55rem', fontSize: '0.78rem' }} disabled={busy} onClick={() => dismissOne(i)} title="Absent, malade, resté au dépôt… : aucune heure comptée">{tr("N’a pas travaillé")}</button>
                                 </div>
                               </td>
                             </>

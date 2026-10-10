@@ -1,10 +1,11 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutGrid, Building2, CalendarDays, ListChecks, Clock, TrendingUp, FileText, Wallet,
-  BarChart3, Euro, Warehouse, Contact, Users, Truck, Wrench, Package, ScanLine, Flag, Settings, ExternalLink,
+  BarChart3, Euro, Warehouse, Contact, Users, UserRound, Truck, Wrench, Package, ScanLine, Flag, Settings, ExternalLink,
   MessageSquare, ClipboardList, BellRing, Search, ChevronDown, ChevronLeft, ChevronRight, X, Menu, LogOut, Sparkles, type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
@@ -161,10 +162,10 @@ export function Shell({ children, navigationPaths }: { children: React.ReactNode
     .sort((a, b) => b.length - a.length)[0];
   const isActive = (href: string) => href === bestMatch;
   const current =
-    nav.flatMap((g) => g.items).find((i) => isActive(i.href))?.label ?? 'JJD App';
+    pathname === '/app/profil' ? tr('Mon profil') : tr(nav.flatMap((g) => g.items).find((i) => isActive(i.href))?.label ?? 'JJD App');
 
   const normalize = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-  const matchesQuery = (item: Item) => normalize(item.label).includes(normalize(navQuery.trim()));
+  const matchesQuery = (item: Item) => normalize(tr(item.label)).includes(normalize(navQuery.trim()));
   const hasResults = nav.some(group => group.items.some(item => visible(item) && matchesQuery(item)));
 
   return (
@@ -172,6 +173,7 @@ export function Shell({ children, navigationPaths }: { children: React.ReactNode
       <header className="topbar">
         <button className="burger" aria-label="Ouvrir le menu" aria-expanded={open} aria-controls="app-navigation" onClick={() => setOpen(true)}><Menu size={20} /></button>
         <span className="topbar-title">{current}</span>
+        <Link href="/app/profil" className="btn ghost" aria-label={tr('Mon profil')} title={tr('Mon profil')} style={{ color: 'inherit', padding: '0.5rem' }}><UserRound size={19} /></Link>
         <span className="brand-mini"><span className="mark"><img src="/brand/icon-white.png" alt="" /></span>JJD</span>
       </header>
 
@@ -183,7 +185,7 @@ export function Shell({ children, navigationPaths }: { children: React.ReactNode
           <span className="mark"><img src="/brand/icon-white.png" alt="" /></span>
           <div>
             <div className="org-name">JJD Consult SRL</div>
-            <div className="org-role">{user ? (ROLE_LABEL[user.role] ?? user.role) : '—'}</div>
+            <div className="org-role">{user ? tr(ROLE_LABEL[user.role] ?? user.role) : '—'}</div>
           </div>
         </Link>
         <label className="nav-search">
@@ -198,7 +200,7 @@ export function Shell({ children, navigationPaths }: { children: React.ReactNode
           return (
             <div key={g.title}>
               <button type="button" className="sect nav-group-toggle" aria-expanded={expanded} aria-controls={`nav-group-${index}`} onClick={() => setExpandedGroups(previous => ({ ...previous, [g.title]: !expanded }))}>
-                {g.title}<ChevronDown size={14} className={expanded ? 'expanded' : ''} />
+                {tr(g.title)}<ChevronDown size={14} className={expanded ? 'expanded' : ''} />
               </button>
               <div id={`nav-group-${index}`} hidden={!expanded}>
               {items.map((i) => (
@@ -212,7 +214,7 @@ export function Shell({ children, navigationPaths }: { children: React.ReactNode
                     onClick={() => setOpen(false)}
                   >
                     <span className="ic"><i.ic size={16} strokeWidth={2} /></span>
-                    <span className="lbl">{i.label}</span>
+                    <span className="lbl">{tr(i.label)}</span>
                     <ExternalLink size={13} className="lbl" style={{ marginLeft: 'auto', opacity: 0.5 }} />
                   </a>
                 ) : (
@@ -222,10 +224,10 @@ export function Shell({ children, navigationPaths }: { children: React.ReactNode
                     aria-current={isActive(i.href) ? 'page' : undefined}
                     className={`navlink${isActive(i.href) ? ' active' : ''}`}
                     onClick={() => setOpen(false)}
-                    title={collapsed ? i.label : undefined}
+                    title={collapsed ? tr(i.label) : undefined}
                   >
                     <span className="ic"><i.ic size={16} strokeWidth={2} /></span>
-                    <span className="lbl">{i.label}</span>
+                    <span className="lbl">{tr(i.label)}</span>
                     {i.href === '/app/messagerie' && unreadTotal > 0 && <span className="nav-badge">{unreadTotal}</span>}
                     {i.href === '/app/boite-ia' && !!mailBox?.total && <span className="nav-badge">{mailBox.total}</span>}
                   </Link>
@@ -259,9 +261,10 @@ export function Shell({ children, navigationPaths }: { children: React.ReactNode
           <span className="lbl">Réduire le menu</span>
         </button>
         <div className="foot">
+          <Link href="/app/profil" className={`navlink${pathname === '/app/profil' ? ' active' : ''}`} title={tr('Mon profil')} onClick={() => setOpen(false)} aria-current={pathname === '/app/profil' ? 'page' : undefined}><span className="ic"><UserRound size={16} /></span><span className="lbl">{tr('Mon profil')}</span></Link>
           <div className="who">{loginLabel(user?.email)}</div>
           <button className="logout" onClick={logout} title={collapsed ? 'Déconnexion' : undefined}>
-            <LogOut size={15} /> <span className="lbl">Déconnexion</span>
+            <LogOut size={15} /> <span className="lbl">{tr("Déconnexion")}</span>
           </button>
         </div>
       </nav>
@@ -276,20 +279,20 @@ export function Shell({ children, navigationPaths }: { children: React.ReactNode
                 <i.ic size={20} strokeWidth={2} />
                 {i.href === '/app/messagerie' && unreadTotal > 0 && <span className="nav-badge">{unreadTotal}</span>}
               </span>
-              {i.href === '/app/materiel' ? 'Outils' : i.href === '/app/mes-chantiers' ? 'Chantiers' : i.href === '/app/messagerie' ? 'Messages' : i.label}
+              {i.href === '/app/materiel' ? tr("Outils") : i.href === '/app/mes-chantiers' ? tr("Chantiers") : i.href === '/app/messagerie' ? tr("Messages") : i.label}
             </Link>
           ))}
         </nav>
       )}
 
       {(isForeman || isStorekeeper) && <nav className="bottom-tabs worker admin" aria-label="Navigation mobile terrain">
-        {(isForeman ? [{href:'/app',label:'Accueil',ic:LayoutGrid},{href:'/app/chantiers',label:'Chantiers',ic:Building2},{href:'/app/planning',label:'Planning',ic:CalendarDays},{href:'/app/messagerie',label:'Messages',ic:MessageSquare}] : [{href:'/app/stock/preparations',label:'Préparer',ic:ClipboardList},{href:'/app/stock/commandes',label:'Réceptions',ic:Truck},{href:'/app/stock/scan',label:'Scanner',ic:ScanLine},{href:'/app/materiel',label:'Outils',ic:Wrench}]).filter(visible).map(i=><Link key={i.href} href={i.href} aria-current={isActive(i.href)?'page':undefined} className={`bottom-tab${isActive(i.href)?' active':''}`}><i.ic size={20}/>{i.label}</Link>)}
-        <button className="bottom-tab" aria-expanded={open} aria-controls="app-navigation" onClick={()=>setOpen(true)}><Menu size={20}/>Plus</button>
+        {(isForeman ? [{href:'/app',label:'Accueil',ic:LayoutGrid},{href:'/app/chantiers',label:'Chantiers',ic:Building2},{href:'/app/planning',label:'Planning',ic:CalendarDays},{href:'/app/messagerie',label:'Messages',ic:MessageSquare}] : [{href:'/app/stock/preparations',label:'Préparer',ic:ClipboardList},{href:'/app/stock/commandes',label:'Réceptions',ic:Truck},{href:'/app/stock/scan',label:'Scanner',ic:ScanLine},{href:'/app/materiel',label:'Outils',ic:Wrench}]).filter(visible).map(i=><Link key={i.href} href={i.href} aria-current={isActive(i.href)?'page':undefined} className={`bottom-tab${isActive(i.href)?' active':''}`}><i.ic size={20}/>{tr(i.label)}</Link>)}
+        <button className="bottom-tab" aria-expanded={open} aria-controls="app-navigation" onClick={()=>setOpen(true)}><Menu size={20}/>{tr("Plus")}</button>
       </nav>}
 
       {bureau && <nav className="bottom-tabs worker admin" aria-label="Navigation mobile administration">
-        {[{href:'/app',label:'Accueil',ic:LayoutGrid},{href:'/app/chantiers',label:'Chantiers',ic:Building2},{href:'/app/planning',label:'Planning',ic:CalendarDays},{href:'/app/messagerie',label:'Messages',ic:MessageSquare}].filter(visible).map(i=><Link key={i.href} href={i.href} aria-current={isActive(i.href)?'page':undefined} className={`bottom-tab${isActive(i.href)?' active':''}`}><i.ic size={20}/>{i.label}</Link>)}
-        <button className="bottom-tab" aria-expanded={open} aria-controls="app-navigation" onClick={()=>setOpen(true)}><Menu size={20}/>Plus</button>
+        {[{href:'/app',label:'Accueil',ic:LayoutGrid},{href:'/app/chantiers',label:'Chantiers',ic:Building2},{href:'/app/planning',label:'Planning',ic:CalendarDays},{href:'/app/messagerie',label:'Messages',ic:MessageSquare}].filter(visible).map(i=><Link key={i.href} href={i.href} aria-current={isActive(i.href)?'page':undefined} className={`bottom-tab${isActive(i.href)?' active':''}`}><i.ic size={20}/>{tr(i.label)}</Link>)}
+        <button className="bottom-tab" aria-expanded={open} aria-controls="app-navigation" onClick={()=>setOpen(true)}><Menu size={20}/>{tr("Plus")}</button>
       </nav>}
 
       {/* Le Compagnon IA s'ouvre depuis le menu latéral (plus de bulle flottante : elle bloquait des boutons) */}
@@ -297,3 +300,4 @@ export function Shell({ children, navigationPaths }: { children: React.ReactNode
     </div>
   );
 }
+

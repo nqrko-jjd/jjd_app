@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { useApi } from '@/lib/use-api';
@@ -40,27 +41,27 @@ export default function MesHeuresPage() {
 
   return (
     <>
-      <PageHead eyebrow="Mon espace ouvrier" title="Mes heures" sub="Historique de pointage" />
+      <PageHead eyebrow={tr("Mon espace ouvrier")} title={tr("Mes heures")} sub={tr("Historique de pointage")} />
 
       <div className="row" style={{ marginBottom: '1.2rem' }}>
         <button className="btn" onClick={() => shift(-1)}>←</button>
         <strong style={{ minWidth: 150, textAlign: 'center' }}>{MONTHS[m - 1]} {y}</strong>
         <button className="btn" onClick={() => shift(1)} disabled={isCurrentMonth}>→</button>
-        {!isCurrentMonth && <button className="btn ghost" onClick={() => { setY(now.getFullYear()); setM(now.getMonth() + 1); }}>Ce mois-ci</button>}
+        {!isCurrentMonth && <button className="btn ghost" onClick={() => { setY(now.getFullYear()); setM(now.getMonth() + 1); }}>{tr("Ce mois-ci")}</button>}
       </div>
 
       {statement && (
         <div className="kpis" style={{ marginBottom: '1.2rem' }}>
-          <Kpi ic={Sigma} label="Heures" value={formatHours(statement.totalHours)} sub={`${MONTHS[m - 1]} ${y}`} hero />
-          <Kpi ic={Euro} label="Montant" value={<Money value={statement.totalAmount} />} sub="Avant retenues" />
+          <Kpi ic={Sigma} label={tr("Heures")} value={formatHours(statement.totalHours)} sub={`${MONTHS[m - 1]} ${y}`} hero />
+          <Kpi ic={Euro} label="Montant" value={<Money value={statement.totalAmount} />} sub={tr("Avant retenues")} />
           {statement.pendingCount > 0 && (
-            <Kpi ic={Clock} label="À valider" value={statement.pendingCount} sub="En attente du bureau" warn />
+            <Kpi ic={Clock} label={tr("À valider")} value={statement.pendingCount} sub={tr("En attente du bureau")} warn />
           )}
         </div>
       )}
 
-      <div className="section-title">Détail</div>
-      {(mine?.items.length ?? 0) === 0 && <div className="card card-pad muted">Aucun pointage sur ce mois.</div>}
+      <div className="section-title">{tr("Détail")}</div>
+      {(mine?.items.length ?? 0) === 0 && <div className="card card-pad muted">{tr("Aucun pointage sur ce mois.")}</div>}
       {mine?.items.map((e) => (
         <div key={e.id} className="card card-pad" style={{ marginBottom: '0.6rem' }}>
           <div className="row" style={{ justifyContent: 'space-between' }}>

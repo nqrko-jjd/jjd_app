@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { tr } from './ui-language';
 import Link from 'next/link';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -23,11 +24,11 @@ export function Kpi({ ic: Ic, label, value, sub, hero, warn, neg, history, href 
   const content = (
     <>
       <div className="kpi-head">
-        <div className="label">{label}</div>
+        <div className="label">{tr(label)}</div>
         <span className="ic"><Ic size={16} strokeWidth={2} /></span>
       </div>
       <div className={`value${neg ? ' neg' : ''}`}>{value}</div>
-      {sub && <div className="sub">{sub}</div>}
+      {sub && <div className="sub">{tr(sub)}</div>}
       {history && history.length > 1 && (
         <div className="kpi-history" aria-label="Historique des 6 derniers mois">
           {history.map((h, i) => (
@@ -58,7 +59,7 @@ const STATUS_TONE: Partial<Record<WorksiteStatus, string>> = {
 
 export function StatusBadge({ status }: { status: string }) {
   const tone = STATUS_TONE[status as WorksiteStatus] ?? '';
-  return <span className={`badge ${tone}`}>{WORKSITE_STATUS_LABEL[status as WorksiteStatus] ?? status}</span>;
+  return <span className={`badge ${tone}`}>{tr(WORKSITE_STATUS_LABEL[status as WorksiteStatus] ?? status)}</span>;
 }
 
 const PRIORITY_TONE: Record<string, string> = { high: 'warn', urgent: 'crit' };
@@ -110,9 +111,9 @@ export function PageHead({ eyebrow, title, sub, action }: { eyebrow?: string; ti
   return (
     <div className="page-head">
       <div>
-        {eyebrow && <div className="eyebrow" style={{ marginBottom: '0.3rem' }}>{eyebrow}</div>}
-        <h1>{title}</h1>
-        {sub && <div className="sub">{sub}</div>}
+        {eyebrow && <div className="eyebrow" style={{ marginBottom: '0.3rem' }}>{tr(eyebrow)}</div>}
+        <h1>{tr(title)}</h1>
+        {sub && <div className="sub">{tr(sub)}</div>}
       </div>
       {action}
     </div>

@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { SkeletonRows } from '@/components/States';
 import { useEffect, useState } from 'react';
 import { useApi } from '@/lib/use-api';
@@ -22,12 +23,12 @@ export default function ParametresPage() {
   const admin = user?.role === 'admin';
   return (
     <>
-      <PageHead eyebrow="Administration" title="Paramètres" sub="Société, bibliothèque de prix, dépôt, pointage, utilisateurs, import/export" />
+      <PageHead eyebrow={tr("Administration")} title="Paramètres" sub="Société, bibliothèque de prix, dépôt, pointage, utilisateurs, import/export" />
       <div className="seg" style={{ marginBottom: '1rem' }}>
-        <button className={tab === 'company' ? 'on' : ''} onClick={() => setTab('company')}>Société</button>
+        <button className={tab === 'company' ? 'on' : ''} onClick={() => setTab('company')}>{tr("Société")}</button>
         <button className={tab === 'depot' ? 'on' : ''} onClick={() => setTab('depot')}>Dépôt</button>
         <button className={tab === 'library' ? 'on' : ''} onClick={() => setTab('library')}>Bibliothèque de prix</button>
-        <button className={tab === 'pointage' ? 'on' : ''} onClick={() => setTab('pointage')}>Pointage</button>
+        <button className={tab === 'pointage' ? 'on' : ''} onClick={() => setTab('pointage')}>{tr("Pointage")}</button>
         <button className={tab === 'io' ? 'on' : ''} onClick={() => setTab('io')}>Import / Export</button>
         {admin && <button className={tab === 'users' ? 'on' : ''} onClick={() => setTab('users')}>Utilisateurs</button>}
       </div>
@@ -231,7 +232,7 @@ function UsersTab() {
                 <td className="muted" style={{ fontSize: '0.82rem' }}>{u.lastLoginAt ? formatDateBE(u.lastLoginAt) : 'Jamais'}</td>
                 <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                   <button className="btn ghost" style={{ fontSize: '0.78rem' }} onClick={() => resetPassword(u.id)}>Réinitialiser mdp</button>
-                  <button className="btn ghost" style={{ fontSize: '0.78rem' }} onClick={() => removeUser(u.id)}>Supprimer</button>
+                  <button className="btn ghost" style={{ fontSize: '0.78rem' }} onClick={() => removeUser(u.id)}>{tr("Supprimer")}</button>
                 </td>
               </tr>
             ))}
@@ -283,7 +284,7 @@ function DepotForm({ canEdit }: { canEdit: boolean }) {
         parking…) = coût mensuel ÷ jours ouvrés par mois.
       </p>
       <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
-        <label className="field" style={{ gridColumn: '1 / -1' }}><span>Adresse</span>
+        <label className="field" style={{ gridColumn: '1 / -1' }}><span>{tr("Adresse")}</span>
           <AddressAutocomplete
             disabled={!canEdit}
             value={f.address}
@@ -308,7 +309,7 @@ function DepotForm({ canEdit }: { canEdit: boolean }) {
       </p>
       {canEdit && (
         <div className="row" style={{ marginTop: '0.9rem', gap: '0.5rem' }}>
-          <button className="btn primary" disabled={busy} onClick={save}>Enregistrer</button>
+          <button className="btn primary" disabled={busy} onClick={save}>{tr("Enregistrer")}</button>
           <button className="btn" disabled={busy || !f.address} onClick={geocode}>Géolocaliser l’adresse</button>
           {msg && <span className="muted">{msg}</span>}
         </div>
@@ -337,7 +338,7 @@ function GeoForm({ canEdit }: { canEdit: boolean }) {
       </label>
       {canEdit && (
         <div className="row" style={{ marginTop: '0.9rem' }}>
-          <button className="btn primary" onClick={async () => { await api('/api/settings/geo', { method: 'PUT', body: { radiusM: m } }); setSaved(true); }}>Enregistrer</button>
+          <button className="btn primary" onClick={async () => { await api('/api/settings/geo', { method: 'PUT', body: { radiusM: m } }); setSaved(true); }}>{tr("Enregistrer")}</button>
           {saved && <span className="muted">Enregistré.</span>}
         </div>
       )}
@@ -394,7 +395,7 @@ function CompanyForm({ canEdit }: { canEdit: boolean }) {
       </div>
       {canEdit ? (
         <div className="row" style={{ marginTop: '1rem' }}>
-          <button className="btn primary" onClick={async () => { await api('/api/settings/company', { method: 'PUT', body: form }); setSaved(true); }}>Enregistrer</button>
+          <button className="btn primary" onClick={async () => { await api('/api/settings/company', { method: 'PUT', body: form }); setSaved(true); }}>{tr("Enregistrer")}</button>
           {saved && <span className="muted">Enregistré — utilisé sur les PDF de devis et factures.</span>}
         </div>
       ) : (
@@ -422,7 +423,7 @@ function PriceLibrary() {
         <div className="section-title">Ajouter un ouvrage</div>
         <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))' }}>
           <label className="field"><span>Libellé</span><input className="input" value={draft.label ?? ''} onChange={(e) => setDraft({ ...draft, label: e.target.value })} /></label>
-          <label className="field"><span>Catégorie</span><input className="input" value={draft.category ?? ''} onChange={(e) => setDraft({ ...draft, category: e.target.value })} /></label>
+          <label className="field"><span>{tr("Catégorie")}</span><input className="input" value={draft.category ?? ''} onChange={(e) => setDraft({ ...draft, category: e.target.value })} /></label>
           <label className="field"><span>Unité</span><input className="input" value={draft.unit ?? ''} onChange={(e) => setDraft({ ...draft, unit: e.target.value })} /></label>
           <label className="field"><span>P.U. HT</span><input className="input" type="number" value={draft.unitPriceHt ?? ''} onChange={(e) => setDraft({ ...draft, unitPriceHt: Number(e.target.value) })} /></label>
           <label className="field"><span>TVA</span>
@@ -430,17 +431,17 @@ function PriceLibrary() {
               {VAT_RATES.map((r) => <option key={r} value={r}>{Math.round(r * 100)}%</option>)}
             </select>
           </label>
-          <div className="field"><span>&nbsp;</span><button className="btn primary" onClick={add}>Ajouter</button></div>
+          <div className="field"><span>&nbsp;</span><button className="btn primary" onClick={add}>{tr("Ajouter")}</button></div>
         </div>
       </div>
 
-      <input className="input" style={{ maxWidth: 260, marginBottom: '1rem' }} placeholder="Rechercher…" value={q} onChange={(e) => setQ(e.target.value)} />
+      <input className="input" style={{ maxWidth: 260, marginBottom: '1rem' }} placeholder={tr("Rechercher…")} value={q} onChange={(e) => setQ(e.target.value)} />
       {!data ? <SkeletonRows /> : data.items.length === 0 ? (
         <div className="empty">Bibliothèque vide.</div>
       ) : (
         <div className="tbl-wrap">
           <table className="tbl">
-            <thead><tr><th>Catégorie</th><th>Libellé</th><th>Unité</th><th style={{ textAlign: 'right' }}>P.U. HT</th><th>TVA</th><th></th></tr></thead>
+            <thead><tr><th>{tr("Catégorie")}</th><th>Libellé</th><th>Unité</th><th style={{ textAlign: 'right' }}>P.U. HT</th><th>TVA</th><th></th></tr></thead>
             <tbody>
               {data.items.map((it) => (
                 <tr key={it.id}>

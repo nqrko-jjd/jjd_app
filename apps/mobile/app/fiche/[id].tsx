@@ -218,7 +218,7 @@ export default function FicheDuJour() {
           <Text style={{ color: T.primary, fontWeight: '700', fontSize: 15 }}>Photos du chantier</Text>
         </Pressable>
         <Pressable style={{ backgroundColor: T.primary, borderRadius: 10, padding: 14, alignItems: 'center' }} onPress={() => router.push(`/rapport/${id}` as never)}>
-          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Faire le rapport de chantier</Text>
+          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>PV / rapport client</Text><Text style={{ color: '#d8e6dd', fontSize: 12, marginTop: 2 }}>À faire pour valider une prestation avec le client (signature)</Text>
         </Pressable>
       </View>
     </ScrollView>

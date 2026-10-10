@@ -2679,5 +2679,45 @@ export const DICT: Record<string, [string, string]> = {
  "nov.": [
   "Nov",
   "nov."
+ ],
+ "Bonne fin de journée !": [
+  "Have a good evening!",
+  "Bom fim de dia!"
+ ],
+ "Un mot ou des photos pour l’équipe ? C’est facultatif.": [
+  "A word or some photos for the team? It's optional.",
+  "Uma mensagem ou fotos para a equipe? É opcional."
+ ],
+ "Ce qui a été fait, ce qui reste…": [
+  "What was done, what's left…",
+  "O que foi feito, o que falta…"
+ ],
+ "Envoyer dans le fil du chantier": [
+  "Send to the job site thread",
+  "Enviar no chat da obra"
+ ],
+ "Passer": [
+  "Skip",
+  "Pular"
+ ],
+ "Envoi impossible": [
+  "Could not send",
+  "Não foi possível enviar"
+ ],
+ "Vérifie ta connexion et réessaie, ou passe cette étape : ton temps de présence est déjà enregistré.": [
+  "Check your connection and try again, or skip this step: your time on site is already recorded.",
+  "Verifique sua conexão e tente de novo, ou pule esta etapa: seu tempo na obra já foi registrado."
+ ],
+ "PV / rapport client": [
+  "Client report / acceptance",
+  "Relatório / PV do cliente"
+ ],
+ "À faire pour valider une prestation avec le client (signature)": [
+  "To validate work with the client (signature)",
+  "Para validar um serviço com o cliente (assinatura)"
+ ],
+ "Retirer la photo": [
+  "Remove photo",
+  "Remover foto"
  ]
 };

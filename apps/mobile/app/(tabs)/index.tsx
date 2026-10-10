@@ -9,6 +9,7 @@ import { useSession } from '@/lib/session';
 import { HeroTile, ScreenHeader, EmptyState } from '@/lib/ui';
 import { T } from '@/lib/theme';
 import { tr, dateLocale, Alert } from '@/lib/i18n';
+import { DayWrapUp } from '@/lib/DayWrapUp';
 
 interface Ev {
   id: string;
@@ -21,6 +22,7 @@ interface Ev {
 interface Running {
   id: string;
   startedAt: string;
+  worksiteId?: string | null;
   worksite: { ref: string; title: string } | null;
 }
 interface TimerResp {
@@ -41,6 +43,7 @@ export function FieldHome({ embedded = false }: { embedded?: boolean }) {
   const router = useRouter();
   const [events, setEvents] = useState<Ev[]>([]);
   const [running, setRunning] = useState<Running | null>(null);
+  const [wrapUp, setWrapUp] = useState<{ id: string; ref: string; title: string } | null>(null);
   const [linked, setLinked] = useState(true);
   const [queued, setQueued] = useState(0);
   const [weekHours, setWeekHours] = useState<number | null>(null);
@@ -124,12 +127,15 @@ export function FieldHome({ embedded = false }: { embedded?: boolean }) {
     await load();
   }
   async function stop() {
+    const leaving = running;
     const r = await apiSend<{ entry: unknown }>('/api/timesheet/timer/stop', 'POST', {
       endedAt: new Date().toISOString(),
     });
     if ('queued' in r) setQueued((q) => q + 1);
     setRunning(null);
     await load();
+    // fin de journée : on PROPOSE un mot et des photos pour le fil du chantier (facultatif, pas de rapport à remplir)
+    if (leaving?.worksiteId && leaving.worksite) setWrapUp({ id: leaving.worksiteId, ref: leaving.worksite.ref, title: leaving.worksite.title });
   }
 
   const hm = (iso: string) => new Date(iso).toLocaleTimeString(dateLocale(), { hour: '2-digit', minute: '2-digit' });
@@ -261,6 +267,7 @@ export function FieldHome({ embedded = false }: { embedded?: boolean }) {
           </View>
         );
       })}
+      <DayWrapUp worksite={wrapUp} onClose={() => setWrapUp(null)} />
     </ScrollView>
   );
 }

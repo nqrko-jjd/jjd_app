@@ -139,3 +139,30 @@ test('CF Group: two payments per invoice, balances, edits, settled search and le
     await new Promise<void>((resolve, reject) => server.close(e => e ? reject(e) : resolve()));
   }
 });
+
+test('confirmed supplier statement absorbs only named historical credits and advances', async () => {
+  const { supplierAccounts } = await import('../src/lib/supplier-account.js');
+  const c = await prisma.contact.create({ data: { name: 'Statement settlement test', normalizedName: 'statement settlement test', type: 'supplier' } });
+  try {
+    await prisma.ledgerEntry.createMany({ data: [
+      { contactId: c.id, direction: 'purchase', ht: 1332.04, ttc: 1332.04, source: 'test' },
+      { id: c.id + '-old-credit', contactId: c.id, direction: 'credit_note', ht: 10, ttc: 10, source: 'test' },
+      { contactId: c.id, direction: 'credit_note', ht: 464.89, ttc: -464.89, source: 'test' },
+    ] });
+    const old = await prisma.bankTransaction.create({ data: { contactId: c.id, amount: -322.3, side: 'out' } });
+    await prisma.auditLog.create({ data: { action: 'supplier_statement_reconciled', entity: 'Contact', entityId: c.id, meta: { accountSettlement: { settledCreditIds: [c.id + '-old-credit'], absorbedAdvances: [{ id: old.id, amount: 322.3 }] } } } });
+    let a = (await supplierAccounts()).find(a => a.contactId === c.id)!;
+    assert.equal(a.balance, 867.15);
+    assert.equal(a.credits, 464.89);
+    assert.equal(a.unallocatedTotal, 0);
+    await prisma.bankTransaction.create({ data: { contactId: c.id, amount: -100, side: 'out' } });
+    a = (await supplierAccounts()).find(a => a.contactId === c.id)!;
+    assert.equal(a.balance, 767.15);
+    assert.equal(a.unallocatedTotal, 100);
+  } finally {
+    await prisma.auditLog.deleteMany({ where: { entityId: c.id } });
+    await prisma.bankTransaction.deleteMany({ where: { contactId: c.id } });
+    await prisma.ledgerEntry.deleteMany({ where: { contactId: c.id } });
+    await prisma.contact.delete({ where: { id: c.id } });
+  }
+});

@@ -4,3 +4,10 @@
  * sans cette tolérance elle restait « En retard » avec 0,10 € « dû ». Reste volontairement petit.
  */
 export const PAYMENT_TOLERANCE = 0.5;
+
+/** Purchase invoices: ignore a paid residual of at most two cents, using integer cents. */
+export const PURCHASE_PAYMENT_TOLERANCE = 0.02;
+export function purchaseRemaining(total: number, paid: number): number {
+  const cents = Math.max(0, Math.round(Math.abs(total) * 100) - Math.round(paid * 100));
+  return paid > 0 && cents <= Math.round(PURCHASE_PAYMENT_TOLERANCE * 100) ? 0 : cents / 100;
+}

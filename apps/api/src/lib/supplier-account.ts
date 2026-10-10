@@ -2,6 +2,7 @@ import { round2 } from '@jjd/shared';
 import { prisma } from '../db.js';
 import { allocationSnapshot } from './bank-allocation.js';
 import { isPaid } from './consolidated.js';
+import { purchaseRemaining, PURCHASE_PAYMENT_TOLERANCE } from './payment-tolerance.js';
 
 export async function supplierAccounts() {
   const [ledger, txs, snapshot, contacts] = await Promise.all([
@@ -26,8 +27,7 @@ export async function supplierAccounts() {
     const total = Math.abs(l.ttc ?? l.ht);
     if (l.direction === 'credit_note') { g.credits += total; continue; }
     const paid = snapshot.ledgerPaid.has(l.id) ? snapshot.ledgerPaid.get(l.id)! : isPaid(l.paymentStatus) ? total : 0;
-    const residual = round2(Math.max(0, total - paid));
-    const remaining = paid > 0 && residual <= 0.01 ? 0 : residual;
+    const remaining = purchaseRemaining(total, paid);
     g.openTtc += remaining;
     g.invoices.push({ id: l.id, number: l.docNumber, date: l.date, dueDate: l.dueDate, total, paid: round2(paid), remaining });
     if (remaining > 0.01 && l.dueDate) {
@@ -47,6 +47,7 @@ export async function supplierAccounts() {
     }
     const remaining = round2(Math.max(0, Math.abs(t.amount ?? 0) - (snapshot.transactions.get(t.id) ?? 0)));
     if (remaining <= 0.01) continue;
+    if (remaining <= PURCHASE_PAYMENT_TOLERANCE && t.matches.length > 0 && t.matches.every(m => { const l = ledger.find(l => l.id === m.ledgerEntryId); return !!l && l.direction === 'purchase' && purchaseRemaining(Math.abs(l.ttc ?? l.ht), snapshot.ledgerPaid.get(l.id) ?? 0) === 0; })) continue;
     const g = group(cid, name ?? 'Fournisseur');
     g.unallocatedTotal += remaining;
     g.advances.push({ id: t.id, date: t.bookingDate, bank: t.bank, amount: Math.abs(t.amount ?? 0), remaining });

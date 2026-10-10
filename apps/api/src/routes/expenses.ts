@@ -18,6 +18,7 @@ import { storeFile, UPLOADS_DIR } from '../lib/media.js';
 import { readReceipt } from '../lib/ai-receipt.js';
 import { nameOverlap } from '../lib/bank-match.js';
 import { allocationSnapshot } from '../lib/bank-allocation.js';
+import { purchaseRemaining } from '../lib/payment-tolerance.js';
 import { extractDocumentInfo, suggestExpenseCategory } from '../lib/document-extract.js';
 import { toCsv, readTableBuffer, pick } from '../lib/table-io.js';
 import { invoiceMailboxConfigured, syncInvoiceMailbox, reprocessEmailEntries, scanInvoiceMailboxHistory, PROCESSED_MAILBOX } from '../lib/invoice-mailbox.js';
@@ -126,8 +127,8 @@ function expensePayment(e: { id: string; ttc: number | null; ht: number; payment
   const total = Math.abs(e.ttc ?? e.ht);
   const manuallyPaid = (e.paymentStatus ?? '').toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').trim() === 'paye';
   const paidAmount = Math.min(total, payments.ledgerPaid.get(e.id) ?? (manuallyPaid ? total : 0));
-  const remainingAmount = Math.round(Math.max(0, total - paidAmount) * 100) / 100;
-  const paid = remainingAmount <= 0.01 && (paidAmount > 0 || manuallyPaid);
+  const remainingAmount = purchaseRemaining(total, paidAmount);
+  const paid = remainingAmount === 0 && (paidAmount > 0 || manuallyPaid);
   return { paidAmount, remainingAmount, paid, paymentStatus: paid ? 'Payé' : paidAmount > 0 ? 'Partiel' : 'Non payé' };
 }
 

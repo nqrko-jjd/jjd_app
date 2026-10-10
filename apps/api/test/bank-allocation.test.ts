@@ -4,6 +4,14 @@ import { createApp } from '../src/app.js';
 import { prisma } from '../src/db.js';
 import { signToken } from '../src/lib/auth.js';
 import { allocateLines } from '../src/lib/bank-allocation.js';
+import { purchaseRemaining } from '../src/lib/payment-tolerance.js';
+
+test('purchase rounding tolerance: two cents settled only after a payment; three cents remain payable', () => {
+  assert.equal(purchaseRemaining(28.75, 28.74), 0);
+  assert.equal(purchaseRemaining(28.75, 28.73), 0);
+  assert.equal(purchaseRemaining(28.75, 28.72), 0.03);
+  assert.equal(purchaseRemaining(0.02, 0), 0.02);
+});
 
 test('legacy allocations cap each invoice and share a payment without losing its advance', () => {
   const result = allocateLines([
@@ -101,14 +109,27 @@ test('CF Group: two payments per invoice, balances, edits, settled search and le
     assert.equal(clientBalance.openTtc, 300);
     assert.equal(clientBalance.unallocatedTotal, 300);
     assert.equal(clientBalance.balance, 0);
-    // A settled one-cent residual must not remain payable on the supplier contact.
+    // A settled two-cent residual must not remain payable on the supplier contact.
     const penny = await invoice('BANK-TEST-PENNY', 28.75);
-    const pennyTx = await prisma.bankTransaction.create({ data: { amount: -28.74, side: 'out', contactId: contact.id } });
+    const pennyTx = await prisma.bankTransaction.create({ data: { amount: -28.73, side: 'out', contactId: contact.id } });
     txIds.push(pennyTx.id);
-    assert.equal((await call(`/api/finance/bank/${pennyTx.id}/matches`, 'POST', { ledgerId: penny.id, amount: 28.74 })).status, 201);
+    assert.equal((await call(`/api/finance/bank/${pennyTx.id}/matches`, 'POST', { ledgerId: penny.id, amount: 28.73 })).status, 201);
     assert.equal((await prisma.ledgerEntry.findUniqueOrThrow({ where: { id: penny.id } })).paymentStatus, 'Payé');
     const pennyAccount = (await call('/api/finance/suppliers')).body.items.find((i: { contactId: string }) => i.contactId === contact.id);
     assert.equal(pennyAccount.invoices.find((i: { id: string }) => i.id === penny.id).remaining, 0);
+    const pennyExpense = (await call(`/api/finance/expenses/${penny.id}`)).body.expense;
+    assert.equal(pennyExpense.paid, true);
+    assert.equal(pennyExpense.remainingAmount, 0);
+    const excess = await invoice('BANK-TEST-PENNY-EXCESS', 28.75);
+    const excessTx = await prisma.bankTransaction.create({ data: { amount: -28.77, side: 'out', contactId: contact.id } });
+    txIds.push(excessTx.id);
+    assert.equal((await call(`/api/finance/bank/${excessTx.id}/matches`, 'POST', { ledgerId: excess.id, amount: 28.75 })).status, 201);
+    let roundedAccount = (await call('/api/finance/suppliers')).body.items.find((i: { contactId: string }) => i.contactId === contact.id);
+    assert.equal(roundedAccount.unallocatedTotal, pennyAccount.unallocatedTotal);
+    const tinyAdvance = await prisma.bankTransaction.create({ data: { amount: -0.02, side: 'out', contactId: contact.id } });
+    txIds.push(tinyAdvance.id);
+    roundedAccount = (await call('/api/finance/suppliers')).body.items.find((i: { contactId: string }) => i.contactId === contact.id);
+    assert.equal(roundedAccount.unallocatedTotal, Math.round((pennyAccount.unallocatedTotal + 0.02) * 100) / 100);
   } finally {
     await prisma.bankTransaction.deleteMany({ where: { id: { in: txIds } } });
     await prisma.ledgerEntry.deleteMany({ where: { contactId: contact.id } });

@@ -155,6 +155,8 @@ test('confirmed supplier statement absorbs only named historical credits and adv
     assert.equal(a.balance, 867.15);
     assert.equal(a.credits, 464.89);
     assert.equal(a.unallocatedTotal, 0);
+    const { allocationSnapshot } = await import('../src/lib/bank-allocation.js');
+    assert.equal((await allocationSnapshot()).transactions.get(old.id), 322.3);
     await prisma.bankTransaction.create({ data: { contactId: c.id, amount: -100, side: 'out' } });
     a = (await supplierAccounts()).find(a => a.contactId === c.id)!;
     assert.equal(a.balance, 767.15);

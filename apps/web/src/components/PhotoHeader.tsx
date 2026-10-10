@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { useRef, useState, type ReactNode } from 'react';
 import { api, apiUpload } from '@/lib/api';
 
@@ -89,9 +90,9 @@ export function PhotoHeader({
             onChange={(e) => { const f = e.target.files?.[0]; if (f) pick(f); e.target.value = ''; }}
           />
           <button className="btn" disabled={busy} onClick={() => inputRef.current?.click()}>
-            {busy ? '…' : photoUrl ? 'Changer la photo' : 'Ajouter une photo'}
+            {busy ? '…' : photoUrl ? tr("Changer la photo") : tr("Ajouter une photo")}
           </button>
-          {photoUrl && <button className="btn ghost" disabled={busy} onClick={remove}>Retirer</button>}
+          {photoUrl && <button className="btn ghost" disabled={busy} onClick={remove}>{tr("Retirer")}</button>}
           {err && <span className="badge crit">{err}</span>}
         </div>
       )}

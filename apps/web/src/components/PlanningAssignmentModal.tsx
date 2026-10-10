@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { vehicleLabel } from '@/lib/vehicle';
 import { useMemo, useState } from 'react';
 import { api } from '@/lib/api';
@@ -239,7 +240,7 @@ export function PlanningAssignmentModal({
       <div className="modal wiz" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h2>{existing ? (f.kind === 'meeting' ? 'Modifier le rendez-vous' : 'Modifier l’affectation') : duplicateFrom ? 'Dupliquer l’affectation' : 'Nouvel événement'}</h2>
-          <button type="button" className="btn ghost" onClick={onClose} aria-label="Fermer">✕</button>
+          <button type="button" className="btn ghost" onClick={onClose} aria-label={tr("Fermer")}>✕</button>
         </div>
         <div className="wiz-body">
           <div className="plan-form-intro">
@@ -272,7 +273,7 @@ export function PlanningAssignmentModal({
           <fieldset>
             <legend>01 · {f.kind === 'meeting' ? 'Chantier & créneau du rendez-vous' : 'Chantier & créneau'}</legend>
             <div className="field full" style={{ marginBottom: '0.85rem' }}>
-              <label>{f.kind === 'meeting' ? 'Chantier (ou charge si pas de chantier : dépôt, enlèvement…)' : 'Chantier'}</label>
+              <label>{f.kind === 'meeting' ? 'Chantier (ou charge si pas de chantier : dépôt, enlèvement…)' : tr("Chantier")}</label>
               <WorksitePicker
                 value={f.worksiteId}
                 onChange={(v) => setF((cur) => ({ ...cur, worksiteId: v }))}
@@ -280,7 +281,7 @@ export function PlanningAssignmentModal({
               />
             </div>
             <div className="field full" style={{ marginBottom: '0.85rem' }}>
-              <label>{f.kind === 'meeting' ? 'Objet du rendez-vous' : 'Titre (facultatif)'}</label>
+              <label>{f.kind === 'meeting' ? tr("Objet du rendez-vous") : tr("Titre (facultatif)")}</label>
               <input
                 className="input"
                 value={f.title}
@@ -302,7 +303,7 @@ export function PlanningAssignmentModal({
                 {!f.meetingOnSite && (
                   <div style={{ marginTop: '0.6rem' }}>
                     <div className="field full" style={{ marginBottom: '0.6rem' }}>
-                      <label>Adresse</label>
+                      <label>{tr("Adresse")}</label>
                       <AddressAutocomplete
                         value={f.meetingAddress}
                         onChange={(v) => setF((cur) => ({ ...cur, meetingAddress: v }))}
@@ -331,7 +332,7 @@ export function PlanningAssignmentModal({
 
             <div className="wiz-grid">
               <div className="field">
-                <label>Date</label>
+                <label>{tr("Date")}</label>
                 <input className="input" type="date" value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} />
               </div>
               <div className="field">
@@ -427,7 +428,7 @@ export function PlanningAssignmentModal({
               </div>
               {vehicles.length === 0 && <p className="muted" style={{ margin: '0 0 0.7rem' }}>Aucun véhicule dans la flotte.</p>}
 
-              <label style={{ display: 'block', fontWeight: 600, fontSize: '0.82rem', color: 'var(--ink-2)', margin: '0.9rem 0 0.4rem' }}>Matériel</label>
+              <label style={{ display: 'block', fontWeight: 600, fontSize: '0.82rem', color: 'var(--ink-2)', margin: '0.9rem 0 0.4rem' }}>{tr("Matériel")}</label>
               <input className="input" style={{ marginBottom: '0.7rem' }} placeholder="Chercher un matériel…" value={equipmentQuery} onChange={(e) => setEquipmentQuery(e.target.value)} />
               <div className="plan-equipment-picker">
                 {filteredEquipment.map((eq) => {
@@ -449,7 +450,7 @@ export function PlanningAssignmentModal({
           )}
 
           <fieldset>
-            <legend>{f.kind === 'intervention' ? '04' : '03'} · {f.kind === 'meeting' ? 'Rendez-vous' : 'Tâches & organisation'}</legend>
+            <legend>{f.kind === 'intervention' ? '04' : '03'} · {f.kind === 'meeting' ? tr("Rendez-vous") : 'Tâches & organisation'}</legend>
             <div className="field full" style={{ marginBottom: '0.85rem' }}>
               <label>{f.kind === 'meeting' ? 'Ordre du jour — un point par ligne' : 'Travaux à réaliser — une tâche par ligne'}</label>
               <textarea
@@ -483,8 +484,8 @@ export function PlanningAssignmentModal({
           </fieldset>
         </div>
         <div className="modal-foot">
-          <button type="button" className="btn" onClick={onClose}>Annuler</button>
-          <button type="button" className="btn primary" disabled={busy} onClick={submit}>{busy ? 'Enregistrement…' : 'Enregistrer dans le planning'}</button>
+          <button type="button" className="btn" onClick={onClose}>{tr("Annuler")}</button>
+          <button type="button" className="btn primary" disabled={busy} onClick={submit}>{busy ? tr("Enregistrement…") : 'Enregistrer dans le planning'}</button>
         </div>
       </div>
     </div>

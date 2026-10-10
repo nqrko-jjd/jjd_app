@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { useRef, useState } from 'react';
 import { api, apiBlobUrl, apiUpload } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
@@ -147,7 +148,7 @@ export function WorksiteFiles({ worksiteId, onChanged }: { worksiteId: string; o
                       <form className="row" style={{ gap: '0.4rem' }} onSubmit={(e) => { e.preventDefault(); if (editLabel.trim()) saveEdit(f, { label: editLabel.trim() }); }}>
                         <input className="input" autoFocus value={editLabel} onChange={(e) => setEditLabel(e.target.value)} />
                         <button className="btn primary" type="submit">OK</button>
-                        <button className="btn ghost" type="button" onClick={() => setEditing(null)}>Annuler</button>
+                        <button className="btn ghost" type="button" onClick={() => setEditing(null)}>{tr("Annuler")}</button>
                       </form>
                     ) : (
                       <button type="button" className="linklike" style={{ textAlign: 'left', background: 'none', border: 0, padding: 0, cursor: 'pointer', color: 'inherit' }} onClick={() => open(f)}>
@@ -167,10 +168,10 @@ export function WorksiteFiles({ worksiteId, onChanged }: { worksiteId: string; o
                   <td className="mono" style={{ whiteSpace: 'nowrap' }}>{sizeLabel(f.size)}</td>
                   <td style={{ whiteSpace: 'nowrap' }}>{formatDateBE(f.createdAt)}{f.uploadedBy && <span className="muted" style={{ fontSize: '0.76rem' }}> · {f.uploadedBy}</span>}</td>
                   <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
-                    <button className="btn" onClick={() => open(f)}>Ouvrir</button>
+                    <button className="btn" onClick={() => open(f)}>{tr("Ouvrir")}</button>
                     {canEdit && <>
                       {' '}<button className="btn ghost" onClick={() => { setEditing(f.id); setEditLabel(f.label); }}>Renommer</button>
-                      {' '}<button className="btn ghost" onClick={() => remove(f)} aria-label="Supprimer">🗑</button>
+                      {' '}<button className="btn ghost" onClick={() => remove(f)} aria-label={tr("Supprimer")}>🗑</button>
                     </>}
                   </td>
                 </tr>

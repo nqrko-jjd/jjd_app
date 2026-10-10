@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { Phone, Navigation, ClipboardList, Users, Package, Camera } from 'lucide-react';
 import { SkeletonRows } from '@/components/States';
 import { use, useCallback, useState } from 'react';
@@ -70,8 +71,7 @@ export default function WorkerFichePage({ params }: { params: Promise<{ id: stri
           target="_blank" rel="noreferrer"
           className="btn" style={{ display: 'inline-flex', marginBottom: '1rem' }}
         >
-          <Navigation size={16}/> Itinéraire
-        </a>
+          <Navigation size={16}/> {tr("Itinéraire")} </a>
       )}
 
       {d.building?.digicode && (
@@ -81,14 +81,14 @@ export default function WorkerFichePage({ params }: { params: Promise<{ id: stri
       )}
       {d.building?.accessNote && (
         <div className="card card-pad" style={{ marginBottom: '1rem' }}>
-          <div className="muted" style={{ marginBottom: '0.2rem' }}>Accès</div>
+          <div className="muted" style={{ marginBottom: '0.2rem' }}>{tr("Accès")}</div>
           {d.building.accessNote}
         </div>
       )}
 
       <div className="card card-pad" style={{ marginBottom: '1rem' }}>
         <div className="field-section-title">
-          <ClipboardList size={18}/> Mission du jour{d.today && !d.today.allDay ? ` · ${new Date(d.today.startAt).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' })}–${new Date(d.today.endAt).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' })}` : ''}
+          <ClipboardList size={18}/> {tr("Mission du jour")}{d.today && !d.today.allDay ? ` · ${new Date(d.today.startAt).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' })}–${new Date(d.today.endAt).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' })}` : ''}
         </div>
         <div style={{ whiteSpace: 'pre-wrap' }}>{d.today?.toDo || w.description || 'Voir avec le bureau.'}</div>
         {d.today?.materials && <div className="muted" style={{ marginTop: '0.4rem' }}>{d.today.materials}</div>}
@@ -105,7 +105,7 @@ export default function WorkerFichePage({ params }: { params: Promise<{ id: stri
 
       {tasks.length > 0 && (
         <div className="card card-pad" style={{ marginBottom: '1rem' }}>
-          <div className="muted" style={{ marginBottom: '0.3rem' }}>Tâches ({openTasks.length} à faire)</div>
+          <div className="muted" style={{ marginBottom: '0.3rem' }}>{tr("Tâches (")}{openTasks.length} {tr("à faire)")}</div>
           {[...openTasks, ...doneTasks].map((t) => (
             <button type="button" className="field-task" key={t.id} disabled={busy === t.id} aria-pressed={t.status === 'done'} onClick={() => toggleTask(t)}>
               <span style={{
@@ -125,24 +125,24 @@ export default function WorkerFichePage({ params }: { params: Promise<{ id: stri
 
       {d.today && d.today.people.length > 0 && (
         <div className="card card-pad" style={{ marginBottom: '1rem' }}>
-          <div className="field-section-title"><Users size={18}/> Équipe du jour</div>
-          {d.today.people.map((p, i) => <PhoneLine key={i} label="Ouvrier" name={p.name} phone={p.phone} />)}
+          <div className="field-section-title"><Users size={18}/> {tr("Équipe du jour")}</div>
+          {d.today.people.map((p, i) => <PhoneLine key={i} label={tr("Ouvrier")} name={p.name} phone={p.phone} />)}
         </div>
       )}
 
       <div className="card card-pad" style={{ marginBottom: '1.2rem' }}>
         <div className="field-section-title"><Phone size={18}/> Personnes à contacter</div>
-        {d.manager && <PhoneLine label="Chef de chantier" name={d.manager.name} phone={d.manager.phone} />}
+        {d.manager && <PhoneLine label={tr("Chef de chantier")} name={d.manager.name} phone={d.manager.phone} />}
         {d.client && <PhoneLine label="Client" name={d.client.name} phone={d.client.phone} />}
         {(d.building?.contacts ?? []).map((c, i) => <PhoneLine key={i} label={CONTACT_ROLE[c.role] ?? c.role} name={c.name} phone={c.phone} />)}
-        {!d.manager && !d.client && (d.building?.contacts ?? []).length === 0 && <div className="muted">Aucun contact renseigné.</div>}
+        {!d.manager && !d.client && (d.building?.contacts ?? []).length === 0 && <div className="muted">{tr("Aucun contact renseigné.")}</div>}
       </div>
 
       <Link href={`/app/fiche/${w.id}/rapport`} className="btn primary" style={{ display: 'block', textAlign: 'center', marginBottom: '1.2rem' }}>
         <Camera size={18}/> Photos et rapport de chantier
       </Link>
 
-      <div id="fil-chantier" className="section-title" style={{ marginTop: 0 }}>Fil de chantier</div>
+      <div id="fil-chantier" className="section-title" style={{ marginTop: 0 }}>{tr("Fil de chantier")}</div>
       <ChantierThread worksiteId={w.id} />
     </>
   );

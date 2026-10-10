@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -142,7 +143,7 @@ export function SearchCreateSelect({
           }}
         />
         {value && !disabled && (
-          <button type="button" className="btn ghost" style={{ padding: '0.3rem 0.55rem' }} onClick={clear} title="Retirer">✕</button>
+          <button type="button" className="btn ghost" style={{ padding: '0.3rem 0.55rem' }} onClick={clear} title={tr("Retirer")}>✕</button>
         )}
       </div>
       {open && (

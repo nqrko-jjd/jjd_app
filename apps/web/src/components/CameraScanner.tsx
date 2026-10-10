@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { useEffect, useRef, useState } from 'react';
 
 type Detector = { detect: (v: CanvasImageSource) => Promise<{ rawValue: string }[]> };
@@ -120,7 +121,7 @@ export function CameraScanner({ onScan, onClose }: { onScan: (code: string) => v
       <div className="modal" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h2>Scanner avec la caméra</h2>
-          <button type="button" className="btn ghost" onClick={onClose} aria-label="Fermer">✕</button>
+          <button type="button" className="btn ghost" onClick={onClose} aria-label={tr("Fermer")}>✕</button>
         </div>
         <div style={{ padding: '1rem' }}>
           {err ? (
@@ -135,7 +136,7 @@ export function CameraScanner({ onScan, onClose }: { onScan: (code: string) => v
             {last ? <>Dernier code lu : <strong className="mono">{last}</strong></> : 'Visez le code-barres ou le QR code dans le cadre.'}
           </div>
         </div>
-        <div className="modal-foot"><button type="button" className="btn primary" onClick={onClose}>Terminer</button></div>
+        <div className="modal-foot"><button type="button" className="btn primary" onClick={onClose}>{tr("Terminer")}</button></div>
       </div>
     </div>
   );

@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
@@ -437,7 +438,7 @@ function ScanPanel({
                   )}
                   {line.kind === 'materiel' ? (
                     <span className="stock-qty-stepper">
-                      <button type="button" className="remove" onClick={() => removeLine(line.key)}>Retirer</button>
+                      <button type="button" className="remove" onClick={() => removeLine(line.key)}>{tr("Retirer")}</button>
                     </span>
                   ) : (
                     <span className="stock-qty-stepper">
@@ -450,7 +451,7 @@ function ScanPanel({
                         onScanReady={() => scanRef.current?.focus()}
                       />
                       <button type="button" onClick={() => setQty(line.key, line.qty + 1)} aria-label={`Augmenter la quantité de ${line.name}`}>＋</button>
-                      <button type="button" className="remove" onClick={() => removeLine(line.key)}>Retirer</button>
+                      <button type="button" className="remove" onClick={() => removeLine(line.key)}>{tr("Retirer")}</button>
                     </span>
                   )}
                 </span>
@@ -463,7 +464,7 @@ function ScanPanel({
             {err && <div className="badge crit" style={{ padding: '0.4rem 0.7rem', marginBottom: '0.7rem' }}>{err}</div>}
             {toast && <div className="badge ok" style={{ padding: '0.4rem 0.7rem', marginBottom: '0.7rem' }}>{toast}</div>}
             <button type="button" className="btn primary" disabled={busy || scanning > 0 || cart.length === 0 || (action !== 'in' && !worksiteId) || needsLocation} onClick={submit}>
-              {busy ? 'Enregistrement…' : `Valider ${ACTION_LABEL[action]} · ${cart.length} article${cart.length > 1 ? 's' : ''}`}
+              {busy ? tr("Enregistrement…") : `Valider ${ACTION_LABEL[action]} · ${cart.length} article${cart.length > 1 ? 's' : ''}`}
             </button>
           </div>
         </div>
@@ -489,7 +490,7 @@ function ScanPanel({
                 {it.photoThumbUrl ? <Thumb src={it.photoThumbUrl} size={40} /> : <span className="icon">▥</span>}
                 <span className="info">
                   <span className="name">{it.name}</span>
-                  <span className="sub">{it.qty} {it.unit} en stock{it.category ? ` · ${it.category}` : ''}</span>
+                  <span className="sub">{it.qty} {it.unit} {tr("en stock")}{it.category ? ` · ${it.category}` : ''}</span>
                 </span>
                 <b className="plus">＋</b>
               </button>
@@ -511,7 +512,7 @@ function ScanPanel({
                 <span className="icon">🧰</span>
                 <span className="info">
                   <span className="name">{c.name}</span>
-                  <span className="sub">{c.stockQty ?? '—'} en stock</span>
+                  <span className="sub">{c.stockQty ?? '—'} {tr("en stock")}</span>
                 </span>
                 <b className="plus">＋</b>
               </button>
@@ -625,7 +626,7 @@ function QtyDialog({ item, initialUnit, action, rack, onCancel, onConfirm, onRes
       >
         <div className="modal-head">
           <h2>{ACTION_BADGE[action]}</h2>
-          <button type="button" className="btn ghost" onClick={onCancel} aria-label="Fermer">✕</button>
+          <button type="button" className="btn ghost" onClick={onCancel} aria-label={tr("Fermer")}>✕</button>
         </div>
         <div className="modal-body" style={{ gridTemplateColumns: '1fr' }}>
           <div className="row" style={{ gap: '0.8rem', alignItems: 'center', flexWrap: 'nowrap' }}>
@@ -640,7 +641,7 @@ function QtyDialog({ item, initialUnit, action, rack, onCancel, onConfirm, onRes
           <div className="field">
             <label htmlFor="qd-qty">Quantité à {verb}</label>
             <div className="row" style={{ gap: '0.5rem', flexWrap: 'nowrap', alignItems: 'center' }}>
-              <button type="button" className="btn" style={{ fontSize: '1.4rem', padding: '0.3rem 1rem' }} onClick={() => bump(-1)} aria-label="Moins">−</button>
+              <button type="button" className="btn" style={{ fontSize: '1.4rem', padding: '0.3rem 1rem' }} onClick={() => bump(-1)} aria-label={tr("Moins")}>−</button>
               <input
                 id="qd-qty" ref={ref} className="input" style={{ fontSize: '1.6rem', fontWeight: 800, textAlign: 'center', width: 110 }}
                 inputMode="decimal" value={qty}
@@ -669,7 +670,7 @@ function QtyDialog({ item, initialUnit, action, rack, onCancel, onConfirm, onRes
                   }, 200);
                 }}
               />
-              <button type="button" className="btn" style={{ fontSize: '1.4rem', padding: '0.3rem 1rem' }} onClick={() => bump(1)} aria-label="Plus">＋</button>
+              <button type="button" className="btn" style={{ fontSize: '1.4rem', padding: '0.3rem 1rem' }} onClick={() => bump(1)} aria-label={tr("Plus")}>＋</button>
               {item.units.length > 0 ? (
                 <select className="select" style={{ fontSize: '1.05rem', flex: 1 }} value={unit} onChange={(e) => setUnit(e.target.value)} aria-label="Unité">
                   <option value="">{item.unit}</option>
@@ -683,7 +684,7 @@ function QtyDialog({ item, initialUnit, action, rack, onCancel, onConfirm, onRes
           {short && <div className="badge warn" style={{ padding: '0.35rem 0.7rem' }}>Attention : il n’y a que {fmtN(item.qty)} {item.unit} en stock.</div>}
         </div>
         <div className="modal-foot">
-          <button type="button" className="btn" onClick={onCancel}>Annuler</button>
+          <button type="button" className="btn" onClick={onCancel}>{tr("Annuler")}</button>
           <button type="submit" className="btn primary" disabled={!valid}>Ajouter au panier</button>
         </div>
       </form>

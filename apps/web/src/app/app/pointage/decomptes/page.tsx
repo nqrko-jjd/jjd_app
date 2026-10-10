@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { SkeletonRows, ErrorState, EmptyState } from '@/components/States';
 import { useState } from 'react';
 import Link from 'next/link';
@@ -87,7 +88,7 @@ export default function DecomptesPage() {
       )}
       <PageHead
         eyebrow="Suivi du temps"
-        title="Décomptes du mois"
+        title={tr("Décomptes du mois")}
         sub="Temps réellement pointé et base rémunérée, présentés séparément"
         action={(
           <>
@@ -112,9 +113,9 @@ export default function DecomptesPage() {
             sub={hasWithholding ? `dont ${formatEur(data.totalPayoutAmount - data.totalNetAmount)} de retenues` : 'Aucune retenue'}
             hero
           />
-          <Kpi ic={Users} label="Personnes" value={rows.length} sub="Ont pointé ce mois-ci" />
+          <Kpi ic={Users} label={tr("Personnes")} value={rows.length} sub="Ont pointé ce mois-ci" />
           <Kpi ic={Clock} label="Heures rémunérées" value={formatHours(totalHours)} sub={`${formatHours(rows.reduce((sum,r)=>sum+(r.actualHours??r.hours),0))} réellement pointées et validées`} />
-          <Kpi ic={AlertTriangle} label="À valider" value={pending} sub={pending > 0 ? 'Pointages en attente' : 'Tout est validé'} warn={pending > 0} />
+          <Kpi ic={AlertTriangle} label={tr("À valider")} value={pending} sub={pending > 0 ? 'Pointages en attente' : 'Tout est validé'} warn={pending > 0} />
           <Kpi ic={Clock} label="Prévu au planning" value={formatHours(plannedHours)} sub={plannedHours > 0 ? 'Pas encore validé : pas compté dans le payé' : 'Rien en attente de validation'} warn={plannedHours > 0} href="/app/pointage" />
         </div>
       )}
@@ -136,7 +137,7 @@ export default function DecomptesPage() {
           <table className="tbl">
             <thead>
               <tr>
-                <th></th><th>Personne</th><th>Contrat</th><th style={{ textAlign: 'right' }}>Taux</th>
+                <th></th><th>Personne</th><th>{tr("Contrat")}</th><th style={{ textAlign: 'right' }}>Taux</th>
                 <th style={{ textAlign: 'right' }}>Jours</th>
                 <th style={{ textAlign: 'right' }}>Pointées</th><th style={{ textAlign: 'right' }}>Rémunérées</th><th style={{ textAlign: 'right' }}>Montant</th>
                 {hasPayoutDiff && <th style={{ textAlign: 'right' }}>À verser</th>}
@@ -203,7 +204,7 @@ function FragmentRow({
         {showWithholding && <td style={{ textAlign: 'right' }}>{r.toWithhold > 0 ? <Money value={r.toWithhold} /> : '—'}</td>}
         {showWithholding && <td style={{ textAlign: 'right', fontWeight: r.toWithhold > 0 ? 700 : 400 }}><Money value={r.netAmount} /></td>}
         <td>
-          {r.pending > 0 && <span className="badge warn">{r.pending} à valider</span>}
+          {r.pending > 0 && <span className="badge warn">{r.pending} {tr("à valider")}</span>}
           {(r.plannedHours ?? 0) > 0 && <span className="badge" style={{ marginLeft: '0.3rem' }} title="Heures prévues au planning, pas encore validées dans Pointage">{formatHours(r.plannedHours ?? 0)} prévues</span>}
         </td>
       </tr>
@@ -225,7 +226,7 @@ function FragmentRow({
           {showWithholding && <td></td>}
           <td onClick={(ev) => ev.stopPropagation()}>
             <div className="row" style={{ gap: '0.3rem', justifyContent: 'flex-end' }}>
-              {e.status === 'submitted' && <span className="badge warn" style={{ fontSize: '0.7rem' }}>à valider</span>}
+              {e.status === 'submitted' && <span className="badge warn" style={{ fontSize: '0.7rem' }}>{tr("à valider")}</span>}
               <button className="btn ghost" style={miniBtn} onClick={() => onEdit(e)} title="Modifier ce pointage">✎</button>
               <button className="btn ghost" style={miniBtn} onClick={() => onDelete(e.id)} title="Supprimer ce pointage">✕</button>
             </div>

@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { Warehouse, Layers, AlertTriangle, Package, MapPin } from 'lucide-react';
 import { SkeletonRows, EmptyState } from '@/components/States';
 import { use, useEffect, useState } from 'react';
@@ -138,7 +139,7 @@ export default function StockDetail({ params }: { params: Promise<{ id: string }
         {canManage && (
           <div className="row">
             <button className="btn" onClick={() => setEditing(true)}>Modifier l’article</button>
-            <button className="btn" style={{ color: 'var(--crit)' }} onClick={removeItem}>Supprimer</button>
+            <button className="btn" style={{ color: 'var(--crit)' }} onClick={removeItem}>{tr("Supprimer")}</button>
           </div>
         )}
       </div>
@@ -155,7 +156,7 @@ export default function StockDetail({ params }: { params: Promise<{ id: string }
           <h1>{item.name}</h1>
           <span className={`badge ${item.low ? 'crit' : 'ok'}`}>{item.low ? 'À réapprovisionner' : 'Disponible'}</span>
         </div>
-        <div className="sub">{fmtQty(primaryQty)} {primaryUnitName} en stock{inBig}</div>
+        <div className="sub">{fmtQty(primaryQty)} {primaryUnitName} {tr("en stock")}{inBig}</div>
       </div>
       </div>
 
@@ -241,7 +242,7 @@ export default function StockDetail({ params }: { params: Promise<{ id: string }
         <div className="tbl-wrap" style={{ marginBottom: '1.6rem' }}>
           <table className="tbl">
             <thead>
-              <tr><th>Fournisseur</th><th>Réf. fournisseur</th><th>Conditionnement</th><th style={{ textAlign: 'right' }}>Prix HT</th><th style={{ textAlign: 'right' }}>Par {item.unit}</th><th /></tr>
+              <tr><th>{tr("Fournisseur")}</th><th>Réf. fournisseur</th><th>Conditionnement</th><th style={{ textAlign: 'right' }}>Prix HT</th><th style={{ textAlign: 'right' }}>Par {item.unit}</th><th /></tr>
             </thead>
             <tbody>
               {item.suppliers.map((s) => {
@@ -259,7 +260,7 @@ export default function StockDetail({ params }: { params: Promise<{ id: string }
                     <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                       {canManage && (
                         <>
-                          <button className="btn ghost" style={mini} onClick={() => setSupplierModal(s)}>Modifier</button>
+                          <button className="btn ghost" style={mini} onClick={() => setSupplierModal(s)}>{tr("Modifier")}</button>
                           <button className="btn ghost" style={mini} onClick={() => removeSupplier(s)}>✕</button>
                         </>
                       )}
@@ -283,7 +284,7 @@ export default function StockDetail({ params }: { params: Promise<{ id: string }
       ) : (
         <div className="tbl-wrap" style={{ marginBottom: '1.6rem' }}>
           <table className="tbl">
-            <thead><tr><th>Date</th><th>Fournisseur</th><th>Réf.</th><th>Facture</th><th style={{ textAlign: 'right' }}>Montant</th></tr></thead>
+            <thead><tr><th>{tr("Date")}</th><th>{tr("Fournisseur")}</th><th>Réf.</th><th>{tr("Facture")}</th><th style={{ textAlign: 'right' }}>Montant</th></tr></thead>
             <tbody>
               {purchaseHistory.items.map((p) => (
                 <tr key={p.id} className="row-link" onClick={() => window.open(`/app/achats?q=${encodeURIComponent(p.docNumber ?? p.supplierRef)}`, '_blank')}>
@@ -305,7 +306,7 @@ export default function StockDetail({ params }: { params: Promise<{ id: string }
       {moves && moves.items.length > 0 && (
         <div className="tbl-wrap" style={{ marginBottom: '1rem' }}>
           <table className="tbl">
-            <thead><tr><th>Date</th><th>Type</th><th style={{ textAlign: 'right' }}>Qté</th><th>Fournisseur / Chantier</th><th>Note</th></tr></thead>
+            <thead><tr><th>{tr("Date")}</th><th>Type</th><th style={{ textAlign: 'right' }}>Qté</th><th>Fournisseur / Chantier</th><th>Note</th></tr></thead>
             <tbody>
               {moves.items.map((m) => (
                 <tr key={m.id}>
@@ -369,7 +370,7 @@ function SupplierModal({ item, link, onClose, onDone }: { item: StockItemFull; l
       <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
         <div className="modal-head">
           <h2>{link ? 'Modifier le fournisseur' : 'Ajouter un fournisseur'}</h2>
-          <button type="button" className="btn ghost" onClick={onClose} aria-label="Fermer">✕</button>
+          <button type="button" className="btn ghost" onClick={onClose} aria-label={tr("Fermer")}>✕</button>
         </div>
         <div className="modal-body">
           <div className="field" style={{ gridColumn: '1 / -1' }}>
@@ -404,8 +405,8 @@ function SupplierModal({ item, link, onClose, onDone }: { item: StockItemFull; l
         </div>
         {err && <div className="badge crit" style={{ margin: '0 1.15rem', padding: '0.4rem 0.7rem' }}>{err}</div>}
         <div className="modal-foot">
-          <button type="button" className="btn" onClick={onClose}>Annuler</button>
-          <button type="submit" className="btn primary" disabled={busy}>{busy ? 'Enregistrement…' : 'Enregistrer'}</button>
+          <button type="button" className="btn" onClick={onClose}>{tr("Annuler")}</button>
+          <button type="submit" className="btn primary" disabled={busy}>{busy ? tr("Enregistrement…") : tr("Enregistrer")}</button>
         </div>
       </form>
     </div>
@@ -480,7 +481,7 @@ function MovementModal({
       <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
         <div className="modal-head">
           <h2>{item.name}</h2>
-          <button type="button" className="btn ghost" onClick={onClose} aria-label="Fermer">✕</button>
+          <button type="button" className="btn ghost" onClick={onClose} aria-label={tr("Fermer")}>✕</button>
         </div>
         <div className="modal-body">
           <div style={{ gridColumn: '1 / -1' }}>
@@ -494,9 +495,9 @@ function MovementModal({
               );
             })()}
             <div className="seg">
-              <button type="button" className={type === 'in' ? 'on' : ''} onClick={() => setType('in')}>Entrée</button>
-              <button type="button" className={type === 'out' ? 'on' : ''} onClick={() => setType('out')}>Sortie</button>
-              <button type="button" className={type === 'adjustment' ? 'on' : ''} onClick={() => setType('adjustment')}>Inventaire</button>
+              <button type="button" className={type === 'in' ? 'on' : ''} onClick={() => setType('in')}>{tr("Entrée")}</button>
+              <button type="button" className={type === 'out' ? 'on' : ''} onClick={() => setType('out')}>{tr("Sortie")}</button>
+              <button type="button" className={type === 'adjustment' ? 'on' : ''} onClick={() => setType('adjustment')}>{tr("Inventaire")}</button>
             </div>
           </div>
 
@@ -525,7 +526,7 @@ function MovementModal({
             </select>
           </div>
           {converted != null && (
-            <div className="muted" style={{ gridColumn: '1 / -1', marginTop: '-0.4rem' }}>= {fmtQty(converted)} {item.unit} en stock</div>
+            <div className="muted" style={{ gridColumn: '1 / -1', marginTop: '-0.4rem' }}>= {fmtQty(converted)} {item.unit} {tr("en stock")}</div>
           )}
 
           {type === 'in' && (
@@ -536,7 +537,7 @@ function MovementModal({
                 {unitCost !== '' && f !== 1 && <span className="muted" style={{ fontSize: '0.78rem' }}>≈ {formatEur(Number(unitCost) / f)} / {item.unit}</span>}
               </div>
               <div className="field">
-                <label>Fournisseur</label>
+                <label>{tr("Fournisseur")}</label>
                 <ContactPicker typeFilter="supplier" value={contactId} onChange={(cid) => setContactId(cid)} />
               </div>
             </>
@@ -558,7 +559,7 @@ function MovementModal({
                 <ComboBox placeholder="chercher un chantier" value={worksiteId} onChange={setWorksiteId} options={meta.worksites.map((w) => ({ value: w.id, label: w.name }))} />
               </div>
               <div className="field" style={{ gridColumn: '1 / -1' }}>
-                <label>Demandeur</label>
+                <label>{tr("Demandeur")}</label>
                 <input className="input" value={requestedByName} onChange={(e) => setRequestedByName(e.target.value)} placeholder="qui prend la sortie" />
               </div>
             </>
@@ -571,9 +572,9 @@ function MovementModal({
         </div>
         {err && <div className="badge crit" style={{ margin: '0 1.15rem', padding: '0.4rem 0.7rem' }}>{err}</div>}
         <div className="modal-foot">
-          <button type="button" className="btn" onClick={onClose}>Annuler</button>
+          <button type="button" className="btn" onClick={onClose}>{tr("Annuler")}</button>
           <button type="submit" className="btn primary" disabled={busy || !qty || (type === 'out' && !worksiteId)}>
-            {busy ? 'Enregistrement…' : 'Enregistrer'}
+            {busy ? tr("Enregistrement…") : tr("Enregistrer")}
           </button>
         </div>
       </form>

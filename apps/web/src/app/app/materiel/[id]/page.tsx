@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { Wrench, Boxes, Warehouse, Building2, Truck } from 'lucide-react';
 import { SkeletonRows, EmptyState, ErrorState } from '@/components/States';
 import { use, useState } from 'react';
@@ -135,12 +136,12 @@ export default function MaterielDetail({ params }: { params: Promise<{ id: strin
       <div className="kpis" style={{ marginBottom: '1.4rem' }}>
         <Kpi ic={Boxes} label="Exemplaires" value={p.total} sub="Toutes situations" hero />
         <Kpi ic={Warehouse} label="Au dépôt" value={p.available} sub="Disponibles maintenant" />
-        <Kpi ic={Building2} label="Sur chantier" value={p.onSite} sub="En cours d'utilisation" />
+        <Kpi ic={Building2} label={tr("Sur chantier")} value={p.onSite} sub="En cours d'utilisation" />
         <Kpi ic={Truck} label="Loué" value={p.rented} sub="Client Bricoloc" />
       </div>
 
       <div className="info-grid" style={{ marginBottom: '1.4rem' }}>
-        <Info label="Catégorie" value={p.category ?? '—'} />
+        <Info label={tr("Catégorie")} value={p.category ?? '—'} />
         <Info label="Marque / modèle" value={[p.brand, p.model].filter(Boolean).join(' ') || '—'} />
       </div>
 

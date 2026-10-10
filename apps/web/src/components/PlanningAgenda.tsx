@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { Truck, Users, Plus, AlertTriangle } from 'lucide-react';
 import type { PlanningEv } from './planningTypes';
 import { vehicleLabel } from '@/lib/vehicle';
@@ -20,7 +21,7 @@ export function PlanningAgenda({days, events, onOpen, onNew, onMove}: {
           const transportWarning=missingDriver || (!unknownSeats && event.vehicles.length>0 && seats<event.assignments.length);
           return <button key={event.id} draggable onDragStart={e=>e.dataTransfer.setData('text/plain',event.id)} className={`agenda-event ${event.kind==='meeting'?'meeting kind-meeting':'kind-intervention'}`} onClick={()=>onOpen(event)}>
             <div className="agenda-event-time">{new Date(event.startAt).toLocaleTimeString('fr-BE',{hour:'2-digit',minute:'2-digit'})} – {new Date(event.endAt).toLocaleTimeString('fr-BE',{hour:'2-digit',minute:'2-digit'})}</div>
-            <small>{event.kind==='meeting'?'Rendez-vous':'Travaux'} · {event.worksite.ref}</small>
+            <small>{event.kind==='meeting'?tr("Rendez-vous"):'Travaux'} · {event.worksite.ref}</small>
             <strong>{event.title || event.worksite.title}</strong><span>{event.worksite.city}</span>
             <div className="agenda-team"><Users size={14}/>{event.assignments.length} personne{event.assignments.length!==1?'s':''}</div>
             <span className="agenda-names">{event.assignments.map(a=>a.person.displayName||a.person.firstName).join(', ') || 'Équipe à affecter'}</span>
@@ -30,7 +31,7 @@ export function PlanningAgenda({days, events, onOpen, onNew, onMove}: {
             {event.status==='tentative' && <span className="agenda-warning">Provisoire</span>}
           </button>;
         })}
-        <button className="agenda-add" onClick={()=>onNew(key)}><Plus size={16}/> Ajouter</button>
+        <button className="agenda-add" onClick={()=>onNew(key)}><Plus size={16}/> {tr("Ajouter")}</button>
       </section>;
     })}
   </section>;

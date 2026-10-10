@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { useEffect, useRef, useState } from 'react';
 
 /**
@@ -59,7 +60,7 @@ export function FileDrop({
           {preview ? <img src={preview} alt="" /> : <span className="filedrop-ic">📄</span>}
           <span className="filedrop-name">{file.name}</span>
           {!disabled && (
-            <button type="button" className="btn ghost" onClick={(e) => { e.stopPropagation(); onFile(null); }} aria-label="Retirer">✕</button>
+            <button type="button" className="btn ghost" onClick={(e) => { e.stopPropagation(); onFile(null); }} aria-label={tr("Retirer")}>✕</button>
           )}
         </div>
       ) : existingUrl ? (

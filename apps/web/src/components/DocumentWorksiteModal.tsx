@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Building2, Check, Search, X } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -68,8 +69,8 @@ export function DocumentWorksiteModal({ document: doc, onClose, onLinked }: {
   return <div className="modal-scrim" onClick={() => { if (!busy) onClose(); }}>
     <form ref={form} className="modal" role="dialog" aria-modal="true" aria-labelledby={titleId} onClick={(e) => e.stopPropagation()} onSubmit={submit} style={{ width: '100%', maxWidth: 620 }}>
       <div className="modal-head">
-        <div className="modal-heading"><span className="modal-eyebrow">Devis & factures</span><h2 id={titleId}>{doc.worksite ? 'Changer le chantier lié' : 'Lier à un chantier'}</h2></div>
-        <button className="btn ghost" type="button" onClick={onClose} disabled={busy} aria-label="Fermer"><X size={18}/></button>
+        <div className="modal-heading"><span className="modal-eyebrow">{tr("Devis & factures")}</span><h2 id={titleId}>{doc.worksite ? 'Changer le chantier lié' : 'Lier à un chantier'}</h2></div>
+        <button className="btn ghost" type="button" onClick={onClose} disabled={busy} aria-label={tr("Fermer")}><X size={18}/></button>
       </div>
       <div className="modal-body" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 14 }}>
         <div style={{ overflowWrap: 'anywhere' }}><strong>{doc.number ?? doc.draftRef ?? 'Document'}</strong>{doc.title && <div className="muted">{doc.title}</div>}
@@ -88,7 +89,7 @@ export function DocumentWorksiteModal({ document: doc, onClose, onLinked }: {
         {selected && <div role="status" style={{ overflowWrap: 'anywhere' }}><strong>{unchanged ? 'Déjà lié à ce chantier' : 'Chantier sélectionné'}</strong><div className="muted">{selected.name}</div></div>}
         {saveError && <p className="badge crit" role="alert" style={{ whiteSpace: 'normal' }}>{saveError}</p>}
       </div>
-      <div className="modal-foot"><button type="button" className="btn" onClick={onClose} disabled={busy}>Annuler</button><button type="submit" className="btn primary" disabled={!selected || unchanged || busy || loading || !!error}>{busy ? 'Enregistrement…' : 'Lier au chantier'}</button></div>
+      <div className="modal-foot"><button type="button" className="btn" onClick={onClose} disabled={busy}>{tr("Annuler")}</button><button type="submit" className="btn primary" disabled={!selected || unchanged || busy || loading || !!error}>{busy ? tr("Enregistrement…") : 'Lier au chantier'}</button></div>
     </form>
   </div>;
 }

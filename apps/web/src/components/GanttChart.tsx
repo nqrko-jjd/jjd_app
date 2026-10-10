@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 /** Une ligne du diagramme : une barre du jour de début (matin/après-midi) au jour de fin. Les jours sont des dates `AAAA-MM-JJ` (heure de Bruxelles). */
@@ -73,7 +74,7 @@ export function GanttChart({ rows }: { rows: GanttRow[] }) {
     return { days, left, width, w, weeks, todayX: ti >= 0 ? left[ti]! + w(ti) / 2 : null };
   }, [rows, cw]);
 
-  if (!g) return <p className="muted" style={{ margin: 0 }}>Rien à afficher.</p>;
+  if (!g) return <p className="muted" style={{ margin: 0 }}>{tr("Rien à afficher.")}</p>;
   const pos = (day: string, part: number) => { const i = g.days.indexOf(day); return g.left[i]! + part * g.w(i); };
 
   return (
@@ -117,7 +118,7 @@ export function GanttChart({ rows }: { rows: GanttRow[] }) {
               </div>
             );
           })}
-          {g.todayX !== null && <div className="gantt-today" style={{ left: LABEL_W + g.todayX }} title="Aujourd’hui" />}
+          {g.todayX !== null && <div className="gantt-today" style={{ left: LABEL_W + g.todayX }} title={tr("Aujourd’hui")} />}
         </div>
       </div>
       <div className="gantt-legend"><span className="gantt-key" /> confirmé <span className="gantt-key tentative" /> à confirmer · <span>matin / après-midi : une demi-journée = une demi-case</span></div>

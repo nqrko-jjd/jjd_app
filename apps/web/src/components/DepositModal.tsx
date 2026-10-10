@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { formatEur, formatDateBE } from '@/lib/ui';
@@ -55,15 +56,14 @@ export function DepositModal({ quote, onClose, onCreated }: {
       <form className="modal" style={{ maxWidth: 560 }} onClick={(e) => e.stopPropagation()} onSubmit={(e) => { e.preventDefault(); if (!valid) { setErr('Choisissez un pourcentage entre 1 et 100.'); return; } create({ depositPct: pctNum }); }}>
         <div className="modal-head">
           <h2>Facture d’acompte · devis {quote.number ?? quote.draftRef}</h2>
-          <button type="button" className="btn ghost" onClick={onClose} aria-label="Fermer">✕</button>
+          <button type="button" className="btn ghost" onClick={onClose} aria-label={tr("Fermer")}>✕</button>
         </div>
         <div className="modal-body">
           <div className="field" style={{ gridColumn: '1 / -1' }}>
             <div style={{ height: 10, borderRadius: 999, background: 'var(--paper-2, #e9efe9)', overflow: 'hidden' }} aria-hidden>
               <div style={{ width: `${billing.billedPct}%`, height: '100%', background: 'var(--ok, #2f8f5b)' }} />
             </div>
-            <p className="muted" style={{ margin: '0.4rem 0 0', fontSize: '0.86rem' }}>
-              Devis {formatEur(billing.totalHt)} HT · déjà facturé {formatEur(billing.billedHt)} ({billing.billedPct} %) · <strong>reste {formatEur(billing.remainingHt)} HT</strong>
+            <p className="muted" style={{ margin: '0.4rem 0 0', fontSize: '0.86rem' }}> {tr("Devis")} {formatEur(billing.totalHt)} HT · déjà facturé {formatEur(billing.billedHt)} ({billing.billedPct} %) · <strong>reste {formatEur(billing.remainingHt)} HT</strong>
             </p>
             {billing.invoices.length > 0 && (
               <div style={{ marginTop: '0.5rem', display: 'grid', gap: '0.25rem', fontSize: '0.84rem' }}>
@@ -107,7 +107,7 @@ export function DepositModal({ quote, onClose, onCreated }: {
         </div>
         {err && <div className="badge crit" style={{ margin: '0 1.15rem', padding: '0.4rem 0.7rem' }}>{err}</div>}
         <div className="modal-foot">
-          <button type="button" className="btn" onClick={onClose}>Annuler</button>
+          <button type="button" className="btn" onClick={onClose}>{tr("Annuler")}</button>
           {!done && billing.billedHt > 0.01 && <button type="button" className="btn" disabled={busy} onClick={() => create({})} title="Lignes du devis, acomptes déjà facturés déduits">Facturer le solde ({formatEur(billing.remainingHt)} HT)</button>}
           {!done && <button type="submit" className="btn primary" disabled={busy || !valid}>{busy ? 'Création…' : `Créer l’acompte de ${valid ? pctNum : '…'} %`}</button>}
         </div>

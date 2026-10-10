@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import {useState} from 'react';
 const fields=[['ca','CA net enregistré','#237461'],['buy','Achats & sous-traitance','#ce8c7a'],['labor','Rémunérations enregistrées','#c3a35f'],['charges','Autres charges','#8e9caa']] as const;
 export interface OperationsRow {month:string; ca:number; other:number; buy:number; labor:number; charges:number; previous?:number|null}
@@ -19,5 +20,5 @@ export function OperationsChart({data,rangeMonths}:{data:OperationsRow[];rangeMo
  <div className="operations-legend">{[...fields,['result','Résultat','#173f34'],['gross','Après achats','#92ad9e']].map(([key,name,color])=><button key={key} className={!on(key)?'off':''} aria-pressed={on(key)} onClick={()=>toggle(key)}><i style={{background:color}}/>{name}</button>)}</div>
  <div className="dashboard-chart-detail" aria-live="polite">{selected?<><strong>{selected.month}</strong><span>Produits : <b>{euro(selected.ca+selected.other)}</b></span><span>Coûts : <b>{euro(selected.buy+selected.labor+selected.charges)}</b></span><span>Résultat : <b>{euro(result(selected))}</b></span></>:<span>Touchez un mois pour lire les montants. Cliquez sur la légende pour masquer des postes.</span>}</div>
  <div className="dashboard-chart-foot"><p className="muted">Grand livre · HT · par date de pièce, mois courant inclus et provisoire. Résultat enregistré = CA net − charges enregistrées. Les rémunérations proviennent des achats, sans ajout des coûts estimés des pointages. Les pièces manquantes ne sont pas estimées. Ce n’est ni le solde bancaire ni un résultat comptable certifié. Les totaux et courbes conservent tous les postes, même masqués.</p><button className="btn" onClick={()=>setTable(!table)}>{table?'Masquer':'Voir'} les données</button></div>
- {table&&<div className="tbl-wrap"><table className="tbl"><thead><tr><th>Mois</th>{fields.map(([key,label])=><th key={key}>{label}</th>)}<th>Après achats</th><th>Résultat</th></tr></thead><tbody>{rows.map(r=><tr key={r.month}><td>{r.month}</td>{fields.map(([key])=><td key={key}>{euro(r[key])}</td>)}<td>{euro(gross(r))}</td><td>{euro(result(r))}</td></tr>)}</tbody></table></div>}</div>
+ {table&&<div className="tbl-wrap"><table className="tbl"><thead><tr><th>{tr("Mois")}</th>{fields.map(([key,label])=><th key={key}>{label}</th>)}<th>Après achats</th><th>{tr("Résultat")}</th></tr></thead><tbody>{rows.map(r=><tr key={r.month}><td>{r.month}</td>{fields.map(([key])=><td key={key}>{euro(r[key])}</td>)}<td>{euro(gross(r))}</td><td>{euro(result(r))}</td></tr>)}</tbody></table></div>}</div>
 }

@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { SkeletonRows, ErrorState } from '@/components/States';
 import { use, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -125,7 +126,7 @@ export default function CdcPage({ params }: { params: Promise<{ id: string }> })
             ? <button className="btn" disabled={busy} onClick={() => save('validated')} title="Marque le document comme définitif (reste modifiable)">Marquer validé</button>
             : <button className="btn" disabled={busy} onClick={() => save('draft')}>Repasser en brouillon</button>}
           {data.cdc.quoteId && <button className="btn" onClick={regenerate} title="Recrée un brouillon rédigé par l’IA depuis le devis (utile si le devis a changé)" disabled={busy}>Régénérer avec l’IA</button>}
-          <button className="btn ghost" onClick={remove}>Supprimer</button>
+          <button className="btn ghost" onClick={remove}>{tr("Supprimer")}</button>
         </span>
       </div>
 

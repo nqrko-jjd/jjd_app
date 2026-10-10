@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { SkeletonRows, ErrorState } from '@/components/States';
 import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -102,7 +103,7 @@ function ContactsInner() {
         />
       )}
       <PageHead
-        eyebrow="Gestion"
+        eyebrow={tr("Gestion")}
         title="Contacts"
         sub={data ? `${data.totalCount} contacts · page ${data.page}/${data.totalPages} · clic droit pour les actions rapides` : undefined}
         action={<button className="btn primary" onClick={() => setCreating(true)}>+ Nouveau contact</button>}
@@ -110,7 +111,7 @@ function ContactsInner() {
       <div className="row" style={{ marginBottom: '1rem' }}>
         <input className="input" style={{ maxWidth: 280 }} placeholder="Nom, ville, TVA…" value={q} onChange={(e) => setQ(e.target.value)} />
         <select className="select" style={{ maxWidth: 180 }} value={type} onChange={(e) => setType(e.target.value)}>
-          <option value="all">Tous</option>
+          <option value="all">{tr("Tous")}</option>
           <option value="client">Clients</option>
           <option value="supplier">Fournisseurs</option>
         </select>
@@ -128,7 +129,7 @@ function ContactsInner() {
               <div className="gallery-body">
                 <div className="gallery-title">{c.name}</div>
                 <div className="gallery-sub">
-                  {c.kind ? CLIENT_KIND_LABEL[c.kind as keyof typeof CLIENT_KIND_LABEL] : c.type === 'supplier' ? 'Fournisseur' : '—'}
+                  {c.kind ? CLIENT_KIND_LABEL[c.kind as keyof typeof CLIENT_KIND_LABEL] : c.type === 'supplier' ? tr("Fournisseur") : '—'}
                   {c.city && ` · ${c.city}`}
                 </div>
               </div>
@@ -141,12 +142,12 @@ function ContactsInner() {
           <table className="tbl">
             <thead>
               <tr>
-                <SortTh k="name" sort={sort} filter={colFilter}>Nom</SortTh>
+                <SortTh k="name" sort={sort} filter={colFilter}>{tr("Nom")}</SortTh>
                 <SortTh k="kind" sort={sort} filter={colFilter}>Type</SortTh>
                 <SortTh k="city" sort={sort} filter={colFilter}>Ville</SortTh>
                 <SortTh k="vat" sort={sort} filter={colFilter}>TVA</SortTh>
                 <SortTh k="contact" sort={sort} filter={colFilter}>Contact</SortTh>
-                <SortTh k="worksites" sort={sort} align="right" filter={colFilter}>Chantiers</SortTh>
+                <SortTh k="worksites" sort={sort} align="right" filter={colFilter}>{tr("Chantiers")}</SortTh>
                 <th>Statut</th>
                 <th />
               </tr>
@@ -165,7 +166,7 @@ function ContactsInner() {
                     {c.syndic && <div className="muted" style={{ fontSize: '0.78rem' }}>c/o {c.syndic.name}</div>}
                     {c.building && <div className="muted" style={{ fontSize: '0.78rem' }}>ACP : {c.building.name}</div>}
                   </td>
-                  <td>{c.kind ? CLIENT_KIND_LABEL[c.kind as keyof typeof CLIENT_KIND_LABEL] : c.type === 'supplier' ? 'Fournisseur' : '—'}</td>
+                  <td>{c.kind ? CLIENT_KIND_LABEL[c.kind as keyof typeof CLIENT_KIND_LABEL] : c.type === 'supplier' ? tr("Fournisseur") : '—'}</td>
                   <td>{c.city ?? '—'}</td>
                   <td className="mono" style={{ fontSize: '0.82rem' }}>{formatVat(c.vat) ?? '—'}</td>
                   <td>{c.email ?? c.phone ?? '—'}</td>

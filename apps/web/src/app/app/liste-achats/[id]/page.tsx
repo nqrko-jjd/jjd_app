@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { SkeletonRows, ErrorState } from '@/components/States';
 import { use, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -137,14 +138,14 @@ export default function PurchaseListPage({ params }: { params: Promise<{ id: str
               <div style={{ padding: '0.7rem 1rem', fontWeight: 600 }}>{lot}</div>
               <div className="tbl-wrap">
                 <table className="tbl">
-                  <thead><tr><th>Article</th><th style={{ width: 80 }}>Qté</th><th style={{ width: 80 }}>Unité</th><th>Fournisseur</th><th style={{ width: 120, textAlign: 'right' }}>Budget HT</th><th style={{ width: 130 }}>Statut</th><th>Note</th><th /></tr></thead>
+                  <thead><tr><th>{tr("Article")}</th><th style={{ width: 80 }}>Qté</th><th style={{ width: 80 }}>Unité</th><th>{tr("Fournisseur")}</th><th style={{ width: 120, textAlign: 'right' }}>Budget HT</th><th style={{ width: 130 }}>Statut</th><th>Note</th><th /></tr></thead>
                   <tbody>
                     {internal.filter((i) => i.lot === lot).map((i) => (
                       <tr key={i.id}>
-                        <td><input className="input" value={i.label} onChange={(e) => upInternal(i.id, { label: e.target.value })} aria-label="Article" /></td>
+                        <td><input className="input" value={i.label} onChange={(e) => upInternal(i.id, { label: e.target.value })} aria-label={tr("Article")} /></td>
                         <td><input className="input" inputMode="decimal" value={String(i.qty)} onChange={(e) => upInternal(i.id, { qty: Number(e.target.value.replace(',', '.')) || 0 })} aria-label="Quantité" /></td>
                         <td><input className="input" value={i.unit} onChange={(e) => upInternal(i.id, { unit: e.target.value })} aria-label="Unité" /></td>
-                        <td><input className="input" value={i.supplier} placeholder="Fournisseur" onChange={(e) => upInternal(i.id, { supplier: e.target.value })} aria-label="Fournisseur" /></td>
+                        <td><input className="input" value={i.supplier} placeholder={tr("Fournisseur")} onChange={(e) => upInternal(i.id, { supplier: e.target.value })} aria-label={tr("Fournisseur")} /></td>
                         <td><input className="input" style={{ textAlign: 'right' }} inputMode="decimal" value={String(i.estCostHt)} onChange={(e) => upInternal(i.id, { estCostHt: Number(e.target.value.replace(',', '.')) || 0 })} aria-label="Budget HT" /></td>
                         <td>
                           <select className="select" value={i.status} onChange={(e) => upInternal(i.id, { status: e.target.value as InternalItem['status'] })} aria-label="Statut">
@@ -152,7 +153,7 @@ export default function PurchaseListPage({ params }: { params: Promise<{ id: str
                           </select>
                         </td>
                         <td><input className="input" value={i.note} onChange={(e) => upInternal(i.id, { note: e.target.value })} aria-label="Note" /></td>
-                        <td><button className="btn ghost" title="Retirer" onClick={() => { setInternal((l) => l.filter((x) => x.id !== i.id)); setDirty(true); }}>✕</button></td>
+                        <td><button className="btn ghost" title={tr("Retirer")} onClick={() => { setInternal((l) => l.filter((x) => x.id !== i.id)); setDirty(true); }}>✕</button></td>
                       </tr>
                     ))}
                   </tbody>
@@ -202,7 +203,7 @@ export default function PurchaseListPage({ params }: { params: Promise<{ id: str
                       {c.clientChoice === 'other' && <span className="badge warn">Autre souhait : « {c.clientComment} »</span>}
                       {!c.clientChoice && <span className="muted" style={{ fontSize: '0.82rem' }}>Pas encore de réponse</span>}
                     </span>
-                    <button className="btn ghost" style={{ fontSize: '0.8rem' }} onClick={() => { setClient((l) => l.filter((x) => x.id !== c.id)); setDirty(true); }}>Retirer</button>
+                    <button className="btn ghost" style={{ fontSize: '0.8rem' }} onClick={() => { setClient((l) => l.filter((x) => x.id !== c.id)); setDirty(true); }}>{tr("Retirer")}</button>
                   </div>
                 </div>
               ))}

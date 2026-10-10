@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { useEffect, useMemo, useState } from 'react';
 import { GanttChart, type GanttRow } from './GanttChart';
 import Link from 'next/link';
@@ -80,13 +81,13 @@ export function QuotePlanModal({ quoteId, onClose }: { quoteId: string; onClose:
   return (
     <div className="modal-scrim" onClick={onClose}>
       <div className="modal" style={{ maxWidth: 980, maxHeight: '92vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
-        <div className="modal-head"><h2>Planning prévisionnel d’après le devis</h2><button className="btn ghost" onClick={onClose} aria-label="Fermer">✕</button></div>
+        <div className="modal-head"><h2>Planning prévisionnel d’après le devis</h2><button className="btn ghost" onClick={onClose} aria-label={tr("Fermer")}>✕</button></div>
         <div style={{ padding: '1rem', display: 'grid', gap: '0.9rem' }}>
           {done ? (
             <>
               <p className="state" role="status">{done.created} créneau{done.created > 1 ? 'x' : ''} « à confirmer » créé{done.created > 1 ? 's' : ''}, jusqu’au {dayFr(done.endDate)}.</p>
               <p className="muted" style={{ margin: 0 }}>Ils apparaissent en pointillés dans le planning. Affecte l’équipe et confirme-les un par un ; rien n’est envoyé à Google Agenda avant la confirmation.</p>
-              <div className="row"><Link className="btn primary" href={`/app/planning`}>Ouvrir le planning</Link><button className="btn" onClick={onClose}>Fermer</button></div>
+              <div className="row"><Link className="btn primary" href={`/app/planning`}>Ouvrir le planning</Link><button className="btn" onClick={onClose}>{tr("Fermer")}</button></div>
             </>
           ) : (
             <>
@@ -121,7 +122,7 @@ export function QuotePlanModal({ quoteId, onClose }: { quoteId: string; onClose:
                     </table>
                   </div>
                   <details>
-                    <summary style={{ cursor: 'pointer', fontSize: '0.86rem' }}>Voir les {pv.slots.length} créneaux proposés</summary>
+                    <summary style={{ cursor: 'pointer', fontSize: '0.86rem' }}>{tr("Voir les")} {pv.slots.length} créneaux proposés</summary>
                     <ul style={{ margin: '0.4rem 0 0', paddingLeft: '1.1rem', fontSize: '0.85rem' }}>
                       {pv.slots.map((s, i) => <li key={i}>{dayFr(s.date)} · {s.start}–{s.end} · Lot {s.lot} — {s.title}</li>)}
                     </ul>
@@ -146,7 +147,7 @@ export function QuotePlanModal({ quoteId, onClose }: { quoteId: string; onClose:
                     {pv.existing > 0
                       ? <button className="btn primary" disabled={busy} onClick={() => create(true)}>{busy ? 'Création…' : 'Remplacer le planning proposé'}</button>
                       : <button className="btn primary" disabled={busy} onClick={() => create(false)}>{busy ? 'Création…' : `Créer ${pv.slots.length} créneaux « à confirmer »`}</button>}
-                    <button className="btn" onClick={onClose}>Annuler</button>
+                    <button className="btn" onClick={onClose}>{tr("Annuler")}</button>
                   </div>
                 </>
               )}

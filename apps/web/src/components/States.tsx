@@ -1,5 +1,6 @@
 'use client';
 import { useState, type ReactNode } from 'react';
+import { tr } from '@/lib/ui-language';
 import { Inbox, AlertTriangle, CheckCircle2, ShieldAlert } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -21,8 +22,8 @@ export function EmptyState({
   return (
     <div className="state">
       <div className="ic"><Icon size={22} strokeWidth={1.8} /></div>
-      <h3>{title}</h3>
-      <p>{text}</p>
+      <h3>{tr(title)}</h3>
+      <p>{tr(text)}</p>
       {(action || secondary) && <div className="acts">{action}{secondary}</div>}
     </div>
   );
@@ -68,7 +69,7 @@ export function Banner({
         {children && <span>{children}</span>}
       </div>
       {action}
-      {onClose && <button type="button" className="banner-x" onClick={onClose} aria-label="Fermer">✕</button>}
+      {onClose && <button type="button" className="banner-x" onClick={onClose} aria-label={tr("Fermer")}>✕</button>}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { Truck } from 'lucide-react';
 import { SkeletonRows, EmptyState, ErrorState } from '@/components/States';
 import { use, useRef, useState } from 'react';
@@ -158,7 +159,7 @@ export default function VehicleDetail({ params }: { params: Promise<{ id: string
       )}
       <div className="row" style={{ justifyContent: 'space-between', marginBottom: '0.9rem', flexWrap: 'wrap' }}>
         <Link href="/app/flotte" className="btn ghost">← Flotte</Link>
-        <button className="btn" onClick={() => setEditing(true)}>Modifier</button>
+        <button className="btn" onClick={() => setEditing(true)}>{tr("Modifier")}</button>
       </div>
 
       <div className="vehicle-sheet">
@@ -208,11 +209,11 @@ export default function VehicleDetail({ params }: { params: Promise<{ id: string
       <details className="vehicle-fold">
         <summary><span><strong>Assurance & financement</strong><small>Contrats, acquisition et taxes</small></span><span className="vehicle-fold-hint">Détails</span></summary>
         <div className="vehicle-fold-body">
-          {v.insurances.filter(i => Object.values(i).some(present)).map((ins, index) => <section key={index} className="vehicle-subsection"><h3>Assurance{ins.provider ? ` · ${ins.provider}` : ''}</h3><div className="vehicle-facts">
-            {present(ins.contractNumber) && <Info label="Contrat" value={ins.contractNumber} />}
+          {v.insurances.filter(i => Object.values(i).some(present)).map((ins, index) => <section key={index} className="vehicle-subsection"><h3>{tr("Assurance")}{ins.provider ? ` · ${ins.provider}` : ''}</h3><div className="vehicle-facts">
+            {present(ins.contractNumber) && <Info label={tr("Contrat")} value={ins.contractNumber} />}
             {present(ins.monthlyAmount) && <Info label="Mensualité" value={<Money value={ins.monthlyAmount} />} />}
             {present(ins.annualAmount) && <Info label="Montant annuel" value={<Money value={ins.annualAmount} />} />}
-            {present(ins.paymentMode) && <Info label="Paiement" value={ins.paymentMode} />}
+            {present(ins.paymentMode) && <Info label={tr("Paiement")} value={ins.paymentMode} />}
           </div></section>)}
           <div className="vehicle-facts">
             {present(v.acquisitionMode) && <Info label="Acquisition" value={v.acquisitionMode} />}
@@ -269,7 +270,7 @@ export default function VehicleDetail({ params }: { params: Promise<{ id: string
                       <td className="mono">{d.number ?? '—'}</td>
                       <td className="tnum">{d.expiresOn ? <span className={soon ? 'badge crit' : ''}>{formatDateBE(d.expiresOn)}</span> : '—'}</td>
                       <td><VehicleDocFile vehicleId={id} docId={d.id} hasFile={!!d.fileUrl} onView={() => viewDocFile(d.id)} onUploaded={reload} /></td>
-                      <td style={{ textAlign: 'right' }}><button className="btn ghost" onClick={() => removeDoc(d.id)} aria-label="Supprimer">✕</button></td>
+                      <td style={{ textAlign: 'right' }}><button className="btn ghost" onClick={() => removeDoc(d.id)} aria-label={tr("Supprimer")}>✕</button></td>
                     </tr>
                   );
                 })}
@@ -291,19 +292,19 @@ export default function VehicleDetail({ params }: { params: Promise<{ id: string
         ) : (
           <div className="tbl-wrap">
             <table className="tbl">
-              <thead><tr><th>Date</th><th>Réparation</th><th>Garage</th><th>Facture d’achat</th><th>Km</th><th style={{ textAlign: 'right' }}>Montant</th><th /></tr></thead>
+              <thead><tr><th>{tr("Date")}</th><th>Réparation</th><th>Garage</th><th>Facture d’achat</th><th>Km</th><th style={{ textAlign: 'right' }}>Montant</th><th /></tr></thead>
               <tbody>
                 {v.repairs.map((r) => (
                   <tr key={r.id}>
                     <td className="tnum">{formatDateBE(r.date)}</td>
                     <td>{r.description ?? '—'}</td>
                     <td>{r.garage ?? '—'}</td>
-                    <td>{r.ledgerEntry ? <div><Link href={`/app/achats?q=${encodeURIComponent(r.ledgerEntry.docNumber || r.ledgerEntry.supplierName || '')}`} className="link">{r.ledgerEntry.docNumber || 'Facture liée'}</Link><div className="muted">{r.ledgerEntry.supplierName}</div>{(r.ledgerEntry.pdfPath || r.ledgerEntry.hasPdf) && <button className="btn ghost" onClick={() => viewExpensePdf(r.ledgerEntry!.id)}>Voir le PDF</button>}</div> : <button className="btn ghost" onClick={() => setRepairModal(r)}>Lier une facture</button>}</td>
+                    <td>{r.ledgerEntry ? <div><Link href={`/app/achats?q=${encodeURIComponent(r.ledgerEntry.docNumber || r.ledgerEntry.supplierName || '')}`} className="link">{r.ledgerEntry.docNumber || 'Facture liée'}</Link><div className="muted">{r.ledgerEntry.supplierName}</div>{(r.ledgerEntry.pdfPath || r.ledgerEntry.hasPdf) && <button className="btn ghost" onClick={() => viewExpensePdf(r.ledgerEntry!.id)}>{tr("Voir le PDF")}</button>}</div> : <button className="btn ghost" onClick={() => setRepairModal(r)}>Lier une facture</button>}</td>
                     <td className="tnum">{r.km ?? '—'}</td>
                     <td style={{ textAlign: 'right' }}><Money value={r.amount} /></td>
                     <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                      <button className="btn ghost" style={{ padding: '0.15rem 0.45rem', fontSize: '0.75rem' }} onClick={() => setRepairModal(r)}>Modifier</button>
-                      <button className="btn ghost" style={{ padding: '0.15rem 0.45rem', fontSize: '0.75rem' }} onClick={() => removeRepair(r.id)} aria-label="Supprimer">✕</button>
+                      <button className="btn ghost" style={{ padding: '0.15rem 0.45rem', fontSize: '0.75rem' }} onClick={() => setRepairModal(r)}>{tr("Modifier")}</button>
+                      <button className="btn ghost" style={{ padding: '0.15rem 0.45rem', fontSize: '0.75rem' }} onClick={() => removeRepair(r.id)} aria-label={tr("Supprimer")}>✕</button>
                     </td>
                   </tr>
                 ))}
@@ -327,7 +328,7 @@ export default function VehicleDetail({ params }: { params: Promise<{ id: string
         ) : (
           <div className="tbl-wrap">
             <table className="tbl">
-              <thead><tr><th>Date</th><th>Fournisseur</th><th>N° facture</th><th>Catégorie</th><th style={{ textAlign: 'right' }}>Montant</th><th /></tr></thead>
+              <thead><tr><th>{tr("Date")}</th><th>{tr("Fournisseur")}</th><th>N° facture</th><th>{tr("Catégorie")}</th><th style={{ textAlign: 'right' }}>Montant</th><th /></tr></thead>
               <tbody>
                 {v.ledgerEntries.map((e) => (
                   <tr key={e.id}>
@@ -355,14 +356,14 @@ export default function VehicleDetail({ params }: { params: Promise<{ id: string
           <h2 style={{ marginBottom: '0.7rem' }}>PV récents ({v.fines.length})</h2>
           <div className="tbl-wrap">
             <table className="tbl">
-              <thead><tr><th>Date</th><th>Type</th><th style={{ textAlign: 'right' }}>Montant</th><th>Statut</th></tr></thead>
+              <thead><tr><th>{tr("Date")}</th><th>Type</th><th style={{ textAlign: 'right' }}>Montant</th><th>Statut</th></tr></thead>
               <tbody>
                 {v.fines.map((f) => (
                   <tr key={f.id}>
                     <td className="tnum">{formatDateBE(f.date)}</td>
                     <td>{f.type ?? '—'}</td>
                     <td style={{ textAlign: 'right' }}><Money value={f.amount} /></td>
-                    <td>{f.status === 'Payé' ? <span className="badge ok">Payé</span> : <span className="badge crit">Impayé</span>}</td>
+                    <td>{f.status === 'Payé' ? <span className="badge ok">{tr("Payé")}</span> : <span className="badge crit">{tr("Impayé")}</span>}</td>
                   </tr>
                 ))}
               </tbody>
@@ -396,7 +397,7 @@ function VehicleDocFile({ vehicleId, docId, hasFile, onView, onUploaded }: { veh
       <input ref={inputRef} type="file" accept="application/pdf,image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); }} />
       {hasFile && <button className="btn" style={{ padding: '0.15rem 0.5rem', fontSize: '0.76rem' }} onClick={onView}>Voir 📎</button>}
       <button className="btn" style={{ padding: '0.15rem 0.5rem', fontSize: '0.76rem' }} disabled={busy} onClick={() => inputRef.current?.click()}>
-        {busy ? 'Envoi…' : hasFile ? 'Remplacer' : 'Joindre'}
+        {busy ? tr("Envoi…") : hasFile ? 'Remplacer' : 'Joindre'}
       </button>
     </div>
   );

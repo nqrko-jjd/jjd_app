@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { useState } from 'react';
 import Link from 'next/link';
 import { MapPin } from 'lucide-react';
@@ -46,7 +47,7 @@ export default function RacksPage() {
   return (
     <>
       <PageHead
-        eyebrow="Magasin"
+        eyebrow={tr("Magasin")}
         title="Racks & emplacements"
         sub="Une étiquette QR par rack : on la scanne pendant une entrée pour dire où l’article est rangé"
         action={<Link href="/app/stock" className="btn">← Stock</Link>}
@@ -60,7 +61,7 @@ export default function RacksPage() {
               <label htmlFor="rk-new">Codes (séparés par une virgule ou un retour à la ligne)</label>
               <textarea id="rk-new" className="input" rows={2} placeholder="R-01-A, R-01-B, R-02-A" value={text} onChange={(e) => setText(e.target.value)} />
             </div>
-            <button className="btn primary" disabled={busy || !text.trim()} onClick={add}>{busy ? 'Ajout…' : 'Ajouter'}</button>
+            <button className="btn primary" disabled={busy || !text.trim()} onClick={add}>{busy ? tr("Ajout…") : tr("Ajouter")}</button>
           </div>
           {err && <div className="badge crit" style={{ display: 'block', marginTop: '0.6rem', padding: '0.4rem 0.7rem' }}>{err}</div>}
           <div className="muted" style={{ fontSize: '0.82rem', marginTop: '0.6rem' }}>

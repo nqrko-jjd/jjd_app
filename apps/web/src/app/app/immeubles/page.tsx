@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { SkeletonRows, ErrorState } from '@/components/States';
 import { useState } from 'react';
 import Link from 'next/link';
@@ -41,8 +42,8 @@ export default function ImmeublesPage() {
         />
       )}
       <PageHead
-        eyebrow="Gestion"
-        title="Immeubles / Projets"
+        eyebrow={tr("Gestion")}
+        title={tr("Immeubles / Projets")}
         sub={data ? `${data.items.length} dossiers` : undefined}
         action={<button className="btn primary" onClick={() => setCreating(true)}>+ Nouvel immeuble</button>}
       />
@@ -60,7 +61,7 @@ export default function ImmeublesPage() {
       {data && data.items.length > 0 && mode === 'list' && (
         <div className="tbl-wrap">
           <table className="tbl">
-            <thead><tr><th>Immeuble</th><th>Ville</th><th>Gestionnaire</th><th style={{ textAlign: 'right' }}>Chantiers</th><th>Statut</th><th /></tr></thead>
+            <thead><tr><th>Immeuble</th><th>Ville</th><th>Gestionnaire</th><th style={{ textAlign: 'right' }}>{tr("Chantiers")}</th><th>Statut</th><th /></tr></thead>
             <tbody>
               {data.items.map((b) => (
                 <tr key={b.id} className="row-link" onClick={rowNav(`/app/immeubles/${b.id}`, (h) => router.push(h))}>

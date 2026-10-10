@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { SkeletonRows, ErrorState } from '@/components/States';
 import { Fragment, Suspense, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -303,7 +304,7 @@ function BanqueInner() {
         <select className="select" style={{ maxWidth: 180 }} value={matched} onChange={(e) => setMatched(e.target.value)}>
           <option value="0">À rapprocher</option>
           <option value="1">Rapprochées</option>
-          <option value="">Toutes</option>
+          <option value="">{tr("Toutes")}</option>
         </select>
         <select className="select" style={{ maxWidth: 150 }} value={bank} onChange={(e) => setBank(e.target.value)}>
           <option value="">Tous les comptes</option>
@@ -326,7 +327,7 @@ function BanqueInner() {
           <table className="tbl">
             <thead>
               <tr>
-                <th style={{ cursor: 'pointer' }} onClick={() => toggleSort('bookingDate')}>Date{sortIndicator('bookingDate')}</th>
+                <th style={{ cursor: 'pointer' }} onClick={() => toggleSort('bookingDate')}>{tr("Date")}{sortIndicator('bookingDate')}</th>
                 <th style={{ cursor: 'pointer' }} onClick={() => toggleSort('bank')}>Banque{sortIndicator('bank')}</th>
                 <th style={{ cursor: 'pointer', width: 140 }} onClick={() => toggleSort('counterparty')}>Contrepartie{sortIndicator('counterparty')}</th>
                 <th style={{ minWidth: 340 }}>Libellé bancaire (compte · date · REF)</th>
@@ -395,13 +396,11 @@ function BanqueInner() {
                     </td>
                     <td>
                       <button className="btn" style={{ padding: '0.2rem 0.5rem', fontSize: '0.76rem' }} onClick={() => { setOpenTx(openTx === t.id ? null : t.id); setManualQ(''); }}>
-                        {openTx === t.id ? 'Fermer' : t.matches.length ? '+ Ajouter' : 'Rapprocher'}
+                        {openTx === t.id ? tr("Fermer") : t.matches.length ? '+ Ajouter' : 'Rapprocher'}
                       </button>
                     </td>
                     <td>
-                      <button className="btn ghost" style={{ padding: '0.2rem 0.5rem', fontSize: '0.76rem' }} onClick={() => setEditTx(t)} title="Corriger cette ligne (date, banque, montant, communication…)">
-                        Modifier
-                      </button>
+                      <button className="btn ghost" style={{ padding: '0.2rem 0.5rem', fontSize: '0.76rem' }} onClick={() => setEditTx(t)} title="Corriger cette ligne (date, banque, montant, communication…)"> {tr("Modifier")} </button>
                     </td>
                   </tr>
                   {openTx === t.id && (
@@ -420,7 +419,7 @@ function BanqueInner() {
                             onChange={(e) => setManualQ(e.target.value)}
                           />
                         </div>
-                        {suggLoading ? 'Recherche…' : !sugg ? 'Recherche…' : sugg.items.length === 0 ? (
+                        {suggLoading ? tr("Recherche…") : !sugg ? tr("Recherche…") : sugg.items.length === 0 ? (
                           <span className="muted">
                             {manualQ.trim() ? 'Aucune correspondance.' : 'Aucune proposition automatique — cherche toi-même ci-dessus.'}
                           </span>

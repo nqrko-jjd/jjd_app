@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { useEffect, useRef, useState } from 'react';
 import { api, apiUpload } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
@@ -134,7 +135,7 @@ export function ChantierThread({ worksiteId }: { worksiteId: string }) {
     <div className="card" style={{ overflow: 'hidden' }}>
       <div className="modal-head" style={{ borderBottom: '1px solid var(--line)' }}>
         <div>
-          <strong>Fil de chantier</strong>{' '}
+          <strong>{tr("Fil de chantier")}</strong>{' '}
           <span className="muted" style={{ fontSize: '0.8rem' }}>{data.participants.length} participant(s)</span>
         </div>
         <div className="row" style={{ gap: '0.5rem' }}>
@@ -147,7 +148,7 @@ export function ChantierThread({ worksiteId }: { worksiteId: string }) {
             </>
           )}
           <button className={`btn ${data.thread.closedAt ? '' : 'primary'}`} onClick={toggleClose}>
-            {data.thread.closedAt ? 'Rouvrir' : 'Chantier terminé'}
+            {data.thread.closedAt ? 'Rouvrir' : tr("Chantier terminé")}
           </button>
         </div>
       </div>
@@ -270,7 +271,7 @@ export function ChantierThread({ worksiteId }: { worksiteId: string }) {
             onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), sendClient())}
             style={{ flex: 1 }}
           />
-          <button className="btn primary" onClick={sendClient} disabled={busy || !clientText.trim()}>Envoyer</button>
+          <button className="btn primary" onClick={sendClient} disabled={busy || !clientText.trim()}>{tr("Envoyer")}</button>
         </div>
       )}
 
@@ -309,7 +310,7 @@ export function ChantierThread({ worksiteId }: { worksiteId: string }) {
           >
             {voice.recording ? '⏹️' : '🎤'}
           </button>
-          <button className="btn primary" onClick={send} disabled={busy || !text.trim()}>Envoyer</button>
+          <button className="btn primary" onClick={send} disabled={busy || !text.trim()}>{tr("Envoyer")}</button>
         </div>
       )}
     </div>

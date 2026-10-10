@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { useEffect, useMemo, useState } from 'react';
 import { api, apiUpload } from '@/lib/api';
 import { ContactPicker } from './ContactPicker';
@@ -121,7 +122,7 @@ export function StockItemModal({ item, onClose, onSaved }: { item?: StockItemFul
       <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
         <div className="modal-head">
           <h2>{item ? `Modifier ${item.name}` : 'Nouvel article'}</h2>
-          <button type="button" className="btn ghost" onClick={onClose} aria-label="Fermer">✕</button>
+          <button type="button" className="btn ghost" onClick={onClose} aria-label={tr("Fermer")}>✕</button>
         </div>
         <div className="modal-body">
           <div className="field" style={{ gridColumn: '1 / -1' }}>
@@ -141,7 +142,7 @@ export function StockItemModal({ item, onClose, onSaved }: { item?: StockItemFul
                 {photoPreview || item?.photoUrl ? 'Changer l’image' : 'Choisir une image'}
                 <input type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) setPhoto(f); e.target.value = ''; }} />
               </label>
-              {photo && <button type="button" className="btn ghost" onClick={() => setPhoto(null)}>Annuler</button>}
+              {photo && <button type="button" className="btn ghost" onClick={() => setPhoto(null)}>{tr("Annuler")}</button>}
             </div>
           </div>
           <div className="field">
@@ -174,7 +175,7 @@ export function StockItemModal({ item, onClose, onSaved }: { item?: StockItemFul
             </div>
           )}
           <div className="field" style={{ gridColumn: '1 / -1' }}>
-            <label htmlFor="si-cat">Catégorie</label>
+            <label htmlFor="si-cat">{tr("Catégorie")}</label>
             <input id="si-cat" className="input" value={v.category} onChange={(e) => set('category', e.target.value)} placeholder="Plâtrerie, Peinture…" />
           </div>
 
@@ -249,8 +250,8 @@ export function StockItemModal({ item, onClose, onSaved }: { item?: StockItemFul
         </div>
         {err && <div className="badge crit" style={{ margin: '0 1.15rem', padding: '0.4rem 0.7rem' }}>{err}</div>}
         <div className="modal-foot">
-          <button type="button" className="btn" onClick={onClose}>Annuler</button>
-          <button type="submit" className="btn primary" disabled={busy}>{busy ? 'Enregistrement…' : 'Enregistrer'}</button>
+          <button type="button" className="btn" onClick={onClose}>{tr("Annuler")}</button>
+          <button type="submit" className="btn primary" disabled={busy}>{busy ? tr("Enregistrement…") : tr("Enregistrer")}</button>
         </div>
       </form>
     </div>

@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { SkeletonRows, ErrorState, EmptyState } from '@/components/States';
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -171,7 +172,7 @@ export default function FlottePage() {
       )}
       <PageHead
         eyebrow="Ressources"
-        title="Flotte"
+        title={tr("Flotte")}
         sub={data ? `${vehiclesAll.filter((v) => v.status === 'active').length} véhicules actifs · disponibilités, places et suivi` : undefined}
         action={
           <div className="row">
@@ -184,23 +185,23 @@ export default function FlottePage() {
 
       <div className="row" style={{ marginBottom: '1rem' }}>
         <div className="row" style={{ gap: '0.3rem' }}>
-          <button type="button" className="btn ghost" onClick={() => setDay((d) => addDaysStr(d, -1))} aria-label="Jour précédent"><ChevronLeft size={16} strokeWidth={2} /></button>
+          <button type="button" className="btn ghost" onClick={() => setDay((d) => addDaysStr(d, -1))} aria-label={tr("Jour précédent")}><ChevronLeft size={16} strokeWidth={2} /></button>
           <strong style={{ minWidth: 130, textAlign: 'center', textTransform: 'capitalize' }}>{dayShort(day)}</strong>
-          <button type="button" className="btn ghost" onClick={() => setDay((d) => addDaysStr(d, 1))} aria-label="Jour suivant"><ChevronRight size={16} strokeWidth={2} /></button>
+          <button type="button" className="btn ghost" onClick={() => setDay((d) => addDaysStr(d, 1))} aria-label={tr("Jour suivant")}><ChevronRight size={16} strokeWidth={2} /></button>
         </div>
-        <button type="button" className="btn" onClick={() => setDay(toDateInput(new Date()))}>Aujourd’hui</button>
+        <button type="button" className="btn" onClick={() => setDay(toDateInput(new Date()))}>{tr("Aujourd’hui")}</button>
         <ViewToggle mode={mode} onChange={setMode} />
       </div>
 
       <div className="kpis" style={{ marginBottom: '1.4rem' }}>
-        <Kpi ic={Truck} label="Véhicules" value={fleet.length} sub="Flotte active" hero />
+        <Kpi ic={Truck} label={tr("Véhicules")} value={fleet.length} sub="Flotte active" hero />
         <Kpi ic={CircleCheck} label="Libres toute la journée" value={availCounts.available} sub="Disponibles ce jour-là" />
         <Kpi ic={Building2} label="Avec affectation" value={availCounts.assigned} sub="Déjà réservés" />
         <Kpi ic={TriangleAlert} label="Indisponibles" value={availCounts.unavailable} sub={availCounts.unavailable > 0 ? 'En réparation ou en panne' : 'Aucun souci déclaré'} warn={availCounts.unavailable > 0} />
       </div>
 
       <div className="msg-filter-chips" style={{ marginBottom: '1.1rem' }}>
-        <button className={statusFilter === 'all' ? 'on' : ''} onClick={() => setStatusFilter('all')}>Tous</button>
+        <button className={statusFilter === 'all' ? 'on' : ''} onClick={() => setStatusFilter('all')}>{tr("Tous")}</button>
         <button className={statusFilter === 'available' ? 'on' : ''} onClick={() => setStatusFilter('available')}>Disponible</button>
         <button className={statusFilter === 'assigned' ? 'on' : ''} onClick={() => setStatusFilter('assigned')}>Affecté</button>
         <button className={statusFilter === 'unavailable' ? 'on' : ''} onClick={() => setStatusFilter('unavailable')}>Indisponible</button>
@@ -251,12 +252,12 @@ export default function FlottePage() {
           <table className="tbl">
             <thead>
               <tr>
-                <SortTh k="vehicle" sort={sort} filter={colFilter}>Véhicule</SortTh>
+                <SortTh k="vehicle" sort={sort} filter={colFilter}>{tr("Véhicule")}</SortTh>
                 <SortTh k="plate" sort={sort} filter={colFilter}>Plaque</SortTh>
                 <SortTh k="type" sort={sort} filter={colFilter}>Type</SortTh>
                 <SortTh k="status" sort={sort} filter={colFilter}>Statut</SortTh>
                 <SortTh k="driver" sort={sort} filter={colFilter}>Conducteur</SortTh>
-                <SortTh k="insurance" sort={sort} filter={colFilter}>Assurance</SortTh>
+                <SortTh k="insurance" sort={sort} filter={colFilter}>{tr("Assurance")}</SortTh>
                 <SortTh k="monthlyPayment" sort={sort} align="right" filter={colFilter}>Mensualité</SortTh>
                 <SortTh k="nextInspection" sort={sort} filter={colFilter}>Contrôle technique</SortTh>
               </tr>

@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { SkeletonRows, ErrorState } from '@/components/States';
 import { useState } from 'react';
 import Link from 'next/link';
@@ -40,7 +41,7 @@ export default function AnalysePage() {
     <>
       <PageHead
         eyebrow="Pilotage"
-        title="Analyse"
+        title={tr("Analyse")}
         sub="Activité facturée, encaissements et coûts sur la période sélectionnée"
         action={
           <div className="row">
@@ -64,21 +65,21 @@ export default function AnalysePage() {
       {data && (
         <>
           <div className="chart-tiles">
-            <TrendTile label="CA net" value={formatEur(data.totals.revenue)} delta={pct(data.totals.revenue, data.prev.revenue)} deltaSuffix="%" sub={`${data.range.months} mois`} />
+            <TrendTile label={tr("CA net")} value={formatEur(data.totals.revenue)} delta={pct(data.totals.revenue, data.prev.revenue)} deltaSuffix="%" sub={`${data.range.months} mois`} />
             <TrendTile label="Résultat calculé" value={formatEur(data.totals.result)} delta={pct(data.totals.result, data.prev.result)} deltaSuffix="%" />
             <TrendTile
-              label="Marge"
+              label={tr("Marge")}
               value={data.totals.marginPct != null ? `${data.totals.marginPct} %` : '—'}
               delta={data.totals.marginPct != null && data.prev.marginPct != null ? data.totals.marginPct - data.prev.marginPct : null}
               deltaSuffix=" pt"
             />
-            <TrendTile label="Encaissé" value={formatEur(data.totals.collected)} delta={pct(data.totals.collected, data.prev.collected)} deltaSuffix="%" />
-            <TrendTile label="Heures pointées" value={data.totals.hours.toLocaleString('fr-BE')} delta={pct(data.totals.hours, data.prev.hours)} deltaSuffix="%" />
+            <TrendTile label={tr("Encaissé")} value={formatEur(data.totals.collected)} delta={pct(data.totals.collected, data.prev.collected)} deltaSuffix="%" />
+            <TrendTile label={tr("Heures pointées")} value={data.totals.hours.toLocaleString('fr-BE')} delta={pct(data.totals.hours, data.prev.hours)} deltaSuffix="%" />
           </div>
 
           <div className="analysis-guide">
-            <div><strong>Facturé</strong><p>Le chiffre d’affaires n’est pas le solde disponible en banque.</p></div>
-            <div><strong>Encaissé</strong><p>Les règlements sont à contrôler dans le <Link href="/app/finances/banque">rapprochement bancaire</Link>.</p></div>
+            <div><strong>{tr("Facturé")}</strong><p>Le chiffre d’affaires n’est pas le solde disponible en banque.</p></div>
+            <div><strong>{tr("Encaissé")}</strong><p>Les règlements sont à contrôler dans le <Link href="/app/finances/banque">rapprochement bancaire</Link>.</p></div>
             <div><strong>Par chantier</strong><p>Retrouvez les heures, achats et marges dans la <Link href="/app/chantiers">fiche du chantier</Link>.</p></div>
           </div>
 
@@ -86,25 +87,25 @@ export default function AnalysePage() {
 
           <div className="chart-2col">
             <div className="card card-pad">
-              <div className="eyebrow" style={{ marginBottom: '0.8rem' }}>Répartition des dépenses</div>
-              {data.expenseSections.length === 0 ? <div className="muted">Aucune dépense sur la période.</div>
+              <div className="eyebrow" style={{ marginBottom: '0.8rem' }}>{tr("Répartition des dépenses")}</div>
+              {data.expenseSections.length === 0 ? <div className="muted">{tr("Aucune dépense sur la période.")}</div>
                 : <HBars rows={data.expenseSections.map((s) => ({ label: s.label, value: s.total }))} />}
             </div>
             <div className="card card-pad">
-              <div className="eyebrow" style={{ marginBottom: '0.8rem' }}>Top chantiers · marge réelle</div>
-              {data.topWorksites.length === 0 ? <div className="muted">Rien à afficher.</div>
+              <div className="eyebrow" style={{ marginBottom: '0.8rem' }}>{tr("Top chantiers · marge réelle")}</div>
+              {data.topWorksites.length === 0 ? <div className="muted">{tr("Rien à afficher.")}</div>
                 : <HBars rows={data.topWorksites.map((w) => ({ label: `${w.ref} · ${w.title}`, value: w.margin }))} />}
             </div>
           </div>
 
           <div className="chart-2col" style={{ marginTop: '1.4rem' }}>
             <div className="card card-pad">
-              <div className="eyebrow" style={{ marginBottom: '0.8rem' }}>Heures pointées <span className="muted">/ mois</span></div>
+              <div className="eyebrow" style={{ marginBottom: '0.8rem' }}>{tr("Heures pointées")} <span className="muted">/ mois</span></div>
               <MonthBars data={data.monthly.map((m) => ({ month: m.month, value: m.hours }))} color="var(--primary)" unit="h" />
             </div>
             <div className="card card-pad">
               <div className="eyebrow" style={{ marginBottom: '0.8rem' }}>Top clients · CA</div>
-              {data.topClients.length === 0 ? <div className="muted">Rien à afficher.</div> : (
+              {data.topClients.length === 0 ? <div className="muted">{tr("Rien à afficher.")}</div> : (
                 <table className="tbl" style={{ width: '100%' }}>
                   <tbody>
                     {data.topClients.map((c) => (
@@ -120,10 +121,10 @@ export default function AnalysePage() {
             </div>
           </div>
 
-          <div className="section-title">Devis</div>
+          <div className="section-title">{tr("Devis")}</div>
           <div className="chart-tiles">
-            <TrendTile label="Émis" value={String(data.quotes.sent)} sub={`${data.quotes.pending} en attente`} />
-            <TrendTile label="Acceptés" value={String(data.quotes.accepted)} sub={`${data.quotes.declined} déclinés / expirés`} />
+            <TrendTile label={tr("Émis")} value={String(data.quotes.sent)} sub={`${data.quotes.pending} en attente`} />
+            <TrendTile label={tr("Acceptés")} value={String(data.quotes.accepted)} sub={`${data.quotes.declined} déclinés / expirés`} />
             <TrendTile label="Taux d'acceptation" value={data.quotes.acceptRate != null ? `${data.quotes.acceptRate} %` : '—'} />
             <TrendTile label="Pipeline (devis envoyés)" value={formatEur(data.quotes.pipelineHt)} sub="HT, non tranchés" />
           </div>

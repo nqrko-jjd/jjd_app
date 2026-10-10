@@ -17,6 +17,9 @@ export interface SessionPerson {
   id: string;
   displayName: string | null;
   firstName: string;
+  lastName?: string | null;
+  phone?: string | null;
+  email?: string | null;
 }
 
 interface Ctx {
@@ -25,6 +28,8 @@ interface Ctx {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
+  refresh: () => Promise<void>;
+  changeLocale: (locale: string) => Promise<void>;
 }
 
 const AuthContext = createContext<Ctx | null>(null);
@@ -60,8 +65,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     router.push('/login');
   }
 
+  async function refresh() {
+    const r = await api<{ user: SessionUser; person: SessionPerson | null }>('/api/auth/me');
+    setUser(r.user); setPerson(r.person);
+  }
+
+  async function changeLocale(locale: string) {
+    const r = await api<{ locale: string }>('/api/auth/locale', { method: 'PATCH', body: { locale } });
+    setUser(previous => previous ? { ...previous, locale: r.locale } : previous);
+  }
+
   return (
-    <AuthContext.Provider value={{ user, person, loading, login, logout }}>{children}</AuthContext.Provider>
+    <AuthContext.Provider value={{ user, person, loading, login, logout, refresh, changeLocale }}>{children}</AuthContext.Provider>
   );
 }
 

@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { useState } from 'react';
 import { api } from '@/lib/api';
 import { ABSENCE_KINDS, ABSENCE_KIND_LABEL } from '@jjd/shared';
@@ -67,7 +68,7 @@ export function PlanningAbsenceModal({
           </div>
           <div className="field"><label>Du</label><input className="input" type="date" value={f.startsOn} onChange={(e) => setF({ ...f, startsOn: e.target.value })} /></div>
           <div className="field"><label>Au</label><input className="input" type="date" value={f.endsOn} onChange={(e) => setF({ ...f, endsOn: e.target.value })} /></div>
-          <div className="field full"><label>Note (facultatif)</label><input className="input" value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} /></div>
+          <div className="field full"><label>{tr("Note (facultatif)")}</label><input className="input" value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} /></div>
         </div>
         <div className="modal-foot">
           {existing && (
@@ -75,10 +76,10 @@ export function PlanningAbsenceModal({
               if (!confirm('Supprimer cette absence ?')) return;
               await api(`/api/absences/${existing.id}`, { method: 'DELETE' });
               onSaved();
-            }}>Supprimer</button>
+            }}>{tr("Supprimer")}</button>
           )}
-          <button type="button" className="btn" onClick={onClose}>Annuler</button>
-          <button className="btn primary" disabled={busy} type="submit">{busy ? 'Enregistrement…' : 'Enregistrer'}</button>
+          <button type="button" className="btn" onClick={onClose}>{tr("Annuler")}</button>
+          <button className="btn primary" disabled={busy} type="submit">{busy ? tr("Enregistrement…") : tr("Enregistrer")}</button>
         </div>
       </form>
     </div>

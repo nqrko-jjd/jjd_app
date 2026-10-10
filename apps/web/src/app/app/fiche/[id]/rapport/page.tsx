@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { SkeletonRows } from '@/components/States';
 import { use, useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -87,9 +88,9 @@ export default function RapportChantierPage({ params }: { params: Promise<{ id: 
     return (
       <div style={{ textAlign: 'center', padding: '3rem 1rem' }}>
         <div style={{ fontSize: '2.8rem' }}>✅</div>
-        <h1 style={{ margin: '0.6rem 0 0.3rem' }}>Rapport signé par {report.clientName || clientName}</h1>
-        <p className="muted">Le bureau et le client y ont accès.</p>
-        <Link href={`/app/fiche/${worksiteId}`} className="btn primary" style={{ marginTop: '1rem', display: 'inline-block' }}>Terminer</Link>
+        <h1 style={{ margin: '0.6rem 0 0.3rem' }}>{tr("Rapport signé par")} {report.clientName || clientName}</h1>
+        <p className="muted">{tr("Le bureau et le client y ont accès.")}</p>
+        <Link href={`/app/fiche/${worksiteId}`} className="btn primary" style={{ marginTop: '1rem', display: 'inline-block' }}>{tr("Terminer")}</Link>
       </div>
     );
   }
@@ -97,15 +98,15 @@ export default function RapportChantierPage({ params }: { params: Promise<{ id: 
   if (mode === 'sign') {
     return (
       <>
-        <PageHead title="Signature du client" />
+        <PageHead title={tr("Signature du client")} />
         <div className="field" style={{ marginBottom: '0.8rem', maxWidth: 360 }}>
-          <label>Nom de la personne qui signe</label>
-          <input className="input" value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="ex. M. Dupont" />
+          <label>{tr("Nom de la personne qui signe")}</label>
+          <input className="input" value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder={tr("ex. M. Dupont")} />
         </div>
         <p className="muted" style={{ marginBottom: '0.6rem' }}>Fais signer le client au doigt (ou à la souris) dans le cadre ci-dessous.</p>
         <SignaturePad onDone={onSignature} onEmpty={() => setErr('La signature est vide.')} />
         {err && <p style={{ color: 'var(--crit)', marginTop: '0.6rem' }}>{err}</p>}
-        {busy && <p className="muted" style={{ marginTop: '0.6rem' }}>Envoi…</p>}
+        {busy && <p className="muted" style={{ marginTop: '0.6rem' }}>{tr("Envoi…")}</p>}
         <button type="button" className="btn ghost" style={{ marginTop: '1rem' }} onClick={() => { setErr(null); setMode('edit'); }}>← Retour</button>
       </>
     );
@@ -113,27 +114,27 @@ export default function RapportChantierPage({ params }: { params: Promise<{ id: 
 
   return (
     <>
-      <PageHead title="Rapport de chantier" sub={`${report.photos.length} photo${report.photos.length > 1 ? 's' : ''}`} />
+      <PageHead title={tr("Rapport de chantier")} sub={`${report.photos.length} photo${report.photos.length > 1 ? 's' : ''}`} />
 
       <div className="field" style={{ marginBottom: '0.9rem' }}>
-        <label>Travaux réalisés</label>
+        <label>{tr("Travaux réalisés")}</label>
         <textarea
           className="input" rows={5}
           value={workDone}
           onChange={(e) => setWorkDone(e.target.value)}
           onBlur={() => save({ workDone })}
-          placeholder="Ce qui a été fait aujourd'hui…"
+          placeholder={tr("Ce qui a été fait aujourd'hui…")}
         />
       </div>
 
       <div className="field" style={{ marginBottom: '0.9rem' }}>
-        <label>Remarques / réserves (optionnel)</label>
+        <label>{tr("Remarques / réserves (optionnel)")}</label>
         <textarea
           className="input" rows={3}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           onBlur={() => save({ notes })}
-          placeholder="Points à signaler, matériel manquant…"
+          placeholder={tr("Points à signaler, matériel manquant…")}
         />
       </div>
 
@@ -149,7 +150,7 @@ export default function RapportChantierPage({ params }: { params: Promise<{ id: 
         )}
         <input ref={fileRef} type="file" accept="image/*" capture="environment" multiple hidden onChange={(e) => addPhoto(e.target.files)} />
         <button type="button" className="btn" disabled={busy} onClick={() => fileRef.current?.click()}>
-          {busy ? 'Envoi…' : '📷 Ajouter une photo'}
+          {busy ? tr("Envoi…") : '📷 Ajouter une photo'}
         </button>
       </div>
 
@@ -158,10 +159,8 @@ export default function RapportChantierPage({ params }: { params: Promise<{ id: 
       <button
         type="button" className="btn primary" style={{ width: '100%', padding: '0.8rem', fontSize: '0.95rem' }}
         onClick={async () => { await save({ workDone, notes }); setErr(null); setMode('sign'); }}
-      >
-        Faire signer le client
-      </button>
-      <p className="muted" style={{ textAlign: 'center', marginTop: '0.6rem' }}>Le rapport est enregistré automatiquement.</p>
+      > {tr("Faire signer le client")} </button>
+      <p className="muted" style={{ textAlign: 'center', marginTop: '0.6rem' }}>{tr("Le rapport est enregistré automatiquement.")}</p>
     </>
   );
 }

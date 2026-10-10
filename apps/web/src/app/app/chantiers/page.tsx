@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { SkeletonRows, ErrorState } from '@/components/States';
 import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -312,7 +313,7 @@ function ChantiersInner() {
               </article>
             );
           })}
-          {sort.rows.length === 0 && <div className="state worksite-empty"><Building2 size={30} /><h3>Aucun chantier trouvé</h3><p>Modifiez votre recherche ou choisissez un autre statut.</p></div>}
+          {sort.rows.length === 0 && <div className="state worksite-empty"><Building2 size={30} /><h3>{tr("Aucun chantier trouvé")}</h3><p>Modifiez votre recherche ou choisissez un autre statut.</p></div>}
           <div className="worksite-card-pagination"><PaginationBar page={data.page} totalPages={data.totalPages} pageSize={pageSize} onPage={setPage} onPageSize={(s) => { setPageSize(s); setPage(1); }} /></div>
         </div>
       )}
@@ -330,7 +331,7 @@ function ChantiersInner() {
                     aria-label="Tout sélectionner"
                   />
                 </th>
-                <SortTh k="ref" sort={sort}>Chantier</SortTh>
+                <SortTh k="ref" sort={sort}>{tr("Chantier")}</SortTh>
                 <SortTh k="manager" sort={sort}>Responsable</SortTh>
                 <SortTh k="status" sort={sort}>Statut</SortTh>
                 <SortTh k="invoicedHt" sort={sort} align="right">Facturé HT</SortTh>

@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { useState } from 'react';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
@@ -83,7 +84,7 @@ export function WorksiteTasks({ worksiteId }: { worksiteId: string }) {
             {phase && (
               <>
                 <button className="btn ghost" style={{ padding: '0.1rem 0.4rem', fontSize: '0.72rem' }} onClick={() => renamePhase(phase)}>Renommer</button>
-                <button className="btn ghost" style={{ padding: '0.1rem 0.4rem', fontSize: '0.72rem' }} onClick={() => deletePhase(phase)}>Supprimer</button>
+                <button className="btn ghost" style={{ padding: '0.1rem 0.4rem', fontSize: '0.72rem' }} onClick={() => deletePhase(phase)}>{tr("Supprimer")}</button>
               </>
             )}
           </div>
@@ -147,7 +148,7 @@ function TaskCreateModal({
       <form className="modal" style={{ maxWidth: 480 }} onClick={(e) => e.stopPropagation()} onSubmit={submit}>
         <div className="modal-head">
           <h2>Nouvelle tâche</h2>
-          <button type="button" className="btn ghost" onClick={onClose} aria-label="Fermer">✕</button>
+          <button type="button" className="btn ghost" onClick={onClose} aria-label={tr("Fermer")}>✕</button>
         </div>
         <div className="modal-body">
           <div className="field">
@@ -168,7 +169,7 @@ function TaskCreateModal({
           </div>
         </div>
         <div className="modal-foot">
-          <button type="button" className="btn" onClick={onClose}>Annuler</button>
+          <button type="button" className="btn" onClick={onClose}>{tr("Annuler")}</button>
           <button type="submit" className="btn primary" disabled={busy}>{busy ? 'Création…' : 'Créer'}</button>
         </div>
       </form>

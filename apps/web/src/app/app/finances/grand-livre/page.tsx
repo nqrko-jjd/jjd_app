@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { SkeletonRows, ErrorState, EmptyState } from '@/components/States';
 import { useState } from 'react';
 import Link from 'next/link';
@@ -82,8 +83,8 @@ export default function GrandLivrePage() {
             <table className="tbl">
               <thead>
                 <tr>
-                  <th>Document</th><th>Client</th><th>Chantier</th><th>Émis</th>
-                  <th style={{ textAlign: 'right' }}>TTC</th><th>Grand livre</th><th></th>
+                  <th>Document</th><th>Client</th><th>{tr("Chantier")}</th><th>{tr("Émis")}</th>
+                  <th style={{ textAlign: 'right' }}>TTC</th><th>{tr("Grand livre")}</th><th></th>
                 </tr>
               </thead>
               <tbody>

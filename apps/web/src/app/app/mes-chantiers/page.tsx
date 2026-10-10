@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { useState } from 'react';
 import Link from 'next/link';
 import { HardHat } from 'lucide-react';
@@ -18,11 +19,11 @@ export default function MesChantiersPage() {
 
   return (
     <>
-      <PageHead eyebrow="Mon espace ouvrier" title="Mes chantiers" sub="Chantiers où tu es affecté ou as pointé" />
+      <PageHead eyebrow={tr("Mon espace ouvrier")} title={tr("Mes chantiers")} sub={tr("Chantiers où tu es affecté ou as pointé")} />
       <input
         className="input"
         style={{ marginBottom: '1rem', maxWidth: 360 }}
-        placeholder="Rechercher (réf, titre, ville)…"
+        placeholder={tr("Rechercher (réf, titre, ville)…")}
         value={q}
         onChange={(e) => setQ(e.target.value)}
       />

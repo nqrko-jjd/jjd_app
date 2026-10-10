@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { SkeletonRows, EmptyState, ErrorState } from '@/components/States';
 import { use, useState } from 'react';
 import Link from 'next/link';
@@ -157,7 +158,7 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
       {merging && (
         <div className="modal-scrim" onClick={() => setMerging(false)}>
           <div className="modal" style={{ maxWidth: 640, maxHeight: '92vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
-            <div className="modal-head"><h2>Fusionner un doublon dans « {c.name} »</h2><button className="btn ghost" onClick={() => setMerging(false)} aria-label="Fermer">✕</button></div>
+            <div className="modal-head"><h2>Fusionner un doublon dans « {c.name} »</h2><button className="btn ghost" onClick={() => setMerging(false)} aria-label={tr("Fermer")}>✕</button></div>
             <div style={{ padding: '1rem', display: 'grid', gap: '0.8rem' }}>
               <p className="muted" style={{ margin: 0, fontSize: '0.85rem' }}>La fiche choisie disparaît : ses devis, factures, achats, chantiers et contacts sont rattachés à « {c.name} ». Vous pouvez répéter l’opération pour plusieurs doublons.</p>
               <div className="field"><label>Fiche en doublon</label>
@@ -192,7 +193,7 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
                 </div>
               )}
             </div>
-            <div className="modal-foot"><button className="btn" onClick={() => setMerging(false)}>Annuler</button><button className="btn primary" disabled={!dupId || mergeBusy} onClick={doMerge}>{mergeBusy ? 'Fusion…' : 'Fusionner'}</button></div>
+            <div className="modal-foot"><button className="btn" onClick={() => setMerging(false)}>{tr("Annuler")}</button><button className="btn primary" disabled={!dupId || mergeBusy} onClick={doMerge}>{mergeBusy ? 'Fusion…' : 'Fusionner'}</button></div>
           </div>
         </div>
       )}
@@ -226,9 +227,9 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
       <div className="row" style={{ justifyContent: 'space-between', marginBottom: '0.9rem', flexWrap: 'wrap' }}>
         <Link href="/app/contacts" className="btn ghost">← Contacts</Link>
         <div className="row">
-          <button className="btn" onClick={() => setEditing(true)}>Modifier</button>
+          <button className="btn" onClick={() => setEditing(true)}>{tr("Modifier")}</button>
           <button className="btn" onClick={() => { setFinalName(c.name); setMerging(true); }}>Fusionner un doublon</button>
-          <button className="btn" onClick={removeContact}>Supprimer</button>
+          <button className="btn" onClick={removeContact}>{tr("Supprimer")}</button>
         </div>
       </div>
 
@@ -236,7 +237,7 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
         <div>
         <div className="eyebrow">Contact</div>
         <h1>{c.name}</h1>
-        <div className="sub">{c.kind ? CLIENT_KIND_LABEL[c.kind as keyof typeof CLIENT_KIND_LABEL] : c.type === 'supplier' ? 'Fournisseur' : c.type === 'both' ? 'Client + Fournisseur' : 'Client'}</div>
+        <div className="sub">{c.kind ? CLIENT_KIND_LABEL[c.kind as keyof typeof CLIENT_KIND_LABEL] : c.type === 'supplier' ? tr("Fournisseur") : c.type === 'both' ? 'Client + Fournisseur' : 'Client'}</div>
         </div>
       <PhotoHeader
         basePath={`/api/contacts/${c.id}`}
@@ -252,13 +253,13 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
 
       <div className="info-grid" style={{ marginBottom: '1.4rem' }}>
         <Info label="E-mail" value={c.email ?? '—'} />
-        <Info label="Téléphone" value={c.phone ?? '—'} />
+        <Info label={tr("Téléphone")} value={c.phone ?? '—'} />
         <Info label="TVA" value={formatVat(c.vat) ?? '—'} />
-        <Info label="Adresse" value={[[c.address, c.box && `bte ${c.box}`].filter(Boolean).join(', '), c.postalCode, c.city].filter(Boolean).join(' ') || '—'} />
+        <Info label={tr("Adresse")} value={[[c.address, c.box && `bte ${c.box}`].filter(Boolean).join(', '), c.postalCode, c.city].filter(Boolean).join(' ') || '—'} />
         {isSupplier && <Info label="N° de client chez lui" value={c.customerNumber ?? '—'} />}
-        {isSupplier && <Info label="Paiement" value={c.onAccount ? 'En compte' : 'Comptant'} />}
-        {c.syndic && <Info label="Syndic" value={<Link href={`/app/immeubles?syndicId=${c.syndic.id}`}>{c.syndic.name}</Link>} />}
-        {c.promoter && <Info label="Promoteur" value={<Link href={`/app/immeubles?promoterId=${c.promoter.id}`}>{c.promoter.name}</Link>} />}
+        {isSupplier && <Info label={tr("Paiement")} value={c.onAccount ? 'En compte' : 'Comptant'} />}
+        {c.syndic && <Info label={tr("Syndic")} value={<Link href={`/app/immeubles?syndicId=${c.syndic.id}`}>{c.syndic.name}</Link>} />}
+        {c.promoter && <Info label={tr("Promoteur")} value={<Link href={`/app/immeubles?promoterId=${c.promoter.id}`}>{c.promoter.name}</Link>} />}
         {c.building && <Info label="Immeuble / ACP" value={<Link href={`/app/immeubles/${c.building.id}`}>{c.building.name}</Link>} />}
         {isClientLike && (
           <div className="info-cell">
@@ -286,8 +287,7 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
       <ContactLinks id={c.id} refreshKey={linksKey} />
 
       {/* Personnes de contact — utile pour tout type, en particulier les fournisseurs */}
-      <div className="section-title">
-        Personnes de contact <span className="hint">{c.contactPersons.length}</span>
+      <div className="section-title"> {tr("Personnes de contact")} <span className="hint">{c.contactPersons.length}</span>
         <button className="btn" style={{ marginLeft: 'auto', padding: '0.2rem 0.6rem', fontSize: '0.78rem' }} onClick={() => setPersonModal('new')}>+ Ajouter</button>
       </div>
       {c.contactPersons.length === 0 ? (
@@ -301,7 +301,7 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
               {p.phone && <div><a href={`tel:${p.phone}`}>{p.phone}</a></div>}
               {p.email && <div className="muted" style={{ fontSize: '0.85rem' }}><a href={`mailto:${p.email}`}>{p.email}</a></div>}
               <div className="row" style={{ marginTop: '0.5rem', gap: '0.3rem' }}>
-                <button className="btn ghost" style={mini} onClick={() => setPersonModal(p)}>Modifier</button>
+                <button className="btn ghost" style={mini} onClick={() => setPersonModal(p)}>{tr("Modifier")}</button>
                 <button className="btn ghost" style={mini} onClick={() => removePerson(p.id)}>✕</button>
               </div>
             </div>
@@ -332,7 +332,7 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
               </p>
               <div className="tbl-wrap">
                 <table className="tbl">
-                  <thead><tr><th>Date</th><th>Banque</th><th style={{ textAlign: 'right' }}>Non affecté</th><th style={{ textAlign: 'right' }}>Virement</th><th>Communication</th><th /></tr></thead>
+                  <thead><tr><th>{tr("Date")}</th><th>Banque</th><th style={{ textAlign: 'right' }}>Non affecté</th><th style={{ textAlign: 'right' }}>Virement</th><th>Communication</th><th /></tr></thead>
                   <tbody>
                     {c.clientAccount.unallocated.map((u) => (
                       <tr key={u.id}>
@@ -366,7 +366,7 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
               sub={c.purchaseSummary.balance < 0 ? 'Ce fournisseur vous doit' : c.purchaseSummary.balance > 0 ? 'À régler' : 'Compte soldé'}
               warn={c.purchaseSummary.balance > 0}
             />
-            <Kpi ic={FileText} label="Factures" value={c.purchaseSummary.count} sub="Achats enregistrés" />
+            <Kpi ic={FileText} label={tr("Factures")} value={c.purchaseSummary.count} sub="Achats enregistrés" />
           </div>
           {c.supplierAccount && <div className="kpis" style={{ marginBottom: '1rem' }}>
             <Kpi ic={FileText} label="Factures restant à régler" value={<Money value={c.supplierAccount.openTtc} />} />
@@ -386,10 +386,10 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
                   <table className="tbl">
                     <thead>
                       <tr>
-                        <SortTh k="date" sort={purchaseSort}>Date</SortTh>
+                        <SortTh k="date" sort={purchaseSort}>{tr("Date")}</SortTh>
                         <SortTh k="docNumber" sort={purchaseSort}>N°</SortTh>
-                        <SortTh k="worksite" sort={purchaseSort}>Chantier</SortTh>
-                        <SortTh k="category" sort={purchaseSort}>Catégorie</SortTh>
+                        <SortTh k="worksite" sort={purchaseSort}>{tr("Chantier")}</SortTh>
+                        <SortTh k="category" sort={purchaseSort}>{tr("Catégorie")}</SortTh>
                         <SortTh k="ht" sort={purchaseSort} align="right">HT</SortTh>
                         <SortTh k="ttc" sort={purchaseSort} align="right">TTC</SortTh>
                         <SortTh k="status" sort={purchaseSort}>Statut</SortTh>
@@ -405,7 +405,7 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
                           <td>{p.categoryRaw ?? '—'}</td>
                           <td style={{ textAlign: 'right' }}><Money value={p.ht} /></td>
                           <td style={{ textAlign: 'right' }}><Money value={p.ttc ?? p.ht} /></td>
-                          <td><span className={`badge ${p.paid ? 'ok' : 'warn'}`}>{p.paid ? 'Payé' : 'Non payé'}</span></td>
+                          <td><span className={`badge ${p.paid ? 'ok' : 'warn'}`}>{p.paid ? tr("Payé") : tr("Non payé")}</span></td>
                           <td>{p.hasPdf && <button className="btn ghost" style={mini} onClick={() => viewPurchasePdf(p.id)}>📎</button>}</td>
                         </tr>
                       ))}
@@ -434,7 +434,7 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
                 <table className="tbl">
                   <thead>
                     <tr>
-                      <SortTh k="date" sort={balanceSort}>Date</SortTh>
+                      <SortTh k="date" sort={balanceSort}>{tr("Date")}</SortTh>
                       <SortTh k="docNumber" sort={balanceSort}>N°</SortTh>
                       <SortTh k="debit" sort={balanceSort} align="right">Débit</SortTh>
                       <SortTh k="credit" sort={balanceSort} align="right">Crédit</SortTh>
@@ -466,13 +466,13 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
 
       {isClientLike && (
         <section>
-          <h2 style={{ marginBottom: '0.7rem' }}>Chantiers ({c.worksites.length})</h2>
+          <h2 style={{ marginBottom: '0.7rem' }}>{tr("Chantiers (")}{c.worksites.length})</h2>
           {c.worksites.length === 0 ? (
             <div className="card card-pad muted">Aucun chantier.</div>
           ) : (
             <div className="tbl-wrap">
               <table className="tbl">
-                <thead><tr><th>Réf</th><th>Chantier</th><th>Statut</th><th style={{ textAlign: 'right' }}>Devisé</th></tr></thead>
+                <thead><tr><th>Réf</th><th>{tr("Chantier")}</th><th>Statut</th><th style={{ textAlign: 'right' }}>Devisé</th></tr></thead>
                 <tbody>
                   {c.worksites.map((w) => (
                     <tr key={w.id}>

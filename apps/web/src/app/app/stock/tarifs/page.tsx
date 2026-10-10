@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -63,7 +64,7 @@ export default function TarifsPage() {
   return (
     <>
       <PageHead
-        eyebrow="Magasin"
+        eyebrow={tr("Magasin")}
         title="Tarifs fournisseurs"
         sub="Importez la liste de prix d’un fournisseur (Excel ou CSV), puis créez vos articles de stock en un clic"
         action={<Link href="/app/stock/commandes" className="btn">← Commandes</Link>}
@@ -83,7 +84,7 @@ export default function TarifsPage() {
         <div className="eyebrow" style={{ marginBottom: '0.6rem' }}>Importer / mettre à jour un tarif</div>
         <div className="row" style={{ gap: '0.7rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
           <div className="field" style={{ minWidth: 280, flex: 1 }}>
-            <label>Fournisseur</label>
+            <label>{tr("Fournisseur")}</label>
             <ContactPicker typeFilter="supplier" value={contactId} onChange={(id, label) => { setContactId(id); setContactName(label); }} />
           </div>
           <div className="field" style={{ width: 220 }}>

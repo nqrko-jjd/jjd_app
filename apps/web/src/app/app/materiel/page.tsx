@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { SkeletonRows, EmptyState } from '@/components/States';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -194,7 +195,7 @@ export default function MaterielPage() {
       <PageHead eyebrow="Ressources" title="Outils & consommables" sub="Parc partagé avec Bricoloc — scan à la sortie et au retour" />
 
       <div className="seg" style={{ marginBottom: '1rem' }}>
-        <button className={tab === 'outils' ? 'on' : ''} onClick={() => setTab('outils')}>Outils</button>
+        <button className={tab === 'outils' ? 'on' : ''} onClick={() => setTab('outils')}>{tr("Outils")}</button>
         <button className={tab === 'consommables' ? 'on' : ''} onClick={() => setTab('consommables')}>Consommables</button>
       </div>
 
@@ -202,14 +203,14 @@ export default function MaterielPage() {
         <div className="kpis" style={{ marginBottom: '1.4rem' }}>
           <Kpi ic={Wrench} label="Équipements" value={products.length} sub={`${products.reduce((a, p) => a + p.total, 0)} exemplaires`} hero />
           <Kpi ic={CircleCheck} label="Au dépôt" value={products.reduce((a, p) => a + p.available, 0)} sub="Disponibles maintenant" />
-          <Kpi ic={Building2} label="Sur chantier" value={products.reduce((a, p) => a + p.onSite, 0)} sub="En cours d'utilisation" />
+          <Kpi ic={Building2} label={tr("Sur chantier")} value={products.reduce((a, p) => a + p.onSite, 0)} sub="En cours d'utilisation" />
           <Kpi ic={Truck} label="Loué" value={products.reduce((a, p) => a + p.rented, 0)} sub="Client Bricoloc" />
         </div>
       )}
 
       {tab === 'outils' && (
         <div className="msg-filter-chips" style={{ marginBottom: '1rem' }}>
-          <button className={!onlyAvailable ? 'on' : ''} onClick={() => setOnlyAvailable(false)}>Tous</button>
+          <button className={!onlyAvailable ? 'on' : ''} onClick={() => setOnlyAvailable(false)}>{tr("Tous")}</button>
           <button className={onlyAvailable ? 'on' : ''} onClick={() => setOnlyAvailable(true)}>Disponible maintenant</button>
         </div>
       )}
@@ -308,7 +309,7 @@ export default function MaterielPage() {
             <div className="tbl-wrap">
               <table className="tbl">
                 <thead>
-                  <tr><th></th><th>Outil</th><th>Catégorie</th><th style={{ textAlign: 'right' }}>Dépôt</th><th style={{ textAlign: 'right' }}>Chantier</th><th style={{ textAlign: 'right' }}>Loué</th></tr>
+                  <tr><th></th><th>Outil</th><th>{tr("Catégorie")}</th><th style={{ textAlign: 'right' }}>Dépôt</th><th style={{ textAlign: 'right' }}>{tr("Chantier")}</th><th style={{ textAlign: 'right' }}>Loué</th></tr>
                 </thead>
                 <tbody>
                   {paged.map((p) => (
@@ -357,8 +358,7 @@ export default function MaterielPage() {
                   <div style={{ fontWeight: 650 }}>{c.name}</div>
                   {c.shortDescription && <div className="muted" style={{ fontSize: '0.8rem' }}>{c.shortDescription}</div>}
                   <span className={`badge plain ${(c.stockQty ?? 0) > 0 ? 'ok' : 'crit'}`} style={{ fontSize: '0.68rem', marginTop: 4 }}>
-                    {c.stockQty ?? '—'} en stock
-                  </span>
+                    {c.stockQty ?? '—'} {tr("en stock")} </span>
                 </div>
                 {consumeTarget !== c.id && (
                   <button className="btn primary" disabled={busy} onClick={() => { setConsumeTarget(c.id); setConsumeQty(1); }}>

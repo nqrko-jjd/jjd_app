@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { SkeletonRows, ErrorState } from '@/components/States';
 import { Suspense, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
@@ -90,7 +91,7 @@ function CrmInner() {
         sub="Suivi des demandes jusqu'au devis"
         action={<button className="btn primary" onClick={() => setCreating(true)}><Plus size={15} strokeWidth={2} /> Nouvelle opportunité</button>}
       />
-      {viewing && <div className="modal-scrim"><div className="modal wiz" role="dialog" aria-modal="true" aria-label="Demande client"><div className="modal-head"><h2>{viewing.title}</h2><button className="btn ghost" onClick={() => setViewing(null)} aria-label="Fermer">✕</button></div><div className="wiz-body"><p className="wiz-note">Informations déclarées par le client · à vérifier avant de planifier et de confirmer la facturation.</p><p style={{ whiteSpace: 'pre-wrap' }}>{viewing.note}</p>{viewing.requestBrief && <RequestBriefCard brief={viewing.requestBrief}/>}<p><strong>Accès :</strong> {viewing.accessNotes || 'À préciser'}</p><p><strong>Passage souhaité :</strong> {viewing.visitPreference || 'À convenir'}</p><div className="request-images">{viewing.photos.map(p => <a key={p.id} href={p.url} target="_blank" rel="noreferrer"><img src={p.thumbUrl ?? p.url} alt="Photo transmise par le client"/></a>)}</div></div><div className="modal-foot"><button className="btn" onClick={() => setViewing(null)}>Fermer</button><button className="btn primary" onClick={() => { setEditing(viewing); setViewing(null); }}>Qualifier la demande</button></div></div></div>}
+      {viewing && <div className="modal-scrim"><div className="modal wiz" role="dialog" aria-modal="true" aria-label="Demande client"><div className="modal-head"><h2>{viewing.title}</h2><button className="btn ghost" onClick={() => setViewing(null)} aria-label={tr("Fermer")}>✕</button></div><div className="wiz-body"><p className="wiz-note">Informations déclarées par le client · à vérifier avant de planifier et de confirmer la facturation.</p><p style={{ whiteSpace: 'pre-wrap' }}>{viewing.note}</p>{viewing.requestBrief && <RequestBriefCard brief={viewing.requestBrief}/>}<p><strong>Accès :</strong> {viewing.accessNotes || 'À préciser'}</p><p><strong>Passage souhaité :</strong> {viewing.visitPreference || 'À convenir'}</p><div className="request-images">{viewing.photos.map(p => <a key={p.id} href={p.url} target="_blank" rel="noreferrer"><img src={p.thumbUrl ?? p.url} alt="Photo transmise par le client"/></a>)}</div></div><div className="modal-foot"><button className="btn" onClick={() => setViewing(null)}>{tr("Fermer")}</button><button className="btn primary" onClick={() => { setEditing(viewing); setViewing(null); }}>Qualifier la demande</button></div></div></div>}
       {creating && (
         <FormModal
           title="Nouvelle opportunité"

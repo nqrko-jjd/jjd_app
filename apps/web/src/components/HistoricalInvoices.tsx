@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
@@ -52,7 +53,7 @@ export function HistoricalInvoices() {
           {data && data.items.length > 0 && (
             <div className="tbl-wrap">
               <table className="tbl">
-                <thead><tr><th>N°</th><th>Client</th><th>Chantier</th><th>Date</th><th style={{ textAlign: 'right' }}>TTC</th><th>Statut</th><th /></tr></thead>
+                <thead><tr><th>N°</th><th>Client</th><th>{tr("Chantier")}</th><th>{tr("Date")}</th><th style={{ textAlign: 'right' }}>TTC</th><th>Statut</th><th /></tr></thead>
                 <tbody>
                   {data.items.map((r) => (
                     <tr key={r.id}>
@@ -66,9 +67,7 @@ export function HistoricalInvoices() {
                         <button className="btn" disabled={busy === r.id} onClick={async () => { const d = await toDocument(r); if (d) setCredit(d); }}>
                           {busy === r.id ? '…' : 'Note de crédit…'}
                         </button>{' '}
-                        <button className="btn ghost" disabled={busy === r.id} title="Crée le document de cette facture dans l’appli, sans note de crédit" onClick={async () => { const d = await toDocument(r); if (d) router.push(`/app/documents/${d.id}`); }}>
-                          Ouvrir
-                        </button>
+                        <button className="btn ghost" disabled={busy === r.id} title="Crée le document de cette facture dans l’appli, sans note de crédit" onClick={async () => { const d = await toDocument(r); if (d) router.push(`/app/documents/${d.id}`); }}> {tr("Ouvrir")} </button>
                       </td>
                     </tr>
                   ))}

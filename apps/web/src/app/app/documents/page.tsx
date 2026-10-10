@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { SkeletonRows, ErrorState, EmptyState } from '@/components/States';
 import { FileText } from 'lucide-react';
 import { Suspense, useEffect, useRef, useState } from 'react';
@@ -224,7 +225,7 @@ function DocumentsInner() {
       {linkNotice && <div className="worksite-context-banner" role="status"><span>{linkNotice}</span><button className="btn ghost" onClick={() => setLinkNotice('')} aria-label="Fermer la confirmation">✕</button></div>}
       <PageHead
         eyebrow="Facturation"
-        title="Devis & factures"
+        title={tr("Devis & factures")}
         sub={data ? `${data.totalCount} document${data.totalCount > 1 ? 's' : ''} · page ${data.page}/${data.totalPages} · clic droit pour les actions rapides` : 'Création, émission, suivi des paiements'}
         action={
           <div className="row">
@@ -254,7 +255,7 @@ function DocumentsInner() {
           <div className="modal" style={{ maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-head">
               <h2>Que veux-tu importer ?</h2>
-              <button type="button" className="btn ghost" onClick={() => setPendingImport(null)} aria-label="Fermer">✕</button>
+              <button type="button" className="btn ghost" onClick={() => setPendingImport(null)} aria-label={tr("Fermer")}>✕</button>
             </div>
             <div style={{ padding: '1rem', display: 'grid', gap: '0.6rem' }}>
               <div className="muted" style={{ fontSize: '0.85rem', overflowWrap: 'anywhere' }}>{pendingImport.name}</div>
@@ -281,7 +282,7 @@ function DocumentsInner() {
             <>
               <div className="doc-stat"><span className="label">Facturé ce mois</span><span className="value">{formatEur(dash.kpis.invoicedMonth)}</span></div>
               <div className="doc-stat"><span className="label">À encaisser</span><span className="value">{formatEur(dash.kpis.receivableAmount)}</span></div>
-              <div className="doc-stat"><span className="label">En retard</span><span className="value crit">{formatEur(dash.kpis.overdueAmount)}</span></div>
+              <div className="doc-stat"><span className="label">{tr("En retard")}</span><span className="value crit">{formatEur(dash.kpis.overdueAmount)}</span></div>
             </>
           )}
         </div>

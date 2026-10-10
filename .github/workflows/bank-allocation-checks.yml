@@ -8,6 +8,12 @@ on:
       - 'apps/api/src/lib/supplier-account.ts'
       - 'apps/api/src/routes/finance.ts'
       - 'apps/api/src/routes/contacts.ts'
+      - 'apps/api/src/routes/auth.ts'
+      - 'apps/api/test/auth-profile.test.ts'
+      - 'apps/web/src/lib/ui-language.ts'
+      - 'apps/web/src/lib/auth.tsx'
+      - 'apps/web/src/app/app/profil/**'
+      - 'apps/web/src/components/AppLanguage.tsx'
       - 'apps/api/src/routes/expenses.ts'
       - 'apps/api/test/bank*.test.ts'
       - 'apps/api/test/client-account.test.ts'
@@ -43,6 +49,6 @@ jobs:
         run: |
           node --import tsx --input-type=module -e "import {prisma} from './apps/api/src/db.ts'; import bcrypt from 'bcryptjs'; await prisma.user.create({data:{email:'david@jjd-consult.be',passwordHash:await bcrypt.hash('jjd',10),role:'admin',isPartner:true}}); await prisma.\$disconnect();"
       - name: Bank and contact regression tests
-        run: node --test --test-force-exit --test-concurrency=1 --import tsx apps/api/test/bank-allocation.test.ts apps/api/test/bank-match.test.ts apps/api/test/bank-suggestions-settled.test.ts apps/api/test/bank-reconcile.test.ts apps/api/test/client-account.test.ts
+        run: node --test --test-force-exit --test-concurrency=1 --import tsx apps/api/test/bank-allocation.test.ts apps/api/test/bank-match.test.ts apps/api/test/bank-suggestions-settled.test.ts apps/api/test/bank-reconcile.test.ts apps/api/test/client-account.test.ts apps/api/test/auth-profile.test.ts
       - run: npm run typecheck
       - run: npm run build --workspace @jjd/web

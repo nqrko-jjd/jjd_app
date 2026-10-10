@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { SkeletonRows } from '@/components/States';
 import { use, useEffect, useMemo, useState, useRef } from 'react';
 import Link from 'next/link';
@@ -312,7 +313,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
       )}
 
       <div className="doc-commandbar">            <div className="doc-recap-actions">
-              {dirty ? <button className="btn primary" disabled={!!busy} onClick={save}><Save size={16}/>{busy === 'save' ? 'Enregistrement…' : 'Enregistrer les modifications'}</button> : !locked ? <button className="btn primary" disabled={!!busy} onClick={() => act('/issue', {}, 'Émettre : un numéro définitif sera attribué et les lignes verrouillées. Continuer ?')}>Émettre {isQuote ? 'le devis' : 'le document'} <ChevronDown size={15}/></button> : <button className="btn primary" disabled={!!busy} onClick={prepareDelivery}><Send size={16}/>{doc.sentAt ? 'Préparer un nouvel envoi' : 'Préparer l’envoi'}</button>}
+              {dirty ? <button className="btn primary" disabled={!!busy} onClick={save}><Save size={16}/>{busy === 'save' ? tr("Enregistrement…") : tr("Enregistrer les modifications")}</button> : !locked ? <button className="btn primary" disabled={!!busy} onClick={() => act('/issue', {}, 'Émettre : un numéro définitif sera attribué et les lignes verrouillées. Continuer ?')}>Émettre {isQuote ? 'le devis' : 'le document'} <ChevronDown size={15}/></button> : <button className="btn primary" disabled={!!busy} onClick={prepareDelivery}><Send size={16}/>{doc.sentAt ? 'Préparer un nouvel envoi' : 'Préparer l’envoi'}</button>}
               {dirty && !locked && <button className="btn ghost" disabled={!!busy} onClick={() => act('/issue', {}, 'Émettre : un numéro définitif sera attribué et les lignes verrouillées. Continuer ?')}>Enregistrer et émettre</button>}
               {!dirty && isQuote && locked && <><button className="btn" disabled={!!busy} onClick={() => setDepositOpen(true)}>Facture d’acompte</button><button className="btn" disabled={!!busy} onClick={() => router.push(`/app/documents/${id}/avancement`)}>États d’avancement</button><button className="btn" disabled={!!busy} onClick={() => act('/convert', {})}>{doc.billing && doc.billing.billedHt > 0.01 ? 'Facture du solde' : 'Facture finale'}</button></>}
               {!dirty && <span className="doc-saved">Modifications enregistrées</span>}
@@ -327,7 +328,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
               {isQuote && locked && <><button disabled={!!busy} onClick={() => act('/status', { status: 'accepted' })}>Marquer le devis accepté</button><button disabled={!!busy} onClick={() => act('/status', { status: 'declined' })}>Marquer le devis refusé</button></>}
               {isInvoiceLike && locked && doc.status !== 'credited' && creditRemaining > 0.01 && <button disabled={!!busy} onClick={() => setCreditOpen(true)}>Créer une note de crédit</button>}
 </div>
-              <div className="doc-action-group"><h3>Dupliquer</h3>
+              <div className="doc-action-group"><h3>{tr("Dupliquer")}</h3>
                 <button disabled={!!busy} onClick={() => act('/duplicate', {})}>Copier à l’identique</button>
                 {doc.kind !== 'quote' && <button disabled={!!busy} onClick={() => act('/duplicate', { kind: 'quote' })}>Copier en devis</button>}
                 {doc.kind !== 'invoice' && <button disabled={!!busy} onClick={() => act('/duplicate', { kind: 'invoice' })}>Copier en facture</button>}
@@ -549,7 +550,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
             <div className="doc-sheet-section-head"><h2>Règlement</h2></div>
             <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
               <label className="field">
-                <span>Date {isInvoiceLike ? 'de facture' : 'du devis'}</span>
+                <span>{tr("Date")} {isInvoiceLike ? 'de facture' : 'du devis'}</span>
                 <input className="input" type="date" value={doc.issuedOn?.slice(0, 10) ?? ''} onChange={(e) => patch({ issuedOn: e.target.value || null })} />
               </label>
               {isQuote && (
@@ -575,7 +576,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
           </div>
 
           <section id="document-delivery" className="doc-delivery-block">
-            <button type="button" className="doc-disclosure" aria-expanded={deliveryOpen} aria-controls="document-delivery-content" onClick={() => setDeliveryOpen(!deliveryOpen)}><Send size={18}/><span><strong>Envoi{isQuote ? ' et signature' : ''}</strong><small>{doc.sentAt ? 'Envoi enregistré · consulter ou renvoyer' : 'Choisir le canal et préparer le message'}</small></span><ChevronDown size={17}/></button>
+            <button type="button" className="doc-disclosure" aria-expanded={deliveryOpen} aria-controls="document-delivery-content" onClick={() => setDeliveryOpen(!deliveryOpen)}><Send size={18}/><span><strong>{tr("Envoi")}{isQuote ? ' et signature' : ''}</strong><small>{doc.sentAt ? 'Envoi enregistré · consulter ou renvoyer' : 'Choisir le canal et préparer le message'}</small></span><ChevronDown size={17}/></button>
             <div id="document-delivery-content" hidden={!deliveryOpen}><DocumentDelivery doc={doc} busy={!!busy} onExternal={() => act('/send', { confirmedExternal: true })} onError={setMsg} emailEnabled={!!mailCfg?.enabled} onEmail={(m) => act('/email', m)} peppolEnabled={!!peppol?.enabled} onPeppol={() => act('/send', { peppol: true })} onPeppolRefresh={() => act('/peppol/refresh', {})} /></div>
           </section>
 
@@ -751,7 +752,7 @@ function TasksFromLinesModal({
       <div className="modal" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h2>Créer des tâches depuis ce devis</h2>
-          <button type="button" className="btn ghost" onClick={onClose} aria-label="Fermer">✕</button>
+          <button type="button" className="btn ghost" onClick={onClose} aria-label={tr("Fermer")}>✕</button>
         </div>
         <div className="modal-body">
           {linesWithId.length === 0 ? (
@@ -773,7 +774,7 @@ function TasksFromLinesModal({
         </div>
         {err && <div className="badge crit" style={{ margin: '0 1.15rem', padding: '0.4rem 0.7rem' }}>{err}</div>}
         <div className="modal-foot">
-          <button type="button" className="btn" onClick={onClose}>Annuler</button>
+          <button type="button" className="btn" onClick={onClose}>{tr("Annuler")}</button>
           <button type="button" className="btn primary" disabled={busy || !checked.size} onClick={submit}>
             {busy ? 'Création…' : `Créer ${checked.size} tâche${checked.size > 1 ? 's' : ''}`}
           </button>

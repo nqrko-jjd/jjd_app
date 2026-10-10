@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -43,7 +44,7 @@ export default function CommandesPage() {
     <>
       {creating && <NewOrderModal onClose={() => setCreating(false)} onCreated={(id) => router.push(`/app/stock/commandes/${id}`)} />}
       <PageHead
-        eyebrow="Magasin"
+        eyebrow={tr("Magasin")}
         title="Commandes fournisseurs"
         sub="Le bureau commande, le magasinier réceptionne en scannant ce qui arrive"
         action={
@@ -192,7 +193,7 @@ function NewOrderModal({ onClose, onCreated }: { onClose: () => void; onCreated:
       <form className="modal" style={{ maxWidth: 900 }} onClick={(e) => e.stopPropagation()} onSubmit={(e) => submit(e, 'ordered')}>
         <div className="modal-head">
           <h2>Nouvelle commande fournisseur</h2>
-          <button type="button" className="btn ghost" onClick={onClose} aria-label="Fermer">✕</button>
+          <button type="button" className="btn ghost" onClick={onClose} aria-label={tr("Fermer")}>✕</button>
         </div>
         <div className="modal-body">
           <div className="field" style={{ gridColumn: '1 / -1' }}>
@@ -238,7 +239,7 @@ function NewOrderModal({ onClose, onCreated }: { onClose: () => void; onCreated:
                       {(it?.units ?? []).map((u) => <option key={u.name} value={u.name}>{u.name}</option>)}
                     </select>}
                   <input className="input" style={{ width: 100 }} type="number" step="any" min="0" placeholder="Prix HT" value={l.price} onChange={(e) => setLine(i, { price: e.target.value, priceAuto: false })} aria-label="Prix HT par unité" />
-                  <button type="button" className="btn ghost" onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))} aria-label="Retirer">✕</button>
+                  <button type="button" className="btn ghost" onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))} aria-label={tr("Retirer")}>✕</button>
                 </div>
               );
             })}
@@ -263,7 +264,7 @@ function NewOrderModal({ onClose, onCreated }: { onClose: () => void; onCreated:
         </div>
         {err && <div className="badge crit" style={{ margin: '0 1.15rem', padding: '0.4rem 0.7rem' }}>{err}</div>}
         <div className="modal-foot">
-          <button type="button" className="btn" onClick={onClose}>Annuler</button>
+          <button type="button" className="btn" onClick={onClose}>{tr("Annuler")}</button>
           <button type="button" className="btn" disabled={busy} onClick={(e) => submit(e, 'draft')}>Enregistrer en brouillon</button>
           <button type="submit" className="btn primary" disabled={busy}>{busy ? 'Création…' : 'Commander'}</button>
         </div>

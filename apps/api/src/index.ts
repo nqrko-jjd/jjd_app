@@ -7,6 +7,7 @@ import { mailSuggestionsConfigured, syncMailSuggestions } from './lib/lead-mailb
 import { markOverdueInvoices, renumberFaDepositInvoices } from './lib/documents.js';
 import { runAutoReminders } from './lib/reminders.js';
 import { runAutoFollowups } from './lib/quote-followups.js';
+import { runAutoReviewRequests } from './lib/review-requests.js';
 import { getDocPdfBuffer } from './routes/documents.js';
 import { backfillBankMatches } from './lib/bank-match.js';
 import { backfillWorksiteGeo } from './lib/worksite-geo.js';
@@ -109,6 +110,7 @@ setInterval(() => { runMarkOverdue().catch((e) => console.error('[overdue] éche
 const runReminders = () => Promise.all([
   runAutoReminders(getDocPdfBuffer).then((n) => { if (n) console.log(`[relances] ${n} relance(s) envoyée(s)`); }),
   runAutoFollowups(getDocPdfBuffer).then((n) => { if (n) console.log(`[suivi devis] ${n} suivi(s) envoyé(s)`); }),
+  runAutoReviewRequests().then((n) => { if (n) console.log(`[avis] ${n} demande(s) d’avis envoyée(s)`); }),
 ]).catch((e) => console.error('[relances] échec :', e.message));
 setTimeout(runReminders, 120_000);
 setInterval(runReminders, 30 * 60_000);

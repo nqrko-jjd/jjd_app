@@ -1813,3 +1813,21 @@ model ReportReserve {
 
   @@index([reportId])
 }
+
+/// Demande d'avis client (Google…) envoyée après une facture finale payée : une ligne par facture, status sent | skipped | failed.
+model ReviewRequest {
+  id         String    @id @default(cuid())
+  documentId String    @unique
+  contactId  String?
+  status     String
+  auto       Boolean   @default(false)
+  toEmail    String?
+  subject    String?
+  body       String?
+  error      String?
+  sentById   String?
+  createdAt  DateTime  @default(now())
+  sentAt     DateTime?
+
+  @@index([contactId])
+}

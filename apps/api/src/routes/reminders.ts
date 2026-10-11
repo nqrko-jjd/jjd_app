@@ -6,6 +6,7 @@ import { requireAuth, OFFICE } from '../lib/auth.js';
 import { emailConfigured } from '../lib/doc-mail.js';
 import { computeProposals, getReminderSettings, saveReminderSettings, sendReminder, skipReminder } from '../lib/reminders.js';
 import { getDocPdfBuffer } from './documents.js';
+import { computeReviewProposals, getReviewSettings, saveReviewSettings, sendReviewRequest, skipReviewRequest } from '../lib/review-requests.js';
 import { computeQuoteProposals, getFollowupSettings, saveFollowupSettings, sendQuoteFollowup } from '../lib/quote-followups.js';
 
 /** Relances de paiement des factures impayées (bureau uniquement) — voir lib/reminders.ts. */
@@ -128,5 +129,56 @@ remindersRouter.post(
     const i = sendInput.parse(req.body);
     const r = await sendQuoteFollowup(i.documentId, i.step, { to: i.to, subject: i.subject, body: i.body, userId: req.user!.id, pdf: getDocPdfBuffer });
     res.json({ ok: true, note: `Suivi envoyé à ${r.to}.` });
+  }),
+);
+
+/** Demandes d'avis client après une facture finale payée (lib/review-requests.ts). */
+remindersRouter.get(
+  '/reviews',
+  requireAuth(...OFFICE),
+  asyncHandler(async (_req, res) => {
+    const [settings, proposals, history] = await Promise.all([
+      getReviewSettings(), computeReviewProposals(),
+      prisma.reviewRequest.findMany({ where: { status: { in: ['sent', 'failed'] } }, orderBy: { createdAt: 'desc' }, take: 60 }),
+    ]);
+    const docs = await prisma.document.findMany({ where: { id: { in: history.map((h) => h.documentId) } }, select: { id: true, number: true, contact: { select: { name: true } } } });
+    const byId = new Map(docs.map((d) => [d.id, d]));
+    res.json({
+      emailConfigured: emailConfigured(), settings, proposals,
+      history: history.map((h) => ({ id: h.id, status: h.status, auto: h.auto, toEmail: h.toEmail, error: h.error, sentAt: h.sentAt, createdAt: h.createdAt, document: byId.get(h.documentId) ?? null })),
+    });
+  }),
+);
+
+const reviewSettingsInput = z.object({
+  autoSend: z.boolean(), copyToSelf: z.boolean(), reviewUrl: z.string().max(500), delayDays: z.coerce.number().min(0).max(60), maxAgeDays: z.coerce.number().min(7).max(180),
+  minAmount: z.coerce.number().min(0), subject: z.string().max(200), body: z.string().max(4000),
+});
+remindersRouter.put(
+  '/reviews/settings',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const saved = await saveReviewSettings(reviewSettingsInput.parse(req.body));
+    await prisma.auditLog.create({ data: { actorId: req.user!.id, action: 'review.settings', entity: 'Setting', entityId: 'reviewRequests', meta: { autoSend: saved.autoSend } } });
+    res.json({ settings: saved });
+  }),
+);
+
+remindersRouter.post(
+  '/reviews/send',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const i = z.object({ documentId: z.string(), to: z.string().trim().email().optional(), subject: z.string().trim().min(1).max(200).optional(), body: z.string().trim().min(1).max(5000).optional() }).parse(req.body);
+    const r = await sendReviewRequest(i.documentId, { to: i.to, subject: i.subject, body: i.body, userId: req.user!.id });
+    res.json({ ok: true, note: `Demande d’avis envoyée à ${r.to}.` });
+  }),
+);
+
+remindersRouter.post(
+  '/reviews/skip',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    await skipReviewRequest(z.object({ documentId: z.string() }).parse(req.body).documentId, req.user!.id);
+    res.json({ ok: true });
   }),
 );

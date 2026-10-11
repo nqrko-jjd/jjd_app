@@ -8,7 +8,7 @@ import { markOverdueInvoices, renumberFaDepositInvoices } from './lib/documents.
 import { runAutoReminders } from './lib/reminders.js';
 import { runAutoFollowups } from './lib/quote-followups.js';
 import { runAutoReviewRequests } from './lib/review-requests.js';
-import { getDocPdfBuffer } from './routes/documents.js';
+import { getDocPdfBuffer, runScheduledEmails } from './routes/documents.js';
 import { backfillBankMatches } from './lib/bank-match.js';
 import { backfillWorksiteGeo } from './lib/worksite-geo.js';
 import { pontoConfigured } from './lib/ponto.js';
@@ -112,6 +112,8 @@ const runReminders = () => Promise.all([
   runAutoFollowups(getDocPdfBuffer).then((n) => { if (n) console.log(`[suivi devis] ${n} suivi(s) envoyé(s)`); }),
   runAutoReviewRequests().then((n) => { if (n) console.log(`[avis] ${n} demande(s) d’avis envoyée(s)`); }),
 ]).catch((e) => console.error('[relances] échec :', e.message));
+// e-mails programmés (« envoyer plus tard » sur un document)
+setInterval(() => { runScheduledEmails().then((n) => { if (n) console.log(`[envoi programmé] ${n} e-mail(s) envoyé(s)`); }).catch((e) => console.error('[envoi programmé] échec :', e.message)); }, 5 * 60_000);
 setTimeout(runReminders, 120_000);
 setInterval(runReminders, 30 * 60_000);
 

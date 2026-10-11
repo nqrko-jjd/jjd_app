@@ -901,34 +901,88 @@ documentsRouter.get(
  * Envoi par e-mail du PDF (devis, facture, acompte, note de crédit) depuis la boîte JJD.
  * Réel ou rien : si le serveur SMTP refuse, le document n'est PAS marqué envoyé. Le document doit être émis.
  */
+async function sendDocumentEmail(docId: string, input: z.infer<typeof emailInput>, actorId: string | null) {
+  if (!emailConfigured()) throw new HttpError(503, 'Envoi par e-mail non configuré : le serveur d’envoi de la boîte JJD n’est pas encore branché.');
+  const doc = await prisma.document.findUnique({ where: { id: docId } });
+  if (!doc) throw new HttpError(404, 'Document introuvable');
+  const delivery = externalDeliveryState(doc);
+  const pdf = await getDocPdfBuffer(doc.id);
+  if (input.sign && doc.kind !== 'quote') throw new HttpError(422, 'La signature en ligne ne concerne que les devis.');
+  // signature en ligne : le PDF envoyé est figé et un lien personnel est ajouté au message
+  const sig = input.sign ? await createSignatureRequest(doc.id, actorId ?? '', pdf, input.to) : null;
+  try {
+    await sendEmailWithPdf(sig ? { ...input, message: input.message + signLinkBlock(sig.url, sig.expiresAt) } : input, pdf);
+  } catch (e) {
+    if (sig) await revokeSignature(sig.request.id); // l'e-mail n'est pas parti : le lien ne doit pas rester actif
+    throw e;
+  }
+  const updated = await prisma.document.update({
+    where: { id: doc.id },
+    data: delivery.alreadyRecorded ? {} : { status: delivery.status, sentAt: new Date() },
+    include: docInclude,
+  });
+  await prisma.auditLog.create({ data: { actorId, action: 'send', entity: 'document', entityId: doc.id, meta: { channel: 'email', to: input.to, signature: sig ? sig.request.id : undefined } } });
+  return { document: updated, note: `${DOC_KIND_LABEL[doc.kind] ?? 'Document'} envoyé par e-mail à ${input.to.join(', ')}${sig ? ', avec un lien de signature en ligne (valable 30 jours)' : ''}.` };
+}
+
 documentsRouter.post(
   '/:id/email',
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
-    if (!emailConfigured()) throw new HttpError(503, 'Envoi par e-mail non configuré : le serveur d’envoi de la boîte JJD n’est pas encore branché.');
-    const input = emailInput.parse(req.body);
-    const doc = await prisma.document.findUnique({ where: { id: req.params.id } });
-    if (!doc) throw new HttpError(404, 'Document introuvable');
-    const delivery = externalDeliveryState(doc);
-    const pdf = await getDocPdfBuffer(doc.id);
-    if (input.sign && doc.kind !== 'quote') throw new HttpError(422, 'La signature en ligne ne concerne que les devis.');
-    // signature en ligne : le PDF envoyé est figé et un lien personnel est ajouté au message
-    const sig = input.sign ? await createSignatureRequest(doc.id, req.user!.id, pdf, input.to) : null;
-    try {
-      await sendEmailWithPdf(sig ? { ...input, message: input.message + signLinkBlock(sig.url, sig.expiresAt) } : input, pdf);
-    } catch (e) {
-      if (sig) await revokeSignature(sig.request.id); // l'e-mail n'est pas parti : le lien ne doit pas rester actif
-      throw e;
-    }
-    const updated = await prisma.document.update({
-      where: { id: doc.id },
-      data: delivery.alreadyRecorded ? {} : { status: delivery.status, sentAt: new Date() },
-      include: docInclude,
-    });
-    await prisma.auditLog.create({ data: { actorId: req.user!.id, action: 'send', entity: 'document', entityId: doc.id, meta: { channel: 'email', to: input.to, signature: sig ? sig.request.id : undefined } } });
-    res.json({ document: updated, note: `${DOC_KIND_LABEL[doc.kind] ?? 'Document'} envoyé par e-mail à ${input.to.join(', ')}${sig ? ', avec un lien de signature en ligne (valable 30 jours)' : ''}.` });
+    res.json(await sendDocumentEmail(req.params.id as string, emailInput.parse(req.body), req.user!.id));
   }),
 );
+
+/** « Envoyer plus tard » : programme l'envoi (le PDF est généré au moment de l'envoi, document émis obligatoire). */
+documentsRouter.post(
+  '/:id/email/schedule',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const { sendAt, ...rest } = z.object({ sendAt: z.coerce.date() }).passthrough().parse(req.body);
+    const input = emailInput.parse(rest);
+    if (sendAt.getTime() < Date.now() + 60_000) throw new HttpError(422, 'Choisissez une date et une heure dans le futur.');
+    if (sendAt.getTime() > Date.now() + 90 * 86_400_000) throw new HttpError(422, 'Programmation limitée à 90 jours.');
+    const doc = await prisma.document.findUnique({ where: { id: req.params.id }, select: { id: true, lockedAt: true } });
+    if (!doc) throw new HttpError(404, 'Document introuvable');
+    if (!doc.lockedAt) throw new HttpError(422, 'Émettez d’abord le document pour pouvoir l’envoyer.');
+    const item = await prisma.scheduledEmail.create({ data: { documentId: doc.id, payload: input as never, sendAt, createdById: req.user!.id } });
+    await prisma.auditLog.create({ data: { actorId: req.user!.id, action: 'send.schedule', entity: 'document', entityId: doc.id, meta: { to: input.to, sendAt: sendAt.toISOString() } } });
+    res.status(201).json({ item });
+  }),
+);
+documentsRouter.get(
+  '/:id/email/scheduled',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    res.json({ items: await prisma.scheduledEmail.findMany({ where: { documentId: req.params.id, status: { in: ['pending', 'failed'] } }, orderBy: { sendAt: 'asc' } }) });
+  }),
+);
+documentsRouter.delete(
+  '/:id/email/scheduled/:sid',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const r = await prisma.scheduledEmail.updateMany({ where: { id: req.params.sid, documentId: req.params.id, status: { in: ['pending', 'failed'] } }, data: { status: 'cancelled' } });
+    if (!r.count) throw new HttpError(404, 'Envoi programmé introuvable');
+    res.json({ ok: true });
+  }),
+);
+
+/** Envoie les e-mails programmés arrivés à échéance (appelé toutes les 5 minutes). Un envoi raté n'est pas retenté. */
+export async function runScheduledEmails(now = new Date()): Promise<number> {
+  const due = await prisma.scheduledEmail.findMany({ where: { status: 'pending', sendAt: { lte: now } }, orderBy: { sendAt: 'asc' }, take: 20 });
+  let sent = 0;
+  for (const it of due) {
+    const claimed = await prisma.scheduledEmail.updateMany({ where: { id: it.id, status: 'pending' }, data: { status: 'sent', sentAt: new Date() } });
+    if (!claimed.count) continue;
+    try {
+      await sendDocumentEmail(it.documentId, emailInput.parse(it.payload), it.createdById);
+      sent++;
+    } catch (e) {
+      await prisma.scheduledEmail.update({ where: { id: it.id }, data: { status: 'failed', sentAt: null, error: (e as Error).message.slice(0, 300) } });
+    }
+  }
+  return sent;
+}
 
 /** Relit le statut de livraison Peppol d'un document déjà transmis. */
 documentsRouter.post(

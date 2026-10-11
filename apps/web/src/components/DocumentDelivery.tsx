@@ -10,6 +10,11 @@ export function DocumentDelivery({doc,busy,onExternal,onError,peppolEnabled=fals
   const [mail,setMail]=useState<{to:string;subject:string;message:string}|null>(null);
   const [copy,setCopy]=useState(true);
   const [sign,setSign]=useState(false);
+  const [later,setLater]=useState('');
+  type Sched={id:string;sendAt:string;status:string;error:string|null;payload:{to:string[]}};
+  const [sched,setSched]=useState<Sched[]>([]);
+  const loadSched=()=>{api<{items:Sched[]}>(`/api/documents/${doc.id}/email/scheduled`).then((r)=>setSched(r.items)).catch(()=>setSched([]));};
+  useEffect(()=>{if(doc.lockedAt)loadSched();},[doc.id,doc.lockedAt]); // eslint-disable-line react-hooks/exhaustive-deps
   const isQuote=doc.kind==='quote';
   type Sig={id:string;status:string;sentTo:string|null;expiresAt:string;signedAt:string|null;signerName:string|null;signerComment:string|null;url:string|null}|null;
   const [sig,setSig]=useState<Sig>(null);
@@ -50,6 +55,18 @@ export function DocumentDelivery({doc,busy,onExternal,onError,peppolEnabled=fals
           const to=mail.to.split(/[,;\s]+/).map((x)=>x.trim()).filter(Boolean);
           if(confirm(`Envoyer ce document par e-mail à ${to.join(', ')} ?`))onEmail?.({to,subject:mail.subject,message:mail.message,copyToSelf:copy,...(isQuote&&sign?{sign:true}:{})});
         }}><Send size={16}/>Envoyer par e-mail</button></div>
+        <div style={{display:'flex',gap:'0.5rem',alignItems:'center',flexWrap:'wrap'}}>
+          <span style={{fontSize:'0.88rem'}}>ou envoyer plus tard :</span>
+          <input className="input" type="datetime-local" style={{width:'auto'}} value={later} onChange={(e)=>setLater(e.target.value)}/>
+          <button className="btn" disabled={busy||!later||!mail.to.trim()} onClick={async()=>{
+            const to=mail.to.split(/[,;\s]+/).map((x)=>x.trim()).filter(Boolean);
+            try{await api(`/api/documents/${doc.id}/email/schedule`,{method:'POST',body:{to,subject:mail.subject,message:mail.message,copyToSelf:copy,...(isQuote&&sign?{sign:true}:{}),sendAt:new Date(later).toISOString()}});setLater('');loadSched();}catch(e){onError((e as Error).message);}
+          }}>Programmer l’envoi</button>
+        </div>
+        {sched.map((it)=><div key={it.id} className="hint" style={{display:'flex',gap:'0.6rem',alignItems:'center',flexWrap:'wrap'}}>
+          <span>{it.status==='failed'?'Échec de l’envoi programmé':'Envoi programmé'} le {new Date(it.sendAt).toLocaleString('fr-BE',{dateStyle:'long',timeStyle:'short'})} à {it.payload.to.join(', ')}{it.error?` — ${it.error}`:''}</span>
+          <button className="btn ghost" onClick={async()=>{try{await api(`/api/documents/${doc.id}/email/scheduled/${it.id}`,{method:'DELETE'});loadSched();}catch(e){onError((e as Error).message);}}}>{it.status==='failed'?'Retirer':'Annuler'}</button>
+        </div>)}
       </div>}
     </div>:    channel==='peppol'?(peppolEnabled?<div className="delivery-notice"><Send size={20}/><div>
       {doc.peppolId&&doc.peppolStatus!=='error'?<>

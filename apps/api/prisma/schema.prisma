@@ -1833,3 +1833,19 @@ model ReviewRequest {
 
   @@index([contactId])
 }
+
+/// Envoi d'un document par e-mail programmé à une date/heure (« envoyer plus tard ») ; le PDF est généré au moment de l'envoi.
+model ScheduledEmail {
+  id          String    @id @default(cuid())
+  documentId  String
+  payload     Json // {to, subject, message, copyToSelf, sign?}
+  sendAt      DateTime
+  status      String    @default("pending") // pending | sent | failed | cancelled
+  error       String?
+  createdById String?
+  createdAt   DateTime  @default(now())
+  sentAt      DateTime?
+
+  @@index([status, sendAt])
+  @@index([documentId])
+}

@@ -103,3 +103,28 @@ test('e-mail : un devis émis peut aussi être envoyé', async () => {
   const def = (await call('GET', `/api/documents/${id}/email/defaults`)).body;
   assert.match(def.message, /Bon pour accord/);
 });
+
+test('e-mail programmé : refus dans le passé / non émis, envoi à l’échéance, annulation', async () => {
+  arm(true); sent.length = 0;
+  const { runScheduledEmails } = await import('../src/routes/documents.js');
+  const id = await mkDoc('FM-LATER');
+  const body = { to: ['client@exemple.be'], subject: 'S', message: 'M' };
+  assert.equal((await call('POST', `/api/documents/${id}/email/schedule`, { ...body, sendAt: new Date(Date.now() - 3600_000).toISOString() })).status, 422, 'dans le passé');
+  const draft = await mkDoc('FM-LATER-D', { locked: false });
+  assert.equal((await call('POST', `/api/documents/${draft}/email/schedule`, { ...body, sendAt: new Date(Date.now() + 3600_000).toISOString() })).status, 422, 'non émis');
+
+  const ok = await call('POST', `/api/documents/${id}/email/schedule`, { ...body, sendAt: new Date(Date.now() + 3600_000).toISOString() });
+  assert.equal(ok.status, 201);
+  assert.equal((await call('GET', `/api/documents/${id}/email/scheduled`)).body.items.length, 1);
+  assert.equal(await runScheduledEmails(new Date()), 0, 'pas encore l’heure');
+  assert.equal(sent.length, 0);
+  assert.equal(await runScheduledEmails(new Date(Date.now() + 2 * 3600_000)), 1);
+  assert.equal(sent.length, 1);
+  assert.ok((await prisma.document.findUnique({ where: { id } }))?.sentAt, 'le document passe en envoyé');
+  assert.equal(await runScheduledEmails(new Date(Date.now() + 3 * 3600_000)), 0, 'jamais deux fois');
+
+  const second = await call('POST', `/api/documents/${id}/email/schedule`, { ...body, sendAt: new Date(Date.now() + 7200_000).toISOString() });
+  assert.equal((await call('DELETE', `/api/documents/${id}/email/scheduled/${second.body.item.id}`)).status, 200);
+  assert.equal(await runScheduledEmails(new Date(Date.now() + 5 * 3600_000)), 0, 'annulé : rien ne part');
+  await prisma.scheduledEmail.deleteMany({ where: { documentId: id } });
+});

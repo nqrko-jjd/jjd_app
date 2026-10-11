@@ -27,6 +27,8 @@ interface Msg {
   id: string; kind: string; body: string | null; fileUrl: string | null; thumbUrl: string | null;
   authorName: string | null; authorId?: string | null; createdAt: string; sharedWithClient?: boolean;
   mentionedNames?: string[];
+  /** Texte traduit dans la langue du lecteur (DeepL), présent seulement si l'auteur écrit dans une autre langue. */
+  bodyTranslated?: string;
 }
 
 type Audience = 'internal' | 'client';
@@ -65,6 +67,7 @@ function MessagerieInner({worksiteId, compact=false, active=true}: {worksiteId?:
   const draftKey = `${audience}:${selected?.kind==='worksite'?selected.worksiteId:selected?.kind||'none'}`;
   const text = drafts[draftKey] || '';
   const setText = (value:string|((previous:string)=>string)) => setDrafts(previous=>({...previous,[draftKey]:typeof value==='function'?value(previous[draftKey]||''):value}));
+  const [showOriginal, setShowOriginal] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [sharing, setSharing] = useState(false);
@@ -432,9 +435,16 @@ function MessagerieInner({worksiteId, compact=false, active=true}: {worksiteId?:
                         {isOffice && audience==='internal' && selected.kind==='worksite' && (m.kind==='photo'||m.kind==='video') && <button type="button" disabled={sharing} className={`btn msg-share-button ${m.sharedWithClient?'shared':''}`} onClick={()=>toggleShare(m)}>{m.sharedWithClient?'Visible du client · Retirer':'Partager avec le client'}</button>}
                         {m.body && m.kind !== 'file' && (
                           <div className={`msg-bubble${mine ? ' mine' : ''}`}>
-                            {splitMentions(m.body, m.mentionedNames ?? []).map((seg, i) => (
-                              seg.mention ? <span key={i} className="mention-tag">{seg.text}</span> : <span key={i}>{seg.text}</span>
-                            ))}
+                            {m.bodyTranslated && !showOriginal.has(m.id)
+                              ? <span>{m.bodyTranslated}</span>
+                              : splitMentions(m.body, m.mentionedNames ?? []).map((seg, i) => (
+                                seg.mention ? <span key={i} className="mention-tag">{seg.text}</span> : <span key={i}>{seg.text}</span>
+                              ))}
+                            {m.bodyTranslated && (
+                              <button type="button" className="msg-translation-toggle" onClick={() => setShowOriginal((s) => { const n = new Set(s); if (n.has(m.id)) n.delete(m.id); else n.add(m.id); return n; })}>
+                                {showOriginal.has(m.id) ? tr('Voir la traduction') : tr('Voir l’original')}
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>

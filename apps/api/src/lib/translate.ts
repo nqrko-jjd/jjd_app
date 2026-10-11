@@ -63,3 +63,24 @@ export async function withTranslations<T extends Msg>(rows: T[], viewerLocale: u
   const map = await translateFor(rows, viewer);
   return rows.map((m) => (map[m.id] && map[m.id] !== m.body ? { ...m, bodyTranslated: map[m.id] } : m));
 }
+
+/** Textes d'interface (français) → langue du lecteur, gardés en base : chaque texte n'est envoyé à DeepL qu'une seule fois par langue. */
+export async function translateUiStrings(strings: string[], target: Locale): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  const uniq = [...new Set(strings.map((s) => s.trim()).filter((s) => s.length > 1 && s.length <= 200))].slice(0, 80);
+  if (target === 'fr' || !uniq.length) return out;
+  try {
+    const cached = await prisma.uiTranslation.findMany({ where: { locale: target, source: { in: uniq } } });
+    for (const c of cached) out[c.source] = c.body;
+    const missing = uniq.filter((s) => !(s in out));
+    if (!missing.length || !env.deeplApiKey) return out;
+    const done = await deepl(missing, 'fr', target);
+    for (const [i, s] of missing.entries()) {
+      const text = done[i]?.trim();
+      if (!text) continue;
+      out[s] = text;
+      await prisma.uiTranslation.upsert({ where: { locale_source: { locale: target, source: s } }, create: { locale: target, source: s, body: text }, update: { body: text } });
+    }
+  } catch { /* tant pis : le texte reste en français */ }
+  return out;
+}

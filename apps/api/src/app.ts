@@ -19,6 +19,7 @@ import { threadRouter } from './routes/thread.js';
 import { worksiteFilesRouter } from './routes/worksite-files.js';
 import { worksiteMailsRouter } from './routes/worksite-mails.js';
 import { messagerieRouter } from './routes/messagerie.js';
+import { translateRouter } from './routes/translate.js';
 import { portalRouter } from './routes/portal.js';
 import { financeRouter } from './routes/finance.js';
 import { expensesRouter } from './routes/expenses.js';
@@ -64,6 +65,7 @@ export function createApp() {
   app.use('/api/worksites/:worksiteId/files', worksiteFilesRouter);
   app.use('/api/worksites/:worksiteId/mails', worksiteMailsRouter);
   app.use('/api/messagerie', messagerieRouter);
+  app.use('/api/translate', translateRouter);
   app.use('/api/push', pushRouter);
   app.use('/api/worksites/:worksiteId/reports', worksiteReportsRouter);
   app.use('/api/reports', reportsRouter);

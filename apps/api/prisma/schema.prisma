@@ -1849,3 +1849,13 @@ model ScheduledEmail {
   @@index([status, sendAt])
   @@index([documentId])
 }
+
+/// Traduction d'un texte d'interface (source en français) dans une langue ; alimenté à la volée par DeepL (lib/translate.ts).
+model UiTranslation {
+  locale    String
+  source    String
+  body      String
+  createdAt DateTime @default(now())
+
+  @@id([locale, source])
+}

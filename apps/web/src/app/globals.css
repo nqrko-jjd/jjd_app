@@ -2581,3 +2581,5 @@ body.nav-collapsed .navlink .nav-badge { position: absolute; top: 2px; right: 2p
   .mx-list { max-height: none; }
   .mx-head, .mx-atts, .mx-note, .mx-compose { padding-left: 16px; padding-right: 16px; }
 }
+
+.msg-translation-toggle { display: block; margin-top: 0.25rem; padding: 0; border: 0; background: none; font: inherit; font-size: 0.74rem; opacity: 0.7; text-decoration: underline; cursor: pointer; color: inherit; }

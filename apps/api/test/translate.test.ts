@@ -36,3 +36,31 @@ test('traductions : lues en cache, messages déjà dans la langue du lecteur lai
   assert.equal(out['tr-test-1'], 'Bonjour à tous');
   assert.ok(!('tr-test-2' in out) && !('tr-test-3' in out));
 });
+
+test('textes d’interface : traduits une seule fois par langue (DeepL simulé), puis lus en cache', async () => {
+  const { env } = await import('../src/env.js');
+  const realFetch = globalThis.fetch; let deeplCalls = 0;
+  const keyBefore = env.deeplApiKey; env.deeplApiKey = 'test-key';
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    if (String(input).includes('/v2/translate')) {
+      deeplCalls++;
+      const texts = new URLSearchParams(String(init?.body)).getAll('text');
+      return new Response(JSON.stringify({ translations: texts.map((t) => ({ text: `PT:${t}` })) }), { status: 200 });
+    }
+    return realFetch(input as never, init);
+  }) as typeof fetch;
+  try {
+    const post = (locale: string, strings: string[]) => fetch(`${base}/api/translate/ui`, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ locale, strings }) }).then(async (r) => ({ status: r.status, body: await r.json() as { translations: Record<string, string> } }));
+    const a = await post('pt-BR', ['Texte test interface un', 'Texte test interface deux']);
+    assert.equal(a.body.translations['Texte test interface un'], 'PT:Texte test interface un');
+    assert.equal(deeplCalls, 1);
+    const b = await post('pt-BR', ['Texte test interface un']);
+    assert.equal(b.body.translations['Texte test interface un'], 'PT:Texte test interface un');
+    assert.equal(deeplCalls, 1, 'lu en cache : DeepL pas rappelé');
+    assert.deepEqual((await post('fr', ['Bonjour'])).body.translations, {}, 'le français n’est pas traduit');
+    assert.equal((await post('de', ['x'])).status, 422);
+  } finally {
+    globalThis.fetch = realFetch; env.deeplApiKey = keyBefore;
+    await prisma.uiTranslation.deleteMany({ where: { source: { startsWith: 'Texte test interface' } } });
+  }
+});

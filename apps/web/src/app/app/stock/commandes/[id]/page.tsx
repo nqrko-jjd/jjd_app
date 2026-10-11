@@ -21,6 +21,7 @@ interface Line {
 }
 interface Order {
   id: string; ref: string; status: string; expectedOn: string | null; orderedOn: string | null; supplierRef: string | null; note: string | null;
+  priceRequestedAt?: string | null; priceRequestedTo?: string | null;
   contact: { id: string; name: string; customerNumber: string | null; onAccount: boolean; phone: string | null; email: string | null };
   worksite: { id: string; ref: string; title: string } | null;
   lines: Line[];
@@ -71,6 +72,7 @@ export default function CommandeDetail({ params }: { params: Promise<{ id: strin
   const [editing, setEditing] = useState<string | null>(null);
   const [showReceived, setShowReceived] = useState(false);
   const [scanning, setScanning] = useState(0);
+  const [priceReq, setPriceReq] = useState<{ to: string; subject: string; body: string } | null>(null);
   const queue = useRef<Promise<void>>(Promise.resolve());
   const operation = useRef(false);
   const order = data?.order ?? null;
@@ -139,6 +141,14 @@ export default function CommandeDetail({ params }: { params: Promise<{ id: strin
       setBusy(false);
     }
   }
+  async function openPriceRequest() {
+    try { setPriceReq(await api<{ to: string; subject: string; body: string }>(`/api/purchasing/orders/${id}/price-request`)); } catch (e) { setMsg({ ok: false, text: (e as Error).message }); }
+  }
+  async function sendPriceRequest() {
+    if (!priceReq || operation.current) return;
+    operation.current = true; setBusy(true);
+    try { await api(`/api/purchasing/orders/${id}/request-price`, { method: 'POST', body: priceReq }); setPriceReq(null); setMsg({ ok: true, text: 'Demande de prix envoyée.' }); reload(); } catch (e) { setMsg({ ok: false, text: (e as Error).message }); } finally { operation.current = false; setBusy(false); }
+  }
   async function act(path: string, confirmText?: string) {
     if (operation.current || scanning > 0) return;
     if (confirmText && !confirm(confirmText)) return;
@@ -166,6 +176,7 @@ export default function CommandeDetail({ params }: { params: Promise<{ id: strin
             </a>
           )}
           <a className="btn" href={`/imprimer/commande/${order.id}`} target="_blank" rel="noreferrer">🖨️ Imprimer</a>
+          {canOrder && order.status === 'draft' && <button className="btn" disabled={busy || scanning > 0} onClick={openPriceRequest}>{order.priceRequestedAt ? 'Redemander un prix' : 'Demander un prix'}</button>}
           {canOrder && order.status === 'draft' && <button className="btn primary" disabled={busy || scanning > 0} onClick={() => act('place')}>Marquer comme commandée</button>}
           {canOrder && order.status === 'partial' && <button className="btn" disabled={busy || scanning > 0} onClick={() => act('close', 'Clôturer cette commande ? Le reste ne sera plus attendu.')}>Clôturer (reste non livré)</button>}
           {canOrder && (order.status === 'draft' || order.status === 'ordered') && <button className="btn" disabled={busy || scanning > 0} onClick={() => act('cancel', 'Annuler cette commande ?')}>{tr("Annuler")}</button>}
@@ -179,9 +190,23 @@ export default function CommandeDetail({ params }: { params: Promise<{ id: strin
           <span className={`badge ${PO_STATUS_TONE[order.status] ?? ''}`}>{PO_STATUS_LABEL[order.status] ?? order.status}</span>
         </div>
         <div className="sub">
-          {[order.contact.customerNumber ? `N° client ${order.contact.customerNumber}` : null, order.contact.onAccount ? 'en compte' : null, order.worksite ? `Chantier ${order.worksite.ref}` : null, order.supplierRef ? `Réf. ${order.supplierRef}` : null, order.note].filter(Boolean).join(' · ')}
+          {[order.priceRequestedAt ? `Prix demandé le ${formatDateBE(order.priceRequestedAt)}${order.priceRequestedTo ? ` à ${order.priceRequestedTo}` : ''}` : null, order.contact.customerNumber ? `N° client ${order.contact.customerNumber}` : null, order.contact.onAccount ? 'en compte' : null, order.worksite ? `Chantier ${order.worksite.ref}` : null, order.supplierRef ? `Réf. ${order.supplierRef}` : null, order.note].filter(Boolean).join(' · ')}
         </div>
       </div>
+
+      {priceReq && (
+        <div className="modal-scrim" onClick={() => setPriceReq(null)}>
+          <form className="modal" style={{ maxWidth: 620 }} onClick={(e) => e.stopPropagation()} onSubmit={(e) => { e.preventDefault(); sendPriceRequest(); }}>
+            <div className="modal-head"><h2>Demande de prix · {order.contact.name}</h2><button type="button" className="btn ghost" onClick={() => setPriceReq(null)} aria-label="Fermer">✕</button></div>
+            <div className="modal-body">
+              <div className="field" style={{ gridColumn: '1 / -1' }}><label>À</label><input className="input" type="email" required value={priceReq.to} onChange={(e) => setPriceReq({ ...priceReq, to: e.target.value })} placeholder="e-mail du fournisseur" /></div>
+              <div className="field" style={{ gridColumn: '1 / -1' }}><label>Objet</label><input className="input" required value={priceReq.subject} onChange={(e) => setPriceReq({ ...priceReq, subject: e.target.value })} /></div>
+              <div className="field" style={{ gridColumn: '1 / -1' }}><label>Message</label><textarea className="input" rows={10} required value={priceReq.body} onChange={(e) => setPriceReq({ ...priceReq, body: e.target.value })} /><span className="muted" style={{ fontSize: '0.8rem' }}>À sa réponse, saisissez les prix sur les lignes puis cliquez « Marquer comme commandée ».</span></div>
+            </div>
+            <div className="modal-foot"><button type="button" className="btn" onClick={() => setPriceReq(null)}>Annuler</button><button type="submit" className="btn primary" disabled={busy}>{busy ? 'Envoi…' : 'Envoyer la demande'}</button></div>
+          </form>
+        </div>
+      )}
 
       <div style={{ marginTop: '1.1rem' }}>
         <PurchaseOrderFiles orderId={order.id} files={order.files ?? []} onChanged={reload} />

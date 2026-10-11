@@ -16,6 +16,8 @@ import { requireAuth, STOCK_MOVE, STOCK_MANAGE, OFFICE } from '../lib/auth.js';
 import { storeFile, UPLOADS_DIR } from '../lib/media.js';
 import { applyStockMovement, sameName, unitFactor } from '../lib/stock.js';
 import { parseTariff, guessPacking } from '../lib/supplier-tariff.js';
+import { sendEmailWithPdf } from '../lib/doc-mail.js';
+import { getCompany } from '../lib/documents.js';
 
 export const purchasingRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -288,6 +290,38 @@ purchasingRouter.post(
     const cur = await loadOrder(req.params.id as string);
     if (cur.status !== 'draft') throw new HttpError(409, 'Cette commande n’est plus un brouillon');
     await prisma.purchaseOrder.update({ where: { id: cur.id }, data: { status: 'ordered', orderedOn: new Date() } });
+    res.json({ order: await loadOrder(cur.id) });
+  }),
+);
+
+/** Demande de prix par e-mail au fournisseur à partir d'un brouillon : liste des articles et quantités, sans prix ; à la réponse, on saisit les prix puis on passe la commande. */
+function priceRequestMail(order: { ref: string; note: string | null; expectedOn: Date | null; worksite: { ref: string } | null; lines: { qty: number; label: string | null; unitName: string | null; stockItem: { ref: string | null; name: string; unit: string } | null }[] }, company: { name: string; phone: string }) {
+  const lines = order.lines.map((l) => `- ${l.stockItem?.ref ? `${l.stockItem.ref} · ` : ''}${l.stockItem?.name ?? l.label ?? 'Article'} : ${l.qty} ${l.unitName ?? l.stockItem?.unit ?? ''}`.trimEnd()).join('\n');
+  return {
+    subject: `Demande de prix${order.worksite ? ` — chantier ${order.worksite.ref}` : ''} (${order.ref})`,
+    body: ['Bonjour,', '', 'Pourriez-vous nous communiquer votre meilleur prix (HT) et le délai de livraison pour :', '', lines, '',
+      ...(order.note ? [`Note : ${order.note}`, ''] : []), ...(order.expectedOn ? [`Livraison souhaitée pour le ${order.expectedOn.toLocaleDateString('fr-BE')}.`, ''] : []),
+      'Merci d’avance,', company.name, ...(company.phone ? [company.phone] : [])].join('\n'),
+  };
+}
+purchasingRouter.get(
+  '/orders/:id/price-request',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const cur = await loadOrder(req.params.id as string);
+    res.json({ to: cur.contact.email ?? '', ...priceRequestMail(cur, await getCompany()) });
+  }),
+);
+purchasingRouter.post(
+  '/orders/:id/request-price',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const d = z.object({ to: z.string().trim().email(), subject: z.string().trim().min(1).max(200), body: z.string().trim().min(1).max(5000) }).parse(req.body);
+    const cur = await loadOrder(req.params.id as string);
+    if (cur.status !== 'draft') throw new HttpError(409, 'Une demande de prix se fait depuis un brouillon');
+    await sendEmailWithPdf({ to: [d.to], subject: d.subject, message: d.body, copyToSelf: true }, { buffer: Buffer.alloc(0), filename: '' }, true);
+    await prisma.purchaseOrder.update({ where: { id: cur.id }, data: { priceRequestedAt: new Date(), priceRequestedTo: d.to } });
+    await prisma.auditLog.create({ data: { actorId: req.user!.id, action: 'purchase.priceRequest', entity: 'PurchaseOrder', entityId: cur.id, meta: { to: d.to } } });
     res.json({ order: await loadOrder(cur.id) });
   }),
 );

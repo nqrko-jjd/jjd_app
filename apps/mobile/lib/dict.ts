@@ -2719,5 +2719,77 @@ export const DICT: Record<string, [string, string]> = {
  "Retirer la photo": [
   "Remove photo",
   "Remover foto"
+ ],
+ "PV de réception": [
+  "Acceptance report",
+  "PV de recebimento"
+ ],
+ "Réserves, signature du client, PDF": [
+  "Reserves, client signature, PDF",
+  "Ressalvas, assinatura do cliente, PDF"
+ ],
+ "Sans réserve": [
+  "No reserves",
+  "Sem ressalvas"
+ ],
+ "Avec réserve(s)": [
+  "With reserve(s)",
+  "Com ressalva(s)"
+ ],
+ "Refusée": [
+  "Refused",
+  "Recusada"
+ ],
+ "Résultat de la réception": [
+  "Acceptance result",
+  "Resultado do recebimento"
+ ],
+ "Marquer levée": [
+  "Mark as lifted",
+  "Marcar como resolvida"
+ ],
+ "Levée ✓": [
+  "Lifted ✓",
+  "Resolvida ✓"
+ ],
+ "Décrire la réserve…": [
+  "Describe the reserve…",
+  "Descreva a ressalva…"
+ ],
+ "Devis / marché concerné": [
+  "Quote / contract",
+  "Orçamento / contrato"
+ ],
+ "Personnes présentes": [
+  "People present",
+  "Pessoas presentes"
+ ],
+ "Remarques": [
+  "Remarks",
+  "Observações"
+ ],
+ "Ouvrir le PDF du PV": [
+  "Open the PV PDF",
+  "Abrir o PDF do PV"
+ ],
+ "PDF du PV de levée des réserves": [
+  "PDF of the reserves-lifted report",
+  "PDF do PV de resolução das ressalvas"
+ ],
+ "Le PV a besoin de connexion pour être créé.": [
+  "The report needs a connection to be created.",
+  "O PV precisa de conexão para ser criado."
+ ],
+ "Toutes les réserves sont levées.": [
+  "All reserves are lifted.",
+  "Todas as ressalvas foram resolvidas."
+ ],
+ "Aucune réserve.": [
+  "No reserves.",
+  "Nenhuma ressalva."
+ ],
+ "Supprimer la réserve": [
+  "Delete the reserve",
+  "Excluir a ressalva"
  ]
 };

@@ -217,6 +217,10 @@ export default function FicheDuJour() {
         <Pressable style={{ backgroundColor: T.primarySoft, borderRadius: 10, padding: 14, alignItems: 'center', marginBottom: 10 }} onPress={() => router.push(`/photos/${id}` as never)}>
           <Text style={{ color: T.primary, fontWeight: '700', fontSize: 15 }}>Photos du chantier</Text>
         </Pressable>
+        <Pressable style={{ backgroundColor: T.primarySoft, borderRadius: 10, padding: 14, alignItems: 'center', marginBottom: 10 }} onPress={() => router.push(`/pv/new?worksite=${id}` as never)}>
+          <Text style={{ color: T.primary, fontWeight: '700', fontSize: 15 }}>PV de réception</Text>
+          <Text style={{ color: T.ink2, fontSize: 12, marginTop: 2 }}>Réserves, signature du client, PDF</Text>
+        </Pressable>
         <Pressable style={{ backgroundColor: T.primary, borderRadius: 10, padding: 14, alignItems: 'center' }} onPress={() => router.push(`/rapport/${id}` as never)}>
           <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>PV / rapport client</Text><Text style={{ color: '#d8e6dd', fontSize: 12, marginTop: 2 }}>À faire pour valider une prestation avec le client (signature)</Text>
         </Pressable>

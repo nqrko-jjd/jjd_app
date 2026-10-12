@@ -8,6 +8,8 @@ import { markOverdueInvoices, renumberFaDepositInvoices } from './lib/documents.
 import { runAutoReminders } from './lib/reminders.js';
 import { runAutoFollowups } from './lib/quote-followups.js';
 import { runAutoReviewRequests } from './lib/review-requests.js';
+import { syncVehiclePositions, pajConfigured } from './lib/paj.js';
+import { runArrivalNotices } from './lib/arrival-notices.js';
 import { getDocPdfBuffer, runScheduledEmails } from './routes/documents.js';
 import { backfillBankMatches } from './lib/bank-match.js';
 import { backfillWorksiteGeo } from './lib/worksite-geo.js';
@@ -114,6 +116,8 @@ const runReminders = () => Promise.all([
 ]).catch((e) => console.error('[relances] échec :', e.message));
 // e-mails programmés (« envoyer plus tard » sur un document)
 setInterval(() => { runScheduledEmails().then((n) => { if (n) console.log(`[envoi programmé] ${n} e-mail(s) envoyé(s)`); }).catch((e) => console.error('[envoi programmé] échec :', e.message)); }, 5 * 60_000);
+// positions des traceurs PAJ + avis d'arrivée aux clients (sans effet tant que le compte PAJ n'est pas configuré et les avis activés)
+setInterval(() => { if (!pajConfigured()) return; syncVehiclePositions().then(() => runArrivalNotices()).then((n) => { if (n) console.log(`[arrivée] ${n} avis d’arrivée envoyé(s)`); }).catch((e) => console.error('[paj] échec :', e.message)); }, 2 * 60_000);
 setTimeout(runReminders, 120_000);
 setInterval(runReminders, 30 * 60_000);
 

@@ -1075,6 +1075,12 @@ model Vehicle {
   financeCompany  String?
   financeContract String?
 
+  pajDeviceId          String? // traceur PAJ GPS relié à ce véhicule (lib/paj.ts)
+  lastLat              Float? // dernière position connue du traceur
+  lastLng              Float?
+  lastSeenAt           DateTime?
+  lastSpeed            Float?
+  lastBattery          Float?
   active               Boolean  @default(true)
   excludedFromPlanning Boolean  @default(false) // véhicule perso, chariot élévateur… : pas proposé dans les affectations planning
   note                 String?
@@ -1859,4 +1865,16 @@ model UiTranslation {
   createdAt DateTime @default(now())
 
   @@id([locale, source])
+}
+
+/// Avis d'arrivée envoyé au client pour une intervention (un seul par intervention, voir lib/arrival-notices.ts).
+model ArrivalNotice {
+  id         String    @id @default(cuid())
+  eventId    String    @unique
+  toEmail    String?
+  etaMinutes Int?
+  status     String    @default("sent") // sent | failed
+  error      String?
+  createdAt  DateTime  @default(now())
+  sentAt     DateTime?
 }

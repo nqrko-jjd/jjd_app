@@ -99,6 +99,7 @@ const NAV: Group[] = [
       { href: '/app/contacts', label: 'Contacts', ic: Contact },
       { href: '/app/equipe', label: 'Équipe', ic: Users },
       { href: '/app/flotte', label: 'Flotte', ic: Truck },
+      { href: '/app/flotte/suivi', label: 'Suivi GPS', ic: Truck, roles: ['admin', 'office'] },
       { href: '/app/materiel', label: 'Outils & consommables', ic: Wrench },
       { href: '/app/stock', label: 'Stock matériaux', ic: Package },
       { href: '/app/stock/preparations', label: 'Préparations', ic: ClipboardList, roles: ['admin', 'office'] },

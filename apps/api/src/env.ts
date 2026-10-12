@@ -40,6 +40,10 @@ export const env = {
   /** Assistant IA (chat) — brouillons de devis/planning/tâches. Sans clé = masqué. */
   anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? '',
 
+  /** Traceurs PAJ GPS (compte du portail PAJ Finder). Sans identifiants = suivi GPS désactivé. */
+  pajEmail: (process.env.PAJ_EMAIL ?? '').trim(),
+  pajPassword: process.env.PAJ_PASSWORD ?? '',
+
   /** Envoi de documents par e-mail (SMTP de la boîte JJD, ex. info@jjd-consult.be). Sans identifiants = envoi par e-mail désactivé. */
   smtp: {
     host: (process.env.SMTP_HOST ?? '').trim(),

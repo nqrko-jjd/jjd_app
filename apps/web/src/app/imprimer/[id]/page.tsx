@@ -94,6 +94,7 @@ export default function PrintDocument({ params }: { params: Promise<{ id: string
 
         {d.title && <div className="object">{d.title}</div>}
         {d.customerRef && <div className="client-ref">Réf. client : <strong>{d.customerRef}</strong></div>}
+        {d.poNumber?.trim() && <div className="client-ref">Référence de commande : <strong>{d.poNumber}</strong></div>}
         {d.intro && <p className="intro">{d.intro}</p>}
 
         <table className="lines">

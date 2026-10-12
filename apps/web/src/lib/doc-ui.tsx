@@ -68,6 +68,7 @@ export interface DocFull {
   billingAddress: string | null;
   billingEmail: string | null;
   customerRef: string | null;
+  poNumber?: string | null;
   worksite: { id: string; ref: string; title: string } | null;
   contact: { id: string; name: string; vat: string | null; address: string | null; box: string | null; postalCode: string | null; city: string | null; email: string | null } | null;
   parent: { id: string; kind: string; number: string | null; draftRef: string | null } | null;

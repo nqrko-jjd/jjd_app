@@ -118,6 +118,7 @@ export async function buildHtml(d: PdfDoc, co: Company): Promise<string> {
     ? await renderEpcQrDataUrl({ beneficiaryName: co.name, iban: co.iban!, amount: totals.totalTtc, structuredComm: d.structuredComm })
     : null;
 
+  const paymentTerms = `<footer class="terms"><strong>Conditions de paiement</strong><div>${esc(d.terms?.trim() || (d.kind === 'quote' ? (planItems.length ? 'Selon l’échéancier d’acomptes ci-dessus.' : co.quoteTerms) : co.invoiceTerms))}</div></footer>`;
   const payBlock = isInvoiceLike || d.kind === 'quote'
     ? `<div class="pay">
          <div class="pay-text">
@@ -126,6 +127,7 @@ export async function buildHtml(d: PdfDoc, co: Company): Promise<string> {
            ${isInvoiceLike && !d.structuredComm && ref ? `<div>Communication : <strong>${esc(ref)}</strong></div>` : ''}
            ${d.structuredComm ? `<div>Communication structurée : <strong>${esc(d.structuredComm)}</strong></div>` : ''}
          </div>
+         ${paymentTerms}
          ${qrDataUrl ? `<div class="pay-qr"><img src="${qrDataUrl}" alt="QR code de paiement" /><span>à scanner pour payer</span></div>` : ''}
        </div>`
     : '';
@@ -187,7 +189,7 @@ export async function buildHtml(d: PdfDoc, co: Company): Promise<string> {
            </div>`
         : vatNotes}
       ${payBlock}
-      <footer class="terms"><strong>Conditions de paiement</strong><div>${esc(d.terms?.trim() || (d.kind === 'quote' ? (planItems.length ? 'Selon l’échéancier d’acomptes ci-dessus.' : co.quoteTerms) : co.invoiceTerms))}</div></footer>
+      ${!isInvoiceLike && d.kind !== 'quote' ? paymentTerms : ''}
     </div>
     ${isInvoiceLike || d.kind === 'quote' ? `<section class="sheet general-terms"><h1>Conditions générales JJD Consult SRL</h1><div class="cg-cols">${DOCUMENT_TERMS.map(text => `<p>${esc(text)}</p>`).join('')}</div></section>
     <script>${CG_FIT_SCRIPT}</script>` : ''}
@@ -274,8 +276,11 @@ const CSS = `
   .totals tr.grand td:first-child { border-radius: 6px 0 0 6px; }
   .totals tr.grand td:last-child { border-radius: 0 6px 6px 0; }
 
-  .pay { margin-top: 18px; padding: 12px 14px; background: #e9efe9; border-radius: 10px; font-size: 11px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-  .pay-text { flex: 1; }
+  .pay { margin-top: 18px; padding: 12px 14px; background: #e9efe9; border-radius: 10px; font-size: 11px; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+  .pay-text { flex: 1.3; min-width: 0; overflow-wrap: anywhere; }
+  .pay .terms { flex: 1; min-width: 0; margin: 0; padding: 0 0 0 14px; border: 0; border-left: 1px solid #cbd8ce; border-radius: 0; overflow-wrap: anywhere; }
+  .pay .terms strong { color: #173f34; }
+  .pay .terms div { margin-top: 2px; }
   .pay-text strong { color: #173f34; }
   .pay-qr { text-align: center; flex: none; }
   .pay-qr img { width: 84px; height: 84px; display: block; }

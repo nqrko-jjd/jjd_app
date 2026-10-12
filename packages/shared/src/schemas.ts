@@ -334,6 +334,7 @@ export const documentInput = z.object({
   billingAddress: z.string().trim().nullish(),
   billingEmail: z.string().trim().nullish(),
   customerRef: z.string().trim().nullish(),
+  poNumber: z.string().trim().max(160).nullish(),
   depositPlan: z.array(depositPlanItem).max(8).nullish(),
   retentionPct: z.coerce.number().min(0).max(30).nullish(),
   // acompte déjà réglé, saisi directement pendant la rédaction (distinct de /mark-paid, qui

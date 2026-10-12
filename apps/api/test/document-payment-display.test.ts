@@ -44,3 +44,13 @@ test('explicit conditions and a custom deposit plan take precedence', async () =
   assert.ok(html.includes('Selon l’échéancier d’acomptes ci-dessus.'));
   assert.ok(!html.includes('50 % d’acompte'));
 });
+
+test('render representative payment documents in CI', { skip: !process.env.CI }, async () => {
+  process.env.PUPPETEER_EXECUTABLE_PATH = '/usr/bin/google-chrome';
+  const { renderDocumentPdf } = await import('../src/lib/pdf.js');
+  const { mkdir, writeFile } = await import('node:fs/promises');
+  await mkdir('tmp/payment-preview', { recursive: true });
+  for (const kind of ['quote', 'invoice']) {
+    await writeFile('tmp/payment-preview/' + kind + '.pdf', await renderDocumentPdf(doc(kind), resolveCompany({})));
+  }
+});

@@ -57,3 +57,13 @@ jobs:
         run: node --test --test-force-exit --test-concurrency=1 --import tsx apps/api/test/bank-allocation.test.ts apps/api/test/bank-match.test.ts apps/api/test/bank-suggestions-settled.test.ts apps/api/test/bank-reconcile.test.ts apps/api/test/client-account.test.ts apps/api/test/auth-profile.test.ts apps/api/test/document-payment-display.test.ts
       - run: npm run typecheck
       - run: npm run build --workspace @jjd/web
+      - name: Render payment preview pages
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y poppler-utils
+          pdftoppm -scale-to 1400 -png tmp/payment-preview/quote.pdf tmp/payment-preview/quote
+          pdftoppm -scale-to 1400 -png tmp/payment-preview/invoice.pdf tmp/payment-preview/invoice
+      - uses: actions/upload-artifact@v4
+        with:
+          name: document-payment-previews
+          path: tmp/payment-preview/

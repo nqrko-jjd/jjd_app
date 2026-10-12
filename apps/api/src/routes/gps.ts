@@ -22,10 +22,18 @@ gpsRouter.get(
       getArrivalSettings(), computeArrivals(),
       prisma.arrivalNotice.findMany({ orderBy: { createdAt: 'desc' }, take: 30 }),
     ]);
+    const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(dayStart.getTime() + 86_400_000);
+    const todays = await prisma.planningEvent.findMany({
+      where: { kind: 'intervention', startAt: { gte: dayStart, lt: dayEnd }, vehicles: { some: {} }, worksite: { lat: { not: null }, lng: { not: null } } },
+      select: { id: true, startAt: true, worksite: { select: { ref: true, lat: true, lng: true, client: { select: { name: true } } } }, vehicles: { select: { vehicleId: true } } },
+      orderBy: { startAt: 'asc' },
+    });
+    const sites = todays.map((e) => ({ id: e.id, ref: e.worksite.ref, client: e.worksite.client?.name ?? null, lat: e.worksite.lat!, lng: e.worksite.lng!, startAt: e.startAt, vehicleIds: e.vehicles.map((v) => v.vehicleId) }));
     const events = await prisma.planningEvent.findMany({ where: { id: { in: history.map((h) => h.eventId) } }, select: { id: true, startAt: true, worksite: { select: { ref: true, client: { select: { name: true } } } } } });
     const byId = new Map(events.map((e) => [e.id, e]));
     res.json({
-      pajConfigured: pajConfigured(), emailConfigured: emailConfigured(), vehicles, settings, arrivals,
+      pajConfigured: pajConfigured(), emailConfigured: emailConfigured(), vehicles, sites, settings, arrivals,
       history: history.map((h) => ({ id: h.id, status: h.status, toEmail: h.toEmail, etaMinutes: h.etaMinutes, sentAt: h.sentAt, error: h.error, createdAt: h.createdAt, event: byId.get(h.eventId) ?? null })),
     });
   }),

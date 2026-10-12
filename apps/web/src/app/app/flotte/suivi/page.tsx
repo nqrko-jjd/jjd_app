@@ -1,17 +1,22 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { PageHead, formatDateBE } from '@/lib/ui';
 import { SkeletonRows, ErrorState, EmptyState } from '@/components/States';
 import { MapPin } from 'lucide-react';
+import type { MapVehicle, MapSite } from '@/components/FleetMap';
+
+const FleetMap = dynamic(() => import('@/components/FleetMap'), { ssr: false, loading: () => <SkeletonRows /> });
 
 interface Vehicle { id: string; code: string | null; name: string | null; plate: string | null; brand: string | null; model: string | null; pajDeviceId: string | null; lastLat: number | null; lastLng: number | null; lastSeenAt: string | null; lastSpeed: number | null; lastBattery: number | null }
 interface Settings { enabled: boolean; radiusKm: number; maxPositionAgeMin: number; copyToSelf: boolean; testTo: string; subject: string; body: string }
 interface Arrival { eventId: string; worksiteRef: string; client: string; to: string | null; startAt: string; vehicle: string; km: number; minutes: number; blocked: string | null }
 interface Hist { id: string; status: string; toEmail: string | null; etaMinutes: number | null; sentAt: string | null; error: string | null; createdAt: string; event: { startAt: string; worksite: { ref: string; client: { name: string } | null } } | null }
-interface Data { pajConfigured: boolean; emailConfigured: boolean; vehicles: Vehicle[]; settings: Settings; arrivals: Arrival[]; history: Hist[] }
+interface Site { id: string; ref: string; client: string | null; lat: number; lng: number; startAt: string; vehicleIds: string[] }
+interface Data { pajConfigured: boolean; emailConfigured: boolean; vehicles: Vehicle[]; sites: Site[]; settings: Settings; arrivals: Arrival[]; history: Hist[] }
 interface Device { id: string; name: string }
 const PLACEHOLDERS = '{client} {minutes} {chantier} {heure} {societe} {telephone}';
 const label = (v: Vehicle) => [v.code, v.name ?? [v.brand, v.model].filter(Boolean).join(' '), v.plate].filter(Boolean).join(' · ') || 'Véhicule';
@@ -20,10 +25,21 @@ const ago = (iso: string) => { const m = Math.round((Date.now() - new Date(iso).
 /** Suivi GPS (traceurs PAJ) : relier les traceurs aux véhicules, voir les dernières positions, régler les avis d'arrivée aux clients. */
 export default function SuiviGps() {
   const { data, error, loading, reload } = useApi<Data>('/api/gps');
-  const [tab, setTab] = useState<'vehicles' | 'arrivals' | 'settings'>('vehicles');
+  const [tab, setTab] = useState<'map' | 'vehicles' | 'arrivals' | 'settings'>('map');
   const [devices, setDevices] = useState<Device[] | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // la carte se met à jour toute seule (positions relues par le serveur toutes les 2 minutes)
+  useEffect(() => {
+    if (tab !== 'map') return;
+    const t = setInterval(reload, 60_000);
+    return () => clearInterval(t);
+  }, [tab, reload]);
+  const mapVehicles = useMemo<MapVehicle[]>(() => (data?.vehicles ?? []).filter((v) => v.pajDeviceId && v.lastLat != null && v.lastLng != null && v.lastSeenAt).map((v) => ({
+    id: v.id, label: label(v), lat: v.lastLat!, lng: v.lastLng!, seenAgo: ago(v.lastSeenAt!), speed: v.lastSpeed, stale: Date.now() - new Date(v.lastSeenAt!).getTime() > 30 * 60_000,
+  })), [data]);
+  const mapSites = useMemo<MapSite[]>(() => (data?.sites ?? []).map((x) => ({ id: x.id, label: `${x.ref}${x.client ? ` · ${x.client}` : ''} · ${new Date(x.startAt).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' })}`, lat: x.lat, lng: x.lng, vehicleIds: x.vehicleIds })), [data]);
 
   if (loading && !data) return <SkeletonRows />;
   if (error || !data) return <ErrorState message={error ?? 'Erreur'} onRetry={reload} />;
@@ -45,10 +61,20 @@ export default function SuiviGps() {
       {!data.pajConfigured && <div className="badge warn" style={{ marginBottom: '1rem', padding: '0.5rem 0.8rem' }}>Le compte PAJ GPS n’est pas encore configuré sur le serveur (PAJ_EMAIL et PAJ_PASSWORD) : aucune position ne peut être lue.</div>}
       {msg && <div className={`badge ${msg.ok ? 'ok' : 'crit'}`} style={{ marginBottom: '1rem', padding: '0.5rem 0.8rem' }}>{msg.text}</div>}
       <div className="seg" style={{ marginBottom: '1rem' }}>
+        <button className={tab === 'map' ? 'on' : ''} onClick={() => setTab('map')}>Carte</button>
         <button className={tab === 'vehicles' ? 'on' : ''} onClick={() => setTab('vehicles')}>Véhicules</button>
         <button className={tab === 'arrivals' ? 'on' : ''} onClick={() => setTab('arrivals')}>Avis d’arrivée · {data.arrivals.length}</button>
         <button className={tab === 'settings' ? 'on' : ''} onClick={() => setTab('settings')}>Réglages</button>
       </div>
+
+      {tab === 'map' && (
+        <div style={{ display: 'grid', gap: '0.6rem' }}>
+          <FleetMap vehicles={mapVehicles} sites={mapSites} />
+          <p className="muted" style={{ margin: 0, fontSize: '0.84rem' }}>
+            {mapVehicles.length === 0 ? 'Aucune position pour le moment : reliez les véhicules à leur traceur dans l’onglet « Véhicules ».' : `${mapVehicles.length} véhicule(s) suivi(s) en vert (gris = position de plus de 30 minutes) · chantiers du jour avec véhicule affecté en or · mise à jour automatique.`}
+          </p>
+        </div>
+      )}
 
       {tab === 'vehicles' && (
         <div className="panel" style={{ padding: '1rem', display: 'grid', gap: '0.8rem' }}>

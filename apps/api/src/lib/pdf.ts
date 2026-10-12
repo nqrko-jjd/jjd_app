@@ -35,6 +35,7 @@ export interface PdfDoc {
   billingVat: string | null;
   billingEmail: string | null;
   customerRef: string | null;
+  poNumber?: string | null;
   vatRate?: number | null;
   depositPlan?: unknown;
   worksite: { ref: string } | null;
@@ -157,6 +158,7 @@ export async function buildHtml(d: PdfDoc, co: Company): Promise<string> {
       </section>
       ${d.title ? `<div class="object">${esc(d.title)}</div>` : ''}
       ${d.customerRef ? `<div class="client-ref">Réf. client : <strong>${esc(d.customerRef)}</strong></div>` : ''}
+      ${d.poNumber?.trim() ? `<div class="client-ref">Référence de commande : <strong>${esc(d.poNumber)}</strong></div>` : ''}
       ${d.intro ? `<p class="intro">${esc(d.intro)}</p>` : ''}
       <table class="lines">
         <thead><tr>

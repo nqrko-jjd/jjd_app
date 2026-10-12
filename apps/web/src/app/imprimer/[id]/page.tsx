@@ -166,19 +166,20 @@ export default function PrintDocument({ params }: { params: Promise<{ id: string
           </div>
         ) : vatNotes.map((note, i) => <p key={i} className="vat-note">{note}</p>)}
 
-        {(d.kind === 'invoice' || d.kind === 'deposit_invoice' || d.kind === 'quote') && (
-          <div className="pay">
-            <div><strong>Coordonnées bancaires</strong></div>
-            <div className="bank-details">{co.bankDetails || co.iban}</div>
-            {d.kind !== 'quote' && !d.structuredComm && ref && <div>Communication : <strong>{ref}</strong></div>}
-            {d.structuredComm && <div>Communication structurée : <strong>{d.structuredComm}</strong></div>}
-          </div>
-        )}
-
-        <footer className="terms">
-          <strong>Conditions de paiement</strong>
-          <div>{d.terms?.trim() || (d.kind === 'quote' ? (Array.isArray(d.depositPlan) && d.depositPlan.length ? 'Selon l’échéancier d’acomptes ci-dessus.' : co.quoteTerms) : co.invoiceTerms)}</div>
-        </footer>
+        <div className={(d.kind === 'invoice' || d.kind === 'deposit_invoice' || d.kind === 'quote') ? 'pay' : undefined}>
+          {(d.kind === 'invoice' || d.kind === 'deposit_invoice' || d.kind === 'quote') && (
+            <div className="pay-text">
+              <div><strong>Coordonnées bancaires</strong></div>
+              <div className="bank-details">{co.bankDetails || co.iban}</div>
+              {d.kind !== 'quote' && !d.structuredComm && ref && <div>Communication : <strong>{ref}</strong></div>}
+              {d.structuredComm && <div>Communication structurée : <strong>{d.structuredComm}</strong></div>}
+            </div>
+          )}
+          <footer className="terms">
+            <strong>Conditions de paiement</strong>
+            <div>{d.terms?.trim() || (d.kind === 'quote' ? (Array.isArray(d.depositPlan) && d.depositPlan.length ? 'Selon l’échéancier d’acomptes ci-dessus.' : co.quoteTerms) : co.invoiceTerms)}</div>
+          </footer>
+        </div>
       </div>
       {(d.kind === 'invoice' || d.kind === 'deposit_invoice' || d.kind === 'quote') && <section className="sheet general-terms">
         <h1>Conditions générales JJD Consult SRL</h1>
@@ -262,7 +263,10 @@ const CSS = `
   .totals tr.grand td:first-child { border-radius: 6px 0 0 6px; }
   .totals tr.grand td:last-child { border-radius: 0 6px 6px 0; }
 
-  .pay { margin-top: 18px; padding: 12px 14px; background: #e9efe9; border-radius: 10px; font-size: 11px; }
+  .pay { margin-top: 18px; padding: 12px 14px; background: #e9efe9; border-radius: 10px; font-size: 11px; display: flex; align-items: flex-start; gap: 16px; }
+  .pay-text { flex: 1.3; min-width: 0; overflow-wrap: anywhere; }
+  .pay .terms { flex: 1; min-width: 0; margin: 0; padding: 0 0 0 14px; border: 0; border-left: 1px solid #cbd8ce; border-radius: 0; overflow-wrap: anywhere; }
+  .pay .terms div { margin-top: 2px; }
   .pay strong { color: #173f34; }
 
   .terms { margin-top: 14px; padding: 12px 14px; border: 1px solid #d5dfd6; border-radius: 8px; color: #26372f; font-size: 11px; white-space: pre-wrap; break-inside: avoid; }

@@ -59,6 +59,7 @@ export function splitAddress(raw: string | null | undefined): { street: string; 
 }
 
 interface PeppolDoc {
+  poNumber?: string | null;
   kind: string; number: string | null; issuedOn: Date | null; dueOn: Date | null; structuredComm: string | null; customerRef: string | null;
   billingName: string | null; billingVat: string | null; billingAddress: string | null; totalHt?: number; totalTtc?: number;
   contact: { name: string; vat: string | null; address: string | null; box: string | null; postalCode: string | null; city: string | null } | null;
@@ -111,7 +112,7 @@ export function buildPeppolPayload(d: PeppolDoc, co: Pick<Company, 'iban'> & { v
   }
 
   const iban = (co.iban ?? '').replace(/\s+/g, '');
-  const note = [d.customerRef && `Réf. client : ${d.customerRef}`, d.worksite?.ref && `Chantier ${d.worksite.ref}`].filter(Boolean).join(' · ');
+  const note = [d.customerRef && `Réf. client : ${d.customerRef}`, d.poNumber?.trim() && `Référence de commande : ${d.poNumber}`, d.worksite?.ref && `Chantier ${d.worksite.ref}`].filter(Boolean).join(' · ');
   const issue = ymd(d.issuedOn ?? new Date());
   // catégorie AE (autoliquidation) : le réseau refuse le document sans motif d'exonération (code VATEX et/ou texte) au niveau de la TVA
   const reverseCharge = lines.some((l) => l.vat.category === 'AE');

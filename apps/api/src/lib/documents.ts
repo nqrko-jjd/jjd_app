@@ -129,7 +129,7 @@ export async function issueDocument(documentId: string, opts: { issuedOn?: Date;
   const { number, seq } = await nextFreeDocNumber(doc.kind, year);
 
   const isInvoiceLike = doc.kind === 'invoice' || doc.kind === 'deposit_invoice';
-  const dueOn = isInvoiceLike ? computeDueDate(issuedOn, opts.dueDays ?? 30) : null;
+  const dueOn = isInvoiceLike ? computeDueDate(issuedOn, opts.dueDays ?? 10) : null;
   const structuredComm = isInvoiceLike
     ? belgianStructuredComm(year * 100000 + seq)
     : null;
@@ -361,12 +361,13 @@ const COMPANY_DEFAULTS = {
   postalCode: '',
   city: '',
   vat: '',
-  iban: '',
+  iban: 'BE31 0689 4940 0055',
+  bankDetails: 'Belfius BE31 0689 4940 0055\nING BE64 3632 5469 4152',
   email: 'info@jjd-consult.be',
   phone: '',
   website: 'www.jjd-consult.be',
-  quoteTerms: 'Devis valable 30 jours. Acompte de 30 % à la commande.',
-  invoiceTerms: 'Facture payable à 30 jours. Tout retard de paiement entraîne de plein droit et sans mise en demeure un intérêt de 8 % l’an et une indemnité forfaitaire de 40 €.',
+  quoteTerms: '50 % d’acompte à la signature du devis.\n40 % à l’avancement des travaux.\n10 % à la réception finale des travaux.',
+  invoiceTerms: '10 jours date facture.',
   // mentions légales TVA (modifiables dans Paramètres ; vide = pas de mention)
   vatNote6: VAT_RATE_NOTE['0.06']!,
   vatNote0: VAT_RATE_NOTE['0']!,
@@ -375,5 +376,16 @@ export type Company = typeof COMPANY_DEFAULTS;
 
 export async function getCompany(): Promise<Company> {
   const row = await prisma.setting.findUnique({ where: { key: 'company' } });
-  return { ...COMPANY_DEFAULTS, ...((row?.value as Partial<Company>) ?? {}) };
+  return resolveCompany((row?.value as Partial<Company>) ?? {});
+}
+
+/** Upgrade only empty settings and the old starter terms; preserve negotiated/custom values. */
+export function resolveCompany(saved: Partial<Company>): Company {
+  const company = { ...COMPANY_DEFAULTS, ...saved };
+  for (const key of ['iban', 'bankDetails', 'quoteTerms', 'invoiceTerms'] as const) {
+    if (!company[key]?.trim()) company[key] = COMPANY_DEFAULTS[key];
+  }
+  if (company.quoteTerms === "Devis valable 30 jours. Acompte de 30 % à la commande.") company.quoteTerms = COMPANY_DEFAULTS.quoteTerms;
+  if (company.invoiceTerms === "Facture payable à 30 jours. Tout retard de paiement entraîne de plein droit et sans mise en demeure un intérêt de 8 % l’an et une indemnité forfaitaire de 40 €.") company.invoiceTerms = COMPANY_DEFAULTS.invoiceTerms;
+  return company;
 }

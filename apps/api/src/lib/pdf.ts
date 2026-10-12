@@ -117,10 +117,12 @@ export async function buildHtml(d: PdfDoc, co: Company): Promise<string> {
     ? await renderEpcQrDataUrl({ beneficiaryName: co.name, iban: co.iban!, amount: totals.totalTtc, structuredComm: d.structuredComm })
     : null;
 
-  const payBlock = isInvoiceLike
+  const payBlock = isInvoiceLike || d.kind === 'quote'
     ? `<div class="pay">
          <div class="pay-text">
-           <div><strong>Paiement</strong> — ${co.iban ? `IBAN ${esc(co.iban)}` : 'coordonnées bancaires sur demande'}</div>
+           <div><strong>Coordonnées bancaires</strong></div>
+           <div class="bank-details">${esc(co.bankDetails || co.iban)}</div>
+           ${isInvoiceLike && !d.structuredComm && ref ? `<div>Communication : <strong>${esc(ref)}</strong></div>` : ''}
            ${d.structuredComm ? `<div>Communication structurée : <strong>${esc(d.structuredComm)}</strong></div>` : ''}
          </div>
          ${qrDataUrl ? `<div class="pay-qr"><img src="${qrDataUrl}" alt="QR code de paiement" /><span>à scanner pour payer</span></div>` : ''}
@@ -183,7 +185,7 @@ export async function buildHtml(d: PdfDoc, co: Company): Promise<string> {
            </div>`
         : vatNotes}
       ${payBlock}
-      <footer class="terms">${esc(d.terms || (d.kind === 'quote' ? co.quoteTerms : co.invoiceTerms))}</footer>
+      <footer class="terms"><strong>Conditions de paiement</strong><div>${esc(d.terms?.trim() || (d.kind === 'quote' ? (planItems.length ? 'Selon l’échéancier d’acomptes ci-dessus.' : co.quoteTerms) : co.invoiceTerms))}</div></footer>
     </div>
     ${isInvoiceLike || d.kind === 'quote' ? `<section class="sheet general-terms"><h1>Conditions générales JJD Consult SRL</h1><div class="cg-cols">${DOCUMENT_TERMS.map(text => `<p>${esc(text)}</p>`).join('')}</div></section>
     <script>${CG_FIT_SCRIPT}</script>` : ''}
@@ -277,7 +279,8 @@ const CSS = `
   .pay-qr img { width: 84px; height: 84px; display: block; }
   .pay-qr span { display: block; font-size: 9px; color: #788078; margin-top: 2px; }
 
-  .terms { margin-top: 22px; padding-top: 10px; border-top: 1px solid #e5e7df; color: #9aa79e; font-size: 9.5px; white-space: pre-wrap; }
+  .terms { margin-top: 14px; padding: 12px 14px; border: 1px solid #d5dfd6; border-radius: 8px; color: #26372f; font-size: 11px; white-space: pre-wrap; break-inside: avoid; }
+  .bank-details { white-space: pre-wrap; overflow-wrap: anywhere; }
   .vat-note { margin: 14px 0 0; color: #788078; font-size: 9.5px; line-height: 1.5; }
   .vat-note + .vat-note { margin-top: 8px; }
 `;

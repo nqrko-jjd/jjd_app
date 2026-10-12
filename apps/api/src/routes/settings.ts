@@ -19,6 +19,7 @@ const companySchema = z.object({
   city: z.string().trim().default(''),
   vat: z.string().trim().default(''),
   iban: z.string().trim().default(''),
+  bankDetails: z.string().trim().max(2000).optional(),
   email: z.string().trim().default(''),
   phone: z.string().trim().default(''),
   website: z.string().trim().default(''),
@@ -119,6 +120,7 @@ settingsRouter.put(
   requireAuth('admin'),
   asyncHandler(async (req, res) => {
     const value = companySchema.parse(req.body);
+    if (value.bankDetails === undefined) value.bankDetails = (await getCompany()).bankDetails;
     await prisma.setting.upsert({
       where: { key: 'company' },
       create: { key: 'company', value },

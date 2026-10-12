@@ -165,15 +165,18 @@ export default function PrintDocument({ params }: { params: Promise<{ id: string
           </div>
         ) : vatNotes.map((note, i) => <p key={i} className="vat-note">{note}</p>)}
 
-        {(d.kind === 'invoice' || d.kind === 'deposit_invoice') && (
+        {(d.kind === 'invoice' || d.kind === 'deposit_invoice' || d.kind === 'quote') && (
           <div className="pay">
-            <div><strong>Paiement</strong> — {co.iban ? `IBAN ${co.iban}` : 'coordonnées bancaires sur demande'}</div>
+            <div><strong>Coordonnées bancaires</strong></div>
+            <div className="bank-details">{co.bankDetails || co.iban}</div>
+            {d.kind !== 'quote' && !d.structuredComm && ref && <div>Communication : <strong>{ref}</strong></div>}
             {d.structuredComm && <div>Communication structurée : <strong>{d.structuredComm}</strong></div>}
           </div>
         )}
 
         <footer className="terms">
-          {d.terms || (d.kind === 'quote' ? co.quoteTerms : co.invoiceTerms)}
+          <strong>Conditions de paiement</strong>
+          <div>{d.terms?.trim() || (d.kind === 'quote' ? (Array.isArray(d.depositPlan) && d.depositPlan.length ? 'Selon l’échéancier d’acomptes ci-dessus.' : co.quoteTerms) : co.invoiceTerms)}</div>
         </footer>
       </div>
       {(d.kind === 'invoice' || d.kind === 'deposit_invoice' || d.kind === 'quote') && <section className="sheet general-terms">
@@ -261,7 +264,8 @@ const CSS = `
   .pay { margin-top: 18px; padding: 12px 14px; background: #e9efe9; border-radius: 10px; font-size: 11px; }
   .pay strong { color: #173f34; }
 
-  .terms { margin-top: 22px; padding-top: 10px; border-top: 1px solid #e5e7df; color: #9aa79e; font-size: 9.5px; white-space: pre-wrap; }
+  .terms { margin-top: 14px; padding: 12px 14px; border: 1px solid #d5dfd6; border-radius: 8px; color: #26372f; font-size: 11px; white-space: pre-wrap; break-inside: avoid; }
+  .bank-details { white-space: pre-wrap; overflow-wrap: anywhere; }
   .vat-note { margin: 14px 0 0; color: #788078; font-size: 9.5px; line-height: 1.5; white-space: pre-line; }
   .vat-note + .vat-note { margin-top: 8px; }
   .toolbar { max-width: 780px; margin: 12px auto 0; padding: 0 24px; text-align: right; }

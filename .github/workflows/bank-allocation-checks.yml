@@ -2,6 +2,11 @@ name: Bank allocations and supplier accounts
 on:
   pull_request:
     paths:
+      - 'apps/api/src/lib/pdf.ts'
+      - 'apps/api/src/lib/documents.ts'
+      - 'apps/api/src/routes/settings.ts'
+      - 'apps/api/test/document-payment-display.test.ts'
+      - 'apps/web/src/app/imprimer/**'
       - 'apps/api/src/lib/bank-allocation.ts'
       - 'apps/api/src/lib/bank-match.ts'
       - 'apps/api/src/lib/client-account.ts'
@@ -49,6 +54,26 @@ jobs:
         run: |
           node --import tsx --input-type=module -e "import {prisma} from './apps/api/src/db.ts'; import bcrypt from 'bcryptjs'; await prisma.user.create({data:{email:'david@jjd-consult.be',passwordHash:await bcrypt.hash('jjd',10),role:'admin',isPartner:true}}); await prisma.\$disconnect();"
       - name: Bank and contact regression tests
-        run: node --test --test-force-exit --test-concurrency=1 --import tsx apps/api/test/bank-allocation.test.ts apps/api/test/bank-match.test.ts apps/api/test/bank-suggestions-settled.test.ts apps/api/test/bank-reconcile.test.ts apps/api/test/client-account.test.ts apps/api/test/auth-profile.test.ts
+        run: node --test --test-force-exit --test-concurrency=1 --import tsx apps/api/test/bank-allocation.test.ts apps/api/test/bank-match.test.ts apps/api/test/bank-suggestions-settled.test.ts apps/api/test/bank-reconcile.test.ts apps/api/test/client-account.test.ts apps/api/test/auth-profile.test.ts apps/api/test/document-payment-display.test.ts
       - run: npm run typecheck
       - run: npm run build --workspace @jjd/web
+      - name: Render payment preview pages
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y poppler-utils
+          pdftoppm -scale-to 1400 -png tmp/payment-preview/quote.pdf tmp/payment-preview/quote
+          pdftoppm -scale-to 1400 -png tmp/payment-preview/invoice.pdf tmp/payment-preview/invoice
+      - name: Visual preview review
+        run: |
+          for name in quote invoice; do
+            pdftoppm -scale-to 1200 -jpeg tmp/payment-preview/$name.pdf tmp/payment-preview/$name
+          done
+          python3 - <<'PY'
+          import base64, pathlib
+          for p in sorted(pathlib.Path('tmp/payment-preview').glob('*.jpg')):
+              print('PAYMENT_PREVIEW_' + p.name + ':' + base64.b64encode(p.read_bytes()).decode())
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: document-payment-previews
+          path: tmp/payment-preview/

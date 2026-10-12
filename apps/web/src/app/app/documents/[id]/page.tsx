@@ -176,6 +176,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
           billingAddress: doc!.billingAddress,
           billingEmail: doc!.billingEmail,
           customerRef: doc!.customerRef,
+          poNumber: doc!.poNumber ?? null,
           paidAmount: doc!.paidAmount,
           ...(doc!.kind === 'quote' ? { depositPlan: plan } : {}),
           lines: lines.filter((l) => hasLineText(l.label)),
@@ -420,6 +421,11 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
                 <label className="field">
                   <span>Référence client / bon de commande</span>
                   <input className="input" value={doc.customerRef ?? ''} onChange={(e) => patch({ customerRef: e.target.value || null })} />
+                </label>
+                <label className="field">
+                  <span>Numéro de PO</span>
+                  <input className="input" type="text" maxLength={160} value={doc.poNumber ?? ''} onChange={(e) => patch({ poNumber: e.target.value || null })} placeholder="Ex. 456789402" />
+                  <small className="muted">Affiché sur le document comme « Référence de commande ».</small>
                 </label>
               </div>
             )}

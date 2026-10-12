@@ -643,6 +643,7 @@ model Document {
   billingAddress String?
   billingEmail   String?
   customerRef    String? // référence client / bon de commande, affichée sur le document
+  poNumber       String? // numéro de PO, affiché comme référence de commande
   structuredComm String? // communication structurée belge +++xxx/xxxx/xxxxx+++
   peppolStatus   String? // null | queued | sent | delivered | error
   peppolId       String? // identifiant du document chez le point d'accès Peppol (Recommand) une fois transmis

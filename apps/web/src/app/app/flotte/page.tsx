@@ -176,6 +176,7 @@ export default function FlottePage() {
         sub={data ? `${vehiclesAll.filter((v) => v.status === 'active').length} véhicules actifs · disponibilités, places et suivi` : undefined}
         action={
           <div className="row">
+            <Link className="btn" href="/app/flotte/suivi">Suivi GPS</Link>
             <button className="btn" onClick={() => setAssignmentModal({ prefill: { date: day } })}><CalendarPlus size={15} strokeWidth={2} /> Nouvelle affectation</button>
             <Link href="/app/flotte/pv" className="btn">PV / amendes →</Link>
             <button className="btn primary" onClick={() => setCreating(true)}>+ Nouveau véhicule</button>

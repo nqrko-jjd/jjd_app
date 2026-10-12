@@ -161,7 +161,16 @@ export default function PrintDocument({ params }: { params: Promise<{ id: string
 
         {d.kind === 'quote' ? (
           <div className="sign-row">
-            <div className="sign-box"><div>Mention « Bon pour accord »</div><div>Date et signature</div><div className="sign-date">...... / ...... / ............</div><div className="sign-space" /></div>
+            {d.eSignature ? (
+              <div className="sign-box" style={{ borderColor: '#173f34' }}>
+                <div style={{ color: '#173f34', fontWeight: 700 }}>✓ Bon pour accord — signé électroniquement</div>
+                <div style={{ marginTop: 6 }}>{d.eSignature.signerName ?? ''}</div>
+                <div>le {new Date(d.eSignature.signedAt).toLocaleDateString('fr-BE', { dateStyle: 'long' })} à {new Date(d.eSignature.signedAt).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' })}</div>
+                <div style={{ marginTop: 6, fontSize: 9, color: '#6b7280' }}>Empreinte du document signé (SHA-256) : {d.eSignature.pdfHash.slice(0, 16)}…</div>
+              </div>
+            ) : (
+              <div className="sign-box"><div>Mention « Bon pour accord »</div><div>Date et signature</div><div className="sign-date">...... / ...... / ............</div><div className="sign-space" /></div>
+            )}
             <div className="sign-notes">{vatNotes.map((note, i) => <p key={i} className="vat-note">{note}</p>)}</div>
           </div>
         ) : vatNotes.map((note, i) => <p key={i} className="vat-note">{note}</p>)}

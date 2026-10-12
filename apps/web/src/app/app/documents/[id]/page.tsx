@@ -284,6 +284,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
       </div>
 
       {msg && <div className="card card-pad" style={{ marginBottom: '1rem', borderLeft: '3px solid var(--primary)' }}>{msg}</div>}
+      {doc.eSignature && <div className="badge ok" style={{ marginBottom: '1rem', padding: '0.5rem 0.8rem' }}>✓ Signé en ligne par {doc.eSignature.signerName} le {new Date(doc.eSignature.signedAt).toLocaleString('fr-BE', { dateStyle: 'long', timeStyle: 'short' })}</div>}
       {imported && (
         <div className="card card-pad muted" style={{ marginBottom: '1rem', fontSize: '0.85rem', borderLeft: '3px solid var(--warn)' }}>
           Document importé de TrustUp (le détail des lignes n’a pas été repris à l’import — la liste ci-dessous est

@@ -329,7 +329,10 @@ documentsRouter.get(
       billing = { ...billing, plan: plan.rows } as typeof billing & { plan: unknown };
     }
     const margin = doc.kind === 'quote' ? computeMargin(doc.lines) : undefined;
-    res.json({ document: { ...doc, hasBankMatch: payments.length > 0, payments, billing, margin }, company });
+    // devis signé en ligne : nom, date et heure, empreinte du PDF signé (affichés sur le devis imprimé / en PDF)
+    const signed = doc.kind === 'quote' ? await prisma.quoteSignature.findFirst({ where: { documentId: doc.id, status: 'signed' }, orderBy: { signedAt: 'desc' } }) : null;
+    const eSignature = signed?.signedAt ? { signerName: signed.signerName, signedAt: signed.signedAt, pdfHash: signed.pdfHash } : undefined;
+    res.json({ document: { ...doc, hasBankMatch: payments.length > 0, payments, billing, margin, eSignature }, company });
   }),
 );
 

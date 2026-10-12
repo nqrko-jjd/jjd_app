@@ -8,7 +8,7 @@ const doc = (kind: string): PdfDoc => ({
   title: 'Travaux de contrôle', intro: null, terms: null,
   issuedOn: '2026-10-12', dueOn: kind === 'quote' ? null : '2026-10-22',
   validUntil: null, structuredComm: null, billingName: 'Client de test',
-  billingAddress: null, billingVat: null, billingEmail: null, customerRef: null,
+  billingAddress: null, billingVat: null, billingEmail: null, customerRef: 'DOSSIER-CLIENT', poNumber: '456789402',
   worksite: null, contact: null,
   lines: [{ kind: 'item', label: 'Travaux', description: null, unit: 'ff', qty: 1, unitPriceHt: 500, vatRate: 0.21, discountPct: 0 }],
 });
@@ -20,6 +20,8 @@ test('quotes and invoices expose both supplied bank accounts and payment terms',
     assert.ok(html.includes('Belfius BE31 0689 4940 0055'));
     assert.ok(html.includes('ING BE64 3632 5469 4152'));
     assert.ok(html.includes('Conditions de paiement'));
+    assert.ok(html.includes('Réf. client : <strong>DOSSIER-CLIENT</strong>'));
+    assert.ok(html.includes('Référence de commande : <strong>456789402</strong>'));
     if (kind === 'quote') {
       assert.ok(html.includes('50 % d’acompte'));
       assert.ok(html.includes('40 % à l’avancement'));
@@ -52,5 +54,14 @@ test('render representative payment documents in CI', { skip: !process.env.CI },
   await mkdir('tmp/payment-preview', { recursive: true });
   for (const kind of ['quote', 'invoice']) {
     await writeFile('tmp/payment-preview/' + kind + '.pdf', await renderDocumentPdf(doc(kind), resolveCompany({})));
+  }
+});
+
+test('PO reference is escaped, preserves leading zeroes and is omitted when empty', async () => {
+  const company = resolveCompany({});
+  const html = await buildHtml({ ...doc('invoice'), poNumber: '00456789402 <PO>' }, company);
+  assert.ok(html.includes('00456789402 &lt;PO&gt;'));
+  for (const poNumber of [null, undefined, '', '   ']) {
+    assert.ok(!(await buildHtml({ ...doc('invoice'), poNumber }, company)).includes('Référence de commande'));
   }
 });

@@ -418,15 +418,17 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
                   <span>Contact / e-mail de facturation</span>
                   <input className="input" type="email" value={doc.billingEmail ?? ''} onChange={(e) => patch({ billingEmail: e.target.value || null })} placeholder={doc.contact?.email ?? ''} />
                 </label>
-                <label className="field">
-                  <span>Référence client / bon de commande</span>
-                  <input className="input" value={doc.customerRef ?? ''} onChange={(e) => patch({ customerRef: e.target.value || null })} />
-                </label>
-                <label className="field">
-                  <span>Numéro de PO</span>
-                  <input className="input" type="text" maxLength={160} value={doc.poNumber ?? ''} onChange={(e) => patch({ poNumber: e.target.value || null })} placeholder="Ex. 456789402" />
-                  <small className="muted">Affiché sur le document comme « Référence de commande ».</small>
-                </label>
+                <div className="grid" style={{ gridColumn: '1 / -1', gridTemplateColumns: 'repeat(auto-fit, minmax(min(220px, 100%), 1fr))' }}>
+                  <label className="field">
+                    <span>Référence client / bon de commande</span>
+                    <input className="input" value={doc.customerRef ?? ''} onChange={(e) => patch({ customerRef: e.target.value || null })} />
+                  </label>
+                  <label className="field">
+                    <span>Numéro de PO</span>
+                    <input className="input" type="text" maxLength={160} value={doc.poNumber ?? ''} onChange={(e) => patch({ poNumber: e.target.value || null })} placeholder="Ex. 456789402" />
+                    <small className="muted">Affiché sur le document comme « Référence de commande ».</small>
+                  </label>
+                </div>
               </div>
             )}
           </div>

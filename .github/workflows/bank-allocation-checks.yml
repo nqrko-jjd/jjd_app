@@ -63,6 +63,16 @@ jobs:
           sudo apt-get install -y poppler-utils
           pdftoppm -scale-to 1400 -png tmp/payment-preview/quote.pdf tmp/payment-preview/quote
           pdftoppm -scale-to 1400 -png tmp/payment-preview/invoice.pdf tmp/payment-preview/invoice
+      - name: Visual preview review
+        run: |
+          for name in quote invoice; do
+            pdftoppm -scale-to 1200 -jpeg tmp/payment-preview/$name.pdf tmp/payment-preview/$name
+          done
+          python3 - <<'PY'
+          import base64, pathlib
+          for p in sorted(pathlib.Path('tmp/payment-preview').glob('*.jpg')):
+              print('PAYMENT_PREVIEW_' + p.name + ':' + base64.b64encode(p.read_bytes()).decode())
+          PY
       - uses: actions/upload-artifact@v4
         with:
           name: document-payment-previews

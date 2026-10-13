@@ -501,6 +501,44 @@ worksitesRouter.post(
   }),
 );
 
+/** Nouveau dossier indépendant : seuls le lieu et les contacts sont repris. */
+worksitesRouter.post(
+  '/:id/duplicate',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const { title } = worksiteInput.pick({ title: true }).parse(req.body);
+    const src = await prisma.worksite.findUnique({ where: { id: req.params.id }, include: { contacts: { orderBy: { position: 'asc' } } } });
+    if (!src || src.kind !== 'project') throw new HttpError(404, 'Chantier introuvable');
+    const ref = await nextWorksiteRef();
+    const ws = await prisma.$transaction(async (tx) => {
+      const copy = await tx.worksite.create({
+        data: {
+          ref, title, entity: src.entity, status: 'to_plan', priority: 'normal', source: 'manual',
+          clientId: src.clientId, acpId: src.acpId, billToContactId: src.billToContactId,
+          billTo: src.billTo, billToAttn: src.billToAttn, billToEmail: src.billToEmail,
+          address: src.address, box: src.box, postalCode: src.postalCode, city: src.city,
+          unitLabel: src.unitLabel, accessNotes: src.accessNotes,
+          ownerName: src.ownerName, ownerPhone: src.ownerPhone, ownerEmail: src.ownerEmail,
+          tenantName: src.tenantName, tenantPhone: src.tenantPhone, tenantPhone2: src.tenantPhone2, tenantEmail: src.tenantEmail,
+          contacts: { create: src.contacts.map((contact) => ({
+            contactId: contact.contactId, role: contact.role, name: contact.name,
+            phone: contact.phone, email: contact.email, contactFor: contact.contactFor,
+            unitLabel: contact.unitLabel, position: contact.position,
+          })) },
+        },
+      });
+      await tx.auditLog.create({ data: {
+        actorId: req.user!.id, action: 'duplicate', entity: 'worksite', entityId: copy.id,
+        meta: { sourceId: src.id, sourceRef: src.ref, newRef: copy.ref },
+      } });
+      return copy;
+    });
+    void pushBricoloc(ws.id);
+    void autoGeocodeWorksite(ws.id, { force: true });
+    res.status(201).json({ worksite: ws });
+  }),
+);
+
 /** Point GPS de référence du chantier (pour le contrôle de pointage). */
 worksitesRouter.patch(
   '/:id/geo',

@@ -16,7 +16,7 @@ before(async () => {
   base = `http://127.0.0.1:${typeof address === 'object' && address ? address.port : 0}`;
   token = (await (await fetch(base + '/api/auth/login', { method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify({email:'david@jjd-consult.be',password:'jjd'}) })).json()).token;
   assert.ok(token);
-  contactId = (await prisma.contact.create({ data: { name: 'Duplication test', type: 'client' } })).id;
+  contactId = (await prisma.contact.create({ data: { name: 'Duplication test', normalizedName: 'duplication test', type: 'client' } })).id;
   const src = await prisma.worksite.create({ data: {
     ref: 'R-DUPLICATE-TEST', title: 'Ancien chantier', entity: 'jjd', status: 'closed', archived: true,
     clientId: contactId, billToContactId: contactId, address: 'Rue du Test 1', box: '4',

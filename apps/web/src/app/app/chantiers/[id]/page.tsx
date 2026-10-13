@@ -80,6 +80,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
   }>('/api/meta/pickers');
   const [editingContacts, setEditingContacts] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [duplicating, setDuplicating] = useState(false);
   const [invoicing, setInvoicing] = useState<string | null>(null);
   const [tab, setTab] = useState<'overview' | 'planning' | 'tasks' | 'finances' | 'photos' | 'files' | 'mails' | 'discussion'>('overview');
   // nombre de documents (pastille de l'onglet « Documents »)
@@ -156,6 +157,19 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
   return (
     <>
       {editingContacts && <ContactsDialog title="Personnes de contact du chantier" initial={w.contacts} onClose={() => setEditingContacts(false)} onSave={async contacts => { await api(`/api/worksites/${id}`, { method: 'PATCH', body: { contacts } }); reload(); }}/>}
+      {duplicating && (
+        <FormModal
+          title={`Dupliquer ${w.ref} — nouveau chantier`}
+          fields={[{ name: 'title', label: 'Objet du nouveau chantier', required: true, full: true }]}
+          initial={{ title: w.title }}
+          onClose={() => setDuplicating(false)}
+          onSubmit={async (values) => {
+            const result = await api<{ worksite: { id: string } }>(`/api/worksites/${id}/duplicate`, { method: 'POST', body: { title: values.title } });
+            setDuplicating(false);
+            router.push(`/app/chantiers/${result.worksite.id}`);
+          }}
+        />
+      )}
       {editing && (
         <FormModal
           title={`Modifier ${w.ref}`}
@@ -183,6 +197,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
               Résumé facturation →
             </a>
           )}
+          {canSeeMails && <button className="btn" onClick={() => setDuplicating(true)}>Dupliquer le chantier</button>}
           <button className="btn" onClick={() => setEditing(true)}>{tr("Modifier")}</button>
         </div>
       </div>

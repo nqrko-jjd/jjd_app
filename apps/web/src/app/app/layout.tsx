@@ -1,4 +1,5 @@
 'use client';
+import '../backoffice-ux.css';
 import { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Shell } from '@/components/Shell';

@@ -19,8 +19,7 @@ async function run() {
   }
   console.log('\n— Factures rattachées —');
   for (const l of plan.links) console.log(`${l.invoiceNumber ?? '(brouillon)'}  → ${l.quoteNumber}  ${eur(l.netHt)}`);
-  if (plan.review.length) { console.log('
-— À vérifier (NON rattachées : devis dépassé ou total nul/négatif) —'); for (const r of plan.review) console.log(`${r.quoteNumber}  devis ${eur(r.totalHt)}  factures ${eur(r.addedHt)} (${r.afterPct} %)  ${r.invoices.join(', ')}`); }
+  if (plan.review.length) { console.log('\n— À vérifier (NON rattachées : devis dépassé ou total nul/négatif) —'); for (const r of plan.review) console.log(`${r.quoteNumber}  devis ${eur(r.totalHt)}  factures ${eur(r.addedHt)} (${r.afterPct} %)  ${r.invoices.join(', ')}`); }
   if (plan.ambiguous.length) { console.log('\n— À rattacher à la main (plusieurs devis cités ou chantier différent) —'); for (const a of plan.ambiguous) console.log(`${a.invoiceNumber ?? '(brouillon)'}  ${a.quotes.join(' / ')}  « ${a.title} »`); }
   if (plan.unknownQuote.length) { console.log('\n— Devis cité introuvable dans l’appli —'); for (const a of plan.unknownQuote) console.log(`${a.invoiceNumber ?? '(brouillon)'}  ${a.quote}  « ${a.title} »`); }
   if (!APPLY || !plan.links.length) { await prisma.$disconnect(); return; }

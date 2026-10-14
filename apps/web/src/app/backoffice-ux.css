@@ -79,3 +79,9 @@
 @media (prefers-reduced-motion: reduce) {
   .ux-shell *, .ux-shell *::before, .ux-shell *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+.ux-shell button.navlink { background: transparent; border: 0; width: 100%; text-align: left; font-family: inherit; }
+.ux-shell button.navlink:hover { background: var(--nav-active-bg); }
+.ux-shell .topbar .btn.ghost { background: transparent; border-color: var(--nav-line); min-width: 44px; min-height: 44px; }
+.ux-shell .burger { width: 44px; height: 44px; flex-shrink: 0; }
+@media(min-width:1200px) { .ux-shell .kpis { grid-template-columns: repeat(auto-fit,minmax(190px,1fr)); } }

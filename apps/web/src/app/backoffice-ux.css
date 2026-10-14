@@ -54,6 +54,8 @@
   body.nav-collapsed .ux-shell .foot .navlink { justify-content: center; }
 }
 @media (max-width: 900px) {
+  .ux-shell .sidebar:not(.open) { visibility: hidden; }
+  .ux-shell .sidebar.open { visibility: visible; }
   .ux-shell .sidebar { width: min(320px, calc(100vw - 32px)); padding-top: 54px; }
   body.nav-collapsed .ux-shell .sidebar { width: min(320px, calc(100vw - 32px)); padding: 54px 10px 12px; }
   .ux-shell .nav-group-toggle, .ux-shell .navlink { min-height: 44px; }

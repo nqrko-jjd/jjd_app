@@ -29,6 +29,7 @@ export default function SuiviGps() {
   const [devices, setDevices] = useState<Device[] | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [focus, setFocus] = useState<string | null>(null);
 
   // la carte se met à jour toute seule (positions relues par le serveur toutes les 2 minutes)
   useEffect(() => {
@@ -68,11 +69,25 @@ export default function SuiviGps() {
       </div>
 
       {tab === 'map' && (
-        <div style={{ display: 'grid', gap: '0.6rem' }}>
-          <FleetMap vehicles={mapVehicles} sites={mapSites} />
-          <p className="muted" style={{ margin: 0, fontSize: '0.84rem' }}>
-            {mapVehicles.length === 0 ? 'Aucune position pour le moment : reliez les véhicules à leur traceur dans l’onglet « Véhicules ».' : `${mapVehicles.length} véhicule(s) suivi(s) en vert (gris = position de plus de 30 minutes) · chantiers du jour avec véhicule affecté en or · mise à jour automatique.`}
-          </p>
+        <div className="fleet-map-layout">
+          <FleetMap vehicles={mapVehicles} sites={mapSites} focusId={focus} />
+          <div className="fm-list">
+            {mapVehicles.length === 0 && <p className="muted" style={{ margin: 0, fontSize: '0.88rem' }}>Aucune position pour le moment : reliez les véhicules à leur traceur dans l’onglet « Véhicules ».</p>}
+            {mapVehicles.map((v) => (
+              <button key={v.id} type="button" className={`fm-card${v.stale ? ' stale' : ''}${focus === v.id ? ' on' : ''}`} onClick={() => setFocus(v.id)}>
+                <span className="fm-state" />
+                <span><strong>{v.label}</strong><small>{v.speed != null && v.speed > 2 ? `${Math.round(v.speed)} km/h · ` : 'à l’arrêt · '}{v.seenAgo}</small></span>
+              </button>
+            ))}
+            {mapSites.length > 0 && <div className="eyebrow" style={{ marginTop: '0.4rem' }}>Chantiers du jour</div>}
+            {mapSites.map((x) => (
+              <button key={x.id} type="button" className={`fm-card${focus === x.id ? ' on' : ''}`} onClick={() => setFocus(x.id)}>
+                <span className="fm-state" style={{ background: 'var(--gold)' }} />
+                <span><strong>{x.label.split(' · ')[0]}</strong><small>{x.label.split(' · ').slice(1).join(' · ')}</small></span>
+              </button>
+            ))}
+            <p className="muted" style={{ margin: '0.2rem 0 0', fontSize: '0.78rem' }}>Mise à jour automatique · gris = position de plus de 30 minutes.</p>
+          </div>
         </div>
       )}
 

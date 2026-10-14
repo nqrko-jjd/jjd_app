@@ -67,18 +67,32 @@ function toResource(e: EventInput) {
   };
 }
 
+/**
+ * Les fiches importées de Google Agenda sont enregistrées sous leur UID iCal (« abc123@google.com »), pas sous leur identifiant d'API (« abc123 ») :
+ * la mise à jour échouait en silence (couleur, titre, description jamais poussés). On retrouve l'identifiant d'API : suffixe @google.com retiré,
+ * sinon recherche par UID.
+ */
+export async function resolveApiEventId(cal: { events: { list: (p: { calendarId: string; iCalUID: string; maxResults: number }) => Promise<{ data: { items?: { id?: string | null }[] } }> } }, stored: string, calendarId: string): Promise<string> {
+  if (!stored.includes('@')) return stored;
+  if (/@google\.com$/.test(stored)) return stored.replace(/@google\.com$/, '');
+  try {
+    const r = await cal.events.list({ calendarId, iCalUID: stored, maxResults: 1 });
+    return r.data.items?.[0]?.id ?? stored;
+  } catch { return stored; }
+}
+
 /** Crée ou met à jour ; renvoie l'id Google de l'événement (ou null si off). */
 export async function upsertEvent(googleEventId: string | null, e: EventInput): Promise<string | null> {
   const cal = client();
   if (!cal) return null;
   try {
     if (googleEventId) {
-      const r = await cal.events.update({
+      await cal.events.update({
         calendarId: env.google.calendarId,
-        eventId: googleEventId,
+        eventId: await resolveApiEventId(cal, googleEventId, env.google.calendarId),
         requestBody: toResource(e),
       });
-      return r.data.id ?? googleEventId;
+      return googleEventId; // on garde l'identifiant enregistré (l'import retrouve ses fiches par UID)
     }
     const r = await cal.events.insert({
       calendarId: env.google.calendarId,
@@ -96,7 +110,7 @@ export async function deleteEvent(googleEventId: string): Promise<void> {
   const cal = client();
   if (!cal) return;
   try {
-    await cal.events.delete({ calendarId: env.google.calendarId, eventId: googleEventId });
+    await cal.events.delete({ calendarId: env.google.calendarId, eventId: await resolveApiEventId(cal, googleEventId, env.google.calendarId) });
   } catch {
     /* déjà supprimé */
   }

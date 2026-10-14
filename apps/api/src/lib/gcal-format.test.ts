@@ -89,3 +89,13 @@ test('une seule fiche par chantier et par jour : créneaux fusionnés, détail A
   const same = composeGcalGroup([journee, { ...journee, assignments: [person('Coco')] }]);
   assert.match(same.description, /👥 Ouvriers :\n– Eduardo et Patrick\n– Coco$/m);
 });
+
+test('fiche importée de Google : l’UID « …@google.com » devient l’identifiant d’API (sinon la mise à jour échoue en silence)', async () => {
+  const { resolveApiEventId } = await import('./gcal.js');
+  const never = { events: { list: async () => { throw new Error('ne doit pas être appelé'); } } };
+  assert.equal(await resolveApiEventId(never, '7vtjt7mun61sveeb4irgpqnvaa@google.com', 'cal'), '7vtjt7mun61sveeb4irgpqnvaa');
+  assert.equal(await resolveApiEventId(never, 'abc123def', 'cal'), 'abc123def');
+  const byUid = { events: { list: async (p: { iCalUID: string }) => ({ data: { items: p.iCalUID === 'xyz@outlook.com' ? [{ id: 'real1' }] : [] } }) } };
+  assert.equal(await resolveApiEventId(byUid, 'xyz@outlook.com', 'cal'), 'real1');
+  assert.equal(await resolveApiEventId(byUid, 'inconnu@outlook.com', 'cal'), 'inconnu@outlook.com');
+});

@@ -115,7 +115,7 @@ export function PageHead({ eyebrow, title, sub, action }: { eyebrow?: string; ti
         <h1>{tr(title)}</h1>
         {sub && <div className="sub">{tr(sub)}</div>}
       </div>
-      {action}
+      {action && <div className="page-actions">{action}</div>}
     </div>
   );
 }

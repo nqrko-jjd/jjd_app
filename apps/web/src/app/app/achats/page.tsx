@@ -322,13 +322,16 @@ function AchatsInner() {
                 📦 Exporter {selected.size} pièce{selected.size > 1 ? 's' : ''} jointe{selected.size > 1 ? 's' : ''} (zip)
               </button>
             )}
+            <details className="page-tools" onKeyDown={event => { if (event.key === 'Escape') { event.currentTarget.open = false; event.currentTarget.querySelector('summary')?.focus(); } }}>
+              <summary className="btn">{tr('Imports & outils')} <span aria-hidden="true">⌄</span></summary>
+              <div className="page-tools-panel">
             {mailbox?.configured && (
               <button className="btn" disabled={syncingMailbox} onClick={syncMailbox} title="Vérifie la boîte mail factures et importe les nouveaux PDF reçus">
-                {syncingMailbox ? 'Synchronisation…' : '✉️ Synchroniser la boîte mail'}
+                {syncingMailbox ? 'Synchronisation…' : 'Synchroniser la boîte mail'}
               </button>
             )}
             <button className="btn" disabled={reprocessing} onClick={reprocessMailbox} title="Relit les factures boîte mail déjà importées dont le montant, le n° ou le fournisseur n'avaient pas été trouvés">
-              {reprocessing ? 'Retraitement…' : '🔄 Retraiter les imports mail'}
+              {reprocessing ? 'Retraitement…' : 'Retraiter les imports mail'}
             </button>
             {mailbox?.configured && (
               <button
@@ -337,7 +340,7 @@ function AchatsInner() {
                 onClick={scanProcessedMailbox}
                 title="Un mail avec plusieurs pièces jointes (facture + conditions générales…) pouvait être classé « traité » sans que la facture soit importée — recherche celles qui manquent dans ce dossier"
               >
-                {scanningProcessed ? 'Recherche…' : '🗂️ Retrouver des factures manquées'}
+                {scanningProcessed ? 'Recherche…' : 'Retrouver des factures manquées'}
               </button>
             )}
             <button
@@ -346,15 +349,17 @@ function AchatsInner() {
               onClick={scanPurchaseRefs}
               title="Recherche dans les PDF déjà reçus les références produit déjà enregistrées sur vos articles de stock — alimente l'historique d'achat de chaque article"
             >
-              {scanningRefs ? 'Recherche…' : '🔎 Détecter les réf. produits'}
+              {scanningRefs ? 'Recherche…' : 'Détecter les réf. produits'}
             </button>
             <button
               className="btn"
               onClick={() => setShowCandidates(true)}
               title="Repère les articles qui reviennent souvent sur vos factures mais n'ont pas encore de fiche stock"
             >
-              📈 Articles récurrents non suivis
+              Articles récurrents non suivis
             </button>
+              </div>
+            </details>
             <button className="btn primary" onClick={() => setEdit('new')}>+ Nouvelle dépense</button>
           </div>
         }
@@ -402,7 +407,7 @@ function AchatsInner() {
         </div>
       </div>
 
-      <div className="row" style={{ marginBottom: '1rem', flexWrap: 'wrap', gap: '0.4rem' }}>
+      <div className="row list-filters" style={{ marginBottom: '1rem', flexWrap: 'wrap', gap: '0.4rem' }}>
         <input className="input" style={{ maxWidth: 240 }} placeholder="Fournisseur, n°, notes…" value={q} onChange={(e) => setQ(e.target.value)} />
         <select className="select" style={{ maxWidth: 150 }} value={paid} onChange={(e) => setPaid(e.target.value)}>
           <option value="">Payé & non payé</option>

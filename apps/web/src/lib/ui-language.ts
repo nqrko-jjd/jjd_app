@@ -13,6 +13,15 @@ const patterns = Object.entries(TPL).map(([key, values]) => ({
   slots: [...key.matchAll(/\{(\d+)\}/g)].map(m => Number(m[1])), values,
 }));
 const extra: Record<string, [string, string]> = {
+  'Au quotidien': ['Everyday', 'Dia a dia'],
+  'Chantiers & clients': ['Sites & contacts', 'Obras e contatos'],
+  'Équipe & temps': ['Team & time', 'Equipe e horas'],
+  'Matériel & logistique': ['Equipment & logistics', 'Materiais e logística'],
+  'Aller au contenu': ['Skip to content', 'Ir para o conteúdo'],
+  'Aucune page trouvée.': ['No pages found.', 'Nenhuma página encontrada.'],
+  'Imports & outils': ['Imports & tools', 'Importações e ferramentas'],
+  'Nombre de lignes par page': ['Rows per page', 'Linhas por página'],
+
   'Prénom': ['First name', 'Nome'],
   'Enregistrez vos informations avant de changer de langue.': ['Save your information before changing language.', 'Salve suas informações antes de mudar o idioma.'],
   'Nom': ['Last name', 'Sobrenome'],

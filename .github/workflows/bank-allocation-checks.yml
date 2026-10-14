@@ -38,6 +38,10 @@ on:
       - 'apps/web/src/components/Shell.tsx'
       - 'apps/web/src/app/app/page.tsx'
       - 'apps/web/src/app/globals.css'
+      - 'apps/web/src/app/backoffice-ux.css'
+      - 'apps/web/src/lib/ui.tsx'
+      - 'apps/web/src/components/PaginationBar.tsx'
+      - 'scripts/check-backoffice-ux.mts'
       - '.github/workflows/bank-allocation-checks.yml'
 permissions:
   contents: read
@@ -66,6 +70,16 @@ jobs:
         run: node --test --test-force-exit --test-concurrency=1 --import tsx apps/api/test/bank-allocation.test.ts apps/api/test/bank-match.test.ts apps/api/test/bank-suggestions-settled.test.ts apps/api/test/bank-reconcile.test.ts apps/api/test/client-account.test.ts apps/api/test/auth-profile.test.ts apps/api/test/document-payment-display.test.ts apps/api/test/document-po.test.ts apps/api/test/worksite-duplicate.test.ts
       - run: npm run typecheck
       - run: npm run build --workspace @jjd/web
+      - name: Check backoffice navigation and responsive pages
+        run: |
+          npm run start --workspace @jjd/web > /tmp/jjd-web.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:3100/login > /dev/null && break; sleep 2; done
+          node --import tsx scripts/check-backoffice-ux.mts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backoffice-ux-previews
+          path: tmp/ux-preview/
       - name: Render payment preview pages
         run: |
           sudo apt-get update -qq

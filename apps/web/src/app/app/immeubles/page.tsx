@@ -47,7 +47,7 @@ export default function ImmeublesPage() {
         sub={data ? `${data.items.length} dossiers` : undefined}
         action={<button className="btn primary" onClick={() => setCreating(true)}>+ Nouvel immeuble</button>}
       />
-      <div className="row" style={{ marginBottom: '1rem' }}>
+      <div className="row list-filters" style={{ marginBottom: '1rem' }}>
         <input className="input" style={{ maxWidth: 300 }} placeholder="Nom, ville…" value={q} onChange={(e) => setQ(e.target.value)} />
         <ViewToggle mode={mode} onChange={setMode} />
       </div>

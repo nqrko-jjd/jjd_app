@@ -1,4 +1,5 @@
 'use client';
+import { tr } from '@/lib/ui-language';
 
 /** Taille de page conventionnellement utilisée pour « Tout afficher » (au-delà des volumes
  *  réels de l'appli — sert surtout à vérifier qu'une liste complète est bien là, ex. tous les R-). */
@@ -26,7 +27,7 @@ export function PaginationBar({
   inCard?: boolean;
 }) {
   return (
-    <div className={`row${inCard ? ' pager-in-card' : ''}`} style={inCard ? { gap: '0.5rem', alignItems: 'center' } : { marginTop: '0.8rem', gap: '0.5rem', alignItems: 'center' }}>
+    <div className={`row pagination-bar${inCard ? ' pager-in-card' : ''}`} style={inCard ? { gap: '0.5rem', alignItems: 'center' } : { marginTop: '0.8rem', gap: '0.5rem', alignItems: 'center' }}>
       {totalPages > 1 && (
         <>
           <button className="btn" disabled={page <= 1} onClick={() => onPage(page - 1)}>← Précédent</button>
@@ -35,6 +36,7 @@ export function PaginationBar({
         </>
       )}
       <select
+        aria-label={tr("Nombre de lignes par page")}
         className="select"
         style={{ maxWidth: 160, marginLeft: 'auto' }}
         value={pageSize}

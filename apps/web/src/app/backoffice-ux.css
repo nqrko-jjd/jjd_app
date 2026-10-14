@@ -1,0 +1,87 @@
+/* Shared backoffice ergonomics; deliberately scoped away from public/print pages. */
+.ux-shell .sidebar { padding: 12px 10px; gap: 2px; scrollbar-width: thin; }
+.ux-shell .org-card { margin: 0 2px 12px; padding: 8px; min-height: 54px; }
+.ux-shell .nav-search { margin-bottom: 8px; }
+.ux-shell .nav-group { flex-shrink: 0; }
+.ux-shell .nav-group-toggle { gap: 9px; padding: 8px; min-height: 40px; text-transform: none; letter-spacing: 0; font-size: 12px; font-weight: 600; border-radius: 8px; }
+.ux-shell .nav-group-toggle:hover { background: var(--nav-active-bg); }
+.ux-shell .nav-group-toggle .nav-group-icon { transform: none; flex-shrink: 0; opacity: .85; }
+.ux-shell .nav-group-label { flex: 1; text-align: left; }
+.ux-shell .nav-group-toggle > svg:last-child { flex-shrink: 0; }
+.ux-shell .nav-group.current > .nav-group-toggle { color: var(--nav-fg-active); }
+.ux-shell .navlink { min-height: 38px; padding: 8px 10px; font-size: 13px; line-height: 1.45; }
+.ux-shell .nav-group > div { margin: 2px 0 6px 8px; padding-left: 6px; border-left: 1px solid var(--nav-line); }
+.ux-shell .nav-group > div[hidden] { display: none; }
+.ux-shell .sidebar .foot { padding: 8px 2px 0; }
+.ux-shell .foot .who { padding: 4px 10px; font-size: 11px; font-weight: 400; }
+.ux-shell .nav-collapse { min-height: 36px; margin: 6px 0; }
+.ux-shell .main { min-width: 0; }
+.ux-shell .page-head { align-items: flex-start; gap: 16px 24px; margin-bottom: 22px; }
+.ux-shell .page-head > div:first-child { min-width: 0; flex: 1 1 260px; }
+.ux-shell .page-head h1 { font-size: clamp(25px, 2.1vw, 32px); line-height: 1.25; overflow-wrap: anywhere; }
+.ux-shell .page-head .sub { font-size: 13px; line-height: 1.6; max-width: 75ch; }
+.ux-shell .page-actions, .ux-shell .page-actions > .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ux-shell .page-actions { justify-content: flex-end; max-width: 100%; }
+.ux-shell .page-actions .btn { white-space: normal; text-align: center; }
+.ux-shell .filter-bar, .ux-shell .list-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; margin-bottom: 16px; min-width: 0; }
+.ux-shell .list-filters > .seg { flex-basis: 100%; }
+.ux-shell .list-filters > .input { flex: 1 1 200px; }
+.ux-shell .list-filters > .select { flex: 0 1 190px; }
+.ux-shell .tbl-wrap { max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; }
+.ux-shell .tbl th { padding-top: 12px; padding-bottom: 12px; }
+.ux-shell .tbl td { padding-top: 13px; padding-bottom: 13px; }
+.ux-shell .card, .ux-shell .kpi, .ux-shell .gallery-card { box-shadow: var(--shadow-sm); }
+.ux-shell .page-tabs { gap: 6px; max-width: 100%; overflow-x: auto; flex-wrap: nowrap; scrollbar-width: thin; padding-bottom: 4px; }
+.ux-shell .page-tab { flex-shrink: 0; min-height: 44px; padding: 10px 14px; }
+.ux-shell :is(a,button,input,select,textarea,summary):focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+.ux-shell .pagination-bar { flex-wrap: wrap; gap: 8px; }
+.ux-shell .page-tools { position: relative; }
+.ux-shell .page-tools > summary { list-style: none; cursor: pointer; }
+.ux-shell .page-tools > summary::-webkit-details-marker { display: none; }
+.ux-shell .page-tools-panel { position: absolute; z-index: 45; top: calc(100% + 8px); right: 0; display: grid; gap: 4px; padding: 8px; width: min(320px, calc(100vw - 48px)); background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow-lg); }
+.ux-shell .page-tools-panel .btn { justify-content: flex-start; text-align: left; width: 100%; background: transparent; border-color: transparent; }
+.ux-shell .page-tools-panel .btn:hover { background: var(--surface-2); }
+.skip-content { position: fixed; top: 8px; left: 50%; transform: translate(-50%, -200%); z-index: 9999; padding: 12px 18px; background: var(--surface); color: var(--ink); border-radius: 8px; }
+.skip-content:focus { transform: translate(-50%, 0); }
+@media (min-width: 901px) {
+  body.nav-collapsed .ux-shell .sidebar { align-items: stretch; }
+  body.nav-collapsed .ux-shell .nav-group-toggle { display: flex; justify-content: center; min-height: 44px; padding: 10px; }
+  body.nav-collapsed .ux-shell .nav-group-label,
+  body.nav-collapsed .ux-shell .nav-group-toggle > svg:last-child,
+  body.nav-collapsed .ux-shell .nav-group-toggle > .nav-badge,
+  body.nav-collapsed .ux-shell .nav-group > div { display: none; }
+  body.nav-collapsed .ux-shell .nav-group.current > .nav-group-toggle { background: var(--nav-active-pill-bg); color: var(--nav-active-pill-fg); }
+  body.nav-collapsed .ux-shell .foot .navlink { justify-content: center; }
+}
+@media (max-width: 900px) {
+  .ux-shell .sidebar:not(.open) { visibility: hidden; }
+  .ux-shell .sidebar.open { visibility: visible; }
+  .ux-shell .sidebar { width: min(320px, calc(100vw - 32px)); padding-top: 54px; }
+  body.nav-collapsed .ux-shell .sidebar { width: min(320px, calc(100vw - 32px)); padding: 54px 10px 12px; }
+  .ux-shell .nav-group-toggle, .ux-shell .navlink { min-height: 44px; }
+  .ux-shell .page-actions { justify-content: flex-start; width: 100%; }
+  .ux-shell .page-head > div:first-child { flex-basis: auto; }
+}
+@media (max-width: 600px) {
+  .ux-shell .page-head h1 { font-size: 26px; }
+  .ux-shell .page-actions > .row { width: 100%; }
+  .ux-shell .page-actions .btn { width: auto; min-height: 44px; flex: 1 1 auto; }
+  .ux-shell .page-actions > .row > .btn.primary { flex-basis: 100%; order: -1; }
+  .ux-shell .page-tools { flex: 1 1 auto; }
+  .ux-shell .page-tools > summary { width: 100%; }
+  .ux-shell .page-tools-panel { left: 0; right: auto; }
+  .ux-shell .list-filters > :is(.input,.select) { flex: 1 1 140px; min-width: 0; max-width: 100% !important; margin-left: 0 !important; }
+  .ux-shell :is(.input,.select) { font-size: 16px; }
+  .ux-shell :is(.btn,.btn.small,.seg button,.msg-filter-chips button) { min-height: 44px; }
+  .ux-shell .pagination-bar .select { min-height: 44px; }
+  .ux-shell .page-tabs { margin-block: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ux-shell *, .ux-shell *::before, .ux-shell *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+
+.ux-shell button.navlink { background: transparent; border: 0; width: 100%; text-align: left; font-family: inherit; }
+.ux-shell button.navlink:hover { background: var(--nav-active-bg); }
+.ux-shell .topbar .btn.ghost { background: transparent; border-color: var(--nav-line); min-width: 44px; min-height: 44px; }
+.ux-shell .burger { width: 44px; height: 44px; flex-shrink: 0; }
+@media(min-width:1200px) { .ux-shell .kpis { grid-template-columns: repeat(auto-fit,minmax(190px,1fr)); } }

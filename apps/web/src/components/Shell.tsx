@@ -1,6 +1,6 @@
 'use client';
 import { tr } from '@/lib/ui-language';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -118,6 +118,7 @@ export function Shell({ children, navigationPaths }: { children: React.ReactNode
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const [open, setOpen] = useState(false);
+  const navigationRef = useRef<HTMLElement>(null);
   const [navQuery, setNavQuery] = useState('');
   const [companionOpen, setCompanionOpen] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
@@ -133,9 +134,24 @@ export function Shell({ children, navigationPaths }: { children: React.ReactNode
   }, [collapsed]);
   useEffect(() => {
     if (!open) return;
-    const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setOpen(false); };
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    navigationRef.current?.querySelector<HTMLButtonElement>('.nav-close')?.focus();
+    const close = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+      if (event.key !== 'Tab') return;
+      const focusable = Array.from(navigationRef.current?.querySelectorAll<HTMLElement>('a[href],button:not([disabled]),input:not([disabled])') ?? []).filter(el => el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden');
+      const first = focusable[0], last = focusable.at(-1);
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    };
     document.addEventListener('keydown', close);
-    return () => document.removeEventListener('keydown', close);
+    return () => {
+      document.removeEventListener('keydown', close);
+      document.body.style.overflow = previousOverflow;
+      previousFocus?.focus();
+    };
   }, [open]);
   const bureau = user?.role === 'admin' || user?.role === 'office';
   const { data: assistant } = useApi<{ enabled: boolean; previewAllowed: boolean }>(user ? '/api/assistant/status' : null);
@@ -178,7 +194,7 @@ export function Shell({ children, navigationPaths }: { children: React.ReactNode
       </header>
 
       {open && <div className="scrim" onClick={() => setOpen(false)} />}
-      <nav id="app-navigation" aria-label="Navigation principale" className={`sidebar${open ? ' open' : ''}`}>
+      <nav ref={navigationRef} id="app-navigation" aria-label="Navigation principale" className={`sidebar${open ? ' open' : ''}`}>
         <button className="nav-close" aria-label="Fermer le menu" onClick={() => setOpen(false)}><X size={20} /></button>
         <Link className="org-card" href={bureau ? '/app/parametres' : '/app'} onClick={() => setOpen(false)} aria-label={bureau ? 'Ouvrir la fiche société JJD Consult SRL' : 'Revenir à l’accueil JJD Consult'}>
           <span className="mark"><img src="/brand/icon-white.png" alt="" /></span>

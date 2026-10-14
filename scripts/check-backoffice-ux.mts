@@ -54,6 +54,7 @@ try {
   await page.keyboard.press('Escape');
   assert.equal(await page.$eval('.page-tools',el=>el.open),false);
   await page.click('.burger');
+  await page.waitForFunction(()=>Math.abs(document.querySelector('.sidebar').getBoundingClientRect().left)<1);
   const launcher = await page.$('button[aria-controls="jjd-companion"]');
   if (launcher) {
     assert.equal(await page.$('#jjd-companion'), null);

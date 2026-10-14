@@ -11,7 +11,8 @@ import {
 import { useAuth } from '@/lib/auth';
 import { useApi } from '@/lib/use-api';
 import { loginLabel } from '@jjd/shared';
-import { CompanionLauncher } from './CompanionLauncher';
+import dynamic from 'next/dynamic';
+const CompanionLauncher = dynamic(() => import('./CompanionLauncher').then(module => module.CompanionLauncher), { ssr: false });
 
 type Item = { href: string; label: string; ic: LucideIcon; roles?: string[]; ext?: boolean; noBottomTab?: boolean };
 type Group = { title: string; ic?: LucideIcon; items: Item[] };
@@ -121,6 +122,7 @@ export function Shell({ children, navigationPaths }: { children: React.ReactNode
   const navigationRef = useRef<HTMLElement>(null);
   const [navQuery, setNavQuery] = useState('');
   const [companionOpen, setCompanionOpen] = useState(false);
+  const [companionLoaded, setCompanionLoaded] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -261,7 +263,7 @@ export function Shell({ children, navigationPaths }: { children: React.ReactNode
             aria-expanded={companionOpen}
             aria-controls="jjd-companion"
             title={collapsed ? 'Compagnon IA' : undefined}
-            onClick={() => { setOpen(false); setCompanionOpen((v) => !v); }}
+            onClick={() => { setOpen(false); setCompanionLoaded(true); setCompanionOpen((v) => !v); }}
           >
             <span className="ic"><Sparkles size={16} strokeWidth={2} /></span>
             <span className="lbl">Compagnon IA</span>
@@ -313,7 +315,7 @@ export function Shell({ children, navigationPaths }: { children: React.ReactNode
       </nav>}
 
       {/* Le Compagnon IA s'ouvre depuis le menu latéral (plus de bulle flottante : elle bloquait des boutons) */}
-      {assistant?.previewAllowed && pathname !== '/app/messagerie' && <CompanionLauncher open={companionOpen} onClose={() => setCompanionOpen(false)} />}
+      {companionLoaded && assistant?.previewAllowed && pathname !== '/app/messagerie' && <CompanionLauncher open={companionOpen} onClose={() => setCompanionOpen(false)} />}
     </div>
   );
 }

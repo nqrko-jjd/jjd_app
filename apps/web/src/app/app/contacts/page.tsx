@@ -108,7 +108,7 @@ function ContactsInner() {
         sub={data ? `${data.totalCount} contacts · page ${data.page}/${data.totalPages} · clic droit pour les actions rapides` : undefined}
         action={<button className="btn primary" onClick={() => setCreating(true)}>+ Nouveau contact</button>}
       />
-      <div className="row" style={{ marginBottom: '1rem' }}>
+      <div className="row list-filters" style={{ marginBottom: '1rem' }}>
         <input className="input" style={{ maxWidth: 280 }} placeholder="Nom, ville, TVA…" value={q} onChange={(e) => setQ(e.target.value)} />
         <select className="select" style={{ maxWidth: 180 }} value={type} onChange={(e) => setType(e.target.value)}>
           <option value="all">{tr("Tous")}</option>

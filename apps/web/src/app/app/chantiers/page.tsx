@@ -94,13 +94,19 @@ function ChantiersInner() {
   };
   const sort = useSort<WS>(data?.items ?? [], wsAccessors);
 
-  const { data: counts, reload: reloadCounts } = useApi<{ total: number; byStatus: Record<string, number> }>(
+  const { data: counts, reload: reloadCounts } = useApi<{ total: number; byStatus: Record<string, number>; byStatusActive?: Record<string, number> }>(
     kind === 'project' ? '/api/worksites/counts' : null,
   );
   const reloadAll = () => { reload(); reloadCounts(); };
   // « Planifier » : bouton rapide sur chaque ligne des onglets où l'on cherche surtout à programmer quelque chose (en attente, à planifier)
   const quickPlan = status === 'on_hold' || status === 'to_plan,scheduled';
-  const countOf = (key: string) => (key === '' ? counts?.total : key.split(',').reduce((a, s) => a + (counts?.byStatus[s] ?? 0), 0));
+  // le compteur d'un onglet suit la règle de sa liste : les onglets sans « archived » masquent les chantiers archivés
+  const countOf = (key: string) => {
+    if (key === '') return counts?.total;
+    const view = STATUS_VIEWS.find((v) => v.key === key);
+    const src = view?.archived ? counts?.byStatus : (counts?.byStatusActive ?? counts?.byStatus);
+    return key.split(',').reduce((a, s) => a + (src?.[s] ?? 0), 0);
+  };
 
   const { data: refs } = useApi<{
     clients: { id: string; name: string }[];

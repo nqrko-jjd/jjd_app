@@ -128,7 +128,11 @@ worksitesRouter.get(
       byStatus[g.status] = g._count._all;
       total += g._count._all;
     }
-    res.json({ total, byStatus });
+    // onglets qui masquent les chantiers archivés (comme la liste : archived=false par défaut) : le compteur doit montrer la même chose
+    const activeGroups = await prisma.worksite.groupBy({ by: ['status'], where: { ...where, archived: false }, _count: { _all: true } });
+    const byStatusActive: Record<string, number> = {};
+    for (const g of activeGroups) byStatusActive[g.status] = g._count._all;
+    res.json({ total, byStatus, byStatusActive });
   }),
 );
 

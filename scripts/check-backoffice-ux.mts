@@ -41,6 +41,7 @@ try {
       await page.waitForFunction(()=>!document.body.classList.contains('nav-collapsed'));
     } else {
       await page.click('.burger');
+      await page.waitForFunction(()=>Math.abs(document.querySelector('.sidebar').getBoundingClientRect().left)<1);
       await page.screenshot({path:'tmp/ux-preview/mobile-menu.jpg',type:'jpeg',quality:75});
       await page.keyboard.press('Escape');
       await page.waitForFunction(()=>!document.querySelector('.sidebar').classList.contains('open'));
@@ -52,6 +53,15 @@ try {
   assert.equal(await page.$eval('.page-tools',el=>el.open),true);
   await page.keyboard.press('Escape');
   assert.equal(await page.$eval('.page-tools',el=>el.open),false);
+  await page.click('.burger');
+  const launcher = await page.$('button[aria-controls="jjd-companion"]');
+  if (launcher) {
+    assert.equal(await page.$('#jjd-companion'), null);
+    await launcher.click();
+    await page.waitForSelector('#jjd-companion:not([hidden])');
+    await page.click('#jjd-companion button[aria-label="Fermer le chat"]');
+    await page.waitForSelector('#jjd-companion[hidden]');
+  }
   console.log('UX_INTERACTIONS_OK');
   for (const name of ['1440-equipe.jpg','390-achats.jpg','mobile-menu.jpg']) console.log('UX_PREVIEW_'+name+':'+(await readFile('tmp/ux-preview/'+name)).toString('base64'));
 } finally { await browser.close(); server.close(); await prisma.$disconnect(); }

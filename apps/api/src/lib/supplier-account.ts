@@ -7,7 +7,7 @@ import { purchaseRemaining, PURCHASE_PAYMENT_TOLERANCE } from './payment-toleran
 export async function supplierAccounts() {
   const [ledger, txs, snapshot, contacts, reconciliations] = await Promise.all([
     prisma.ledgerEntry.findMany({ where: { direction: { in: ['purchase', 'credit_note'] }, source: { not: 'demo' }, OR: [{ documentId: null }, { direction: 'purchase' }] }, include: { contact: { select: { id: true, name: true } } } }),
-    prisma.bankTransaction.findMany({ where: { amount: { lt: 0 } }, include: { contact: { select: { id: true, name: true } }, matches: { include: { ledgerEntry: { select: { contactId: true, supplierName: true, direction: true } } } } } }),
+    prisma.bankTransaction.findMany({ where: { amount: { lt: 0 }, pairedTxId: null }, include: { contact: { select: { id: true, name: true } }, matches: { include: { ledgerEntry: { select: { contactId: true, supplierName: true, direction: true } } } } } }),
     allocationSnapshot(),
     prisma.contact.findMany({ where: { type: { in: ['supplier', 'both'] } }, select: { id: true, name: true } }),
     prisma.auditLog.findMany({ where: { action: 'supplier_statement_reconciled', entity: 'Contact' }, orderBy: [{ at: 'desc' }, { id: 'desc' }], select: { entityId: true, meta: true } }),

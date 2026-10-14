@@ -857,8 +857,16 @@ model BankTransaction {
 
   matches BankTransactionMatch[]
 
+  /// Paire « remboursement » : une entrée et une sortie du même montant qui s'annulent (double paiement
+  /// d'un client remboursé, avoir fournisseur reversé…). Posé sur les DEUX transactions, chacune pointant
+  /// vers l'autre ; une transaction appairée compte comme rapprochée, sans toucher aucune facture.
+  pairedTxId String?
+  pairNote   String?
+  pairedAt   DateTime?
+
   @@index([bookingDate])
   @@index([pontoId])
+  @@index([pairedTxId])
   @@index([matchedLedgerId])
   @@index([matchedDocumentId])
   @@index([contactId])

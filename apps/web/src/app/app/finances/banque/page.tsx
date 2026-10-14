@@ -26,6 +26,14 @@ interface Tx {
   // plusieurs factures possibles pour une même transaction — un acompte réglé en une fois,
   // décompté ensuite par le fournisseur sur plusieurs factures reçues
   matches: Match[];
+  // remboursement lié : entrée + sortie du même montant qui s'annulent (aucune facture concernée)
+  pairedTxId?: string | null;
+  pairNote?: string | null;
+  pairedTx?: PairTx | null;
+}
+interface PairTx {
+  id: string; bookingDate: string | null; bank: string | null; amount: number | null;
+  counterpartyName: string | null; communication: string | null;
 }
 interface Suggestion {
   kind: 'ledger' | 'document';
@@ -113,6 +121,11 @@ function BanqueInner() {
   const [manualQ, setManualQ] = useState('');
   const suggQs = manualQ.trim() ? `?q=${encodeURIComponent(manualQ.trim())}` : '';
   const { data: sugg, loading: suggLoading, reload: reloadSugg } = useApi<{ items: Suggestion[]; remaining: number }>(openTx ? `/api/finance/bank/${openTx}/suggestions${suggQs}` : null);
+  const openTxRow = data?.items.find((t) => t.id === openTx) ?? null;
+  const canPair = !!openTxRow && openTxRow.matches.length === 0 && !openTxRow.pairedTxId;
+  const [pairQ, setPairQ] = useState('');
+  const pairQs = pairQ.trim() ? `?q=${encodeURIComponent(pairQ.trim())}` : '';
+  const { data: pairSugg, loading: pairLoading } = useApi<{ items: PairTx[] }>(canPair ? `/api/finance/bank/${openTx}/pair-suggestions${pairQs}` : null);
   const fileRef = useRef<HTMLInputElement>(null);
   const screenshotRef = useRef<HTMLInputElement>(null);
 
@@ -134,6 +147,25 @@ function BanqueInner() {
     await api(`/api/finance/bank/${txId}/matches/${matchId}`, { method: 'DELETE' });
     reload();
     reloadSugg();
+  }
+  // « Lier un remboursement » : le paiement et son remboursement s'annulent, les deux sortent
+  // de « À rapprocher » sans toucher aucune facture
+  async function pairTx(txId: string, other: PairTx) {
+    const note = window.prompt('Note (facultative) — ex. « Double paiement F2026-105 remboursé » :', 'Remboursement');
+    if (note === null) return;
+    try {
+      await api(`/api/finance/bank/${txId}/pair`, { method: 'POST', body: { otherId: other.id, note } });
+      setFlash(`Remboursement lié : ${formatDateBE(other.bookingDate)} · ${(other.amount ?? 0).toLocaleString('fr-BE', { minimumFractionDigits: 2 })} €.`);
+      setOpenTx(null); setPairQ('');
+      reload();
+    } catch (e) { setFlash((e as Error).message); }
+  }
+  async function unpairTx(txId: string) {
+    if (!window.confirm('Délier ce remboursement ? Les deux transactions repasseront « à rapprocher ».')) return;
+    try {
+      await api(`/api/finance/bank/${txId}/pair`, { method: 'DELETE' });
+      reload();
+    } catch (e) { setFlash((e as Error).message); }
   }
   function toggleSort(key: string) {
     if (sort === key) setDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -350,7 +382,25 @@ function BanqueInner() {
                     </td>
                     <td style={{ textAlign: 'right' }}><Money value={t.amount} sign /></td>
                     <td style={{ fontSize: '0.8rem' }}>
-                      {t.matches.length === 0 ? (
+                      {t.pairedTx ? (
+                        <div className="bank-match-card">
+                          <span className="badge plain">↔ remboursement</span>
+                          <div className="bank-match-document">
+                            <strong>Lié à {(t.pairedTx.amount ?? 0) < 0 ? 'la sortie' : 'l’entrée'} du {formatDateBE(t.pairedTx.bookingDate)} · <Money value={t.pairedTx.amount} sign /></strong>
+                            <div className="muted" style={{ fontSize: '0.74rem' }}>
+                              {[t.pairedTx.counterpartyName, t.pairNote].filter(Boolean).join(' · ')}
+                            </div>
+                          </div>
+                          <button
+                            className="btn ghost"
+                            style={{ padding: '0.1rem 0.35rem', fontSize: '0.72rem' }}
+                            onClick={() => unpairTx(t.id)}
+                            title="Délier ce remboursement"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ) : t.matches.length === 0 ? (
                         <span className="muted">—</span>
                       ) : (
                         <div className="grid" style={{ gap: '0.25rem' }}>
@@ -383,7 +433,7 @@ function BanqueInner() {
                           )}
                         </div>
                       )}
-                      {(t.amount ?? 0) !== 0 && (
+                      {(t.amount ?? 0) !== 0 && !t.pairedTx && (
                         <BankClientAssign
                           supplier={(t.amount ?? 0) < 0}
                           txId={t.id}
@@ -395,15 +445,15 @@ function BanqueInner() {
                       )}
                     </td>
                     <td>
-                      <button className="btn" style={{ padding: '0.2rem 0.5rem', fontSize: '0.76rem' }} onClick={() => { setOpenTx(openTx === t.id ? null : t.id); setManualQ(''); }}>
+                      {!t.pairedTx && <button className="btn" style={{ padding: '0.2rem 0.5rem', fontSize: '0.76rem' }} onClick={() => { setOpenTx(openTx === t.id ? null : t.id); setManualQ(''); setPairQ(''); }}>
                         {openTx === t.id ? tr("Fermer") : t.matches.length ? '+ Ajouter' : 'Rapprocher'}
-                      </button>
+                      </button>}
                     </td>
                     <td>
                       <button className="btn ghost" style={{ padding: '0.2rem 0.5rem', fontSize: '0.76rem' }} onClick={() => setEditTx(t)} title="Corriger cette ligne (date, banque, montant, communication…)"> {tr("Modifier")} </button>
                     </td>
                   </tr>
-                  {openTx === t.id && (
+                  {openTx === t.id && !t.pairedTx && (
                     <tr>
                       <td colSpan={8} style={{ background: 'var(--surface-2)', padding: '0.8rem 0.9rem' }}>
                         <div className="row" style={{ marginBottom: '0.6rem', gap: '0.5rem', alignItems: 'center' }}>
@@ -441,6 +491,39 @@ function BanqueInner() {
                                 <span>Reste à régler : <Money value={s.amount} /></span>
                               </button>
                             ))}
+                          </div>
+                        )}
+                        {t.matches.length === 0 && (
+                          <div style={{ marginTop: '1rem', paddingTop: '0.8rem', borderTop: '1px solid var(--line)' }}>
+                            <div className="row" style={{ marginBottom: '0.5rem', gap: '0.5rem', alignItems: 'center' }}>
+                              <div className="eyebrow" style={{ margin: 0 }}>Ou lier un remboursement</div>
+                              <span className="muted" style={{ fontSize: '0.8rem' }}>
+                                {(t.amount ?? 0) > 0 ? 'une sortie' : 'une entrée'} du même montant qui annule celle-ci (double paiement remboursé…) — aucune facture n’est touchée
+                              </span>
+                              <input
+                                className="input"
+                                style={{ maxWidth: 220, marginLeft: 'auto' }}
+                                placeholder="Chercher : nom, communication…"
+                                value={pairQ}
+                                onChange={(e) => setPairQ(e.target.value)}
+                              />
+                            </div>
+                            {pairLoading || !pairSugg ? <span className="muted">{tr("Recherche…")}</span> : pairSugg.items.length === 0 ? (
+                              <span className="muted">Aucune transaction de sens opposé et de même montant à rapprocher.</span>
+                            ) : (
+                              <div className="grid" style={{ gap: '0.4rem' }}>
+                                {pairSugg.items.map((p) => (
+                                  <button key={p.id} className="btn" style={{ justifyContent: 'space-between' }} onClick={() => pairTx(t.id, p)}>
+                                    <span>
+                                      <span className="badge plain" style={{ marginRight: 6 }}>↔</span>
+                                      {formatDateBE(p.bookingDate)} · {p.counterpartyName ?? p.bank ?? '—'}
+                                      {p.communication ? <span className="muted"> · {p.communication.replace(/\s+/g, ' ').slice(0, 70)}</span> : null}
+                                    </span>
+                                    <Money value={p.amount} sign />
+                                  </button>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         )}
                       </td>

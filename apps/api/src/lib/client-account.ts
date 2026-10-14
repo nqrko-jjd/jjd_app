@@ -43,7 +43,7 @@ export async function clientAccount(contactId: string) {
     }
   }
   const txs = await prisma.bankTransaction.findMany({
-    where: { contactId, amount: { gt: 0 } },
+    where: { contactId, amount: { gt: 0 }, pairedTxId: null }, // un paiement remboursé (paire) n'est pas un trop-perçu
     orderBy: { bookingDate: 'asc' },
     select: { id: true, bookingDate: true, bank: true, amount: true, description: true, communication: true, matches: { select: { amount: true } } },
   });

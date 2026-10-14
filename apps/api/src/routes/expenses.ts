@@ -507,7 +507,7 @@ expensesRouter.get(
 
     const where: Prisma.BankTransactionWhereInput = manual
       ? {
-          ...(includeMatched ? {} : { matches: { none: {} } }),
+          ...(includeMatched ? {} : { matches: { none: {} }, pairedTxId: null }),
           ...(askedAmount != null ? { OR: [{ amount: { gte: Math.abs(askedAmount) - 0.5, lte: Math.abs(askedAmount) + 0.5 } }, { amount: { gte: -(Math.abs(askedAmount) + 0.5), lte: -(Math.abs(askedAmount) - 0.5) } }] } : {}),
           ...(from || to ? { bookingDate: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {}),
           AND: words.map((w) => ({
@@ -520,6 +520,7 @@ expensesRouter.get(
         }
       : {
           matches: { none: {} },
+          pairedTxId: null,
           // décaissement : montant négatif de valeur proche du TTC de la dépense
           amount: { gte: -(amount + 1), lte: -(amount - 1) },
           ...(e.date ? { bookingDate: { gte: new Date(e.date.getTime() - 30 * 86400000), lte: new Date(e.date.getTime() + 60 * 86400000) } } : {}),

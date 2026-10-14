@@ -329,7 +329,8 @@ export async function autoMatchAll(
   opts: { onlyUnmatched?: boolean; txFilter?: Prisma.BankTransactionWhereInput } = {},
 ): Promise<{ strong: number; good: number; scanned: number }> {
   const txs = await prisma.bankTransaction.findMany({
-    where: { ...(opts.onlyUnmatched === false ? {} : { matches: { none: {} } }), ...opts.txFilter },
+    // une transaction liée à un remboursement n'a jamais de facture : jamais rapprochée automatiquement
+    where: { pairedTxId: null, ...(opts.onlyUnmatched === false ? {} : { matches: { none: {} } }), ...opts.txFilter },
     select: { id: true, amount: true, bookingDate: true, structuredComm: true, counterpartyName: true, side: true, description: true, communication: true, counterpartyAccount: true },
     orderBy: { bookingDate: 'desc' },
   });

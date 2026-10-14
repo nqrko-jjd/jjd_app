@@ -18,6 +18,7 @@ import { supplierAccounts } from '../lib/supplier-account.js';
 import { allocationSnapshot, freezeLegacyAllocations } from '../lib/bank-allocation.js';
 import { purchaseRemaining } from '../lib/payment-tolerance.js';
 import { PAYMENT_TOLERANCE } from '../lib/payment-tolerance.js';
+import { RECONCILED, UNRECONCILED, pairSuggestions, pairTransactions, unpairTransaction } from '../lib/bank-pair.js';
 
 export const financeRouter = Router();
 financeRouter.get('/suppliers', requireAuth(...OFFICE), asyncHandler(async (_req, res) => {
@@ -278,8 +279,8 @@ financeRouter.get(
       const dn = (await prisma.document.findUnique({ where: { id: documentId }, select: { number: true } }))?.number;
       and.push({ matches: { some: { OR: [{ documentId }, { ledgerEntry: { documentId } }, ...(dn ? [{ ledgerEntry: { documentId: null, docNumber: dn, direction: { in: ['sale', 'credit_note'] } } }] : [])] } } });
     }
-    else if (matched === '1') and.push({ matches: { some: {} } });
-    else if (matched === '0') and.push({ matches: { none: {} } });
+    else if (matched === '1') and.push(RECONCILED);
+    else if (matched === '0') and.push(UNRECONCILED);
     if (from) and.push({ bookingDate: { gte: new Date(from) } });
     if (bank) and.push({ bank });
     if (typeof req.query.transactionId === 'string') { and.length = 0; and.push({ id: req.query.transactionId }); }
@@ -314,11 +315,15 @@ financeRouter.get(
       prisma.bankTransaction.count({ where }),
       prisma.bankTransaction.groupBy({ by: ['bank'], _count: true, _sum: { amount: true } }),
       prisma.bankTransaction.count(),
-      prisma.bankTransaction.count({ where: { matches: { some: {} } } }),
+      prisma.bankTransaction.count({ where: RECONCILED }),
     ]);
     const allocations = await allocationSnapshot();
+    // remboursement lié : on renvoie l'autre transaction de la paire (date, montant, contrepartie)
+    const pairIds = items.map(t => t.pairedTxId).filter((x): x is string => !!x);
+    const pairs = pairIds.length ? await prisma.bankTransaction.findMany({ where: { id: { in: pairIds } }, select: { id: true, bookingDate: true, bank: true, amount: true, counterpartyName: true, communication: true } }) : [];
+    const pairById = new Map(pairs.map(p => [p.id, p]));
     res.json({
-      items: items.map(t => ({ ...t, matches: t.matches.map(m => ({ ...m, amount: allocations.amounts.get(m.id) ?? 0 })) })),
+      items: items.map(t => ({ ...t, pairedTx: t.pairedTxId ? pairById.get(t.pairedTxId) ?? null : null, matches: t.matches.map(m => ({ ...m, amount: allocations.amounts.get(m.id) ?? 0 })) })),
       byBank: stats, matched: done, total,
       page, pageSize, totalCount: filteredCount, totalPages: Math.max(1, Math.ceil(filteredCount / pageSize)),
     });
@@ -565,6 +570,7 @@ async function saveAllocation(txId: string, body: Record<string, unknown>, match
   return prisma.$transaction(async db => {
     const tx = await db.bankTransaction.findUnique({ where: { id: txId } });
     if (!tx) throw new HttpError(404, 'Transaction introuvable');
+    if (tx.pairedTxId) throw new HttpError(409, 'Cette transaction est liée à un remboursement : détachez-le d’abord.');
     const previous = matchId ? await db.bankTransactionMatch.findFirst({ where: { id: matchId, bankTransactionId: txId } }) : null;
     if (matchId && !previous) throw new HttpError(404, 'Rapprochement introuvable');
     const ledgerId = previous?.ledgerEntryId ?? (typeof body.ledgerId === 'string' ? body.ledgerId : null);
@@ -636,6 +642,24 @@ financeRouter.delete('/bank/:id/matches/:matchId', requireAuth(...OFFICE), async
     return found;
   }, { isolationLevel: 'Serializable', timeout: 30000 });
   await refreshAllocationDocument(m.ledgerEntryId, m.documentId);
+  res.json({ ok: true });
+}));
+
+/** Lier un remboursement : propositions (sens opposé, même montant, pas encore rapprochées). */
+financeRouter.get('/bank/:id/pair-suggestions', requireAuth(...OFFICE), asyncHandler(async (req, res) => {
+  res.json(await pairSuggestions(req.params.id!, typeof req.query.q === 'string' ? req.query.q : undefined));
+}));
+/** Lie deux transactions qui s'annulent (paiement + remboursement) — aucune facture touchée. */
+financeRouter.post('/bank/:id/pair', requireAuth(...OFFICE), asyncHandler(async (req, res) => {
+  const otherId = typeof req.body?.otherId === 'string' ? req.body.otherId : '';
+  if (!otherId) throw new HttpError(422, 'Choisissez la transaction à lier');
+  const pair = await pairTransactions(req.params.id!, otherId, typeof req.body?.note === 'string' ? req.body.note : null);
+  await prisma.auditLog.create({ data: { actorId: req.user!.id, action: 'bank_pair', entity: 'bank_transaction', entityId: pair.id, meta: { pairedTxId: pair.pairedTxId } } });
+  res.status(201).json({ ok: true, ...pair });
+}));
+financeRouter.delete('/bank/:id/pair', requireAuth(...OFFICE), asyncHandler(async (req, res) => {
+  const r = await unpairTransaction(req.params.id!);
+  await prisma.auditLog.create({ data: { actorId: req.user!.id, action: 'bank_unpair', entity: 'bank_transaction', entityId: req.params.id!, meta: { ids: r.ids } } });
   res.json({ ok: true });
 }));
 

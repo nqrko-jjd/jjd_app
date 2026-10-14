@@ -41,7 +41,7 @@ on:
       - 'apps/web/src/app/backoffice-ux.css'
       - 'apps/web/src/lib/ui.tsx'
       - 'apps/web/src/components/PaginationBar.tsx'
-      - 'scripts/check-backoffice-ux.ts'
+      - 'scripts/check-backoffice-ux.mts'
       - '.github/workflows/bank-allocation-checks.yml'
 permissions:
   contents: read
@@ -74,7 +74,7 @@ jobs:
         run: |
           npm run start --workspace @jjd/web > /tmp/jjd-web.log 2>&1 &
           for i in $(seq 1 60); do curl -sf http://127.0.0.1:3100/login > /dev/null && break; sleep 2; done
-          node --import tsx scripts/check-backoffice-ux.ts
+          node --import tsx scripts/check-backoffice-ux.mts
       - uses: actions/upload-artifact@v4
         if: always()
         with:

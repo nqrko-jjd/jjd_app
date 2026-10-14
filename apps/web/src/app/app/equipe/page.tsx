@@ -204,7 +204,7 @@ function EquipeInner() {
         }
       />
 
-      <div className="row" style={{ marginBottom: '1rem' }}>
+      <div className="row list-filters" style={{ marginBottom: '1rem' }}>
         <input className="input" style={{ maxWidth: 220 }} placeholder="Nom…" value={q} onChange={(e) => setQ(e.target.value)} />
         <select className="select" style={{ maxWidth: 190 }} value={role} onChange={(e) => setRole(e.target.value)}>
           <option value="">Tous rôles</option>

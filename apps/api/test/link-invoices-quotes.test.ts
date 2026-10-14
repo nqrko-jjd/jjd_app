@@ -21,6 +21,8 @@ test('rattachement des factures importées aux devis cités dans leur intitulé'
   const multi = await doc({ kind: 'invoice', number: 'F9999-003', totalHt: 100, worksiteId: ws, title: 'Acompte devis D9999-001 / D9999-002' });
   const otherWs = await doc({ kind: 'invoice', number: 'F9999-004', totalHt: 100, worksiteId: ws2, title: 'Facture devis D9999-002' });
   const unknown = await doc({ kind: 'invoice', number: 'F9999-005', totalHt: 100, worksiteId: ws, title: 'Facture devis D9999-777' });
+  const q3 = await doc({ kind: 'quote', number: 'D9999-003', status: 'accepted', totalHt: 100, worksiteId: ws });
+  await doc({ kind: 'invoice', number: 'F9999-007', totalHt: 300, worksiteId: ws, title: 'Facture devis D9999-003' });
   const already = await doc({ kind: 'invoice', number: 'F9999-006', totalHt: 50, worksiteId: ws, title: 'Acompte devis D9999-002', parentId: q2.id });
 
   const plan = await planInvoiceQuoteLinks();
@@ -30,6 +32,8 @@ test('rattachement des factures importées aux devis cités dans leur intitulé'
   assert.ok(plan.ambiguous.some((a) => a.invoiceNumber === 'F9999-004'), 'chantier différent : à la main');
   assert.ok(plan.unknownQuote.some((a) => a.invoiceNumber === 'F9999-005'));
   assert.ok(!plan.links.some((l) => l.invoiceId === already.id), 'déjà lié : ignoré');
+  assert.ok(plan.review.some((r) => r.quoteNumber === 'D9999-003'), 'devis dépassé : à vérifier, rien rattaché');
+  assert.ok(!plan.links.some((l) => l.quoteNumber === 'D9999-003'));
   const pq = plan.perQuote.find((p) => p.quoteNumber === 'D9999-001')!;
   assert.equal(pq.addedHt, 600); assert.equal(pq.afterPct, 60);
 
@@ -42,5 +46,5 @@ test('rattachement des factures importées aux devis cités dans leur intitulé'
   // le devis affiche maintenant le pourcentage facturé
   const b = (await quoteBillings([{ id: q.id, totalHt: 1000 }])).get(q.id)!;
   assert.equal(b.billedPct, 60); assert.equal(b.remainingHt, 400); assert.equal(b.invoices.length, 2);
-  void multi; void otherWs; void unknown;
+  void q3; void multi; void otherWs; void unknown;
 });

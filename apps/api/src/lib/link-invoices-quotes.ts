@@ -13,6 +13,8 @@ export interface LinkPlan {
   links: { invoiceId: string; invoiceNumber: string | null; quoteId: string; quoteNumber: string; netHt: number }[];
   ambiguous: { invoiceNumber: string | null; title: string | null; quotes: string[] }[];
   unknownQuote: { invoiceNumber: string | null; title: string | null; quote: string }[];
+  /** Devis dont les factures dépassent le devis (> 102 %) ou dont le total est nul/négatif : rien n'est rattaché, à vérifier à la main. */
+  review: { quoteNumber: string; totalHt: number; addedHt: number; afterPct: number; invoices: string[] }[];
   perQuote: { quoteNumber: string; totalHt: number; alreadyBilledHt: number; addedHt: number; afterPct: number }[];
 }
 
@@ -23,7 +25,7 @@ export async function planInvoiceQuoteLinks(): Promise<LinkPlan> {
   });
   const quotes = await prisma.document.findMany({ where: { kind: 'quote', number: { not: null } }, select: { id: true, number: true, totalHt: true, worksiteId: true } });
   const byNumber = new Map(quotes.map((q) => [q.number!, q]));
-  const plan: LinkPlan = { links: [], ambiguous: [], unknownQuote: [], perQuote: [] };
+  const plan: LinkPlan = { links: [], ambiguous: [], unknownQuote: [], review: [], perQuote: [] };
   for (const inv of invoices) {
     const cited = [...new Set(inv.title!.match(QUOTE_NUMBER) ?? [])];
     if (!cited.length) continue;
@@ -38,7 +40,13 @@ export async function planInvoiceQuoteLinks(): Promise<LinkPlan> {
     const q = quotes.find((x) => x.id === quoteId)!;
     const already = round2(existing.filter((e) => e.parentId === quoteId).reduce((s, e) => s + e.totalHt, 0));
     const added = round2(plan.links.filter((l) => l.quoteId === quoteId).reduce((s, l) => s + l.netHt, 0));
-    plan.perQuote.push({ quoteNumber: q.number!, totalHt: q.totalHt, alreadyBilledHt: already, addedHt: added, afterPct: q.totalHt > 0 ? Math.round(((already + added) / q.totalHt) * 1000) / 10 : 0 });
+    const afterPct = q.totalHt > 0 ? Math.round(((already + added) / q.totalHt) * 1000) / 10 : 0;
+    if (q.totalHt <= 0 || afterPct > 102) {
+      plan.review.push({ quoteNumber: q.number!, totalHt: q.totalHt, addedHt: added, afterPct, invoices: plan.links.filter((l) => l.quoteId === quoteId).map((l) => l.invoiceNumber ?? '(brouillon)') });
+      plan.links = plan.links.filter((l) => l.quoteId !== quoteId);
+      continue;
+    }
+    plan.perQuote.push({ quoteNumber: q.number!, totalHt: q.totalHt, alreadyBilledHt: already, addedHt: added, afterPct });
   }
   return plan;
 }

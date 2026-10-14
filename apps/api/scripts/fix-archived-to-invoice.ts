@@ -15,7 +15,8 @@ async function run() {
     orderBy: { ref: 'asc' },
   });
   const docs = await prisma.document.findMany({ where: { worksiteId: { in: ws.map((w) => w.id) } }, select: { worksiteId: true, kind: true, status: true, number: true } });
-  const fixable = [], kept = [];
+  type Row = (typeof ws)[number] & { quotes: string; accepted: number; invoices: number };
+  const fixable: Row[] = [], kept: Row[] = [];
   for (const w of ws) {
     const mine = docs.filter((d) => d.worksiteId === w.id);
     const accepted = mine.filter((d) => d.kind === 'quote' && d.status === 'accepted').length;

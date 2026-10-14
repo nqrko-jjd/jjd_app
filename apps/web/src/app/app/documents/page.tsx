@@ -288,7 +288,7 @@ function DocumentsInner() {
         </div>
       )}
 
-      <div className="row" style={{ marginBottom: '1rem', gap: '0.4rem', flexWrap: 'wrap' }}>
+      <div className="row list-filters" style={{ marginBottom: '1rem', gap: '0.4rem', flexWrap: 'wrap' }}>
         <div className="seg">
           {TABS.map((t) => (
             <button key={t.key} className={tab === t.key ? 'on' : ''} onClick={() => { setTab(t.key); setStatus(''); setSelected(new Set()); if (dashboard) router.push(`/app/documents${t.kind ? `?kind=${t.kind}` : ''}`); }}>

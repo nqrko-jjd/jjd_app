@@ -78,7 +78,7 @@ try {
     for (const width of [1440,390]) {
       await page.setViewport({width,height:950});
       await page.goto('http://127.0.0.1:3100/app/documents?kind=invoice',{waitUntil:'networkidle2'});
-      const states = await page.$eval('.peppol-status.compact',els=>els.map(el=>({label:el.getAttribute('aria-label'),className:el.className,href:el.getAttribute('href')})));
+      const states = await page.$$eval('.peppol-status.compact',els=>els.map(el=>({label:el.getAttribute('aria-label'),className:el.className,href:el.getAttribute('href')})));
       assert.equal(states.length,5);
       assert.equal(states.filter(s=>s.className.includes('peppol-delivered')).length,1);
       assert.equal(states.filter(s=>s.className.includes('peppol-error')).length,1);
@@ -89,7 +89,7 @@ try {
     }
     await page.click('.peppol-delivered.compact');
     await page.waitForSelector('#document-delivery-content:not([hidden]) .peppol-delivered',{visible:true});
-    assert.equal(await page.$eval('#document-delivery',els=>els.length),1);
+    assert.equal(await page.$$eval('#document-delivery',els=>els.length),1);
     assert.ok((await page.$eval('.peppol-summary',el=>el.textContent)).includes('réception confirmée'));
     console.log('PEPPOL_STATUS_CHECKS_OK: pending, delivered, error, no-send, queued, unverified, mobile and deep link');
     for (const name of ['peppol-1440.jpg','peppol-390.jpg']) console.log('PEPPOL_PREVIEW_'+name+':'+(await readFile('tmp/ux-preview/'+name)).toString('base64'));

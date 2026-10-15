@@ -97,3 +97,7 @@
 .peppol-summary { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 12px 0; }
 #document-delivery { scroll-margin-top: 85px; }
 @media(max-width:600px) { .peppol-status.compact { min-width: 44px; min-height: 44px; } }
+
+.fox-export-panel { min-width: 0; }
+.fox-export-panel .btn { white-space: normal; max-width: 100%; min-width: 0; }
+@media(max-width:600px) { .fox-export-panel .row { align-items: stretch; } .fox-export-panel .btn { width: 100%; min-height: 44px; } }

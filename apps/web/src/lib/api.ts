@@ -49,12 +49,16 @@ export async function api<T = unknown>(
 }
 
 /** Récupère un binaire authentifié (PDF…) et renvoie une URL blob à ouvrir. */
-export async function apiBlobUrl(path: string): Promise<string> {
+export async function apiBlobUrl(path: string, opts: { method?: string; body?: unknown } = {}): Promise<string> {
   const headers: Record<string, string> = {};
   const t = token();
   if (t) headers.authorization = `Bearer ${t}`;
-  const res = await fetch(`${BASE}${path}`, { headers });
-  if (!res.ok) throw new ApiError(res.status, `Erreur ${res.status}`);
+  if (opts.body !== undefined) headers['content-type'] = 'application/json';
+  const res = await fetch(`${BASE}${path}`, { headers, method: opts.method ?? 'GET', body: opts.body === undefined ? undefined : JSON.stringify(opts.body) });
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    throw new ApiError(res.status, data?.error ?? `Erreur ${res.status}`);
+  }
   return URL.createObjectURL(await res.blob());
 }
 

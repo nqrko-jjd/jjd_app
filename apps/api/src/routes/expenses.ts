@@ -4,6 +4,8 @@
  * les rapports (marge chantier, P&L, analyses) lisent déjà LedgerEntry.
  */
 import { Router } from 'express';
+import { z } from 'zod';
+import { prepareFoxZip, foxEligible } from '../lib/fox-export.js';
 import type { Prisma } from '@prisma/client';
 import path from 'node:path';
 import { createReadStream, existsSync, readFileSync } from 'node:fs';
@@ -104,6 +106,9 @@ function buildWhere(q: Record<string, string>, payments?: Awaited<ReturnType<typ
   const settledIds = payments ? payments.matches.filter(m => m.ledgerEntry && expensePayment(m.ledgerEntry, payments).paid).map(m => m.ledgerEntryId!) : [];
   const settled = { OR: [{ id: { in: settledIds } }, { id: { notIn: matchedIds }, paymentStatus: 'Payé' }] };
   const outstanding = { OR: [{ id: { in: matchedIds, notIn: settledIds } }, { id: { notIn: matchedIds }, OR: [{ paymentStatus: null }, { NOT: { paymentStatus: 'Payé' } }] }] };
+  if (q.fox === 'pending') and.push({ foxTransmittedAt: null });
+  if (q.fox === 'sent') and.push({ foxTransmittedAt: { not: null } });
+  if (q.fox) and.push({ OR: [{ direction: 'purchase' }, { direction: 'credit_note', OR: [{ categoryRaw: null }, { AND: [{ NOT: { categoryRaw: { contains: 'vente', ...insensitive } } }, { NOT: { categoryRaw: { contains: 'dit auto', ...insensitive } } }] }] }] });
   if (paid === '1') and.push(settled);
   if (paid === '0') and.push(outstanding);
   if (q.overdue === '1') and.push({ direction: 'purchase', dueDate: { not: null, lt: new Date() }, ...outstanding });
@@ -319,6 +324,33 @@ expensesRouter.get(
     res.send(Buffer.from(zipped));
   }),
 );
+
+
+const foxIds = z.object({ ids: z.array(z.string().min(1)).min(1).max(300) });
+expensesRouter.post('/fox-export', requireAuth(...OFFICE), asyncHandler(async (req, res) => {
+  const ids = [...new Set(foxIds.parse(req.body).ids)];
+  const items = await prisma.ledgerEntry.findMany({ where: { id: { in: ids } }, include: { contact: { select: { name: true, vat: true } } }, orderBy: { id: 'asc' } });
+  if (items.length !== ids.length) throw new HttpError(404, 'Une dépense sélectionnée est introuvable. Actualisez la liste.');
+  const zip = await prepareFoxZip(items);
+  await prisma.$transaction([
+    prisma.ledgerEntry.updateMany({ where: { id: { in: ids } }, data: { foxExportedAt: new Date() } }),
+    prisma.auditLog.create({ data: { actorId: req.user!.id, action: 'fox_export', entity: 'ledgerEntry', meta: { ids } } }),
+  ]);
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', 'attachment; filename="fox-' + new Date().toISOString().slice(0, 10) + '.zip"');
+  res.send(zip);
+}));
+expensesRouter.post('/fox-transmission', requireAuth(...OFFICE), asyncHandler(async (req, res) => {
+  const { ids: raw, transmitted } = foxIds.extend({ transmitted: z.boolean() }).parse(req.body);
+  const ids = [...new Set(raw)];
+  const items = await prisma.ledgerEntry.findMany({ where: { id: { in: ids } } });
+  if (items.length !== ids.length || items.some(e => !foxEligible(e))) throw new HttpError(422, 'Sélection de factures d’achat invalide.');
+  await prisma.$transaction([
+    prisma.ledgerEntry.updateMany({ where: { id: { in: ids }, ...(transmitted ? { foxTransmittedAt: null } : {}) }, data: { foxTransmittedAt: transmitted ? new Date() : null } }),
+    prisma.auditLog.create({ data: { actorId: req.user!.id, action: transmitted ? 'fox_transmitted' : 'fox_reset', entity: 'ledgerEntry', meta: { ids, confirmation: 'manual' } } }),
+  ]);
+  res.json({ count: ids.length });
+}));
 
 /* --------------------------------------------------------- export/import Excel */
 

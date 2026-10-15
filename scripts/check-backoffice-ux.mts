@@ -95,6 +95,28 @@ try {
     for (const name of ['peppol-1440.jpg','peppol-390.jpg']) console.log('PEPPOL_PREVIEW_'+name+':'+(await readFile('tmp/ux-preview/'+name)).toString('base64'));
   } finally { await prisma.document.deleteMany({where:{id:{in:fixtureIds}}}); }
 
+
+  // Fox UI: independent from payment status; selecting a visible page never includes hidden rows.
+  const foxFixture = await prisma.ledgerEntry.create({data:{direction:'purchase',supplierName:'Fox UX supplier',docNumber:'FOX-UX',ht:100,ttc:121,pdfPath:'/uploads/expenses/fox-ui.pdf',paymentStatus:'Payé'}});
+  try {
+    for (const width of [1440,390]) {
+      await page.setViewport({width,height:950});
+      await page.goto('http://127.0.0.1:3100/app/achats',{waitUntil:'networkidle2'});
+      await page.$eval('details.card > summary',el=>el.click());
+      await page.$$eval('button',els=>els.find(el=>el.textContent==='Sélectionner les PDF à transmettre de cette page').click());
+      assert.ok(await page.$$eval('button',els=>els.some(el=>el.textContent==='Télécharger pour Fox (1)' && !el.disabled)));
+      console.log('FOX_OVERFLOW', width, await page.evaluate(()=>({width:innerWidth,scroll:document.documentElement.scrollWidth,wide:[...document.querySelectorAll('*')].filter(el=>el.getBoundingClientRect().right>innerWidth+2 && getComputedStyle(el).position!=='fixed').slice(-12).map(el=>({tag:el.tagName,cls:el.className,text:el.textContent?.slice(0,60)}))})));
+      await page.screenshot({path:'tmp/ux-preview/fox-'+width+'.jpg',type:'jpeg',quality:80});
+      console.log('FOX_PREVIEW_'+width+':'+(await readFile('tmp/ux-preview/fox-'+width+'.jpg')).toString('base64'));
+      assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2));
+      await page.select('select[aria-label="Transmission Fox"]','sent');
+      await page.waitForFunction(()=>document.body.textContent.includes('Aucune dépense'));
+      assert.ok(await page.$$eval('button',els=>els.some(el=>el.textContent==='Télécharger pour Fox (0)' && el.disabled)));
+    }
+    console.log('FOX_UI_OK');
+    for (const width of [1440,390]) console.log('FOX_PREVIEW_'+width+':'+(await readFile('tmp/ux-preview/fox-'+width+'.jpg')).toString('base64'));
+  } finally { await prisma.ledgerEntry.delete({where:{id:foxFixture.id}}); }
+
   console.log('UX_INTERACTIONS_OK');
   for (const name of ['1440-equipe.jpg','390-achats.jpg','mobile-menu.jpg']) console.log('UX_PREVIEW_'+name+':'+(await readFile('tmp/ux-preview/'+name)).toString('base64'));
 } finally { await browser.close(); server.close(); await prisma.$disconnect(); }

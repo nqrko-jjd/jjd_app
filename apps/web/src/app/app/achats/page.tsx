@@ -43,6 +43,8 @@ interface Expense {
   paidAmount: number;
   remainingAmount: number;
   hasPdf: boolean;
+  foxExportedAt: string | null;
+  foxTransmittedAt: string | null;
   editable: boolean;
   source: string | null;
   // bordereau (direction "delivery_slip") -> facture reçue ensuite, une fois reliée
@@ -106,14 +108,19 @@ function AchatsInner() {
   const [showCandidates, setShowCandidates] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [exporting, setExporting] = useState(false);
+  const [fox, setFox] = useState('');
+  const [foxNotice, setFoxNotice] = useState('');
+  const [foxBusy, setFoxBusy] = useState(false);
   const ctx = useContextMenu<Expense>();
 
   // revient à la 1ère page à chaque changement de filtre (sinon on peut se retrouver
   // sur une page qui n'existe plus après un filtrage plus restrictif)
-  useEffect(() => { setPage(1); }, [q, paid, worksiteId, contactId, category, year, type, linked]);
+  useEffect(() => { setPage(1); }, [q, paid, worksiteId, contactId, category, year, type, linked, fox]);
+  useEffect(() => { setSelected(new Set()); }, [q, paid, worksiteId, contactId, category, year, type, linked, fox, page, pageSize]);
 
   const params = new URLSearchParams();
   if (sp.get('overdue') === '1') params.set('overdue', '1');
+  if (fox) params.set('fox', fox);
   if (q) params.set('q', q);
   if (paid) params.set('paid', paid);
   if (worksiteId) params.set('worksiteId', worksiteId);
@@ -200,6 +207,37 @@ function AchatsInner() {
     }
   }
 
+
+  const foxEligible = (e: Expense) => e.direction === 'purchase' || (e.direction === 'credit_note' && !/vente|dit auto/i.test(e.categoryRaw ?? ''));
+  const selectedExpenses = (data?.items ?? []).filter(e => selected.has(e.id));
+  const foxSelection = selectedExpenses.length === selected.size && selectedExpenses.length > 0 && selectedExpenses.every(foxEligible);
+  async function exportFox() {
+    if (!foxSelection) return;
+    if (selectedExpenses.some(e => e.foxTransmittedAt) && !window.confirm('La sélection contient des factures déjà marquées transmises à Fox. Les télécharger à nouveau ?')) return;
+    setFoxBusy(true); setFoxNotice('');
+    try {
+      const url = await apiBlobUrl('/api/finance/expenses/fox-export', { method: 'POST', body: { ids: [...selected] } });
+      const a = document.createElement('a');
+      a.href = url; a.download = 'fox-' + new Date().toISOString().slice(0, 10) + '.zip'; a.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+      setFoxNotice('ZIP préparé. Extrayez les PDF, glissez-les dans Fox, puis confirmez ci-dessous le dépôt réussi. Aucune facture n’est encore marquée transmise.');
+      reload();
+    } catch (e) { setFoxNotice((e as Error).message); }
+    finally { setFoxBusy(false); }
+  }
+  async function confirmFox(transmitted: boolean, ids = [...selected]) {
+    if (!ids.length || !window.confirm(transmitted
+      ? 'Confirmer que ces ' + ids.length + ' facture(s) ont bien été déposées dans Fox ? Le téléchargement seul ne suffit pas.'
+      : 'Remettre ces factures dans « À transmettre à Fox » ?')) return;
+    setFoxBusy(true);
+    try {
+      await api('/api/finance/expenses/fox-transmission', { method: 'POST', body: { ids, transmitted } });
+      setFoxNotice(transmitted ? 'Dépôt dans Fox confirmé. La date de transmission est enregistrée.' : 'Factures remises à transmettre.');
+      setSelected(new Set()); reload();
+    } catch (e) { setFoxNotice((e as Error).message); }
+    finally { setFoxBusy(false); }
+  }
+
   async function syncMailbox() {
     setSyncingMailbox(true);
     try {
@@ -278,6 +316,7 @@ function AchatsInner() {
       : [];
     return [
       { label: 'Ouvrir / modifier', onClick: () => setEdit(e) },
+      ...(foxEligible(e) && e.foxTransmittedAt ? [{ label: 'Remettre à transmettre à Fox', onClick: () => confirmFox(false, [e.id]) }] : []),
       ...(e.hasPdf ? [{ label: 'Voir la pièce jointe', onClick: () => viewPdf(e.id) }] : []),
       ...(slipActions.length ? ['separator' as const, ...slipActions] : []),
       'separator',
@@ -365,6 +404,20 @@ function AchatsInner() {
         }
       />
 
+      <details className="card fox-export-panel" style={{ padding: 16, marginBottom: 16 }}>
+        <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Export pour Fox</summary>
+        <p>Sélectionnez les factures, téléchargez le ZIP et extrayez ses PDF avant de les glisser dans Fox. Confirmez ensuite le dépôt réussi.</p>
+        <p className="muted">Le suivi commence ici : les anciens dépôts dans Fox ne sont pas connus automatiquement. Vous pouvez les sélectionner puis les marquer comme transmis.</p>
+        <div className="row" style={{ flexWrap: 'wrap', gap: 8 }}>
+          <button className="btn" onClick={() => { setFox('pending'); setType(''); }}>Voir les factures à transmettre</button>
+          <button className="btn" onClick={() => setSelected(new Set(sort.rows.filter(e => foxEligible(e) && e.hasPdf && !e.foxTransmittedAt).slice(0, 300).map(e => e.id)))}>Sélectionner les PDF à transmettre de cette page</button>
+          <button className="btn primary" disabled={!foxSelection || foxBusy || selected.size > 300} onClick={exportFox}>{foxBusy ? 'Traitement…' : 'Télécharger pour Fox (' + selected.size + ')'}</button>
+          <button className="btn" disabled={!foxSelection || foxBusy || selected.size > 300} onClick={() => confirmFox(true)}>Marquer comme transmis à Fox</button>
+        </div>
+        <p className="muted">300 documents / 100 Mo maximum par lot. Les doublons possibles dans le lot bloquent l’export pour vérification.</p>
+      </details>
+      {foxNotice && <div role="status" className="card" style={{ padding: 16, marginBottom: 16 }}>{foxNotice}</div>}
+
       {sp.get('overdue') === '1' && <div className="worksite-context-banner"><strong>Factures fournisseurs échues et non payées</strong><Link href="/app" className="btn ghost">Retour au dashboard</Link><Link href="/app/achats" className="btn ghost">Retirer le filtre</Link></div>}
       <div className="kpis" style={{ marginBottom: '1.2rem' }}>
         <Kpi
@@ -408,6 +461,11 @@ function AchatsInner() {
       </div>
 
       <div className="row list-filters" style={{ marginBottom: '1rem', flexWrap: 'wrap', gap: '0.4rem' }}>
+        <select className="select" aria-label="Transmission Fox" value={fox} onChange={e => setFox(e.target.value)}>
+          <option value="">Fox : tous</option>
+          <option value="pending">Fox : à transmettre</option>
+          <option value="sent">Fox : transmis</option>
+        </select>
         <input className="input" style={{ maxWidth: 240 }} placeholder="Fournisseur, n°, notes…" value={q} onChange={(e) => setQ(e.target.value)} />
         <select className="select" style={{ maxWidth: 150 }} value={paid} onChange={(e) => setPaid(e.target.value)}>
           <option value="">Payé & non payé</option>
@@ -522,7 +580,11 @@ function AchatsInner() {
                     {e.source === 'chat' && <span className="badge plain" style={{ marginLeft: 6 }} title="Envoyée depuis le fil de chantier — à vérifier">📎 Fil de chantier</span>}
                     {e.source === 'email' && <span className="badge plain" style={{ marginLeft: 6 }} title="Reçue sur la boîte mail factures — à vérifier">✉️ Boîte mail</span>}
                   </td>
-                  <td className="mono" style={{ fontSize: '0.82rem' }}>{e.docNumber ?? '—'}</td>
+                  <td className="mono" style={{ fontSize: '0.82rem' }}>{e.docNumber ?? '—'}
+                    {foxEligible(e) && <div className="muted" style={{ fontSize: '0.72rem', marginTop: 4 }} title={e.foxTransmittedAt ? 'Dépôt confirmé manuellement dans JJD' : 'Le téléchargement ne confirme pas le dépôt dans Fox'}>
+                      {e.foxTransmittedAt ? 'Fox : transmis le ' + formatDateBE(e.foxTransmittedAt) : e.foxExportedAt ? 'Fox : ZIP préparé · dépôt à confirmer' : 'Fox : à transmettre'}
+                    </div>}
+                  </td>
                   <td className="mono">{e.worksite?.ref ?? (e.vehicle ? `🚗 ${vehicleName(e.vehicle)}` : '—')}</td>
                   <td>{e.categoryLabel ?? '—'}</td>
                   <td style={{ textAlign: 'right' }}><Money value={e.ht} /></td>

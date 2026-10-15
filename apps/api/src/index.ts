@@ -1,3 +1,4 @@
+import { syncPeppolInbox } from './lib/peppol-inbox.js';
 import os from 'node:os';
 import { createApp } from './app.js';
 import { env } from './env.js';
@@ -171,3 +172,7 @@ if (mailSuggestionsConfigured()) {
   setTimeout(runMailSync, 30_000);
   setInterval(runMailSync, 20 * 60_000);
 }
+
+const runPeppolInbox=()=>syncPeppolInbox().catch(e=>console.error('[peppol-inbox]',e.message));
+setTimeout(runPeppolInbox,75000);
+setInterval(runPeppolInbox,10*60_000);

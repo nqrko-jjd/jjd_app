@@ -102,7 +102,7 @@ try {
     for (const width of [1440,390]) {
       await page.setViewport({width,height:950});
       await page.goto('http://127.0.0.1:3100/app/achats',{waitUntil:'networkidle2'});
-      await page.$eval('details.card > summary',el=>el.click());
+      await page.$eval('#fox-export > summary',el=>el.click());
       await page.$$eval('button',els=>els.find(el=>el.textContent==='Sélectionner les PDF à transmettre de cette page').click());
       assert.ok(await page.$$eval('button',els=>els.some(el=>el.textContent==='Télécharger pour Fox (1)' && !el.disabled)));
       console.log('FOX_OVERFLOW', width, await page.evaluate(()=>({width:innerWidth,scroll:document.documentElement.scrollWidth,wide:[...document.querySelectorAll('*')].filter(el=>el.getBoundingClientRect().right>innerWidth+2 && getComputedStyle(el).position!=='fixed').slice(-12).map(el=>({tag:el.tagName,cls:el.className,text:el.textContent?.slice(0,60)}))})));
@@ -116,6 +116,23 @@ try {
     console.log('FOX_UI_OK');
     for (const width of [1440,390]) console.log('FOX_PREVIEW_'+width+':'+(await readFile('tmp/ux-preview/fox-'+width+'.jpg')).toString('base64'));
   } finally { await prisma.ledgerEntry.delete({where:{id:foxFixture.id}}); }
+
+
+  const receiptFixture=await prisma.purchaseReceipt.create({data:{sourceRef:'ux-receipt',source:'peppol',status:'review',reason:'Doublon possible',payload:{supplierName:'Réception test',docNumber:'REC-UX',date:'2026-10-15',ht:100,ttc:121,direction:'purchase'}}});
+  try{
+    for(const width of [1440,390]){
+      await page.setViewport({width,height:950});
+      await page.goto('http://127.0.0.1:3100/app/achats',{waitUntil:'networkidle2'});
+      await page.$$eval('summary',els=>els.find(e=>e.textContent?.includes('Réception Peppol / mails')).click());
+      await page.waitForFunction(()=>document.body.textContent.includes('REC-UX'));
+      await page.$$eval('summary',els=>els.find(e=>e.textContent?.includes('REC-UX')).click());
+      await page.waitForFunction(()=>document.body.textContent.includes('Rattacher à cet achat'));
+      assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2));
+      await page.screenshot({path:'tmp/ux-preview/receipt-'+width+'.jpg',type:'jpeg',quality:80});
+      console.log('RECEIPT_PREVIEW_'+width+':'+(await readFile('tmp/ux-preview/receipt-'+width+'.jpg')).toString('base64'));
+    }
+    console.log('RECEIPT_UI_OK');
+  }finally{await prisma.purchaseReceipt.delete({where:{id:receiptFixture.id}});}
 
   console.log('UX_INTERACTIONS_OK');
   for (const name of ['1440-equipe.jpg','390-achats.jpg','mobile-menu.jpg']) console.log('UX_PREVIEW_'+name+':'+(await readFile('tmp/ux-preview/'+name)).toString('base64'));

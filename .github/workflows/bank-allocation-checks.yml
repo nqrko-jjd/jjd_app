@@ -76,7 +76,7 @@ jobs:
         run: |
           node --import tsx --input-type=module -e "import {prisma} from './apps/api/src/db.ts'; import bcrypt from 'bcryptjs'; await prisma.user.create({data:{email:'david@jjd-consult.be',passwordHash:await bcrypt.hash('jjd',10),role:'admin',isPartner:true}}); await prisma.\$disconnect();"
       - name: Bank and contact regression tests
-        run: node --test --test-force-exit --test-concurrency=1 --import tsx apps/api/test/bank-allocation.test.ts apps/api/test/bank-match.test.ts apps/api/test/bank-suggestions-settled.test.ts apps/api/test/bank-reconcile.test.ts apps/api/test/client-account.test.ts apps/api/test/auth-profile.test.ts apps/api/test/document-payment-display.test.ts apps/api/test/document-po.test.ts apps/api/test/worksite-duplicate.test.ts apps/api/test/fox-export.test.ts apps/api/test/purchase-receipts.test.ts
+        run: node --test --test-force-exit --test-concurrency=1 --import tsx apps/api/test/bank-allocation.test.ts apps/api/test/bank-match.test.ts apps/api/test/bank-suggestions-settled.test.ts apps/api/test/bank-reconcile.test.ts apps/api/test/client-account.test.ts apps/api/test/auth-profile.test.ts apps/api/test/document-payment-display.test.ts apps/api/test/document-po.test.ts apps/api/test/worksite-duplicate.test.ts apps/api/test/fox-export.test.ts apps/api/test/purchase-receipts.test.ts apps/api/test/invoice-mailbox.test.ts
       - run: npm run typecheck
       - run: npm run build --workspace @jjd/web
       - name: Check backoffice navigation and responsive pages

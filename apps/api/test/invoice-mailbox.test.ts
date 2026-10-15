@@ -28,20 +28,20 @@ after(async () => {
   await prisma.ledgerEntry.deleteMany({ where: { id: entryId } });
 });
 
-test('findExistingMatch : retrouve une facture déjà importée par n° de document (relecture après échec d’une autre pièce jointe du même mail)', async () => {
+test('findExistingMatch : ne confond pas référence seule ou montant/date avec un doublon certain', async () => {
   const byDoc = await findExistingMatch({
     kind: 'invoice', issuedOn: null, dueOn: null, docNumber: 'MBX-TEST-1', totalHt: null, totalVat: null, totalTtc: null,
     vatRate: null, vatNumbersFound: [], contactId: null, contactName: null, contactConfidence: null,
     worksiteId: null, worksiteRef: null, otherWorksiteRefs: [], textExtracted: true,
   });
-  assert.equal(byDoc, entryId);
+  assert.equal(byDoc, null, 'un numéro seul ne prouve pas l’identité du fournisseur');
 
   const byAmount = await findExistingMatch({
     kind: 'invoice', issuedOn: '2026-09-21', dueOn: null, docNumber: null, totalHt: null, totalVat: null, totalTtc: 121,
     vatRate: null, vatNumbersFound: [], contactId: null, contactName: null, contactConfidence: null,
     worksiteId: null, worksiteRef: null, otherWorksiteRefs: [], textExtracted: true,
   });
-  assert.equal(byAmount, entryId, 'montant proche (±2c) et date proche (±5j), sans n° de document');
+  assert.equal(byAmount, null, 'montant et date seuls ne doivent jamais éliminer une facture');
 
   const noMatch = await findExistingMatch({
     kind: 'invoice', issuedOn: null, dueOn: null, docNumber: 'AUTRE-REF', totalHt: null, totalVat: null, totalTtc: 999,

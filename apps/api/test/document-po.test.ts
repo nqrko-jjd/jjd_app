@@ -63,3 +63,26 @@ test('Peppol note retains both references', () => {
   assert.match(payload.document.note ?? '', /Réf\. client : DOSSIER-12/);
   assert.match(payload.document.note ?? '', /Référence de commande : 00456789402/);
 });
+
+test('Peppol routes the raw PO and buyer reference into distinct structured fields for all sale types', () => {
+  for (const kind of ['invoice', 'deposit_invoice', 'credit_note']) {
+    for (const poNumber of [' 4500135126 ', ' 00456789402 ', '', '   ', null, undefined]) {
+      const d = {
+        kind, number: 'F-TEST-PO', issuedOn: new Date('2026-10-13'), dueOn: null,
+        structuredComm: '+++020/2600/41810+++', customerRef: ' DOSSIER-12 ', poNumber,
+        billingName: 'Client Test', billingVat: 'BE1003823997', billingAddress: 'Rue du Pont 12, 1000 Bruxelles',
+        contact: null, worksite: { ref: 'R-667' }, totalTtc: 13074,
+        lines: [{ kind: 'item', label: 'Travaux', qty: 1, unitPriceHt: 13074, discountPct: 0, vatRate: 0 }],
+      };
+      const payload = JSON.parse(JSON.stringify(buildPeppolPayload(d, { iban: 'BE31068949400055' })));
+      assert.equal(payload.document.purchaseOrderReference, poNumber?.trim() || undefined);
+      assert.equal(Object.hasOwn(payload.document, 'purchaseOrderReference'), !!poNumber?.trim());
+      assert.equal(payload.document.buyerReference, 'DOSSIER-12');
+      assert.equal(payload.document.paymentMeans[0].reference, '+++020/2600/41810+++');
+      assert.match(payload.document.note, /Chantier R-667/);
+      const withoutBuyer = buildPeppolPayload({ ...d, customerRef: '  ' }, { iban: '' });
+      assert.equal(Object.hasOwn(withoutBuyer.document, 'buyerReference'), false);
+      assert.equal(withoutBuyer.document.purchaseOrderReference, poNumber?.trim() || undefined);
+    }
+  }
+});

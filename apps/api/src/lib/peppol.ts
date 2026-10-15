@@ -120,6 +120,9 @@ export function buildPeppolPayload(d: PeppolDoc, co: Pick<Company, 'iban'> & { v
   const common = {
     issueDate: issue,
     currency: 'EUR',
+    // Structured references: the buyer's accounting system does not extract PO numbers from notes.
+    ...(d.poNumber?.trim() ? { purchaseOrderReference: d.poNumber.trim() } : {}),
+    ...(d.customerRef?.trim() ? { buyerReference: d.customerRef.trim() } : {}),
     buyer: { vatNumber: vat, name, street: addr.street, city: addr.city, postalZone: addr.postalZone, country: 'BE' },
     ...(iban ? { paymentMeans: [{ paymentMethod: 'credit_transfer', reference: d.structuredComm ?? d.number, iban }] } : {}),
     ...(reverseCharge ? { vat: { exemptionReasonCode: 'VATEX-EU-AE', exemptionReason: reason } } : {}),

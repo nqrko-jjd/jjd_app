@@ -1,4 +1,6 @@
 'use client';
+import dynamic from 'next/dynamic';
+const PurchaseReception = dynamic(() => import('@/components/PurchaseReception'));
 import { tr } from '@/lib/ui-language';
 import { vehicleName } from '@/lib/vehicle';
 import { SkeletonRows, ErrorState, EmptyState } from '@/components/States';
@@ -43,6 +45,7 @@ interface Expense {
   paidAmount: number;
   remainingAmount: number;
   hasPdf: boolean;
+  receipts: {id:string;source:string;xmlPath:string|null}[];
   foxExportedAt: string | null;
   foxTransmittedAt: string | null;
   editable: boolean;
@@ -108,6 +111,7 @@ function AchatsInner() {
   const [showCandidates, setShowCandidates] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [exporting, setExporting] = useState(false);
+  const [receptionOpen,setReceptionOpen]=useState(false);
   const [fox, setFox] = useState('');
   const [foxNotice, setFoxNotice] = useState('');
   const [foxBusy, setFoxBusy] = useState(false);
@@ -404,7 +408,11 @@ function AchatsInner() {
         }
       />
 
-      <details className="card fox-export-panel" style={{ padding: 16, marginBottom: 16 }}>
+      <details className="card fox-export-panel" style={{ padding: 16, marginBottom: 16 }} onToggle={e=>setReceptionOpen(e.currentTarget.open)}>
+        <summary style={{cursor:'pointer',fontWeight:600}}>Réception Peppol / mails · documents à vérifier</summary>
+        {receptionOpen && <PurchaseReception onImported={reload}/>}
+      </details>
+      <details id="fox-export" className="card fox-export-panel" style={{ padding: 16, marginBottom: 16 }}>
         <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Export pour Fox</summary>
         <p>Sélectionnez les factures, téléchargez le ZIP et extrayez ses PDF avant de les glisser dans Fox. Confirmez ensuite le dépôt réussi.</p>
         <p className="muted">Le suivi commence ici : les anciens dépôts dans Fox ne sont pas connus automatiquement. Vous pouvez les sélectionner puis les marquer comme transmis.</p>
@@ -577,6 +585,8 @@ function AchatsInner() {
                         📦 {e._count.bordereaux} bordereau{e._count.bordereaux > 1 ? 'x' : ''}
                       </span>
                     )}
+                    {(e.source==='peppol' || e.receipts?.length>0) && <span className="badge plain" style={{marginLeft:6}}>Peppol</span>}
+                    {e.receipts?.some(r=>r.xmlPath) && <button className="btn small" onClick={async ev=>{ev.stopPropagation();const r=e.receipts.find(r=>r.xmlPath)!;const url=await apiBlobUrl('/api/finance/expenses/receipts/'+r.id+'/xml');const a=document.createElement('a');a.href=url;a.download='peppol.xml';a.click();setTimeout(()=>URL.revokeObjectURL(url),60000);}}>XML</button>}
                     {e.source === 'chat' && <span className="badge plain" style={{ marginLeft: 6 }} title="Envoyée depuis le fil de chantier — à vérifier">📎 Fil de chantier</span>}
                     {e.source === 'email' && <span className="badge plain" style={{ marginLeft: 6 }} title="Reçue sur la boîte mail factures — à vérifier">✉️ Boîte mail</span>}
                   </td>

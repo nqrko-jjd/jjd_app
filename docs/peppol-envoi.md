@@ -1,3 +1,22 @@
+# Réception et envoi Peppol JJD
+
+## Mise à jour du 15 octobre 2026
+La demande actuelle est de recevoir dans JJD puis de transmettre les achats à Fox. L’import entrant et son contrôle croisé avec les mails sont disponibles dans Achats / Dépenses. Ils ne changent pas l’inscription chez le prestataire : la synchronisation entrante reste désactivée par défaut.
+
+Pour activer : obtenir auprès de Fox/Horus une clé de migration des identifiants Peppol de JJD Consult ; effectuer le transfert dans Recommand ; vérifier que la société est vérifiée et destinataire ; ouvrir le panneau Réception Peppol / mails dans JJD et activer la synchronisation. Ne libérer l’ancien point de réception qu’en coordination avec les deux prestataires si aucune clé de migration n’est disponible. Ne pas perdre l’accès à l’historique Fox.
+
+Une fois activée, JJD relit les documents entrants toutes les dix minutes (jusqu’à 5000 documents historiques, dépassement signalé), archive le PDF rendu et l’XML original, et conserve une référence unique. Les erreurs restent affichées avec la dernière tentative. Aucun accusé d’acceptation métier n’est envoyé et aucun document distant n’est marqué lu/supprimé.
+
+Le numéro, le fournisseur, le type, la date et le TTC sont comparés. Les cas incertains sont conservés dans la liste À vérifier, avec rattachement manuel à un achat ou création après contrôle. Les paiements et transmissions Fox existants sont préservés. L’import des emails utilise le même mécanisme ; il n’élimine plus une facture sur le seul montant.
+
+Validation en production encore requise : une facture réelle reçue après migration, son PDF et son XML, puis dépôt dans Fox. L’export Fox actuel produit les PDF ; l’XML reste téléchargeable depuis la ligne de l’achat.
+
+Sources : https://docs.recommand.eu/docs/receiving-documents et https://docs.recommand.eu/getting-started/belgium/platform/receiving
+
+---
+
+## Historique de la configuration initiale (remplacée par la demande ci-dessus)
+
 # Envoi Peppol JJD : état et activation
 
 ## État au 30 septembre 2026

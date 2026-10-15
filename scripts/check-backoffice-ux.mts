@@ -105,8 +105,10 @@ try {
       await page.$eval('details.card > summary',el=>el.click());
       await page.$$eval('button',els=>els.find(el=>el.textContent==='Sélectionner les PDF à transmettre de cette page').click());
       assert.ok(await page.$$eval('button',els=>els.some(el=>el.textContent==='Télécharger pour Fox (1)' && !el.disabled)));
-      assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2));
+      console.log('FOX_OVERFLOW', width, await page.evaluate(()=>({width:innerWidth,scroll:document.documentElement.scrollWidth,wide:[...document.querySelectorAll('*')].filter(el=>el.getBoundingClientRect().right>innerWidth+2 && getComputedStyle(el).position!=='fixed').slice(-12).map(el=>({tag:el.tagName,cls:el.className,text:el.textContent?.slice(0,60)}))})));
       await page.screenshot({path:'tmp/ux-preview/fox-'+width+'.jpg',type:'jpeg',quality:80});
+      console.log('FOX_PREVIEW_'+width+':'+(await readFile('tmp/ux-preview/fox-'+width+'.jpg')).toString('base64'));
+      assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2));
       await page.select('select[aria-label="Transmission Fox"]','sent');
       await page.waitForFunction(()=>document.body.textContent.includes('Aucune dépense'));
       assert.ok(await page.$$eval('button',els=>els.some(el=>el.textContent==='Télécharger pour Fox (0)' && el.disabled)));

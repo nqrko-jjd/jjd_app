@@ -84,3 +84,39 @@ test('activation refuses an unregistered receiver and disabled sync never calls 
     else await prisma.setting.deleteMany({where:{key:'peppolReception'}});
   }
 });
+
+test('provider polling archives invoice PDF/XML once, does not consume unarchived documents and surfaces malformed responses',async()=>{
+  const old={...env.peppol},oldFetch=globalThis.fetch;
+  const settings=await prisma.setting.findMany({where:{key:{in:['peppolReception','peppolReceptionLast']}}});
+  const providerId=prefix+'-provider';
+  const sourceRef='peppol:test:'+providerId;
+  const contacts=await prisma.contact.findMany({where:{id:contactId}});
+  let pdfCalls=0;
+  try{
+    Object.assign(env.peppol,{apiKey:'test',apiSecret:'test',companyId:'test',baseUrl:'https://test.invalid'});
+    globalThis.fetch=async input=>{
+      const url=String(input);
+      if(url.includes('/companies/'))return new Response(JSON.stringify({company:{id:'test',isSmpRecipient:true,isVerified:true}}));
+      if(url.includes('/documents?'))return new Response(JSON.stringify({documents:[{id:providerId}],pagination:{total:1}}));
+      if(url.endsWith('/render/pdf')){pdfCalls++;return new Response('%PDF-1.4\nmock\n%%EOF');}
+      if(url.endsWith('/documents/'+providerId))return new Response(JSON.stringify({document:{id:providerId,companyId:'test',direction:'incoming',type:'invoice',xml:'<Invoice/>',validation:{result:'valid'},parsed:{invoiceNumber:prefix+'PROVIDER',issueDate:'2026-10-15',currency:'EUR',seller:{name:prefix,vatNumber:contacts[0]!.vat},totals:{taxExclusiveAmount:'100.00',taxInclusiveAmount:'121.00'}}}}));
+      throw new Error('Unexpected provider call: '+url);
+    };
+    await setPeppolReception(true);
+    const first=await syncPeppolInbox() as {imported:number;errors:string[]};
+    assert.equal(first.imported,1);assert.deepEqual(first.errors,[]);
+    const receipt=await prisma.purchaseReceipt.findUniqueOrThrow({where:{sourceRef}});
+    assert.ok(receipt.pdfPath);assert.ok(receipt.xmlPath);assert.ok(receipt.ledgerEntryId);
+    ids.push(receipt.ledgerEntryId!);
+    const second=await syncPeppolInbox() as {imported:number};
+    assert.equal(second.imported,0);assert.equal(pdfCalls,1);
+    globalThis.fetch=async()=>new Response('{}');
+    const failure=await syncPeppolInbox() as {errors:string[]};
+    assert.ok(failure.errors.length>0);
+  }finally{
+    Object.assign(env.peppol,old);globalThis.fetch=oldFetch;
+    await prisma.purchaseReceipt.deleteMany({where:{sourceRef}});
+    await prisma.setting.deleteMany({where:{key:{in:['peppolReception','peppolReceptionLast']}}});
+    for(const setting of settings)await prisma.setting.create({data:{key:setting.key,value:setting.value!}});
+  }
+});

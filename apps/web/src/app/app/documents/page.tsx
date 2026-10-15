@@ -1,6 +1,7 @@
 'use client';
 import { tr } from '@/lib/ui-language';
 import { SkeletonRows, ErrorState, EmptyState } from '@/components/States';
+import { PeppolStatus } from '@/components/PeppolStatus';
 import { FileText } from 'lucide-react';
 import { Suspense, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -20,6 +21,7 @@ interface Row {
   title: string | null; issuedOn: string | null; dueOn: string | null; totalTtc: number; paidAmount: number;
   paidOn: string | null; createdAt: string; billedPct?: number; billedHt?: number;
   originalPdf: string | null; source: string | null;
+  peppolId: string | null; peppolStatus: string | null;
   worksite: { id: string; ref: string; title: string } | null; contact: { name: string } | null;
 }
 
@@ -359,6 +361,7 @@ function DocumentsInner() {
                     ? <span className="chip" style={{ whiteSpace: 'nowrap' }} title="Chantier lié">🏗 {d.worksite.ref}</span>
                     : <span className="chip" style={{ color: 'var(--ink-3)', borderStyle: 'dashed' }} title="Aucun chantier lié">Sans chantier</span>}
                   {d.source === 'ai-draft' && <span className="badge warn" title="Créé par l'assistant IA — à vérifier avant validation">✨ IA</span>}
+                  <PeppolStatus peppolId={d.peppolId} peppolStatus={d.peppolStatus} compact href={`/app/documents/${d.id}#document-delivery`} />
                   {d.kind === 'quote' && (d.billedPct ?? 0) > 0
                     ? <span className={`badge ${d.status === 'accepted' ? 'ok' : 'primary'}`} title={`${d.billedPct} % facturé (${formatEur(d.billedHt ?? 0)} HT)`} style={{ backgroundImage: `linear-gradient(90deg, ${d.status === 'accepted' ? 'rgba(47,143,91,0.55)' : 'rgba(61,127,196,0.5)'} ${d.billedPct}%, transparent ${d.billedPct}%)` }}>{DOC_STATUS_LABEL[d.status] ?? d.status}</span>
                     : <DocStatusBadge status={d.status} />}

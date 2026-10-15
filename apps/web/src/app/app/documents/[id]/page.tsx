@@ -68,6 +68,18 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
   useEffect(() => { if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('acompte') === '1') setDepositOpen(true); }, []);
   const [billingOpen, setBillingOpen] = useState(false);
   const [deliveryOpen, setDeliveryOpen] = useState(false);
+  useEffect(() => {
+    if (!doc?.id) return;
+    let frame = 0;
+    const reveal = () => {
+      if (window.location.hash !== '#document-delivery') return;
+      setDeliveryOpen(true);
+      frame = requestAnimationFrame(() => document.getElementById('document-delivery')?.scrollIntoView({ block: 'start' }));
+    };
+    reveal();
+    window.addEventListener('hashchange', reveal);
+    return () => { cancelAnimationFrame(frame); window.removeEventListener('hashchange', reveal); };
+  }, [doc?.id]);
   const moreActions = useRef<HTMLDetailsElement>(null);
   useEffect(() => {
     const close = (event: MouseEvent | KeyboardEvent) => {

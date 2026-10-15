@@ -85,3 +85,15 @@
 .ux-shell .topbar .btn.ghost { background: transparent; border-color: var(--nav-line); min-width: 44px; min-height: 44px; }
 .ux-shell .burger { width: 44px; height: 44px; flex-shrink: 0; }
 @media(min-width:1200px) { .ux-shell .kpis { grid-template-columns: repeat(auto-fit,minmax(190px,1fr)); } }
+
+/* Delivery receipt is independent from invoice/payment status. */
+.peppol-status { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.peppol-status.compact { min-width: 36px; min-height: 36px; justify-content: center; border-radius: 8px; flex-shrink: 0; }
+.peppol-status.compact:hover { background: var(--surface-2); }
+.peppol-symbol { position: relative; display: inline-flex; padding: 3px; flex-shrink: 0; }
+.peppol-symbol > svg:last-child { position: absolute; right: -4px; bottom: -3px; background: var(--surface); border-radius: 50%; }
+.peppol-delivered { color: var(--ok); }
+.peppol-error { color: var(--crit); }
+.peppol-summary { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 12px 0; }
+#document-delivery { scroll-margin-top: 85px; }
+@media(max-width:600px) { .peppol-status.compact { min-width: 44px; min-height: 44px; } }

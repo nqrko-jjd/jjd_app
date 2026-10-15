@@ -1,4 +1,5 @@
 'use client';
+import { PeppolStatus } from './PeppolStatus';
 import { useEffect, useState } from 'react';
 import { FileText, Send, CheckCircle2, CircleAlert } from 'lucide-react';
 import { api, apiBlobUrl } from '@/lib/api';
@@ -34,6 +35,10 @@ export function DocumentDelivery({doc,busy,onExternal,onError,peppolEnabled=fals
   const pdf=async()=>{try{window.open(await apiBlobUrl(`/api/documents/${doc.id}/pdf`),'_blank','noopener');}catch(e){onError((e as Error).message);}};
   return <section className="doc-card delivery-panel" aria-label="Transmission du document">
     <div className="delivery-title"><div><span className="eyebrow">Transmission</span><h2>Envoyer au client</h2></div><span className="badge plain">{doc.sentAt?'Envoi enregistré':'À transmettre'}</span></div>
+    {(doc.peppolId || doc.peppolStatus) && <div className="peppol-summary">
+      <PeppolStatus peppolId={doc.peppolId} peppolStatus={doc.peppolStatus}/>
+      {!!doc.peppolId && peppolEnabled && onPeppolRefresh && <button type="button" className="btn small" disabled={busy} onClick={onPeppolRefresh}>Actualiser le statut Peppol</button>}
+    </div>}
     <p className="muted">{recipient||'Choisissez le destinataire'}{vat?` · ${vat}`:''}</p>
     <div className="delivery-options" role="group" aria-label="Canal de transmission">
       <button type="button" aria-pressed={channel==='pdf'} className={channel==='pdf'?'selected':''} onClick={()=>setChannel('pdf')}><FileText size={21}/><span><strong>PDF / envoi externe</strong><small>Particuliers ou autre canal convenu</small></span></button>

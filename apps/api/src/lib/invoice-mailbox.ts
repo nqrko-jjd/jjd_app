@@ -11,6 +11,8 @@
  * et le sync ne se lance jamais (voir index.ts) — l'app fonctionne normalement sans.
  */
 import { readFileSync, existsSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { receivePurchase, purchaseMatches, normVat, type PurchaseData } from './purchase-receipts.js';
 // alias distinct de la variable locale "path" (nom de dossier mail) utilisée plus bas dans ce
 // fichier, pour ne laisser planer aucune ambiguïté entre les deux.
 import nodePath from 'node:path';
@@ -83,27 +85,28 @@ interface SyncStats {
  * montant TTC (± 2 c) et date proche (± 5 j). Amounts à 0/absents = extraction peu fiable,
  * jamais utilisés comme clé (risque de faux positif entre plusieurs factures à 0 €).
  */
-export async function findExistingMatch(extraction: Awaited<ReturnType<typeof extractDocumentInfo>>): Promise<string | null> {
-  if (extraction.docNumber) {
-    const byDoc = await prisma.ledgerEntry.findFirst({
-      where: { direction: 'purchase', docNumber: extraction.docNumber },
-      select: { id: true },
-    });
-    if (byDoc) return byDoc.id;
-  }
-  if (extraction.totalTtc) {
-    const where: Record<string, unknown> = {
-      direction: 'purchase',
-      ttc: { gte: extraction.totalTtc - 0.02, lte: extraction.totalTtc + 0.02 },
-    };
-    if (extraction.issuedOn) {
-      const d = new Date(extraction.issuedOn);
-      where.date = { gte: new Date(d.getTime() - 5 * 86400000), lte: new Date(d.getTime() + 5 * 86400000) };
-    }
-    const byAmount = await prisma.ledgerEntry.findFirst({ where, select: { id: true } });
-    if (byAmount) return byAmount.id;
-  }
-  return null;
+async function extractionData(extraction: Awaited<ReturnType<typeof extractDocumentInfo>>): Promise<PurchaseData> {
+  const contact=extraction.contactId?await prisma.contact.findUnique({where:{id:extraction.contactId},select:{vat:true}}):null;
+  return {direction:extraction.kind==='credit_note'?'credit_note':extraction.kind==='delivery_slip'?'delivery_slip':'purchase',
+    docNumber:extraction.docNumber,supplierName:extraction.contactName,supplierVat:extraction.contactConfidence==='vat'?normVat(contact?.vat):null,
+    contactId:extraction.contactId,date:extraction.issuedOn,dueDate:extraction.dueOn,
+    ht:extraction.totalHt,ttc:extraction.totalTtc,vatRate:extraction.vatRate,worksiteId:extraction.worksiteId,worksiteRef:extraction.worksiteRef};
+}
+export async function findExistingMatch(extraction: Awaited<ReturnType<typeof extractDocumentInfo>>): Promise<string|null> {
+  const data=await extractionData(extraction);
+  const matches=await prisma.$transaction(tx=>purchaseMatches(tx,data));
+  return matches.exact.length===1 && matches.possible.length===1?matches.exact[0]!.id:null;
+}
+async function importEmailPdf(buffer:Buffer,name:string) {
+  const sourceRef='email:sha256:'+createHash('sha256').update(buffer).digest('hex');
+  const old=await prisma.purchaseReceipt.findUnique({where:{sourceRef}});
+  if(old) return {receipt:old,existing:true};
+  const extraction=await extractDocumentInfo(buffer,'application/pdf',['supplier','both']);
+  const data=await extractionData(extraction);
+  const pdfPath=storeFile(buffer,name,'expenses');
+  const receipt=await receivePurchase({sourceRef,source:'email',data,pdfPath,
+    reason:extraction.kind==='quote'?'Devis reçu : ce document n’est pas une facture.':null});
+  return {receipt,existing:false};
 }
 
 /**
@@ -154,12 +157,10 @@ export async function syncInvoiceMailbox(): Promise<SyncStats> {
             if (att.contentType !== 'application/pdf') continue;
             if (att.filename && NON_INVOICE_ATTACHMENT_RE.test(att.filename)) continue;
             try {
-              const { data, extraction } = await buildExpenseFromPdf(att.content, att.filename || 'facture.pdf');
-              if (await findExistingMatch(extraction)) { importedAny = true; continue; } // déjà importée (relecture après échec d'une autre pièce jointe du même mail)
-              const created = await prisma.ledgerEntry.create({ data: { ...data, createdById: null } });
-              await scanEntryForRefs(created.id).catch(() => {});
-              stats.pdfsImported++;
-              importedAny = true;
+              const {receipt,existing}=await importEmailPdf(att.content,att.filename||'facture.pdf');
+              if(receipt.ledgerEntryId) await scanEntryForRefs(receipt.ledgerEntryId).catch(()=>{});
+              if(!existing) stats.pdfsImported++;
+              importedAny=true; // Archived in the review queue even when uncertain; never discarded.
             } catch (e) {
               allOk = false;
               stats.errors.push(`uid ${uid}, ${att.filename ?? 'pièce jointe'} : ${(e as Error).message}`);
@@ -244,42 +245,11 @@ export async function scanInvoiceMailboxHistory(folders?: string[]): Promise<Sca
               if (att.contentType !== 'application/pdf') continue;
               if (att.filename && NON_INVOICE_ATTACHMENT_RE.test(att.filename)) continue;
               stats.pdfsFound++;
-              const extraction = await extractDocumentInfo(att.content, 'application/pdf', ['supplier', 'both']);
-              // le n° de document est une clé fiable même sans montant détecté (findExistingMatch
-              // ignore déjà, en interne, la piste montant quand totalTtc est vide/nul) — donc
-              // toujours tenter la correspondance, seul le compteur "extraction incomplète" en
-              // dessous dépend des montants
-              const reliable = !!(extraction.totalTtc || extraction.totalHt);
-              const existingId = await findExistingMatch(extraction);
-              if (existingId) { stats.alreadyInSystem++; continue; }
-              const date = extraction.issuedOn ? new Date(extraction.issuedOn) : new Date(msg.envelope?.date ?? Date.now());
-              const ht = extraction.totalHt
-                ?? (extraction.totalTtc != null ? Math.round((extraction.totalTtc / (1 + (extraction.vatRate ?? 0.21))) * 100) / 100 : 0);
-              const pdfPath = storeFile(att.content, att.filename || 'facture.pdf', 'expenses');
-              const createdEntry = await prisma.ledgerEntry.create({
-                data: {
-                  ...deriveYM(date),
-                  date,
-                  dueDate: extraction.dueOn ? new Date(extraction.dueOn) : null,
-                  direction: 'purchase',
-                  docType: "Facture d'achat",
-                  docNumber: extraction.docNumber,
-                  worksiteId: extraction.worksiteId,
-                  contactId: extraction.contactId,
-                  supplierName: extraction.contactName,
-                  ht,
-                  ttc: extraction.totalTtc,
-                  vatRate: extraction.vatRate,
-                  pdfPath,
-                  paymentStatus: 'Non payé',
-                  source: 'email',
-                  notes: `Retrouvée dans le dossier mail « ${path} »`,
-                  createdById: null,
-                },
-              });
-              await scanEntryForRefs(createdEntry.id).catch(() => {});
-              stats.created++;
-              if (!reliable) stats.unreliableExtraction++;
+              const {receipt,existing}=await importEmailPdf(att.content,att.filename||'facture.pdf');
+              if(existing) stats.alreadyInSystem++;
+              else { stats.created++; if(receipt.status==='review') stats.unreliableExtraction++; }
+              if(receipt.ledgerEntryId) await scanEntryForRefs(receipt.ledgerEntryId).catch(()=>{});
+
             }
           } catch (e) {
             stats.errors.push(`${path} uid ${uid} : ${(e as Error).message}`);

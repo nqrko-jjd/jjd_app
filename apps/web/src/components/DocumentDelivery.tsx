@@ -33,7 +33,7 @@ export function DocumentDelivery({doc,busy,onExternal,onError,peppolEnabled=fals
   const vat=doc.billingVat??doc.contact?.vat;
   const recipient=doc.billingName??doc.contact?.name;
   const pdf=async()=>{try{window.open(await apiBlobUrl(`/api/documents/${doc.id}/pdf`),'_blank','noopener');}catch(e){onError((e as Error).message);}};
-  return <section id="document-delivery" className="doc-card delivery-panel" aria-label="Transmission du document">
+  return <section className="doc-card delivery-panel" aria-label="Transmission du document">
     <div className="delivery-title"><div><span className="eyebrow">Transmission</span><h2>Envoyer au client</h2></div><span className="badge plain">{doc.sentAt?'Envoi enregistré':'À transmettre'}</span></div>
     {(doc.peppolId || doc.peppolStatus) && <div className="peppol-summary">
       <PeppolStatus peppolId={doc.peppolId} peppolStatus={doc.peppolStatus}/>

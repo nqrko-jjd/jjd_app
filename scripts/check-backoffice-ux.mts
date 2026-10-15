@@ -102,7 +102,7 @@ try {
     for (const width of [1440,390]) {
       await page.setViewport({width,height:950});
       await page.goto('http://127.0.0.1:3100/app/achats',{waitUntil:'networkidle2'});
-      await page.$eval('details.card > summary',el=>el.click());
+      await page.$eval('#fox-export > summary',el=>el.click());
       await page.$$eval('button',els=>els.find(el=>el.textContent==='Sélectionner les PDF à transmettre de cette page').click());
       assert.ok(await page.$$eval('button',els=>els.some(el=>el.textContent==='Télécharger pour Fox (1)' && !el.disabled)));
       console.log('FOX_OVERFLOW', width, await page.evaluate(()=>({width:innerWidth,scroll:document.documentElement.scrollWidth,wide:[...document.querySelectorAll('*')].filter(el=>el.getBoundingClientRect().right>innerWidth+2 && getComputedStyle(el).position!=='fixed').slice(-12).map(el=>({tag:el.tagName,cls:el.className,text:el.textContent?.slice(0,60)}))})));

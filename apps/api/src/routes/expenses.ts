@@ -150,7 +150,7 @@ expensesRouter.get(
     const page = Math.max(1, Math.trunc(Number(pageStr)) || 1);
     const pageSize = Math.min(5000, Math.max(20, Math.trunc(Number(pageSizeStr)) || 100));
 
-    const [items, all] = await Promise.all([
+    const [items, all, receiptsToReview] = await Promise.all([
       prisma.ledgerEntry.findMany({
         where: { AND: and },
         orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
@@ -163,6 +163,7 @@ expensesRouter.get(
         where: { AND: and },
         select: { id: true, ht: true, ttc: true, paymentStatus: true, direction: true, linkedInvoiceId: true, dueDate: true },
       }),
+      prisma.purchaseReceipt.count({ where: { status: 'review' } }),
     ]);
 
     const now = new Date();
@@ -200,6 +201,7 @@ expensesRouter.get(
     );
 
     res.json({
+      receiptsToReview,
       items: items.map((e) => ({
         ...e,
         supplier: e.contact?.name ?? e.supplierName ?? null,

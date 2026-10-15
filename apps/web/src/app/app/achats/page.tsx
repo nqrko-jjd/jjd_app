@@ -137,6 +137,7 @@ function AchatsInner() {
   params.set('pageSize', String(pageSize));
   const { data, loading, error, reload } = useApi<{
     items: Expense[];
+    receiptsToReview: number;
     totals: { count: number; ht: number; ttc: number; unpaidTtc: number; pendingSlips: number; overdueCount: number; overdueTtc: number };
     page: number;
     pageSize: number;
@@ -246,7 +247,7 @@ function AchatsInner() {
     setSyncingMailbox(true);
     try {
       const r = await api<{ messagesSeen: number; pdfsImported: number; errors: string[] }>('/api/finance/expenses/sync-mailbox', { method: 'POST' });
-      alert(`${r.pdfsImported} facture(s) importée(s) sur ${r.messagesSeen} mail(s) vérifié(s).${r.errors.length ? `\n${r.errors.length} erreur(s).` : ''}`);
+      alert(`${r.pdfsImported} document(s) reçu(s), dont ceux à vérifier dans le panneau Réception, sur ${r.messagesSeen} mail(s) vérifié(s).${r.errors.length ? `\n${r.errors.length} erreur(s).` : ''}`);
       reload();
     } catch (e) {
       alert(`Échec de la synchronisation : ${(e as Error).message}`);
@@ -409,7 +410,7 @@ function AchatsInner() {
       />
 
       <details className="card fox-export-panel" style={{ padding: 16, marginBottom: 16 }} onToggle={e=>setReceptionOpen(e.currentTarget.open)}>
-        <summary style={{cursor:'pointer',fontWeight:600}}>Réception Peppol / mails · documents à vérifier</summary>
+        <summary style={{cursor:'pointer',fontWeight:600}}>Réception Peppol / mails · documents à vérifier {data?.receiptsToReview ? <span className="badge warn">{data.receiptsToReview}</span> : null}</summary>
         {receptionOpen && <PurchaseReception onImported={reload}/>}
       </details>
       <details id="fox-export" className="card fox-export-panel" style={{ padding: 16, marginBottom: 16 }}>

@@ -1,3 +1,5 @@
+import { peppolReceptionStatus, setPeppolReception, syncPeppolInbox } from '../lib/peppol-inbox.js';
+import { linkPurchaseReceipt, createReviewedPurchase } from '../lib/purchase-receipts.js';
 /**
  * Dépenses / factures d'achat — CRUD autour de LedgerEntry (grand livre).
  * L'historique Excel (~5000 lignes) et les saisies manuelles cohabitent ;
@@ -39,6 +41,7 @@ const inc = {
   // bordereau (direction "delivery_slip") -> facture reçue ensuite ; facture -> ses bordereaux liés
   linkedInvoice: { select: { id: true, docNumber: true, date: true } },
   _count: { select: { bordereaux: true } },
+  receipts: { select: { id: true, source: true, xmlPath: true }, where: { source: 'peppol' } },
 } as const;
 
 function docTypeOf(direction: string): string {
@@ -220,6 +223,45 @@ expensesRouter.get(
     });
   }),
 );
+
+
+expensesRouter.get('/peppol-reception',requireAuth(...OFFICE),asyncHandler(async (_req,res)=>{res.json(await peppolReceptionStatus());}));
+expensesRouter.post('/peppol-reception',requireAuth('admin'),asyncHandler(async(req,res)=>{
+  const {enabled}=z.object({enabled:z.boolean()}).parse(req.body);
+  await setPeppolReception(enabled);
+  await prisma.auditLog.create({data:{actorId:req.user!.id,action:enabled?'enable':'disable',entity:'peppolReception'}});
+  res.json({enabled});
+}));
+expensesRouter.post('/sync-peppol',requireAuth(...OFFICE),asyncHandler(async(_req,res)=>{res.json(await syncPeppolInbox());}));
+expensesRouter.get('/receipts',requireAuth(...OFFICE),asyncHandler(async(req,res)=>{
+  const page=Math.max(1,Number(req.query.page)||1);
+  const where={status:'review'};
+  const [items,total]=await Promise.all([prisma.purchaseReceipt.findMany({where,orderBy:{createdAt:'desc'},skip:(page-1)*30,take:30}),prisma.purchaseReceipt.count({where})]);
+  res.json({items,total,page});
+}));
+expensesRouter.get('/receipts/:id/:format',requireAuth(...OFFICE),asyncHandler(async(req,res)=>{
+  if(!['pdf','xml'].includes(req.params.format!)) throw new HttpError(404,'Format inconnu.');
+  const row=await prisma.purchaseReceipt.findUnique({where:{id:req.params.id}});
+  const file=req.params.format==='xml'?row?.xmlPath:row?.pdfPath;
+  if(!file || !existsSync(resolveUpload(file))) throw new HttpError(404,'Pièce jointe introuvable.');
+  res.setHeader('Content-Type',req.params.format==='xml'?'application/xml':'application/pdf');
+  res.setHeader('Content-Disposition','attachment; filename="document.'+req.params.format+'"');
+  res.sendFile(path.resolve(resolveUpload(file)));
+}));
+expensesRouter.post('/receipts/:id/link',requireAuth(...OFFICE),asyncHandler(async(req,res)=>{
+  const {entryId}=z.object({entryId:z.string().min(1)}).parse(req.body);
+  res.json(await linkPurchaseReceipt(req.params.id!,entryId,req.user!.id));
+}));
+expensesRouter.post('/receipts/:id/create',requireAuth(...OFFICE),asyncHandler(async(req,res)=>{
+  const data=z.object({
+    confirmedDistinct:z.literal(true),direction:z.enum(['purchase','credit_note']),
+    docNumber:z.string().trim().min(1).max(200),supplierName:z.string().trim().min(1).max(300),
+    supplierVat:z.string().max(40).nullable().optional(),contactId:z.null(),
+    date:z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(s=>Number.isFinite(Date.parse(s))),
+    ht:z.number().finite().nonnegative(),ttc:z.number().finite().nonnegative(),
+  }).parse(req.body);
+  res.json(await createReviewedPurchase(req.params.id!,data,req.user!.id));
+}));
 
 /* ------------------------------------------------------------------ meta */
 

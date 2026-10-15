@@ -725,6 +725,8 @@ model PriceItem {
 /// Ligne du grand livre = une ligne de l'onglet "Facture" du fichier.
 /// C'est la granularité qui alimente la marge réelle (matériaux) et le CA.
 model LedgerEntry {
+  foxExportedAt DateTime? // ZIP préparé ; ne constitue pas une transmission
+  foxTransmittedAt DateTime? // dépôt Fox confirmé manuellement
   vehicleRepairs VehicleRepair[]
   id            String    @id @default(cuid())
   date          DateTime?

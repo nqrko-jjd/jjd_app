@@ -34,6 +34,8 @@ on:
       - 'apps/web/src/app/app/finances/**'
       - 'apps/web/src/app/app/contacts/**'
       - 'apps/web/src/app/app/achats/**'
+      - 'apps/web/src/components/PeppolStatus.tsx'
+      - 'apps/web/src/components/DocumentDelivery.tsx'
       - 'apps/web/src/components/BankClientAssign.tsx'
       - 'apps/web/src/components/Shell.tsx'
       - 'apps/web/src/app/app/page.tsx'

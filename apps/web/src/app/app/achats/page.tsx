@@ -404,7 +404,7 @@ function AchatsInner() {
         }
       />
 
-      <details className="card" style={{ padding: 16, marginBottom: 16 }}>
+      <details className="card fox-export-panel" style={{ padding: 16, marginBottom: 16 }}>
         <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Export pour Fox</summary>
         <p>Sélectionnez les factures, téléchargez le ZIP et extrayez ses PDF avant de les glisser dans Fox. Confirmez ensuite le dépôt réussi.</p>
         <p className="muted">Le suivi commence ici : les anciens dépôts dans Fox ne sont pas connus automatiquement. Vous pouvez les sélectionner puis les marquer comme transmis.</p>

@@ -1,8 +1,8 @@
 /**
  * Envoi des factures de vente / notes de crédit sur le réseau Peppol via Recommand (point d'accès certifié, API JSON).
  *
- * ENVOI SEULEMENT : la réception des factures fournisseurs reste gérée par le comptable (son propre point d'accès).
- * JJD n'enregistre donc pas d'adresse de réception ici et ne lit jamais la boîte de réception Recommand.
+ * Transport sortant. La réception opt-in est gérée séparément par peppol-inbox.ts.
+ * Aucune inscription destinataire ni migration de fournisseur n’est effectuée par ce module.
  *
  * Fail-closed : sans clé configurée, rien n'est envoyé ; en cas d'erreur du point d'accès, le document n'est PAS marqué envoyé.
  */

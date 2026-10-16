@@ -19,19 +19,18 @@ const KEY = 'jjd-plan-params';
 
 /**
  * Planning prévisionnel d'après le budget du devis : on règle les hypothèses (équipe, prix d'une journée, part de main-d'œuvre, date de départ),
- * l'aperçu se recalcule, puis on crée des créneaux « à confirmer » dans le planning — rien n'est envoyé à Google tant qu'ils ne sont pas confirmés.
+ * l'aperçu se recalcule, puis on enregistre le PROGRAMME du chantier (onglet Planning du chantier, en Gantt). Rien n'est écrit dans le planning des équipes
+ * ni dans Google Agenda : on l'y crée plus tard, après validation, depuis le chantier.
  */
 export function QuotePlanModal({ quoteId, onClose }: { quoteId: string; onClose: () => void }) {
   const [startDate, setStartDate] = useState('');
   const [teamSize, setTeamSize] = useState('2');
   const [dayRate, setDayRate] = useState('380');
   const [share, setShare] = useState('50');
-  const [personIds, setPersonIds] = useState<string[]>([]);
   const [pv, setPv] = useState<Preview | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState<{ created: number; endDate: string } | null>(null);
-  const { data: pick } = useApi<{ people: { id: string; name: string; role?: string }[] }>('/api/meta/pickers');
+  const [done, setDone] = useState<{ created: number; endDate: string; worksiteId: string } | null>(null);
 
   useEffect(() => {
     try { const k = JSON.parse(localStorage.getItem(KEY) ?? 'null'); if (k) { setTeamSize(String(k.teamSize)); setDayRate(String(k.dayRate)); setShare(String(k.share)); } } catch { /* ignoré */ }
@@ -71,7 +70,7 @@ export function QuotePlanModal({ quoteId, onClose }: { quoteId: string; onClose:
   async function create(replace: boolean) {
     setBusy(true); setErr(null);
     try {
-      const r = await api<{ created: number; endDate: string }>(`/api/quote-tools/${quoteId}/plan/create`, { method: 'POST', body: { ...body, personIds, replace } });
+      const r = await api<{ created: number; endDate: string; worksiteId: string }>(`/api/quote-tools/${quoteId}/plan/create`, { method: 'POST', body: { ...body, replace } });
       try { localStorage.setItem(KEY, JSON.stringify({ teamSize: body.teamSize, dayRate: body.dayRate, share: Math.round(body.labourShare * 100) })); } catch { /* ignoré */ }
       setDone(r);
     } catch (e) { setErr(e instanceof Error ? e.message : 'Création impossible.'); }
@@ -81,13 +80,13 @@ export function QuotePlanModal({ quoteId, onClose }: { quoteId: string; onClose:
   return (
     <div className="modal-scrim" onClick={onClose}>
       <div className="modal" style={{ maxWidth: 980, maxHeight: '92vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
-        <div className="modal-head"><h2>Planning prévisionnel d’après le devis</h2><button className="btn ghost" onClick={onClose} aria-label={tr("Fermer")}>✕</button></div>
+        <div className="modal-head"><h2>Programme prévisionnel d’après le devis</h2><button className="btn ghost" onClick={onClose} aria-label={tr("Fermer")}>✕</button></div>
         <div style={{ padding: '1rem', display: 'grid', gap: '0.9rem' }}>
           {done ? (
             <>
-              <p className="state" role="status">{done.created} créneau{done.created > 1 ? 'x' : ''} « à confirmer » créé{done.created > 1 ? 's' : ''}, jusqu’au {dayFr(done.endDate)}.</p>
-              <p className="muted" style={{ margin: 0 }}>Ils apparaissent en pointillés dans le planning. Affecte l’équipe et confirme-les un par un ; rien n’est envoyé à Google Agenda avant la confirmation.</p>
-              <div className="row"><Link className="btn primary" href={`/app/planning`}>Ouvrir le planning</Link><button className="btn" onClick={onClose}>{tr("Fermer")}</button></div>
+              <p className="state" role="status">Programme enregistré : {done.created} lot{done.created > 1 ? 's' : ''}, jusqu’au {dayFr(done.endDate)}.</p>
+              <p className="muted" style={{ margin: 0 }}>Il s’affiche dans l’onglet Planning du chantier (diagramme de Gantt). <strong>Rien n’a été écrit dans le planning des équipes ni dans Google Agenda</strong> : tu pourras ajuster les dates, puis le créer dans le planning quand tu le valides.</p>
+              <div className="row"><Link className="btn primary" href={`/app/chantiers/${done.worksiteId}?tab=planning`}>Voir le programme du chantier</Link><button className="btn" onClick={onClose}>{tr("Fermer")}</button></div>
             </>
           ) : (
             <>
@@ -107,7 +106,7 @@ export function QuotePlanModal({ quoteId, onClose }: { quoteId: string; onClose:
               {pv && (
                 <>
                   <div>
-                    <div className="eyebrow" style={{ margin: '0 0 0.4rem' }}>Planning en diagramme de Gantt</div>
+                    <div className="eyebrow" style={{ margin: '0 0 0.4rem' }}>Programme en diagramme de Gantt</div>
                     <GanttChart rows={ganttRows} />
                   </div>
                   <div className="tbl-wrap">
@@ -122,31 +121,21 @@ export function QuotePlanModal({ quoteId, onClose }: { quoteId: string; onClose:
                     </table>
                   </div>
                   <details>
-                    <summary style={{ cursor: 'pointer', fontSize: '0.86rem' }}>{tr("Voir les")} {pv.slots.length} créneaux proposés</summary>
+                    <summary style={{ cursor: 'pointer', fontSize: '0.86rem' }}>{tr("Voir les")} {pv.slots.length} demi-journées / journées du programme</summary>
                     <ul style={{ margin: '0.4rem 0 0', paddingLeft: '1.1rem', fontSize: '0.85rem' }}>
                       {pv.slots.map((s, i) => <li key={i}>{dayFr(s.date)} · {s.start}–{s.end} · Lot {s.lot} — {s.title}</li>)}
                     </ul>
                   </details>
 
-                  <details>
-                    <summary style={{ cursor: 'pointer', fontSize: '0.86rem' }}>Affecter une équipe dès maintenant (facultatif)</summary>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginTop: '0.5rem' }}>
-                      {(pick?.people ?? []).map((p) => {
-                        const on = personIds.includes(p.id);
-                        return <button key={p.id} type="button" className={`btn${on ? ' primary' : ''}`} style={{ padding: '0.2rem 0.6rem', fontSize: '0.8rem' }} onClick={() => setPersonIds((c) => (on ? c.filter((x) => x !== p.id) : [...c, p.id]))}>{p.name}</button>;
-                      })}
-                    </div>
-                  </details>
-
                   {pv.existing > 0 && (
                     <p className="state error" style={{ margin: 0 }}>
-                      Un planning proposé existe déjà pour ce devis ({pv.existing} créneau{pv.existing > 1 ? 'x' : ''}{pv.confirmed ? `, dont ${pv.confirmed} déjà confirmé${pv.confirmed > 1 ? 's' : ''}` : ''}). « Remplacer » supprime seulement ceux qui sont encore « à confirmer ».
+                      Un programme existe déjà pour ce devis ({pv.existing} lot{pv.existing > 1 ? 's' : ''}{pv.confirmed ? `, dont ${pv.confirmed} déjà créé${pv.confirmed > 1 ? 's' : ''} dans le planning` : ''}). « Remplacer » ne supprime que les lots pas encore créés dans le planning.
                     </p>
                   )}
                   <div className="row" style={{ gap: '0.5rem' }}>
                     {pv.existing > 0
-                      ? <button className="btn primary" disabled={busy} onClick={() => create(true)}>{busy ? 'Création…' : 'Remplacer le planning proposé'}</button>
-                      : <button className="btn primary" disabled={busy} onClick={() => create(false)}>{busy ? 'Création…' : `Créer ${pv.slots.length} créneaux « à confirmer »`}</button>}
+                      ? <button className="btn primary" disabled={busy} onClick={() => create(true)}>{busy ? 'Enregistrement…' : 'Remplacer le programme'}</button>
+                      : <button className="btn primary" disabled={busy} onClick={() => create(false)}>{busy ? 'Enregistrement…' : `Enregistrer le programme (${pv.lots.length} lots)`}</button>}
                     <button className="btn" onClick={onClose}>{tr("Annuler")}</button>
                   </div>
                 </>

@@ -637,9 +637,9 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
               {isQuote && (
                 <button
                   className="btn" disabled={!!busy || !doc.worksite} onClick={openPlan}
-                  title={doc.worksite ? 'Durée et créneaux proposés d’après le budget du devis' : 'Rattachez d’abord le devis à un chantier'}
+                  title={doc.worksite ? 'Programme proposé d’après le budget du devis, affiché en Gantt sur le chantier (rien n’est écrit dans le planning des équipes)' : 'Rattachez d’abord le devis à un chantier'}
                 >
-                  <CalendarDays size={18}/>Planning prévisionnel
+                  <CalendarDays size={18}/>Programme prévisionnel (Gantt)
                 </button>
               )}
               {isQuote && (

@@ -86,7 +86,7 @@ const call = async (method: string, path: string, body?: unknown, auth = true) =
   return { status: r.status, body: (await r.json().catch(() => null)) as any }; // eslint-disable-line @typescript-eslint/no-explicit-any
 };
 
-test('API planning : aperçu, création « à confirmer », refus du doublon, remplacement, suppression', async () => {
+test('API programme : aperçu, enregistrement sans toucher au planning, doublon, remplacement, dates, création dans le planning, suppression', async () => {
   const q = await call('POST', '/api/documents', { kind: 'quote', worksiteId: ids.ws, lines: [
     { kind: 'section', label: 'Façade', qty: 1, unitPriceHt: 0, vatRate: 0.06 },
     { kind: 'item', label: 'Crépi de façade', qty: 50, unit: 'm²', unitPriceHt: 76, vatRate: 0.06 }, // 3800 € -> 1900 € main-d’œuvre -> 5 j-homme -> 2,5 j à deux
@@ -99,19 +99,40 @@ test('API planning : aperçu, création « à confirmer », refus du doublon, re
   assert.equal(pv.body.existing, 0);
   assert.equal(await prisma.planningEvent.count({ where: { worksiteId: ids.ws } }), 0, 'l’aperçu ne crée rien');
 
+  // « Proposer » enregistre le programme du chantier (Gantt) : RIEN n'est écrit dans le planning des équipes
   const cr = await call('POST', `/api/quote-tools/${ids.quote}/plan/create`, { startDate: '2026-10-05' });
   assert.equal(cr.status, 201);
-  const evs = await prisma.planningEvent.findMany({ where: { fromQuoteId: ids.quote }, orderBy: { startAt: 'asc' } });
-  assert.equal(evs.length, 3);
-  assert.ok(evs.every((e) => e.status === 'tentative' && e.kind === 'intervention' && e.googleEventId === null));
-  assert.equal(evs[0]!.startAt.toISOString(), '2026-10-05T06:30:00.000Z');
-  assert.match(evs[0]!.tasksNote ?? '', /Crépi de façade/);
+  assert.equal(await prisma.planningEvent.count({ where: { worksiteId: ids.ws } }), 0, 'aucun créneau dans le planning');
+  const prog = (await call('GET', `/api/quote-tools/worksite/${ids.ws}/program`)).body.lots as { id: string; title: string; startDay: string; endDay: string; startPart: number; endPart: number; plannedAt: string | null }[];
+  assert.equal(prog.length, 1);
+  assert.equal(prog[0]!.startDay, '2026-10-05'); assert.equal(prog[0]!.endDay, '2026-10-07'); assert.equal(prog[0]!.endPart, 0.5);
 
   assert.equal((await call('POST', `/api/quote-tools/${ids.quote}/plan/create`, { startDate: '2026-10-05' })).status, 409);
   const again = await call('POST', `/api/quote-tools/${ids.quote}/plan/create`, { startDate: '2026-10-12', replace: true });
   assert.equal(again.status, 201);
-  assert.equal(await prisma.planningEvent.count({ where: { fromQuoteId: ids.quote } }), 3, 'remplacé, pas doublé');
-  assert.equal((await call('DELETE', `/api/quote-tools/${ids.quote}/plan`)).body.deleted, 3);
+  const lots2 = (await call('GET', `/api/quote-tools/worksite/${ids.ws}/program`)).body.lots as { id: string; startDay: string }[];
+  assert.equal(lots2.length, 1, 'remplacé, pas doublé');
+  assert.equal(lots2[0]!.startDay, '2026-10-12');
+
+  // ajustement des dates (toujours sans toucher au planning)
+  const moved = await call('PATCH', `/api/quote-tools/program/${lots2[0]!.id}`, { startDay: '2026-10-13' });
+  assert.equal(moved.status, 200);
+  assert.equal((await call('PATCH', `/api/quote-tools/program/${lots2[0]!.id}`, { endDay: '2026-10-01' })).status, 422, 'fin avant le début refusée');
+  assert.equal(await prisma.planningEvent.count({ where: { worksiteId: ids.ws } }), 0);
+
+  // création dans le planning, après validation : « à confirmer », jamais envoyée à Google ; une seule fois
+  const to = await call('POST', `/api/quote-tools/worksite/${ids.ws}/program/to-planning`, {});
+  assert.equal(to.status, 201);
+  const evs = await prisma.planningEvent.findMany({ where: { worksiteId: ids.ws }, orderBy: { startAt: 'asc' } });
+  assert.ok(evs.length >= 1 && evs.every((e) => e.status === 'tentative' && e.kind === 'intervention' && e.googleEventId === null));
+  assert.equal(evs[0]!.startAt.toISOString(), '2026-10-13T06:30:00.000Z');
+  assert.match(evs[0]!.tasksNote ?? '', /Crépi de façade/);
+  assert.equal((await call('POST', `/api/quote-tools/worksite/${ids.ws}/program/to-planning`, {})).status, 409, 'déjà dans le planning');
+  assert.ok((await prisma.programLot.findFirst({ where: { worksiteId: ids.ws! } }))!.plannedAt);
+
+  await prisma.planningEvent.deleteMany({ where: { worksiteId: ids.ws } });
+  await prisma.programLot.updateMany({ where: { worksiteId: ids.ws! }, data: { plannedAt: null } });
+  assert.equal((await call('DELETE', `/api/quote-tools/${ids.quote}/plan`)).body.deleted, 1);
   assert.equal((await call('POST', `/api/quote-tools/${ids.quote}/plan/preview`, { teamSize: 0 })).status, 422);
 });
 

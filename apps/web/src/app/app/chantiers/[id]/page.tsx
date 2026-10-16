@@ -3,8 +3,8 @@ import { tr } from '@/lib/ui-language';
 import { ContactsDialog } from '@/components/ContactRoleEditor';
 import { HardHat } from 'lucide-react';
 import { SkeletonRows, EmptyState, ErrorState } from '@/components/States';
-import { use, useMemo, useState } from 'react';
-import { GanttChart, eventsToGantt } from '@/components/GanttChart';
+import { use, useMemo, useState, useEffect } from 'react';
+import { GanttChart, eventsToGantt, type GanttRow } from '@/components/GanttChart';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
@@ -83,6 +83,11 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
   const [duplicating, setDuplicating] = useState(false);
   const [invoicing, setInvoicing] = useState<string | null>(null);
   const [tab, setTab] = useState<'overview' | 'planning' | 'tasks' | 'finances' | 'photos' | 'files' | 'mails' | 'discussion'>('overview');
+  // lien direct vers un onglet : /app/chantiers/<id>?tab=planning
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get('tab');
+    if (t === 'planning' || t === 'tasks' || t === 'finances' || t === 'photos' || t === 'files' || t === 'mails' || t === 'discussion') setTab(t);
+  }, []);
   // nombre de documents (pastille de l'onglet « Documents »)
   const { data: filesInfo, reload: reloadFiles } = useApi<{ items: unknown[] }>(`/api/worksites/${id}/files`);
   // suivi des mails : réservé au bureau (les chefs de chantier et ouvriers ne le voient pas)
@@ -636,20 +641,86 @@ function TransportDetail({ t }: { t: NonNullable<Detail['margin']>['transport'] 
   );
 }
 
-/** Onglet Planning : le chantier en diagramme de Gantt (interventions, regroupées par lot quand elles viennent du devis). */
+interface ProgramLot { id: string; quoteId: string | null; title: string; budgetHt: number; days: number; startDay: string; startPart: number; endDay: string; endPart: number; plannedAt: string | null }
+
+/**
+ * Onglet Planning : en haut le PROGRAMME prévisionnel d'après le devis (Gantt par poste, dates ajustables) — il n'écrit rien dans le planning des équipes ;
+ * en bas les interventions réellement planifiées pour les équipes. « Créer dans le planning » transforme le programme en créneaux « à confirmer », après validation.
+ */
 function PlanningTab({ worksiteId }: { worksiteId: string }) {
-  const { data } = useApi<{ items: Parameters<typeof eventsToGantt>[0] }>(`/api/planning?worksiteId=${worksiteId}`);
+  const { data, reload: reloadEvents } = useApi<{ items: Parameters<typeof eventsToGantt>[0] }>(`/api/planning?worksiteId=${worksiteId}`);
+  const { data: prog, reload: reloadProg } = useApi<{ lots: ProgramLot[] }>(`/api/quote-tools/worksite/${worksiteId}/program`);
   const rows = useMemo(() => eventsToGantt(data?.items ?? []), [data]);
+  const lots = prog?.lots ?? [];
+  const progRows: GanttRow[] = useMemo(() => lots.map((l) => ({
+    id: l.id, label: l.title, sub: `${String(l.days).replace('.', ',')} j · ${l.budgetHt.toLocaleString('fr-BE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })}${l.plannedAt ? ' · dans le planning' : ''}`,
+    startDay: l.startDay, startPart: l.startPart === 0.5 ? 0.5 : 0, endDay: l.endDay, endPart: l.endPart === 0.5 ? 0.5 : 1, tentative: !l.plannedAt,
+  })), [lots]);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const pending = lots.filter((l) => !l.plannedAt);
+
+  async function run(fn: () => Promise<string | void>) {
+    setBusy(true); setMsg(null);
+    try { const t = await fn(); if (t) setMsg({ ok: true, text: t }); reloadProg(); reloadEvents(); } catch (e) { setMsg({ ok: false, text: (e as Error).message }); } finally { setBusy(false); }
+  }
+  const patch = (l: ProgramLot, body: { startDay?: string; endDay?: string }) => run(async () => { await api(`/api/quote-tools/program/${l.id}`, { method: 'PATCH', body }); });
+  const toPlanning = () => {
+    if (!window.confirm(`Créer ${pending.length} lot${pending.length > 1 ? 's' : ''} dans le planning des équipes ? Les créneaux seront « à confirmer » (rien n’est envoyé à Google Agenda avant leur confirmation).`)) return;
+    run(async () => { const r = await api<{ lots: number; created: number }>(`/api/quote-tools/worksite/${worksiteId}/program/to-planning`, { method: 'POST', body: {} }); return `${r.lots} lot${r.lots > 1 ? 's' : ''} créé${r.lots > 1 ? 's' : ''} dans le planning (${r.created} créneaux « à confirmer »).`; });
+  };
+  const remove = () => {
+    if (!window.confirm('Supprimer le programme ? Les lots déjà créés dans le planning des équipes ne sont pas touchés.')) return;
+    run(async () => { for (const q of new Set(pending.map((l) => l.quoteId).filter(Boolean))) await api(`/api/quote-tools/${q}/plan`, { method: 'DELETE' }); return 'Programme supprimé.'; });
+  };
+
   return (
-    <section className="card card-pad">
-      <div className="row" style={{ justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-        <div className="section-title" style={{ margin: 0 }}>{tr("Planning")}</div>
-        <Link href="/app/planning" className="hint">Ouvrir le planning des équipes →</Link>
-      </div>
-      {!data ? <p className="muted" style={{ margin: 0 }}>Chargement…</p>
-        : rows.length === 0 ? <p className="muted" style={{ margin: 0 }}>Aucune intervention planifiée sur ce chantier.</p>
-        : <GanttChart rows={rows} />}
-    </section>
+    <div style={{ display: 'grid', gap: '1rem' }}>
+      <section className="card card-pad">
+        <div className="row" style={{ justifyContent: 'space-between', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+          <div className="section-title" style={{ margin: 0 }}>Programme prévisionnel</div>
+          <div className="row" style={{ gap: '0.4rem' }}>
+            {pending.length > 0 && <button className="btn primary" disabled={busy} onClick={toPlanning}>Créer dans le planning des équipes</button>}
+            {pending.length > 0 && <button className="btn" disabled={busy} onClick={remove}>Supprimer le programme</button>}
+          </div>
+        </div>
+        {msg && <div className={`badge ${msg.ok ? 'ok' : 'crit'}`} style={{ marginBottom: '0.6rem', padding: '0.4rem 0.7rem' }}>{msg.text}</div>}
+        {!prog ? <p className="muted" style={{ margin: 0 }}>Chargement…</p>
+          : lots.length === 0 ? <p className="muted" style={{ margin: 0 }}>Aucun programme. Depuis le devis accepté, « Planning » propose un programme d’après son budget : il s’affiche ici, sans rien écrire dans le planning des équipes.</p>
+          : (
+            <>
+              <p className="muted" style={{ margin: '0 0 0.6rem', fontSize: '0.84rem' }}>Proposition d’après le budget du devis (hachuré = pas encore dans le planning des équipes). Ajuste les dates, puis crée-le dans le planning quand tu le valides.</p>
+              <GanttChart rows={progRows} />
+              <div className="tbl-wrap" style={{ marginTop: '0.8rem' }}>
+                <table className="tbl">
+                  <thead><tr><th>Lot</th><th style={{ textAlign: 'right' }}>Durée</th><th>Début</th><th>Fin</th><th /></tr></thead>
+                  <tbody>
+                    {lots.map((l) => (
+                      <tr key={l.id}>
+                        <td>{l.title}</td>
+                        <td style={{ textAlign: 'right' }}>{String(l.days).replace('.', ',')} j</td>
+                        <td><input className="input" type="date" disabled={busy || !!l.plannedAt} defaultValue={l.startDay} key={`s${l.startDay}`} onBlur={(e) => e.target.value && e.target.value !== l.startDay && patch(l, { startDay: e.target.value })} /></td>
+                        <td><input className="input" type="date" disabled={busy || !!l.plannedAt} defaultValue={l.endDay} key={`e${l.endDay}`} onBlur={(e) => e.target.value && e.target.value !== l.endDay && patch(l, { endDay: e.target.value })} /></td>
+                        <td>{l.plannedAt ? <span className="badge ok">dans le planning</span> : <span className="badge plain">proposé</span>}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+      </section>
+
+      <section className="card card-pad">
+        <div className="row" style={{ justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+          <div className="section-title" style={{ margin: 0 }}>{tr("Planning")} · interventions des équipes</div>
+          <Link href="/app/planning" className="hint">Ouvrir le planning des équipes →</Link>
+        </div>
+        {!data ? <p className="muted" style={{ margin: 0 }}>Chargement…</p>
+          : rows.length === 0 ? <p className="muted" style={{ margin: 0 }}>Aucune intervention planifiée sur ce chantier.</p>
+          : <GanttChart rows={rows} />}
+      </section>
+    </div>
   );
 }
 

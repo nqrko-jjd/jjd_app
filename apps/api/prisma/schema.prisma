@@ -499,6 +499,7 @@ model Worksite {
   tasks          WorksiteTask[]
   files          WorksiteFile[]
   taskPhases     WorksiteTaskPhase[]
+  programLots    ProgramLot[]
   stockMovements StockMovement[]
   stockOrders    StockOrder[]    @relation("StockOrderWorksite")
   purchaseOrders PurchaseOrder[] @relation("PurchaseOrderWorksite")
@@ -1904,4 +1905,28 @@ model PurchaseReceipt {
   ledgerEntry LedgerEntry? @relation(fields: [ledgerEntryId], references: [id], onDelete: SetNull)
   createdAt DateTime @default(now())
   @@index([status, createdAt])
+}
+
+/// Programme prévisionnel d'un chantier, proposé d'après le devis : un lot (poste) par barre du Gantt du chantier, avec ses dates.
+/// N'est PAS le planning des équipes : rien n'y est écrit tant qu'on ne choisit pas « Créer dans le planning » (voir routes/quote-tools.ts).
+model ProgramLot {
+  id         String    @id @default(cuid())
+  worksiteId String
+  worksite   Worksite  @relation(fields: [worksiteId], references: [id], onDelete: Cascade)
+  quoteId    String?
+  position   Int       @default(0)
+  title      String
+  budgetHt   Float     @default(0)
+  manDays    Float     @default(0)
+  days       Float     @default(0)
+  startDay   String // AAAA-MM-JJ (Bruxelles)
+  startPart  Float     @default(0) // 0 = matin, 0.5 = après-midi
+  endDay     String
+  endPart    Float     @default(1) // 0.5 = midi, 1 = fin de journée
+  items      Json? // détail des travaux (liste de textes)
+  plannedAt  DateTime? // créé dans le planning des équipes à cette date
+  createdAt  DateTime  @default(now())
+
+  @@index([worksiteId])
+  @@index([quoteId])
 }

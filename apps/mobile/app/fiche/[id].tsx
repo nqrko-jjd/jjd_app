@@ -8,7 +8,7 @@ import { ScreenHeader, Card, Label, Loading, Row, Muted, dateBE } from '@/lib/ui
 import { T } from '@/lib/theme';
 import { tr, dateLocale } from '@/lib/i18n';
 
-interface Task { id: string; title: string; status: string; assignees: { id: string; name: string }[] }
+interface Task { id: string; title: string; status: string; assignees: { id: string; name: string }[]; checklist?: { label: string; done: boolean }[] | null }
 
 const ROLE: Record<string, string> = {
   concierge: 'Concierge', president: 'Président', council: 'Conseil', syndic_manager: 'Gestionnaire syndic',
@@ -44,6 +44,7 @@ export default function FicheDuJour() {
   const router = useRouter();
   const [d, setD] = useState<Field | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [openTasks_, setOpenTasks_] = useState<Set<string>>(new Set()); // tâches dont la liste de travaux est dépliée
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskAssignees, setNewTaskAssignees] = useState<Set<string>>(new Set());
   const [addingTask, setAddingTask] = useState(false);
@@ -59,6 +60,14 @@ export default function FicheDuJour() {
     const next = t.status === 'done' ? 'todo' : 'done';
     setTasks((ts) => ts.map((x) => (x.id === t.id ? { ...x, status: next } : x)));
     await apiSend(`/api/tasks/${t.id}`, 'PATCH', { status: next });
+  };
+  // case d'une liste de travaux (issue du devis) : la tâche passe « en cours » dès la 1re case, « faite » quand tout est coché
+  const toggleCheck = async (t: Task, i: number) => {
+    const checklist = (t.checklist ?? []).map((c, j) => (j === i ? { ...c, done: !c.done } : c));
+    const doneCount = checklist.filter((c) => c.done).length;
+    const status = doneCount === checklist.length ? 'done' : doneCount > 0 ? 'doing' : 'todo';
+    setTasks((ts) => ts.map((x) => (x.id === t.id ? { ...x, checklist, status } : x)));
+    await apiSend(`/api/tasks/${t.id}`, 'PATCH', { checklist, status });
   };
   const toggleNewTaskAssignee = (personId: string) => {
     setNewTaskAssignees((s) => {
@@ -144,14 +153,33 @@ export default function FicheDuJour() {
       <Card>
         <Label>Tâches ({openTasks.length} à faire)</Label>
         {[...openTasks, ...doneTasks].map((t) => (
-          <Pressable key={t.id} onPress={() => toggleTask(t)} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 7 }}>
+          <View key={t.id}>
+          <Pressable onPress={() => toggleTask(t)} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 7 }}>
             <View style={{ width: 20, height: 20, borderRadius: 5, borderWidth: 2, borderColor: t.status === 'done' ? T.ok : T.line, backgroundColor: t.status === 'done' ? T.ok : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
               {t.status === 'done' && <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>✓</Text>}
             </View>
             <Text style={{ flex: 1, color: t.status === 'done' ? T.ink3 : T.ink, textDecorationLine: t.status === 'done' ? 'line-through' : 'none' }}>
               {t.title}{t.assignees.length ? `  ·  ${t.assignees.map((a) => a.name).join(', ')}` : ''}
             </Text>
+            {!!t.checklist?.length && (
+              <Pressable onPress={() => setOpenTasks_((s) => { const n = new Set(s); if (n.has(t.id)) n.delete(t.id); else n.add(t.id); return n; })} hitSlop={8} style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999, backgroundColor: T.primarySoft }}>
+                <Text style={{ color: T.primary, fontSize: 12, fontWeight: '800' }}>{t.checklist.filter((c) => c.done).length}/{t.checklist.length} {openTasks_.has(t.id) ? '▴' : '▾'}</Text>
+              </Pressable>
+            )}
           </Pressable>
+          {openTasks_.has(t.id) && !!t.checklist?.length && (
+            <View style={{ paddingLeft: 30, paddingBottom: 6, gap: 2 }}>
+              {t.checklist.map((c, i) => (
+                <Pressable key={i} onPress={() => toggleCheck(t, i)} style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-start', paddingVertical: 5 }}>
+                  <View style={{ width: 18, height: 18, borderRadius: 4, borderWidth: 2, borderColor: c.done ? T.ok : T.line, backgroundColor: c.done ? T.ok : 'transparent', alignItems: 'center', justifyContent: 'center', marginTop: 1 }}>
+                    {c.done && <Text style={{ color: '#fff', fontSize: 11, fontWeight: '800' }}>✓</Text>}
+                  </View>
+                  <Text style={{ flex: 1, color: c.done ? T.ink3 : T.ink, fontSize: 14, textDecorationLine: c.done ? 'line-through' : 'none' }}>{c.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+          </View>
         ))}
 
         <View style={{ marginTop: 8, gap: 8 }}>

@@ -1,6 +1,7 @@
 import { computeWorksiteMargin, type Entity, type WorksiteMargin } from '@jjd/shared';
 import { prisma } from '../db.js';
 import { worksiteTransport, type WorksiteTransport } from './vehicle-cost.js';
+import { invoiceWorksiteAllocation } from './invoice-allocation.js';
 import { isOuvrierRemuneration, isCreditNoteSale, isVehicleFinancing, paidFraction } from './consolidated.js';
 
 /**
@@ -130,16 +131,9 @@ export async function slipCostShift(worksiteId: string): Promise<number> {
   for (const inv of invoices) {
     // facture déjà répartie par chantier à la saisie (une écriture par chantier, même n° de facture) : la répartition existe déjà, on n'y touche pas
     if (inv.docNumber && await prisma.ledgerEntry.count({ where: { direction: 'purchase', docNumber: inv.docNumber, id: { not: inv.id }, OR: [...(inv.contactId ? [{ contactId: inv.contactId }] : []), ...(inv.supplierName ? [{ supplierName: inv.supplierName }] : [])] } }) > 0) continue;
-    // seuls les bordereaux d'un AUTRE chantier que celui de la facture déplacent du coût (ceux du même chantier y sont déjà)
-    const moving = slips.filter((s) => s.linkedInvoiceId === inv.id && s.worksiteId && s.worksiteId !== inv.worksiteId);
-    const total = moving.reduce((a, s) => a + s.ht, 0);
-    if (!total) continue;
-    const scale = total > inv.ht && inv.ht > 0 ? inv.ht / total : 1; // jamais plus que le montant de la facture
-    for (const s of moving) {
-      const part = s.ht * scale;
-      if (s.worksiteId === worksiteId) delta += part;
-      if (inv.worksiteId === worksiteId) delta -= part;
-    }
+    const alloc = invoiceWorksiteAllocation(inv, slips.filter((s) => s.linkedInvoiceId === inv.id));
+    if (!alloc.length) continue;
+    delta += (alloc.find((a) => a.worksiteId === worksiteId)?.ht ?? 0) - (inv.worksiteId === worksiteId ? inv.ht : 0);
   }
   return Math.round(delta * 100) / 100;
 }

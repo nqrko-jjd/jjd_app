@@ -39,3 +39,21 @@ test('facture déjà répartie par chantier à la saisie (une écriture par chan
   assert.equal((await worksiteMargin(f))!.materialCost, 60);
   assert.equal((await worksiteMargin(g))!.materialCost, 40);
 });
+
+test('la facture expose sa répartition par chantier (calculée d’après les bordereaux reliés), sans rien saisir', async () => {
+  const { createApp } = await import('../src/app.js');
+  const h = await site('R-ALLOC-H'), i = await site('R-ALLOC-I'), j = await site('R-ALLOC-J');
+  const inv = await entry({ direction: 'purchase', docNumber: 'FC-9', supplierName: 'Lambert Alloc', ht: 619.85, ttc: 750.02, worksiteId: h });
+  await entry({ direction: 'delivery_slip', docNumber: 'BC-9a', supplierName: 'Lambert Alloc', ht: 75.66, ttc: 91.55, worksiteId: i, linkedInvoiceId: inv.id });
+  await entry({ direction: 'delivery_slip', docNumber: 'BC-9b', supplierName: 'Lambert Alloc', ht: 98.74, ttc: 119.47, worksiteId: i, linkedInvoiceId: inv.id });
+  await entry({ direction: 'delivery_slip', docNumber: 'BC-9c', supplierName: 'Lambert Alloc', ht: 34.23, ttc: 41.42, worksiteId: j, linkedInvoiceId: inv.id });
+  const server = createApp().listen(0); await new Promise((r) => server.once('listening', r));
+  try {
+    const addr = server.address(); const base = `http://127.0.0.1:${typeof addr === 'object' && addr ? addr.port : 0}`;
+    const token = (await (await fetch(`${base}/api/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'melvina@jjd-consult.be', password: 'jjd' }) })).json()).token;
+    const r = await (await fetch(`${base}/api/finance/expenses/${inv.id}`, { headers: { authorization: `Bearer ${token}` } })).json();
+    const alloc = r.expense.worksiteAllocation as { ref: string; ht: number }[];
+    assert.deepEqual(alloc.map((a) => [a.ref, a.ht]), [['R-ALLOC-H', 411.22], ['R-ALLOC-I', 174.4], ['R-ALLOC-J', 34.23]]);
+    assert.equal(alloc.reduce((s, a) => s + a.ht, 0).toFixed(2), '619.85');
+  } finally { server.close(); }
+});

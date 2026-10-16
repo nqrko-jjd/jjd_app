@@ -1,3 +1,4 @@
+import { invoiceWorksiteAllocation } from '../lib/invoice-allocation.js';
 import { peppolReceptionStatus, setPeppolReception, syncPeppolInbox } from '../lib/peppol-inbox.js';
 import { linkPurchaseReceipt, createReviewedPurchase } from '../lib/purchase-receipts.js';
 /**
@@ -40,7 +41,7 @@ const inc = {
   createdBy: { select: { email: true } },
   // bordereau (direction "delivery_slip") -> facture reçue ensuite ; facture -> ses bordereaux liés
   linkedInvoice: { select: { id: true, docNumber: true, date: true, ttc: true, ht: true, paymentStatus: true } },
-  bordereaux: { select: { id: true, docNumber: true, date: true, ht: true, ttc: true, pdfPath: true }, orderBy: { date: 'asc' as const } },
+  bordereaux: { select: { id: true, docNumber: true, date: true, ht: true, ttc: true, pdfPath: true, worksiteId: true, worksite: { select: { ref: true } } }, orderBy: { date: 'asc' as const } },
   _count: { select: { bordereaux: true } },
   receipts: { select: { id: true, source: true, xmlPath: true }, where: { source: 'peppol' } },
 } as const;
@@ -143,6 +144,16 @@ function buildWhere(q: Record<string, string>, payments?: Awaited<ReturnType<typ
   return and;
 }
 
+/** Répartition par chantier calculée d'après les bordereaux reliés (voir lib/invoice-allocation.ts) ; absente si la facture est déjà répartie à la saisie. */
+async function allocationOf(e: { id: string; direction: string; ht: number; worksiteId: string | null; docNumber: string | null; contactId: string | null; supplierName: string | null; worksite?: { ref: string } | null; bordereaux?: { ht: number; worksiteId: string | null; worksite?: { ref: string } | null }[] }) {
+  if (e.direction !== 'purchase' || !e.bordereaux?.length) return undefined;
+  const parts = invoiceWorksiteAllocation(e, e.bordereaux);
+  if (!parts.length) return undefined;
+  if (e.docNumber && await prisma.ledgerEntry.count({ where: { direction: 'purchase', docNumber: e.docNumber, id: { not: e.id }, OR: [...(e.contactId ? [{ contactId: e.contactId }] : []), ...(e.supplierName ? [{ supplierName: e.supplierName }] : [])] } }) > 0) return undefined;
+  const refs = new Map<string, string>([...(e.worksiteId && e.worksite ? [[e.worksiteId, e.worksite.ref] as [string, string]] : []), ...e.bordereaux.flatMap((b) => (b.worksiteId && b.worksite ? [[b.worksiteId, b.worksite.ref] as [string, string]] : []))]);
+  return parts.map((p) => ({ worksiteId: p.worksiteId, ref: p.worksiteId ? refs.get(p.worksiteId) ?? null : null, ht: p.ht }));
+}
+
 /** Paiement à afficher : un bordereau relié à une facture n'a pas de paiement à lui, il prend celui de sa facture (une seule dépense). */
 function paymentOf(e: { id: string; ttc: number | null; ht: number; paymentStatus: string | null; direction: string; linkedInvoice?: { id: string; ttc: number | null; ht: number; paymentStatus: string | null } | null }, payments: Awaited<ReturnType<typeof allocationSnapshot>>) {
   return e.direction === 'delivery_slip' && e.linkedInvoice ? expensePayment(e.linkedInvoice, payments) : expensePayment(e, payments);
@@ -238,14 +249,15 @@ expensesRouter.get(
 
     res.json({
       receiptsToReview,
-      items: items.map((e) => ({
+      items: await Promise.all(items.map(async (e) => ({
         ...e,
         supplier: e.contact?.name ?? e.supplierName ?? null,
         categoryLabel: e.category?.label ?? e.categoryRaw ?? null,
         ...paymentOf(e, payments),
+        worksiteAllocation: await allocationOf(e),
         hasPdf: !!e.pdfPath,
         editable: e.source !== 'xlsx',
-      })),
+      }))),
       totals: {
         count: totals.count,
         ht: Math.round(totals.ht * 100) / 100,
@@ -590,7 +602,7 @@ expensesRouter.get(
     });
     const payments = await allocationSnapshot();
     const bankMatches = matches.map((m) => ({ matchId: m.id, allocatedAmount: payments.amounts.get(m.id) ?? 0, ...m.bankTransaction }));
-    res.json({ expense: { ...e, ...paymentOf(e, payments), hasPdf: !!e.pdfPath, editable: e.source !== 'xlsx', bankMatches } });
+    res.json({ expense: { ...e, ...paymentOf(e, payments), worksiteAllocation: await allocationOf(e), hasPdf: !!e.pdfPath, editable: e.source !== 'xlsx', bankMatches } });
   }),
 );
 

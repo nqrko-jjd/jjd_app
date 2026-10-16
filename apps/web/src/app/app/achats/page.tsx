@@ -57,6 +57,8 @@ interface Expense {
   _count: { bordereaux: number } | null;
   /** bordereaux reliés à cette facture (une seule dépense avec elle) */
   bordereaux?: { id: string; docNumber: string | null; date: string | null; ht: number; ttc: number | null }[];
+  /** répartition par chantier calculée d'après les bordereaux reliés (coût de chaque bordereau sur son chantier) */
+  worksiteAllocation?: { worksiteId: string | null; ref: string | null; ht: number }[];
 }
 interface Meta {
   categories: { code: string; label: string; kind: string }[];
@@ -583,6 +585,11 @@ function AchatsInner() {
                         ? <span className="badge ok" style={{ marginLeft: 6 }} title={`Relié à la facture ${e.linkedInvoice?.docNumber ?? ''}`}>📦 Bordereau · relié</span>
                         : <span className="badge warn" style={{ marginLeft: 6 }} title="Preuve d’enlèvement/paiement — la facture n’est pas encore arrivée">📦 Bordereau · en attente</span>
                     )}
+                    {e.direction === 'purchase' && (e.worksiteAllocation?.length ?? 0) > 1 && (
+                      <span className="badge plain" style={{ marginLeft: 6 }} title={e.worksiteAllocation!.map((a) => `${a.ref ?? 'Sans chantier'} : ${formatEur(a.ht)} HT`).join('\n')}>
+                        ↔ {e.worksiteAllocation!.length} chantiers
+                      </span>
+                    )}
                     {e.direction === 'purchase' && !!e._count?.bordereaux && (
                       <span className="badge plain" style={{ marginLeft: 6 }} title={`Bordereau(x) relié(s) à cette facture, payés avec elle : ${(e.bordereaux ?? []).map((b) => b.docNumber ?? 'sans n°').join(', ')}`}>
                         📦 {e._count.bordereaux} bordereau{e._count.bordereaux > 1 ? 'x' : ''}
@@ -903,6 +910,18 @@ function ExpenseModal({
           <div className="banner" style={{ margin: '0 1.2rem 0.6rem', display: 'block' }}>
             <strong>📦 {expense.bordereaux.length} bordereau{expense.bordereaux.length > 1 ? 'x' : ''} relié{expense.bordereaux.length > 1 ? 's' : ''} à cette facture</strong>
             <div className="muted" style={{ fontSize: '0.84rem', margin: '0.2rem 0 0.4rem' }}>Ils ne forment qu’une seule dépense avec la facture : leur paiement est celui de la facture, et ils ne sont pas comptés en plus dans les totaux.</div>
+            {!!expense.worksiteAllocation?.length && (
+              <div style={{ margin: '0.3rem 0 0.5rem', padding: '0.5rem 0.6rem', background: 'var(--surface)', borderRadius: 8 }}>
+                <strong style={{ fontSize: '0.88rem' }}>Répartition par chantier (automatique, d’après les bordereaux)</strong>
+                {expense.worksiteAllocation.map((a, i) => (
+                  <div key={i} style={{ display: 'flex', gap: '0.8rem', fontSize: '0.88rem', padding: '0.1rem 0' }}>
+                    <span className="mono">{a.ref ?? 'Sans chantier'}</span>
+                    <span className="muted">{a.worksiteId === expense.worksiteId ? 'reste de la facture (non couvert par un bordereau)' : 'bordereaux de ce chantier'}</span>
+                    <span style={{ marginLeft: 'auto' }}>{formatEur(a.ht)} HT</span>
+                  </div>
+                ))}
+              </div>
+            )}
             {expense.bordereaux.map((b) => (
               <div key={b.id} style={{ display: 'flex', gap: '0.8rem', fontSize: '0.88rem', padding: '0.15rem 0' }}>
                 <span className="mono">{b.docNumber ?? 'sans n°'}</span>

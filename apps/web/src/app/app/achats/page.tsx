@@ -659,9 +659,10 @@ function ExpenseModal({
     categoryRaw: (expense ?? prefillFrom)?.categoryRaw ?? '',
     worksiteId: (expense ?? prefillFrom)?.worksiteId ?? '',
     vehicleId: (expense ?? prefillFrom)?.vehicleId ?? '',
-    ht: expense?.ht != null ? String(expense.ht) : '',
-    vatRecup: expense?.vatRecup != null ? String(expense.vatRecup) : '',
-    ttc: expense?.ttc != null ? String(expense.ttc) : '',
+    // « Facture reçue… » depuis un bordereau : on part des montants du bordereau (à remplacer par ceux de la facture si elle en regroupe plusieurs)
+    ht: expense?.ht != null ? String(expense.ht) : prefillFrom?.ht ? String(prefillFrom.ht) : '',
+    vatRecup: expense?.vatRecup != null ? String(expense.vatRecup) : prefillFrom?.ttc != null && prefillFrom.ht ? String(Math.round((prefillFrom.ttc - prefillFrom.ht) * 100) / 100) : '',
+    ttc: expense?.ttc != null ? String(expense.ttc) : prefillFrom?.ttc != null ? String(prefillFrom.ttc) : '',
     notes: expense?.notes ?? (prefillFrom ? `Bordereau ${prefillFrom.docNumber ?? ''}`.trim() : ''),
     paymentStatus: (expense?.paid ? 'Payé' : 'Non payé') as 'Payé' | 'Non payé',
   });
@@ -913,7 +914,7 @@ function ExpenseModal({
         )}
         {prefillFrom && (
           <div className="banner success" style={{ margin: '0 1.2rem 0.6rem' }}>
-            <span className="txt">Reliée automatiquement au bordereau {prefillFrom.docNumber ?? ''} ({prefillFrom.supplier ?? 'fournisseur'}) à l’enregistrement.</span>
+            <span className="txt">Reliée automatiquement au bordereau {prefillFrom.docNumber ?? ''} ({prefillFrom.supplier ?? 'fournisseur'}) à l’enregistrement. Les montants du bordereau sont repris : remplacez-les par ceux de la facture si elle regroupe plusieurs bordereaux.</span>
           </div>
         )}
         <div className="modal-body">

@@ -123,11 +123,13 @@ export async function slipCostShift(worksiteId: string): Promise<number> {
   const invoiceIds = [...new Set(involved.map((s) => s.linkedInvoiceId!))];
   if (!invoiceIds.length) return 0;
   const [invoices, slips] = await Promise.all([
-    prisma.ledgerEntry.findMany({ where: { id: { in: invoiceIds } }, select: { id: true, ht: true, worksiteId: true } }),
+    prisma.ledgerEntry.findMany({ where: { id: { in: invoiceIds } }, select: { id: true, ht: true, worksiteId: true, docNumber: true, contactId: true, supplierName: true } }),
     prisma.ledgerEntry.findMany({ where: { direction: 'delivery_slip', linkedInvoiceId: { in: invoiceIds } }, select: { linkedInvoiceId: true, worksiteId: true, ht: true } }),
   ]);
   let delta = 0;
   for (const inv of invoices) {
+    // facture déjà répartie par chantier à la saisie (une écriture par chantier, même n° de facture) : la répartition existe déjà, on n'y touche pas
+    if (inv.docNumber && await prisma.ledgerEntry.count({ where: { direction: 'purchase', docNumber: inv.docNumber, id: { not: inv.id }, OR: [...(inv.contactId ? [{ contactId: inv.contactId }] : []), ...(inv.supplierName ? [{ supplierName: inv.supplierName }] : [])] } }) > 0) continue;
     // seuls les bordereaux d'un AUTRE chantier que celui de la facture déplacent du coût (ceux du même chantier y sont déjà)
     const moving = slips.filter((s) => s.linkedInvoiceId === inv.id && s.worksiteId && s.worksiteId !== inv.worksiteId);
     const total = moving.reduce((a, s) => a + s.ht, 0);

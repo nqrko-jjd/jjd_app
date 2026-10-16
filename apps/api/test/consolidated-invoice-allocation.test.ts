@@ -30,3 +30,12 @@ test('facture sans chantier : chaque bordereau porte son coût ; bordereaux > fa
   assert.equal(await slipCostShift(e), 20);
   assert.equal((await worksiteMargin(d))!.materialCost + (await worksiteMargin(e))!.materialCost, 50, 'jamais plus que la facture');
 });
+
+test('facture déjà répartie par chantier à la saisie (une écriture par chantier) : les bordereaux ne déplacent rien en plus', async () => {
+  const f = await site('R-ALLOC-F'), g = await site('R-ALLOC-G');
+  const partF = await entry({ direction: 'purchase', docNumber: 'FC-3', supplierName: 'Lambert Test', ht: 60, ttc: 72.6, worksiteId: f });
+  await entry({ direction: 'purchase', docNumber: 'FC-3', supplierName: 'Lambert Test', ht: 40, ttc: 48.4, worksiteId: g });
+  await entry({ direction: 'delivery_slip', docNumber: 'BC-6', supplierName: 'Lambert Test', ht: 40, ttc: 48.4, worksiteId: g, linkedInvoiceId: partF.id });
+  assert.equal((await worksiteMargin(f))!.materialCost, 60);
+  assert.equal((await worksiteMargin(g))!.materialCost, 40);
+});

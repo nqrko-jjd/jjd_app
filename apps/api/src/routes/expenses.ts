@@ -63,7 +63,7 @@ function resolveUpload(rel: string): string {
 /* ------------------------------------------------------------------ liste */
 
 /** Filtre commun à la liste et à l'export CSV. */
-function buildWhere(q: Record<string, string>, payments?: Awaited<ReturnType<typeof allocationSnapshot>>) {
+function buildWhere(q: Record<string, string>, payments?: Awaited<ReturnType<typeof allocationSnapshot>>, slipPay: { paid: string[]; due: string[] } = { paid: [], due: [] }) {
   const { q: searchRaw, paid, worksiteId, vehicleId, contactId, category, from, to, year, type, linked } = q;
   // recherche insensible à la casse (y compris accents : le repli SQLite n'insensibilise que
   // l'ASCII, "café"/"CAFÉ" ne matcheraient pas sans ce passage en minuscules côté JS)
@@ -115,9 +115,10 @@ function buildWhere(q: Record<string, string>, payments?: Awaited<ReturnType<typ
   const outstandingSelf = { OR: [{ id: { in: matchedIds, notIn: settledIds } }, { id: { notIn: matchedIds }, OR: [{ paymentStatus: null }, { NOT: { paymentStatus: 'Payé' } }] }] };
   // un bordereau relié n'a pas de paiement propre : il est payé / à payer comme sa facture
   const notLinkedSlip = { OR: [{ direction: { not: 'delivery_slip' } }, { linkedInvoiceId: null }] };
-  const slipOf = (invoiceState: Record<string, unknown>) => ({ direction: 'delivery_slip', NOT: { linkedInvoiceId: null }, linkedInvoice: { is: invoiceState } });
-  const settled = { OR: [{ AND: [notLinkedSlip, settledSelf] }, slipOf(settledSelf)] };
-  const outstanding = { OR: [{ AND: [notLinkedSlip, outstandingSelf] }, slipOf(outstandingSelf)] };
+  // (les listes d'identifiants de paiement sont énormes : on ne les répète JAMAIS dans la requête — Postgres refuse plus de 32 767 paramètres ;
+  //  les bordereaux reliés, eux, sont peu nombreux et leur état est calculé en amont, voir linkedSlipPayments)
+  const settled = { OR: [{ AND: [notLinkedSlip, settledSelf] }, { id: { in: slipPay.paid } }] };
+  const outstanding = { OR: [{ AND: [notLinkedSlip, outstandingSelf] }, { id: { in: slipPay.due } }] };
   if (q.fox === 'pending') and.push({ foxTransmittedAt: null });
   if (q.fox === 'sent') and.push({ foxTransmittedAt: { not: null } });
   if (q.fox) and.push({ OR: [{ direction: 'purchase' }, { direction: 'credit_note', OR: [{ categoryRaw: null }, { AND: [{ NOT: { categoryRaw: { contains: 'vente', ...insensitive } } }, { NOT: { categoryRaw: { contains: 'dit auto', ...insensitive } } }] }] }] });
@@ -140,6 +141,20 @@ function buildWhere(q: Record<string, string>, payments?: Awaited<ReturnType<typ
   return and;
 }
 
+/** Bordereaux reliés à une facture : identifiants à considérer payés / à payer selon l'état de LEUR FACTURE (peu nombreux, calculé en mémoire). */
+async function linkedSlipPayments(payments: Awaited<ReturnType<typeof allocationSnapshot>>) {
+  const slips = await prisma.ledgerEntry.findMany({
+    where: { direction: 'delivery_slip', NOT: { linkedInvoiceId: null } },
+    select: { id: true, linkedInvoice: { select: { id: true, ttc: true, ht: true, paymentStatus: true } } },
+  });
+  const out = { paid: [] as string[], due: [] as string[] };
+  for (const s of slips) {
+    if (!s.linkedInvoice) continue;
+    (expensePayment(s.linkedInvoice, payments).paid ? out.paid : out.due).push(s.id);
+  }
+  return out;
+}
+
 /** Paiement à afficher : un bordereau relié à une facture n'a pas de paiement à lui, il prend celui de sa facture (une seule dépense). */
 function paymentOf(e: { id: string; ttc: number | null; ht: number; paymentStatus: string | null; direction: string; linkedInvoice?: { id: string; ttc: number | null; ht: number; paymentStatus: string | null } | null }, payments: Awaited<ReturnType<typeof allocationSnapshot>>) {
   return e.direction === 'delivery_slip' && e.linkedInvoice ? expensePayment(e.linkedInvoice, payments) : expensePayment(e, payments);
@@ -160,7 +175,7 @@ expensesRouter.get(
   asyncHandler(async (req, res) => {
     const { page: pageStr, pageSize: pageSizeStr } = req.query as Record<string, string>;
     const payments = await allocationSnapshot();
-    const and = buildWhere(req.query as Record<string, string>, payments);
+    const and = buildWhere(req.query as Record<string, string>, payments, await linkedSlipPayments(payments));
     const page = Math.max(1, Math.trunc(Number(pageStr)) || 1);
     const pageSize = Math.min(5000, Math.max(20, Math.trunc(Number(pageSizeStr)) || 100));
 

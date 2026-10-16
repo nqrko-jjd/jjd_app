@@ -57,3 +57,22 @@ test('la facture expose sa répartition par chantier (calculée d’après les b
     assert.equal(alloc.reduce((s, a) => s + a.ht, 0).toFixed(2), '619.85');
   } finally { server.close(); }
 });
+
+test('facture sans chantier propre : seuls les bordereaux comptent ; elle ressort dans le filtre chantier de ses bordereaux', async () => {
+  const { createApp } = await import('../src/app.js');
+  const k = await site('R-ALLOC-K'), l = await site('R-ALLOC-L');
+  const inv = await entry({ direction: 'purchase', docNumber: 'FC-10', supplierName: 'Lambert Nul', ht: 100, ttc: 121 });
+  await entry({ direction: 'delivery_slip', docNumber: 'BC-10a', supplierName: 'Lambert Nul', ht: 60, ttc: 72.6, worksiteId: k, linkedInvoiceId: inv.id });
+  await entry({ direction: 'delivery_slip', docNumber: 'BC-10b', supplierName: 'Lambert Nul', ht: 30, ttc: 36.3, worksiteId: l, linkedInvoiceId: inv.id });
+  assert.equal((await worksiteMargin(k))!.materialCost, 60);
+  assert.equal((await worksiteMargin(l))!.materialCost, 30);
+  const server = createApp().listen(0); await new Promise((r) => server.once('listening', r));
+  try {
+    const addr = server.address(); const base = `http://127.0.0.1:${typeof addr === 'object' && addr ? addr.port : 0}`;
+    const token = (await (await fetch(`${base}/api/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'melvina@jjd-consult.be', password: 'jjd' }) })).json()).token;
+    const detail = await (await fetch(`${base}/api/finance/expenses/${inv.id}`, { headers: { authorization: `Bearer ${token}` } })).json();
+    assert.deepEqual(detail.expense.worksiteAllocation.map((a: { ref: string | null; ht: number }) => [a.ref, a.ht]), [[null, 10], ['R-ALLOC-K', 60], ['R-ALLOC-L', 30]], '10 € non couverts restent « sans chantier »');
+    const list = await (await fetch(`${base}/api/finance/expenses?worksiteId=${k}&pageSize=50`, { headers: { authorization: `Bearer ${token}` } })).json();
+    assert.ok(list.items.some((e: { docNumber: string }) => e.docNumber === 'FC-10'), 'la facture ressort pour le chantier de son bordereau');
+  } finally { server.close(); }
+});

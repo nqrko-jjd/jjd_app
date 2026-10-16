@@ -103,7 +103,8 @@ function buildWhere(q: Record<string, string>, payments?: Awaited<ReturnType<typ
   // linked = 0/1 ne s'applique qu'aux bordereaux (linkedInvoiceId)
   if (linked === '0') and.push({ linkedInvoiceId: null });
   if (linked === '1') and.push({ NOT: { linkedInvoiceId: null } });
-  if (worksiteId) and.push({ worksiteId });
+  // une facture qui regroupe des bordereaux n'a pas forcément de chantier propre : elle compte aussi pour les chantiers de ses bordereaux
+  if (worksiteId) and.push({ OR: [{ worksiteId }, { bordereaux: { some: { worksiteId } } }] });
   if (vehicleId) and.push({ vehicleId });
   if (contactId) and.push({ contactId });
   if (category) and.push({ categoryRaw: category });

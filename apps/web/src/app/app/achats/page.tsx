@@ -585,9 +585,9 @@ function AchatsInner() {
                         ? <span className="badge ok" style={{ marginLeft: 6 }} title={`Relié à la facture ${e.linkedInvoice?.docNumber ?? ''}`}>📦 Bordereau · relié</span>
                         : <span className="badge warn" style={{ marginLeft: 6 }} title="Preuve d’enlèvement/paiement — la facture n’est pas encore arrivée">📦 Bordereau · en attente</span>
                     )}
-                    {e.direction === 'purchase' && (e.worksiteAllocation?.length ?? 0) > 1 && (
+                    {e.direction === 'purchase' && !!e.worksiteAllocation?.length && (e.worksiteAllocation.length > 1 || e.worksiteAllocation[0]!.worksiteId !== e.worksiteId) && (
                       <span className="badge plain" style={{ marginLeft: 6 }} title={e.worksiteAllocation!.map((a) => `${a.ref ?? 'Sans chantier'} : ${formatEur(a.ht)} HT`).join('\n')}>
-                        ↔ {e.worksiteAllocation!.length} chantiers
+                        ↔ {e.worksiteAllocation!.length > 1 ? `${e.worksiteAllocation!.length} chantiers` : (e.worksiteAllocation![0]!.ref ?? 'chantier des bordereaux')}
                       </span>
                     )}
                     {e.direction === 'purchase' && !!e._count?.bordereaux && (
@@ -664,7 +664,9 @@ function ExpenseModal({
     docNumber: expense?.docNumber ?? '',
     categoryCode: (expense ?? prefillFrom)?.categoryCode ?? '',
     categoryRaw: (expense ?? prefillFrom)?.categoryRaw ?? '',
-    worksiteId: (expense ?? prefillFrom)?.worksiteId ?? '',
+    // « Facture reçue… » depuis un bordereau : la facture n'a pas de chantier propre (elle ne fait que regrouper des bordereaux) ;
+    // son coût suit le chantier de chaque bordereau relié
+    worksiteId: expense ? (expense.worksiteId ?? '') : '',
     vehicleId: (expense ?? prefillFrom)?.vehicleId ?? '',
     // « Facture reçue… » depuis un bordereau : on part des montants du bordereau (à remplacer par ceux de la facture si elle en regroupe plusieurs)
     ht: expense?.ht != null ? String(expense.ht) : prefillFrom?.ht ? String(prefillFrom.ht) : '',
@@ -913,6 +915,7 @@ function ExpenseModal({
             {!!expense.worksiteAllocation?.length && (
               <div style={{ margin: '0.3rem 0 0.5rem', padding: '0.5rem 0.6rem', background: 'var(--surface)', borderRadius: 8 }}>
                 <strong style={{ fontSize: '0.88rem' }}>Répartition par chantier (automatique, d’après les bordereaux)</strong>
+                {!!expense.worksiteId && <div className="muted" style={{ fontSize: '0.8rem' }}>Cette facture est rattachée à un chantier : le reste non couvert par un bordereau lui revient. Pour qu’elle n’en ait aucun en propre, videz le champ « Chantier » ci-dessous.</div>}
                 {expense.worksiteAllocation.map((a, i) => (
                   <div key={i} style={{ display: 'flex', gap: '0.8rem', fontSize: '0.88rem', padding: '0.1rem 0' }}>
                     <span className="mono">{a.ref ?? 'Sans chantier'}</span>
@@ -933,7 +936,7 @@ function ExpenseModal({
         )}
         {prefillFrom && (
           <div className="banner success" style={{ margin: '0 1.2rem 0.6rem' }}>
-            <span className="txt">Reliée automatiquement au bordereau {prefillFrom.docNumber ?? ''} ({prefillFrom.supplier ?? 'fournisseur'}) à l’enregistrement. Les montants du bordereau sont repris : remplacez-les par ceux de la facture si elle regroupe plusieurs bordereaux.</span>
+            <span className="txt">Reliée automatiquement au bordereau {prefillFrom.docNumber ?? ''} ({prefillFrom.supplier ?? 'fournisseur'}) à l’enregistrement. Les montants du bordereau sont repris : remplacez-les par ceux de la facture si elle regroupe plusieurs bordereaux. La facture n’a pas de chantier propre : son coût suit le chantier de chaque bordereau relié.</span>
           </div>
         )}
         <div className="modal-body">

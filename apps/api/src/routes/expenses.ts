@@ -39,7 +39,8 @@ const inc = {
   category: { select: { code: true, label: true } },
   createdBy: { select: { email: true } },
   // bordereau (direction "delivery_slip") -> facture reçue ensuite ; facture -> ses bordereaux liés
-  linkedInvoice: { select: { id: true, docNumber: true, date: true } },
+  linkedInvoice: { select: { id: true, docNumber: true, date: true, ttc: true, ht: true, paymentStatus: true } },
+  bordereaux: { select: { id: true, docNumber: true, date: true, ht: true, ttc: true, pdfPath: true }, orderBy: { date: 'asc' as const } },
   _count: { select: { bordereaux: true } },
   receipts: { select: { id: true, source: true, xmlPath: true }, where: { source: 'peppol' } },
 } as const;
@@ -95,6 +96,9 @@ function buildWhere(q: Record<string, string>, payments?: Awaited<ReturnType<typ
       ],
     });
   }
+  // un bordereau relié à une facture ne fait plus qu'UNE dépense avec elle : il disparaît de la vue par défaut (on le retrouve dans sa facture,
+  // ou en choisissant explicitement « Bordereaux »)
+  if (!type && !linked) and.push({ OR: [{ direction: { not: 'delivery_slip' } }, { linkedInvoiceId: null }] });
   // linked = 0/1 ne s'applique qu'aux bordereaux (linkedInvoiceId)
   if (linked === '0') and.push({ linkedInvoiceId: null });
   if (linked === '1') and.push({ NOT: { linkedInvoiceId: null } });
@@ -107,8 +111,13 @@ function buildWhere(q: Record<string, string>, payments?: Awaited<ReturnType<typ
   if (to) and.push({ date: { lte: new Date(to) } });
   const matchedIds = [...(payments?.ledgerPaid.keys() ?? [])];
   const settledIds = payments ? payments.matches.filter(m => m.ledgerEntry && expensePayment(m.ledgerEntry, payments).paid).map(m => m.ledgerEntryId!) : [];
-  const settled = { OR: [{ id: { in: settledIds } }, { id: { notIn: matchedIds }, paymentStatus: 'Payé' }] };
-  const outstanding = { OR: [{ id: { in: matchedIds, notIn: settledIds } }, { id: { notIn: matchedIds }, OR: [{ paymentStatus: null }, { NOT: { paymentStatus: 'Payé' } }] }] };
+  const settledSelf = { OR: [{ id: { in: settledIds } }, { id: { notIn: matchedIds }, paymentStatus: 'Payé' }] };
+  const outstandingSelf = { OR: [{ id: { in: matchedIds, notIn: settledIds } }, { id: { notIn: matchedIds }, OR: [{ paymentStatus: null }, { NOT: { paymentStatus: 'Payé' } }] }] };
+  // un bordereau relié n'a pas de paiement propre : il est payé / à payer comme sa facture
+  const notLinkedSlip = { OR: [{ direction: { not: 'delivery_slip' } }, { linkedInvoiceId: null }] };
+  const slipOf = (invoiceState: Record<string, unknown>) => ({ direction: 'delivery_slip', NOT: { linkedInvoiceId: null }, linkedInvoice: { is: invoiceState } });
+  const settled = { OR: [{ AND: [notLinkedSlip, settledSelf] }, slipOf(settledSelf)] };
+  const outstanding = { OR: [{ AND: [notLinkedSlip, outstandingSelf] }, slipOf(outstandingSelf)] };
   if (q.fox === 'pending') and.push({ foxTransmittedAt: null });
   if (q.fox === 'sent') and.push({ foxTransmittedAt: { not: null } });
   if (q.fox) and.push({ OR: [{ direction: 'purchase' }, { direction: 'credit_note', OR: [{ categoryRaw: null }, { AND: [{ NOT: { categoryRaw: { contains: 'vente', ...insensitive } } }, { NOT: { categoryRaw: { contains: 'dit auto', ...insensitive } } }] }] }] });
@@ -129,6 +138,11 @@ function buildWhere(q: Record<string, string>, payments?: Awaited<ReturnType<typ
     });
   }
   return and;
+}
+
+/** Paiement à afficher : un bordereau relié à une facture n'a pas de paiement à lui, il prend celui de sa facture (une seule dépense). */
+function paymentOf(e: { id: string; ttc: number | null; ht: number; paymentStatus: string | null; direction: string; linkedInvoice?: { id: string; ttc: number | null; ht: number; paymentStatus: string | null } | null }, payments: Awaited<ReturnType<typeof allocationSnapshot>>) {
+  return e.direction === 'delivery_slip' && e.linkedInvoice ? expensePayment(e.linkedInvoice, payments) : expensePayment(e, payments);
 }
 
 function expensePayment(e: { id: string; ttc: number | null; ht: number; paymentStatus: string | null }, payments: Awaited<ReturnType<typeof allocationSnapshot>>) {
@@ -206,7 +220,7 @@ expensesRouter.get(
         ...e,
         supplier: e.contact?.name ?? e.supplierName ?? null,
         categoryLabel: e.category?.label ?? e.categoryRaw ?? null,
-        ...expensePayment(e, payments),
+        ...paymentOf(e, payments),
         hasPdf: !!e.pdfPath,
         editable: e.source !== 'xlsx',
       })),
@@ -554,7 +568,7 @@ expensesRouter.get(
     });
     const payments = await allocationSnapshot();
     const bankMatches = matches.map((m) => ({ matchId: m.id, allocatedAmount: payments.amounts.get(m.id) ?? 0, ...m.bankTransaction }));
-    res.json({ expense: { ...e, ...expensePayment(e, payments), hasPdf: !!e.pdfPath, editable: e.source !== 'xlsx', bankMatches } });
+    res.json({ expense: { ...e, ...paymentOf(e, payments), hasPdf: !!e.pdfPath, editable: e.source !== 'xlsx', bankMatches } });
   }),
 );
 

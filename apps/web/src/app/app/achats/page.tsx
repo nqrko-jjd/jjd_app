@@ -9,7 +9,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
 import { api, apiUpload, apiBlobUrl } from '@/lib/api';
-import { PageHead, Money, formatDateBE, Kpi } from '@/lib/ui';
+import { PageHead, Money, formatDateBE, formatEur, Kpi } from '@/lib/ui';
 import { Wallet, AlertTriangle, Receipt, Truck, CreditCard } from 'lucide-react';
 import { useSort, useColumnFilter, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
@@ -55,6 +55,8 @@ interface Expense {
   linkedInvoice: { id: string; docNumber: string | null; date: string | null } | null;
   // facture (direction "purchase") -> nombre de bordereaux qui pointent vers elle
   _count: { bordereaux: number } | null;
+  /** bordereaux reliés à cette facture (une seule dépense avec elle) */
+  bordereaux?: { id: string; docNumber: string | null; date: string | null; ht: number; ttc: number | null }[];
 }
 interface Meta {
   categories: { code: string; label: string; kind: string }[];
@@ -582,7 +584,7 @@ function AchatsInner() {
                         : <span className="badge warn" style={{ marginLeft: 6 }} title="Preuve d’enlèvement/paiement — la facture n’est pas encore arrivée">📦 Bordereau · en attente</span>
                     )}
                     {e.direction === 'purchase' && !!e._count?.bordereaux && (
-                      <span className="badge plain" style={{ marginLeft: 6 }} title="Bordereau(x) relié(s) à cette facture">
+                      <span className="badge plain" style={{ marginLeft: 6 }} title={`Bordereau(x) relié(s) à cette facture, payés avec elle : ${(e.bordereaux ?? []).map((b) => b.docNumber ?? 'sans n°').join(', ')}`}>
                         📦 {e._count.bordereaux} bordereau{e._count.bordereaux > 1 ? 'x' : ''}
                       </span>
                     )}
@@ -896,6 +898,19 @@ function ExpenseModal({
           <h2>{expense ? 'Modifier la dépense' : prefillFrom ? `Facture reçue — bordereau ${prefillFrom.docNumber ?? ''}` : tr("Nouvelle dépense")}</h2>
           <button type="button" className="btn ghost" onClick={onClose} aria-label={tr("Fermer")}>✕</button>
         </div>
+        {expense?.direction === 'purchase' && !!expense.bordereaux?.length && (
+          <div className="banner" style={{ margin: '0 1.2rem 0.6rem', display: 'block' }}>
+            <strong>📦 {expense.bordereaux.length} bordereau{expense.bordereaux.length > 1 ? 'x' : ''} relié{expense.bordereaux.length > 1 ? 's' : ''} à cette facture</strong>
+            <div className="muted" style={{ fontSize: '0.84rem', margin: '0.2rem 0 0.4rem' }}>Ils ne forment qu’une seule dépense avec la facture : leur paiement est celui de la facture, et ils ne sont pas comptés en plus dans les totaux.</div>
+            {expense.bordereaux.map((b) => (
+              <div key={b.id} style={{ display: 'flex', gap: '0.8rem', fontSize: '0.88rem', padding: '0.15rem 0' }}>
+                <span className="mono">{b.docNumber ?? 'sans n°'}</span>
+                <span>{b.date ? formatDateBE(b.date) : ''}</span>
+                <span style={{ marginLeft: 'auto' }}>{formatEur(b.ttc ?? b.ht)}</span>
+              </div>
+            ))}
+          </div>
+        )}
         {prefillFrom && (
           <div className="banner success" style={{ margin: '0 1.2rem 0.6rem' }}>
             <span className="txt">Reliée automatiquement au bordereau {prefillFrom.docNumber ?? ''} ({prefillFrom.supplier ?? 'fournisseur'}) à l’enregistrement.</span>

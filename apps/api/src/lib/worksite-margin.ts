@@ -104,6 +104,44 @@ export async function worksiteLabourDetail(worksiteId: string): Promise<Worksite
   return [...byKey.values()].sort((a, b) => a.date.localeCompare(b.date) || a.personName.localeCompare(b.personName));
 }
 
+/**
+ * Facture consolidée : un fournisseur regroupe parfois plusieurs bordereaux de CHANTIERS DIFFÉRENTS sur une seule facture, qui n'a qu'un chantier.
+ * Le coût de chaque bordereau est reporté sur SON chantier ; ce que les bordereaux ne couvrent pas reste sur le chantier de la facture.
+ * Retourne l'écart à appliquer au coût matériaux de `worksiteId` (négatif : coût qui part vers un autre chantier ; positif : coût qui arrive).
+ */
+export async function slipCostShift(worksiteId: string): Promise<number> {
+  const involved = await prisma.ledgerEntry.findMany({
+    where: {
+      direction: 'delivery_slip', NOT: { linkedInvoiceId: null },
+      OR: [
+        { worksiteId, linkedInvoice: { is: { direction: 'purchase', OR: [{ worksiteId: null }, { worksiteId: { not: worksiteId } }] } } },
+        { NOT: { worksiteId }, linkedInvoice: { is: { direction: 'purchase', worksiteId } } },
+      ],
+    },
+    select: { linkedInvoiceId: true },
+  });
+  const invoiceIds = [...new Set(involved.map((s) => s.linkedInvoiceId!))];
+  if (!invoiceIds.length) return 0;
+  const [invoices, slips] = await Promise.all([
+    prisma.ledgerEntry.findMany({ where: { id: { in: invoiceIds } }, select: { id: true, ht: true, worksiteId: true } }),
+    prisma.ledgerEntry.findMany({ where: { direction: 'delivery_slip', linkedInvoiceId: { in: invoiceIds } }, select: { linkedInvoiceId: true, worksiteId: true, ht: true } }),
+  ]);
+  let delta = 0;
+  for (const inv of invoices) {
+    // seuls les bordereaux d'un AUTRE chantier que celui de la facture déplacent du coût (ceux du même chantier y sont déjà)
+    const moving = slips.filter((s) => s.linkedInvoiceId === inv.id && s.worksiteId && s.worksiteId !== inv.worksiteId);
+    const total = moving.reduce((a, s) => a + s.ht, 0);
+    if (!total) continue;
+    const scale = total > inv.ht && inv.ht > 0 ? inv.ht / total : 1; // jamais plus que le montant de la facture
+    for (const s of moving) {
+      const part = s.ht * scale;
+      if (s.worksiteId === worksiteId) delta += part;
+      if (inv.worksiteId === worksiteId) delta -= part;
+    }
+  }
+  return Math.round(delta * 100) / 100;
+}
+
 export async function worksiteMargin(worksiteId: string): Promise<WorksiteMarginFull | null> {
   const ws = await prisma.worksite.findUnique({ where: { id: worksiteId } });
   if (!ws) return null;
@@ -146,6 +184,8 @@ export async function worksiteMargin(worksiteId: string): Promise<WorksiteMargin
       }
     }
   }
+
+  materialCost += await slipCostShift(worksiteId);
 
   // Tant qu'aucune facture "Rémunération - Ouvrier" n'existe pour ce chantier, on garde
   // l'estimation par pointage (c'est elle qui sert à préparer la facture, cf. décompte mensuel).

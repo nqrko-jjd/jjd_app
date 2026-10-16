@@ -4,6 +4,8 @@
  * transparente — créneaux « à confirmer » à ajuster —, pas un calcul d'ingénieur : les hypothèses (prix d'une journée, part de main-d'œuvre,
  * taille d'équipe) sont affichées et modifiables avant création.
  */
+import { descriptionPoints } from './quote-detail.js';
+
 export interface QuoteLine { kind: string; label: string; description?: string | null; qty: number; unit: string | null; totalHt: number; category?: string | null }
 export interface PlanParams { startDate: string; teamSize: number; dayRate: number; labourShare: number }
 export interface LotEstimate { title: string; budgetHt: number; labourHt: number; materialHt: number; manDays: number; days: number; items: string[] }
@@ -19,7 +21,7 @@ const isLabourLine = (l: QuoteLine) => (l.unit ?? '').toLowerCase().replace(/\./
 const hoursOf = (l: QuoteLine) => ((l.unit ?? '').toLowerCase().replace(/\./g, '') === 'h' ? l.qty : null);
 
 interface RawLot { title: string; items: QuoteLine[] }
-function groupLots(lines: QuoteLine[]): RawLot[] {
+function groupBySection(lines: QuoteLine[]): RawLot[] {
   const lots: RawLot[] = [];
   let cur: RawLot | null = null;
   for (const l of lines) {
@@ -29,6 +31,19 @@ function groupLots(lines: QuoteLine[]): RawLot[] {
     cur.items.push(l);
   }
   return lots.filter((l) => l.items.length > 0);
+}
+/** Un lot par poste (« Grenier », « Hall », « SDB du +1 »…), chacun avec sa durée : ce que fait un devis rédigé par pièces. */
+function groupByItem(lines: QuoteLine[]): RawLot[] {
+  return lines.filter((l) => l.kind === 'item').map((l) => ({ title: l.label.trim(), items: [l] }));
+}
+/**
+ * Par section dès que le devis en a (au moins 2) ; sans section, ou avec une seule (« Extérieur » en fin de devis), un lot par poste :
+ * sinon un devis rédigé par pièces donnerait 1 ou 2 énormes barres (« Travaux », « Extérieur »), inutilisables pour un planning.
+ */
+function groupLots(lines: QuoteLine[]): RawLot[] {
+  const sections = lines.filter((l) => l.kind === 'section').length;
+  const itemCount = lines.filter((l) => l.kind === 'item').length;
+  return sections <= 1 && itemCount >= 4 ? groupByItem(lines) : groupBySection(lines);
 }
 
 export function estimateLots(lines: QuoteLine[], p: PlanParams): LotEstimate[] {
@@ -50,7 +65,7 @@ export function estimateLots(lines: QuoteLine[], p: PlanParams): LotEstimate[] {
     const raw = (manDays / Math.max(1, p.teamSize)) * 2; // en demi-journées
     const days = budgetHt > 0 ? Math.min(MAX_LOT_DAYS, Math.max(0.5, Math.ceil(raw - 1e-9) / 2)) : 0;
     const r2 = (n: number) => Math.round(n * 100) / 100;
-    return { title: lot.title, budgetHt: r2(budgetHt), labourHt: r2(labourHt), materialHt: r2(materialHt), manDays: r2(manDays), days, items: items.map((i) => i.label.trim()) };
+    return { title: lot.title, budgetHt: r2(budgetHt), labourHt: r2(labourHt), materialHt: r2(materialHt), manDays: r2(manDays), days, items: items.length === 1 ? (descriptionPoints(items[0]!.description).length ? descriptionPoints(items[0]!.description) : [items[0]!.label.trim()]) : items.map((i) => i.label.trim()) };
   }).filter((l) => l.days > 0);
 }
 

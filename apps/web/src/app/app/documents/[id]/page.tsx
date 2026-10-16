@@ -753,7 +753,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
           lines={lines.filter((l) => l.kind === 'item' && l.label.trim())}
           people={pick?.people ?? []}
           onClose={() => setTasksModal(false)}
-          onDone={(count) => { setTasksModal(false); setMsg(`${count} tâche(s) créée(s) sur le chantier — visibles dans l'onglet Tâches de sa fiche.`); }}
+          onDone={(created, updated) => { setTasksModal(false); setMsg(`${created} tâche(s) créée(s)${updated ? `, ${updated} complétée(s) (liste des travaux ajoutée)` : ''} sur le chantier — visibles dans l'onglet Tâches de sa fiche.`); }}
         />
       )}
     </div>
@@ -773,7 +773,7 @@ function TasksFromLinesModal({
   lines: DocLine[];
   people: { id: string; name: string }[];
   onClose: () => void;
-  onDone: (count: number) => void;
+  onDone: (created: number, updated: number) => void;
 }) {
   const linesWithId = lines.filter((l): l is DocLine & { id: string } => !!l.id);
   const [checked, setChecked] = useState<Set<string>>(new Set(linesWithId.map((l) => l.id)));
@@ -794,11 +794,11 @@ function TasksFromLinesModal({
     setBusy(true);
     setErr(null);
     try {
-      const r = await api<{ tasks: unknown[] }>(`/api/documents/${docId}/tasks-from-lines`, {
+      const r = await api<{ tasks: unknown[]; created: number; updated: number }>(`/api/documents/${docId}/tasks-from-lines`, {
         method: 'POST',
         body: { lineIds: [...checked], assigneeIds },
       });
-      onDone(r.tasks.length);
+      onDone(r.created, r.updated);
     } catch (e) {
       setErr((e as Error).message);
       setBusy(false);
@@ -817,6 +817,7 @@ function TasksFromLinesModal({
             <p className="muted">Ce devis n’a pas encore de ligne enregistrée — enregistre-le d’abord.</p>
           ) : (
             <div className="grid" style={{ gap: '0.3rem' }}>
+              <p className="muted" style={{ margin: '0 0 0.4rem', fontSize: '0.84rem' }}>Une tâche par poste. Les travaux détaillés dans la description du poste deviennent sa liste à cocher, et les sections du devis deviennent des phases. Les tâches déjà créées depuis ce devis sont complétées, pas dupliquées.</p>
               {linesWithId.map((l) => (
                 <label key={l.id} className="row" style={{ gap: '0.5rem', alignItems: 'center' }}>
                   <input type="checkbox" checked={checked.has(l.id)} onChange={() => toggle(l.id)} />

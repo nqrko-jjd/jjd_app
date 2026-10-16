@@ -21,6 +21,7 @@ import { extractDocumentInfo } from '../lib/document-extract.js';
 import { UPLOADS_DIR } from '../lib/media.js';
 import { PAYMENT_TOLERANCE } from '../lib/payment-tolerance.js';
 import { taskInclude, serializeTask } from './tasks.js';
+import { descriptionPoints } from '../lib/quote-detail.js';
 import { quoteBillings, planRows } from '../lib/quote-billing.js';
 import { nanoid as planId } from 'nanoid';
 import { DEPOSIT_TRIGGERS, computeMargin } from '@jjd/shared';
@@ -840,26 +841,55 @@ documentsRouter.post(
     const doc = await prisma.document.findUnique({ where: { id: req.params.id }, include: { lines: true } });
     if (!doc) throw new HttpError(404, 'Document introuvable');
     if (!doc.worksiteId) throw new HttpError(422, "Ce devis n'est pas lié à un chantier — impossible d'y créer des tâches.");
-    const lines = doc.lines.filter((l) => l.kind === 'item' && lineIds.includes(l.id));
+    const ordered = [...doc.lines].sort((a, b) => a.position - b.position);
+    const lines = ordered.filter((l) => l.kind === 'item' && lineIds.includes(l.id));
     if (!lines.length) throw new HttpError(422, 'Aucune ligne sélectionnée.');
 
+    // phase = section du devis qui précède la ligne (créée si besoin) ; les tâches déjà créées depuis ce devis sont complétées, pas dupliquées
+    let section: string | null = null;
+    const sectionOf = new Map<string, string | null>();
+    for (const l of ordered) { if (l.kind === 'section') section = l.label.trim(); else sectionOf.set(l.id, section); }
     const count = await prisma.worksiteTask.count({ where: { worksiteId: doc.worksiteId } });
+    const phases = new Map((await prisma.worksiteTaskPhase.findMany({ where: { worksiteId: doc.worksiteId } })).map((p) => [p.name, p.id]));
     const tasks = [];
+    let created = 0, updated = 0;
     for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]!;
+      const points = descriptionPoints(line.description);
+      const checklist = points.length ? points.map((label) => ({ label, done: false })) : undefined;
+      const phaseName = sectionOf.get(line.id) ?? null;
+      let phaseId: string | undefined;
+      if (phaseName) {
+        phaseId = phases.get(phaseName);
+        if (!phaseId) { phaseId = (await prisma.worksiteTaskPhase.create({ data: { worksiteId: doc.worksiteId, name: phaseName, position: phases.size } })).id; phases.set(phaseName, phaseId); }
+      }
+      const existing = await prisma.worksiteTask.findFirst({ where: { worksiteId: doc.worksiteId, source: 'quote', title: line.label } });
+      if (existing) {
+        const patch: Record<string, unknown> = {};
+        if (checklist && (!Array.isArray(existing.checklist) || existing.checklist.length === 0)) patch.checklist = checklist;
+        if (phaseId && !existing.phaseId) patch.phaseId = phaseId;
+        if (Object.keys(patch).length) {
+          const t = await prisma.worksiteTask.update({ where: { id: existing.id }, data: patch, include: taskInclude });
+          tasks.push(serializeTask(t)); updated++;
+        }
+        continue;
+      }
       const task = await prisma.worksiteTask.create({
         data: {
           worksiteId: doc.worksiteId,
-          title: lines[i]!.label,
+          title: line.label,
           position: count + i,
           source: 'quote',
           createdById: req.user!.id,
+          ...(checklist ? { checklist } : {}),
+          ...(phaseId ? { phaseId } : {}),
           assignees: { create: (assigneeIds ?? []).map((personId) => ({ personId })) },
         },
         include: taskInclude,
       });
-      tasks.push(serializeTask(task));
+      tasks.push(serializeTask(task)); created++;
     }
-    res.status(201).json({ tasks });
+    res.status(201).json({ tasks, created, updated });
   }),
 );
 

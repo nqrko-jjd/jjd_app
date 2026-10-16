@@ -63,7 +63,7 @@ function resolveUpload(rel: string): string {
 /* ------------------------------------------------------------------ liste */
 
 /** Filtre commun à la liste et à l'export CSV. */
-function buildWhere(q: Record<string, string>, payments?: Awaited<ReturnType<typeof allocationSnapshot>>, slipPay: { paid: string[]; due: string[] } = { paid: [], due: [] }) {
+function buildWhere(q: Record<string, string>, payments?: Awaited<ReturnType<typeof allocationSnapshot>>, opts: { skipPayment?: boolean } = {}) {
   const { q: searchRaw, paid, worksiteId, vehicleId, contactId, category, from, to, year, type, linked } = q;
   // recherche insensible à la casse (y compris accents : le repli SQLite n'insensibilise que
   // l'ASCII, "café"/"CAFÉ" ne matcheraient pas sans ce passage en minuscules côté JS)
@@ -115,16 +115,18 @@ function buildWhere(q: Record<string, string>, payments?: Awaited<ReturnType<typ
   const outstandingSelf = { OR: [{ id: { in: matchedIds, notIn: settledIds } }, { id: { notIn: matchedIds }, OR: [{ paymentStatus: null }, { NOT: { paymentStatus: 'Payé' } }] }] };
   // un bordereau relié n'a pas de paiement propre : il est payé / à payer comme sa facture
   const notLinkedSlip = { OR: [{ direction: { not: 'delivery_slip' } }, { linkedInvoiceId: null }] };
-  // (les listes d'identifiants de paiement sont énormes : on ne les répète JAMAIS dans la requête — Postgres refuse plus de 32 767 paramètres ;
-  //  les bordereaux reliés, eux, sont peu nombreux et leur état est calculé en amont, voir linkedSlipPayments)
-  const settled = { OR: [{ AND: [notLinkedSlip, settledSelf] }, { id: { in: slipPay.paid } }] };
-  const outstanding = { OR: [{ AND: [notLinkedSlip, outstandingSelf] }, { id: { in: slipPay.due } }] };
+  // Ces listes d'identifiants grossissent avec les rapprochements : la liste web ne s'en sert PAS (elle filtre en mémoire, voir plus bas) ;
+  // seuls l'export CSV (listes vides) et d'éventuels appels sans snapshot passent ici. Postgres refuse plus de 32 767 paramètres par requête.
+  const settled = { OR: [{ AND: [notLinkedSlip, settledSelf] }, { id: { in: [] as string[] } }] };
+  const outstanding = { OR: [{ AND: [notLinkedSlip, outstandingSelf] }, { id: { in: [] as string[] } }] };
   if (q.fox === 'pending') and.push({ foxTransmittedAt: null });
   if (q.fox === 'sent') and.push({ foxTransmittedAt: { not: null } });
   if (q.fox) and.push({ OR: [{ direction: 'purchase' }, { direction: 'credit_note', OR: [{ categoryRaw: null }, { AND: [{ NOT: { categoryRaw: { contains: 'vente', ...insensitive } } }, { NOT: { categoryRaw: { contains: 'dit auto', ...insensitive } } }] }] }] });
-  if (paid === '1') and.push(settled);
-  if (paid === '0') and.push(outstanding);
-  if (q.overdue === '1') and.push({ direction: 'purchase', dueDate: { not: null, lt: new Date() }, ...outstanding });
+  if (!opts.skipPayment) {
+    if (paid === '1') and.push(settled);
+    if (paid === '0') and.push(outstanding);
+    if (q.overdue === '1') and.push({ direction: 'purchase', dueDate: { not: null, lt: new Date() }, ...outstanding });
+  }
   if (search) {
     and.push({
       OR: [
@@ -139,20 +141,6 @@ function buildWhere(q: Record<string, string>, payments?: Awaited<ReturnType<typ
     });
   }
   return and;
-}
-
-/** Bordereaux reliés à une facture : identifiants à considérer payés / à payer selon l'état de LEUR FACTURE (peu nombreux, calculé en mémoire). */
-async function linkedSlipPayments(payments: Awaited<ReturnType<typeof allocationSnapshot>>) {
-  const slips = await prisma.ledgerEntry.findMany({
-    where: { direction: 'delivery_slip', NOT: { linkedInvoiceId: null } },
-    select: { id: true, linkedInvoice: { select: { id: true, ttc: true, ht: true, paymentStatus: true } } },
-  });
-  const out = { paid: [] as string[], due: [] as string[] };
-  for (const s of slips) {
-    if (!s.linkedInvoice) continue;
-    (expensePayment(s.linkedInvoice, payments).paid ? out.paid : out.due).push(s.id);
-  }
-  return out;
 }
 
 /** Paiement à afficher : un bordereau relié à une facture n'a pas de paiement à lui, il prend celui de sa facture (une seule dépense). */
@@ -175,25 +163,44 @@ expensesRouter.get(
   asyncHandler(async (req, res) => {
     const { page: pageStr, pageSize: pageSizeStr } = req.query as Record<string, string>;
     const payments = await allocationSnapshot();
-    const and = buildWhere(req.query as Record<string, string>, payments, await linkedSlipPayments(payments));
+    const query = req.query as Record<string, string>;
     const page = Math.max(1, Math.trunc(Number(pageStr)) || 1);
     const pageSize = Math.min(5000, Math.max(20, Math.trunc(Number(pageSizeStr)) || 100));
+    const receiptsToReview = await prisma.purchaseReceipt.count({ where: { status: 'review' } });
+    const totalsSelect = { id: true, ht: true, ttc: true, paymentStatus: true, direction: true, linkedInvoiceId: true, dueDate: true } as const;
 
-    const [items, all, receiptsToReview] = await Promise.all([
-      prisma.ledgerEntry.findMany({
-        where: { AND: and },
+    // Filtre « payé / à régler / en retard » : l'état de paiement se calcule en mémoire (rapprochements bancaires, bordereau = sa facture).
+    // On ne le met JAMAIS dans la requête SQL sous forme de listes d'identifiants : elles grossissent avec les rapprochements et
+    // finiraient par dépasser les 32 767 paramètres que Postgres accepte.
+    const paymentFilter = query.paid === '0' || query.paid === '1' || query.overdue === '1';
+    let items: Awaited<ReturnType<typeof prisma.ledgerEntry.findMany<{ include: typeof inc }>>>;
+    let all: { id: string; ht: number; ttc: number | null; paymentStatus: string | null; direction: string; linkedInvoiceId: string | null; dueDate: Date | null }[];
+    if (paymentFilter) {
+      const candidates = await prisma.ledgerEntry.findMany({
+        where: { AND: buildWhere(query, payments, { skipPayment: true }) },
         orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-        include: inc,
-      }),
-      // totaux (KPI) sur l'ensemble du filtre, pas seulement la page affichée
-      prisma.ledgerEntry.findMany({
-        where: { AND: and },
-        select: { id: true, ht: true, ttc: true, paymentStatus: true, direction: true, linkedInvoiceId: true, dueDate: true },
-      }),
-      prisma.purchaseReceipt.count({ where: { status: 'review' } }),
-    ]);
+        select: { ...totalsSelect, linkedInvoice: { select: { id: true, ttc: true, ht: true, paymentStatus: true } } },
+      });
+      const nowF = new Date();
+      all = candidates.filter((e) => {
+        const pay = paymentOf(e, payments);
+        if (query.paid === '1' && !pay.paid) return false;
+        if (query.paid === '0' && pay.paid) return false;
+        if (query.overdue === '1' && !(e.direction === 'purchase' && e.dueDate && e.dueDate < nowF && !pay.paid)) return false;
+        return true;
+      });
+      const pageIds = all.slice((page - 1) * pageSize, page * pageSize).map((e) => e.id);
+      const rows = await prisma.ledgerEntry.findMany({ where: { id: { in: pageIds } }, include: inc });
+      const order = new Map(pageIds.map((id, i) => [id, i]));
+      items = rows.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+    } else {
+      const and = buildWhere(query, payments);
+      [items, all] = await Promise.all([
+        prisma.ledgerEntry.findMany({ where: { AND: and }, orderBy: [{ date: 'desc' }, { createdAt: 'desc' }], skip: (page - 1) * pageSize, take: pageSize, include: inc }),
+        // totaux (KPI) sur l'ensemble du filtre, pas seulement la page affichée
+        prisma.ledgerEntry.findMany({ where: { AND: and }, select: totalsSelect }),
+      ]);
+    }
 
     const now = new Date();
     const totals = all.reduce(

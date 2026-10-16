@@ -56,7 +56,7 @@ interface Expense {
   // facture (direction "purchase") -> nombre de bordereaux qui pointent vers elle
   _count: { bordereaux: number } | null;
   /** bordereaux reliés à cette facture (une seule dépense avec elle) */
-  bordereaux?: { id: string; docNumber: string | null; date: string | null; ht: number; ttc: number | null }[];
+  bordereaux?: { id: string; docNumber: string | null; date: string | null; ht: number; ttc: number | null; pdfPath?: string | null; worksite?: { ref: string } | null }[];
   /** répartition par chantier calculée d'après les bordereaux reliés (coût de chaque bordereau sur son chantier) */
   worksiteAllocation?: { worksiteId: string | null; ref: string | null; ht: number }[];
 }
@@ -172,6 +172,14 @@ function AchatsInner() {
 
   async function setPaidStatus(e: Expense, val: boolean) {
     await api(`/api/finance/expenses/${e.id}/paid`, { method: 'POST', body: { paid: val } });
+    reload();
+  }
+  async function openById(id: string) {
+    const r = await api<{ expense: Expense }>(`/api/finance/expenses/${id}`);
+    setEdit(r.expense);
+  }
+  async function refreshOpen() {
+    if (edit && typeof edit === 'object' && 'id' in edit) await openById(edit.id);
     reload();
   }
   async function viewPdf(id: string) {
@@ -343,11 +351,14 @@ function AchatsInner() {
       {ctx.menu && <ContextMenu x={ctx.menu.x} y={ctx.menu.y} items={rowMenu(ctx.menu.row)} onClose={ctx.close} />}
       {edit && meta && (
         <ExpenseModal
+          key={typeof edit === 'object' && edit && 'id' in edit ? edit.id : typeof edit === 'object' && edit && 'prefillFrom' in edit ? 'prefill' : 'new'}
           expense={edit === 'new' || (typeof edit === 'object' && 'prefillFrom' in edit) ? null : edit}
           prefillFrom={typeof edit === 'object' && edit && 'prefillFrom' in edit ? edit.prefillFrom : null}
           meta={meta}
           onClose={() => setEdit(null)}
           onSaved={() => { setEdit(null); reload(); }}
+          onOpenOther={openById}
+          onChanged={refreshOpen}
         />
       )}
       {linking && (
@@ -638,6 +649,101 @@ function AchatsInner() {
   );
 }
 
+/* ------------------------------------------------------------- bordereaux reliés à une facture */
+
+/**
+ * Dans la fiche d'une facture d'achat : les bordereaux reliés (cliquables), ce qu'il reste à couvrir (la facture est saisie à son total,
+ * on relie ensuite les bordereaux jusqu'à tout couvrir), la répartition par chantier calculée, et les bordereaux du fournisseur encore à relier.
+ */
+function LinkedSlips({ expense, onOpen, onChanged }: { expense: Expense; onOpen: (id: string) => void; onChanged: () => void }) {
+  const slips = expense.bordereaux ?? [];
+  const coveredHt = Math.round(slips.reduce((a, b) => a + b.ht, 0) * 100) / 100;
+  const coveredTtc = Math.round(slips.reduce((a, b) => a + (b.ttc ?? b.ht), 0) * 100) / 100;
+  const remainingHt = Math.round((expense.ht - coveredHt) * 100) / 100;
+  const remainingTtc = expense.ttc != null ? Math.round((expense.ttc - coveredTtc) * 100) / 100 : null;
+  const [pending, setPending] = useState<Expense[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const qs = new URLSearchParams({ type: 'delivery_slip', linked: '0', pageSize: '200' });
+    if (expense.contactId) qs.set('contactId', expense.contactId); else if (expense.supplier) qs.set('q', expense.supplier);
+    api<{ items: Expense[] }>(`/api/finance/expenses?${qs.toString()}`).then((r) => setPending(r.items)).catch(() => setPending([]));
+  }, [open, expense.id, expense.contactId, expense.supplier, slips.length]);
+
+  async function link(slipId: string, invoiceId: string | null) {
+    setBusy(slipId); setErr(null);
+    try { await api(`/api/finance/expenses/${slipId}/link`, { method: 'POST', body: { invoiceId } }); onChanged(); } catch (e) { setErr((e as Error).message); } finally { setBusy(null); }
+  }
+  async function openPdf(id: string) { window.open(await apiBlobUrl(`/api/finance/expenses/${id}/pdf`), '_blank'); }
+
+  const status = !slips.length ? null
+    : Math.abs(remainingHt) <= 0.05 ? { cls: 'ok', text: '✓ Tous les bordereaux sont reliés : la facture est entièrement couverte.' }
+      : remainingHt > 0 ? { cls: 'warn', text: `Il reste ${formatEur(remainingHt)} HT${remainingTtc != null ? ` (${formatEur(remainingTtc)} TTC)` : ''} à couvrir : bordereaux manquants.` }
+        : { cls: 'crit', text: `Les bordereaux dépassent la facture de ${formatEur(-remainingHt)} HT : vérifiez les montants.` };
+
+  return (
+    <div className="banner" style={{ margin: '0 1.2rem 0.6rem', display: 'block' }}>
+      <strong>📦 {slips.length ? `${slips.length} bordereau${slips.length > 1 ? 'x' : ''} relié${slips.length > 1 ? 's' : ''} à cette facture` : 'Aucun bordereau relié'}</strong>
+      <div className="muted" style={{ fontSize: '0.84rem', margin: '0.2rem 0 0.4rem' }}>
+        Ils ne forment qu’une seule dépense avec la facture : leur paiement est celui de la facture, et ils ne sont pas comptés en plus dans les totaux.
+      </div>
+      {slips.length > 0 && (
+        <div style={{ fontSize: '0.88rem', marginBottom: '0.4rem' }}>
+          Bordereaux reliés : <strong>{formatEur(coveredHt)} HT</strong> sur <strong>{formatEur(expense.ht)} HT</strong> de facture
+          {status && <div className={`badge ${status.cls}`} style={{ marginTop: 4, padding: '0.3rem 0.6rem', display: 'inline-block' }}>{status.text}</div>}
+        </div>
+      )}
+      {!!expense.worksiteAllocation?.length && (
+        <div style={{ margin: '0.3rem 0 0.5rem', padding: '0.5rem 0.6rem', background: 'var(--surface)', borderRadius: 8 }}>
+          <strong style={{ fontSize: '0.88rem' }}>Répartition par chantier (automatique, d’après les bordereaux)</strong>
+          {!!expense.worksiteId && <div className="muted" style={{ fontSize: '0.8rem' }}>Cette facture est rattachée à un chantier : le reste non couvert par un bordereau lui revient. Pour qu’elle n’en ait aucun en propre, videz le champ « Chantier » ci-dessous.</div>}
+          {expense.worksiteAllocation.map((a, i) => (
+            <div key={i} style={{ display: 'flex', gap: '0.8rem', fontSize: '0.88rem', padding: '0.1rem 0' }}>
+              <span className="mono">{a.ref ?? 'Sans chantier'}</span>
+              <span className="muted">{a.worksiteId === expense.worksiteId ? 'reste de la facture (non couvert par un bordereau)' : 'bordereaux de ce chantier'}</span>
+              <span style={{ marginLeft: 'auto' }}>{formatEur(a.ht)} HT</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {slips.map((b) => (
+        <div key={b.id} style={{ display: 'flex', gap: '0.7rem', alignItems: 'center', fontSize: '0.88rem', padding: '0.2rem 0' }}>
+          <button type="button" className="btn ghost" style={{ padding: '0.1rem 0.4rem' }} onClick={() => onOpen(b.id)} title="Ouvrir ce bordereau">
+            <span className="mono">{b.docNumber ?? 'sans n°'}</span>
+          </button>
+          <span>{b.date ? formatDateBE(b.date) : ''}</span>
+          <span className="muted">{b.worksite?.ref ?? 'sans chantier'}</span>
+          <span style={{ marginLeft: 'auto' }}>{formatEur(b.ttc ?? b.ht)}</span>
+          {b.pdfPath && <button type="button" className="btn ghost" style={{ padding: '0.1rem 0.4rem' }} onClick={() => openPdf(b.id)} title="Voir le PDF du bordereau">PDF</button>}
+          <button type="button" className="btn ghost" style={{ padding: '0.1rem 0.4rem' }} disabled={busy === b.id} onClick={() => link(b.id, null)} title="Délier de cette facture">✕</button>
+        </div>
+      ))}
+      <div style={{ marginTop: '0.4rem' }}>
+        <button type="button" className="btn" onClick={() => setOpen((o) => !o)}>{open ? 'Masquer' : '+ Relier un bordereau'}</button>
+      </div>
+      {open && (
+        <div style={{ marginTop: '0.4rem', borderTop: '1px solid var(--line)', paddingTop: '0.4rem' }}>
+          {pending === null ? <span className="muted">Chargement…</span> : pending.length === 0
+            ? <span className="muted" style={{ fontSize: '0.86rem' }}>Aucun bordereau en attente pour ce fournisseur.</span>
+            : pending.map((b) => (
+              <div key={b.id} style={{ display: 'flex', gap: '0.7rem', alignItems: 'center', fontSize: '0.88rem', padding: '0.2rem 0' }}>
+                <span className="mono">{b.docNumber ?? 'sans n°'}</span>
+                <span>{b.date ? formatDateBE(b.date) : ''}</span>
+                <span className="muted">{b.worksite?.ref ?? 'sans chantier'}</span>
+                <span style={{ marginLeft: 'auto' }}>{formatEur(b.ttc ?? b.ht)}</span>
+                <button type="button" className="btn primary" disabled={busy === b.id} onClick={() => link(b.id, expense.id)}>Relier</button>
+              </div>
+            ))}
+        </div>
+      )}
+      {err && <div className="badge crit" style={{ marginTop: 4 }}>{err}</div>}
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------- modale créer / éditer */
 
 function ExpenseModal({
@@ -646,6 +752,8 @@ function ExpenseModal({
   meta,
   onClose,
   onSaved,
+  onOpenOther,
+  onChanged,
 }: {
   expense: Expense | null;
   /** Bordereau d'origine : « Facture reçue… » depuis un bordereau — préremplit fournisseur/chantier,
@@ -654,6 +762,10 @@ function ExpenseModal({
   meta: Meta;
   onClose: () => void;
   onSaved: () => void;
+  /** ouvre une autre dépense (un bordereau relié) à la place de celle-ci */
+  onOpenOther: (id: string) => void;
+  /** la facture a changé (bordereau relié / délié) : recharge-la sans fermer la fenêtre */
+  onChanged: () => void;
 }) {
   const [v, setV] = useState({
     date: toDateInput(expense?.date ?? new Date().toISOString()),
@@ -908,32 +1020,7 @@ function ExpenseModal({
           <h2>{expense ? 'Modifier la dépense' : prefillFrom ? `Facture reçue — bordereau ${prefillFrom.docNumber ?? ''}` : tr("Nouvelle dépense")}</h2>
           <button type="button" className="btn ghost" onClick={onClose} aria-label={tr("Fermer")}>✕</button>
         </div>
-        {expense?.direction === 'purchase' && !!expense.bordereaux?.length && (
-          <div className="banner" style={{ margin: '0 1.2rem 0.6rem', display: 'block' }}>
-            <strong>📦 {expense.bordereaux.length} bordereau{expense.bordereaux.length > 1 ? 'x' : ''} relié{expense.bordereaux.length > 1 ? 's' : ''} à cette facture</strong>
-            <div className="muted" style={{ fontSize: '0.84rem', margin: '0.2rem 0 0.4rem' }}>Ils ne forment qu’une seule dépense avec la facture : leur paiement est celui de la facture, et ils ne sont pas comptés en plus dans les totaux.</div>
-            {!!expense.worksiteAllocation?.length && (
-              <div style={{ margin: '0.3rem 0 0.5rem', padding: '0.5rem 0.6rem', background: 'var(--surface)', borderRadius: 8 }}>
-                <strong style={{ fontSize: '0.88rem' }}>Répartition par chantier (automatique, d’après les bordereaux)</strong>
-                {!!expense.worksiteId && <div className="muted" style={{ fontSize: '0.8rem' }}>Cette facture est rattachée à un chantier : le reste non couvert par un bordereau lui revient. Pour qu’elle n’en ait aucun en propre, videz le champ « Chantier » ci-dessous.</div>}
-                {expense.worksiteAllocation.map((a, i) => (
-                  <div key={i} style={{ display: 'flex', gap: '0.8rem', fontSize: '0.88rem', padding: '0.1rem 0' }}>
-                    <span className="mono">{a.ref ?? 'Sans chantier'}</span>
-                    <span className="muted">{a.worksiteId === expense.worksiteId ? 'reste de la facture (non couvert par un bordereau)' : 'bordereaux de ce chantier'}</span>
-                    <span style={{ marginLeft: 'auto' }}>{formatEur(a.ht)} HT</span>
-                  </div>
-                ))}
-              </div>
-            )}
-            {expense.bordereaux.map((b) => (
-              <div key={b.id} style={{ display: 'flex', gap: '0.8rem', fontSize: '0.88rem', padding: '0.15rem 0' }}>
-                <span className="mono">{b.docNumber ?? 'sans n°'}</span>
-                <span>{b.date ? formatDateBE(b.date) : ''}</span>
-                <span style={{ marginLeft: 'auto' }}>{formatEur(b.ttc ?? b.ht)}</span>
-              </div>
-            ))}
-          </div>
-        )}
+        {expense?.direction === 'purchase' && <LinkedSlips expense={expense} onOpen={onOpenOther} onChanged={onChanged} />}
         {prefillFrom && (
           <div className="banner success" style={{ margin: '0 1.2rem 0.6rem' }}>
             <span className="txt">Reliée automatiquement au bordereau {prefillFrom.docNumber ?? ''} ({prefillFrom.supplier ?? 'fournisseur'}) à l’enregistrement. Les montants du bordereau sont repris : remplacez-les par ceux de la facture si elle regroupe plusieurs bordereaux. La facture n’a pas de chantier propre : son coût suit le chantier de chaque bordereau relié.</span>

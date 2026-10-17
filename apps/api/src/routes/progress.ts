@@ -29,6 +29,31 @@ progressRouter.get(
 
 progressRouter.get('/quote/:quoteId', requireAuth(...OFFICE), asyncHandler(async (req, res) => { res.json(await loadProgress(req.params.quoteId!)); }));
 
+/**
+ * Avancement proposé d'après les tâches du chantier créées depuis ce devis : par poste, le % de cases cochées de sa tâche (à défaut de liste, 100 % si la tâche est faite).
+ * C'est une PROPOSITION : le bureau la relit et l'enregistre ; elle ne modifie rien toute seule.
+ */
+progressRouter.get('/quote/:quoteId/from-tasks', requireAuth(...OFFICE), asyncHandler(async (req, res) => {
+  const quote = await prisma.document.findUnique({ where: { id: req.params.quoteId }, select: { id: true, kind: true, worksiteId: true } });
+  if (!quote || quote.kind !== 'quote') throw new HttpError(404, 'Devis introuvable');
+  const [items, tasks] = await Promise.all([
+    quoteItems(quote.id),
+    quote.worksiteId ? prisma.worksiteTask.findMany({ where: { worksiteId: quote.worksiteId, source: 'quote' } }) : Promise.resolve([]),
+  ]);
+  const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
+  const suggestions = items.map((it) => {
+    const t = tasks.find((x) => norm(x.title) === norm(it.label));
+    if (!t) return { quoteLineId: it.id, pct: null as number | null, done: 0, total: 0, status: null as string | null };
+    const list = Array.isArray(t.checklist) ? (t.checklist as { done?: boolean }[]) : [];
+    if (list.length) {
+      const done = list.filter((c) => c?.done).length;
+      return { quoteLineId: it.id, pct: Math.round((done / list.length) * 100), done, total: list.length, status: t.status };
+    }
+    return { quoteLineId: it.id, pct: t.status === 'done' ? 100 : 0, done: t.status === 'done' ? 1 : 0, total: 1, status: t.status };
+  });
+  res.json({ suggestions, matched: suggestions.filter((s) => s.pct !== null).length, tasks: tasks.length });
+}));
+
 progressRouter.post(
   '/quote/:quoteId',
   requireAuth(...OFFICE),

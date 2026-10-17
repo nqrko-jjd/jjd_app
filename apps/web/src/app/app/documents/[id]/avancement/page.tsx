@@ -32,6 +32,7 @@ export default function ProgressPage({ params }: { params: Promise<{ id: string 
   const [pcts, setPcts] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  const [hints, setHints] = useState<Record<string, string>>({}); // « 3/12 cochés » par ligne, après « Proposer d'après les tâches »
 
   const statements = data?.statements ?? [];
   const current = statements.find((s) => s.id === sel) ?? statements[statements.length - 1] ?? null;
@@ -58,6 +59,13 @@ export default function ProgressPage({ params }: { params: Promise<{ id: string 
     setBusy(key); setMsg(null);
     try { const r = await fn(); after?.(r); reload(); } catch (e) { setMsg((e as Error).message); } finally { setBusy(null); }
   }
+  // propose l'avancement d'après les cases cochées des tâches du chantier ; jamais en dessous de l'état précédent ; rien n'est enregistré avant « Enregistrer »
+  const fromTasks = () => run('tasks', () => api<{ suggestions: { quoteLineId: string; pct: number | null; done: number; total: number }[]; matched: number; tasks: number }>(`/api/progress/quote/${id}/from-tasks`), (r) => {
+    if (!r.matched) { setMsg(r.tasks ? 'Aucune tâche ne correspond aux postes du devis.' : 'Aucune tâche créée depuis ce devis : utilisez « Créer des tâches depuis ce devis » sur le devis.'); return; }
+    setPcts((p) => { const n = { ...p }; for (const s of r.suggestions) if (s.pct !== null) n[s.quoteLineId] = String(Math.max(s.pct, prevPct(s.quoteLineId))); return n; });
+    setHints(Object.fromEntries(r.suggestions.filter((s) => s.pct !== null).map((s) => [s.quoteLineId, `${s.done}/${s.total} fait${s.done > 1 ? 's' : ''}`])));
+    setMsg(`Avancement proposé pour ${r.matched} poste${r.matched > 1 ? 's' : ''} d’après les tâches : relisez, ajustez puis enregistrez.`);
+  });
   const save = () => run('save', () => api(`/api/progress/${current!.id}`, { method: 'PATCH', body: { lines: data.items.map((it) => ({ quoteLineId: it.id, cumulativePct: num(pcts[it.id]) })) } }));
 
   return (
@@ -106,7 +114,7 @@ export default function ProgressPage({ params }: { params: Promise<{ id: string 
                 <tbody>
                   {data.items.map((it) => (
                     <tr key={it.id}>
-                      <td>{it.label}</td>
+                      <td>{it.label}{hints[it.id] && <span className="muted" style={{ marginLeft: 6, fontSize: '0.78rem' }}>· tâches : {hints[it.id]}</span>}</td>
                       <td style={{ textAlign: 'right' }}>{formatEur(it.totalHt)}</td>
                       <td style={{ textAlign: 'right' }} className="muted">{prevPct(it.id)} %</td>
                       <td style={{ textAlign: 'right' }}>
@@ -132,6 +140,7 @@ export default function ProgressPage({ params }: { params: Promise<{ id: string 
                 </p>
               )}
               <div className="row" style={{ marginTop: '1rem', gap: '0.5rem', flexWrap: 'wrap' }}>
+                {editable && <button className="btn" disabled={!!busy} onClick={fromTasks} title="Remplit l’avancement de chaque poste d’après les cases cochées de sa tâche sur le chantier">{busy === 'tasks' ? 'Calcul…' : 'Proposer d’après les tâches'}</button>}
                 {editable && <button className="btn" disabled={!!busy} onClick={save}>{busy === 'save' ? 'Enregistrement…' : 'Enregistrer'}</button>}
                 {editable && <button className="btn" disabled={!!busy} onClick={() => run('validate', async () => { await save_(); return api(`/api/progress/${current.id}/validate`, { method: 'POST', body: {} }); })}>Valider</button>}
                 {current.status !== 'invoiced' && (

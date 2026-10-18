@@ -4,6 +4,11 @@ on:
     paths:
       - 'apps/mobile/**'
       - 'scripts/check-android-launch.py'
+      - 'scripts/test-mobile-queue.cjs'
+      - 'scripts/seed-mobile-launch.mjs'
+      - 'apps/api/src/routes/timesheet.ts'
+      - 'apps/api/prisma/schema.prisma'
+      - 'packages/shared/**'
       - '.github/workflows/mobile-launch.yml'
 permissions:
   contents: read
@@ -38,10 +43,12 @@ jobs:
         working-directory: apps/mobile
       - run: npm run typecheck
         working-directory: apps/mobile
+      - run: node --test scripts/test-mobile-queue.cjs
       - name: Export iOS JavaScript bundle
         run: npx expo export --platform ios --output-dir /tmp/jjd-ios-export
         working-directory: apps/mobile
       - run: npm run build:shared && npm run prisma:generate --workspace @jjd/api && npm run db:deploy:safe --workspace @jjd/api && npm run seed --workspace @jjd/api
+      - run: node scripts/seed-mobile-launch.mjs
       - name: Start isolated API without integrations
         run: |
           mkdir -p /tmp/jjd-mobile-test-uploads

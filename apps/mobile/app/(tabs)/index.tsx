@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Pressable, ScrollView, StyleSheet, RefreshControl, Linking } from 'react-native';
 import { Text } from '@/lib/AppText';
 import { Feather } from '@expo/vector-icons';
 import { useFocusEffect, Redirect, useRouter } from 'expo-router';
-import { apiGet, apiSend, flushQueue, pendingCount } from '@/lib/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { projectTimer } from '@/lib/timer-state';
+import { apiGet, apiSend, flushQueue, pendingCalls, queueStatus } from '@/lib/api';
 import { currentPosition } from '@/lib/geo';
 import { useSession } from '@/lib/session';
 import { HeroTile, ScreenHeader, EmptyState } from '@/lib/ui';
@@ -46,6 +48,10 @@ export function FieldHome({ embedded = false }: { embedded?: boolean }) {
   const [wrapUp, setWrapUp] = useState<{ id: string; ref: string; title: string } | null>(null);
   const [linked, setLinked] = useState(true);
   const [queued, setQueued] = useState(0);
+  const [syncError, setSyncError] = useState<string>();
+  const [legacyCount, setLegacyCount] = useState(0);
+  const actionBusy = useRef(false);
+  const [busy, setBusy] = useState(false);
   const [weekHours, setWeekHours] = useState<number | null>(null);
   const [unread, setUnread] = useState(0);
   const lead = user?.role === 'foreman' || user?.role === 'admin' || user?.role === 'office';
@@ -54,8 +60,19 @@ export function FieldHome({ embedded = false }: { embedded?: boolean }) {
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
+    const cacheKey = `jjd_field_home:${user?.id}`;
+    let snapshot: { items: Ev[]; running: Running | null; linked?: boolean } | null = null;
+    try {
+      snapshot = JSON.parse(await AsyncStorage.getItem(cacheKey) ?? 'null');
+      if (snapshot) {
+        setEvents(snapshot.items);
+        setRunning(projectTimer(snapshot.running, await pendingCalls(), snapshot.items));
+        setLinked(snapshot.linked !== false);
+      }
+    } catch { /* A damaged cache must not block server access. */ }
     await flushQueue();
-    setQueued(await pendingCount());
+    const state = await queueStatus();
+    setQueued(state.count); setSyncError(state.error); setLegacyCount(state.legacyCount);
     const today = new Date();
     const from = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
     const to = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString();
@@ -65,7 +82,9 @@ export function FieldHome({ embedded = false }: { embedded?: boolean }) {
         apiGet<TimerResp>('/api/timesheet/timer'),
       ]);
       setEvents(plan.items);
-      setRunning(timer.running);
+      snapshot = { items: plan.items, running: timer.running, linked: timer.linked };
+      await AsyncStorage.setItem(cacheKey, JSON.stringify(snapshot));
+      setRunning(projectTimer(timer.running, await pendingCalls(), plan.items));
       setLinked(timer.linked !== false);
       // heures de la semaine et messages non lus : deux cases cliquables sous le compteur
       const monday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - ((today.getDay() + 6) % 7));
@@ -90,9 +109,9 @@ export function FieldHome({ embedded = false }: { embedded?: boolean }) {
         });
       }
     } catch {
-      /* hors ligne : on garde l'état courant */
+      if (snapshot) setRunning(projectTimer(snapshot.running, await pendingCalls(), snapshot.items));
     }
-  }, [person, user?.role]);
+  }, [person, user?.role, user?.id]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
   useEffect(() => {
@@ -109,6 +128,9 @@ export function FieldHome({ embedded = false }: { embedded?: boolean }) {
   }
 
   async function start(worksiteId: string) {
+    if (actionBusy.current) return;
+    actionBusy.current = true; setBusy(true);
+    try {
     const pos = await currentPosition();
     const r = await apiSend<{ entry: unknown; geoFlag?: boolean; geoDistance?: number; geoInit?: boolean }>('/api/timesheet/timer/start', 'POST', {
       worksiteId,
@@ -125,17 +147,25 @@ export function FieldHome({ embedded = false }: { embedded?: boolean }) {
       Alert.alert('Pointage hors zone', `Tu es à environ ${(r as { geoDistance?: number }).geoDistance} m du chantier. Le pointage est enregistré mais sera vérifié par le bureau.`);
     }
     await load();
+    } catch (e) { Alert.alert('Pointage non enregistré', e instanceof Error ? e.message : 'Réessaie.'); }
+    finally { actionBusy.current = false; setBusy(false); }
   }
   async function stop() {
+    if (actionBusy.current) return;
+    actionBusy.current = true; setBusy(true);
+    try {
     const leaving = running;
     const r = await apiSend<{ entry: unknown }>('/api/timesheet/timer/stop', 'POST', {
       endedAt: new Date().toISOString(),
+      startedAt: running?.startedAt,
     });
     if ('queued' in r) setQueued((q) => q + 1);
     setRunning(null);
     await load();
     // fin de journée : on PROPOSE un mot et des photos pour le fil du chantier (facultatif, pas de rapport à remplir)
     if (leaving?.worksiteId && leaving.worksite) setWrapUp({ id: leaving.worksiteId, ref: leaving.worksite.ref, title: leaving.worksite.title });
+    } catch (e) { Alert.alert('Pointage non enregistré', e instanceof Error ? e.message : 'Réessaie.'); }
+    finally { actionBusy.current = false; setBusy(false); }
   }
 
   const hm = (iso: string) => new Date(iso).toLocaleTimeString(dateLocale(), { hour: '2-digit', minute: '2-digit' });
@@ -153,10 +183,12 @@ export function FieldHome({ embedded = false }: { embedded?: boolean }) {
       {queued > 0 && (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           <Feather name="clock" size={14} color={T.accent} />
-          <Text style={s.queued}>{queued} pointage(s) en attente de réseau</Text>
+          <Text style={s.queued}>{queued} action(s) enregistrée(s) sur ce téléphone, à synchroniser</Text>
         </View>
       )}
 
+      {!!syncError && <Text style={s.queued}>{syncError} Les actions sont conservées. Tire l’écran vers le bas pour réessayer ; si le problème persiste, contacte le bureau.</Text>}
+      {legacyCount > 0 && <Text style={s.queued}>Des anciennes actions sans compte identifié sont conservées sur ce téléphone. Contacte le bureau avant de désinstaller l’application.</Text>}
       {!linked && (
         <View style={[s.card, { borderColor: T.accent, borderWidth: 2 }]}>
           <Text style={s.label}>Compte non lié</Text>
@@ -172,7 +204,7 @@ export function FieldHome({ embedded = false }: { embedded?: boolean }) {
           <Text style={s.heroLabel}>Compteur en cours</Text>
           <Text style={s.heroSub}>{running.worksite?.ref} — {running.worksite?.title}</Text>
           <Text style={s.heroBig}>{elapsed(running.startedAt)}</Text>
-          <Pressable accessibilityRole="button" style={({ pressed }) => [s.stopBtn, pressed && { opacity: 0.85 }]} onPress={() => Alert.alert('Quitter le chantier ?', 'Ton temps de présence sera enregistré.', [{ text: 'Rester', style: 'cancel' }, { text: 'Je quitte', style: 'destructive', onPress: stop }])}>
+          <Pressable disabled={busy} accessibilityRole="button" style={({ pressed }) => [s.stopBtn, pressed && { opacity: 0.85 }]} onPress={() => Alert.alert('Quitter le chantier ?', 'Ton temps de présence sera enregistré.', [{ text: 'Rester', style: 'cancel' }, { text: 'Je quitte', style: 'destructive', onPress: stop }])}>
             <Text style={[s.btnTxt, { color: '#fff', fontSize: 17 }]}>Je quitte le chantier</Text>
           </Pressable>
         </HeroTile>
@@ -181,7 +213,7 @@ export function FieldHome({ embedded = false }: { embedded?: boolean }) {
           <Text style={s.heroLabel}>Prochain chantier</Text>
           <Text style={[s.heroSub, { fontSize: 16, fontWeight: '700', color: '#fff' }]}>{next.worksite.ref} — {next.title || next.worksite.title}</Text>
           <Text style={s.heroSub}>{next.allDay ? 'Toute la journée' : hm(next.startAt) + ' – ' + hm(next.endAt)}{next.worksite.city ? ' · ' + next.worksite.city : ''}</Text>
-          <Pressable accessibilityRole="button" style={({ pressed }) => [s.arriveBtn, pressed && { transform: [{ scale: 0.98 }] }]} onPress={() => start(next.worksite.id)}>
+          <Pressable disabled={busy} accessibilityRole="button" style={({ pressed }) => [s.arriveBtn, pressed && { transform: [{ scale: 0.98 }] }]} onPress={() => start(next.worksite.id)}>
             <Feather name="play" size={20} color="#241c05" />
             <Text style={s.arriveTxt}>Je suis arrivé</Text>
           </Pressable>

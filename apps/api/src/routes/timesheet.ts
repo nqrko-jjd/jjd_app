@@ -44,6 +44,10 @@ timesheetRouter.post(
   asyncHandler(async (req, res) => {
     const d = timerStartInput.parse(req.body);
     const personId = myPersonId(req);
+    if (d.operationId) {
+      const previous = await prisma.timeEntry.findUnique({ where: { personId_startRequestId: { personId, startRequestId: d.operationId } } });
+      if (previous) { res.json({ entry: previous, geoFlag: previous.geoFlag, geoDistance: previous.geoDistance }); return; }
+    }
     const existing = await prisma.timeEntry.findFirst({ where: { personId, status: 'running' } });
     if (existing) throw new HttpError(409, 'Un compteur tourne déjà');
     const person = await prisma.person.findUnique({ where: { id: personId } });
@@ -70,6 +74,7 @@ timesheetRouter.post(
     const entry = await prisma.timeEntry.create({
       data: {
         personId,
+        startRequestId: d.operationId,
         worksiteId: d.worksiteId,
         startedAt: d.startedAt ?? new Date(),
         date: d.startedAt ?? new Date(),
@@ -94,16 +99,23 @@ timesheetRouter.post(
   asyncHandler(async (req, res) => {
     const d = timerStopInput.parse(req.body);
     const personId = myPersonId(req);
+    if (d.operationId) {
+      const previous = await prisma.timeEntry.findUnique({ where: { personId_stopRequestId: { personId, stopRequestId: d.operationId } } });
+      if (previous) { res.json({ entry: previous }); return; }
+    }
     const running = await prisma.timeEntry.findFirst({ where: { personId, status: 'running' } });
     if (!running) throw new HttpError(404, 'Aucun compteur en cours');
     const end = d.endedAt ?? new Date();
     const started = running.startedAt ?? end;
+    if (d.startedAt && d.startedAt.getTime() !== started.getTime()) throw new HttpError(409, 'Ce pointage ne correspond pas au compteur en cours. Contacte le bureau.');
+    if (end < started) throw new HttpError(400, 'La fin du pointage précède son début.');
     const hours = round2(Math.max(0, (end.getTime() - started.getTime()) / 3_600_000));
     const rate = running.rateUsed ?? 0;
     const entry = await prisma.timeEntry.update({
       where: { id: running.id },
       data: {
         endedAt: end,
+        stopRequestId: d.operationId,
         hours,
         amount: rate ? round2(hours * rate) : null,
         note: d.note ?? running.note,

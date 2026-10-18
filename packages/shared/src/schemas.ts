@@ -276,6 +276,7 @@ export const timeEntryInput = z.object({
 
 /** Démarrage du compteur mobile (l'app envoie l'heure locale de début). */
 export const timerStartInput = z.object({
+  operationId: z.string().min(1).max(100).optional(),
   worksiteId: nonEmpty,
   startedAt: z.coerce.date().optional(),
   task: z.string().trim().nullish(),
@@ -284,6 +285,8 @@ export const timerStartInput = z.object({
 });
 
 export const timerStopInput = z.object({
+  operationId: z.string().min(1).max(100).optional(),
+  startedAt: z.coerce.date().optional(),
   endedAt: z.coerce.date().optional(),
   note: z.string().trim().nullish(),
 });

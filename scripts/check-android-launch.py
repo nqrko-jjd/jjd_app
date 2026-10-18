@@ -1,5 +1,5 @@
 """Native Android smoke test. Synthetic local API only; never production."""
-import subprocess, time, re, pathlib, xml.etree.ElementTree as ET
+import subprocess, time, re, pathlib, json, urllib.request, xml.etree.ElementTree as ET
 out = pathlib.Path('tmp/android-launch')
 out.mkdir(parents=True, exist_ok=True)
 def adb(*args):
@@ -43,6 +43,9 @@ try:
     apk=next(pathlib.Path('apps/mobile/android/app/build/outputs/apk/release').glob('*.apk'))
     adb('reverse','tcp:4100','tcp:4100')
     adb('install','-r',str(apk))
+    adb('shell','pm','grant','be.jjdconsult.chantier','android.permission.ACCESS_FINE_LOCATION')
+    adb('shell','pm','grant','be.jjdconsult.chantier','android.permission.ACCESS_COARSE_LOCATION')
+    adb('emu','geo','fix','4.3525','50.8467')
     adb('logcat','-c')
     adb('shell','am','start','-n','be.jjdconsult.chantier/.MainActivity')
     find('Bienvenue',90)
@@ -55,6 +58,28 @@ try:
     tap('Se connecter')
     find('Mes heures',60)
     shot('02-worker-home')
+    heading=find('Bonjour')
+    assert int(re.findall(r'\d+',heading.get('bounds'))[1]) >= 60, 'Header overlaps system status bar'
+    tap('Je suis arrivé')
+    find('Compteur en cours',60)
+    shot('02b-timer-running')
+    tap('Je quitte le chantier')
+    find('Rester')
+    confirm=next(n for n in tree().iter('node') if n.get('text','').casefold()=='je quitte')
+    tap_node(confirm)
+    find('Bonne fin de journée',60)
+    shot('02c-timer-stopped')
+    tap('Passer')
+    # Inspect the persisted result on the isolated API, not only screen text.
+    request=urllib.request.Request('http://127.0.0.1:4100/api/auth/login',data=json.dumps({'email':'ouvrier@jjd-consult.be','password':'jjd'}).encode(),headers={'Content-Type':'application/json'})
+    token=json.load(urllib.request.urlopen(request))['token']
+    request=urllib.request.Request('http://127.0.0.1:4100/api/timesheet/mine',headers={'Authorization':'Bearer '+token})
+    entries=json.load(urllib.request.urlopen(request))['items']
+    assert len(entries)==1, entries
+    entry=entries[0]
+    assert entry['status']=='submitted' and entry['endedAt'] and entry['startRequestId'] and entry['stopRequestId'], entry
+    assert entry['startLat'] is not None and abs(entry['startLat']-50.8467)<0.01, entry
+    (out/'pointage.json').write_text(json.dumps(entry,indent=2))
     tap('Mes heures')
     shot('03-hours')
     tap('Chantiers')

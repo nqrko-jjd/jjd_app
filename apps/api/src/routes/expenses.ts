@@ -166,6 +166,15 @@ async function duplicateIdsFor(entries: { id: string; direction: string; docNumb
   return out;
 }
 
+/** Parmi deux exemplaires d'une même facture : « delete » pour celui qu'aucun paiement ne touche (l'autre est payé), « keep » pour celui qui est payé. */
+function duplicateAdvice(id: string, dups: Map<string, string[]>, payments: Awaited<ReturnType<typeof allocationSnapshot>>): 'delete' | 'keep' | null {
+  const twins = dups.get(id);
+  if (!twins?.length) return null;
+  const hasPayment = (x: string) => payments.ledgerPaid.has(x);
+  if (hasPayment(id)) return 'keep';
+  return twins.some(hasPayment) ? 'delete' : null;
+}
+
 /** Répartition par chantier calculée d'après les bordereaux reliés (voir lib/invoice-allocation.ts) ; absente si la facture est déjà répartie à la saisie. */
 async function allocationOf(e: { id: string; direction: string; ht: number; worksiteId: string | null; docNumber: string | null; contactId: string | null; supplierName: string | null; worksite?: { ref: string } | null; bordereaux?: { ht: number; worksiteId: string | null; worksite?: { ref: string } | null }[] }) {
   if (e.direction !== 'purchase' || !e.bordereaux?.length) return undefined;
@@ -281,6 +290,7 @@ expensesRouter.get(
         hasPdf: !!e.pdfPath,
         editable: e.source !== 'xlsx',
         duplicateIds: dups.get(e.id) ?? [],
+        duplicateAdvice: duplicateAdvice(e.id, dups, payments),
         deletable: e.source !== 'xlsx' || dups.has(e.id),
       }))),
       totals: {
@@ -692,7 +702,7 @@ expensesRouter.get(
     const payments = await allocationSnapshot();
     const bankMatches = matches.map((m) => ({ matchId: m.id, allocatedAmount: payments.amounts.get(m.id) ?? 0, ...m.bankTransaction }));
     const dupIds = (await duplicateIdsFor([e])).get(e.id) ?? [];
-    res.json({ expense: { ...e, ...paymentOf(e, payments), worksiteAllocation: await allocationOf(e), hasPdf: !!e.pdfPath, editable: e.source !== 'xlsx', duplicateIds: dupIds, deletable: e.source !== 'xlsx' || dupIds.length > 0, bankMatches } });
+    res.json({ expense: { ...e, ...paymentOf(e, payments), worksiteAllocation: await allocationOf(e), hasPdf: !!e.pdfPath, editable: e.source !== 'xlsx', duplicateIds: dupIds, duplicateAdvice: duplicateAdvice(e.id, new Map(dupIds.length ? [[e.id, dupIds]] : []), payments), deletable: e.source !== 'xlsx' || dupIds.length > 0, bankMatches } });
   }),
 );
 

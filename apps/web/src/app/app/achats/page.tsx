@@ -52,6 +52,7 @@ interface Expense {
   /** supprimable : saisie manuelle, ou écriture de l'import Excel qui a un doublon */
   deletable?: boolean;
   duplicateIds?: string[];
+  duplicateAdvice?: 'delete' | 'keep' | null;
   source: string | null;
   // bordereau (direction "delivery_slip") -> facture reçue ensuite, une fois reliée
   linkedInvoiceId: string | null;
@@ -595,7 +596,9 @@ function AchatsInner() {
                   <td>
                     {e.supplier ?? '—'}
                     {e.direction === 'credit_note' && <span className="badge warn" style={{ marginLeft: 6 }}>NC</span>}
-                    {!!e.duplicateIds?.length && <span className="badge crit" style={{ marginLeft: 6 }} title="Même fournisseur, même n° et même montant qu'une autre dépense : clic droit → supprimer ce doublon">doublon ?</span>}
+                    {!!e.duplicateIds?.length && (e.duplicateAdvice === 'keep'
+                      ? <span className="badge plain" style={{ marginLeft: 6 }} title="Cette facture est en double ; celle-ci est la bonne (elle a les paiements). Supprimez l'autre.">doublon · à garder</span>
+                      : <span className="badge crit" style={{ marginLeft: 6 }} title="Même fournisseur, même n° et même montant qu'une autre dépense : clic droit → supprimer ce doublon">{e.duplicateAdvice === 'delete' ? 'doublon · à supprimer (aucun paiement)' : 'doublon ?'}</span>)}
                     {e.direction === 'delivery_slip' && (
                       e.linkedInvoiceId
                         ? <span className="badge ok" style={{ marginLeft: 6 }} title={`Relié à la facture ${e.linkedInvoice?.docNumber ?? ''}`}>📦 Bordereau · relié</span>

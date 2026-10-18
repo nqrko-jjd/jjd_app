@@ -324,6 +324,9 @@ test('doublon de l’import Excel : supprimable (l’autre exemplaire reste), sa
   // un doublon rapproché à un paiement bancaire n'est pas supprimé : on supprime l'autre
   const tx = await prisma.bankTransaction.create({ data: { externalId: 'dup-test-tx', amount: -3078.43, side: 'out', bookingDate: new Date('2024-06-01') } });
   await prisma.bankTransactionMatch.create({ data: { bankTransactionId: tx.id, ledgerEntryId: b.id } });
+  const advice = await jf<{ items: { id: string; duplicateAdvice: string | null }[] }>(`/api/finance/expenses?q=MD/DUP-1`);
+  assert.equal(advice.body.items.find((x) => x.id === a.id)!.duplicateAdvice, 'delete', 'sans paiement : à supprimer');
+  assert.equal(advice.body.items.find((x) => x.id === b.id)!.duplicateAdvice, 'keep', 'payé : à garder');
   assert.equal((await jf(`/api/finance/expenses/${b.id}`, { method: 'DELETE' })).status, 409);
   assert.equal((await jf(`/api/finance/expenses/${a.id}`, { method: 'DELETE' })).status, 200, 'l’exemplaire sans paiement part');
   assert.equal((await jf(`/api/finance/expenses/${b.id}`, { method: 'DELETE' })).status, 409, 'plus de doublon : l’exemplaire restant est protégé');

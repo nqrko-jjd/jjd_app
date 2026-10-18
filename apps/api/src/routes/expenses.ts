@@ -277,7 +277,7 @@ expensesRouter.get(
 
 
 /**
- * Dépenses sans chantier (poste « Matériel sans chantier », E-01…) à imputer : pour chacune, les chantiers actifs CE JOUR-LÀ
+ * Dépenses du poste « Matériel sans chantier » (E-01) à imputer : pour chacune, les chantiers actifs CE JOUR-LÀ
  * (interventions du planning et heures pointées) — ceux sur lesquels ce matériel a pu servir. Aucune écriture : l'imputation se fait ensuite
  * par une modification normale de la dépense (PATCH worksiteId). `window` = nombre de jours avant/après à regarder aussi (0 à 3).
  */
@@ -290,7 +290,8 @@ expensesRouter.get(
     const win = Math.min(3, Math.max(0, Math.trunc(Number(req.query.window)) || 0));
     const page = Math.max(1, Math.trunc(Number(pageStr)) || 1);
     const pageSize = Math.min(200, Math.max(10, Math.trunc(Number(pageSizeStr)) || 50));
-    const and: Record<string, unknown>[] = [{ direction: 'purchase' }, { worksite: { kind: 'overhead' } }];
+    // seulement le poste « Matériel sans chantier » (E-01) : les autres postes E-xx (E-03, E-04…) sont de vraies charges, pas des achats à imputer à un chantier
+    const and: Record<string, unknown>[] = [{ direction: 'purchase' }, { worksite: { ref: 'E-01', kind: 'overhead' } }];
     if (from) and.push({ date: { gte: new Date(from) } });
     if (to) and.push({ date: { lte: new Date(to) } });
     if (category) and.push({ categoryRaw: category });

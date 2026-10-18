@@ -15,7 +15,7 @@ interface Row {
 interface Data { items: Row[]; total: number; totalHt: number; page: number; totalPages: number; window: number }
 
 /**
- * Dépenses sans chantier (« Matériel sans chantier », E-01…) à imputer : pour chaque dépense, les chantiers actifs le jour de l'achat
+ * Dépenses du poste E-01 « Matériel sans chantier » à imputer : pour chaque dépense, les chantiers actifs le jour de l'achat
  * (planning + heures pointées), d'un clic pour l'imputer. Rien n'est modifié tant qu'on ne clique pas sur un chantier ; « Annuler » remet l'ancien poste.
  */
 export default function SansChantierPage() {
@@ -51,7 +51,7 @@ export default function SansChantierPage() {
       <PageHead
         eyebrow="Comptabilité"
         title="Dépenses sans chantier"
-        sub={`${data.total} dépense${data.total > 1 ? 's' : ''} · ${formatEur(data.totalHt)} HT sur un poste sans chantier (matériel, frais…) · choisis le chantier où ça a servi`}
+        sub={`${data.total} dépense${data.total > 1 ? 's' : ''} · ${formatEur(data.totalHt)} HT sur E-01 « Matériel sans chantier » · choisis le chantier où ça a servi`}
         action={<Link className="btn" href="/app/achats">← Achats / Dépenses</Link>}
       />
       {msg && (

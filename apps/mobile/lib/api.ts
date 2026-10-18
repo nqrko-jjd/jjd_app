@@ -1,3 +1,4 @@
+import { File } from 'expo-file-system';
 import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -124,7 +125,7 @@ export async function apiUploadPhoto<T = unknown>(
 ): Promise<T> {
   const token = await getToken();
   const form = new FormData();
-  form.append('file', { uri, name: 'photo.jpg', type: 'image/jpeg' } as unknown as Blob);
+  form.append('file', new File(uri));
   if (caption) form.append('caption', caption);
   const res = await fetch(`${API_URL}${path}`, {
     method: 'POST',

@@ -1,3 +1,4 @@
+import { File } from 'expo-file-system';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, AppState, Pressable, View } from 'react-native';
@@ -64,7 +65,7 @@ export function VoiceNote({ endpoint, onSent }: { endpoint: string; onSent: () =
     try {
       const token = await getToken();
       const form = new FormData();
-      form.append('file', { uri: draft, name: 'note-vocale.m4a', type: 'audio/mp4' } as unknown as Blob);
+      form.append('file', new File(draft));
       form.append('requestId', operation.current);
       const res = await fetch(`${API_URL}${endpoint}`, { method: 'POST', headers: token ? { authorization: `Bearer ${token}` } : {}, body: form, signal: controller.signal });
       if (!res.ok) throw new Error('upload');

@@ -13,7 +13,14 @@ const TOKEN = 'jjd_push_token';
 const ENABLED = 'jjd_push_enabled';
 Notifications.setNotificationHandler({ handleNotification: async () => ({ shouldPlaySound: true, shouldSetBadge: false, shouldShowBanner: true, shouldShowList: true }) });
 
-async function register(ask: boolean) {
+let deviceQueue: Promise<unknown> = Promise.resolve();
+function serializeDevice<T>(work: () => Promise<T>): Promise<T> {
+  const result = deviceQueue.then(work, work);
+  deviceQueue = result.catch(() => {});
+  return result;
+}
+function register(ask: boolean) { return serializeDevice(() => registerDevice(ask)); }
+async function registerDevice(ask: boolean) {
   if (Platform.OS !== 'android' && Platform.OS !== 'ios') throw new Error('Disponible dans l’application installée.');
   if (Platform.OS === 'android' && !Constants.expoConfig?.extra?.nativePushConfigured) throw new Error('Les notifications Android attendent la configuration Firebase de JJD.');
   const auth = await getToken();
@@ -31,7 +38,8 @@ async function register(ask: boolean) {
   await AsyncStorage.multiSet([[TOKEN, token], [ENABLED, '1']]);
 }
 
-export async function unregisterNotifications() {
+export function unregisterNotifications() { return serializeDevice(unregisterDevice); }
+async function unregisterDevice() {
   const token = await AsyncStorage.getItem(TOKEN);
   if (token) await apiSend('/api/push/native/unsubscribe', 'POST', { token }, false);
   await AsyncStorage.multiRemove([TOKEN, ENABLED]);

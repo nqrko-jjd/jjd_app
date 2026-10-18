@@ -1,0 +1,23 @@
+PRÉPARATION SÉCURITÉ DES DONNÉES — À VALIDER DANS PLAY CONSOLE
+Ce document aide à remplir le formulaire ; il n’a pas été soumis à Google.
+
+L’application transmet des données à l’API JJD par HTTPS. L’accès est fourni par l’entreprise, sans inscription libre dans l’app.
+Catégories à examiner et déclarer selon les fonctions activées :
+- Informations personnelles : nom, e-mail, téléphone, identifiant de compte ; gestion du compte et fonctions de l’app.
+- Localisation approximative/précise : position ponctuelle au pointage ; facultative, permission refusables ; pas de suivi GPS en arrière-plan.
+- Messages : conversations internes et contenu transmis ; fonctions de l’app.
+- Photos : photos/justificatifs sélectionnés ou capturés ; fonctions de l’app.
+- Audio : notes vocales enregistrées volontairement ; fonctions de messagerie.
+- Fichiers/documents et contenu utilisateur : rapports, signatures, justificatifs et documents professionnels.
+- Informations financières : dépenses et documents de facturation selon les rôles ; examiner les sous-catégories du formulaire avec le responsable.
+- Activité dans l’app : pointages, actions et journaux d’activité nécessaires au travail et à la sécurité.
+- Identifiants d’appareil/autres identifiants : jeton de notification Expo/FCM, facultatif si notifications activées.
+
+La collecte nécessaire à un compte actif est distincte des fonctions optionnelles photo, audio et localisation. Ne pas déclarer toutes les données comme facultatives simplement parce qu’une permission peut être refusée.
+Pas d’annonceur ni de SDK publicitaire identifié. Ne pas cocher « aucune donnée collectée ».
+Les services d’hébergement, Expo/Google pour les notifications et les intégrations serveur doivent être examinés. La lecture de justificatifs, la traduction et l’assistance peuvent passer par Anthropic lorsqu’elles sont activées. Le fait qu’un prestataire puisse relever de l’exception « fournisseur de services » dans le formulaire Google ne signifie pas absence de traitement externe.
+Confirmer les prestataires réellement activés, pays de traitement et durées de conservation avant publication publique. Ne pas inventer de durée ni déclarer un chiffrement de bout en bout.
+Les demandes de suppression passent par info@jjd-consult.be. Leur traitement est manuel ; obligations de conservation à expliquer au demandeur. Aucune suppression automatique instantanée n’est annoncée.
+
+Les tests internes seuls sont exemptés de la section publique Sécurité des données, mais la publication publique nécessite un formulaire exact.
+Source : https://support.google.com/googleplay/android-developer/answer/10787469?hl=fr

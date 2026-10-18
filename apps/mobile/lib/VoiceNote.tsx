@@ -53,7 +53,7 @@ export function VoiceNote({ endpoint, onSent }: { endpoint: string; onSent: () =
         operation.current = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
         active.current = true; recorder.record();
       }
-    } catch { Alert.alert('Enregistrement indisponible', 'Réessayez après avoir vérifié le microphone.'); }
+    } catch { active.current = false; Alert.alert('Enregistrement indisponible', 'Réessayez après avoir vérifié le microphone.'); }
     finally { lock.current = false; if (mounted.current) setBusy(false); }
   }
   async function send() {

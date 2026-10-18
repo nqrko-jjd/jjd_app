@@ -1,5 +1,5 @@
 import { useCallback, useState, type ReactNode } from 'react';
-import { View, StyleSheet, ActivityIndicator, Pressable, FlatList, TextInput, RefreshControl, Image } from 'react-native';
+import { View, StyleSheet, ActivityIndicator, Pressable, FlatList, TextInput, RefreshControl, Image, type StyleProp, type ViewStyle } from 'react-native';
 import { Text } from '@/lib/AppText';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -10,9 +10,9 @@ import { T } from './theme';
 import { tr, dateLocale, Alert } from './i18n';
 
 /** Bannière/tuile vert dégradé — mise en avant d'une métrique ou d'un titre de fiche (voir maquette). */
-export function HeroTile({ children, icon }: { children: ReactNode; icon?: keyof typeof Feather.glyphMap }) {
+export function HeroTile({ children, icon, style }: { children: ReactNode; icon?: keyof typeof Feather.glyphMap; style?: StyleProp<ViewStyle> }) {
   return (
-    <LinearGradient colors={[T.heroFrom, T.heroTo]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={st.hero}>
+    <LinearGradient colors={[T.heroFrom, T.heroTo]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[st.hero, style]}>
       {icon && (
         <View style={st.heroIcon}>
           <Feather name={icon} size={16} color="#fff" />

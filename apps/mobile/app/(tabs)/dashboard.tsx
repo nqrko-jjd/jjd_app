@@ -83,7 +83,7 @@ function BureauHome() {
 
       <View style={s.tiles}>
         <Pressable accessibilityRole="button" accessibilityLabel={tr('Facturé ce mois')} onPress={() => go('/analyse')} style={{flexGrow:1,flexBasis:150}}>
-          <HeroTile icon="bar-chart-2"><Text style={s.heroLabel}>Facturé ce mois</Text><Text style={s.heroValue}>{eur(data.kpis.invoicedMonth)}</Text></HeroTile>
+          <HeroTile icon="bar-chart-2" style={{padding:18,flex:1}}><Text style={s.heroLabel}>Facturé ce mois</Text><Text style={s.heroValue}>{eur(data.kpis.invoicedMonth)}</Text></HeroTile>
         </Pressable>
         <Pressable accessibilityRole="button" onPress={() => go('/analyse')} style={s.metric}><Text style={s.tileLabel}>Encaissé ce mois</Text><Text style={s.metricValue}>{eur(data.kpis.paidMonth)}</Text><Feather name="trending-up" size={18} color={T.primary}/></Pressable>
         <Pressable accessibilityRole="button" onPress={() => go('/documents')} style={[s.metric,s.tileAlert]}><Text style={s.tileLabel}>Factures en retard</Text><Text style={[s.metricValue,{color:T.kpiWarnFg}]}>{eur(data.kpis.overdueAmount)}</Text><Text style={s.tileLabel}>{data.kpis.overdueCount} facture(s)</Text></Pressable>
@@ -153,10 +153,10 @@ function BureauHome() {
 
 const s = StyleSheet.create({
   sectionTitle: { fontFamily:T.headingFont,fontSize:20,fontWeight:'700',color:T.ink,letterSpacing:-0.5,marginBottom:10 },
-  metric: {...T.shadow,flexGrow:1,flexBasis:150,borderRadius:24,borderWidth:1,borderColor:T.line,backgroundColor:T.surface,padding:20,gap:10,justifyContent:'center'},
-  metricValue: {fontFamily:T.headingFont,fontSize:23,fontWeight:'700',color:T.ink,letterSpacing:-0.6},
+  metric: {...T.shadow,flexGrow:1,flexBasis:150,borderRadius:24,borderWidth:1,borderColor:T.line,backgroundColor:T.surface,padding:18,gap:10,justifyContent:'center'},
+  metricValue: {fontFamily:T.headingFont,fontSize:20,fontWeight:'700',color:T.ink,letterSpacing:-0.6},
   heroLabel: {fontSize:13,color:'#d0dfd5',paddingRight:28},
-  heroValue: {fontFamily:T.headingFont,fontSize:23,fontWeight:'700',color:'#fff',marginTop:16,letterSpacing:-0.6},
+  heroValue: {fontFamily:T.headingFont,fontSize:20,fontWeight:'700',color:'#fff',marginTop:16,letterSpacing:-0.6},
   tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   tile: { ...T.shadow, flexGrow: 1, flexBasis: 150, backgroundColor: T.surface, borderWidth: 1, borderColor: T.line, borderRadius: 20, padding: 16, gap: 6, minHeight: 112 },
   tileAlert: { backgroundColor: T.kpiWarnBg, borderColor: T.kpiWarnBorder },

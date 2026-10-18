@@ -6,6 +6,7 @@ on:
       - 'scripts/check-android-launch.py'
       - 'scripts/test-mobile-queue.cjs'
       - 'scripts/test-mobile-session.cjs'
+      - 'scripts/test-mobile-voice.cjs'
       - 'scripts/seed-mobile-launch.mjs'
       - 'apps/api/src/routes/timesheet.ts'
       - 'apps/api/prisma/schema.prisma'
@@ -47,7 +48,7 @@ jobs:
         working-directory: apps/mobile
       - run: npm run typecheck
         working-directory: apps/mobile
-      - run: node --test scripts/test-mobile-queue.cjs scripts/test-mobile-session.cjs
+      - run: node --test scripts/test-mobile-queue.cjs scripts/test-mobile-session.cjs scripts/test-mobile-voice.cjs
       - name: Export iOS JavaScript bundle
         run: npx expo export --platform ios --output-dir /tmp/jjd-ios-export
         working-directory: apps/mobile

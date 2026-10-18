@@ -1,3 +1,4 @@
+import { File } from 'expo-file-system';
 import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -14,11 +15,40 @@ function devLanHost(): string | undefined {
 
 const configured = (Constants.expoConfig?.extra as { apiUrl?: string } | undefined)?.apiUrl;
 
-export const API_URL =
+const TEAM_API_URL =
   process.env.EXPO_PUBLIC_API_URL ||
   (devLanHost() ? `http://${devLanHost()}:${API_PORT}` : undefined) ||
   (configured && configured !== 'http://localhost:4100' ? configured : undefined) ||
   'http://localhost:4100';
+
+export let API_URL = TEAM_API_URL;
+const DEMO_API_URL = 'https://new.jjd-consult.be/jjd-demo-api';
+let demo = false;
+let environmentReady: Promise<void> | undefined;
+export function isDemoEnvironment() { return demo; }
+export function storageKey(key: string) { return demo ? `demo:${key}` : key; }
+export function initializeEnvironment() {
+  return environmentReady ??= AsyncStorage.getItem('jjd_environment').then(value => {
+    demo = value === 'demo';
+    API_URL = demo ? DEMO_API_URL : TEAM_API_URL;
+  });
+}
+/** Available only while signed out. Wait for offline replay before changing its storage. */
+export async function selectEnvironment(useDemo: boolean) {
+  await initializeEnvironment();
+  if (await getToken()) throw new Error('Déconnectez-vous avant de changer d’espace.');
+  await serialized(async () => {
+    if (await getToken()) throw new Error('Déconnectez-vous avant de changer d’espace.');
+    await AsyncStorage.setItem('jjd_environment', useDemo ? 'demo' : 'team');
+    demo = useDemo;
+    API_URL = demo ? DEMO_API_URL : TEAM_API_URL;
+    memToken = null;
+    // Never silently restore another space's account on the login screen.
+    await AsyncStorage.removeItem(storageKey(TOKEN_KEY));
+    await AsyncStorage.removeItem(storageKey(OWNER_KEY));
+    await AsyncStorage.removeItem(storageKey('jjd_session_cache'));
+  });
+}
 
 // eslint-disable-next-line no-console
 if (__DEV__) console.log('[JJD] API_URL =', API_URL);
@@ -30,15 +60,17 @@ const OWNER_KEY = 'jjd_token_owner';
 let memToken: string | null = null;
 
 export async function getToken(): Promise<string | null> {
+  await initializeEnvironment();
   if (memToken) return memToken;
-  memToken = await AsyncStorage.getItem(TOKEN_KEY);
+  memToken = await AsyncStorage.getItem(storageKey(TOKEN_KEY));
   return memToken;
 }
 export async function setToken(t: string | null, userId?: string): Promise<void> {
-  await AsyncStorage.setItem(OWNER_KEY, JSON.stringify({ token: t, userId: userId ?? null }));
+  await initializeEnvironment();
+  await AsyncStorage.setItem(storageKey(OWNER_KEY), JSON.stringify({ token: t, userId: userId ?? null }));
   memToken = t;
-  if (t) await AsyncStorage.setItem(TOKEN_KEY, t);
-  else await AsyncStorage.removeItem(TOKEN_KEY);
+  if (t) await AsyncStorage.setItem(storageKey(TOKEN_KEY), t);
+  else await AsyncStorage.removeItem(storageKey(TOKEN_KEY));
 }
 
 export class ApiError extends Error {
@@ -58,11 +90,11 @@ export interface QueuedCall {
 }
 
 async function readQueue(): Promise<QueuedCall[]> {
-  const raw = await AsyncStorage.getItem(QUEUE_KEY);
+  const raw = await AsyncStorage.getItem(storageKey(QUEUE_KEY));
   return raw ? (JSON.parse(raw) as QueuedCall[]) : [];
 }
 async function writeQueue(q: QueuedCall[]): Promise<void> {
-  await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(q));
+  await AsyncStorage.setItem(storageKey(QUEUE_KEY), JSON.stringify(q));
 }
 
 // All queue mutations are serialized, including replay and new actions.
@@ -74,7 +106,7 @@ function serialized<T>(work: () => Promise<T>): Promise<T> {
 }
 async function identity() {
   const token = await getToken();
-  const saved = JSON.parse(await AsyncStorage.getItem(OWNER_KEY) ?? 'null');
+  const saved = JSON.parse(await AsyncStorage.getItem(storageKey(OWNER_KEY)) ?? 'null');
   return { token, ownerId: token && saved?.token === token ? saved.userId as string | null : null };
 }
 export async function pendingCalls(): Promise<QueuedCall[]> {
@@ -124,7 +156,7 @@ export async function apiUploadPhoto<T = unknown>(
 ): Promise<T> {
   const token = await getToken();
   const form = new FormData();
-  form.append('file', { uri, name: 'photo.jpg', type: 'image/jpeg' } as unknown as Blob);
+  form.append('file', new File(uri));
   if (caption) form.append('caption', caption);
   const res = await fetch(`${API_URL}${path}`, {
     method: 'POST',

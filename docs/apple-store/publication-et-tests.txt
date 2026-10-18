@@ -1,0 +1,24 @@
+JJD CHANTIER — PARCOURS APPLE
+19 octobre 2026
+
+Compte organisation JJD Consult : inscription envoyée, activation en attente.
+D-U-N-S : 372964766. Ce numéro ne remplace pas l’identifiant d’équipe Apple.
+
+Après activation :
+1. Terminer l’adhésion et les accords Apple Developer.
+2. Relier l’équipe Apple à Expo dans le parcours sécurisé de gestion des identifiants. Créer les certificats/profils pour be.jjdconsult.chantier et la clé APNs pour les notifications. Ne pas déposer les clés privées dans le dépôt ou dans le dossier de remise.
+3. Créer JJD Chantier dans App Store Connect avec ce Bundle ID.
+4. Compiler le profil production iOS (EAS) avec la configuration de production. Le simulateur ne fournit pas un IPA distribuable : il reste nécessaire de produire une archive signée après activation.
+5. Déposer l’archive dans App Store Connect/TestFlight. Ajouter les utilisateurs internes habilités. Les tests externes peuvent nécessiter une revue bêta Apple.
+6. Installer sur iPhone physique et tester connexion, pointage avec/refus GPS, photos, notes vocales, notifications reçues app en arrière-plan/fermée, ouverture de l’alerte, déconnexion et changement de compte.
+7. Fournir les captures iPhone et iPad finales, la confidentialité, les notes d’examen et un accès de démonstration isolé avant soumission publique.
+
+Commande de compilation depuis apps/mobile : eas build --platform ios --profile production
+Soumission : eas submit --platform ios --profile production (sélectionner l’app App Store Connect exacte dans le parcours sécurisé).
+L’identifiant App Store Connect n’est pas encore disponible : ne pas inventer ascAppId ou appleTeamId dans eas.json.
+
+Sources :
+https://docs.expo.dev/build/setup/
+https://docs.expo.dev/push-notifications/push-notifications-setup/
+https://developer.apple.com/app-store/review/
+https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications/

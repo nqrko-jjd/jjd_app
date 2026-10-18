@@ -1,0 +1,48 @@
+JJD CHANTIER — INSCRIPTION ET PREMIER TEST GOOGLE PLAY
+18 octobre 2026
+
+1. Créer le compte
+Ouvrir https://play.google.com/console/signup avec un compte Google maîtrisé par JJD.
+Choisir Organisation pour JJD Consult SRL, et non un compte personnel.
+Préparer : numéro D-U-N-S de l’entreprise (9 chiffres, distinct du numéro BCE/TVA), raison sociale et adresse identiques au dossier Dun & Bradstreet, site de l’entreprise, coordonnées de David et de l’entreprise, justificatifs d’identité/entreprise demandés par Google.
+D-U-N-S obtenu : 372964766, JJD Consult, Gieterijstraat 49, 1601 Sint-Pieters-Leeuw. Compte Google Play créé ; site validé ; identité en cours de vérification, puis téléphones à valider.
+Frais Play Console : 25 USD, une seule fois, à régler personnellement dans le formulaire Google. Ne pas communiquer de numéro de carte dans le chat.
+Nom public choisi : JJD Dev. Contact public confirmé : info@jjd-consult.be.
+Google peut afficher l’identité et les coordonnées professionnelles du développeur.
+
+2. Créer l’application
+Nom : JJD Chantier ; langue par défaut : français ; application ; gratuite.
+Identifiant Android fixé dans le binaire : be.jjdconsult.chantier.
+Ne pas modifier cet identifiant après la première publication.
+
+3. Première distribution interne
+Tester et publier > Tests > Tests internes > Créer une version.
+Configurer Play App Signing. Avant de choisir une nouvelle clé de signature Google, vérifier la continuité avec les APK déjà installés via Expo : une signature différente peut nécessiter une réinstallation. Ne jamais désinstaller une app avec des pointages encore en attente. Exporter/transférer la clé existante uniquement dans le parcours sécurisé Google si l’on souhaite conserver la même signature.
+Importer le fichier .aab fourni, compléter les notes de version, vérifier les avertissements et lancer le test interne.
+Onglet Testeurs : créer une liste avec les adresses Google utilisées sur les téléphones des testeurs, puis copier le lien d’inscription au test. Jusqu’à 100 testeurs internes.
+Chaque testeur ouvre le lien avec le compte Google autorisé, accepte le test puis installe via Google Play. L’app n’est pas une publication publique à ce stade.
+Premier dépôt manuel dans Play Console. Le profil EAS de soumission est configuré sur internal/draft : aucun envoi automatique n’est lancé ici.
+
+4. Avant publication publique
+Compléter la fiche avec les textes et visuels du dossier.
+Contrôler la politique de confidentialité en ligne et les déclarations Sécurité des données.
+Répondre sincèrement aux questionnaires : accès restreint par connexion, classification du contenu, publicité, public cible et autorisations.
+Fournir à Google un accès de démonstration durable, sans données réelles de clients ou de salariés. Aucun compte d’examen contenant des données réelles n’a été créé dans cette préparation.
+Faire les essais du fichier tests-internes.csv, corriger les échecs et consulter le rapport de pré-lancement Play.
+L’acceptation et les délais dépendent de Google. Les 12 testeurs pendant 14 jours concernent certains nouveaux comptes personnels ; ce n’est pas le parcours conseillé pour JJD Consult SRL.
+
+5. Firebase / notifications
+Projet Firebase : jjd-chantier. Package : be.jjdconsult.chantier.
+google-services.json correspond à l’application ; il est intégré au projet.
+Clé privée du compte de service : déposer dans Expo > JJD Chantier > Credentials > Android > be.jjdconsult.chantier > FCM V1. Ne pas la joindre au code ni à ce dossier.
+Le fichier google-services.json n’est pas cette clé privée.
+Dans l’app, Mon compte > Activer les notifications ; autoriser la demande Android.
+Tester avec deux comptes distincts : l’auteur ne reçoit pas d’alerte pour son propre message. Le destinataire doit avoir accès au fil/être affecté au planning.
+Un envoi accepté par Expo ne prouve pas la réception sur le téléphone : vérifier l’alerte et son ouverture.
+
+Sources officielles :
+https://support.google.com/googleplay/android-developer/answer/6112435?hl=fr
+https://support.google.com/googleplay/android-developer/answer/13628312?hl=fr
+https://support.google.com/googleplay/android-developer/answer/9845334?hl=fr
+https://docs.expo.dev/submit/android/
+https://docs.expo.dev/push-notifications/fcm-credentials/

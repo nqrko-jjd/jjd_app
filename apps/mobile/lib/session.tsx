@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ApiError, apiGet, apiSend, setToken, getToken } from './api';
+import { ApiError, apiGet, apiSend, setToken, getToken, storageKey } from './api';
 
 interface User {
   id: string;
@@ -37,7 +37,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setLoading(false);
       return;
     }
-    const cacheKey = 'jjd_session_cache';
+    const cacheKey = storageKey('jjd_session_cache');
     try {
       const r = await apiGet<{ user: User; person: Person | null }>('/api/auth/me');
       if (await getToken() !== t) return;
@@ -78,7 +78,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   async function signOut() {
     await setToken(null);
-    await AsyncStorage.removeItem('jjd_session_cache');
+    await AsyncStorage.removeItem(storageKey('jjd_session_cache'));
     setUser(null);
     setPerson(null);
   }

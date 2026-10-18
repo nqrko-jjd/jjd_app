@@ -8,7 +8,7 @@ class ApiError extends Error { constructor(status) {super('HTTP '+status);this.s
 function setup({reply,cache,token='A'}) {
   const state=[], effects=[], storage=new Map(cache ? [['jjd_session_cache',JSON.stringify(cache)]] : []);
   const react={createContext:()=>({Provider:'provider'}),useState:initial=>{const i=state.length;state.push(initial);return [initial,v=>{state[i]=v}]},useEffect:fn=>effects.push(fn)};
-  const api={ApiError,getToken:async()=>token,setToken:async t=>{token=t},apiGet:reply};
+  const api={ApiError,storageKey:k=>k,getToken:async()=>token,setToken:async t=>{token=t},apiGet:reply};
   const context={exports:{},require:name=>name==='react'?react:name==='react/jsx-runtime'?{jsx:(type,props)=>({type,props})}:name==='./api'?api:{getItem:async k=>storage.get(k)??null,setItem:async(k,v)=>storage.set(k,v),removeItem:async k=>storage.delete(k)}};
   vm.runInNewContext(js,context);
   const component=context.exports.SessionProvider({children:null});

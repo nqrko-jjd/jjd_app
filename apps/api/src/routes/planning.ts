@@ -1,3 +1,4 @@
+import { notifyPlanning } from '../lib/native-push.js';
 import { Router } from 'express';
 import path from 'node:path';
 import { createReadStream, existsSync } from 'node:fs';
@@ -211,6 +212,7 @@ planningRouter.post(
     });
     await syncToGoogle(ev.id);
     await refreshWorksiteStatus(ev.worksiteId, 'event'); // intervention planifiée : le chantier passe « Planifié » / reprend
+    void notifyPlanning(ev.id, req.user!.id).catch(() => {});
     res.status(201).json({ event: await withIncludes(ev.id) });
   }),
 );
@@ -270,6 +272,7 @@ planningRouter.patch(
         await syncGroup(before.worksiteId, brusselsDay(before.startAt));
       }
     }
+    void notifyPlanning(req.params.id!, req.user!.id).catch(() => {});
     res.json({ event: await withIncludes(req.params.id!) });
   }),
 );

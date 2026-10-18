@@ -56,3 +56,24 @@ test('offline timer projection survives start, navigation and stop',()=>{
   const timer=c.exports.projectTimer(null,q,events);assert.equal(timer.startedAt,start.startedAt);assert.equal(timer.worksite.ref,'R-TEST');
   assert.equal(c.exports.projectTimer(timer,[...q,{id:'two',path:'/api/timesheet/timer/stop'}],events),null);
 });
+
+test('demo and team cannot share tokens or offline entries, even with the same user id',async()=>{
+  const x=await queued();
+  await assert.rejects(x.api.selectEnvironment(true),/Déconnectez/);
+  await x.api.setToken(null);
+  await x.api.selectEnvironment(true);
+  assert.equal(await x.api.getToken(),null);
+  await x.api.setToken('demo-token','userA');
+  assert.equal(await x.api.pendingCount(),0);
+  await x.api.apiSend('/demo-action','POST',{});
+  assert.equal(x.requests.at(-1).url,'https://new.jjd-consult.be/jjd-demo-api/demo-action');
+  const y=setup(x.data);
+  assert.equal(await y.api.getToken(),'demo-token');
+  assert.equal(y.api.isDemoEnvironment(),true);
+  await y.api.setToken(null);await y.api.selectEnvironment(false);
+  await y.api.setToken('team-new','userA');
+  assert.equal(await y.api.pendingCount(),1);
+  y.status(200);await y.api.flushQueue();
+  assert.equal(y.requests[0].url,'https://test.invalid/api/timesheet/timer/start');
+  assert.equal(y.requests.length,1);
+});

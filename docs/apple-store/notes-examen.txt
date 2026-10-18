@@ -1,0 +1,15 @@
+NOTES POUR L’EXAMEN APPLE / GOOGLE — PRÉPARATION
+
+JJD Chantier est un outil professionnel pour les équipes autorisées de JJD Consult. Aucun compte ne peut être créé librement dans l’app et aucun contenu n’est public. Les accès sont attribués par l’entreprise.
+L’app contient des fonctions natives : pointage, position ponctuelle, capture de photos, enregistrement/lecture de notes vocales et notifications. Ce n’est pas uniquement un accès au site web.
+Les autorisations GPS, microphone, appareil photo et notifications se demandent lors de l’utilisation de leurs fonctions respectives. La localisation en arrière-plan n’est pas demandée.
+Aucun achat intégré ni abonnement vendu dans l’app.
+
+ACCÈS D’EXAMEN
+À la connexion, choisir « Accès de démonstration ». Deux comptes existent dans une base distincte : terrain@example.invalid et gestion@example.invalid. Leur mot de passe est livré séparément dans acces-examen-prive.txt ; le saisir dans les champs privés des consoles, jamais dans la fiche publique.
+Les personnes et chantiers de cet espace sont fictifs. Les données de l’équipe et ses clés d’intégration ne sont pas utilisées. Les fonctions sont celles de l’application normale, avec les droits propres à chaque compte. Un bandeau indique la démonstration.
+L’API de démonstration est accessible publiquement par HTTPS. La connexion, le planning, les chantiers, les messages et le refus des jetons de démonstration par la production ont été vérifiés. Le parcours mobile complet reste à confirmer dans la dernière compilation.
+Parcours à présenter avec l’accès isolé : connexion ; planning du jour ; fiche chantier ; démarrage/arrêt pointage ; consultation des heures ; conversation ; enregistrement/envoi/lecture note vocale ; photo ; réglage des notifications ; confidentialité.
+Contact d’examen : info@jjd-consult.be. Ajouter le nom et le téléphone du responsable dans le formulaire officiel.
+
+Contrôles éditoriaux avant publication : préciser le caractère professionnel réservé de l’app, répondre correctement aux questions de contenus utilisateurs et documenter le traitement des signalements par JJD. L’acceptation finale appartient aux stores.

@@ -3,7 +3,7 @@
     "name": "JJD Chantier",
     "slug": "jjd-chantier",
     "owner": "jjd-consult",
-    "version": "0.1.0",
+    "version": "1.0.0",
     "orientation": "default",
     "scheme": "jjd",
     "userInterfaceStyle": "light",
@@ -26,9 +26,20 @@
         "backgroundColor": "#102f27"
       },
       "permissions": [
-        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA",
         "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION"
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.POST_NOTIFICATIONS"
+      ],
+      "blockedPermissions": [
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.SYSTEM_ALERT_WINDOW"
       ]
     },
     "plugins": [
@@ -37,7 +48,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "JJD Chantier accède à vos photos pour les ajouter au fil du chantier."
+          "photosPermission": "JJD Chantier accède à vos photos pour les ajouter au fil du chantier.",
+          "cameraPermission": "JJD Chantier utilise l’appareil photo pour les photos de chantier et les justificatifs."
         }
       ],
       [
@@ -56,7 +68,29 @@
           "resizeMode": "contain"
         }
       ],
-      "expo-font"
+      "expo-font",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "JJD Chantier utilise l’appareil photo pour scanner les codes du matériel.",
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "JJD Chantier utilise le microphone uniquement lorsque vous enregistrez une note vocale.",
+          "enableBackgroundRecording": false,
+          "enableBackgroundPlayback": false
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#173f34",
+          "defaultChannel": "jjd"
+        }
+      ]
     ],
     "extra": {
       "apiUrl": "https://new.jjd-consult.be/jjd-api",

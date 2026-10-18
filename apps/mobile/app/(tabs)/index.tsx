@@ -5,7 +5,7 @@ import { Feather } from '@expo/vector-icons';
 import { useFocusEffect, Redirect, useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { projectTimer } from '@/lib/timer-state';
-import { apiGet, apiSend, flushQueue, pendingCalls, queueStatus } from '@/lib/api';
+import { apiGet, apiSend, flushQueue, pendingCalls, queueStatus, storageKey } from '@/lib/api';
 import { currentPosition } from '@/lib/geo';
 import { useSession } from '@/lib/session';
 import { HeroTile, ScreenHeader, EmptyState } from '@/lib/ui';
@@ -60,7 +60,7 @@ export function FieldHome({ embedded = false }: { embedded?: boolean }) {
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
-    const cacheKey = `jjd_field_home:${user?.id}`;
+    const cacheKey = storageKey(`jjd_field_home:${user?.id}`);
     let snapshot: { items: Ev[]; running: Running | null; linked?: boolean } | null = null;
     try {
       snapshot = JSON.parse(await AsyncStorage.getItem(cacheKey) ?? 'null');

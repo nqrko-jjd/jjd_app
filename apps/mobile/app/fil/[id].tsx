@@ -1,3 +1,6 @@
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ReportMessage } from '@/lib/ReportMessage';
+import { VoiceNote, VoicePlayer } from '@/lib/VoiceNote';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { View, TextInput, Pressable, ScrollView, Image, StyleSheet, KeyboardAvoidingView, Platform, Linking } from 'react-native';
 import { Text } from '@/lib/AppText';
@@ -29,6 +32,7 @@ export default function Fil() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { user } = useSession();
+  const insets = useSafeAreaInsets();
   const [d, setD] = useState<Data | null>(null);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -52,7 +56,7 @@ export default function Fil() {
   async function pickImage(fromCamera: boolean) {
     const perm = fromCamera
       ? await ImagePicker.requestCameraPermissionsAsync()
-      : await ImagePicker.requestMediaLibraryPermissionsAsync();
+      : { granted: true };
     if (!perm.granted) { Alert.alert('Permission refusée', fromCamera ? "Accès à l'appareil photo requis." : 'Accès aux photos requis.'); return null; }
     const res = fromCamera
       ? await ImagePicker.launchCameraAsync({ quality: 0.7 })
@@ -107,7 +111,7 @@ export default function Fil() {
   if (!d) return <Loading />;
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: T.paper }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: T.paper, paddingBottom: insets.bottom }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
       <Stack.Screen
         options={{
           title: tr('Fil de chantier'),
@@ -130,6 +134,7 @@ export default function Fil() {
           return (
             <View key={m.id} style={[s.msgCol, mine && s.msgColMine]}>
               {!mine && <Text style={s.author}>{m.authorName}</Text>}
+              {m.kind === 'audio' && m.fileUrl && <VoicePlayer uri={`${API_URL}${m.fileUrl}`} />}
               {m.kind === 'photo' && m.fileUrl && (
                 <Image source={{ uri: `${API_URL}${m.thumbUrl ?? m.fileUrl}` }} style={s.photo} />
               )}
@@ -149,6 +154,7 @@ export default function Fil() {
                 <MsgText body={m.body} translated={m.bodyTranslated} style={[s.bubble, mine && s.bubbleMine]} />
               ) : null}
               <Text style={[s.timeTxt, mine && { alignSelf: 'flex-end' }]}>{time(m.createdAt)}</Text>
+              {!mine && <ReportMessage id={m.id} />}
             </View>
           );
         })}
@@ -163,6 +169,7 @@ export default function Fil() {
         </Pressable>
       )}
 
+      <VoiceNote endpoint={`/api/worksites/${id}/thread/voice`} onSent={load} />
       <View style={s.composer}>
         <Pressable style={s.iconBtn} onPress={addPhoto} disabled={busy}><Feather name="camera" size={18} color={T.ink2} /></Pressable>
         <Pressable style={s.iconBtn} onPress={addInvoice} disabled={busy}><Feather name="paperclip" size={18} color={T.ink2} /></Pressable>

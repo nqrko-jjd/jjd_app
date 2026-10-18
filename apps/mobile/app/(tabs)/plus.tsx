@@ -30,6 +30,7 @@ const GROUPS:{title:string;links:LinkItem[]}[]=[
   {href:'/flotte',label:tr('Flotte'),description:'Véhicules et entretiens',ic:'truck',roles:TEAM},
  ]},
  {title:tr('Gestion'),links:[
+  {href:'/moderation',label:'Signalements',description:'Messages à examiner',ic:'flag',roles:['admin']},
   {href:'/boite-ia',label:tr('Boîte IA'),description:'Les mails qui demandent une action',ic:'inbox',roles:OFFICE},
   {href:'/pipeline',label:tr('Opportunités'),description:'Les demandes à suivre',ic:'trending-up',roles:OFFICE},
   {href:'/documents',label:tr('Devis & factures'),description:'Documents et paiements',ic:'file-text',roles:OFFICE},

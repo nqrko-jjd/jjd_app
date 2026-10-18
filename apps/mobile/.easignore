@@ -1,0 +1,12 @@
+node_modules/
+.expo/
+dist/
+android/
+ios/
+.env*
+*.tsbuildinfo
+credentials.json
+*.keystore
+
+*firebase-adminsdk*.json
+*service-account*.json

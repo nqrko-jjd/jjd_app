@@ -1,5 +1,7 @@
+import { NotificationBridge } from '@/lib/notifications';
 import { useEffect } from 'react';
-import { TextInput } from 'react-native';
+import { TextInput, View, Text } from 'react-native';
+import { isDemoEnvironment } from '@/lib/api';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Manrope_700Bold } from '@expo-google-fonts/manrope';
@@ -38,7 +40,8 @@ function Guard() {
     else if (user && onLogin) router.replace('/');
   }, [user, loading, segments, router]);
 
-  return (
+  return (<>
+    {user && isDemoEnvironment() && <View style={{ backgroundColor: '#fff3cd', padding: 8 }}><Text style={{ textAlign: 'center', color: '#664d03' }}>Démonstration — données fictives</Text></View>}
     <Stack
       screenOptions={{
         contentStyle: { backgroundColor: T.paper },
@@ -51,7 +54,7 @@ function Guard() {
     >
       <Stack.Screen name="login" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-    </Stack>
+    </Stack></>
   );
 }
 
@@ -77,6 +80,7 @@ export default function RootLayout() {
       <SessionProvider>
         <StatusBar style="dark" />
         <Guard />
+        <NotificationBridge />
         <Intro />
       </SessionProvider>
       </LocaleProvider>

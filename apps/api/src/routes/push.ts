@@ -1,3 +1,4 @@
+import { isExpoToken } from '../lib/native-push.js';
 import { Router } from 'express';
 import { prisma } from '../db.js';
 import { env } from '../env.js';
@@ -53,3 +54,20 @@ pushRouter.get(
     res.json({ items: await mentionCandidates() });
   }),
 );
+
+// Native subscriptions share the device registry; the endpoint is an Expo token,
+// never a caller-controlled URL. User identity always comes from authentication.
+pushRouter.post('/native/subscribe', requireAuth(...STAFF), asyncHandler(async (req, res) => {
+  const token = req.body?.token;
+  if (!isExpoToken(token)) throw new HttpError(422, 'Jeton de notification invalide');
+  await prisma.pushSubscription.upsert({ where: { endpoint: token },
+    create: { endpoint: token, p256dh: '', auth: '', userId: req.user!.id },
+    update: { p256dh: '', auth: '', userId: req.user!.id } });
+  res.json({ ok: true });
+}));
+pushRouter.post('/native/unsubscribe', requireAuth(...STAFF), asyncHandler(async (req, res) => {
+  const token = req.body?.token;
+  if (!isExpoToken(token)) throw new HttpError(422, 'Jeton de notification invalide');
+  await prisma.pushSubscription.deleteMany({ where: { endpoint: token, userId: req.user!.id } });
+  res.json({ ok: true });
+}));

@@ -1,0 +1,18 @@
+Test;Procédure;Résultat attendu;Statut;Téléphone / version Android;Notes
+Installation;Installer depuis le lien de test Google Play;Installation et ouverture sans erreur;À faire;;
+Connexion;Se connecter avec un compte terrain autorisé;Planning et chantiers du bon utilisateur;À faire;;
+Micro refusé;Refuser le micro puis tenter une note;Message clair et texte toujours utilisable;À faire;;
+Note vocale;Enregistrer puis écouter puis envoyer;Son audible dans les deux conversations et côté web;À faire;;
+Interruption vocale;Quitter l’écran ou verrouiller pendant l’enregistrement;Micro arrêté sans enregistrement permanent;À faire;;
+Envoi vocal sans réseau;Couper le réseau après enregistrement et envoyer;Erreur claire, note conservée sur l’écran pour réessayer;À faire;;
+Notification message;Compte A envoie à un fil visible par B, app B fermée;B reçoit une alerte générique, ouvre le bon fil;À faire;;
+Notification planning;Bureau affecte B à un créneau;B reçoit une alerte et ouvre le planning;À faire;;
+Refus notifications;Refuser la permission Android;Fonctions de l’app utilisables sans notification;À faire;;
+Désactivation notifications;Désactiver dans Mon compte puis envoyer depuis A;Aucune nouvelle alerte sur le téléphone désabonné;À faire;;
+Changement de compte;Déconnecter A, connecter B puis envoyer à A;Pas de contenu A affiché dans B;À faire;;
+Photos;Prendre une photo et choisir une photo dans le sélecteur;Photo transmise au chantier prévu;À faire;;
+Pointage hors ligne;Pointer début/fin hors ligne, fermer puis rouvrir, reconnecter;Heures originales synchronisées une fois;À faire;;
+GPS refusé;Refuser la position et pointer;Pointage conservé sans position vérifiée;À faire;;
+Confidentialité;Ouvrir les liens avant connexion et dans Mon compte;Page publique lisible et contact de suppression accessible;À faire;;
+Lisibilité;Tester petit écran, paysage, grande police;Actions principales accessibles;À faire;;
+Mise à jour;Mettre à jour sans désinstaller après synchronisation;Compte et données conservés;À faire;;

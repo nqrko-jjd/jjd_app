@@ -159,16 +159,35 @@ try:
     shot('04-worksites')
     tap('Messages')
     shot('05-messages')
+    tap('Général JJD')
+    adb('shell','pm','grant','be.jjdconsult.chantier','android.permission.RECORD_AUDIO')
+    tap('Enregistrer une note vocale')
+    find('Arrêter')
+    time.sleep(3)
+    tap('Arrêter')
+    find('Envoyer la note')
+    shot('05b-voice-draft')
+    tap('Envoyer la note')
+    find('Enregistrer une note vocale')
+    audio_request=urllib.request.Request('http://127.0.0.1:4100/api/messagerie/general',headers={'Authorization':'Bearer '+token})
+    audio_messages=json.load(urllib.request.urlopen(audio_request))['messages']
+    voices=[m for m in audio_messages if m['kind']=='audio']
+    assert voices and voices[-1]['fileUrl'].endswith('.m4a'), audio_messages
+    recording=urllib.request.urlopen('http://127.0.0.1:4100'+voices[-1]['fileUrl']).read()
+    assert len(recording)>100, 'Empty native recording'
+    shot('05c-voice-sent')
+    adb('shell','input','keyevent','4')
     tap('Plus')
     find('Mon compte')
     shot('06-more')
     tap('Mon compte')
+    adb('shell','input','swipe','500','1800','500','600','500')
     find('Déconnexion')
     shot('07-account')
     tap('Déconnexion')
     find('Bienvenue')
     shot('08-logout')
-    print('ANDROID_NATIVE_SMOKE_OK: login, GPS pointage, offline start/stop, offline restart, replay without duplicates, hours, worksites, messages, profile, logout')
+    print('ANDROID_NATIVE_SMOKE_OK: login, GPS pointage, offline start/stop, offline restart, replay without duplicates, hours, worksites, messages, native voice recording/upload, profile, logout')
 finally:
     try: shot('final')
     except Exception: pass

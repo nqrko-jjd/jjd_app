@@ -1,0 +1,32 @@
+JJD CHANTIER — FICHE GOOGLE PLAY (FR)
+
+Nom : JJD Chantier
+Description courte : Planning, pointage et échanges pour les équipes JJD Consult.
+
+Description complète :
+JJD Chantier accompagne les équipes de JJD Consult au bureau et sur le terrain.
+
+Retrouvez votre planning et les informations utiles à vos interventions. Pointez vos heures sur chantier, consultez vos heures et échangez avec votre équipe dans les conversations JJD.
+
+• Planning et affectations aux chantiers.
+• Pointage et suivi des heures, avec mise en attente de certaines actions hors connexion.
+• Photos de chantier, rapports d’intervention et justificatifs de dépenses.
+• Messages et notes vocales dans les conversations.
+• Notifications de nouveaux messages et de mises à jour du planning, après activation sur le téléphone.
+• Espace de gestion accessible selon le rôle attribué par JJD Consult.
+• Choix de la langue dans le compte.
+
+L’application nécessite un compte professionnel fourni par JJD Consult. Les fonctions disponibles dépendent de vos autorisations. Une connexion est nécessaire pour la première connexion, les médias et la synchronisation ; toutes les fonctions ne sont pas disponibles hors connexion.
+
+Assistance : info@jjd-consult.be
+Site : https://new.jjd-consult.be
+Confidentialité : https://new.jjd-consult.be/confidentialite-mobile.html
+Demande de suppression : https://new.jjd-consult.be/confidentialite-mobile.html#droits
+
+Catégorie proposée : Professionnel (Business)
+Distribution : gratuite ; pas d’achat intégré identifié.
+Public : utilisateurs professionnels adultes ; ne pas sélectionner les enfants.
+Publicité : aucune publicité intégrée identifiée dans le code audité.
+
+Notes de version — 1.0.0, tests internes :
+Première version de test Google Play : planning, pointage, suivi des chantiers et échanges d’équipe. Ajout des notes vocales et des notifications Android. Merci de vérifier les photos, le microphone, les notifications et le pointage hors connexion sur votre téléphone.

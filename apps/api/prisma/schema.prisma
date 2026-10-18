@@ -1197,10 +1197,14 @@ model Fine {
   reminder1On DateTime?
   reminder2On DateTime?
   status      String? // "Payé" | null
+  paidOn      DateTime? // date de paiement
+  pdfPath     String? // scan / photo du PV (uploads/vehicle-docs)
+  driverPersonId String? // conducteur identifié (d'après le planning ou saisi)
   note        String?
   createdAt   DateTime  @default(now())
 
   @@index([status])
+  @@index([vehicleId])
 }
 
 // ─────────────────────────────────────────────────────────── Fil de chantier

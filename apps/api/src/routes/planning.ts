@@ -2,8 +2,10 @@ import { Router } from 'express';
 import path from 'node:path';
 import { createReadStream, existsSync } from 'node:fs';
 import multer from 'multer';
+import { z } from 'zod';
 import { planningEventInput, teamInput, consumableInput, vehicleInput, vehicleDocInput, vehicleRepairInput, vehicleCostPerKm, absenceInput } from '@jjd/shared';
 import { prisma } from '../db.js';
+import { insensitive } from '../lib/search.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, STAFF, OFFICE } from '../lib/auth.js';
 import { upsertEvent, deleteEvent, gcalEnabled } from '../lib/gcal.js';
@@ -504,13 +506,134 @@ vehiclesRouter.get(
   requireAuth(...STAFF),
   asyncHandler(async (req, res) => {
     const unpaidOnly = req.query.unpaid === '1';
+    const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+    const vehicleId = typeof req.query.vehicleId === 'string' && req.query.vehicleId ? req.query.vehicleId : null;
+    const and: Record<string, unknown>[] = [];
+    if (unpaidOnly) and.push({ OR: [{ status: null }, { status: { not: 'Payé' } }] });
+    if (vehicleId) and.push({ vehicleId });
+    if (q) and.push({ OR: [{ reference: { contains: q, ...insensitive } }, { type: { contains: q, ...insensitive } }, { payTo: { contains: q, ...insensitive } }, { plateRaw: { contains: q, ...insensitive } }, { street: { contains: q, ...insensitive } }, { vehicle: { plate: { contains: q, ...insensitive } } }] });
     const items = await prisma.fine.findMany({
-      where: unpaidOnly ? { OR: [{ status: null }, { status: { not: 'Payé' } }] } : {},
+      where: { AND: and },
       orderBy: { date: 'desc' },
       take: 500,
       include: { vehicle: { select: { id: true, brand: true, model: true, plate: true, photoThumbUrl: true } } },
     });
-    res.json({ items });
+    // qui conduisait ? d'après le planning : véhicule réservé ce jour-là, conducteur et équipe de l'intervention
+    const dated = items.filter((f) => f.vehicleId && f.date);
+    const planned = new Map<string, { drivers: string[]; team: string[] }>();
+    if (dated.length) {
+      const ts = dated.map((f) => f.date!.getTime());
+      const events = await prisma.planningEvent.findMany({
+        where: { startAt: { gte: new Date(Math.min(...ts) - 86_400_000), lte: new Date(Math.max(...ts) + 2 * 86_400_000) }, vehicles: { some: { vehicleId: { in: [...new Set(dated.map((f) => f.vehicleId!))] } } } },
+        select: { startAt: true, vehicles: { select: { vehicleId: true, driver: { select: { displayName: true, firstName: true } } } }, assignments: { select: { person: { select: { displayName: true, firstName: true } } } } },
+      });
+      const day = (d: Date) => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Brussels' }).format(d);
+      const name = (p: { displayName: string | null; firstName: string }) => p.displayName || p.firstName;
+      for (const f of dated) {
+        const key = day(f.date!);
+        const same = events.filter((e) => day(e.startAt) === key && e.vehicles.some((v) => v.vehicleId === f.vehicleId));
+        planned.set(f.id, {
+          drivers: [...new Set(same.flatMap((e) => e.vehicles.filter((v) => v.vehicleId === f.vehicleId && v.driver).map((v) => name(v.driver!))))],
+          team: [...new Set(same.flatMap((e) => e.assignments.map((a) => name(a.person))))],
+        });
+      }
+    }
+    const people = await prisma.person.findMany({ where: { id: { in: items.map((f) => f.driverPersonId).filter((x): x is string => !!x) } }, select: { id: true, displayName: true, firstName: true } });
+    res.json({
+      items: items.map((f) => ({ ...f, hasPdf: !!f.pdfPath, driverName: people.find((p) => p.id === f.driverPersonId)?.displayName ?? people.find((p) => p.id === f.driverPersonId)?.firstName ?? null, planned: planned.get(f.id) ?? { drivers: [], team: [] } })),
+    });
+  }),
+);
+
+const fineInput = z.object({
+  vehicleId: z.string().max(60).nullish(), plateRaw: z.string().trim().max(20).nullish(),
+  date: z.coerce.date().nullish(), time: z.string().trim().regex(/^\d{1,2}:\d{2}$/).nullish(),
+  reference: z.string().trim().max(120).nullish(), payTo: z.string().trim().max(160).nullish(), street: z.string().trim().max(200).nullish(), postalCode: z.string().trim().max(12).nullish(),
+  type: z.string().trim().max(120).nullish(), amount: z.coerce.number().min(0).max(100000).nullish(),
+  reminder1On: z.coerce.date().nullish(), reminder2On: z.coerce.date().nullish(),
+  status: z.enum(['Payé']).nullish(), paidOn: z.coerce.date().nullish(), driverPersonId: z.string().max(60).nullish(), note: z.string().trim().max(2000).nullish(),
+});
+const plateKey = (s: string | null | undefined) => (s ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+/** Plaque saisie → véhicule de la flotte (comparaison sans tirets ni espaces). */
+async function vehicleByPlate(plate: string | null | undefined): Promise<string | null> {
+  const key = plateKey(plate);
+  if (!key) return null;
+  const all = await prisma.vehicle.findMany({ where: { plate: { not: null } }, select: { id: true, plate: true } });
+  return all.find((v) => plateKey(v.plate) === key)?.id ?? null;
+}
+
+/** Nouveau PV / amende. Sans véhicule choisi, la plaque saisie le retrouve dans la flotte. */
+vehiclesRouter.post(
+  '/fines',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const d = fineInput.parse(req.body);
+    const vehicleId = d.vehicleId || (await vehicleByPlate(d.plateRaw));
+    if (!vehicleId && !d.plateRaw) throw new HttpError(422, 'Indiquez le véhicule ou sa plaque.');
+    const fine = await prisma.fine.create({ data: { ...d, vehicleId: vehicleId ?? null, paidOn: d.status === 'Payé' ? (d.paidOn ?? new Date()) : null } });
+    await prisma.auditLog.create({ data: { actorId: req.user!.id, action: 'fine.create', entity: 'Fine', entityId: fine.id, meta: { reference: d.reference ?? null, amount: d.amount ?? null } } });
+    res.status(201).json({ fine });
+  }),
+);
+
+vehiclesRouter.patch(
+  '/fines/:fineId',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const cur = await prisma.fine.findUnique({ where: { id: req.params.fineId } });
+    if (!cur) throw new HttpError(404, 'PV introuvable');
+    const d = fineInput.partial().parse(req.body);
+    const data: Record<string, unknown> = { ...d };
+    if ('vehicleId' in d || 'plateRaw' in d) {
+      const vehicleId = d.vehicleId || (await vehicleByPlate(d.plateRaw ?? cur.plateRaw));
+      data.vehicleId = vehicleId ?? (d.vehicleId === null ? null : cur.vehicleId);
+    }
+    if ('status' in d) data.paidOn = d.status === 'Payé' ? (d.paidOn ?? cur.paidOn ?? new Date()) : null;
+    const fine = await prisma.fine.update({ where: { id: cur.id }, data });
+    res.json({ fine });
+  }),
+);
+
+vehiclesRouter.delete(
+  '/fines/:fineId',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const cur = await prisma.fine.findUnique({ where: { id: req.params.fineId } });
+    if (!cur) throw new HttpError(404, 'PV introuvable');
+    await prisma.fine.delete({ where: { id: cur.id } });
+    await prisma.auditLog.create({ data: { actorId: req.user!.id, action: 'fine.delete', entity: 'Fine', entityId: cur.id, meta: { reference: cur.reference, amount: cur.amount } } });
+    res.json({ ok: true });
+  }),
+);
+
+/** Joint le scan / la photo du PV (PDF ou image). */
+vehiclesRouter.post(
+  '/fines/:fineId/file',
+  requireAuth(...OFFICE),
+  docUpload.single('file'),
+  asyncHandler(async (req, res) => {
+    if (!req.file) throw new HttpError(422, 'Aucun fichier');
+    const okType = req.file.mimetype === 'application/pdf' || /^image\/(jpe?g|png|webp|heic)$/.test(req.file.mimetype);
+    if (!okType) throw new HttpError(422, 'Format accepté : PDF ou image.');
+    const cur = await prisma.fine.findUnique({ where: { id: req.params.fineId } });
+    if (!cur) throw new HttpError(404, 'PV introuvable');
+    const rel = storeFile(req.file.buffer, req.file.originalname || 'pv.pdf', 'vehicle-docs');
+    res.status(201).json({ fine: await prisma.fine.update({ where: { id: cur.id }, data: { pdfPath: rel } }) });
+  }),
+);
+
+vehiclesRouter.get(
+  '/fines/:fineId/file',
+  requireAuth(...STAFF),
+  asyncHandler(async (req, res) => {
+    const cur = await prisma.fine.findUnique({ where: { id: req.params.fineId } });
+    if (!cur?.pdfPath) throw new HttpError(404, 'Aucune pièce jointe');
+    const file = resolveUpload(cur.pdfPath);
+    if (!existsSync(file)) throw new HttpError(404, 'Fichier introuvable sur le serveur');
+    const ext = path.extname(file).toLowerCase();
+    res.setHeader('Content-Type', ext === '.pdf' ? 'application/pdf' : ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg');
+    res.setHeader('Content-Disposition', `inline; filename="pv-${(cur.reference ?? cur.id).replace(/[^\w.-]/g, '_')}${ext}"`);
+    createReadStream(file).pipe(res);
   }),
 );
 

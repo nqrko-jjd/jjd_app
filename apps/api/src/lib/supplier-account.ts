@@ -19,7 +19,13 @@ export async function supplierAccounts() {
     if (r.entityId && !settlements.has(r.entityId) && meta?.accountSettlement) settlements.set(r.entityId, meta.accountSettlement);
   }
   const groups = new Map<string, { id: string; contactId: string | null; name: string; openTtc: number; overdue: number; dueSoon: number; credits: number; unallocatedTotal: number; balance: number; nextDue: Date | null; invoices: { id: string; number: string | null; date: Date | null; dueDate: Date | null; total: number; paid: number; remaining: number }[]; advances: { id: string; date: Date | null; bank: string | null; amount: number; remaining: number }[] }>();
-  const group = (id: string | null, name: string) => {
+  // une écriture ou un virement sans contact mais dont le nom est celui d'un fournisseur connu (à la casse près) rejoint son compte :
+  // sinon « Quadrus - MD Center » et « Quadrus - MD CENTER » faisaient deux comptes, l'avoir d'un côté et les factures de l'autre
+  const norm = (n: string) => n.trim().toLowerCase().replace(/\s+/g, ' ');
+  const contactByName = new Map<string, string>();
+  for (const c of contacts) if (!contactByName.has(norm(c.name))) contactByName.set(norm(c.name), c.id);
+  const group = (id0: string | null, name: string) => {
+    const id = id0 ?? contactByName.get(norm(name)) ?? null;
     const key = id ?? `name:${name.trim().toLowerCase()}`;
     if (!groups.has(key)) groups.set(key, { id: key, contactId: id, name, openTtc: 0, overdue: 0, dueSoon: 0, credits: 0, unallocatedTotal: 0, balance: 0, nextDue: null, invoices: [], advances: [] });
     return groups.get(key)!;

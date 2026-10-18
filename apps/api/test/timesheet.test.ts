@@ -51,6 +51,40 @@ after(async () => {
   server.close();
 });
 
+test('mobile retries return the same start/stop, even after another timer starts', async () => {
+  const call = (action: string, body: object) => fetch(`${base}/api/timesheet/timer/${action}`, {method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${workerToken}`},body:JSON.stringify(body)});
+  const startedAt = new Date(Date.now()-3600000).toISOString();
+  const start = {worksiteId,startedAt,operationId:'retry-start'};
+  const first = await (await call('start',start)).json();
+  const replay = await (await call('start',start)).json();
+  assert.equal(first.entry.id,replay.entry.id);
+  const stop = {operationId:'retry-stop',startedAt,endedAt:new Date().toISOString()};
+  const ended = await (await call('stop',stop)).json();
+  assert.equal(ended.entry.status,'submitted');
+  assert.equal((await (await call('stop',stop)).json()).entry.id,first.entry.id);
+  assert.equal((await (await call('start',start)).json()).entry.id,first.entry.id);
+  const next = await (await call('start',{worksiteId,operationId:'next-start'})).json();
+  assert.notEqual(next.entry.id,first.entry.id);
+  assert.equal((await call('stop',{startedAt,operationId:'wrong-stop'})).status,409);
+  await call('stop',stop);
+  assert.equal((await prisma.timeEntry.findUnique({where:{id:next.entry.id}}))?.status,'running');
+  await call('stop',{operationId:'next-stop'});
+  assert.equal(await prisma.timeEntry.count({where:{personId:testPersonId,startRequestId:'retry-start'}}),1);
+});
+
+test('simultaneous delivery of the same mobile start creates only one time entry', async () => {
+  const headers = { 'content-type': 'application/json', authorization: `Bearer ${workerToken}` };
+  const body = { worksiteId, operationId: 'concurrent-start', startedAt: new Date(Date.now()-60000).toISOString() };
+  const start = () => fetch(`${base}/api/timesheet/timer/start`, {method:'POST',headers,body:JSON.stringify(body)});
+  await Promise.all([start(), start()]);
+  const retry = await start();
+  assert.equal(retry.status,200);
+  const {entry} = await retry.json();
+  assert.ok(entry.id);
+  assert.equal(await prisma.timeEntry.count({where:{personId:testPersonId,startRequestId:body.operationId}}),1);
+  await fetch(`${base}/api/timesheet/timer/stop`, {method:'POST',headers,body:JSON.stringify({operationId:'concurrent-stop',startedAt:body.startedAt})});
+});
+
 test('compteur : start -> stop calcule les heures et le montant', async () => {
   const started = new Date(Date.now() - 2 * 3600_000).toISOString(); // il y a 2 h
   const s = await fetch(`${base}/api/timesheet/timer/start`, {

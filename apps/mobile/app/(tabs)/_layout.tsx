@@ -63,6 +63,9 @@ export default function TabsLayout() {
 
   return (
     <Tabs
+      screenLayout={({ children, options }) => (
+        <View style={{ flex: 1, backgroundColor: T.paper, paddingTop: options.headerShown === false ? insets.top : 0 }}>{children}</View>
+      )}
       screenOptions={{
         headerStyle: { backgroundColor: T.paper },
         headerTitleStyle: { color: T.ink, fontWeight: '700', fontFamily: 'DMSans_700Bold' },

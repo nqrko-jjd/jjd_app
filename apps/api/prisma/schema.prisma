@@ -915,6 +915,8 @@ model TimeEntry {
   task          String?
   startedAt     DateTime? // compteur mobile
   endedAt       DateTime?
+  startRequestId String?
+  stopRequestId  String?
   startLat      Float? // position au démarrage du compteur
   startLng      Float?
   geoDistance   Int? // mètres entre le pointage et le point de référence du chantier
@@ -929,6 +931,8 @@ model TimeEntry {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
+  @@index([personId, startRequestId])
+  @@index([personId, stopRequestId])
   @@index([planningEventId])
   @@index([personId, date])
   @@index([worksiteId])

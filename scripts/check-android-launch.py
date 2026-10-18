@@ -9,11 +9,18 @@ def tree():
     return ET.fromstring(adb('exec-out', 'cat', '/sdcard/window.xml'))
 def find(label, timeout=40):
     until=time.time()+timeout
+    launcher_recoveries=0
     while time.time()<until:
         try:
             root=tree()
         except (ET.ParseError, subprocess.CalledProcessError):
             time.sleep(2)
+            continue
+        if label == 'Bienvenue' and launcher_recoveries < 2 and any(n.get('text') == "Pixel Launcher isn't responding" for n in root.iter('node')):
+            # Recover only the emulator's launcher, never dismiss a JJD crash.
+            tap_node(next(n for n in root.iter('node') if n.get('text') == 'Close app'))
+            adb('shell','am','start','-n','be.jjdconsult.chantier/.MainActivity')
+            launcher_recoveries += 1
             continue
         for n in root.iter('node'):
             if label.casefold() in (n.get('text','')+' '+n.get('content-desc','')).casefold():
@@ -54,11 +61,13 @@ def timer_started():
     raise AssertionError('Timer did not start')
 
 def gps_stream():
-    # A single fix before login can expire before Expo requests a position.
+    # Android's test providers also serve balanced/coarse location requests.
     while True:
-        try: adb('emu','geo','fix','4.3525','50.8467')
+        try:
+            for provider in ['gps', 'network']:
+                adb('shell','cmd','location','providers','set-test-provider-location',provider,'--location','50.8467,4.3525','--accuracy','5')
         except Exception: return
-        time.sleep(1)
+        time.sleep(2)
 try:
     apk=next(pathlib.Path('apps/mobile/android/app/build/outputs/apk/release').glob('*.apk'))
     adb('reverse','tcp:4100','tcp:4100')
@@ -67,10 +76,9 @@ try:
     adb('shell','pm','grant','be.jjdconsult.chantier','android.permission.ACCESS_COARSE_LOCATION')
     adb('shell','settings','put','secure','location_mode','3')
     adb('emu','geo','fix','4.3525','50.8467')
-    threading.Thread(target=gps_stream,daemon=True).start()
     adb('logcat','-c')
     adb('shell','am','start','-n','be.jjdconsult.chantier/.MainActivity')
-    find('Bienvenue',90)
+    find('Bienvenue',120)
     shot('01-login')
     fill(0,'ouvrier@jjd-consult.be')
     fill(1,'incorrect')
@@ -82,6 +90,11 @@ try:
     shot('02-worker-home')
     heading=find('Bonjour')
     assert int(re.findall(r'\d+',heading.get('bounds'))[1]) >= 60, 'Header overlaps system status bar'
+    adb('shell','appops','set','2000','android:mock_location','allow')
+    for provider in ['gps', 'network']:
+        adb('shell','cmd','location','providers','add-test-provider',provider)
+        adb('shell','cmd','location','providers','set-test-provider-enabled',provider,'true')
+    threading.Thread(target=gps_stream,daemon=True).start()
     tap('Je suis arrivé')
     timer_started()
     shot('02b-timer-running')

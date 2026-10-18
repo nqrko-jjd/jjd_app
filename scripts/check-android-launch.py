@@ -3,14 +3,18 @@ import subprocess, time, re, pathlib, xml.etree.ElementTree as ET
 out = pathlib.Path('tmp/android-launch')
 out.mkdir(parents=True, exist_ok=True)
 def adb(*args):
-    return subprocess.check_output(['adb', *args], stderr=subprocess.STDOUT)
+    return subprocess.check_output(['adb', *args], stderr=subprocess.STDOUT, timeout=45)
 def tree():
     adb('shell', 'uiautomator', 'dump', '/sdcard/window.xml')
     return ET.fromstring(adb('exec-out', 'cat', '/sdcard/window.xml'))
 def find(label, timeout=40):
     until=time.time()+timeout
     while time.time()<until:
-        root=tree()
+        try:
+            root=tree()
+        except (ET.ParseError, subprocess.CalledProcessError):
+            time.sleep(2)
+            continue
         for n in root.iter('node'):
             if label in (n.get('text','')+' '+n.get('content-desc','')):
                 return n
@@ -23,8 +27,10 @@ def tap_node(n):
 def tap(label):
     tap_node(find(label))
 def shot(name):
+    root=tree()
+    time.sleep(1)
     (out/(name+'.png')).write_bytes(adb('exec-out','screencap','-p'))
-    ET.ElementTree(tree()).write(out/(name+'.xml'), encoding='utf-8')
+    ET.ElementTree(root).write(out/(name+'.xml'), encoding='utf-8')
 def fill(index, value):
     nodes=[n for n in tree().iter('node') if n.get('class')=='android.widget.EditText']
     assert len(nodes)>index, 'Missing login input'

@@ -59,16 +59,18 @@ export function VoiceNote({ endpoint, onSent }: { endpoint: string; onSent: () =
   async function send() {
     if (!draft || lock.current) return;
     lock.current = true; setBusy(true);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
     try {
       const token = await getToken();
       const form = new FormData();
       form.append('file', { uri: draft, name: 'note-vocale.m4a', type: 'audio/mp4' } as unknown as Blob);
       form.append('requestId', operation.current);
-      const res = await fetch(`${API_URL}${endpoint}`, { method: 'POST', headers: token ? { authorization: `Bearer ${token}` } : {}, body: form, signal: AbortSignal.timeout(30000) });
+      const res = await fetch(`${API_URL}${endpoint}`, { method: 'POST', headers: token ? { authorization: `Bearer ${token}` } : {}, body: form, signal: controller.signal });
       if (!res.ok) throw new Error('upload');
       setDraft(null); onSent();
     } catch { Alert.alert('Note non envoyée', 'Vérifiez votre connexion puis réessayez. La note reste disponible sur cet écran.'); }
-    finally { lock.current = false; if (mounted.current) setBusy(false); }
+    finally { clearTimeout(timeout); lock.current = false; if (mounted.current) setBusy(false); }
   }
   return <View style={{ paddingHorizontal: 12, paddingVertical: 6, gap: 8, backgroundColor: T.surface }}>
     {draft ? <><VoicePlayer uri={draft} /><View style={{ flexDirection: 'row', gap: 20 }}>

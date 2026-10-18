@@ -276,6 +276,69 @@ expensesRouter.get(
 );
 
 
+/**
+ * Dépenses sans chantier (poste « Matériel sans chantier », E-01…) à imputer : pour chacune, les chantiers actifs CE JOUR-LÀ
+ * (interventions du planning et heures pointées) — ceux sur lesquels ce matériel a pu servir. Aucune écriture : l'imputation se fait ensuite
+ * par une modification normale de la dépense (PATCH worksiteId). `window` = nombre de jours avant/après à regarder aussi (0 à 3).
+ */
+const brusselsDayOf = (d: Date) => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Brussels' }).format(d);
+expensesRouter.get(
+  '/unassigned',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const { q: qRaw, from, to, category, page: pageStr, pageSize: pageSizeStr } = req.query as Record<string, string>;
+    const win = Math.min(3, Math.max(0, Math.trunc(Number(req.query.window)) || 0));
+    const page = Math.max(1, Math.trunc(Number(pageStr)) || 1);
+    const pageSize = Math.min(200, Math.max(10, Math.trunc(Number(pageSizeStr)) || 50));
+    const and: Record<string, unknown>[] = [{ direction: 'purchase' }, { worksite: { kind: 'overhead' } }];
+    if (from) and.push({ date: { gte: new Date(from) } });
+    if (to) and.push({ date: { lte: new Date(to) } });
+    if (category) and.push({ categoryRaw: category });
+    if (qRaw) and.push({ OR: [{ supplierName: { contains: qRaw, ...insensitive } }, { docNumber: { contains: qRaw, ...insensitive } }, { contact: { name: { contains: qRaw, ...insensitive } } }] });
+    const where = { AND: and };
+    const [rows, total, sums] = await Promise.all([
+      prisma.ledgerEntry.findMany({ where, orderBy: [{ date: 'desc' }, { createdAt: 'desc' }], skip: (page - 1) * pageSize, take: pageSize, include: { worksite: { select: { id: true, ref: true, title: true } }, contact: { select: { name: true } } } }),
+      prisma.ledgerEntry.count({ where }),
+      prisma.ledgerEntry.aggregate({ where, _sum: { ht: true } }),
+    ]);
+    const dated = rows.filter((r) => r.date);
+    const days = dated.map((r) => r.date!.getTime());
+    const span = 86_400_000 * (win + 1);
+    const lo = days.length ? new Date(Math.min(...days) - span) : new Date(), hi = days.length ? new Date(Math.max(...days) + span) : new Date();
+    const [events, times] = days.length ? await Promise.all([
+      prisma.planningEvent.findMany({
+        where: { kind: 'intervention', startAt: { gte: lo, lte: hi }, worksite: { kind: 'project' } },
+        select: { startAt: true, worksite: { select: { id: true, ref: true, title: true, city: true } }, _count: { select: { assignments: true } } },
+      }),
+      prisma.timeEntry.findMany({
+        where: { date: { gte: lo, lte: hi }, worksiteId: { not: null }, status: { in: ['approved', 'submitted', 'running'] }, worksite: { kind: 'project' } },
+        select: { date: true, hours: true, personId: true, worksite: { select: { id: true, ref: true, title: true, city: true } } },
+      }),
+    ]) : [[], []];
+    type Sug = { worksiteId: string; ref: string; title: string; city: string | null; onDay: boolean; planned: number; people: number; hours: number };
+    const items = rows.map((r) => {
+      const day = r.date ? brusselsDayOf(r.date) : null;
+      const near = day ? new Set(Array.from({ length: 2 * win + 1 }, (_, i) => brusselsDayOf(new Date(r.date!.getTime() + (i - win) * 86_400_000)))) : new Set<string>();
+      const sug = new Map<string, Sug & { ppl: Set<string> }>();
+      const slot = (w: { id: string; ref: string; title: string; city: string | null }, d: string) => {
+        const cur = sug.get(w.id) ?? { worksiteId: w.id, ref: w.ref, title: w.title, city: w.city, onDay: false, planned: 0, people: 0, hours: 0, ppl: new Set<string>() };
+        if (d === day) cur.onDay = true;
+        sug.set(w.id, cur);
+        return cur;
+      };
+      for (const e of events) { const d = brusselsDayOf(e.startAt); if (near.has(d)) slot(e.worksite, d).planned += 1; }
+      for (const t of times) { if (!t.date) continue; const d = brusselsDayOf(t.date); if (near.has(d)) { if (!t.worksite) continue; const c = slot(t.worksite, d); c.hours += t.hours ?? 0; c.ppl.add(t.personId); } }
+      const suggestions: Sug[] = [...sug.values()].map(({ ppl, ...s }) => ({ ...s, people: ppl.size, hours: Math.round(s.hours * 10) / 10 }))
+        .sort((a, b) => Number(b.onDay) - Number(a.onDay) || b.hours - a.hours || b.planned - a.planned);
+      return {
+        id: r.id, date: r.date, supplier: r.contact?.name ?? r.supplierName ?? null, docNumber: r.docNumber, category: r.categoryRaw, ht: r.ht, ttc: r.ttc,
+        worksite: r.worksite, hasPdf: !!r.pdfPath, suggestions,
+      };
+    });
+    res.json({ items, total, totalHt: Math.round((sums._sum.ht ?? 0) * 100) / 100, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)), window: win });
+  }),
+);
+
 expensesRouter.get('/peppol-reception',requireAuth(...OFFICE),asyncHandler(async (_req,res)=>{res.json(await peppolReceptionStatus());}));
 expensesRouter.post('/peppol-reception',requireAuth('admin'),asyncHandler(async(req,res)=>{
   const {enabled}=z.object({enabled:z.boolean()}).parse(req.body);

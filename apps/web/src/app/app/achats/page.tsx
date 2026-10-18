@@ -381,6 +381,7 @@ function AchatsInner() {
                 📦 Exporter {selected.size} pièce{selected.size > 1 ? 's' : ''} jointe{selected.size > 1 ? 's' : ''} (zip)
               </button>
             )}
+            <Link className="btn" href="/app/achats/sans-chantier" title="Matériel et frais sans chantier (E-01…) : voir les chantiers actifs le jour de l’achat et les imputer">Imputer les dépenses sans chantier</Link>
             <details className="page-tools" onKeyDown={event => { if (event.key === 'Escape') { event.currentTarget.open = false; event.currentTarget.querySelector('summary')?.focus(); } }}>
               <summary className="btn">{tr('Imports & outils')} <span aria-hidden="true">⌄</span></summary>
               <div className="page-tools-panel">

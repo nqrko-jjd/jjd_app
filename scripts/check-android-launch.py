@@ -45,7 +45,7 @@ def timer_started():
     while time.time()<until:
         root=tree()
         labels=[n.get('text','') for n in root.iter('node')]
-        if 'Position non transmise' in labels:
+        if any(label in labels for label in ['Position non transmise', 'Pointage hors zone', 'Point de référence enregistré']):
             shot('location-unavailable-warning')
             tap('OK')  # Unavailable GPS is explicitly reported, never a silent failure.
         elif 'Compteur en cours' in labels:

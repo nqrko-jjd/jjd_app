@@ -44,8 +44,11 @@ timesheetRouter.post(
   asyncHandler(async (req, res) => {
     const d = timerStartInput.parse(req.body);
     const personId = myPersonId(req);
+    // The existing primary key enforces idempotency, including concurrent
+    // retries, without adding unique constraints to populated legacy rows.
+    const requestEntryId = d.operationId ? `timer:${personId}:${d.operationId}` : undefined;
     if (d.operationId) {
-      const previous = await prisma.timeEntry.findUnique({ where: { personId_startRequestId: { personId, startRequestId: d.operationId } } });
+      const previous = await prisma.timeEntry.findUnique({ where: { id: requestEntryId } });
       if (previous) { res.json({ entry: previous, geoFlag: previous.geoFlag, geoDistance: previous.geoDistance }); return; }
     }
     const existing = await prisma.timeEntry.findFirst({ where: { personId, status: 'running' } });
@@ -73,6 +76,7 @@ timesheetRouter.post(
 
     const entry = await prisma.timeEntry.create({
       data: {
+        id: requestEntryId,
         personId,
         startRequestId: d.operationId,
         worksiteId: d.worksiteId,
@@ -100,7 +104,7 @@ timesheetRouter.post(
     const d = timerStopInput.parse(req.body);
     const personId = myPersonId(req);
     if (d.operationId) {
-      const previous = await prisma.timeEntry.findUnique({ where: { personId_stopRequestId: { personId, stopRequestId: d.operationId } } });
+      const previous = await prisma.timeEntry.findFirst({ where: { personId, stopRequestId: d.operationId } });
       if (previous) { res.json({ entry: previous }); return; }
     }
     const running = await prisma.timeEntry.findFirst({ where: { personId, status: 'running' } });

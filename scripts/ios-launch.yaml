@@ -5,13 +5,14 @@ appId: be.jjdconsult.chantier
     visible: "Bienvenue"
     timeout: 60000
 - takeScreenshot: tmp/ios-launch/01-login
-- tapOn: "E-mail ou 0475 12 34 56"
+- tapOn:
+    id: "login-identifier"
 - inputText: "ouvrier@jjd-consult.be"
 - tapOn:
-    text: "Mot de passe ou code"
-    index: 1
+    id: "login-password"
 - inputText: "jjd"
 - hideKeyboard
+- takeScreenshot: tmp/ios-launch/01b-login-filled
 - scrollUntilVisible:
     element: "Se connecter"
 - tapOn: "Se connecter"

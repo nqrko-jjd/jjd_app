@@ -1,3 +1,5 @@
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ReportMessage } from '@/lib/ReportMessage';
 import { VoiceNote, VoicePlayer } from '@/lib/VoiceNote';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { View, TextInput, Pressable, ScrollView, Image, StyleSheet, KeyboardAvoidingView, Platform, Linking } from 'react-native';
@@ -30,6 +32,7 @@ export default function Fil() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { user } = useSession();
+  const insets = useSafeAreaInsets();
   const [d, setD] = useState<Data | null>(null);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -108,7 +111,7 @@ export default function Fil() {
   if (!d) return <Loading />;
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: T.paper }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: T.paper, paddingBottom: insets.bottom }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
       <Stack.Screen
         options={{
           title: tr('Fil de chantier'),
@@ -151,6 +154,7 @@ export default function Fil() {
                 <MsgText body={m.body} translated={m.bodyTranslated} style={[s.bubble, mine && s.bubbleMine]} />
               ) : null}
               <Text style={[s.timeTxt, mine && { alignSelf: 'flex-end' }]}>{time(m.createdAt)}</Text>
+              {!mine && <ReportMessage id={m.id} />}
             </View>
           );
         })}

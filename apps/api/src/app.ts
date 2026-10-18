@@ -46,6 +46,7 @@ import { quoteSignRouter, publicSignRouter } from './routes/quote-sign.js';
 import { geocodeRouter } from './routes/geocode.js';
 import { usersRouter } from './routes/users.js';
 import { pushRouter } from './routes/push.js';
+import { moderationRouter } from './routes/moderation.js';
 
 export function createApp() {
   const app = express();
@@ -66,6 +67,7 @@ export function createApp() {
   app.use('/api/worksites/:worksiteId/files', worksiteFilesRouter);
   app.use('/api/worksites/:worksiteId/mails', worksiteMailsRouter);
   app.use('/api/messagerie', messagerieRouter);
+  app.use('/api/messagerie/moderation', moderationRouter);
   app.use('/api/translate', translateRouter);
   app.use('/api/gps', gpsRouter);
   app.use('/api/push', pushRouter);

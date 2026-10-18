@@ -43,18 +43,29 @@ jobs:
       - name: Generate native iOS project
         working-directory: apps/mobile
         run: npx expo prebuild --platform ios
+      - uses: actions/cache/restore@v4
+        id: ios-cache
+        with:
+          path: /tmp/jjd-ios-build/Build/Products/Release-iphonesimulator
+          key: ios-simulator-v1-${{ hashFiles('apps/mobile/app/**', 'apps/mobile/lib/**', 'apps/mobile/assets/**', 'apps/mobile/package*.json', 'apps/mobile/app.json', 'apps/mobile/app.config.js', 'apps/mobile/babel.config.js', 'apps/mobile/ios/Podfile.lock') }}
       - name: Compile release for simulator without Apple credentials
+        if: steps.ios-cache.outputs.cache-hit != 'true'
         working-directory: apps/mobile
         run: |
           set -o pipefail
           workspace=$(find ios -maxdepth 1 -name '*.xcworkspace' -print -quit)
           scheme=$(basename "$workspace" .xcworkspace)
           xcodebuild -workspace "$workspace" -scheme "$scheme" -configuration Release -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/jjd-ios-build CODE_SIGNING_ALLOWED=NO build > /tmp/jjd-ios-build.log 2>&1 || { tail -100 /tmp/jjd-ios-build.log; exit 1; }
+      - uses: actions/cache/save@v4
+        if: steps.ios-cache.outputs.cache-hit != 'true'
+        with:
+          path: /tmp/jjd-ios-build/Build/Products/Release-iphonesimulator
+          key: ${{ steps.ios-cache.outputs.cache-primary-key }}
       - name: Install and test on iPhone simulator
         run: |
           curl -fsSL https://get.maestro.mobile.dev -o /tmp/install-maestro.sh
           bash /tmp/install-maestro.sh
-          device=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(x["udid"] for group in d["devices"].values() for x in group if "iPhone" in x["name"]))')
+          device=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin); a=[x for group in d["devices"].values() for x in group if "iPhone" in x["name"]]; print(next((x["udid"] for x in a if "Pro Max" in x["name"]),a[0]["udid"]))')
           xcrun simctl boot "$device"
           xcrun simctl bootstatus "$device" -b
           app=$(find /tmp/jjd-ios-build/Build/Products/Release-iphonesimulator -maxdepth 1 -name '*.app' -print -quit)
@@ -63,10 +74,22 @@ jobs:
           xcrun simctl launch "$device" be.jjdconsult.chantier
           xcrun simctl io "$device" screenshot tmp/ios-launch/00-native-launch.png
           "$HOME/.maestro/bin/maestro" --device "$device" test --debug-output tmp/ios-launch scripts/ios-launch.yaml
+          mkdir -p tmp/ios-launch/iphone
+          cp tmp/ios-launch/*.png tmp/ios-launch/iphone/
+          xcrun simctl shutdown "$device"
+          tablet=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin); a=[x for group in d["devices"].values() for x in group if "iPad" in x["name"]]; print(next((x["udid"] for x in a if "Pro 13" in x["name"]),a[0]["udid"]))')
+          xcrun simctl boot "$tablet"
+          xcrun simctl bootstatus "$tablet" -b
+          xcrun simctl install "$tablet" "$app"
+          xcrun simctl privacy "$tablet" grant microphone be.jjdconsult.chantier
+          "$HOME/.maestro/bin/maestro" --device "$tablet" test --debug-output tmp/ios-launch/ipad scripts/ios-launch.yaml
+          mkdir -p tmp/ios-launch/ipad
+          cp tmp/ios-launch/*.png tmp/ios-launch/ipad/
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: ios-launch-evidence
+          include-hidden-files: true
           path: |
             tmp/ios-launch/
             /tmp/jjd-ios-build.log

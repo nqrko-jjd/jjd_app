@@ -1,3 +1,5 @@
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ReportMessage } from '@/lib/ReportMessage';
 import { VoiceNote, VoicePlayer } from '@/lib/VoiceNote';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { View, TextInput, Pressable, ScrollView, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
@@ -25,6 +27,7 @@ function time(iso: string) {
 
 export default function FilGeneral() {
   const { user } = useSession();
+  const insets = useSafeAreaInsets();
   const [d, setD] = useState<Data | null>(null);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -48,7 +51,7 @@ export default function FilGeneral() {
   if (!d) return <Loading />;
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: T.paper }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: T.paper, paddingBottom: insets.bottom }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
       <Stack.Screen options={{ title: tr('Général JJD'), headerBackTitle: tr('Retour') }} />
       <ScrollView ref={scroll} contentContainerStyle={{ ...T.content, padding: 14, gap: 10 }}>
         {d.messages.length === 0 && <Text style={{ color: T.ink2 }}>Aucun message.</Text>}
@@ -60,6 +63,7 @@ export default function FilGeneral() {
               {m.kind === 'audio' && m.fileUrl && <VoicePlayer uri={`${API_URL}${m.fileUrl}`} />}
               {m.body ? <MsgText body={m.body} translated={m.bodyTranslated} style={[s.bubble, mine && s.bubbleMine]} /> : null}
               <Text style={[s.timeTxt, mine && { alignSelf: 'flex-end' }]}>{time(m.createdAt)}</Text>
+              {!mine && <ReportMessage id={m.id} />}
             </View>
           );
         })}

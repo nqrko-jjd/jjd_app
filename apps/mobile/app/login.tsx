@@ -51,9 +51,11 @@ Tout au même endroit.</Text></LinearGradient>
         {demo && <Text style={s.sub}>Démonstration — données fictives. Utilisez les identifiants de démonstration fournis par JJD.</Text>}
         <Text style={s.fieldLabel}>E-mail ou n° de GSM</Text>
         <TextInput
+          testID="login-identifier"
           style={s.input}
           placeholder={tr("E-mail ou 0475 12 34 56")}
           autoCapitalize="none"
+          autoCorrect={false}
           keyboardType="default"
           value={email}
           onChangeText={setEmail}
@@ -61,9 +63,12 @@ Tout au même endroit.</Text></LinearGradient>
         />
         <Text style={s.fieldLabel}>Mot de passe ou code</Text>
         <TextInput
+          testID="login-password"
           style={s.input}
           placeholder={tr("Mot de passe ou code")}
           secureTextEntry
+          autoCapitalize="none"
+          autoCorrect={false}
           value={password}
           onChangeText={setPassword}
           placeholderTextColor={T.ink2}

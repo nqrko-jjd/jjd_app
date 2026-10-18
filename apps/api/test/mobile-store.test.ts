@@ -70,3 +70,26 @@ test('a retried voice upload returns the existing message', async () => {
   const second = await send(); assert.equal(second.status, 200); const b = await second.json();
   assert.equal(a.message.id, b.message.id); assert.equal(a.message.kind, 'audio');
 });
+
+test('message reports are private to administrators and removal changes the conversation', async () => {
+  const t = await prisma.thread.create({data:{kind:'general'}});
+  const m = await prisma.message.create({data:{threadId:t.id,authorId:userId,body:'Synthetic moderation test'}});
+  try {
+    const path='/api/messagerie/moderation/reports';
+    assert.equal((await post(path,'',{messageId:m.id,reason:'Contenu inapproprié'})).status,401);
+    assert.equal((await post(path,worker,{messageId:m.id,reason:'Contenu inapproprié'})).status,201);
+    assert.equal((await realFetch(base+path,{headers:{authorization:`Bearer ${worker}`}})).status,403);
+    const list=await realFetch(base+path,{headers:{authorization:`Bearer ${david}`}});
+    assert.equal(list.status,200);
+    const report=(await list.json()).items.find((r:any)=>r.entityId===m.id);
+    assert.ok(report);
+    assert.equal((await post(`${path}/${report.id}/resolve`,worker,{remove:true})).status,403);
+    assert.equal((await post(`${path}/${report.id}/resolve`,david,{remove:true})).status,200);
+    const changed=await prisma.message.findUniqueOrThrow({where:{id:m.id}});
+    assert.equal(changed.body,'Message retiré par la modération.');
+    assert.equal(changed.fileUrl,null);
+  } finally {
+    await prisma.auditLog.deleteMany({where:{entityId:m.id}});
+    await prisma.thread.delete({where:{id:t.id}});
+  }
+});

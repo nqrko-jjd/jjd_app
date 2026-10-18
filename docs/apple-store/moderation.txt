@@ -1,0 +1,10 @@
+MODÉRATION DE LA MESSAGERIE PROFESSIONNELLE
+
+Les messages sont réservés aux échanges professionnels entre comptes autorisés. Les contenus illégaux, discriminatoires, menaçants, pornographiques ou harcelants sont interdits. Aucun compte anonyme ou inscription publique n’est proposé.
+Depuis un message reçu, « Signaler » permet de choisir un motif. La demande est conservée sur le serveur et n’est visible que de la direction.
+La direction doit consulter régulièrement Plus > Gestion > Signalements, examiner la conversation et les pièces jointes, retirer les contenus concernés et désactiver les comptes abusifs si nécessaire. La désactivation coupe l’accès au service ; elle demande confirmation et ne peut pas viser son propre compte.
+Contact de suivi : info@jjd-consult.be. Un signalement transmis n’est pas une promesse de retrait automatique : une personne doit effectivement le traiter.
+Le traitement des pièces jointes n’est pas une analyse automatique de leur contenu. Documenter ce fonctionnement dans les notes d’examen, et vérifier la réponse des stores pour cette messagerie d’entreprise fermée avant de présenter la conformité comme acquise.
+Sources :
+https://developer.apple.com/app-store/review/guidelines/#user-generated-content
+https://support.google.com/googleplay/android-developer/answer/9876937?hl=fr

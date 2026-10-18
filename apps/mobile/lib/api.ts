@@ -175,6 +175,12 @@ async function drain(session: { token: string | null; ownerId: string | null }, 
       done++;
       if (item.id === target) { delivered = true; value = response; }
     } catch (e) {
+      // A newly submitted, explicitly rejected action must still show the form
+      // error. Older/ambiguous attempts stay durable for recovery and review.
+      if (item.id === target && e instanceof ApiError && [400, 403, 404, 409, 422].includes(e.status)) {
+        await writeQueue(q.filter(q => q.id !== item.id));
+        throw e;
+      }
       item.error = e instanceof ApiError ? e.message : 'Connexion indisponible. Réessaie la synchronisation.';
       await writeQueue(q);
       break; // Preserve every failure, and preserve chronological order.

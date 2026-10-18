@@ -45,6 +45,11 @@ test('account switch during replay does not send following action',async()=>{
   assert.equal(await x.api.flushQueue(),1);assert.equal(x.requests.length,n+1);assert.equal(x.requests.at(-1).options.headers.authorization,'Bearer A');await x.api.setToken('A','userA');assert.equal(await x.api.pendingCount(),1);
 });
 test('malformed server response is retained',async()=>{const x=await queued();x.reply(async()=>({ok:false,status:502,text:async()=>'<html>offline</html>'}));await x.api.flushQueue();assert.equal(await x.api.pendingCount(),1);});
+test('fresh explicit validation rejection reaches the form without a phantom timer',async()=>{
+  const x=setup();await x.api.setToken('A','userA');x.status(409);
+  await assert.rejects(x.api.apiSend('/api/timesheet/timer/start','POST',start),/Server 409/);
+  assert.equal(await x.api.pendingCount(),0);
+});
 test('offline timer projection survives start, navigation and stop',()=>{
   const c={exports:{}};vm.runInNewContext(compiled('apps/mobile/lib/timer-state.ts'),c);
   const q=[{id:'one',path:'/api/timesheet/timer/start',body:start}];const events=[{worksite:{id:'site',ref:'R-TEST',title:'Test'}}];

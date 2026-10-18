@@ -1,0 +1,35 @@
+appId: be.jjdconsult.chantier
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Bienvenue"
+    timeout: 60000
+- takeScreenshot: tmp/ios-launch/01-login
+- tapOn: "E-mail ou 0475 12 34 56"
+- inputText: "ouvrier@jjd-consult.be"
+- tapOn:
+    text: "Mot de passe ou code"
+    index: 1
+- inputText: "jjd"
+- hideKeyboard
+- scrollUntilVisible:
+    element: "Se connecter"
+- tapOn: "Se connecter"
+- extendedWaitUntil:
+    visible: "Mes heures"
+    timeout: 30000
+- takeScreenshot: tmp/ios-launch/02-home
+- tapOn: "Messages"
+- tapOn: "Général JJD"
+- tapOn: ".*Enregistrer une note vocale.*"
+- assertVisible: ".*Arrêter.*"
+- waitForAnimationToEnd
+- tapOn: ".*Arrêter.*"
+- assertVisible: "Envoyer la note"
+- takeScreenshot: tmp/ios-launch/03-voice-draft
+- tapOn: "Envoyer la note"
+- extendedWaitUntil:
+    visible: ".*Enregistrer une note vocale.*"
+    timeout: 30000
+- assertVisible: ".*Note vocale.*"
+- takeScreenshot: tmp/ios-launch/04-voice-sent

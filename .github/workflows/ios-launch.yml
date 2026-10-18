@@ -1,0 +1,70 @@
+name: iOS native launch check
+on:
+  pull_request:
+    paths:
+      - 'apps/mobile/**'
+      - '.github/workflows/ios-launch.yml'
+      - 'scripts/ios-launch.yaml'
+permissions:
+  contents: read
+concurrency:
+  group: ios-launch-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  ios:
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      CI: '1'
+      JJD_SKIP_ENV_FILE: '1'
+      DATABASE_URL: file:./mobile-launch.db
+      EXPO_PUBLIC_API_URL: http://127.0.0.1:4100
+      UPLOADS_DIR: /tmp/jjd-ios-test-uploads
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - run: npm ci --no-audit --no-fund
+      - run: npm ci --no-audit --no-fund
+        working-directory: apps/mobile
+      - run: npm run build:shared && npm run prisma:generate --workspace @jjd/api && npm run db:deploy:safe --workspace @jjd/api && npm run seed --workspace @jjd/api
+      - run: node scripts/seed-mobile-launch.mjs
+      - name: Start isolated API
+        run: |
+          mkdir -p /tmp/jjd-ios-test-uploads tmp/ios-launch
+          node --import tsx --input-type=module -e "import {createApp} from './apps/api/src/app.ts'; createApp().listen(4100,'0.0.0.0');" > /tmp/jjd-ios-api.log 2>&1 &
+      - name: Generate native iOS project
+        working-directory: apps/mobile
+        run: npx expo prebuild --platform ios
+      - name: Compile release for simulator without Apple credentials
+        working-directory: apps/mobile
+        run: |
+          set -o pipefail
+          workspace=$(find ios -maxdepth 1 -name '*.xcworkspace' -print -quit)
+          scheme=$(basename "$workspace" .xcworkspace)
+          xcodebuild -workspace "$workspace" -scheme "$scheme" -configuration Release -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/jjd-ios-build CODE_SIGNING_ALLOWED=NO build > /tmp/jjd-ios-build.log 2>&1 || { tail -100 /tmp/jjd-ios-build.log; exit 1; }
+      - name: Install and test on iPhone simulator
+        run: |
+          curl -fsSL https://get.maestro.mobile.dev -o /tmp/install-maestro.sh
+          bash /tmp/install-maestro.sh
+          device=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(x["udid"] for group in d["devices"].values() for x in group if "iPhone" in x["name"]))')
+          xcrun simctl boot "$device"
+          xcrun simctl bootstatus "$device" -b
+          app=$(find /tmp/jjd-ios-build/Build/Products/Release-iphonesimulator -maxdepth 1 -name '*.app' -print -quit)
+          xcrun simctl install "$device" "$app"
+          xcrun simctl privacy "$device" grant microphone be.jjdconsult.chantier
+          "$HOME/.maestro/bin/maestro" --device "$device" test --debug-output tmp/ios-launch scripts/ios-launch.yaml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios-launch-evidence
+          path: |
+            tmp/ios-launch/
+            /tmp/jjd-ios-build.log
+            /tmp/jjd-ios-api.log

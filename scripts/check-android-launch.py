@@ -55,7 +55,7 @@ def timer_started():
         if any(label in labels for label in ['Position non transmise', 'Pointage hors zone', 'Point de référence enregistré']):
             shot('location-unavailable-warning')
             tap('OK')  # Unavailable GPS is explicitly reported, never a silent failure.
-        elif 'Compteur en cours' in labels:
+        elif any(label.casefold() == 'compteur en cours' for label in labels):
             return
         time.sleep(1)
     raise AssertionError('Timer did not start')
@@ -88,6 +88,17 @@ try:
     tap('Se connecter')
     find('Mes heures',60)
     shot('02-worker-home')
+    # Visual checks for enlarged system text and short landscape screens.
+    adb('shell','settings','put','system','font_scale','1.5')
+    time.sleep(2)
+    shot('02-large-text')
+    adb('shell','settings','put','system','font_scale','1.0')
+    adb('shell','settings','put','system','accelerometer_rotation','0')
+    adb('shell','settings','put','system','user_rotation','1')
+    time.sleep(2)
+    shot('02-landscape')
+    adb('shell','settings','put','system','user_rotation','0')
+    time.sleep(2)
     heading=find('Bonjour')
     assert int(re.findall(r'\d+',heading.get('bounds'))[1]) >= 60, 'Header overlaps system status bar'
     adb('shell','appops','set','2000','android:mock_location','allow')

@@ -28,6 +28,7 @@ export default function SansChantierPage() {
   const [gone, setGone] = useState<Set<string>>(new Set());
   const [msg, setMsg] = useState<{ ok: boolean; text: string; undo?: () => void } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [preview, setPreview] = useState<{ id: string; url: string; title: string } | null>(null); // PDF affiché à côté de la liste
 
   if (loading && !data) return <SkeletonRows />;
   if (error || !data) return <ErrorState message={error ?? 'Erreur'} onRetry={reload} />;
@@ -43,7 +44,10 @@ export default function SansChantierPage() {
       } });
     } catch (e) { setMsg({ ok: false, text: (e as Error).message }); } finally { setBusy(null); }
   }
-  async function viewPdf(id: string) { window.open(await apiBlobUrl(`/api/finance/expenses/${id}/pdf`), '_blank'); }
+  async function viewPdf(r: Row) {
+    try { setPreview({ id: r.id, url: await apiBlobUrl(`/api/finance/expenses/${r.id}/pdf`), title: `${r.supplier ?? 'Dépense'}${r.docNumber ? ` · ${r.docNumber}` : ''}` }); }
+    catch (e) { setMsg({ ok: false, text: (e as Error).message }); }
+  }
   const items = data.items.filter((r) => !gone.has(r.id));
 
   return (
@@ -69,6 +73,8 @@ export default function SansChantierPage() {
         </label>
       </div>
 
+      <div style={preview ? { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(320px, 46%)', gap: '1rem', alignItems: 'start' } : undefined}>
+      <div>
       {items.length === 0 ? <EmptyState icon={Wallet} title="Rien à imputer" text="Aucune dépense sans chantier ne correspond." /> : (
         <div className="panel doc-list">
           {items.map((r) => (
@@ -80,7 +86,7 @@ export default function SansChantierPage() {
                   {r.category && <span className="badge plain">{r.category}</span>}
                   <span className="doc-item-amount" style={{ marginLeft: 'auto' }}>{formatEur(r.ht)} HT{r.ttc != null ? ` · ${formatEur(r.ttc)} TTC` : ''}</span>
                 </div>
-                <div className="doc-item-title">{r.supplier ?? '—'}{r.docNumber ? ` · ${r.docNumber}` : ''}{r.hasPdf && <button className="btn ghost" style={{ marginLeft: 8, padding: '0 0.4rem' }} onClick={() => viewPdf(r.id)}>PDF</button>}</div>
+                <div className="doc-item-title">{r.supplier ?? '—'}{r.docNumber ? ` · ${r.docNumber}` : ''}{r.hasPdf ? <button className="btn" style={{ marginLeft: 8, padding: '0.1rem 0.6rem', fontSize: '0.8rem' }} onClick={() => viewPdf(r)}>📄 Voir le PDF</button> : <span className="muted" style={{ marginLeft: 8, fontSize: '0.78rem' }}>pas de pièce jointe</span>}</div>
                 <div className="row" style={{ marginTop: '0.5rem', gap: '0.4rem', flexWrap: 'wrap' }}>
                   {r.suggestions.length === 0 && <span className="muted" style={{ fontSize: '0.84rem' }}>{r.date ? 'Aucun chantier actif ce jour-là dans le planning ni les pointages.' : 'Pas de date : impossible de proposer des chantiers.'}</span>}
                   {r.suggestions.map((s) => (
@@ -102,6 +108,21 @@ export default function SansChantierPage() {
           ))}
         </div>
       )}
+
+      </div>
+      {preview && (
+        <aside className="panel" style={{ position: 'sticky', top: 12, padding: '0.6rem', display: 'grid', gap: '0.5rem' }}>
+          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
+            <strong style={{ fontSize: '0.9rem' }}>{preview.title}</strong>
+            <span className="row" style={{ gap: '0.3rem' }}>
+              <a className="btn ghost" href={preview.url} target="_blank" rel="noreferrer">Ouvrir dans un onglet</a>
+              <button className="btn ghost" onClick={() => setPreview(null)} aria-label="Fermer l’aperçu">✕</button>
+            </span>
+          </div>
+          <iframe title="Pièce jointe" src={preview.url} style={{ width: '100%', height: '78vh', border: '1px solid var(--line)', borderRadius: 8, background: '#fff' }} />
+        </aside>
+      )}
+      </div>
 
       {data.totalPages > 1 && (
         <div className="row" style={{ justifyContent: 'center', gap: '0.6rem', marginTop: '1rem' }}>

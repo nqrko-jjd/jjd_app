@@ -82,12 +82,12 @@ function BureauHome() {
       <ScreenHeader eyebrow={todayLabel()} title={first ? `Bonjour ${first},` : 'Bonjour,'} description={tr("Ce qui demande votre attention aujourd’hui.")} avatar={first?.slice(0, 1) || 'J'} />
 
       <View style={s.tiles}>
-        <Pressable accessibilityRole="button" accessibilityLabel={tr('Facturé ce mois')} onPress={() => go('/analyse')} style={{flexGrow:1,flexBasis:150}}>
+        <Pressable accessibilityRole="button" accessibilityLabel={`${tr('Facturé ce mois')} : ${eur(data.kpis.invoicedMonth)}`} onPress={() => go('/analyse')} style={({pressed})=>[{flexGrow:1,flexBasis:150},pressed&&{opacity:0.75}]}>
           <HeroTile icon="bar-chart-2" style={{padding:18,flex:1}}><Text style={s.heroLabel}>Facturé ce mois</Text><Text style={s.heroValue}>{eur(data.kpis.invoicedMonth)}</Text></HeroTile>
         </Pressable>
-        <Pressable accessibilityRole="button" onPress={() => go('/analyse')} style={s.metric}><Text style={s.tileLabel}>Encaissé ce mois</Text><Text style={s.metricValue}>{eur(data.kpis.paidMonth)}</Text><Feather name="trending-up" size={18} color={T.primary}/></Pressable>
-        <Pressable accessibilityRole="button" onPress={() => go('/documents')} style={[s.metric,s.tileAlert]}><Text style={s.tileLabel}>Factures en retard</Text><Text style={[s.metricValue,{color:T.kpiWarnFg}]}>{eur(data.kpis.overdueAmount)}</Text><Text style={s.tileLabel}>{data.kpis.overdueCount} facture(s)</Text></Pressable>
-        <Pressable accessibilityRole="button" onPress={() => go('/chantiers?status=in_progress')} style={s.metric}><Text style={s.tileLabel}>Chantiers en cours</Text><Text style={s.metricValue}>{data.kpis.openWorksites}</Text><Feather name="home" size={18} color={T.primary}/></Pressable>
+        <Pressable accessibilityRole="button" onPress={() => go('/analyse')} style={({pressed})=>[s.metric,pressed&&{opacity:0.75}]}><Text style={s.tileLabel}>Encaissé ce mois</Text><Text style={s.metricValue}>{eur(data.kpis.paidMonth)}</Text><Feather name="trending-up" size={18} color={T.primary}/></Pressable>
+        <Pressable accessibilityRole="button" onPress={() => go('/documents')} style={({pressed})=>[s.metric,s.tileAlert,pressed&&{opacity:0.75}]}><Text style={s.tileLabel}>Factures en retard</Text><Text style={[s.metricValue,{color:T.kpiWarnFg}]}>{eur(data.kpis.overdueAmount)}</Text><Text style={s.tileLabel}>{data.kpis.overdueCount} facture(s)</Text></Pressable>
+        <Pressable accessibilityRole="button" onPress={() => go('/chantiers?status=in_progress')} style={({pressed})=>[s.metric,pressed&&{opacity:0.75}]}><Text style={s.tileLabel}>Chantiers en cours</Text><Text style={s.metricValue}>{data.kpis.openWorksites}</Text><Feather name="home" size={18} color={T.primary}/></Pressable>
       </View>
 
       <View>

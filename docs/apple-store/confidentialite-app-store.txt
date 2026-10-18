@@ -1,0 +1,23 @@
+JJD CHANTIER — BROUILLON APP PRIVACY
+À reporter dans App Store Connect après confirmation des traitements réellement activés.
+
+Collecte : oui. Les données professionnelles envoyées à JJD sont liées au compte utilisateur.
+Finalité principale : fonctionnalités de l’application ; sécurité et gestion du compte.
+Suivi publicitaire inter-applications : aucun mécanisme identifié. Pas d’IDFA ni de publicité identifié dans cette version.
+
+Types à examiner :
+- Coordonnées : nom, e-mail, téléphone.
+- Identifiants : identifiant utilisateur et jeton de notification.
+- Localisation précise/approximative : position ponctuelle volontaire au pointage, sans suivi permanent.
+- Contenu utilisateur : messages, photos/vidéos si prises en charge, audio, fichiers, signatures, rapports et justificatifs.
+- Informations financières : montants et justificatifs de dépenses/facturation selon les fonctions autorisées ; pas de saisie de carte bancaire dans l’app auditée.
+- Données d’utilisation : actions professionnelles et pointage ; distinguer des mesures publicitaires.
+- Diagnostics : journaux techniques effectivement conservés par le serveur.
+
+Ne pas déclarer les données comme anonymes : elles sont associées aux comptes/activités. Les fournisseurs techniques doivent être inclus dans l’analyse. Expo, Google/Apple acheminent les notifications ; les fonctions serveur de traduction et lecture de pièces peuvent utiliser Anthropic.
+L’app n’offre pas d’inscription libre : les accès sont créés par l’entreprise. La demande de suppression est accessible dans Mon compte. Si un parcours de création de compte est ajouté, réexaminer les obligations de suppression en application.
+Les durées précises, transferts et sous-traitants réellement utilisés doivent être confirmés par JJD avant de publier la déclaration.
+
+Sources :
+https://developer.apple.com/app-store/app-privacy-details/
+https://developer.apple.com/support/offering-account-deletion-in-your-app/

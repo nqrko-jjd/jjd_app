@@ -5,9 +5,9 @@ JJD CHANTIER — INSCRIPTION ET PREMIER TEST GOOGLE PLAY
 Ouvrir https://play.google.com/console/signup avec un compte Google maîtrisé par JJD.
 Choisir Organisation pour JJD Consult SRL, et non un compte personnel.
 Préparer : numéro D-U-N-S de l’entreprise (9 chiffres, distinct du numéro BCE/TVA), raison sociale et adresse identiques au dossier Dun & Bradstreet, site de l’entreprise, coordonnées de David et de l’entreprise, justificatifs d’identité/entreprise demandés par Google.
-Le D-U-N-S se recherche ou se demande gratuitement via Dun & Bradstreet ; ne pas inventer le numéro. Sa délivrance et les vérifications Google peuvent retarder l’ouverture.
+D-U-N-S obtenu : 372964766, JJD Consult, Gieterijstraat 49, 1601 Sint-Pieters-Leeuw. Compte Google Play créé ; site validé ; identité en cours de vérification, puis téléphones à valider.
 Frais Play Console : 25 USD, une seule fois, à régler personnellement dans le formulaire Google. Ne pas communiquer de numéro de carte dans le chat.
-Nom public proposé : JJD Consult. Contact public confirmé : info@jjd-consult.be.
+Nom public choisi : JJD Dev. Contact public confirmé : info@jjd-consult.be.
 Google peut afficher l’identité et les coordonnées professionnelles du développeur.
 
 2. Créer l’application

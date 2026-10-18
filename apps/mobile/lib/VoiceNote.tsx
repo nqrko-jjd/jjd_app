@@ -24,6 +24,7 @@ export function VoiceNote({ endpoint, onSent }: { endpoint: string; onSent: () =
   const state = useAudioRecorderState(recorder);
   const [draft, setDraft] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [recording, setRecording] = useState(false);
   const operation = useRef('');
   const lock = useRef(false);
   const active = useRef(false);
@@ -31,6 +32,7 @@ export function VoiceNote({ endpoint, onSent }: { endpoint: string; onSent: () =
   async function stop() {
     if (!active.current) return;
     active.current = false;
+    if (mounted.current) setRecording(false);
     await recorder.stop();
     await setAudioModeAsync({ allowsRecording: false });
     if (mounted.current) setDraft(recorder.uri);
@@ -42,6 +44,11 @@ export function VoiceNote({ endpoint, onSent }: { endpoint: string; onSent: () =
     return () => { mounted.current = false; sub.remove(); if (active.current) void recorder.stop().catch(() => {}); void setAudioModeAsync({ allowsRecording: false }).catch(() => {}); };
   }, [recorder]);
   useEffect(() => { if (state.durationMillis >= 120000 && active.current) void stop().catch(() => {}); }, [state.durationMillis]);
+  useEffect(() => {
+    if (!recording) return;
+    const limit = setTimeout(() => { void stop().catch(() => {}); }, 120000);
+    return () => clearTimeout(limit);
+  }, [recording]);
   async function toggle() {
     if (lock.current) return;
     lock.current = true; setBusy(true);
@@ -52,9 +59,9 @@ export function VoiceNote({ endpoint, onSent }: { endpoint: string; onSent: () =
         await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
         await recorder.prepareToRecordAsync();
         operation.current = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-        active.current = true; recorder.record();
+        recorder.record(); active.current = true; setRecording(true);
       }
-    } catch { active.current = false; Alert.alert('Enregistrement indisponible', 'Réessayez après avoir vérifié le microphone.'); }
+    } catch { active.current = false; setRecording(false); Alert.alert('Enregistrement indisponible', 'Réessayez après avoir vérifié le microphone.'); }
     finally { lock.current = false; if (mounted.current) setBusy(false); }
   }
   async function send() {
@@ -78,8 +85,8 @@ export function VoiceNote({ endpoint, onSent }: { endpoint: string; onSent: () =
       <Pressable disabled={busy} onPress={send} style={{ padding: 12 }} accessibilityRole="button"><Text style={{ color: T.primary }}>{busy ? 'Envoi…' : 'Envoyer la note'}</Text></Pressable>
       <Pressable disabled={busy} onPress={() => setDraft(null)} style={{ padding: 12 }} accessibilityRole="button"><Text>Supprimer</Text></Pressable>
     </View></> : <Pressable disabled={busy} onPress={toggle} style={{ flexDirection: 'row', gap: 10, padding: 10 }} accessibilityRole="button">
-      <Feather name={state.isRecording ? 'square' : 'mic'} size={20} color={state.isRecording ? T.crit : T.primary} />
-      <Text>{state.isRecording ? `Arrêter · ${Math.floor(state.durationMillis / 1000)} s` : 'Enregistrer une note vocale'}</Text>
+      <Feather name={recording ? 'square' : 'mic'} size={20} color={recording ? T.crit : T.primary} />
+      <Text>{recording ? `Arrêter · ${Math.floor(state.durationMillis / 1000)} s` : 'Enregistrer une note vocale'}</Text>
     </Pressable>}
   </View>;
 }

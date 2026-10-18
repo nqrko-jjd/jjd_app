@@ -1,0 +1,51 @@
+name: jjd-review
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: jjd_review
+      POSTGRES_DB: jjd_review
+      POSTGRES_PASSWORD: ${REVIEW_DB_PASSWORD:?required}
+    volumes:
+      - review-db:/var/lib/postgresql/data
+    networks: [review]
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U jjd_review']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: jjd-review-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://jjd_review:${REVIEW_DB_PASSWORD}@db:5432/jjd_review
+      JWT_SECRET: ${REVIEW_JWT_SECRET:?required}
+      REVIEW_PASSWORD: ${REVIEW_PASSWORD:?required}
+      JJD_STORE_REVIEW: '1'
+      JJD_SKIP_ENV_FILE: '1'
+      PORT: '4100'
+      PUBLIC_API_URL: https://new.jjd-consult.be/jjd-demo-api
+      WEB_URL: https://new.jjd-consult.be
+      CORS_ORIGINS: https://new.jjd-consult.be
+      UPLOADS_DIR: /repo/apps/api/uploads
+      BRICOLOC_API_URL: ''
+    # No index.js: no mail imports, scheduled integrations, or production seed.
+    command: ['sh', '-c', 'npm run db:deploy:safe && node scripts/seed-store-review.mjs && node --input-type=module -e "import {createApp} from ''./dist/src/app.js''; createApp().listen(4100,''0.0.0.0'');"']
+    volumes:
+      - review-uploads:/repo/apps/api/uploads
+    networks: [review, edge]
+networks:
+  review:
+    internal: true
+  edge:
+    external: true
+volumes:
+  review-db:
+  review-uploads:

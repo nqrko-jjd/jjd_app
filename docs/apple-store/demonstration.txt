@@ -1,0 +1,14 @@
+ESPACE DE DÉMONSTRATION POUR LES STORES
+
+Le bouton « Accès de démonstration » de l'écran de connexion utilise une API séparée : https://new.jjd-consult.be/jjd-demo-api.
+La même application et les mêmes fonctions sont utilisées. Seules les données et intégrations configurées diffèrent. Un bandeau indique clairement la démonstration.
+Les comptes, les fichiers, la base PostgreSQL et le secret de session sont indépendants de la production. Les caches et actions hors ligne sont séparés sur le téléphone. Une déconnexion est obligatoire avant de changer d'espace.
+
+Déploiement : docker-compose.review.yml, avec un fichier .env.review privé contenant REVIEW_DB_PASSWORD, REVIEW_JWT_SECRET et REVIEW_PASSWORD (24 caractères au minimum, générés aléatoirement). Aucun secret ne doit être commité ou intégré à l'application.
+Ne jamais importer les bases de production ou de l'ancien serveur de test. Le script seed-store-review.mjs refuse une base existante non identifiée comme démonstration.
+Le démarrage passe par createApp(), sans synchronisations planifiées. Aucune clé bancaire, SMTP, IMAP, Peppol, calendrier ou IA de production n'est transmise.
+
+Comptes fictifs : terrain@example.invalid (terrain) et gestion@example.invalid (gestion). Le mot de passe est conservé séparément dans le dossier privé de remise, jamais dans cette documentation publique.
+Parcours : ouvrir « Accès de démonstration », saisir les identifiants, essayer planning, pointage, messages, notes vocales et photos. Pour les comptes réels : se déconnecter et choisir « Revenir à mon équipe ».
+Le planning synthétique couvre les 90 jours suivant un démarrage. Redémarrer le service avant une nouvelle soumission pour prolonger ces dates sans supprimer les essais des examinateurs.
+Maintenir cet espace disponible pendant tout l'examen et les examens ultérieurs. Vérifier connexion, stockage et disponibilité avant chaque soumission.

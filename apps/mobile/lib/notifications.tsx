@@ -4,7 +4,7 @@ import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import { apiSend, getToken } from './api';
+import { apiSend, getToken, storageKey } from './api';
 import { useSession } from './session';
 import { Text } from './AppText';
 import { T } from './theme';
@@ -35,14 +35,14 @@ async function registerDevice(ask: boolean) {
   await apiSend('/api/push/native/subscribe', 'POST', { token }, false);
   // If logout raced with the HTTP response, do not mark another session registered.
   if (await getToken() !== auth) return;
-  await AsyncStorage.multiSet([[TOKEN, token], [ENABLED, '1']]);
+  await AsyncStorage.multiSet([[storageKey(TOKEN), token], [storageKey(ENABLED), '1']]);
 }
 
 export function unregisterNotifications() { return serializeDevice(unregisterDevice); }
 async function unregisterDevice() {
-  const token = await AsyncStorage.getItem(TOKEN);
+  const token = await AsyncStorage.getItem(storageKey(TOKEN));
   if (token) await apiSend('/api/push/native/unsubscribe', 'POST', { token }, false);
-  await AsyncStorage.multiRemove([TOKEN, ENABLED]);
+  await AsyncStorage.multiRemove([storageKey(TOKEN), storageKey(ENABLED)]);
   await Notifications.dismissAllNotificationsAsync();
 }
 
@@ -51,7 +51,7 @@ export function NotificationBridge() {
   const router = useRouter();
   useEffect(() => {
     if (!user) return;
-    const refresh = async () => { if (await AsyncStorage.getItem(ENABLED) === '1') await register(false); };
+    const refresh = async () => { if (await AsyncStorage.getItem(storageKey(ENABLED)) === '1') await register(false); };
     void refresh().catch(() => {});
     const state = AppState.addEventListener('change', s => { if (s === 'active') void refresh().catch(() => {}); });
     let last: string | null = null;
@@ -82,7 +82,7 @@ export function NotificationSettings() {
     } catch (e) { Alert.alert('Notifications', e instanceof Error ? e.message : 'Vérifiez votre connexion.'); }
     finally { setBusy(false); }
   }
-  useEffect(() => { void AsyncStorage.getItem(ENABLED).then(v => { if (v === '1') setStatus('Notifications activées dans JJD. Vérifiez aussi les autorisations du téléphone.'); }); }, []);
+  useEffect(() => { void AsyncStorage.getItem(storageKey(ENABLED)).then(v => { if (v === '1') setStatus('Notifications activées dans JJD. Vérifiez aussi les autorisations du téléphone.'); }); }, []);
   return <View style={{ gap: 4 }}><Text style={{ fontWeight: '700' }}>Notifications</Text><Text>{status}</Text>
     <Pressable accessibilityRole="button" disabled={busy} onPress={() => change(true)} style={{ paddingVertical: 12 }}><Text style={{ color: T.primary }}>{busy ? 'Mise à jour…' : 'Activer les notifications'}</Text></Pressable>
     <Pressable accessibilityRole="button" disabled={busy} onPress={() => change(false)} style={{ paddingVertical: 12 }}><Text>Désactiver sur ce téléphone</Text></Pressable>

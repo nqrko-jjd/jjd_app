@@ -20,6 +20,7 @@ jobs:
       DATABASE_URL: file:./mobile-launch.db
       EXPO_PUBLIC_API_URL: http://127.0.0.1:4100
       UPLOADS_DIR: /tmp/jjd-ios-test-uploads
+      MAESTRO_DRIVER_STARTUP_TIMEOUT: '300000'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -59,6 +60,8 @@ jobs:
           app=$(find /tmp/jjd-ios-build/Build/Products/Release-iphonesimulator -maxdepth 1 -name '*.app' -print -quit)
           xcrun simctl install "$device" "$app"
           xcrun simctl privacy "$device" grant microphone be.jjdconsult.chantier
+          xcrun simctl launch "$device" be.jjdconsult.chantier
+          xcrun simctl io "$device" screenshot tmp/ios-launch/00-native-launch.png
           "$HOME/.maestro/bin/maestro" --device "$device" test --debug-output tmp/ios-launch scripts/ios-launch.yaml
       - uses: actions/upload-artifact@v4
         if: always()
@@ -68,3 +71,4 @@ jobs:
             tmp/ios-launch/
             /tmp/jjd-ios-build.log
             /tmp/jjd-ios-api.log
+            ~/.maestro/tests/

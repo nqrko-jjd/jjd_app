@@ -1,5 +1,6 @@
 import { PrivacyLinks } from '@/lib/PrivacyLinks';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { initializeEnvironment, isDemoEnvironment, selectEnvironment } from '@/lib/api';
 import { View, TextInput, Pressable, StyleSheet, KeyboardAvoidingView, Platform, Image, ScrollView } from 'react-native';
 import { Text } from '@/lib/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -15,6 +16,17 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [demo, setDemo] = useState(false);
+  useEffect(() => { void initializeEnvironment().then(() => setDemo(isDemoEnvironment())); }, []);
+
+  async function changeSpace() {
+    setBusy(true); setErr(null);
+    try {
+      await selectEnvironment(!demo);
+      setDemo(isDemoEnvironment()); setEmail(''); setPassword('');
+    } catch (e) { setErr(e instanceof Error ? e.message : 'Changement d’espace impossible.'); }
+    finally { setBusy(false); }
+  }
 
   async function submit() {
     setErr(null);
@@ -36,6 +48,7 @@ Tout au même endroit.</Text></LinearGradient>
         <View style={{ marginTop: 14 }}><LanguagePicker compact /></View>
         <Text style={{fontSize:26,fontWeight:'800',color:T.ink,marginTop:14}}>Bienvenue</Text>
         <Text style={s.sub}>Connectez-vous à votre espace de travail.</Text>
+        {demo && <Text style={s.sub}>Démonstration — données fictives. Utilisez les identifiants de démonstration fournis par JJD.</Text>}
         <Text style={s.fieldLabel}>E-mail ou n° de GSM</Text>
         <TextInput
           style={s.input}
@@ -60,6 +73,9 @@ Tout au même endroit.</Text></LinearGradient>
           <Text style={s.btnTxt}>{busy ? 'Connexion…' : 'Se connecter'}</Text>
         </Pressable>
         <PrivacyLinks />
+        <Pressable accessibilityRole="button" onPress={changeSpace} disabled={busy} style={{ paddingVertical: 12 }}>
+          <Text style={{ color: T.primary }}>{demo ? 'Revenir à mon équipe' : 'Accès de démonstration'}</Text>
+        </Pressable>
       </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

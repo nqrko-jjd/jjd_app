@@ -75,7 +75,7 @@ jobs:
           xcrun simctl io "$device" screenshot tmp/ios-launch/00-native-launch.png
           "$HOME/.maestro/bin/maestro" --device "$device" test --debug-output tmp/ios-launch scripts/ios-launch.yaml
           mkdir -p tmp/ios-launch/iphone
-          cp tmp/ios-launch/*.png tmp/ios-launch/iphone/
+          find tmp/ios-launch -path '*/takeScreenshot/*.png' -exec cp {} tmp/ios-launch/iphone/ \;
           xcrun simctl shutdown "$device"
           tablet=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin); a=[x for group in d["devices"].values() for x in group if "iPad" in x["name"]]; print(next((x["udid"] for x in a if "Pro 13" in x["name"]),a[0]["udid"]))')
           xcrun simctl boot "$tablet"
@@ -84,7 +84,7 @@ jobs:
           xcrun simctl privacy "$tablet" grant microphone be.jjdconsult.chantier
           "$HOME/.maestro/bin/maestro" --device "$tablet" test --debug-output tmp/ios-launch/ipad scripts/ios-launch.yaml
           mkdir -p tmp/ios-launch/ipad
-          cp tmp/ios-launch/*.png tmp/ios-launch/ipad/
+          find tmp/ios-launch/ipad -path '*/takeScreenshot/*.png' -exec cp {} tmp/ios-launch/ipad/ \;
       - uses: actions/upload-artifact@v4
         if: always()
         with:

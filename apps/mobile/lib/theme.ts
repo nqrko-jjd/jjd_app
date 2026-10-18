@@ -1,6 +1,7 @@
-// Même charte que l'appli web (apps/web/src/app/globals.css) : vert profond + or, DM Sans.
+// Reference: JJD — Espace de gestion, Sites mobile concept (18 October 2026).
+// DM Sans body + Manrope headings, pale sage surfaces, forest green and soft gold.
 export const T = {
-  paper: '#f4f6f6',
+  paper: '#f4f7f4',
   surface: '#ffffff',
   surface2: '#eef3ef',
   ink: '#173b31',
@@ -8,13 +9,13 @@ export const T = {
   ink3: '#87958d',
   line: '#e0e7e3',
   primary: '#124b3a',
-  primarySoft: '#e9efe9',
+  primarySoft: '#e5eee1',
   accent: '#a87529',
-  gold: '#d8b674',
+  gold: '#e0c68e',
   goldSoft: '#f1e8d6',
   nav: '#0a2c24',
   // dégradé "hero" — même paire que .kpi.hero / .detail-hero côté web (linear-gradient(130deg, --nav-bg-2, --nav-bg))
-  heroFrom: '#123e30',
+  heroFrom: '#184b38',
   heroTo: '#0a2c24',
   ok: '#124b3a',
   okSoft: '#e9efe9',
@@ -28,6 +29,7 @@ export const T = {
   crit: '#ad4a41',
   critSoft: '#f5e4e1',
   radius: 20,
+  headingFont: 'Manrope_700Bold',
   content: { width: '100%' as const, maxWidth: 960, alignSelf: 'center' as const, paddingHorizontal: 18, paddingVertical: 20, paddingBottom: 32 },
   shadow: { shadowColor: '#123e30', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.045, shadowRadius: 16, elevation: 1 },
 };

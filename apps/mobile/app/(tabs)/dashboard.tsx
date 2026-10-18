@@ -5,7 +5,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { apiGet } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { Feather } from '@expo/vector-icons';
-import { Card, Label, Muted, Loading, eur, ScreenHeader } from '@/lib/ui';
+import { Card, Label, Muted, Loading, eur, ScreenHeader, HeroTile } from '@/lib/ui';
 import { T } from '@/lib/theme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FieldHome } from './index';
@@ -82,13 +82,12 @@ function BureauHome() {
       <ScreenHeader eyebrow={todayLabel()} title={first ? `Bonjour ${first},` : 'Bonjour,'} description={tr("Ce qui demande votre attention aujourd’hui.")} avatar={first?.slice(0, 1) || 'J'} />
 
       <View style={s.tiles}>
-        {tiles.map((t) => (
-          <Pressable key={t.label} accessibilityRole="button" accessibilityLabel={`${t.label} : ${t.value}`} onPress={() => go(t.to)} style={({ pressed }) => [s.tile, t.alert && s.tileAlert, pressed && { transform: [{ scale: 0.97 }] }]}>
-            <View style={[s.tileIc, t.alert && { backgroundColor: T.kpiWarnIconBg }]}><Feather name={t.icon} size={19} color={t.alert ? T.kpiWarnFg : T.primary} /></View>
-            <Text style={[s.tileLabel, t.alert && { color: T.kpiWarnFg }]}>{t.label}</Text>
-            <Text style={[s.tileValue, t.alert && { color: T.kpiWarnFg }]} numberOfLines={1}>{t.value}</Text>
-          </Pressable>
-        ))}
+        <Pressable accessibilityRole="button" accessibilityLabel={tr('Facturé ce mois')} onPress={() => go('/analyse')} style={{flexGrow:1,flexBasis:150}}>
+          <HeroTile icon="bar-chart-2"><Text style={s.heroLabel}>Facturé ce mois</Text><Text style={s.heroValue}>{eur(data.kpis.invoicedMonth)}</Text></HeroTile>
+        </Pressable>
+        <Pressable accessibilityRole="button" onPress={() => go('/analyse')} style={s.metric}><Text style={s.tileLabel}>Encaissé ce mois</Text><Text style={s.metricValue}>{eur(data.kpis.paidMonth)}</Text><Feather name="trending-up" size={18} color={T.primary}/></Pressable>
+        <Pressable accessibilityRole="button" onPress={() => go('/documents')} style={[s.metric,s.tileAlert]}><Text style={s.tileLabel}>Factures en retard</Text><Text style={[s.metricValue,{color:T.kpiWarnFg}]}>{eur(data.kpis.overdueAmount)}</Text><Text style={s.tileLabel}>{data.kpis.overdueCount} facture(s)</Text></Pressable>
+        <Pressable accessibilityRole="button" onPress={() => go('/chantiers?status=in_progress')} style={s.metric}><Text style={s.tileLabel}>Chantiers en cours</Text><Text style={s.metricValue}>{data.kpis.openWorksites}</Text><Feather name="home" size={18} color={T.primary}/></Pressable>
       </View>
 
       <View>
@@ -119,7 +118,7 @@ function BureauHome() {
       </View>
 
       <View>
-        <Label>À suivre</Label>
+        <Text accessibilityRole="header" style={s.sectionTitle}>À traiter en priorité</Text>
         {data.alerts.length === 0 ? (
           <Card><Muted>Tout est à jour : aucune alerte à traiter.</Muted></Card>
         ) : (
@@ -138,11 +137,26 @@ function BureauHome() {
           </View>
         )}
       </View>
+      <Text accessibilityRole="header" style={s.sectionTitle}>Accès rapides</Text>
+      <View style={s.tiles}>
+        {tiles.map((t) => (
+          <Pressable key={t.label} accessibilityRole="button" accessibilityLabel={`${t.label} : ${t.value}`} onPress={() => go(t.to)} style={({ pressed }) => [s.tile, t.alert && s.tileAlert, pressed && { transform: [{ scale: 0.97 }] }]}>
+            <View style={[s.tileIc, t.alert && { backgroundColor: T.kpiWarnIconBg }]}><Feather name={t.icon} size={19} color={t.alert ? T.kpiWarnFg : T.primary} /></View>
+            <Text style={[s.tileLabel, t.alert && { color: T.kpiWarnFg }]}>{t.label}</Text>
+            <Text style={[s.tileValue, t.alert && { color: T.kpiWarnFg }]} numberOfLines={1}>{t.value}</Text>
+          </Pressable>
+        ))}
+      </View>
     </ScrollView>
   );
 }
 
 const s = StyleSheet.create({
+  sectionTitle: { fontFamily:T.headingFont,fontSize:20,fontWeight:'700',color:T.ink,letterSpacing:-0.5,marginBottom:10 },
+  metric: {...T.shadow,flexGrow:1,flexBasis:150,borderRadius:24,borderWidth:1,borderColor:T.line,backgroundColor:T.surface,padding:20,gap:10,justifyContent:'center'},
+  metricValue: {fontFamily:T.headingFont,fontSize:23,fontWeight:'700',color:T.ink,letterSpacing:-0.6},
+  heroLabel: {fontSize:13,color:'#d0dfd5',paddingRight:28},
+  heroValue: {fontFamily:T.headingFont,fontSize:23,fontWeight:'700',color:'#fff',marginTop:16,letterSpacing:-0.6},
   tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   tile: { ...T.shadow, flexGrow: 1, flexBasis: 150, backgroundColor: T.surface, borderWidth: 1, borderColor: T.line, borderRadius: 20, padding: 16, gap: 6, minHeight: 112 },
   tileAlert: { backgroundColor: T.kpiWarnBg, borderColor: T.kpiWarnBorder },
@@ -171,8 +185,8 @@ export default function Dashboard() {
         <View style={sw.seg}>
           {([['bureau', 'Bureau', 'briefcase'], ['terrain', 'Terrain', 'hard-hat']] as const).map(([k, label]) => (
             <Pressable key={k} accessibilityRole="button" onPress={() => pick(k)} style={[sw.btn, mode === k && sw.on]}>
-              <Feather name={k === 'bureau' ? 'briefcase' : 'map-pin'} size={16} color={mode === k ? '#fff' : T.ink2} />
-              <Text style={[sw.txt, mode === k && { color: '#fff' }]}>{label}</Text>
+              <Feather name={k === 'bureau' ? 'briefcase' : 'map-pin'} size={16} color={mode === k ? T.primary : T.ink2} />
+              <Text style={[sw.txt, mode === k && { color: T.primary }]}>{label}</Text>
             </Pressable>
           ))}
         </View>
@@ -186,6 +200,6 @@ const sw = StyleSheet.create({
   wrap: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 2, alignItems: 'center' },
   seg: { flexDirection: 'row', backgroundColor: T.surface2, borderRadius: 16, padding: 4, width: '100%', maxWidth: 440 },
   btn: { flex: 1, flexDirection: 'row', gap: 8, paddingVertical: 11, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
-  on: { backgroundColor: T.primary },
+  on: { ...T.shadow, backgroundColor: T.surface },
   txt: { fontWeight: '800', fontSize: 14.5, color: T.ink2 },
 });

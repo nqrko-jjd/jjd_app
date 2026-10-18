@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { TextInput } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { Manrope_700Bold } from '@expo-google-fonts/manrope';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
 import {
@@ -42,7 +43,7 @@ function Guard() {
       screenOptions={{
         contentStyle: { backgroundColor: T.paper },
         headerStyle: { backgroundColor: T.surface },
-        headerTitleStyle: { color: T.ink, fontWeight: '700', fontFamily: 'DMSans_700Bold' },
+        headerTitleStyle: { color: T.ink, fontWeight: '700', fontFamily: T.headingFont },
         headerTintColor: T.primary,
         headerShadowVisible: false,
         headerBackTitle: tr('Retour'),
@@ -56,6 +57,7 @@ function Guard() {
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
+    Manrope_700Bold,
     DMSans_400Regular,
     DMSans_500Medium,
     DMSans_600SemiBold,

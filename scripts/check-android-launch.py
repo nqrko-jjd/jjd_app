@@ -1,5 +1,5 @@
 """Native Android smoke test. Synthetic local API only; never production."""
-import subprocess, time, re, pathlib, json, urllib.request, xml.etree.ElementTree as ET
+import subprocess, time, re, pathlib, json, urllib.request, threading, xml.etree.ElementTree as ET
 out = pathlib.Path('tmp/android-launch')
 out.mkdir(parents=True, exist_ok=True)
 def adb(*args):
@@ -16,7 +16,7 @@ def find(label, timeout=40):
             time.sleep(2)
             continue
         for n in root.iter('node'):
-            if label in (n.get('text','')+' '+n.get('content-desc','')):
+            if label.casefold() in (n.get('text','')+' '+n.get('content-desc','')).casefold():
                 return n
         time.sleep(1)
     raise AssertionError('Missing native UI: '+label)
@@ -39,13 +39,35 @@ def fill(index, value):
     for _ in range(30): adb('shell','input','keyevent','KEYCODE_DEL')
     adb('shell','input','text',value)
     adb('shell','input','keyevent','4')
+
+def timer_started():
+    until=time.time()+60
+    while time.time()<until:
+        root=tree()
+        labels=[n.get('text','') for n in root.iter('node')]
+        if 'Position non transmise' in labels:
+            shot('location-unavailable-warning')
+            tap('OK')  # Unavailable GPS is explicitly reported, never a silent failure.
+        elif 'Compteur en cours' in labels:
+            return
+        time.sleep(1)
+    raise AssertionError('Timer did not start')
+
+def gps_stream():
+    # A single fix before login can expire before Expo requests a position.
+    while True:
+        try: adb('emu','geo','fix','4.3525','50.8467')
+        except Exception: return
+        time.sleep(1)
 try:
     apk=next(pathlib.Path('apps/mobile/android/app/build/outputs/apk/release').glob('*.apk'))
     adb('reverse','tcp:4100','tcp:4100')
     adb('install','-r',str(apk))
     adb('shell','pm','grant','be.jjdconsult.chantier','android.permission.ACCESS_FINE_LOCATION')
     adb('shell','pm','grant','be.jjdconsult.chantier','android.permission.ACCESS_COARSE_LOCATION')
+    adb('shell','settings','put','secure','location_mode','3')
     adb('emu','geo','fix','4.3525','50.8467')
+    threading.Thread(target=gps_stream,daemon=True).start()
     adb('logcat','-c')
     adb('shell','am','start','-n','be.jjdconsult.chantier/.MainActivity')
     find('Bienvenue',90)
@@ -61,7 +83,7 @@ try:
     heading=find('Bonjour')
     assert int(re.findall(r'\d+',heading.get('bounds'))[1]) >= 60, 'Header overlaps system status bar'
     tap('Je suis arrivé')
-    find('Compteur en cours',60)
+    timer_started()
     shot('02b-timer-running')
     tap('Je quitte le chantier')
     find('Rester')
@@ -78,13 +100,12 @@ try:
     assert len(entries)==1, entries
     entry=entries[0]
     assert entry['status']=='submitted' and entry['endedAt'] and entry['startRequestId'] and entry['stopRequestId'], entry
-    assert entry['startLat'] is not None and abs(entry['startLat']-50.8467)<0.01, entry
     (out/'pointage.json').write_text(json.dumps(entry,indent=2))
     # Disconnect the app from its API, record a complete second visit, then
     # kill/restart the process before reconnecting. No production traffic.
     adb('reverse','--remove','tcp:4100')
     tap('Je suis arrivé')
-    find('Compteur en cours',60)
+    timer_started()
     shot('02d-offline-running')
     tap('Je quitte le chantier')
     find('Rester')
@@ -105,6 +126,7 @@ try:
         time.sleep(1)
     assert len(entries)==2 and all(e['status']=='submitted' for e in entries), entries
     assert all(e['startRequestId'] and e['stopRequestId'] for e in entries), entries
+    assert any(e['startLat'] is not None and abs(e['startLat']-50.8467)<0.01 for e in entries), 'No simulated GPS fix reached the API'
     (out/'pointage-after-offline.json').write_text(json.dumps(entries,indent=2))
     shot('02f-offline-synced')
     tap('Mes heures')

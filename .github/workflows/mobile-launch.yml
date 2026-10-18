@@ -1,0 +1,82 @@
+name: Mobile native launch check
+on:
+  pull_request:
+    paths:
+      - 'apps/mobile/**'
+      - 'scripts/check-android-launch.py'
+      - '.github/workflows/mobile-launch.yml'
+permissions:
+  contents: read
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      CI: '1'
+      JJD_SKIP_ENV_FILE: '1'
+      DATABASE_URL: file:./mobile-launch.db
+      EXPO_PUBLIC_API_URL: http://127.0.0.1:4100
+      UPLOADS_DIR: /tmp/jjd-mobile-test-uploads
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            apps/mobile/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - run: npm ci --no-audit --no-fund
+      - run: npm ci --no-audit --no-fund
+        working-directory: apps/mobile
+      - run: npm run typecheck
+        working-directory: apps/mobile
+      - name: Export iOS JavaScript bundle
+        run: npx expo export --platform ios --output-dir /tmp/jjd-ios-export
+        working-directory: apps/mobile
+      - run: npm run build:shared && npm run prisma:generate --workspace @jjd/api && npm run db:deploy:safe --workspace @jjd/api && npm run seed --workspace @jjd/api
+      - name: Start isolated API without integrations
+        run: |
+          mkdir -p /tmp/jjd-mobile-test-uploads
+          node --import tsx --input-type=module -e "import {createApp} from './apps/api/src/app.ts'; createApp().listen(4100,'0.0.0.0');" > /tmp/jjd-mobile-api.log 2>&1 &
+      - name: Generate Android test project
+        working-directory: apps/mobile
+        run: |
+          npx expo prebuild --platform android --no-install
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('android/app/src/main/AndroidManifest.xml')
+          s=p.read_text()
+          if 'android:usesCleartextTraffic=' not in s:
+              s=s.replace('<application ', '<application android:usesCleartextTraffic="true" ', 1)
+          p.write_text(s)
+          PY
+      - name: Build bundled native APK for emulator
+        working-directory: apps/mobile/android
+        run: ./gradlew :app:assembleRelease -PreactNativeArchitectures=x86_64 --no-daemon --max-workers=2
+      - name: Enable emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Real Android emulator smoke test
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          profile: pixel_6
+          disable-animations: true
+          script: python3 scripts/check-android-launch.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-launch-evidence
+          path: |
+            tmp/android-launch/
+            /tmp/jjd-mobile-api.log

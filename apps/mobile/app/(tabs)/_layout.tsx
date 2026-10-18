@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSession } from '@/lib/session';
 import { apiGet } from '@/lib/api';
 import { T } from '@/lib/theme';
+import { BrandHeader } from '@/lib/BrandHeader';
 import { tr } from '@/lib/i18n';
 
 type FeatherName = keyof typeof Feather.glyphMap;
@@ -17,7 +18,7 @@ function Icon({ name, color, focused }: { name: FeatherName; color: ColorValue; 
       style={{
         width: 44,
         height: 30,
-        borderRadius: 12,
+        borderRadius: 10,
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: focused ? T.primarySoft : 'transparent',
@@ -64,11 +65,14 @@ export default function TabsLayout() {
   return (
     <Tabs
       screenLayout={({ children, options }) => (
-        <View style={{ flex: 1, backgroundColor: T.paper, paddingTop: options.headerShown === false ? insets.top : 0 }}>{children}</View>
+        <View style={{ flex: 1, backgroundColor: T.paper, paddingTop: options.headerShown === false ? insets.top : 0 }}>
+          {options.headerShown === false && <BrandHeader />}
+          {children}
+        </View>
       )}
       screenOptions={{
         headerStyle: { backgroundColor: T.paper },
-        headerTitleStyle: { color: T.ink, fontWeight: '700', fontFamily: 'DMSans_700Bold' },
+        headerTitleStyle: { color: T.ink, fontWeight: '700', fontFamily: T.headingFont },
         headerShadowVisible: false,
         tabBarActiveTintColor: T.primary,
         tabBarInactiveTintColor: T.ink2,
@@ -77,17 +81,16 @@ export default function TabsLayout() {
         // sur la barre flottante, notamment sur les vieux Android sans navigation gestuelle.
         tabBarStyle: {
           backgroundColor: T.surface,
-          borderTopWidth: 0,
-          borderTopLeftRadius: 24,
-          borderTopRightRadius: 24,
+          borderTopWidth: 1,
+          borderTopColor: T.line,
           height: 68 + insets.bottom,
           paddingTop: 10,
           paddingBottom: 8 + insets.bottom,
           shadowColor: '#0f2a20',
-          shadowOpacity: 0.08,
+          shadowOpacity: 0.03,
           shadowRadius: 16,
           shadowOffset: { width: 0, height: -4 },
-          elevation: 12,
+          elevation: 3,
         },
         tabBarLabelStyle: { fontSize: 11, fontWeight: '600', fontFamily: 'DMSans_600SemiBold' },
       }}

@@ -202,8 +202,8 @@ export function FieldHome({ embedded = false }: { embedded?: boolean }) {
       {linked && (running ? (
         <HeroTile icon="clock">
           <Text style={s.heroLabel}>Compteur en cours</Text>
-          <Text style={s.heroSub}>{running.worksite?.ref} — {running.worksite?.title}</Text>
           <Text style={s.heroBig}>{elapsed(running.startedAt)}</Text>
+          <Text style={s.heroSub}>{running.worksite?.ref} — {running.worksite?.title}</Text>
           <Pressable disabled={busy} accessibilityRole="button" style={({ pressed }) => [s.stopBtn, pressed && { opacity: 0.85 }]} onPress={() => Alert.alert('Quitter le chantier ?', 'Ton temps de présence sera enregistré.', [{ text: 'Rester', style: 'cancel' }, { text: 'Je quitte', style: 'destructive', onPress: stop }])}>
             <Text style={[s.btnTxt, { color: '#fff', fontSize: 17 }]}>Je quitte le chantier</Text>
           </Pressable>
@@ -211,7 +211,8 @@ export function FieldHome({ embedded = false }: { embedded?: boolean }) {
       ) : next ? (
         <HeroTile icon="play">
           <Text style={s.heroLabel}>Prochain chantier</Text>
-          <Text style={[s.heroSub, { fontSize: 16, fontWeight: '700', color: '#fff' }]}>{next.worksite.ref} — {next.title || next.worksite.title}</Text>
+          <Text style={s.heroBig}>00:00</Text>
+          <Text style={s.heroSub}>{next.worksite.ref} — {next.title || next.worksite.title}</Text>
           <Text style={s.heroSub}>{next.allDay ? 'Toute la journée' : hm(next.startAt) + ' – ' + hm(next.endAt)}{next.worksite.city ? ' · ' + next.worksite.city : ''}</Text>
           <Pressable disabled={busy} accessibilityRole="button" style={({ pressed }) => [s.arriveBtn, pressed && { transform: [{ scale: 0.98 }] }]} onPress={() => start(next.worksite.id)}>
             <Feather name="play" size={20} color="#241c05" />
@@ -221,7 +222,7 @@ export function FieldHome({ embedded = false }: { embedded?: boolean }) {
       ) : (
         <HeroTile icon="coffee">
           <Text style={s.heroLabel}>Aujourd’hui</Text>
-          <Text style={s.heroBig}>Pas de chantier prévu</Text>
+          <Text style={[s.heroBig, {fontSize:28}]}>Pas de chantier prévu</Text>
           <Text style={s.heroSub}>Le planning apparaîtra ici dès sa validation.</Text>
         </HeroTile>
       ))}
@@ -312,7 +313,7 @@ const s = StyleSheet.create({
   eyebrow: { fontSize: 11.5, color: T.ink3, textTransform: 'uppercase', letterSpacing: 0.6, fontWeight: '700', marginBottom: 4 },
   hi: { fontSize: 22, fontWeight: '800', color: T.ink },
   queued: { color: T.accent, fontWeight: '600' },
-  section: { fontSize: 13, fontWeight: '700', color: T.ink2, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 6 },
+  section: { fontFamily: T.headingFont, fontSize: 19, fontWeight: '700', color: T.ink, letterSpacing: -0.4, marginTop: 8 },
   card: { backgroundColor: T.surface, borderRadius: T.radius, borderWidth: 1, borderColor: T.line, padding: 16, gap: 6 },
   label: { fontSize: 12, color: T.ink2, textTransform: 'uppercase', letterSpacing: 0.5 },
   wsRef: { lineHeight: 24, fontSize: 17, fontWeight: '600', color: T.ink },
@@ -321,12 +322,12 @@ const s = StyleSheet.create({
   btn: { backgroundColor: T.primary, borderRadius: 14, padding: 15, alignItems: 'center', marginTop: 8 },
   btnGold: { backgroundColor: T.gold },
   btnTxt: { color: '#fff', fontWeight: '700', fontSize: 15 },
-  heroLabel: { fontSize: 12.5, color: 'rgba(255,255,255,0.75)', fontWeight: '600' },
+  heroLabel: { fontSize: 11, color: T.gold, textTransform: 'uppercase', letterSpacing: 1, fontWeight: '700', paddingRight: 32 },
   heroSub: { fontSize: 13, color: 'rgba(255,255,255,0.85)', marginTop: 2 },
-  heroBig: { fontSize: 34, fontWeight: '800', color: '#fff', marginVertical: 6, fontVariant: ['tabular-nums'] },
+  heroBig: { fontFamily: T.headingFont, fontSize: 42, fontWeight: '700', color: '#fff', marginVertical: 6, fontVariant: ['tabular-nums'] },
   stopBtn: { backgroundColor: T.crit, borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginTop: 8 },
-  arriveBtn: { flexDirection: 'row', gap: 10, backgroundColor: T.gold, borderRadius: 16, paddingVertical: 17, alignItems: 'center', justifyContent: 'center', marginTop: 12 },
-  arriveTxt: { color: '#241c05', fontWeight: '800', fontSize: 18 },
+  arriveBtn: { flexDirection: 'row', gap: 10, backgroundColor: T.gold, borderRadius: 11, paddingVertical: 17, alignItems: 'center', justifyContent: 'center', marginTop: 12 },
+  arriveTxt: { color: '#29492e', fontWeight: '700', fontSize: 16 },
   tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   tile: { ...T.shadow, flexGrow: 1, flexBasis: 150, backgroundColor: T.surface, borderWidth: 1, borderColor: T.line, borderRadius: 20, padding: 14, gap: 6 },
   tileAlert: { backgroundColor: T.kpiWarnBg, borderColor: T.kpiWarnBorder },

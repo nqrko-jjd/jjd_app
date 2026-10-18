@@ -1,5 +1,5 @@
 import { useCallback, useState, type ReactNode } from 'react';
-import { View, StyleSheet, ActivityIndicator, Pressable, FlatList, TextInput, RefreshControl, Image } from 'react-native';
+import { View, StyleSheet, ActivityIndicator, Pressable, FlatList, TextInput, RefreshControl, Image, type StyleProp, type ViewStyle } from 'react-native';
 import { Text } from '@/lib/AppText';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -10,9 +10,9 @@ import { T } from './theme';
 import { tr, dateLocale, Alert } from './i18n';
 
 /** Bannière/tuile vert dégradé — mise en avant d'une métrique ou d'un titre de fiche (voir maquette). */
-export function HeroTile({ children, icon }: { children: ReactNode; icon?: keyof typeof Feather.glyphMap }) {
+export function HeroTile({ children, icon, style }: { children: ReactNode; icon?: keyof typeof Feather.glyphMap; style?: StyleProp<ViewStyle> }) {
   return (
-    <LinearGradient colors={[T.heroFrom, T.heroTo]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={st.hero}>
+    <LinearGradient colors={[T.heroFrom, T.heroTo]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[st.hero, style]}>
       {icon && (
         <View style={st.heroIcon}>
           <Feather name={icon} size={16} color="#fff" />
@@ -93,9 +93,12 @@ export function PhotoHeader({
   );
 }
 
-export function ScreenHeader({title,eyebrow,description,avatar}: {title:string;eyebrow?:string;description?:string;avatar?:string}) {
- const router=useRouter();
- return <View style={{flexDirection:'row',alignItems:'flex-start',gap:16,marginBottom:6}}><View style={{flex:1}}>{eyebrow&&<Text style={{fontSize:10.5,color:T.ink2,letterSpacing:1.3,textTransform:'uppercase',fontWeight:'700',marginBottom:7}}>{eyebrow}</Text>}<Text accessibilityRole="header" style={{fontSize:28,fontWeight:'800',letterSpacing:-.9,color:T.ink,lineHeight:35}}>{title}</Text>{description&&<Text style={{fontSize:13,color:T.ink2,lineHeight:20,marginTop:6}}>{description}</Text>}</View>{avatar&&<Pressable accessibilityLabel={tr("Ouvrir mon espace")} onPress={()=>router.push('/plus' as never)} style={{width:44,height:44,borderRadius:16,backgroundColor:T.goldSoft,alignItems:'center',justifyContent:'center'}}><Text style={{fontSize:16,fontWeight:'700',color:T.primary}}>{avatar.slice(0,2).toUpperCase()}</Text></Pressable>}</View>;
+export function ScreenHeader({title,eyebrow,description}: {title:string;eyebrow?:string;description?:string;avatar?:string}) {
+ return <View style={{gap:6,marginBottom:8}}>
+   {eyebrow && <Text style={{fontSize:11,color:T.ink2,letterSpacing:1.2,textTransform:'uppercase',fontWeight:'700',marginBottom:4}}>{eyebrow}</Text>}
+   <Text accessibilityRole="header" style={{fontFamily:T.headingFont,fontSize:28,fontWeight:'700',letterSpacing:-1,color:T.ink,lineHeight:37}}>{title}</Text>
+   {description && <Text style={{fontSize:14,color:T.ink2,lineHeight:22}}>{description}</Text>}
+ </View>;
 }
 export function EmptyState({title,description,icon='inbox'}:{title:string;description?:string;icon?:keyof typeof Feather.glyphMap}) {
  return <View style={{padding:30,backgroundColor:T.surface,borderRadius:20,borderWidth:1,borderColor:T.line,alignItems:'center',gap:12}}><View style={{padding:14,borderRadius:18,backgroundColor:T.primarySoft}}><Feather name={icon} size={24} color={T.primary}/></View><Text style={{fontWeight:'700',fontSize:16,textAlign:'center'}}>{title}</Text>{description&&<Text style={{color:T.ink2,fontSize:13,lineHeight:20,textAlign:'center'}}>{description}</Text>}</View>;
@@ -214,7 +217,7 @@ const st = StyleSheet.create({
   searchWrap: { backgroundColor: T.surface, borderWidth: 1, borderColor: T.line, borderRadius: 14, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 10 },
   search: { flex: 1, minHeight: 48, paddingVertical: 12, fontSize: 14, color: T.ink },
   listRow: { ...T.shadow, backgroundColor: T.surface, borderWidth: 1, borderColor: T.line, borderRadius: 18, padding: 18, gap: 14, flexDirection: 'row', alignItems: 'center', minHeight: 78 },
-  hero: { borderRadius: 24, padding: 24, gap: 8, overflow: 'hidden' },
+  hero: { ...T.shadow, borderRadius: 24, padding: 24, gap: 8, overflow: 'hidden' },
   heroIcon: {
     position: 'absolute', top: 20, right: 20, width: 34, height: 34, borderRadius: 12,
     backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center',

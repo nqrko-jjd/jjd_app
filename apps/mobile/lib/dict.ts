@@ -1,5 +1,11 @@
 // Généré : traductions des textes de l'appli — clé = texte français, valeur = [anglais, portugais du Brésil].
 export const DICT: Record<string, [string, string]> = {
+ "À traiter en priorité": ["Priority actions", "Prioridades"],
+ "Accès rapides": ["Quick access", "Acesso rápido"],
+ "Chantiers en cours": ["Active worksites", "Obras em andamento"],
+ "Factures en retard": ["Overdue invoices", "Faturas em atraso"],
+ "Encaissé ce mois": ["Collected this month", "Recebido este mês"],
+ "Facturé ce mois": ["Invoiced this month", "Faturado este mês"],
  "(sans objet)": [
   "(not applicable)",
   "(não se aplica)"

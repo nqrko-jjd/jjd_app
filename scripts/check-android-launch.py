@@ -80,6 +80,33 @@ try:
     assert entry['status']=='submitted' and entry['endedAt'] and entry['startRequestId'] and entry['stopRequestId'], entry
     assert entry['startLat'] is not None and abs(entry['startLat']-50.8467)<0.01, entry
     (out/'pointage.json').write_text(json.dumps(entry,indent=2))
+    # Disconnect the app from its API, record a complete second visit, then
+    # kill/restart the process before reconnecting. No production traffic.
+    adb('reverse','--remove','tcp:4100')
+    tap('Je suis arrivé')
+    find('Compteur en cours',60)
+    shot('02d-offline-running')
+    tap('Je quitte le chantier')
+    find('Rester')
+    tap_node(next(n for n in tree().iter('node') if n.get('text','').casefold()=='je quitte'))
+    find('Bonne fin de journée',60)
+    tap('Passer')
+    adb('shell','am','force-stop','be.jjdconsult.chantier')
+    adb('shell','am','start','-n','be.jjdconsult.chantier/.MainActivity')
+    find('synchroniser',90)
+    shot('02e-offline-restarted')
+    adb('reverse','tcp:4100','tcp:4100')
+    tap('Mes heures')
+    tap('Aujourd’hui')
+    find('Je suis arrivé',60)
+    for _ in range(30):
+        entries=json.load(urllib.request.urlopen(request))['items']
+        if len(entries)==2 and all(e['status']=='submitted' for e in entries): break
+        time.sleep(1)
+    assert len(entries)==2 and all(e['status']=='submitted' for e in entries), entries
+    assert all(e['startRequestId'] and e['stopRequestId'] for e in entries), entries
+    (out/'pointage-after-offline.json').write_text(json.dumps(entries,indent=2))
+    shot('02f-offline-synced')
     tap('Mes heures')
     shot('03-hours')
     tap('Chantiers')
@@ -95,7 +122,7 @@ try:
     tap('Déconnexion')
     find('Bienvenue')
     shot('08-logout')
-    print('ANDROID_NATIVE_SMOKE_OK: launch, invalid login, worker login, hours, worksites, messages, profile, logout')
+    print('ANDROID_NATIVE_SMOKE_OK: login, GPS pointage, offline start/stop, offline restart, replay without duplicates, hours, worksites, messages, profile, logout')
 finally:
     try: shot('final')
     except Exception: pass

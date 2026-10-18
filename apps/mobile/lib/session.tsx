@@ -40,11 +40,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     const cacheKey = 'jjd_session_cache';
     try {
       const r = await apiGet<{ user: User; person: Person | null }>('/api/auth/me');
+      if (await getToken() !== t) return;
       await setToken(t, r.user.id);
       setUser(r.user);
       setPerson(r.person);
       await AsyncStorage.setItem(cacheKey, JSON.stringify({ token: t, ...r }));
     } catch (e) {
+      if (await getToken() !== t) return;
       if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
         await setToken(null);
         await AsyncStorage.removeItem(cacheKey);
@@ -52,6 +54,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       } else {
         const cached = JSON.parse(await AsyncStorage.getItem(cacheKey) ?? 'null');
         if (cached?.token === t) { setUser(cached.user); setPerson(cached.person); }
+        else throw e;
       }
     } finally {
       setLoading(false);
@@ -59,7 +62,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
-    load();
+    void load().catch(() => { /* Login stays available if there is no usable offline session. */ });
   }, []);
 
   async function signIn(email: string, password: string) {

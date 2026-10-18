@@ -5,6 +5,7 @@ on:
       - 'apps/mobile/**'
       - 'scripts/check-android-launch.py'
       - 'scripts/test-mobile-queue.cjs'
+      - 'scripts/test-mobile-session.cjs'
       - 'scripts/seed-mobile-launch.mjs'
       - 'apps/api/src/routes/timesheet.ts'
       - 'apps/api/prisma/schema.prisma'
@@ -12,6 +13,9 @@ on:
       - '.github/workflows/mobile-launch.yml'
 permissions:
   contents: read
+concurrency:
+  group: mobile-launch-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   android:
     runs-on: ubuntu-latest
@@ -43,7 +47,7 @@ jobs:
         working-directory: apps/mobile
       - run: npm run typecheck
         working-directory: apps/mobile
-      - run: node --test scripts/test-mobile-queue.cjs
+      - run: node --test scripts/test-mobile-queue.cjs scripts/test-mobile-session.cjs
       - name: Export iOS JavaScript bundle
         run: npx expo export --platform ios --output-dir /tmp/jjd-ios-export
         working-directory: apps/mobile

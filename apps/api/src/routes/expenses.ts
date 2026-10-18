@@ -146,6 +146,26 @@ function buildWhere(q: Record<string, string>, payments?: Awaited<ReturnType<typ
   return and;
 }
 
+/**
+ * Doublons : même facture saisie deux fois (même fournisseur, même n°, même montant à 2 cts près). Une écriture de l'import historique Excel
+ * ne peut être supprimée que si elle a un doublon (l'autre exemplaire reste) ; sinon l'historique importé est protégé.
+ */
+async function duplicateIdsFor(entries: { id: string; direction: string; docNumber: string | null; contactId: string | null; supplierName: string | null; ht: number; ttc: number | null }[]): Promise<Map<string, string[]>> {
+  const out = new Map<string, string[]>();
+  const nums = [...new Set(entries.filter((e) => e.docNumber && e.docNumber.trim().length > 2 && e.direction !== 'delivery_slip').map((e) => e.docNumber!))];
+  if (!nums.length) return out;
+  const pool = await prisma.ledgerEntry.findMany({ where: { docNumber: { in: nums }, direction: { not: 'delivery_slip' } }, select: { id: true, direction: true, docNumber: true, contactId: true, supplierName: true, ht: true, ttc: true } });
+  const near = (a: number | null, b: number | null) => a != null && b != null && Math.abs(Math.abs(a) - Math.abs(b)) <= 0.02;
+  for (const e of entries) {
+    if (!e.docNumber) continue;
+    const twins = pool.filter((o) => o.id !== e.id && o.direction === e.direction && o.docNumber === e.docNumber
+      && ((e.contactId && o.contactId === e.contactId) || (!!e.supplierName && o.supplierName === e.supplierName))
+      && (near(o.ttc, e.ttc) || near(o.ht, e.ht)));
+    if (twins.length) out.set(e.id, twins.map((t) => t.id));
+  }
+  return out;
+}
+
 /** Répartition par chantier calculée d'après les bordereaux reliés (voir lib/invoice-allocation.ts) ; absente si la facture est déjà répartie à la saisie. */
 async function allocationOf(e: { id: string; direction: string; ht: number; worksiteId: string | null; docNumber: string | null; contactId: string | null; supplierName: string | null; worksite?: { ref: string } | null; bordereaux?: { ht: number; worksiteId: string | null; worksite?: { ref: string } | null }[] }) {
   if (e.direction !== 'purchase' || !e.bordereaux?.length) return undefined;
@@ -249,6 +269,7 @@ expensesRouter.get(
       { count: 0, ht: 0, ttc: 0, unpaidTtc: 0, pendingSlips: 0, overdueCount: 0, overdueTtc: 0 },
     );
 
+    const dups = await duplicateIdsFor(items);
     res.json({
       receiptsToReview,
       items: await Promise.all(items.map(async (e) => ({
@@ -259,6 +280,8 @@ expensesRouter.get(
         worksiteAllocation: await allocationOf(e),
         hasPdf: !!e.pdfPath,
         editable: e.source !== 'xlsx',
+        duplicateIds: dups.get(e.id) ?? [],
+        deletable: e.source !== 'xlsx' || dups.has(e.id),
       }))),
       totals: {
         count: totals.count,
@@ -668,7 +691,8 @@ expensesRouter.get(
     });
     const payments = await allocationSnapshot();
     const bankMatches = matches.map((m) => ({ matchId: m.id, allocatedAmount: payments.amounts.get(m.id) ?? 0, ...m.bankTransaction }));
-    res.json({ expense: { ...e, ...paymentOf(e, payments), worksiteAllocation: await allocationOf(e), hasPdf: !!e.pdfPath, editable: e.source !== 'xlsx', bankMatches } });
+    const dupIds = (await duplicateIdsFor([e])).get(e.id) ?? [];
+    res.json({ expense: { ...e, ...paymentOf(e, payments), worksiteAllocation: await allocationOf(e), hasPdf: !!e.pdfPath, editable: e.source !== 'xlsx', duplicateIds: dupIds, deletable: e.source !== 'xlsx' || dupIds.length > 0, bankMatches } });
   }),
 );
 
@@ -986,9 +1010,13 @@ expensesRouter.delete(
   '/:id',
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
-    const e = await prisma.ledgerEntry.findUnique({ where: { id: req.params.id }, select: { source: true } });
+    const e = await prisma.ledgerEntry.findUnique({ where: { id: req.params.id }, select: { id: true, source: true, direction: true, docNumber: true, contactId: true, supplierName: true, ht: true, ttc: true } });
     if (!e) throw new HttpError(404, 'Dépense introuvable');
-    if (e.source === 'xlsx') throw new HttpError(409, "Écriture de l'import historique Excel : suppression impossible.");
+    if (e.source === 'xlsx') {
+      // import historique protégé, sauf doublon avéré (l'autre exemplaire reste) ; un doublon rapproché à un paiement bancaire ne part pas : on supprime l'autre
+      if (!(await duplicateIdsFor([e])).has(e.id)) throw new HttpError(409, "Écriture de l'import historique Excel : suppression impossible (elle n'a pas de doublon).");
+      if (await prisma.bankTransactionMatch.count({ where: { ledgerEntryId: e.id } })) throw new HttpError(409, "Ce doublon est rapproché d'un paiement bancaire : supprimez plutôt l'autre exemplaire.");
+    }
     // les BankTransactionMatch de cette dépense partent en cascade (onDelete: Cascade) ; il reste
     // à nettoyer le badge de confiance des transactions qui n'ont plus aucun rapprochement.
     const affectedTxIds = (await prisma.bankTransactionMatch.findMany({ where: { ledgerEntryId: req.params.id }, select: { bankTransactionId: true } })).map((m) => m.bankTransactionId);

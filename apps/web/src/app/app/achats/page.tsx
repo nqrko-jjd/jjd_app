@@ -49,6 +49,9 @@ interface Expense {
   foxExportedAt: string | null;
   foxTransmittedAt: string | null;
   editable: boolean;
+  /** supprimable : saisie manuelle, ou écriture de l'import Excel qui a un doublon */
+  deletable?: boolean;
+  duplicateIds?: string[];
   source: string | null;
   // bordereau (direction "delivery_slip") -> facture reçue ensuite, une fois reliée
   linkedInvoiceId: string | null;
@@ -187,9 +190,8 @@ function AchatsInner() {
     window.open(url, '_blank');
   }
   async function remove(e: Expense) {
-    if (!window.confirm(`Supprimer la dépense ${e.docNumber ?? ''} (${e.supplier ?? ''}) ?`)) return;
-    await api(`/api/finance/expenses/${e.id}`, { method: 'DELETE' });
-    reload();
+    if (!window.confirm(e.editable ? `Supprimer la dépense ${e.docNumber ?? ''} (${e.supplier ?? ''}) ?` : `Supprimer ce doublon (${e.docNumber ?? ''}, ${e.supplier ?? ''}) ? L’autre exemplaire reste en place.`)) return;
+    try { await api(`/api/finance/expenses/${e.id}`, { method: 'DELETE' }); reload(); } catch (err) { window.alert((err as Error).message); }
   }
   async function unlinkSlip(e: Expense) {
     if (!window.confirm(`Délier ce bordereau de la facture ${e.linkedInvoice?.docNumber ?? ''} ?`)) return;
@@ -340,8 +342,8 @@ function AchatsInner() {
       e.paid
         ? { label: 'Marquer non payé', onClick: () => setPaidStatus(e, false) }
         : { label: 'Marquer payé', onClick: () => setPaidStatus(e, true) },
-      ...(e.editable
-        ? ['separator' as const, { label: 'Supprimer', danger: true, onClick: () => remove(e) }]
+      ...(e.editable || e.deletable
+        ? ['separator' as const, { label: e.editable ? 'Supprimer' : 'Supprimer ce doublon', danger: true, onClick: () => remove(e) }]
         : []),
     ];
   }
@@ -593,6 +595,7 @@ function AchatsInner() {
                   <td>
                     {e.supplier ?? '—'}
                     {e.direction === 'credit_note' && <span className="badge warn" style={{ marginLeft: 6 }}>NC</span>}
+                    {!!e.duplicateIds?.length && <span className="badge crit" style={{ marginLeft: 6 }} title="Même fournisseur, même n° et même montant qu'une autre dépense : clic droit → supprimer ce doublon">doublon ?</span>}
                     {e.direction === 'delivery_slip' && (
                       e.linkedInvoiceId
                         ? <span className="badge ok" style={{ marginLeft: 6 }} title={`Relié à la facture ${e.linkedInvoice?.docNumber ?? ''}`}>📦 Bordereau · relié</span>

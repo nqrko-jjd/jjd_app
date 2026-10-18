@@ -310,3 +310,24 @@ test('bordereau : lien vers la facture reçue ensuite — apparaît relié, n’
 
   await prisma.ledgerEntry.deleteMany({ where: { id: { in: [slip.id, invoice.id] } } });
 });
+
+test('doublon de l’import Excel : supprimable (l’autre exemplaire reste), sauf s’il est rapproché d’un paiement', async () => {
+  const mk = (data: Record<string, unknown>) => prisma.ledgerEntry.create({ data: { direction: 'purchase', worksiteId, supplierName: 'Quadrus Test', docNumber: 'MD/DUP-1', ht: 2544.16, ttc: 3078.43, source: 'xlsx', year: 2024, ...data } as never });
+  const a = await mk({ date: new Date('2024-05-24') });
+  const b = await mk({ date: new Date('2024-05-31') });
+  const lone = await mk({ docNumber: 'MD/SEUL-1' });
+  const list = await jf<{ items: { id: string; duplicateIds: string[]; deletable: boolean }[] }>(`/api/finance/expenses?q=MD/DUP-1`);
+  const row = list.body.items.find((x) => x.id === b.id)!;
+  assert.deepEqual(row.duplicateIds, [a.id]); assert.equal(row.deletable, true);
+  assert.equal((await jf(`/api/finance/expenses/${lone.id}`, { method: 'DELETE' })).status, 409, 'sans doublon : l’historique reste protégé');
+
+  // un doublon rapproché à un paiement bancaire n'est pas supprimé : on supprime l'autre
+  const tx = await prisma.bankTransaction.create({ data: { externalId: 'dup-test-tx', amount: -3078.43, side: 'out', bookingDate: new Date('2024-06-01') } });
+  await prisma.bankTransactionMatch.create({ data: { bankTransactionId: tx.id, ledgerEntryId: b.id } });
+  assert.equal((await jf(`/api/finance/expenses/${b.id}`, { method: 'DELETE' })).status, 409);
+  assert.equal((await jf(`/api/finance/expenses/${a.id}`, { method: 'DELETE' })).status, 200, 'l’exemplaire sans paiement part');
+  assert.equal((await jf(`/api/finance/expenses/${b.id}`, { method: 'DELETE' })).status, 409, 'plus de doublon : l’exemplaire restant est protégé');
+  await prisma.bankTransactionMatch.deleteMany({ where: { bankTransactionId: tx.id } });
+  await prisma.bankTransaction.deleteMany({ where: { id: tx.id } });
+  await prisma.ledgerEntry.deleteMany({ where: { id: { in: [a.id, b.id, lone.id] } } });
+});

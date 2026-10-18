@@ -31,6 +31,8 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
       - run: npm ci --no-audit --no-fund
       - run: npm ci --no-audit --no-fund
         working-directory: apps/mobile
@@ -80,3 +82,33 @@ jobs:
           path: |
             tmp/android-launch/
             /tmp/jjd-mobile-api.log
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      JJD_SKIP_ENV_FILE: '1'
+      DATABASE_URL: file:./web-launch.db
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build:shared && npm run prisma:generate --workspace @jjd/api
+      - run: npm run typecheck
+      - name: Isolated business regression tests
+        run: node scripts/test-release.mjs
+      - run: npm run db:deploy:safe --workspace @jjd/api && npm run seed --workspace @jjd/api
+      - run: npm run build --workspace @jjd/web
+      - name: Desktop and phone browser tests
+        run: |
+          npm run start --workspace @jjd/web > /tmp/jjd-web.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf http://localhost:3100/login > /dev/null && break; sleep 2; done
+          node --import tsx scripts/check-backoffice-ux.mts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: web-launch-evidence
+          path: tmp/ux-preview/

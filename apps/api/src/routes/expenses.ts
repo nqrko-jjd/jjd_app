@@ -1,4 +1,5 @@
 import { invoiceWorksiteAllocation } from '../lib/invoice-allocation.js';
+import { matchCandidates, expensesWithoutPdf } from '../lib/expense-pdf-match.js';
 import { peppolReceptionStatus, setPeppolReception, syncPeppolInbox } from '../lib/peppol-inbox.js';
 import { linkPurchaseReceipt, createReviewedPurchase } from '../lib/purchase-receipts.js';
 /**
@@ -758,6 +759,26 @@ expensesRouter.post(
     const isPdf = req.file.mimetype === 'application/pdf';
     const suggestedCategory = isPdf ? await suggestExpenseCategory(req.file.buffer, extraction.contactId) : null;
     res.json({ extraction, suggestedCategory });
+  }),
+);
+
+/**
+ * Rattache un PDF à la dépense qui lui correspond (import en masse de pièces manquantes) : lit le PDF puis propose, parmi les dépenses SANS pièce jointe,
+ * celles dont le n° de facture ou le montant colle (voir lib/expense-pdf-match.ts). N'écrit rien : la jonction se fait ensuite par POST /:id/pdf.
+ */
+expensesRouter.post(
+  '/match-pdf',
+  requireAuth(...OFFICE),
+  upload.single('file'),
+  asyncHandler(async (req, res) => {
+    if (!req.file) throw new HttpError(422, 'Aucun fichier');
+    if (req.file.mimetype !== 'application/pdf') throw new HttpError(422, 'PDF uniquement.');
+    const extraction = await extractDocumentInfo(req.file.buffer, req.file.mimetype, ['supplier', 'both']);
+    const candidates = extraction.textExtracted ? matchCandidates(extraction, await expensesWithoutPdf()) : [];
+    res.json({
+      extraction: { docNumber: extraction.docNumber, issuedOn: extraction.issuedOn, totalHt: extraction.totalHt, totalTtc: extraction.totalTtc, contactName: extraction.contactName, textExtracted: extraction.textExtracted },
+      candidates,
+    });
   }),
 );
 

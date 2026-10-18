@@ -56,7 +56,7 @@ export default function SansChantierPage() {
         eyebrow="Comptabilité"
         title="Dépenses sans chantier"
         sub={`${data.total} dépense${data.total > 1 ? 's' : ''} · ${formatEur(data.totalHt)} HT sur E-01 « Matériel sans chantier » · choisis le chantier où ça a servi`}
-        action={<Link className="btn" href="/app/achats">← Achats / Dépenses</Link>}
+        action={<div className="row"><Link className="btn" href="/app/achats/importer-pdf" title="Joindre en masse les PDF manquants (exportés de Fox, etc.)">Importer des PDF</Link><Link className="btn" href="/app/achats">← Achats / Dépenses</Link></div>}
       />
       {msg && (
         <div className={`badge ${msg.ok ? 'ok' : 'crit'}`} style={{ marginBottom: '1rem', padding: '0.5rem 0.8rem', display: 'flex', gap: '0.8rem', alignItems: 'center' }}>

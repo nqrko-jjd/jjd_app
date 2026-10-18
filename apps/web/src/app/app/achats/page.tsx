@@ -385,6 +385,7 @@ function AchatsInner() {
             <details className="page-tools" onKeyDown={event => { if (event.key === 'Escape') { event.currentTarget.open = false; event.currentTarget.querySelector('summary')?.focus(); } }}>
               <summary className="btn">{tr('Imports & outils')} <span aria-hidden="true">⌄</span></summary>
               <div className="page-tools-panel">
+            <Link className="btn" href="/app/achats/importer-pdf" title="Déposer des PDF : JJD les rattache aux dépenses qui n’ont pas encore de pièce jointe">Importer des PDF dans les dépenses</Link>
             {mailbox?.configured && (
               <button className="btn" disabled={syncingMailbox} onClick={syncMailbox} title="Vérifie la boîte mail factures et importe les nouveaux PDF reçus">
                 {syncingMailbox ? 'Synchronisation…' : 'Synchroniser la boîte mail'}

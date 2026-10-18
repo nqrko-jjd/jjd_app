@@ -1,9 +1,10 @@
+import { VoiceNote, VoicePlayer } from '@/lib/VoiceNote';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { View, TextInput, Pressable, ScrollView, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { Text } from '@/lib/AppText';
 import { Feather } from '@expo/vector-icons';
 import { Stack, useFocusEffect } from 'expo-router';
-import { apiGet, apiSend } from '@/lib/api';
+import { API_URL, apiGet, apiSend } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { Loading } from '@/lib/ui';
 import { T } from '@/lib/theme';
@@ -11,7 +12,7 @@ import { MsgText } from '@/lib/MsgText';
 import { tr, dateLocale } from '@/lib/i18n';
 
 interface Msg {
-  id: string; kind: string; body: string | null; authorId: string | null; authorName: string | null; createdAt: string; bodyTranslated?: string | null;
+  id: string; kind: string; fileUrl: string | null; body: string | null; authorId: string | null; authorName: string | null; createdAt: string; bodyTranslated?: string | null;
 }
 interface Data {
   thread: { id: string };
@@ -56,12 +57,14 @@ export default function FilGeneral() {
           return (
             <View key={m.id} style={[s.msgCol, mine && s.msgColMine]}>
               {!mine && <Text style={s.author}>{m.authorName}</Text>}
+              {m.kind === 'audio' && m.fileUrl && <VoicePlayer uri={`${API_URL}${m.fileUrl}`} />}
               {m.body ? <MsgText body={m.body} translated={m.bodyTranslated} style={[s.bubble, mine && s.bubbleMine]} /> : null}
               <Text style={[s.timeTxt, mine && { alignSelf: 'flex-end' }]}>{time(m.createdAt)}</Text>
             </View>
           );
         })}
       </ScrollView>
+      <VoiceNote endpoint={`/api/messagerie/general/voice`} onSent={load} />
       <View style={s.composer}>
         <TextInput style={s.input} placeholder="Message…" value={text} onChangeText={setText} placeholderTextColor={T.ink3} />
         <Pressable style={s.sendBtn} onPress={send} disabled={busy || !text.trim()}><Feather name="send" size={16} color="#fff" /></Pressable>

@@ -6,7 +6,9 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "android": { "buildType": "apk" },
+      "android": {
+        "buildType": "apk"
+      },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://new.jjd-consult.be/jjd-api"
       }
@@ -14,7 +16,9 @@
     "preview": {
       "distribution": "internal",
       "autoIncrement": true,
-      "android": { "buildType": "apk" },
+      "android": {
+        "buildType": "apk"
+      },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://new.jjd-consult.be/jjd-api"
       }
@@ -23,10 +27,19 @@
       "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_API_URL": "https://new.jjd-consult.be/jjd-api"
+      },
+      "distribution": "store",
+      "android": {
+        "buildType": "app-bundle"
       }
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "android": {
+        "track": "internal",
+        "releaseStatus": "draft"
+      }
+    }
   }
 }

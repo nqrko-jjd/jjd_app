@@ -1,3 +1,4 @@
+import { VoiceNote, VoicePlayer } from '@/lib/VoiceNote';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { View, TextInput, Pressable, ScrollView, Image, StyleSheet, KeyboardAvoidingView, Platform, Linking } from 'react-native';
 import { Text } from '@/lib/AppText';
@@ -52,7 +53,7 @@ export default function Fil() {
   async function pickImage(fromCamera: boolean) {
     const perm = fromCamera
       ? await ImagePicker.requestCameraPermissionsAsync()
-      : await ImagePicker.requestMediaLibraryPermissionsAsync();
+      : { granted: true };
     if (!perm.granted) { Alert.alert('Permission refusée', fromCamera ? "Accès à l'appareil photo requis." : 'Accès aux photos requis.'); return null; }
     const res = fromCamera
       ? await ImagePicker.launchCameraAsync({ quality: 0.7 })
@@ -130,6 +131,7 @@ export default function Fil() {
           return (
             <View key={m.id} style={[s.msgCol, mine && s.msgColMine]}>
               {!mine && <Text style={s.author}>{m.authorName}</Text>}
+              {m.kind === 'audio' && m.fileUrl && <VoicePlayer uri={`${API_URL}${m.fileUrl}`} />}
               {m.kind === 'photo' && m.fileUrl && (
                 <Image source={{ uri: `${API_URL}${m.thumbUrl ?? m.fileUrl}` }} style={s.photo} />
               )}
@@ -163,6 +165,7 @@ export default function Fil() {
         </Pressable>
       )}
 
+      <VoiceNote endpoint={`/api/worksites/${id}/thread/voice`} onSent={load} />
       <View style={s.composer}>
         <Pressable style={s.iconBtn} onPress={addPhoto} disabled={busy}><Feather name="camera" size={18} color={T.ink2} /></Pressable>
         <Pressable style={s.iconBtn} onPress={addInvoice} disabled={busy}><Feather name="paperclip" size={18} color={T.ink2} /></Pressable>

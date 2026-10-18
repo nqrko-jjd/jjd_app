@@ -1,3 +1,4 @@
+import { isExpoToken } from './native-push.js';
 import webpush from 'web-push';
 import { prisma } from '../db.js';
 import { env } from '../env.js';
@@ -13,7 +14,7 @@ if (pushConfigured) {
 export async function sendPushToUser(userId: string, payload: { title: string; body: string; url?: string }): Promise<void> {
   if (!pushConfigured) return;
   const subs = await prisma.pushSubscription.findMany({ where: { userId } });
-  await Promise.all(subs.map(async (sub) => {
+  await Promise.all(subs.filter(sub => !isExpoToken(sub.endpoint)).map(async (sub) => {
     try {
       await webpush.sendNotification(
         { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },

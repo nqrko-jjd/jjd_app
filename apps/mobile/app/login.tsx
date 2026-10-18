@@ -1,3 +1,4 @@
+import { PrivacyLinks } from '@/lib/PrivacyLinks';
 import { useState } from 'react';
 import { View, TextInput, Pressable, StyleSheet, KeyboardAvoidingView, Platform, Image, ScrollView } from 'react-native';
 import { Text } from '@/lib/AppText';
@@ -58,6 +59,7 @@ Tout au même endroit.</Text></LinearGradient>
         <Pressable style={s.btn} onPress={submit} disabled={busy}>
           <Text style={s.btnTxt}>{busy ? 'Connexion…' : 'Se connecter'}</Text>
         </Pressable>
+        <PrivacyLinks />
       </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

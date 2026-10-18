@@ -45,7 +45,7 @@ export default function NouvelleDepense() {
 
   async function pick(camera: boolean) {
     setErr(null);
-    const perm = camera ? await ImagePicker.requestCameraPermissionsAsync() : await ImagePicker.requestMediaLibraryPermissionsAsync();
+    const perm = camera ? await ImagePicker.requestCameraPermissionsAsync() : { granted: true };
     if (!perm.granted) { setErr('Autorise l’accès à l’appareil photo ou aux photos pour continuer.'); return; }
     const r = camera ? await ImagePicker.launchCameraAsync({ quality: 0.6 }) : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.6 });
     if (r.canceled || !r.assets[0]) return;

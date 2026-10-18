@@ -1,3 +1,4 @@
+import { NotificationBridge } from '@/lib/notifications';
 import { useEffect } from 'react';
 import { TextInput } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
@@ -77,6 +78,7 @@ export default function RootLayout() {
       <SessionProvider>
         <StatusBar style="dark" />
         <Guard />
+        <NotificationBridge />
         <Intro />
       </SessionProvider>
       </LocaleProvider>

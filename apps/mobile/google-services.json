@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "12321299661",
+    "project_id": "jjd-chantier",
+    "storage_bucket": "jjd-chantier.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:12321299661:android:139bfaf07d168252141d84",
+        "android_client_info": {
+          "package_name": "be.jjdconsult.chantier"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCOtdlR6VQcqsK0ilRCKDWZJhBjcSTn0WI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

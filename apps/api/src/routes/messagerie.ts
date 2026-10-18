@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+import { notifyMessage } from '../lib/native-push.js';
 import { withTranslations } from '../lib/translate.js';
 import { Router } from 'express';
 import multer from 'multer';
@@ -174,6 +176,7 @@ messagerieRouter.post(
       data: { threadId: thread.id, authorId: req.user!.id, authorName: author, kind: 'text', body, audience: 'internal' },
     });
     await processMentions(msg.id, body, req.user!.id, author, '/app/messagerie').catch(() => {});
+    void notifyMessage(req.user!.id).catch(() => {});
     res.status(201).json({ message: msg });
   }),
 );
@@ -192,6 +195,7 @@ messagerieRouter.post(
         kind: 'photo', body: String(req.body.caption ?? '').trim() || null, fileUrl: img.url, thumbUrl: img.thumbUrl, audience: 'internal',
       },
     });
+    void notifyMessage(req.user!.id).catch(() => {});
     res.status(201).json({ message: msg });
   }),
 );
@@ -204,13 +208,21 @@ messagerieRouter.post(
   asyncHandler(async (req, res) => {
     if (!req.file) throw new HttpError(422, 'Aucun fichier');
     const thread = await ensureGeneralThread();
+    const requestId = req.body.requestId;
+    if (requestId && (typeof requestId !== 'string' || !/^[a-zA-Z0-9-]{1,80}$/.test(requestId))) throw new HttpError(422, 'Identifiant vocal invalide');
+    const messageId = requestId ? `voice-${createHash('sha256').update(`${req.user!.id}:${thread.id}:${requestId}`).digest('hex')}` : undefined;
+    if (messageId) {
+      const existing = await prisma.message.findUnique({ where: { id: messageId } });
+      if (existing) { res.status(200).json({ message: existing }); return; }
+    }
     const url = storeFile(req.file.buffer, req.file.originalname || 'note-vocale.webm', 'voice');
     const msg = await prisma.message.create({
       data: {
         threadId: thread.id, authorId: req.user!.id, authorName: await authorName(req.user!.id),
-        kind: 'audio', fileUrl: url, audience: 'internal',
+        id: messageId, kind: 'audio', fileUrl: url, audience: 'internal',
       },
     });
+    void notifyMessage(req.user!.id).catch(() => {});
     res.status(201).json({ message: msg });
   }),
 );

@@ -6,7 +6,7 @@ import {spawnSync} from 'node:child_process';
 const root=mkdtempSync(path.join(tmpdir(),'jjd-release-api-'));
 mkdirSync(path.join(root,'uploads'));
 const env={PATH:process.env.PATH,HOME:process.env.HOME,DATABASE_URL:'file:'+path.join(root,'test.db'),JJD_SKIP_ENV_FILE:'1',JWT_SECRET:'isolated-release-tests-only',NODE_ENV:'test',UPLOADS_DIR:path.join(root,'uploads'),PRISMA_HIDE_UPDATE_MESSAGE:'1'};
-const tests=['documents','buildings','contacts','people','planning-vehicles','timesheet','worksites-worker-access','portal','thread-client','messagerie','stock','stock-orders','purchasing','expenses','bank-reconcile'];
+const tests=['documents','buildings','contacts','people','planning-vehicles','timesheet','worksites-worker-access','portal','thread-client','messagerie','stock','stock-orders','purchasing','expenses','bank-reconcile','mobile-store'];
 const seed=`import {PrismaClient} from '@prisma/client';const p=new PrismaClient();
 const person=await p.person.create({data:{firstName:'David',displayName:'David',normalizedName:'release david',role:'foreman',source:'test'}});
 await p.user.update({where:{email:'david@jjd-consult.be'},data:{personId:person.id}});

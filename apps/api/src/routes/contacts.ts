@@ -180,8 +180,11 @@ contactsRouter.get(
         purchaseHt -= e.ht ?? 0;
         purchaseTtc -= ttc;
         if (supplierAccount?.reconciledCreditIds.includes(e.id)) continue;
-        balance -= Math.abs(ttc);
-        balanceLedger.push({ id: e.id, date: e.date, docNumber: e.docNumber, direction: e.direction, ht: -(e.ht ?? 0), ttc: -Math.abs(ttc), balance: round2(balance) });
+        // crédit restant = avoir − ce qui a été imputé sur des factures ; entièrement imputé : il ne pèse plus dans le compte
+        const creditLeft = Math.max(0, Math.abs(ttc) - (allocations.creditApplied.get(e.id) ?? 0));
+        if (creditLeft <= 0.01) continue;
+        balance -= creditLeft;
+        balanceLedger.push({ id: e.id, date: e.date, docNumber: e.docNumber, direction: e.direction, ht: -(e.ht ?? 0), ttc: -creditLeft, balance: round2(balance) });
       } else {
         purchaseHt += e.ht ?? 0;
         purchaseTtc += ttc;

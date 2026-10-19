@@ -1,4 +1,5 @@
 'use client';
+import { downloadResponse } from './download';
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 
@@ -107,4 +108,11 @@ export function usePortalApi<T>(path: string | null) {
   useEffect(() => { reload(); }, [reload]);
 
   return { data, error, loading, reload };
+}
+
+export async function portalDownload(path: string): Promise<void> {
+  const t = tok();
+  const res = await fetch(`${BASE}${path}`, { headers: t ? { authorization: `Bearer ${t}` } : {} });
+  if (!res.ok) throw new Error(`Erreur ${res.status}`);
+  await downloadResponse(res);
 }

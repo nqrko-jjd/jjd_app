@@ -2,7 +2,7 @@
 import { Suspense, use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { portalApi, portalBlobUrl, usePortalGuard } from '@/lib/portal';
+import { portalApi, portalDownload, usePortalGuard } from '@/lib/portal';
 import { PortalShell } from '../../PortalShell';
 import { EmptyState, ErrorState, SkeletonRows } from '@/components/States';
 
@@ -98,7 +98,7 @@ function PortalWorksiteInner({ params }: { params: Promise<{ id: string }> }) {
     load();
   }
   async function openPdf(docId: string) {
-    try { window.open(await portalBlobUrl(`/documents/${docId}/pdf`), '_blank'); }
+    try { await portalDownload(`/documents/${docId}/pdf`); }
     catch { alert('PDF indisponible.'); }
   }
 

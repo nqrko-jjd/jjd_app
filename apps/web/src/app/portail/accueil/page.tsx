@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ClipboardList } from 'lucide-react';
-import { portalBlobUrl, usePortalApi, usePortalGuard } from '@/lib/portal';
+import { portalDownload, usePortalApi, usePortalGuard } from '@/lib/portal';
 import { EmptyState, ErrorState, SkeletonRows } from '@/components/States';
 import { PortalShell } from '../PortalShell';
 
@@ -55,7 +55,7 @@ export default function PortalDashboard() {
   if (loading || !me) return null;
 
   async function openPdf(id: string) {
-    try { window.open(await portalBlobUrl(`/documents/${id}/pdf`), '_blank'); } catch { /* */ }
+    try { await portalDownload(`/documents/${id}/pdf`); } catch { /* */ }
   }
 
   const name = d?.greeting.name ?? me.label;

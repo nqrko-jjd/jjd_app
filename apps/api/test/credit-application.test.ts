@@ -51,6 +51,7 @@ test('avoir imputé sur deux factures (cas Quadrus) : factures payées, crédit 
   const after = (await supplierAccounts()).find((a) => a.contactId === ids.c)!;
   assert.equal(after.credits, 0, 'crédit entièrement utilisé'); assert.equal(after.openTtc, 0, 'plus rien à payer');
   assert.equal(after.balance, 0);
+  assert.equal((await call('GET', `/${nc.id}`)).body.expense.paymentStatus, 'Payé', 'l’avoir entièrement imputé est réglé');
 
   // côté facture : on voit l'avoir imputé ; annuler rend le crédit et remet la facture « à payer »
   const inv = await call('GET', `/${f2.id}/credit-applications`);
@@ -58,6 +59,7 @@ test('avoir imputé sur deux factures (cas Quadrus) : factures payées, crédit 
   assert.equal((await call('DELETE', `/credit-applications/${inv.body.applications[0].id}`)).status, 200);
   const undone = (await supplierAccounts()).find((a) => a.contactId === ids.c)!;
   assert.equal(undone.credits, 3479.33); assert.equal(undone.openTtc, 3479.33);
+  assert.equal((await call('GET', `/${nc.id}`)).body.expense.paymentStatus, 'Partiel', 'annulé : l’avoir n’est plus entièrement imputé (673,39 € restent imputés)');
   assert.equal((await prisma.ledgerEntry.findUnique({ where: { id: f2.id } }))?.paymentStatus, 'Non payé');
 });
 

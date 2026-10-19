@@ -193,7 +193,8 @@ function paymentOf(e: { id: string; ttc: number | null; ht: number; paymentStatu
 function expensePayment(e: { id: string; ttc: number | null; ht: number; paymentStatus: string | null }, payments: Awaited<ReturnType<typeof allocationSnapshot>>) {
   const total = Math.abs(e.ttc ?? e.ht);
   const manuallyPaid = (e.paymentStatus ?? '').toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').trim() === 'paye';
-  const paidAmount = Math.min(total, payments.ledgerPaid.get(e.id) ?? (manuallyPaid ? total : 0));
+  // un avoir dont le crédit est entièrement imputé sur des factures est « réglé » (creditApplied) ; une facture payée par avoir passe par ledgerPaid
+  const paidAmount = Math.min(total, payments.ledgerPaid.get(e.id) ?? payments.creditApplied.get(e.id) ?? (manuallyPaid ? total : 0));
   const remainingAmount = purchaseRemaining(total, paidAmount);
   const paid = remainingAmount === 0 && (paidAmount > 0 || manuallyPaid);
   return { paidAmount, remainingAmount, paid, paymentStatus: paid ? 'Payé' : paidAmount > 0 ? 'Partiel' : 'Non payé' };
@@ -1100,6 +1101,8 @@ expensesRouter.post(
     const app = await prisma.creditApplication.create({ data: { creditId: credit.id, invoiceId: invoice.id, amount: Math.round(d.amount * 100) / 100, appliedOn: d.appliedOn ?? new Date() } });
     // facture entièrement couverte : elle passe « Payé » (date = celle de l'imputation)
     if (invoiceLeft - d.amount <= 0.02) await prisma.ledgerEntry.update({ where: { id: invoice.id }, data: { paymentStatus: 'Payé', paidOn: invoice.paidOn ?? app.appliedOn } });
+    // avoir entièrement imputé : il passe « Payé » (son crédit est consommé)
+    if (creditLeft - d.amount <= 0.02) await prisma.ledgerEntry.update({ where: { id: credit.id }, data: { paymentStatus: 'Payé', paidOn: credit.paidOn ?? app.appliedOn } });
     await prisma.auditLog.create({ data: { actorId: req.user!.id, action: 'credit.apply', entity: 'LedgerEntry', entityId: credit.id, meta: { invoiceId: invoice.id, amount: app.amount } } });
     res.status(201).json({ ok: true, application: app });
   }),
@@ -1116,6 +1119,9 @@ expensesRouter.delete(
     const payments = await allocationSnapshot();
     const invoice = await prisma.ledgerEntry.findUnique({ where: { id: app.invoiceId } });
     if (invoice && !payments.ledgerPaid.has(invoice.id) && invoice.paymentStatus === 'Payé') await prisma.ledgerEntry.update({ where: { id: invoice.id }, data: { paymentStatus: 'Non payé', paidOn: null } });
+    // l'avoir n'est plus entièrement imputé : il redevient « Non payé » s'il avait été marqué payé par l'imputation
+    const credit = await prisma.ledgerEntry.findUnique({ where: { id: app.creditId } });
+    if (credit && credit.paymentStatus === 'Payé' && !(await prisma.bankTransactionMatch.count({ where: { ledgerEntryId: credit.id } }))) await prisma.ledgerEntry.update({ where: { id: credit.id }, data: { paymentStatus: 'Non payé', paidOn: null } });
     await prisma.auditLog.create({ data: { actorId: req.user!.id, action: 'credit.unapply', entity: 'LedgerEntry', entityId: app.creditId, meta: { invoiceId: app.invoiceId, amount: app.amount } } });
     res.json({ ok: true });
   }),

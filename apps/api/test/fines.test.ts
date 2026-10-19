@@ -33,7 +33,7 @@ after(async () => {
 
 test('PV de la flotte : création (plaque → véhicule), modification, payé / impayé, conducteur du planning, suppression', async () => {
   assert.equal((await call('POST', '/fines', {})).status, 422, 'ni véhicule ni plaque');
-  const c = await call('POST', '/fines', { plateRaw: 't pv 123', date: '2026-09-12', time: '14:05', reference: 'PV-TEST-1', type: 'Stationnement', amount: 58, payTo: 'Ville de Bruxelles', street: 'Rue Royale 1', postalCode: '1000' });
+  const c = await call('POST', '/fines', { plateRaw: 't pv 123', date: '2026-09-12', time: '14:05', reference: 'PV-TEST-1', type: 'Stationnement', amount: 58, payTo: 'Ville de Bruxelles', street: 'Rue Royale 1', postalCode: '7100 La Louvière' });
   assert.equal(c.status, 201);
   ids.fines.push(c.body.fine.id);
   assert.equal(c.body.fine.vehicleId, ids.v, 'la plaque retrouve le véhicule (sans tirets ni espaces)');

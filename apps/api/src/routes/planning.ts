@@ -551,7 +551,7 @@ vehiclesRouter.get(
 const fineInput = z.object({
   vehicleId: z.string().max(60).nullish(), plateRaw: z.string().trim().max(20).nullish(),
   date: z.coerce.date().nullish(), time: z.string().trim().regex(/^\d{1,2}:\d{2}$/).nullish(),
-  reference: z.string().trim().max(120).nullish(), payTo: z.string().trim().max(160).nullish(), street: z.string().trim().max(200).nullish(), postalCode: z.string().trim().max(12).nullish(),
+  reference: z.string().trim().max(120).nullish(), payTo: z.string().trim().max(160).nullish(), street: z.string().trim().max(200).nullish(), postalCode: z.string().trim().max(60).nullish(), // « 7100 » ou « 7100 La Louvière »
   type: z.string().trim().max(120).nullish(), amount: z.coerce.number().min(0).max(100000).nullish(),
   reminder1On: z.coerce.date().nullish(), reminder2On: z.coerce.date().nullish(),
   status: z.enum(['Payé']).nullish(), paidOn: z.coerce.date().nullish(), driverPersonId: z.string().max(60).nullish(), note: z.string().trim().max(2000).nullish(),

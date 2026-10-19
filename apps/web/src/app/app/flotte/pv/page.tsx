@@ -130,7 +130,13 @@ function FineModal({ fine, vehicles, people, onClose, onSaved }: { fine: Fine | 
       const r = fine ? await api<{ fine: { id: string } }>(`/api/vehicles/fines/${fine.id}`, { method: 'PATCH', body }) : await api<{ fine: { id: string } }>('/api/vehicles/fines', { method: 'POST', body });
       if (file) { const fd = new FormData(); fd.append('file', file); await apiUpload(`/api/vehicles/fines/${r.fine.id}/file`, fd); }
       onSaved(fine ? 'PV modifié.' : 'PV ajouté.');
-    } catch (e2) { setErr((e2 as Error).message); setBusy(false); }
+    } catch (e2) {
+      // « Données invalides » seul ne dit pas quel champ pose problème : on le nomme
+      const issues = ((e2 as { body?: { issues?: { path?: (string | number)[]; message?: string }[] } }).body?.issues ?? []);
+      const labels: Record<string, string> = { vehicleId: 'Véhicule', plateRaw: 'Plaque', date: 'Date', time: 'Heure (hh:mm)', reference: 'Référence', payTo: 'À payer à', street: 'Lieu', postalCode: 'Code postal', type: 'Type', amount: 'Montant', reminder1On: '1er rappel', reminder2On: '2e rappel', paidOn: 'Date de paiement', driverPersonId: 'Conducteur', note: 'Note' };
+      setErr(issues.length ? issues.map((i) => `${labels[String(i.path?.[0])] ?? String(i.path?.[0] ?? 'Champ')} : ${i.message ?? 'valeur invalide'}`).join(' · ') : (e2 as Error).message);
+      setBusy(false);
+    }
   }
 
   return (
@@ -150,7 +156,7 @@ function FineModal({ fine, vehicles, people, onClose, onSaved }: { fine: Fine | 
           <div className="field"><label>Type</label><input className="input" list="pv-types" value={v.type} onChange={(e) => set('type', e.target.value)} /><datalist id="pv-types">{TYPES.map((t) => <option key={t} value={t} />)}</datalist></div>
           <div className="field"><label>Montant (€)</label><input className="input" inputMode="decimal" value={v.amount} onChange={(e) => set('amount', e.target.value)} /></div>
           <div className="field"><label>Lieu (rue)</label><input className="input" value={v.street} onChange={(e) => set('street', e.target.value)} /></div>
-          <div className="field"><label>Code postal</label><input className="input" value={v.postalCode} onChange={(e) => set('postalCode', e.target.value)} /></div>
+          <div className="field"><label>Code postal / commune</label><input className="input" value={v.postalCode} onChange={(e) => set('postalCode', e.target.value)} /></div>
           <div className="field"><label>À payer à</label><input className="input" value={v.payTo} onChange={(e) => set('payTo', e.target.value)} placeholder="Ville, police, SPF…" /></div>
           <div className="field"><label>Référence / communication</label><input className="input" value={v.reference} onChange={(e) => set('reference', e.target.value)} /></div>
           <div className="field"><label>1er rappel</label><input className="input" type="date" value={v.reminder1On} onChange={(e) => set('reminder1On', e.target.value)} /></div>

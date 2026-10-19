@@ -39,8 +39,8 @@ export function composeContactPayload(v: Record<string, unknown>): Record<string
 }
 
 /**
- * Champs différents selon le type de contact (`forType`, le type au moment où le formulaire
- * s'ouvre — un client a une « Catégorie », un fournisseur non ; les personnes de contact et
+ * Champs différents selon le type de contact (type sélectionné en direct, ou `forType` à l'ouverture
+ * du formulaire — un client a une « Catégorie », un fournisseur non ; les personnes de contact et
  * l'historique d'achats d'un fournisseur sont gérés à part sur sa fiche, pas dans ce formulaire)
  * ET selon la « Catégorie » (`kind`) choisie en direct dans le formulaire : un particulier a
  * Prénom/Nom séparés (cf. `composeContactPayload`, à appeler dans `onSubmit`) plutôt qu'un
@@ -55,8 +55,8 @@ export const CONTACT_FIELDS = (
   syndics: { id: string; name: string }[] = [],
   promoters: { id: string; name: string }[] = [],
 ) => {
-  const isSupplierOnly = forType === 'supplier';
   return (values: Record<string, unknown>): FieldDef[] => {
+    const isSupplierOnly = (values.type || forType) === 'supplier';
     const kind = (values.kind as string) || (isSupplierOnly ? undefined : 'individual');
     const isIndividual = !isSupplierOnly && kind === 'individual';
     const isAcp = !isSupplierOnly && kind === 'acp';
@@ -69,10 +69,10 @@ export const CONTACT_FIELDS = (
       ...(isIndividual ? [
         { name: 'firstName', label: 'Prénom', required: true },
         { name: 'lastName', label: 'Nom' },
-      ] : [{ name: 'name', label: 'Nom', required: true, full: true }]),
+      ] : [{ name: 'name', label: isSupplierOnly ? 'Nom de l’entreprise / fournisseur' : 'Nom', required: true, full: true }]),
       ...(isAcp ? [{ name: 'syndicId', label: 'Syndic (adresse de facturation "c/o")', type: 'select' as const, options: syndics.map((s) => ({ value: s.id, label: s.name })) }] : []),
       ...(isDeveloper ? [{ name: 'promoterId', label: 'Promoteur', type: 'select' as const, options: promoters.map((p) => ({ value: p.id, label: p.name })) }] : []),
-      ...(!isAcpOrDeveloper ? [{ name: 'buildingId', label: 'Immeuble / ACP rattaché(e)', type: 'contact' as const, contactKindFilter: ['acp', 'developer'], placeholder: 'Nom de l’immeuble / ACP…', full: true }] : []),
+      ...(!isSupplierOnly && !isAcpOrDeveloper ? [{ name: 'buildingId', label: 'Immeuble / ACP rattaché(e)', type: 'contact' as const, contactKindFilter: ['acp', 'developer'], placeholder: 'Nom de l’immeuble / ACP…', full: true }] : []),
       { name: 'email', label: 'E-mail' },
       { name: 'phone', label: 'Téléphone' },
       ...(showVat ? [{ name: 'vat', label: 'N° TVA', placeholder: 'BE0123456789', action: { label: 'Rechercher', run: vatLookupAction } }] : []),

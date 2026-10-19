@@ -41,8 +41,11 @@ appId: be.jjdconsult.chantier
     visible: "Mes heures"
     timeout: 30000
 - takeScreenshot: tmp/ios-launch/02-home
-- tapOn: "Messages"
-- tapOn: "Général JJD"
+- tapOn: ".*Messages, tab.*"
+- extendedWaitUntil:
+    visible: ".*Général JJD.*"
+    timeout: 30000
+- tapOn: ".*Général JJD.*"
 - tapOn: ".*Enregistrer une note vocale.*"
 - assertVisible: ".*Arrêter.*"
 - waitForAnimationToEnd

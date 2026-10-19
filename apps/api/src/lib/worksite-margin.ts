@@ -89,19 +89,18 @@ export async function worksiteLabourDetail(worksiteId: string): Promise<Worksite
     orderBy: { date: 'asc' },
   });
 
-  const byKey = new Map<string, WorksiteLabourDay & { rate: number | null; dailyHours: number; defaultRate: number | null; imported: boolean }>();
+  const byKey = new Map<string, WorksiteLabourDay & { liveHours: number; dailyHours: number; defaultRate: number | null; imported: boolean }>();
   for (const e of entries) {
     const date = e.date!.toISOString().slice(0, 10);
     const key = `${date}|${e.person.id}`;
     const row = byKey.get(key) ?? {
       date, personId: e.person.id, personName: e.person.displayName || e.person.firstName,
       hours: 0, amount: 0, pending: false,
-      rate: null, dailyHours: e.person.dailyHours ?? 10, defaultRate: e.person.hourlyRate ?? null, imported: true,
+      liveHours: 0, dailyHours: e.person.dailyHours ?? 10, defaultRate: e.person.hourlyRate ?? null, imported: true,
     };
     row.hours += e.hours ?? 0;
     row.amount += e.amount ?? 0;
-    row.rate = row.rate ?? e.rateUsed ?? null;
-    if (e.source !== 'xlsx') row.imported = false;
+    if (e.source !== 'xlsx') { row.imported = false; row.liveHours += e.hours ?? 0; } // la garantie ne vaut que pour les pointages de l'appli
     if (e.status === 'submitted') row.pending = true;
     byKey.set(key, row);
   }
@@ -114,31 +113,32 @@ export async function worksiteLabourDetail(worksiteId: string): Promise<Worksite
     const dates = days.map((r) => r.date).sort();
     const all = await prisma.timeEntry.findMany({
       where: { personId: { in: personIds }, status: { in: ['approved', 'submitted'] }, date: { gte: new Date(`${dates[0]}T00:00:00Z`), lte: new Date(`${dates[dates.length - 1]}T00:00:00Z`) } },
-      select: { personId: true, date: true, hours: true, amount: true, source: true },
+      select: { personId: true, date: true, hours: true, amount: true, rateUsed: true, source: true },
     });
-    const dayTotals = new Map<string, { hours: number; amount: number }>();
+    const dayTotals = new Map<string, { hours: number; amount: number; rate: number | null }>();
     for (const e of all) {
       if (e.source === 'xlsx' || !e.date) continue;
       const k = `${e.date.toISOString().slice(0, 10)}|${e.personId}`;
-      const t = dayTotals.get(k) ?? { hours: 0, amount: 0 };
+      const t = dayTotals.get(k) ?? { hours: 0, amount: 0, rate: null };
+      t.rate = t.rate ?? e.rateUsed ?? null; // taux du jour, tous chantiers confondus (comme le décompte de l'ouvrier)
       t.hours += e.hours ?? 0;
       t.amount += e.amount ?? 0;
       dayTotals.set(k, t);
     }
     for (const r of days) {
-      const rate = r.rate ?? r.defaultRate;
-      const total = dayTotals.get(`${r.date}|${r.personId}`) ?? { hours: r.hours, amount: r.amount };
+      const total = dayTotals.get(`${r.date}|${r.personId}`) ?? { hours: r.liveHours, amount: r.amount, rate: null };
+      const rate = total.rate ?? r.defaultRate;
       if (!rate || total.hours <= 0) continue;
       const addHours = Math.max(0, r.dailyHours - total.hours);
       const addAmount = Math.max(0, Math.round(r.dailyHours * rate * 100) / 100 - total.amount);
       if (addAmount <= 0) continue;
-      const share = r.hours / total.hours; // 1 si le chantier est le seul du jour
+      const share = r.liveHours / total.hours; // 1 si le chantier est le seul du jour
       r.hours += addHours * share;
       r.amount += addAmount * share;
     }
   }
   return [...byKey.values()]
-    .map(({ rate: _r, dailyHours: _d, defaultRate: _f, imported: _i, ...r }) => ({ ...r, hours: Math.round(r.hours * 100) / 100, amount: Math.round(r.amount * 100) / 100 }))
+    .map(({ liveHours: _l, dailyHours: _d, defaultRate: _f, imported: _i, ...r }) => ({ ...r, hours: Math.round(r.hours * 100) / 100, amount: Math.round(r.amount * 100) / 100 }))
     .sort((a, b) => a.date.localeCompare(b.date) || a.personName.localeCompare(b.personName));
 }
 

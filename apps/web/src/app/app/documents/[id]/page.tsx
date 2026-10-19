@@ -4,7 +4,7 @@ import { SkeletonRows } from '@/components/States';
 import { use, useEffect, useMemo, useState, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { api, apiBlobUrl } from '@/lib/api';
+import { api, apiDownload } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { formatEur, formatDateBE } from '@/lib/ui';
 import { DocStatusBadge, DOC_KIND_LABEL, type DocFull, type DocLine } from '@/lib/doc-ui';
@@ -363,8 +363,8 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
                 {doc.kind !== 'credit_note' && !(isInvoiceLike && locked) && <button disabled={!!busy} onClick={() => act('/duplicate', { kind: 'credit_note' })}>Copier en note de crédit libre</button>}
               </div>
               <div className="doc-action-group"><h3>PDF et impression</h3>
-                <button onClick={async () => { try { window.open(await apiBlobUrl(`/api/documents/${id}/pdf`), '_blank'); } catch (e) { setMsg((e as Error).message); } }}>Télécharger le PDF</button>
-                {doc.originalPdf && <button onClick={async () => { try { window.open(await apiBlobUrl(`/api/documents/${id}/original.pdf`), '_blank'); } catch (e) { setMsg((e as Error).message); } }}>PDF d’origine (TrustUp)</button>}
+                <button onClick={async () => { try { await apiDownload(`/api/documents/${id}/pdf`); } catch (e) { setMsg((e as Error).message); } }}>Télécharger le PDF</button>
+                {doc.originalPdf && <button onClick={async () => { try { await apiDownload(`/api/documents/${id}/original.pdf`); } catch (e) { setMsg((e as Error).message); } }}>PDF d’origine (TrustUp)</button>}
               </div>
               {!locked && <div className="doc-action-group"><button className="danger" disabled={!!busy} onClick={del}>Supprimer ce brouillon</button></div>}
             </div></details></div>

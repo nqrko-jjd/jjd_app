@@ -2,7 +2,7 @@
 import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { api, apiBlobUrl } from '@/lib/api';
+import { api, apiDownload } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { PageHead, formatEur, formatDateBE } from '@/lib/ui';
 import { SkeletonRows, ErrorState } from '@/components/States';
@@ -147,7 +147,7 @@ export default function ProgressPage({ params }: { params: Promise<{ id: string 
                   <button className="btn primary" disabled={!!busy} onClick={() => run('invoice', async () => { if (editable) await save_(); return api<{ document: { id: string } }>(`/api/progress/${current.id}/invoice`, { method: 'POST', body: {} }); }, (r) => router.push(`/app/documents/${r.document.id}`))}>Facturer</button>
                 )}
                 {current.status === 'validated' && current.seq === statements.length && <button className="btn ghost" disabled={!!busy} onClick={() => run('reopen', () => api(`/api/progress/${current.id}/reopen`, { method: 'POST', body: {} }))}>Rouvrir</button>}
-                <button className="btn ghost" onClick={async () => { try { window.open(await apiBlobUrl(`/api/progress/${current.id}/pdf`), '_blank'); } catch (e) { setMsg((e as Error).message); } }}>Télécharger le PDF</button>
+                <button className="btn ghost" onClick={async () => { try { await apiDownload(`/api/progress/${current.id}/pdf`); } catch (e) { setMsg((e as Error).message); } }}>Télécharger le PDF</button>
                 {editable && <button className="btn ghost" style={{ color: 'var(--crit)' }} disabled={!!busy} onClick={() => { if (window.confirm('Supprimer cet état en brouillon ?')) run('del', () => api(`/api/progress/${current.id}`, { method: 'DELETE' }), () => setSel(null)); }}>Supprimer le brouillon</button>}
               </div>
             </div>

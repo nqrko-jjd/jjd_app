@@ -1,3 +1,4 @@
+import { downloadResponse } from './download';
 const BASE = '/jjd-api';
 
 export class ApiError extends Error {
@@ -72,4 +73,15 @@ export async function apiUpload<T = unknown>(path: string, form: FormData): Prom
   const data = text ? JSON.parse(text) : null;
   if (!res.ok) throw new ApiError(res.status, data?.error ?? `Erreur ${res.status}`, data);
   return data as T;
+}
+
+/** Download a PDF with the reference supplied by the server. */
+export async function apiDownload(path: string): Promise<void> {
+  const t = token();
+  const res = await fetch(`${BASE}${path}`, { headers: t ? { authorization: `Bearer ${t}` } : {} });
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    throw new ApiError(res.status, data?.error ?? `Erreur ${res.status}`);
+  }
+  await downloadResponse(res);
 }

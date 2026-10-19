@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { FileText } from 'lucide-react';
-import { portalBlobUrl, usePortalApi, usePortalGuard } from '@/lib/portal';
+import { portalDownload, usePortalApi, usePortalGuard } from '@/lib/portal';
 import { EmptyState, ErrorState, SkeletonRows } from '@/components/States';
 import { PortalShell } from '../PortalShell';
 
@@ -27,7 +27,7 @@ export default function PortalQuotes() {
   const toValidate = (items ?? []).filter((q) => q.status === 'sent').length;
 
   async function openPdf(id: string) {
-    try { window.open(await portalBlobUrl(`/documents/${id}/pdf`), '_blank'); } catch { /* */ }
+    try { await portalDownload(`/documents/${id}/pdf`); } catch { /* */ }
   }
 
   return (

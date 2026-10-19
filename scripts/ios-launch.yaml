@@ -16,7 +16,8 @@ appId: be.jjdconsult.chantier
 - tapOn:
     text: "Continue"
     optional: true
-- hideKeyboard
+- tapOn: "Bienvenue"
+- waitForAnimationToEnd
 - scrollUntilVisible:
     element:
       id: "login-password"
@@ -28,6 +29,8 @@ appId: be.jjdconsult.chantier
 - tapOn:
     id: "login-password"
 - inputText: "jjd"
+- tapOn: "Bienvenue"
+- waitForAnimationToEnd
 - takeScreenshot: tmp/ios-launch/01b-login-filled
 - assertVisible: "ouvrier@jjd-consult.be"
 - scrollUntilVisible:

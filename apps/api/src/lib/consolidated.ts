@@ -307,7 +307,7 @@ export async function profitShare(_year?: number) {
  * moins fiable — ex. chantier "planifié" avec un devis resté "envoyé").
  */
 export async function forecastReceivable() {
-  const [acceptedQuotes, invoices, creditNotes, worksites] = await Promise.all([
+  const [acceptedQuotes, invoices, ledgerSales, worksites] = await Promise.all([
     prisma.document.findMany({
       where: { kind: 'quote', status: 'accepted', source: { not: 'demo' } },
       select: { id: true, worksiteId: true, totalHt: true, number: true, title: true, billingName: true, contact: { select: { name: true } } },
@@ -316,9 +316,11 @@ export async function forecastReceivable() {
       where: { kind: { in: ['invoice', 'deposit_invoice'] }, status: { not: 'draft' }, source: { not: 'demo' } },
       select: { worksiteId: true, totalHt: true, parentId: true },
     }),
-    prisma.document.findMany({
-      where: { kind: 'credit_note', status: { not: 'draft' }, source: { not: 'demo' } },
-      select: { worksiteId: true, totalHt: true },
+    // facturé par chantier = grand livre (même base que la fiche chantier) : il reprend aussi les factures importées de l'Excel,
+    // qui n'ont pas de Document ; les factures et notes de crédit créées dans l'appli y sont synchronisées.
+    prisma.ledgerEntry.findMany({
+      where: { direction: { in: ['sale', 'credit_note'] }, worksiteId: { not: null } },
+      select: { worksiteId: true, ht: true, direction: true, categoryRaw: true },
     }),
     prisma.worksite.findMany({ where: { kind: 'project', source: { not: 'demo' } }, select: { id: true, ref: true, title: true } }),
   ]);
@@ -327,11 +329,11 @@ export async function forecastReceivable() {
   const invoicedByWorksite = new Map<string, number>();
   const invoicedByParent = new Map<string, number>();
   for (const inv of invoices) {
-    if (inv.worksiteId) invoicedByWorksite.set(inv.worksiteId, (invoicedByWorksite.get(inv.worksiteId) ?? 0) + inv.totalHt);
     if (inv.parentId) invoicedByParent.set(inv.parentId, (invoicedByParent.get(inv.parentId) ?? 0) + inv.totalHt);
   }
-  for (const cn of creditNotes) {
-    if (cn.worksiteId) invoicedByWorksite.set(cn.worksiteId, (invoicedByWorksite.get(cn.worksiteId) ?? 0) - cn.totalHt);
+  for (const e of ledgerSales) {
+    if (e.direction === 'credit_note' && !isCreditNoteSale(e.categoryRaw)) continue; // avoir d'achat : n'est pas du facturé client
+    invoicedByWorksite.set(e.worksiteId!, (invoicedByWorksite.get(e.worksiteId!) ?? 0) + e.ht); // notes de crédit : ht déjà négatif
   }
 
   const quotedByWorksite = new Map<string, number>();

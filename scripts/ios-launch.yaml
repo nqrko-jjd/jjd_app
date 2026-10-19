@@ -40,6 +40,9 @@ appId: be.jjdconsult.chantier
 - extendedWaitUntil:
     visible: "Mes heures"
     timeout: 30000
+- extendedWaitUntil:
+    visible: ".*R-MOBILE-TEST.*"
+    timeout: 30000
 - takeScreenshot: tmp/ios-launch/02-home
 - tapOn: ".*Messages, tab.*"
 - extendedWaitUntil:

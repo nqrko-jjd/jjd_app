@@ -353,7 +353,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
               {isQuote && locked && <button disabled={!!busy} onClick={() => router.push(`/app/documents/${id}/avancement`)}>États d’avancement</button>}
               {isQuote && <button disabled={!!busy} onClick={() => act('/convert', {})}>{doc.billing && doc.billing.billedHt > 0.01 ? `Facturer le solde (${formatEur(doc.billing.remainingHt)} HT)` : 'Créer une facture à partir du devis'}</button>}
               {isQuote && locked && <><button disabled={!!busy} onClick={() => act('/status', { status: 'accepted' })}>Marquer le devis accepté</button><button disabled={!!busy} onClick={() => act('/status', { status: 'declined' })}>Marquer le devis refusé</button></>}
-              {isInvoiceLike && locked && doc.status !== 'credited' && creditRemaining > 0.01 && <button disabled={!!busy} onClick={() => setCreditOpen(true)}>Créer une note de crédit</button>}
+              {isInvoiceLike && locked && creditRemaining > 0.01 && <button disabled={!!busy} onClick={() => setCreditOpen(true)}>Créer une note de crédit</button>}
 </div>
               <div className="doc-action-group"><h3>{tr("Dupliquer")}</h3>
                 <button disabled={!!busy} onClick={() => act('/duplicate', {})}>Copier à l’identique</button>

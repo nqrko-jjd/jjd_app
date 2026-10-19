@@ -1041,6 +1041,86 @@ expensesRouter.delete(
   }),
 );
 
+/* ------------------------------------------------------------------ avoirs imputés sur des factures */
+
+/**
+ * Imputation d'un avoir fournisseur sur une facture d'achat, quand le fournisseur a réglé la facture avec le crédit (sans virement) :
+ * la facture compte comme payée à hauteur du montant imputé, et le crédit restant de l'avoir diminue d'autant.
+ */
+const sameSupplier = (a: { contactId: string | null; supplierName: string | null }, b: { contactId: string | null; supplierName: string | null }) =>
+  (!!a.contactId && a.contactId === b.contactId) || (!!a.supplierName && !!b.supplierName && a.supplierName.trim().toLowerCase() === b.supplierName.trim().toLowerCase());
+
+expensesRouter.get(
+  '/:id/credit-applications',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const e = await prisma.ledgerEntry.findUnique({ where: { id: req.params.id }, include: { creditsApplied: { include: { invoice: { select: { id: true, docNumber: true, date: true } } }, orderBy: { appliedOn: 'asc' } }, creditsReceived: { include: { credit: { select: { id: true, docNumber: true, date: true } } }, orderBy: { appliedOn: 'asc' } } } });
+    if (!e) throw new HttpError(404, 'Dépense introuvable');
+    if (e.direction !== 'credit_note' && e.direction !== 'purchase') return res.json({ role: null, applications: [], candidates: [], remaining: 0 });
+    const payments = await allocationSnapshot();
+    const sup = { contactId: e.contactId, supplierName: e.supplierName };
+    const cands = await prisma.ledgerEntry.findMany({
+      where: { direction: e.direction === 'credit_note' ? 'purchase' : 'credit_note', id: { not: e.id }, ...(e.contactId ? { contactId: e.contactId } : { supplierName: e.supplierName }) },
+      select: { id: true, docNumber: true, date: true, ht: true, ttc: true, paymentStatus: true, contactId: true, supplierName: true, categoryRaw: true, worksite: { select: { ref: true } } },
+      orderBy: { date: 'desc' }, take: 300,
+    });
+    if (e.direction === 'credit_note') {
+      const applied = e.creditsApplied.reduce((s, a) => s + a.amount, 0);
+      const remaining = Math.max(0, Math.round((Math.abs(e.ttc ?? e.ht) - applied) * 100) / 100);
+      const candidates = cands.filter((c) => sameSupplier(sup, c)).map((c) => ({ id: c.id, docNumber: c.docNumber, date: c.date, worksiteRef: c.worksite?.ref ?? null, remaining: expensePayment(c, payments).remainingAmount })).filter((c) => c.remaining > 0.01);
+      return res.json({ role: 'credit', total: Math.abs(e.ttc ?? e.ht), remaining, applications: e.creditsApplied.map((a) => ({ id: a.id, amount: a.amount, appliedOn: a.appliedOn, other: a.invoice })), candidates });
+    }
+    // facture : avoirs encore disponibles du même fournisseur
+    const remainingOf = async (c: { id: string; ttc: number | null; ht: number }) => {
+      const used = await prisma.creditApplication.aggregate({ where: { creditId: c.id }, _sum: { amount: true } });
+      return Math.max(0, Math.round((Math.abs(c.ttc ?? c.ht) - (used._sum.amount ?? 0)) * 100) / 100);
+    };
+    const candidates = [];
+    for (const c of cands.filter((x) => sameSupplier(sup, x) && !/vente/i.test(x.categoryRaw ?? ''))) { const r = await remainingOf(c); if (r > 0.01) candidates.push({ id: c.id, docNumber: c.docNumber, date: c.date, worksiteRef: c.worksite?.ref ?? null, remaining: r }); }
+    res.json({ role: 'invoice', total: Math.abs(e.ttc ?? e.ht), remaining: expensePayment(e, payments).remainingAmount, applications: e.creditsReceived.map((a) => ({ id: a.id, amount: a.amount, appliedOn: a.appliedOn, other: a.credit })), candidates });
+  }),
+);
+
+expensesRouter.post(
+  '/:id/apply-credit',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const d = z.object({ otherId: z.string(), amount: z.coerce.number().positive().max(1_000_000), appliedOn: z.coerce.date().optional() }).parse(req.body);
+    const self = await prisma.ledgerEntry.findUnique({ where: { id: req.params.id } });
+    const other = await prisma.ledgerEntry.findUnique({ where: { id: d.otherId } });
+    if (!self || !other) throw new HttpError(404, 'Dépense introuvable');
+    const [credit, invoice] = self.direction === 'credit_note' ? [self, other] : [other, self];
+    if (credit.direction !== 'credit_note' || invoice.direction !== 'purchase') throw new HttpError(422, 'Il faut un avoir fournisseur et une facture d’achat.');
+    if (!sameSupplier(credit, invoice)) throw new HttpError(422, 'L’avoir et la facture doivent être du même fournisseur.');
+    const payments = await allocationSnapshot();
+    const creditLeft = Math.abs(credit.ttc ?? credit.ht) - (payments.creditApplied.get(credit.id) ?? 0);
+    const invoiceLeft = expensePayment(invoice, payments).remainingAmount;
+    if (d.amount > creditLeft + 0.02) throw new HttpError(422, `Il ne reste que ${Math.round(creditLeft * 100) / 100} € de crédit sur cet avoir.`);
+    if (d.amount > invoiceLeft + 0.02) throw new HttpError(422, `Il ne reste que ${invoiceLeft} € à payer sur cette facture.`);
+    const app = await prisma.creditApplication.create({ data: { creditId: credit.id, invoiceId: invoice.id, amount: Math.round(d.amount * 100) / 100, appliedOn: d.appliedOn ?? new Date() } });
+    // facture entièrement couverte : elle passe « Payé » (date = celle de l'imputation)
+    if (invoiceLeft - d.amount <= 0.02) await prisma.ledgerEntry.update({ where: { id: invoice.id }, data: { paymentStatus: 'Payé', paidOn: invoice.paidOn ?? app.appliedOn } });
+    await prisma.auditLog.create({ data: { actorId: req.user!.id, action: 'credit.apply', entity: 'LedgerEntry', entityId: credit.id, meta: { invoiceId: invoice.id, amount: app.amount } } });
+    res.status(201).json({ ok: true, application: app });
+  }),
+);
+
+expensesRouter.delete(
+  '/credit-applications/:appId',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const app = await prisma.creditApplication.findUnique({ where: { id: req.params.appId } });
+    if (!app) throw new HttpError(404, 'Imputation introuvable');
+    await prisma.creditApplication.delete({ where: { id: app.id } });
+    // la facture n'est plus couverte par aucun paiement ni imputation : elle redevient « Non payé »
+    const payments = await allocationSnapshot();
+    const invoice = await prisma.ledgerEntry.findUnique({ where: { id: app.invoiceId } });
+    if (invoice && !payments.ledgerPaid.has(invoice.id) && invoice.paymentStatus === 'Payé') await prisma.ledgerEntry.update({ where: { id: invoice.id }, data: { paymentStatus: 'Non payé', paidOn: null } });
+    await prisma.auditLog.create({ data: { actorId: req.user!.id, action: 'credit.unapply', entity: 'LedgerEntry', entityId: app.creditId, meta: { invoiceId: app.invoiceId, amount: app.amount } } });
+    res.json({ ok: true });
+  }),
+);
+
 /* ------------------------------------------------------------------ statut payé */
 
 expensesRouter.post(

@@ -781,6 +781,8 @@ model LedgerEntry {
 
   bankMatches   BankTransactionMatch[]
   refSightings  PurchaseRefSighting[]
+  creditsApplied      CreditApplication[] @relation("CreditApplicationCredit") // pour un avoir : où son crédit a été imputé
+  creditsReceived     CreditApplication[] @relation("CreditApplicationInvoice") // pour une facture : avoirs imputés dessus
 
   @@index([worksiteId])
   @@index([vehicleId])
@@ -1937,4 +1939,20 @@ model ProgramLot {
 
   @@index([worksiteId])
   @@index([quoteId])
+}
+
+/// Avoir fournisseur imputé sur une facture d'achat (sans virement) : le fournisseur a réglé la facture avec le crédit de l'avoir.
+/// Compte comme un paiement de la facture (voir allocationSnapshot) et diminue d'autant le crédit restant de l'avoir.
+model CreditApplication {
+  id        String      @id @default(cuid())
+  creditId  String
+  credit    LedgerEntry @relation("CreditApplicationCredit", fields: [creditId], references: [id], onDelete: Cascade)
+  invoiceId String
+  invoice   LedgerEntry @relation("CreditApplicationInvoice", fields: [invoiceId], references: [id], onDelete: Cascade)
+  amount    Float // TTC
+  appliedOn DateTime    @default(now())
+  createdAt DateTime    @default(now())
+
+  @@index([creditId])
+  @@index([invoiceId])
 }

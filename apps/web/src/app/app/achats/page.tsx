@@ -657,6 +657,70 @@ function AchatsInner() {
   );
 }
 
+/* ------------------------------------------------------------- avoir imputé sur une facture */
+
+interface CreditInfo { role: 'credit' | 'invoice' | null; total: number; remaining: number; applications: { id: string; amount: number; appliedOn: string; other: { id: string; docNumber: string | null; date: string | null } }[]; candidates: { id: string; docNumber: string | null; date: string | null; worksiteRef: string | null; remaining: number }[] }
+
+/**
+ * Dans la fiche d'un avoir ou d'une facture d'achat : imputer le crédit de l'avoir sur une facture que le fournisseur a réglée avec ce crédit
+ * (sans virement). La facture passe « payée » à hauteur du montant, et le crédit restant de l'avoir diminue d'autant.
+ */
+function CreditApplications({ expense, onChanged }: { expense: Expense; onChanged: () => void }) {
+  const [info, setInfo] = useState<CreditInfo | null>(null);
+  const [other, setOther] = useState('');
+  const [amount, setAmount] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const load = () => api<CreditInfo>(`/api/finance/expenses/${expense.id}/credit-applications`).then(setInfo).catch(() => setInfo(null));
+  useEffect(() => { void load(); }, [expense.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!info || !info.role) return null;
+  const isCredit = info.role === 'credit';
+  if (!info.applications.length && !info.candidates.length) return null; // rien à imputer, rien d'imputé : on n'encombre pas la fiche
+  const cand = info.candidates.find((c) => c.id === other);
+  const defaultAmount = cand ? Math.min(cand.remaining, isCredit ? info.remaining : cand.remaining) : 0;
+  async function apply() {
+    setBusy(true); setErr(null);
+    try {
+      await api(`/api/finance/expenses/${expense.id}/apply-credit`, { method: 'POST', body: { otherId: other, amount: Number((amount || String(defaultAmount)).replace(',', '.')) } });
+      setOther(''); setAmount(''); await load(); onChanged();
+    } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+  }
+  async function unapply(id: string) {
+    if (!window.confirm('Annuler cette imputation ? Le crédit de l’avoir est rendu et la facture redevient à payer.')) return;
+    setBusy(true); setErr(null);
+    try { await api(`/api/finance/expenses/credit-applications/${id}`, { method: 'DELETE' }); await load(); onChanged(); } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+  }
+  return (
+    <div className="banner" style={{ margin: '0 1.2rem 0.6rem', display: 'block' }}>
+      <strong>{isCredit ? '🧾 Imputation de l’avoir sur des factures' : '🧾 Avoir imputé sur cette facture'}</strong>
+      <div className="muted" style={{ fontSize: '0.84rem', margin: '0.2rem 0 0.4rem' }}>
+        {isCredit
+          ? `Crédit restant : ${formatEur(info.remaining)} sur ${formatEur(info.total)}. Quand le fournisseur règle une facture avec cet avoir (sans virement), imputez-la ici : elle passe « payée » et le crédit diminue.`
+          : `Reste à payer sur cette facture : ${formatEur(info.remaining)}. Si le fournisseur l'a réglée avec un avoir, imputez-le ici.`}
+      </div>
+      {info.applications.map((a) => (
+        <div key={a.id} style={{ display: 'flex', gap: '0.7rem', alignItems: 'center', fontSize: '0.88rem', padding: '0.15rem 0' }}>
+          <span className="mono">{a.other.docNumber ?? 'sans n°'}</span>
+          <span className="muted">{formatDateBE(a.appliedOn)}</span>
+          <span style={{ marginLeft: 'auto' }}>{formatEur(a.amount)}</span>
+          <button type="button" className="btn ghost" style={{ padding: '0.1rem 0.4rem' }} disabled={busy} onClick={() => unapply(a.id)} title="Annuler cette imputation">✕</button>
+        </div>
+      ))}
+      {info.candidates.length > 0 && (
+        <div className="row" style={{ gap: '0.5rem', marginTop: '0.4rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          <select className="select" style={{ width: 'auto', maxWidth: 320 }} value={other} onChange={(e) => { setOther(e.target.value); setAmount(''); }} aria-label={isCredit ? 'Facture' : 'Avoir'}>
+            <option value="">{isCredit ? '— facture à régler avec cet avoir —' : '— avoir à imputer —'}</option>
+            {info.candidates.map((c) => <option key={c.id} value={c.id}>{[c.docNumber ?? 'sans n°', c.date && formatDateBE(c.date), c.worksiteRef, `${formatEur(c.remaining)} ${isCredit ? 'à payer' : 'de crédit'}`].filter(Boolean).join(' · ')}</option>)}
+          </select>
+          {other && <input className="input" inputMode="decimal" style={{ width: 120 }} value={amount || String(defaultAmount)} onChange={(e) => setAmount(e.target.value)} aria-label="Montant TTC imputé" />}
+          <button type="button" className="btn primary" disabled={busy || !other} onClick={apply}>Imputer</button>
+        </div>
+      )}
+      {err && <div className="badge crit" style={{ marginTop: 4 }}>{err}</div>}
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------- bordereaux reliés à une facture */
 
 /**
@@ -1029,6 +1093,7 @@ function ExpenseModal({
           <button type="button" className="btn ghost" onClick={onClose} aria-label={tr("Fermer")}>✕</button>
         </div>
         {expense?.direction === 'purchase' && <LinkedSlips expense={expense} onOpen={onOpenOther} onChanged={onChanged} />}
+        {(expense?.direction === 'purchase' || expense?.direction === 'credit_note') && <CreditApplications expense={expense} onChanged={onChanged} />}
         {prefillFrom && (
           <div className="banner success" style={{ margin: '0 1.2rem 0.6rem' }}>
             <span className="txt">Reliée automatiquement au bordereau {prefillFrom.docNumber ?? ''} ({prefillFrom.supplier ?? 'fournisseur'}) à l’enregistrement. Les montants du bordereau sont repris : remplacez-les par ceux de la facture si elle regroupe plusieurs bordereaux. La facture n’a pas de chantier propre : son coût suit le chantier de chaque bordereau relié.</span>

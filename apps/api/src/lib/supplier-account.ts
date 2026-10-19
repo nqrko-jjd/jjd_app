@@ -39,7 +39,7 @@ export async function supplierAccounts() {
     const g = group(l.contactId, l.contact?.name ?? l.supplierName ?? 'Fournisseur à identifier');
     const total = Math.abs(l.ttc ?? l.ht);
     if (l.direction === 'credit_note') {
-      if (!settlements.get(l.contactId ?? '')?.settledCreditIds.includes(l.id)) g.credits += total;
+      if (!settlements.get(l.contactId ?? '')?.settledCreditIds.includes(l.id)) g.credits += Math.max(0, total - (snapshot.creditApplied.get(l.id) ?? 0));
       continue;
     }
     const paid = snapshot.ledgerPaid.has(l.id) ? snapshot.ledgerPaid.get(l.id)! : isPaid(l.paymentStatus) ? total : 0;

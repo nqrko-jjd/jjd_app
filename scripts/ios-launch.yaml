@@ -28,11 +28,11 @@ appId: be.jjdconsult.chantier
 - tapOn:
     id: "login-password"
 - inputText: "jjd"
-- hideKeyboard
 - takeScreenshot: tmp/ios-launch/01b-login-filled
 - assertVisible: "ouvrier@jjd-consult.be"
 - scrollUntilVisible:
     element: "Se connecter"
+    centerElement: true
 - tapOn: "Se connecter"
 - extendedWaitUntil:
     visible: "Mes heures"

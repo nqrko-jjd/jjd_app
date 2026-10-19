@@ -40,6 +40,27 @@ jobs:
         run: |
           mkdir -p /tmp/jjd-ios-test-uploads tmp/ios-launch
           node --import tsx --input-type=module -e "import {createApp} from './apps/api/src/app.ts'; createApp().listen(4100,'0.0.0.0');" > /tmp/jjd-ios-api.log 2>&1 &
+      - name: Verify isolated login before booting simulator
+        run: |
+          node --input-type=module -e '
+            for (let attempt=0; attempt<5; attempt++) {
+              try {
+                const response = await fetch("http://127.0.0.1:4100/api/auth/login", {
+                  method:"POST", headers:{"content-type":"application/json"},
+                  body:JSON.stringify({email:"ouvrier@jjd-consult.be",password:"jjd"}),
+                  signal:AbortSignal.timeout(15000)
+                });
+                if (!response.ok) throw new Error(`Login preflight HTTP ${response.status}`);
+                const result = await response.json();
+                if (!result.token) throw new Error("Login preflight missing token");
+                console.log("Isolated login preflight passed");
+                process.exit(0);
+              } catch (error) {
+                if (attempt===4) throw error;
+                await new Promise(resolve=>setTimeout(resolve,1000));
+              }
+            }
+          '
       - name: Generate native iOS project
         working-directory: apps/mobile
         run: npx expo prebuild --platform ios

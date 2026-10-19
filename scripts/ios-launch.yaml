@@ -14,6 +14,14 @@ appId: be.jjdconsult.chantier
     id: "login-identifier"
 - inputText: "ouvrier@jjd-consult.be"
 - tapOn:
+    text: "Continue"
+    optional: true
+- tapOn: "Bienvenue"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element:
+      id: "login-password"
+- tapOn:
     id: "login-password"
 - tapOn:
     text: "Continue"
@@ -21,17 +29,26 @@ appId: be.jjdconsult.chantier
 - tapOn:
     id: "login-password"
 - inputText: "jjd"
-- hideKeyboard
+- tapOn: "Bienvenue"
+- waitForAnimationToEnd
 - takeScreenshot: tmp/ios-launch/01b-login-filled
+- assertVisible: "ouvrier@jjd-consult.be"
 - scrollUntilVisible:
     element: "Se connecter"
+    centerElement: true
 - tapOn: "Se connecter"
 - extendedWaitUntil:
     visible: "Mes heures"
     timeout: 30000
+- extendedWaitUntil:
+    visible: ".*R-MOBILE-TEST.*"
+    timeout: 30000
 - takeScreenshot: tmp/ios-launch/02-home
-- tapOn: "Messages"
-- tapOn: "Général JJD"
+- tapOn: ".*Messages, tab.*"
+- extendedWaitUntil:
+    visible: ".*Général JJD.*"
+    timeout: 30000
+- tapOn: ".*Général JJD.*"
 - tapOn: ".*Enregistrer une note vocale.*"
 - assertVisible: ".*Arrêter.*"
 - waitForAnimationToEnd

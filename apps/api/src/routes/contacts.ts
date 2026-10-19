@@ -209,7 +209,7 @@ contactsRouter.get(
       contact: {
         ...contact,
         clientAccount: clientAcct,
-        purchases: [...ledger].reverse().map((p) => ({ ...p, paid: allocations.ledgerPaid.has(p.id) ? purchaseRemaining(Math.abs(p.ttc ?? p.ht), allocations.ledgerPaid.get(p.id) ?? 0) === 0 : isPaidStr(p.paymentStatus), hasPdf: !!p.pdfPath })),
+        purchases: [...ledger].reverse().map((p) => ({ ...p, paid: p.direction === 'credit_note' && allocations.creditApplied.has(p.id) ? purchaseRemaining(Math.abs(p.ttc ?? p.ht), allocations.creditApplied.get(p.id) ?? 0) === 0 : allocations.ledgerPaid.has(p.id) ? purchaseRemaining(Math.abs(p.ttc ?? p.ht), allocations.ledgerPaid.get(p.id) ?? 0) === 0 : isPaidStr(p.paymentStatus), hasPdf: !!p.pdfPath })),
         purchaseBalance: [...balanceLedger].reverse(),
         supplierAccount,
         purchaseSummary: {

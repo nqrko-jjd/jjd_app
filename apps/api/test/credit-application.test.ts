@@ -55,6 +55,7 @@ test('avoir imputé sur deux factures (cas Quadrus) : factures payées, crédit 
   const fiche = await (await fetch(`${base}/api/contacts/${ids.c}`, { headers: { authorization: `Bearer ${token}` } })).json();
   assert.ok(!(fiche.contact.purchaseBalance as { docNumber: string }[]).some((l) => l.docNumber === 'NC-1'), 'la fiche fournisseur ne compte plus l’avoir entièrement imputé');
   assert.equal(fiche.contact.purchaseSummary.balance, 0, 'solde de la fiche : 0');
+  assert.equal((fiche.contact.purchases as { docNumber: string; paid: boolean }[]).find((l) => l.docNumber === 'NC-1')!.paid, true, 'même statut « Payé » dans l’historique de la fiche que dans la liste des dépenses');
 
   // côté facture : on voit l'avoir imputé ; annuler rend le crédit et remet la facture « à payer »
   const inv = await call('GET', `/${f2.id}/credit-applications`);

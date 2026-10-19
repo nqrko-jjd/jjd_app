@@ -30,11 +30,31 @@ after(async () => {
   await prisma.person.deleteMany({ where: { id: personId } });
 });
 
-test('worksiteMargin : sans facture "Rémunération", la main-d\'œuvre = estimation par pointage', async () => {
+test('worksiteMargin : sans facture "Rémunération", la main-d\'œuvre = estimation par pointage, garantie 10 h comprise', async () => {
   const m = await worksiteMargin(worksiteId);
   assert.ok(m);
-  assert.equal(m!.labourCost, 240);
+  // 8 h pointées, seul chantier du jour : les 2 h de garantie (10 h × 30 €) sont imputées à ce chantier → 300 €
+  assert.equal(m!.labourCost, 300);
+  assert.equal(m!.labour[0]!.hours, 10);
   assert.equal(m!.materialCost, 0);
+});
+
+test('worksiteMargin : garantie sur une journée multi-chantiers, répartie au prorata des heures', async () => {
+  const other = await prisma.worksite.create({ data: { ref: 'R-WM-TEST2', title: 'Autre chantier', source: 'test' } });
+  try {
+    // même jour : 8 h ici + 2 h ailleurs = 10 h → pas de complément
+    await prisma.timeEntry.create({ data: { personId, worksiteId: other.id, date: new Date('2026-03-02'), hours: 2, amount: 60, rateUsed: 30, status: 'approved', source: 'test' } });
+    let m = await worksiteMargin(worksiteId);
+    assert.equal(m!.labourCost, 240, '10 h déjà pointées sur la journée : rien à ajouter');
+    // 1 h ailleurs : 8 + 1 = 9 h → 1 h de complément, ici 8/9 de cette heure
+    await prisma.timeEntry.updateMany({ where: { worksiteId: other.id }, data: { hours: 1, amount: 30 } });
+    m = await worksiteMargin(worksiteId);
+    assert.equal(m!.labour[0]!.hours, 8.89);
+    assert.equal(m!.labourCost, 266.67);
+  } finally {
+    await prisma.timeEntry.deleteMany({ where: { worksiteId: other.id } });
+    await prisma.worksite.deleteMany({ where: { id: other.id } });
+  }
 });
 
 test('worksiteMargin : détail main-d\'œuvre — un jour/ouvrier, plusieurs pointages le même jour cumulés', async () => {

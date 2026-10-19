@@ -77,32 +77,69 @@ export interface WorksiteMarginFull extends WorksiteMargin {
   labour: WorksiteLabourDay[];
 }
 
-/** Détail main-d'œuvre par jour/ouvrier pour ce chantier (heures réellement pointées ici —
- *  ne reprend pas la garantie « jour presté » du décompte personnel, propre à chaque ouvrier). */
+/** Détail main-d'œuvre par jour/ouvrier pour ce chantier : heures pointées ici + part de la garantie « jour presté »
+ *  (complément jusqu'à `dailyHours`, tout sur ce chantier s'il est seul ce jour-là, sinon au prorata des heures). */
 export async function worksiteLabourDetail(worksiteId: string): Promise<WorksiteLabourDay[]> {
   const entries = await prisma.timeEntry.findMany({
     where: { worksiteId, status: { in: ['approved', 'submitted'] }, date: { not: null } },
     select: {
-      date: true, hours: true, amount: true, status: true,
-      person: { select: { id: true, displayName: true, firstName: true } },
+      date: true, hours: true, amount: true, status: true, rateUsed: true, source: true,
+      person: { select: { id: true, displayName: true, firstName: true, dailyHours: true, hourlyRate: true } },
     },
     orderBy: { date: 'asc' },
   });
 
-  const byKey = new Map<string, WorksiteLabourDay>();
+  const byKey = new Map<string, WorksiteLabourDay & { rate: number | null; dailyHours: number; defaultRate: number | null; imported: boolean }>();
   for (const e of entries) {
     const date = e.date!.toISOString().slice(0, 10);
     const key = `${date}|${e.person.id}`;
     const row = byKey.get(key) ?? {
       date, personId: e.person.id, personName: e.person.displayName || e.person.firstName,
       hours: 0, amount: 0, pending: false,
+      rate: null, dailyHours: e.person.dailyHours ?? 10, defaultRate: e.person.hourlyRate ?? null, imported: true,
     };
     row.hours += e.hours ?? 0;
     row.amount += e.amount ?? 0;
+    row.rate = row.rate ?? e.rateUsed ?? null;
+    if (e.source !== 'xlsx') row.imported = false;
     if (e.status === 'submitted') row.pending = true;
     byKey.set(key, row);
   }
-  return [...byKey.values()].sort((a, b) => a.date.localeCompare(b.date) || a.personName.localeCompare(b.personName));
+
+  // Garantie « jour presté » : un jour presté est payé au moins `dailyHours` (10 h). Le complément est imputé au chantier du jour
+  // quand l'ouvrier n'a travaillé que sur celui-ci ; s'il a pointé sur plusieurs chantiers, il est réparti au prorata des heures.
+  const days = [...byKey.values()].filter((r) => !r.imported);
+  if (days.length) {
+    const personIds = [...new Set(days.map((r) => r.personId))];
+    const dates = days.map((r) => r.date).sort();
+    const all = await prisma.timeEntry.findMany({
+      where: { personId: { in: personIds }, status: { in: ['approved', 'submitted'] }, date: { gte: new Date(`${dates[0]}T00:00:00Z`), lte: new Date(`${dates[dates.length - 1]}T00:00:00Z`) } },
+      select: { personId: true, date: true, hours: true, amount: true, source: true },
+    });
+    const dayTotals = new Map<string, { hours: number; amount: number }>();
+    for (const e of all) {
+      if (e.source === 'xlsx' || !e.date) continue;
+      const k = `${e.date.toISOString().slice(0, 10)}|${e.personId}`;
+      const t = dayTotals.get(k) ?? { hours: 0, amount: 0 };
+      t.hours += e.hours ?? 0;
+      t.amount += e.amount ?? 0;
+      dayTotals.set(k, t);
+    }
+    for (const r of days) {
+      const rate = r.rate ?? r.defaultRate;
+      const total = dayTotals.get(`${r.date}|${r.personId}`) ?? { hours: r.hours, amount: r.amount };
+      if (!rate || total.hours <= 0) continue;
+      const addHours = Math.max(0, r.dailyHours - total.hours);
+      const addAmount = Math.max(0, Math.round(r.dailyHours * rate * 100) / 100 - total.amount);
+      if (addAmount <= 0) continue;
+      const share = r.hours / total.hours; // 1 si le chantier est le seul du jour
+      r.hours += addHours * share;
+      r.amount += addAmount * share;
+    }
+  }
+  return [...byKey.values()]
+    .map(({ rate: _r, dailyHours: _d, defaultRate: _f, imported: _i, ...r }) => ({ ...r, hours: Math.round(r.hours * 100) / 100, amount: Math.round(r.amount * 100) / 100 }))
+    .sort((a, b) => a.date.localeCompare(b.date) || a.personName.localeCompare(b.personName));
 }
 
 /**
@@ -145,12 +182,14 @@ export async function worksiteMargin(worksiteId: string): Promise<WorksiteMargin
   const [ledger, time, transport, labour] = await Promise.all([
     prisma.ledgerEntry.findMany({ where: { worksiteId }, include: { document: { select: { status: true, paidAmount: true, totalTtc: true } } } }),
     prisma.timeEntry.aggregate({
-      where: { worksiteId, status: { in: ['approved', 'submitted'] } },
+      where: { worksiteId, status: { in: ['approved', 'submitted'] }, date: null },
       _sum: { amount: true },
     }),
     worksiteTransport(worksiteId),
     worksiteLabourDetail(worksiteId),
   ]);
+  // pointages datés (garantie de la journée incluse) + pointages sans date
+  const timeAmount = labour.reduce((s, d) => s + d.amount, 0) + (time._sum.amount ?? 0);
 
   let invoicedHt = 0;
   let paidHt = 0;
@@ -185,7 +224,7 @@ export async function worksiteMargin(worksiteId: string): Promise<WorksiteMargin
 
   // Tant qu'aucune facture "Rémunération - Ouvrier" n'existe pour ce chantier, on garde
   // l'estimation par pointage (c'est elle qui sert à préparer la facture, cf. décompte mensuel).
-  const labourCost = invoicedLabourCost > 0 ? invoicedLabourCost : (time._sum.amount ?? 0);
+  const labourCost = invoicedLabourCost > 0 ? invoicedLabourCost : timeAmount;
 
   const margin = computeWorksiteMargin({
     entity: (ws.entity as Entity) ?? 'jjd',

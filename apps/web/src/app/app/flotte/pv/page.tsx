@@ -5,13 +5,14 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
 import { api, apiBlobUrl, apiUpload } from '@/lib/api';
+import { FileDrop } from '@/components/FileDrop';
 import { Truck, ReceiptText } from 'lucide-react';
 import { PageHead, Money, formatDateBE, formatEur, Thumb } from '@/lib/ui';
 
 interface Fine {
   id: string; date: string | null; time: string | null; reference: string | null; payTo: string | null; street: string | null; postalCode: string | null;
   type: string | null; amount: number | null; status: string | null; paidOn: string | null; plateRaw: string | null; note: string | null;
-  reminder1On: string | null; reminder2On: string | null; driverPersonId: string | null; driverName: string | null; hasPdf: boolean;
+  dueOn: string | null; reminder1On: string | null; reminder2On: string | null; driverPersonId: string | null; driverName: string | null; hasPdf: boolean;
   planned: { drivers: string[]; team: string[] };
   vehicle: { id: string; brand: string | null; model: string | null; plate: string | null; photoThumbUrl: string | null } | null;
 }
@@ -19,7 +20,8 @@ interface VehicleOpt { id: string; brand: string | null; model: string | null; p
 const TYPES = ['Stationnement', 'Excès de vitesse', 'Feu rouge', 'Zone basse émission (LEZ)', 'Téléphone au volant', 'Taxe de circulation', 'Autre'];
 const dayInput = (iso: string | null) => (iso ? iso.slice(0, 10) : '');
 const vLabel = (v: { brand: string | null; model: string | null; plate: string | null; name?: string | null }) => [v.name ?? [v.brand, v.model].filter(Boolean).join(' '), v.plate].filter(Boolean).join(' · ') || 'Véhicule';
-const late = (f: Fine) => f.status !== 'Payé' && [f.reminder1On, f.reminder2On].some((d) => d && new Date(d) < new Date());
+const today = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Brussels' }).format(new Date());
+const late = (f: Fine) => f.status !== 'Payé' && [f.dueOn, f.reminder1On, f.reminder2On].some((d) => d && d.slice(0, 10) < today());
 
 /** PV / amendes de la flotte : ajouter, modifier, marquer payé, joindre le scan, retrouver qui conduisait (planning), supprimer. */
 export default function PvPage() {
@@ -49,7 +51,7 @@ export default function PvPage() {
     <>
       <PageHead
         title="PV / amendes"
-        sub={data ? `${items.length} PV · ${formatEur(total)}${dueNow ? ` · ${dueNow} rappel${dueNow > 1 ? 's' : ''} dépassé${dueNow > 1 ? 's' : ''}` : ''}` : undefined}
+        sub={data ? `${items.length} PV · ${formatEur(total)}${dueNow ? ` · ${dueNow} PV en retard` : ''}` : undefined}
         action={<div className="row"><Link href="/app/flotte" className="btn">← Flotte</Link><button className="btn primary" onClick={() => setEdit('new')}>+ Nouveau PV</button></div>}
       />
       {msg && <div className={`badge ${msg.ok ? 'ok' : 'crit'}`} style={{ marginBottom: '1rem', padding: '0.5rem 0.8rem' }}>{msg.text}</div>}
@@ -68,7 +70,7 @@ export default function PvPage() {
         <div className="tbl-wrap">
           <table className="tbl">
             <thead>
-              <tr><th>{tr("Date")}</th><th>{tr("Véhicule")}</th><th>Type</th><th>À payer à</th><th>Réf</th><th>Conducteur</th><th style={{ textAlign: 'right' }}>Montant</th><th>Statut</th><th /></tr>
+              <tr><th>{tr("Date")}</th><th>{tr("Véhicule")}</th><th>Type</th><th>À payer à</th><th>Réf</th><th>Conducteur</th><th style={{ textAlign: 'right' }}>Montant</th><th>Échéance</th><th>Statut</th><th /></tr>
             </thead>
             <tbody>
               {items.map((f) => (
@@ -87,9 +89,10 @@ export default function PvPage() {
                   <td className="mono" style={{ fontSize: '0.78rem' }}>{f.reference ?? '—'}</td>
                   <td>{f.driverName ?? (f.planned.drivers.length ? <span className="muted" title="D’après le planning ce jour-là">{f.planned.drivers.join(', ')} ?</span> : '—')}</td>
                   <td style={{ textAlign: 'right' }}><Money value={f.amount} /></td>
+                  <td className="tnum">{formatDateBE(f.dueOn)}</td>
                   <td>
                     {f.status === 'Payé' ? <span className="badge ok" title={f.paidOn ? `Payé le ${formatDateBE(f.paidOn)}` : undefined}>{tr("Payé")}</span> : <span className="badge crit">{tr("Impayé")}</span>}
-                    {late(f) && <span className="badge warn" style={{ marginLeft: 4 }} title="Un rappel est dépassé">rappel</span>}
+                    {late(f) && <span className="badge warn" style={{ marginLeft: 4 }} title="Échéance ou rappel dépassé">en retard</span>}
                   </td>
                   <td style={{ whiteSpace: 'nowrap' }}>
                     <button className="btn ghost" onClick={() => setEdit(f)}>Modifier</button>
@@ -111,7 +114,7 @@ export default function PvPage() {
 function FineModal({ fine, vehicles, people, onClose, onSaved }: { fine: Fine | null; vehicles: VehicleOpt[]; people: { id: string; name: string }[]; onClose: () => void; onSaved: (text: string) => void }) {
   const [v, setV] = useState({
     vehicleId: fine?.vehicle?.id ?? '', plateRaw: fine?.plateRaw ?? '', date: dayInput(fine?.date ?? null), time: fine?.time ?? '', reference: fine?.reference ?? '', payTo: fine?.payTo ?? '',
-    street: fine?.street ?? '', postalCode: fine?.postalCode ?? '', type: fine?.type ?? '', amount: fine?.amount != null ? String(fine.amount) : '', reminder1On: dayInput(fine?.reminder1On ?? null),
+    street: fine?.street ?? '', postalCode: fine?.postalCode ?? '', type: fine?.type ?? '', amount: fine?.amount != null ? String(fine.amount) : '', dueOn: dayInput(fine?.dueOn ?? null), reminder1On: dayInput(fine?.reminder1On ?? null),
     reminder2On: dayInput(fine?.reminder2On ?? null), paid: fine?.status === 'Payé', paidOn: dayInput(fine?.paidOn ?? null), driverPersonId: fine?.driverPersonId ?? '', note: fine?.note ?? '',
   });
   const [file, setFile] = useState<File | null>(null);
@@ -125,7 +128,7 @@ function FineModal({ fine, vehicles, people, onClose, onSaved }: { fine: Fine | 
       const body = {
         vehicleId: v.vehicleId || null, plateRaw: v.plateRaw || null, date: v.date || null, time: v.time || null, reference: v.reference || null, payTo: v.payTo || null,
         street: v.street || null, postalCode: v.postalCode || null, type: v.type || null, amount: v.amount === '' ? null : Number(v.amount.replace(',', '.')),
-        reminder1On: v.reminder1On || null, reminder2On: v.reminder2On || null, status: v.paid ? 'Payé' : null, paidOn: v.paid && v.paidOn ? v.paidOn : null, driverPersonId: v.driverPersonId || null, note: v.note || null,
+        dueOn: v.dueOn || null, reminder1On: v.reminder1On || null, reminder2On: v.reminder2On || null, status: v.paid ? 'Payé' : null, paidOn: v.paid && v.paidOn ? v.paidOn : null, driverPersonId: v.driverPersonId || null, note: v.note || null,
       };
       const r = fine ? await api<{ fine: { id: string } }>(`/api/vehicles/fines/${fine.id}`, { method: 'PATCH', body }) : await api<{ fine: { id: string } }>('/api/vehicles/fines', { method: 'POST', body });
       if (file) { const fd = new FormData(); fd.append('file', file); await apiUpload(`/api/vehicles/fines/${r.fine.id}/file`, fd); }
@@ -133,7 +136,7 @@ function FineModal({ fine, vehicles, people, onClose, onSaved }: { fine: Fine | 
     } catch (e2) {
       // « Données invalides » seul ne dit pas quel champ pose problème : on le nomme
       const issues = ((e2 as { body?: { issues?: { path?: (string | number)[]; message?: string }[] } }).body?.issues ?? []);
-      const labels: Record<string, string> = { vehicleId: 'Véhicule', plateRaw: 'Plaque', date: 'Date', time: 'Heure (hh:mm)', reference: 'Référence', payTo: 'À payer à', street: 'Lieu', postalCode: 'Code postal', type: 'Type', amount: 'Montant', reminder1On: '1er rappel', reminder2On: '2e rappel', paidOn: 'Date de paiement', driverPersonId: 'Conducteur', note: 'Note' };
+      const labels: Record<string, string> = { vehicleId: 'Véhicule', plateRaw: 'Plaque', date: 'Date', time: 'Heure (hh:mm)', reference: 'Référence', payTo: 'À payer à', street: 'Lieu', postalCode: 'Code postal', type: 'Type', amount: 'Montant', dueOn: 'Échéance de paiement', reminder1On: '1er rappel', reminder2On: '2e rappel', paidOn: 'Date de paiement', driverPersonId: 'Conducteur', note: 'Note' };
       setErr(issues.length ? issues.map((i) => `${labels[String(i.path?.[0])] ?? String(i.path?.[0] ?? 'Champ')} : ${i.message ?? 'valeur invalide'}`).join(' · ') : (e2 as Error).message);
       setBusy(false);
     }
@@ -159,6 +162,7 @@ function FineModal({ fine, vehicles, people, onClose, onSaved }: { fine: Fine | 
           <div className="field"><label>Code postal / commune</label><input className="input" value={v.postalCode} onChange={(e) => set('postalCode', e.target.value)} /></div>
           <div className="field"><label>À payer à</label><input className="input" value={v.payTo} onChange={(e) => set('payTo', e.target.value)} placeholder="Ville, police, SPF…" /></div>
           <div className="field"><label>Référence / communication</label><input className="input" value={v.reference} onChange={(e) => set('reference', e.target.value)} /></div>
+          <div className="field"><label htmlFor="pv-due-on">Échéance de paiement</label><input id="pv-due-on" className="input" type="date" value={v.dueOn} onChange={(e) => set('dueOn', e.target.value)} /></div>
           <div className="field"><label>1er rappel</label><input className="input" type="date" value={v.reminder1On} onChange={(e) => set('reminder1On', e.target.value)} /></div>
           <div className="field"><label>2e rappel</label><input className="input" type="date" value={v.reminder2On} onChange={(e) => set('reminder2On', e.target.value)} /></div>
           <div className="field" style={{ gridColumn: '1 / -1' }}>
@@ -178,7 +182,7 @@ function FineModal({ fine, vehicles, people, onClose, onSaved }: { fine: Fine | 
           </div>
           <div className="field" style={{ gridColumn: '1 / -1' }}>
             <label>Scan ou photo du PV (PDF ou image){fine?.hasPdf ? ' — un fichier est déjà joint, en choisir un nouveau le remplace' : ''}</label>
-            <input className="input" type="file" accept="application/pdf,image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+            <FileDrop file={file} onFile={setFile} disabled={busy} />
           </div>
         </div>
         {err && <div className="badge crit" style={{ margin: '0 1.2rem', padding: '0.4rem 0.7rem' }}>{err}</div>}

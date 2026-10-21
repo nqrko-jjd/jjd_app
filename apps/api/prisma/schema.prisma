@@ -1196,6 +1196,7 @@ model Fine {
   postalCode  String?
   type        String?
   amount      Float?
+  dueOn       DateTime? // échéance de paiement du PV
   reminder1On DateTime?
   reminder2On DateTime?
   status      String? // "Payé" | null

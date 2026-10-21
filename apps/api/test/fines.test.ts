@@ -33,7 +33,7 @@ after(async () => {
 
 test('PV de la flotte : création (plaque → véhicule), modification, payé / impayé, conducteur du planning, suppression', async () => {
   assert.equal((await call('POST', '/fines', {})).status, 422, 'ni véhicule ni plaque');
-  const c = await call('POST', '/fines', { plateRaw: 't pv 123', date: '2026-09-12', time: '14:05', reference: 'PV-TEST-1', type: 'Stationnement', amount: 58, payTo: 'Ville de Bruxelles', street: 'Rue Royale 1', postalCode: '7100 La Louvière' });
+  const c = await call('POST', '/fines', { plateRaw: 't pv 123', date: '2026-09-12', time: '14:05', dueOn: '2026-10-30', reference: 'PV-TEST-1', type: 'Stationnement', amount: 58, payTo: 'Ville de Bruxelles', street: 'Rue Royale 1', postalCode: '7100 La Louvière' });
   assert.equal(c.status, 201);
   ids.fines.push(c.body.fine.id);
   assert.equal(c.body.fine.vehicleId, ids.v, 'la plaque retrouve le véhicule (sans tirets ni espaces)');
@@ -43,9 +43,16 @@ test('PV de la flotte : création (plaque → véhicule), modification, payé / 
   assert.deepEqual(f.planned.drivers, ['Cond.'], 'conducteur du véhicule ce jour-là d’après le planning');
   assert.equal((await call('GET', '/fines?q=PV-TEST-1')).body.items.length, 1);
 
+  assert.equal(f.dueOn, '2026-10-30T00:00:00.000Z');
+  assert.equal((await call('PATCH', `/fines/${f.id}`, { dueOn: 'invalid' })).status, 422);
+  assert.equal((await call('PATCH', `/fines/${f.id}`, { dueOn: '2026-11-15' })).body.fine.dueOn, '2026-11-15T00:00:00.000Z');
+
   const edit = await call('PATCH', `/fines/${f.id}`, { amount: 60, driverPersonId: ids.p, note: 'Contesté ?' });
   assert.equal(edit.status, 200); assert.equal(edit.body.fine.amount, 60);
   assert.equal((await call('GET', `/fines?vehicleId=${ids.v}`)).body.items[0].driverName, 'Cond.');
+
+  assert.equal(edit.body.fine.dueOn, '2026-11-15T00:00:00.000Z', 'un PATCH partiel conserve l’échéance');
+  assert.equal((await call('PATCH', `/fines/${f.id}`, { dueOn: null })).body.fine.dueOn, null);
 
   const paid = await call('PATCH', `/fines/${f.id}`, { status: 'Payé' });
   assert.equal(paid.body.fine.status, 'Payé'); assert.ok(paid.body.fine.paidOn, 'date de paiement posée');

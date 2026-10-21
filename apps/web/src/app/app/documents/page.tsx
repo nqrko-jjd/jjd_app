@@ -13,6 +13,7 @@ import { DocStatusBadge, DOC_KIND_LABEL } from '@/lib/doc-ui';
 import { ContextMenu, useContextMenu, openActions, type MenuItem } from '@/components/ContextMenu';
 import { PaginationBar } from '@/components/PaginationBar';
 import { DocumentWorksiteModal } from '@/components/DocumentWorksiteModal';
+import { CreditLinkModal } from '@/components/CreditLinkModal';
 import { rowNav } from '@/lib/rowNav';
 import { DOC_STATUS_LABEL } from '@jjd/shared';
 
@@ -22,7 +23,9 @@ interface Row {
   paidOn: string | null; createdAt: string; billedPct?: number; billedHt?: number;
   originalPdf: string | null; source: string | null;
   peppolId: string | null; peppolStatus: string | null;
-  worksite: { id: string; ref: string; title: string } | null; contact: { name: string } | null;
+  worksite: { id: string; ref: string; title: string } | null; contact: { id: string; name: string } | null;
+  parent?: { id: string; kind: string; number: string | null } | null; // facture annulée (sur une note de crédit)
+  children?: { id: string; number: string | null; totalTtc: number; lockedAt: string | null }[]; // notes de crédit rattachées (sur une facture)
 }
 
 const TABS: { key: string; label: string; kind?: string; scope?: string }[] = [
@@ -74,6 +77,7 @@ function DocumentsInner() {
   const [pageSize, setPageSize] = useState(100);
   const [importing, setImporting] = useState(false);
   const [linkDocument, setLinkDocument] = useState<Row | null>(null);
+  const [creditLink, setCreditLink] = useState<Row | null>(null);
   const [linkNotice, setLinkNotice] = useState('');
   const [pendingImport, setPendingImport] = useState<File | null>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
@@ -117,6 +121,15 @@ function DocumentsInner() {
       ...openActions(`/app/documents/${d.id}`, (h) => router.push(h)),
       'separator',
       { label: d.worksite ? 'Changer le chantier lié' : 'Lier à un chantier', onClick: () => { setLinkNotice(''); setLinkDocument(d); } },
+      ...(d.kind === 'credit_note' && d.status !== 'draft'
+        ? [
+            { label: d.parent ? 'Changer la facture annulée…' : 'Lier à une facture…', onClick: () => { setLinkNotice(''); setCreditLink(d); } },
+            ...(d.parent ? [{ label: 'Délier de la facture', onClick: async () => { if (!window.confirm(`Retirer le rattachement de ${d.number ?? 'cette note'} à ${d.parent!.number ?? 'sa facture'} ?`)) return; await api(`/api/documents/${d.id}`, { method: 'PATCH', body: { parentId: null } }); setLinkNotice('Rattachement retiré.'); reload(); } }] : []),
+          ]
+        : []),
+      ...((d.kind === 'invoice' || d.kind === 'deposit_invoice') && d.status !== 'draft'
+        ? [{ label: 'Lier une note de crédit…', onClick: () => { setLinkNotice(''); setCreditLink(d); } }]
+        : []),
       'separator',
       { label: 'Dupliquer', onClick: () => post(`/api/documents/${d.id}/duplicate`, {}, true) },
       ...(d.kind !== 'quote' ? [{ label: 'Dupliquer en devis', onClick: () => post(`/api/documents/${d.id}/duplicate`, { kind: 'quote' }, true) }] : []),
@@ -223,6 +236,11 @@ function DocumentsInner() {
         document={linkDocument}
         onClose={() => setLinkDocument(null)}
         onLinked={(name) => { setLinkNotice(`${linkDocument.number ?? linkDocument.draftRef ?? 'Document'} lié à ${name}.`); reload(); }}
+      />}
+      {creditLink && <CreditLinkModal
+        subject={{ id: creditLink.id, kind: creditLink.kind, number: creditLink.number, draftRef: creditLink.draftRef, totalTtc: creditLink.totalTtc, contact: creditLink.contact }}
+        onClose={() => setCreditLink(null)}
+        onLinked={(m) => { setLinkNotice(m); reload(); }}
       />}
       {linkNotice && <div className="worksite-context-banner" role="status"><span>{linkNotice}</span><button className="btn ghost" onClick={() => setLinkNotice('')} aria-label="Fermer la confirmation">✕</button></div>}
       <PageHead
@@ -360,6 +378,12 @@ function DocumentsInner() {
                   {d.worksite
                     ? <span className="chip" style={{ whiteSpace: 'nowrap' }} title="Chantier lié">🏗 {d.worksite.ref}</span>
                     : <span className="chip" style={{ color: 'var(--ink-3)', borderStyle: 'dashed' }} title="Aucun chantier lié">Sans chantier</span>}
+                  {d.kind === 'credit_note' && (d.parent
+                    ? <Link href={`/app/documents/${d.parent.id}`} onClick={(e) => e.stopPropagation()} className="chip" style={{ whiteSpace: 'nowrap', borderColor: 'var(--primary)', color: 'var(--primary)' }} title="Facture annulée par cette note de crédit">↩ annule {d.parent.number ?? 'facture'}</Link>
+                    : <span className="chip" style={{ whiteSpace: 'nowrap', color: 'var(--warn)', borderStyle: 'dashed', borderColor: 'var(--warn)' }} title="Clic droit → Lier à une facture">⚠ non liée à une facture</span>)}
+                  {(d.kind === 'invoice' || d.kind === 'deposit_invoice') && (d.children ?? []).map((c) => (
+                    <Link key={c.id} href={`/app/documents/${c.id}`} onClick={(e) => e.stopPropagation()} className="chip" style={{ whiteSpace: 'nowrap', borderColor: 'var(--primary)', color: 'var(--primary)' }} title="Note de crédit rattachée à cette facture">NC {c.number ?? '—'} · −{formatEur(Math.abs(c.totalTtc))}{c.lockedAt ? '' : ' (brouillon)'}</Link>
+                  ))}
                   {d.source === 'ai-draft' && <span className="badge warn" title="Créé par l'assistant IA — à vérifier avant validation">✨ IA</span>}
                   <PeppolStatus peppolId={d.peppolId} peppolStatus={d.peppolStatus} compact href={`/app/documents/${d.id}#document-delivery`} />
                   {d.kind === 'quote' && (d.billedPct ?? 0) > 0

@@ -49,7 +49,7 @@ export const docInclude = {
   lines: { orderBy: { position: 'asc' } },
   worksite: { select: { id: true, ref: true, title: true } },
   contact: { select: { id: true, name: true, vat: true, address: true, box: true, postalCode: true, city: true, email: true } },
-  parent: { select: { id: true, kind: true, number: true, draftRef: true } },
+  parent: { select: { id: true, kind: true, number: true, draftRef: true, status: true, totalTtc: true, issuedOn: true } },
   children: { select: { id: true, kind: true, number: true, draftRef: true, status: true, totalTtc: true, issuedOn: true, lockedAt: true } },
   createdBy: { select: { id: true, email: true } },
 } satisfies Prisma.DocumentInclude;

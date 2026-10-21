@@ -12,7 +12,7 @@ import { insensitive } from '../lib/search.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, OFFICE } from '../lib/auth.js';
 import { z } from 'zod';
-import { docInclude, buildLineRows, cloneLineRows, refreshDocTotals, issueDocument, getCompany, syncLedgerEntryForDocument, creditedTtc, partialCreditLines } from '../lib/documents.js';
+import { docInclude, buildLineRows, cloneLineRows, refreshDocTotals, issueDocument, getCompany, syncLedgerEntryForDocument, creditedTtc, partialCreditLines, applyCreditToParent } from '../lib/documents.js';
 import { renderDocumentPdf } from '../lib/pdf.js';
 import { sendViaPeppol, refreshPeppolStatus } from '../lib/peppol.js';
 import { emailInput, defaultEmail, sendEmailWithPdf, emailConfigured } from '../lib/doc-mail.js';
@@ -243,6 +243,9 @@ documentsRouter.get(
         include: {
           worksite: { select: { id: true, ref: true, title: true } },
           contact: { select: { id: true, name: true } },
+          // lien facture ↔ note de crédit, affiché dans la liste : facture annulée (sur une NC) / NC rattachées (sur une facture)
+          parent: { select: { id: true, kind: true, number: true } },
+          children: { where: { kind: 'credit_note' }, select: { id: true, number: true, totalTtc: true, lockedAt: true } },
         },
       }),
       prisma.document.count({ where }),
@@ -455,6 +458,18 @@ documentsRouter.patch(
     if (data.lines && existing.kind === 'quote' && (await prisma.progressStatement.count({ where: { quoteId: existing.id } })) > 0) {
       throw new HttpError(409, 'Des états d’avancement existent sur ce devis : ses lignes ne se modifient plus (créez un devis complémentaire).');
     }
+    // Rattacher (ou détacher) une note de crédit à la facture qu'elle annule — après coup, pour les NC importées ou créées « libres ».
+    let relinkParentId: string | null | undefined = undefined;
+    if (data.parentId !== undefined && (data.parentId ?? null) !== (existing.parentId ?? null)) {
+      if (existing.kind !== 'credit_note') throw new HttpError(422, 'Seule une note de crédit peut être rattachée à une facture.');
+      if (data.parentId) {
+        if (data.parentId === existing.id) throw new HttpError(422, 'Une note de crédit ne peut pas s’annuler elle-même.');
+        const parent = await prisma.document.findUnique({ where: { id: data.parentId }, select: { id: true, kind: true, status: true, number: true } });
+        if (!parent || (parent.kind !== 'invoice' && parent.kind !== 'deposit_invoice')) throw new HttpError(422, 'Il faut choisir une facture (ou une facture d’acompte).');
+        if (parent.status === 'draft') throw new HttpError(422, 'Cette facture n’est pas encore émise.');
+      }
+      relinkParentId = data.parentId ?? null;
+    }
     let depositPlan: unknown = undefined;
     if (data.depositPlan !== undefined) {
       const items = (data.depositPlan ?? []).map((i) => ({ id: i.id || planId(8), kind: i.kind, value: i.value, trigger: i.trigger, label: i.label?.trim() || null, invoiceId: i.invoiceId ?? null }));
@@ -491,6 +506,7 @@ documentsRouter.patch(
         paidAmount: data.paidAmount ?? undefined,
         depositPlan: depositPlan as never,
         retentionPct: data.retentionPct === undefined ? undefined : data.retentionPct,
+        parentId: relinkParentId,
         status: revertOverdue ? (existing.paidAmount > 0 ? 'partial' : 'sent') : undefined,
       },
     });
@@ -506,6 +522,10 @@ documentsRouter.patch(
       await refreshDocTotals(existing.id);
     }
     if (existing.lockedAt) await syncLedgerEntryForDocument(existing.id);
+    if (relinkParentId !== undefined) {
+      await prisma.auditLog.create({ data: { actorId: req.user!.id, action: relinkParentId ? 'credit-note.link' : 'credit-note.unlink', entity: 'document', entityId: existing.id, meta: { number: existing.number, from: existing.parentId, to: relinkParentId } } });
+      if (relinkParentId && existing.lockedAt) await applyCreditToParent(relinkParentId); // facture entièrement couverte → « créditée »
+    }
     const full = await prisma.document.findUnique({ where: { id: existing.id }, include: docInclude });
     res.json({ document: full });
   }),

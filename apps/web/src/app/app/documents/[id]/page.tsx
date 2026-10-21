@@ -13,6 +13,7 @@ import { AssigneePicker } from '@/components/AssigneePicker';
 import { WorksitePicker, type WsPickerOption } from '@/components/WorksitePicker';
 import { DocumentDelivery } from '@/components/DocumentDelivery';
 import { CreditNoteModal } from '@/components/CreditNoteModal';
+import { CreditLinkCard } from '@/components/CreditLinkModal';
 import { DepositModal } from '@/components/DepositModal';
 import { InvoiceWizardModal } from '@/components/InvoiceWizardModal';
 import { IssueModal } from '@/components/IssueModal';
@@ -317,25 +318,20 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
       {depositOpen && <DepositModal quote={{ id: doc.id, number: doc.number, draftRef: doc.draftRef, vatRate: doc.vatRate, totalHt: doc.totalHt, billing: doc.billing }} onClose={() => setDepositOpen(false)} onCreated={(nid) => router.push(`/app/documents/${nid}`)} />}
       {creditOpen && <CreditNoteModal invoice={{ id: doc.id, number: doc.number, totalTtc: doc.totalTtc }} creditedTtc={creditedTtc} onClose={() => setCreditOpen(false)} onCreated={(nid) => router.push(`/app/documents/${nid}`)} />}
 
-      {(doc.parent || doc.children.length > 0) && (
+      {/* lien facture ↔ note de crédit : encadré visible + rattachement après coup */}
+      <CreditLinkCard doc={doc} onChanged={(m) => { if (m) setMsg(m); void reload(); }} />
+      {((doc.parent && doc.kind !== 'credit_note') || doc.children.some((c) => c.kind !== 'credit_note')) && (
       <div className="row" style={{ marginBottom: '1rem', gap: '0.4rem' }}>
-        {doc.parent && (
+        {doc.parent && doc.kind !== 'credit_note' && (
           <Link href={`/app/documents/${doc.parent.id}`} className="chip">
             ← {DOC_KIND_LABEL[doc.parent.kind]} {doc.parent.number ?? doc.parent.draftRef}
           </Link>
         )}
-        {doc.children.map((c) => (
+        {doc.children.filter((c) => c.kind !== 'credit_note').map((c) => (
           <Link key={c.id} href={`/app/documents/${c.id}`} className="chip">
-            {DOC_KIND_LABEL[c.kind]} {c.number ?? c.draftRef}{c.kind === 'credit_note' && c.totalTtc != null ? ` · ${formatEur(Math.abs(c.totalTtc))}` : ''}{c.kind === 'credit_note' && !c.lockedAt ? ' (brouillon)' : ''} →
+            {DOC_KIND_LABEL[c.kind]} {c.number ?? c.draftRef} →
           </Link>
         ))}
-        {(doc.kind === 'invoice' || doc.kind === 'deposit_invoice') && creditedTtc > 0 && (
-          <span className="muted" style={{ fontSize: '0.84rem', alignSelf: 'center' }}>
-            Crédité {formatEur(creditedTtc)} sur {formatEur(Math.abs(doc.totalTtc))}{creditRemaining > 0.01 ? ` · reste ${formatEur(creditRemaining)}` : ' · intégralement'}
-            {doc.paidAmount > 0.01 ? ` · payé ${formatEur(doc.paidAmount)}` : ''}
-            {doc.paidAmount - creditRemaining > 0.01 ? ` · trop-perçu ${formatEur(doc.paidAmount - creditRemaining)} à rembourser ou à imputer sur une autre facture` : ''}
-          </span>
-        )}
       </div>
       )}
 

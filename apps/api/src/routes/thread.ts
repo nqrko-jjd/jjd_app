@@ -15,7 +15,7 @@ import { processMentions, mentionNamesFor } from '../lib/mentions.js';
 
 export const threadRouter = Router({ mergeParams: true });
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
-const uploadZip = multer({ storage: multer.memoryStorage(), limits: { fileSize: 300 * 1024 * 1024 } });
+const uploadZip = multer({ storage: multer.memoryStorage(), limits: { fileSize: 500 * 1024 * 1024 } });
 
 function deriveYM(date: Date) {
   const m = date.getMonth() + 1;
@@ -190,7 +190,10 @@ threadRouter.post(
 threadRouter.post(
   '/import-whatsapp',
   requireAuth(...FIELD_OFFICE),
-  uploadZip.single('zip'),
+  (req, res, next) => uploadZip.single('zip')(req, res, (err) => {
+    if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') return next(new HttpError(413, 'ZIP trop volumineux : 500 Mo maximum.'));
+    next(err);
+  }),
   asyncHandler(async (req, res) => {
     const worksiteId = req.params.worksiteId!;
     if (!req.file) throw new HttpError(422, 'Aucun fichier');

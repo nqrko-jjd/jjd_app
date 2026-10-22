@@ -70,7 +70,13 @@ export async function apiUpload<T = unknown>(path: string, form: FormData): Prom
   if (t) headers.authorization = `Bearer ${t}`;
   const res = await fetch(`${BASE}${path}`, { method: 'POST', headers, body: form });
   const text = await res.text();
-  const data = text ? JSON.parse(text) : null;
+  let data;
+  try { data = text ? JSON.parse(text) : null; } catch {
+    const message = res.status === 413 ? 'Fichier trop volumineux pour le serveur.'
+      : res.status === 504 ? 'Le serveur a dépassé le délai de réponse. Vérifiez le résultat de l’import avant de réessayer.'
+      : `Le serveur n’a pas pu traiter l’envoi (erreur ${res.status}).`;
+    throw new ApiError(res.status, message);
+  }
   if (!res.ok) throw new ApiError(res.status, data?.error ?? `Erreur ${res.status}`, data);
   return data as T;
 }

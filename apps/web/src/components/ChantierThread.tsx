@@ -102,12 +102,17 @@ export function ChantierThread({ worksiteId }: { worksiteId: string }) {
   async function importWhatsapp(files: FileList | null) {
     const zip = files?.[0];
     if (!zip) return;
+    if (zip.size > 500 * 1024 * 1024) {
+      setImportMsg('ZIP trop volumineux : 500 Mo maximum.');
+      if (zipRef.current) zipRef.current.value = '';
+      return;
+    }
     if (!confirm('Importer cet export WhatsApp ? Les messages iront dans le chat, les photos/vidéos dans les pièces jointes. Un import précédent pour ce chantier serait remplacé.')) {
       if (zipRef.current) zipRef.current.value = '';
       return;
     }
     setBusy(true);
-    setImportMsg('Import en cours… (peut prendre une minute selon le nombre de photos)');
+    setImportMsg('Import en cours… (peut prendre plusieurs minutes selon la taille du ZIP et le nombre de photos)');
     try {
       const fd = new FormData();
       fd.append('zip', zip);

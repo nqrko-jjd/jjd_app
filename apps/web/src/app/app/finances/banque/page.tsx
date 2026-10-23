@@ -90,6 +90,10 @@ function BanqueInner() {
   const [matched, setMatched] = useState('0');
   const [q, setQ] = useState('');
   const [bank, setBank] = useState('');
+  // filtre de date : « all » (toutes), « day » (une date précise) ou « range » (du … au …)
+  const [dateMode, setDateMode] = useState<'all' | 'day' | 'range'>('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(100);
   const [sort, setSort] = useState('bookingDate');
@@ -103,11 +107,13 @@ function BanqueInner() {
   const [documentFilter, setDocumentFilter] = useState<string | null>(null);
   useEffect(() => { setDocumentFilter(sp.get('documentId')); }, [sp]);
 
-  useEffect(() => { setPage(1); }, [q, bank, matched, documentFilter]);
+  useEffect(() => { setPage(1); }, [q, bank, matched, documentFilter, dateMode, dateFrom, dateTo]);
 
   const qs = new URLSearchParams({ matched, page: String(page), pageSize: String(pageSize), sort, dir });
   if (q) qs.set('q', q);
   if (bank) qs.set('bank', bank);
+  if (dateMode === 'day' && dateFrom) { qs.set('from', dateFrom); qs.set('to', dateFrom); }
+  if (dateMode === 'range') { if (dateFrom) qs.set('from', dateFrom); if (dateTo) qs.set('to', dateTo); }
   if (documentFilter) qs.set('documentId', documentFilter);
   if (sp.get('transactionId')) qs.set('transactionId', sp.get('transactionId')!);
   const { data, loading, error, reload } = useApi<{
@@ -348,6 +354,25 @@ function BanqueInner() {
           <button className="btn" title="Renomme ce libellé pour toutes ses transactions" onClick={() => renameBank(bank)}>
             Renommer
           </button>
+        )}
+        <select className="select" style={{ maxWidth: 170 }} value={dateMode} aria-label="Filtre de date" onChange={(e) => { const m = e.target.value as 'all' | 'day' | 'range'; setDateMode(m); if (m === 'all') { setDateFrom(''); setDateTo(''); } if (m === 'day') setDateTo(''); }}>
+          <option value="all">Toutes les dates</option>
+          <option value="day">Une date précise</option>
+          <option value="range">Une période</option>
+        </select>
+        {dateMode === 'day' && (
+          <input className="input" type="date" style={{ maxWidth: 170 }} aria-label="Date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+        )}
+        {dateMode === 'range' && (
+          <>
+            <label className="row" style={{ gap: 6, alignItems: 'center' }}><span className="muted">du</span><input className="input" type="date" style={{ maxWidth: 170 }} aria-label="Date de début" value={dateFrom} max={dateTo || undefined} onChange={(e) => setDateFrom(e.target.value)} /></label>
+            <label className="row" style={{ gap: 6, alignItems: 'center' }}><span className="muted">au</span><input className="input" type="date" style={{ maxWidth: 170 }} aria-label="Date de fin" value={dateTo} min={dateFrom || undefined} onChange={(e) => setDateTo(e.target.value)} /></label>
+            <button type="button" className="btn ghost" onClick={() => { const n = new Date(); const f = new Date(n.getFullYear(), n.getMonth(), 1); const l = new Date(n.getFullYear(), n.getMonth() + 1, 0); const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; setDateFrom(iso(f)); setDateTo(iso(l)); }}>Ce mois</button>
+            <button type="button" className="btn ghost" onClick={() => { const n = new Date(); const f = new Date(n.getFullYear(), n.getMonth() - 1, 1); const l = new Date(n.getFullYear(), n.getMonth(), 0); const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; setDateFrom(iso(f)); setDateTo(iso(l)); }}>Mois dernier</button>
+          </>
+        )}
+        {dateMode !== 'all' && (dateFrom || dateTo) && (
+          <button type="button" className="btn ghost" onClick={() => { setDateMode('all'); setDateFrom(''); setDateTo(''); }} title="Retirer le filtre de date">✕ Effacer la date</button>
         )}
       </div>
 

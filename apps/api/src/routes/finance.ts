@@ -268,7 +268,7 @@ financeRouter.get(
   '/bank',
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
-    const { matched, q: qRaw, from, bank, documentId, page: pageStr, pageSize: pageSizeStr, sort, dir } = req.query as Record<string, string>;
+    const { matched, q: qRaw, from, to, bank, documentId, page: pageStr, pageSize: pageSizeStr, sort, dir } = req.query as Record<string, string>;
     const q = qRaw?.toLowerCase();
     const and: Record<string, unknown>[] = [];
     // Retrouver la transaction qui a réglé une facture précise (lien direct depuis sa fiche) —
@@ -281,7 +281,10 @@ financeRouter.get(
     }
     else if (matched === '1') and.push(RECONCILED);
     else if (matched === '0') and.push(UNRECONCILED);
-    if (from) and.push({ bookingDate: { gte: new Date(from) } });
+    // période : « du » / « au » (AAAA-MM-JJ, bornes incluses) ; le même jour des deux côtés = une date précise
+    const isDay = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v));
+    if (isDay(from)) and.push({ bookingDate: { gte: new Date(`${from}T00:00:00.000Z`) } });
+    if (isDay(to)) and.push({ bookingDate: { lte: new Date(`${to}T23:59:59.999Z`) } });
     if (bank) and.push({ bank });
     if (typeof req.query.transactionId === 'string') { and.length = 0; and.push({ id: req.query.transactionId }); }
     if (q) and.push({ OR: [{ counterpartyName: { contains: q, ...insensitive } }, { description: { contains: q, ...insensitive } }, { communication: { contains: q, ...insensitive } }] });

@@ -23,6 +23,7 @@ interface ContactPerson { id: string; role: string | null; name: string; email: 
 interface Purchase {
   id: string; date: string | null; docNumber: string | null; categoryRaw: string | null;
   ht: number; ttc: number | null; direction: string; paid: boolean; hasPdf: boolean;
+  paidAmount?: number; remainingAmount?: number;
   worksite: { ref: string; title: string } | null;
 }
 interface BalanceLine { id: string; date: string | null; docNumber: string | null; direction: string; ht: number; ttc: number; balance: number }
@@ -405,7 +406,12 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
                           <td>{p.categoryRaw ?? '—'}</td>
                           <td style={{ textAlign: 'right' }}><Money value={p.ht} /></td>
                           <td style={{ textAlign: 'right' }}><Money value={p.ttc ?? p.ht} /></td>
-                          <td><span className={`badge ${p.paid ? 'ok' : 'warn'}`}>{p.paid ? tr("Payé") : tr("Non payé")}</span></td>
+                          <td>
+                            {(() => { const partial = !p.paid && p.direction !== 'credit_note' && (p.paidAmount ?? 0) > 0.01; return (<>
+                              <span className={`badge ${p.paid ? 'ok' : 'warn'}`}>{p.paid ? tr("Payé") : partial ? tr("Partiellement payé") : tr("Non payé")}</span>
+                              {partial && <div className="muted" style={{ fontSize: '0.76rem', marginTop: 3 }}>Payé : <Money value={p.paidAmount ?? 0} /><br />Reste : <Money value={p.remainingAmount ?? 0} /></div>}
+                            </>); })()}
+                          </td>
                           <td>{p.hasPdf && <button className="btn ghost" style={mini} onClick={() => viewPurchasePdf(p.id)}>📎</button>}</td>
                         </tr>
                       ))}

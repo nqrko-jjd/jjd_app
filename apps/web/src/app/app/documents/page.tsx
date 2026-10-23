@@ -392,6 +392,9 @@ function DocumentsInner() {
                   {(d.status === 'paid' || d.status === 'partial') && d.paidOn && (
                     <span className="muted" style={{ fontSize: '0.76rem' }}>le {formatDateBE(d.paidOn)}</span>
                   )}
+                  {(d.kind === 'invoice' || d.kind === 'deposit_invoice') && !['paid', 'credited', 'draft'].includes(d.status) && d.paidAmount > 0.01 && d.totalTtc - d.paidAmount > 0.01 && (
+                    <span className="badge warn" title="Paiement partiel reçu" style={{ whiteSpace: 'nowrap' }}>payé {formatEur(d.paidAmount)} · reste {formatEur(d.totalTtc - d.paidAmount)}</span>
+                  )}
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginLeft: 'auto', flexShrink: 0 }}>
                   <span className="doc-item-amount"><Money value={d.totalTtc} /></span>
                   <button

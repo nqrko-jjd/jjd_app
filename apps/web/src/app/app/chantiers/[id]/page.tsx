@@ -556,6 +556,7 @@ function InvoicedProgress({ invoicedHt, quotedHt }: { invoicedHt: number; quoted
 interface WsExpense {
   id: string; date: string | null; docNumber: string | null; supplier: string | null;
   categoryLabel: string | null; ht: number; ttc: number | null; paid: boolean; hasPdf: boolean;
+  paidAmount?: number; remainingAmount?: number;
 }
 
 function WorksiteExpenses({ worksiteId }: { worksiteId: string }) {
@@ -581,7 +582,10 @@ function WorksiteExpenses({ worksiteId }: { worksiteId: string }) {
                     <td>{e.categoryLabel ?? '—'}</td>
                     <td style={{ textAlign: 'right' }}><Money value={e.ht} /></td>
                     <td style={{ textAlign: 'right' }}><Money value={e.ttc ?? e.ht} /></td>
-                    <td><span className={`badge ${e.paid ? 'ok' : 'warn'}`}>{e.paid ? tr("Payé") : tr("Non payé")}</span></td>
+                    <td>
+                      <span className={`badge ${e.paid ? 'ok' : 'warn'}`}>{e.paid ? tr("Payé") : (e.paidAmount ?? 0) > 0.01 ? tr("Partiellement payé") : tr("Non payé")}</span>
+                      {!e.paid && (e.paidAmount ?? 0) > 0.01 && <div className="muted" style={{ fontSize: '0.76rem', marginTop: 3 }}>Payé : <Money value={e.paidAmount ?? 0} /><br />Reste : <Money value={e.remainingAmount ?? 0} /></div>}
+                    </td>
                   </tr>
                 ))}
               </tbody>

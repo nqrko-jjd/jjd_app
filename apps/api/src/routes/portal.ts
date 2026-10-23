@@ -44,6 +44,7 @@ const mSel = { select: { displayName: true, firstName: true } } as const;
 const NEXT_STEP_LABEL: Partial<Record<WorksiteStatus, string>> = {
   lead: 'Étude de votre demande',
   quote_needed: 'Envoi du devis',
+  quote_sent: 'Votre décision sur le devis',
   to_plan: 'Planification de l’intervention',
   scheduled: 'Début des travaux',
   in_progress: 'Poursuite des travaux',

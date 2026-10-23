@@ -16,7 +16,7 @@ interface WS {
 
 const STATUS_DOT: Record<string, string> = {
   scheduled: 'gold', in_progress: 'ok', on_hold: 'blue', done: 'ok', to_invoice: 'gold',
-  invoiced: 'grey', closed: 'grey', lead: 'grey', to_plan: 'grey', cancelled: 'crit',
+  invoiced: 'grey', closed: 'grey', lead: 'grey', quote_sent: 'grey', to_plan: 'grey', cancelled: 'crit',
 };
 const fdate = (s: string | null) => (s ? new Date(s).toLocaleDateString('fr-BE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—');
 

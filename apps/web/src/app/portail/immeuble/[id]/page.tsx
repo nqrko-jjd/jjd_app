@@ -13,7 +13,7 @@ interface Building {
   worksites: { id: string; ref: string; title: string; status: string; updatedAt: string }[];
 }
 const STATUS: Record<string, string> = {
-  to_plan: 'À planifier', scheduled: 'Planifié', in_progress: 'En cours', on_hold: 'En attente',
+  quote_sent: 'Devis envoyé', to_plan: 'À planifier', scheduled: 'Planifié', in_progress: 'En cours', on_hold: 'En attente',
   done: 'Terminé', to_invoice: 'À facturer', invoiced: 'Facturé', closed: 'Clôturé', cancelled: 'Annulé', lead: 'Demande',
 };
 const fdate = (s: string) => new Date(s).toLocaleDateString('fr-BE', { day: '2-digit', month: 'long', year: 'numeric' });

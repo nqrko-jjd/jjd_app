@@ -162,3 +162,30 @@ test('suivi des devis ancré sur la date d’expiration : seuls les devis encore
   assert.ok(!by(expired.id), 'devis déjà expiré : plus relancé');
   await saveF({ ...D });
 });
+
+test('suivi des devis : seuls les devis dont le chantier est « Devis envoyé » sont relancés (un devis sans chantier reste relancé)', async () => {
+  arm(); sent.length = 0;
+  const { computeQuoteProposals } = await import('../src/lib/quote-followups.js');
+  const c = await prisma.contact.create({ data: { name: 'Prospect Statut Chantier', normalizedName: 'prospect statut chantier', type: 'client', email: 'p@statut.be' } });
+  created.contacts.push(c.id);
+  const wsIds: string[] = [];
+  try {
+    const mk = async (status: string | null) => {
+      const ws = status ? await prisma.worksite.create({ data: { ref: `R-FUP${Math.floor(Math.random() * 1e6)}`, title: 'Chantier relance', status, source: 'test-reminders' } }) : null;
+      if (ws) wsIds.push(ws.id);
+      const d = await prisma.document.create({ data: { kind: 'quote', direction: 'sale', number: `D7${Math.floor(Math.random() * 1e6)}`, status: 'sent', worksiteId: ws?.id ?? null, contactId: c.id, lockedAt: new Date(), issuedOn: new Date(Date.now() - 10 * DAY), sentAt: new Date(Date.now() - 10 * DAY), totalTtc: 1000, totalHt: 826, originalPdf: PDF, source: 'test-reminders' } });
+      created.docs.push(d.id);
+      return d;
+    };
+    const sentWs = await mk('quote_sent'), neededWs = await mk('quote_needed'), holdWs = await mk('on_hold'), noWs = await mk(null);
+    const props = await computeQuoteProposals();
+    const has = (id: string) => props.some((p) => p.documentId === id);
+    assert.ok(has(sentWs.id), 'chantier « Devis envoyé » : relancé');
+    assert.ok(!has(neededWs.id), 'chantier « Devis à faire » : pas relancé');
+    assert.ok(!has(holdWs.id), 'chantier en attente : les relances sont arrêtées');
+    assert.ok(has(noWs.id), 'devis sans chantier : relancé');
+  } finally {
+    await prisma.document.deleteMany({ where: { worksiteId: { in: wsIds } } });
+    await prisma.worksite.deleteMany({ where: { id: { in: wsIds } } });
+  }
+});

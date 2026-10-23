@@ -46,6 +46,7 @@ export function Kpi({ ic: Ic, label, value, sub, hero, warn, neg, history, href 
 
 const STATUS_TONE: Partial<Record<WorksiteStatus, string>> = {
   lead: 'plain',
+  quote_sent: 'primary',
   to_plan: 'plain',
   scheduled: 'primary',
   in_progress: 'primary',

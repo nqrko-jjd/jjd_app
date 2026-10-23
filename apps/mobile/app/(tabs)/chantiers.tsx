@@ -15,7 +15,7 @@ interface WS {
 }
 
 const STATUS_LABEL: Record<string, string> = {
-  lead: 'Demande', to_plan: 'À planifier', scheduled: 'Planifié', in_progress: 'En cours',
+  lead: 'Demande', quote_needed: 'Devis à faire', quote_sent: 'Devis envoyé', to_plan: 'À planifier', scheduled: 'Planifié', in_progress: 'En cours',
   on_hold: 'En attente', done: 'Terminé', to_invoice: 'À facturer', invoiced: 'Facturé',
   closed: 'Clôturé', cancelled: 'Abandonné',
 };

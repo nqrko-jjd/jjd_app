@@ -37,7 +37,7 @@ function invoiceTag(status: string | null) {
 
 const STATUS_DOT: Record<string, string> = {
   scheduled: 'gold', in_progress: 'ok', on_hold: 'blue', done: 'ok', to_invoice: 'gold',
-  invoiced: 'grey', closed: 'grey', lead: 'grey', to_plan: 'grey', cancelled: 'crit',
+  invoiced: 'grey', closed: 'grey', lead: 'grey', quote_sent: 'grey', to_plan: 'grey', cancelled: 'crit',
 };
 function fdate(s: string | null) {
   if (!s) return '—';

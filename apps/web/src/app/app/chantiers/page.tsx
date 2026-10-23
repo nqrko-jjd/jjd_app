@@ -29,7 +29,7 @@ import { WORKSITE_STATUS_GROUPS } from '@/lib/worksite-status-groups';
 // Chaque statut doit avoir son onglet (sinon un chantier « en attente », « demande »… n'est visible que dans « Tous »).
 const STATUS_VIEWS: { key: string; label: string; archived?: '1' | 'all' }[] = [
   { key: '', label: 'Tous', archived: 'all' },
-  { key: 'lead,quote_needed', label: 'Demandes / devis', archived: 'all' },
+  { key: 'lead,quote_needed,quote_sent', label: 'Demandes / devis', archived: 'all' },
   { key: 'in_progress', label: 'En cours' },
   { key: 'to_plan,scheduled', label: 'À planifier' },
   { key: 'on_hold', label: 'En attente', archived: 'all' },

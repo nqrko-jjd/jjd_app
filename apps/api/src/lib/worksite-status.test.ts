@@ -101,3 +101,17 @@ test('un événement du planning ne réveille pas la facturation (statut manuel 
   assert.equal(to({ status: 'done', quotedHt: 10000, invoicedHt: 3000, invoices: 1 }, 'event'), null);
   assert.equal(to({ status: 'invoiced', quotedHt: 10000, invoicedHt: 10000, invoices: 1, allPaid: true }, 'event'), null);
 });
+
+test('devis envoyé : demande / devis à faire → « Devis envoyé » seulement quand le devis est réellement transmis', () => {
+  assert.equal(to({ status: 'quote_needed', quotes: { accepted: 0, sent: 1, declined: 0, delivered: 1 } }, 'document'), 'quote_sent');
+  assert.equal(to({ status: 'lead', quotes: { accepted: 0, sent: 1, declined: 0, delivered: 1 } }, 'document'), 'quote_sent');
+  assert.equal(to({ status: 'quote_needed', quotes: { accepted: 0, sent: 1, declined: 0, delivered: 0 } }, 'document'), null, 'devis seulement émis, pas transmis : rien ne change');
+  assert.equal(to({ status: 'to_plan', quotes: { accepted: 0, sent: 1, declined: 0, delivered: 1 } }, 'document'), null, 'un chantier plus avancé ne recule pas');
+});
+
+test('« Devis envoyé » : accepté → à planifier, refusé → refusé, intervention planifiée → planifié', () => {
+  assert.equal(to({ status: 'quote_sent', quotes: { accepted: 1, sent: 0, declined: 0, delivered: 0 } }, 'document'), 'to_plan');
+  assert.equal(to({ status: 'quote_sent', quotes: { accepted: 0, sent: 0, declined: 1, delivered: 0 } }, 'document'), 'refused');
+  assert.equal(to({ status: 'quote_sent', quotes: { accepted: 0, sent: 1, declined: 1, delivered: 1 } }, 'document'), null, 'un autre devis est encore en attente');
+  assert.equal(to({ status: 'quote_sent', futureIntervention: true, anyIntervention: true }, 'event'), 'scheduled');
+});

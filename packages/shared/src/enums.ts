@@ -94,6 +94,7 @@ export const ENTITY_PROFIT_SHARE: Record<Entity, number> = {
 export const WORKSITE_STATUSES = [
   'lead', // demande / devis pas encore accepté
   'quote_needed', // demande reçue, devis à rédiger
+  'quote_sent', // devis envoyé au client, en attente de sa réponse (c'est ce statut qui déclenche les relances de devis)
   'to_plan', // accepté, à planifier
   'scheduled', // planifié
   'in_progress', // en cours
@@ -110,6 +111,7 @@ export type WorksiteStatus = (typeof WORKSITE_STATUSES)[number];
 export const WORKSITE_STATUS_LABEL: Record<WorksiteStatus, string> = {
   lead: 'Demande',
   quote_needed: 'Devis à faire',
+  quote_sent: 'Devis envoyé',
   to_plan: 'À planifier',
   scheduled: 'Planifié',
   in_progress: 'En cours',
@@ -123,7 +125,7 @@ export const WORKSITE_STATUS_LABEL: Record<WorksiteStatus, string> = {
 };
 
 export const WORKSITE_STATUS_OPEN: WorksiteStatus[] = [
-  'lead', 'quote_needed', 'to_plan', 'scheduled', 'in_progress', 'on_hold', 'done', 'to_invoice',
+  'lead', 'quote_needed', 'quote_sent', 'to_plan', 'scheduled', 'in_progress', 'on_hold', 'done', 'to_invoice',
 ];
 
 /**
@@ -131,7 +133,7 @@ export const WORKSITE_STATUS_OPEN: WorksiteStatus[] = [
  * repère visuel dans les listes, sur le cycle de vie du dossier).
  */
 export const WORKSITE_PROGRESS_PCT: Record<WorksiteStatus, number> = {
-  lead: 0, quote_needed: 0, to_plan: 5, scheduled: 15, in_progress: 55, on_hold: 40,
+  lead: 0, quote_needed: 0, quote_sent: 3, to_plan: 5, scheduled: 15, in_progress: 55, on_hold: 40,
   done: 90, to_invoice: 95, invoiced: 100, closed: 100, refused: 0, cancelled: 0,
 };
 

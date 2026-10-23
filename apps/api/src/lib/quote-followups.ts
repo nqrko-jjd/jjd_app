@@ -1,5 +1,7 @@
 /**
  * Suivi des devis envoyés restés sans réponse : relance courtoise à J+7, J+21, J+45 après l'envoi (réglable), avec le devis en PDF.
+ * Seuls les devis dont le CHANTIER est au statut « Devis envoyé » sont relancés : dès que le chantier change (accepté, refusé, en attente, abandonné…), les relances s'arrêtent.
+ * Un devis sans chantier (pas encore rattaché) reste relancé, faute de statut sur lequel s'appuyer.
  * Même principe que les relances de factures (lib/reminders.ts) : une seule proposition par devis (la plus haute étape atteinte), jamais deux d'un coup,
  * validation une par une par défaut, envoi automatique seulement si le bureau l'a activé. Les devis trop anciens (froids) ne sont plus proposés.
  */
@@ -59,12 +61,13 @@ export async function computeQuoteProposals(now = new Date()): Promise<QuoteProp
   const company = await getCompany();
   const docs = await prisma.document.findMany({
     where: { kind: 'quote', lockedAt: { not: null }, status: 'sent', source: { not: 'demo' } },
-    include: { contact: { select: { id: true, name: true, email: true, reminderMode: true } }, worksite: { select: { ref: true } }, reminders: true },
+    include: { contact: { select: { id: true, name: true, email: true, reminderMode: true } }, worksite: { select: { ref: true, status: true } }, reminders: true },
     orderBy: { issuedOn: 'desc' },
   });
   const out: QuoteProposal[] = [];
   for (const d of docs) {
     if (d.contact?.reminderMode === 'off') continue;
+    if (d.worksite && d.worksite.status !== 'quote_sent') continue; // le chantier n'est pas (ou plus) au statut « Devis envoyé »
     const sentOn = d.sentAt ?? d.issuedOn;
     if (!sentOn) continue;
     const daysSince = Math.floor((now.getTime() - sentOn.getTime()) / DAY);

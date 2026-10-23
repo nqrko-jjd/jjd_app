@@ -20,7 +20,7 @@ export type StatusTrigger = 'event' | 'timesheet' | 'document' | 'sweep' | 'fiel
 export interface StatusSignals {
   status: string;
   /** devis émis du chantier */
-  quotes: { accepted: number; sent: number; declined: number };
+  quotes: { accepted: number; sent: number; declined: number; /** devis « envoyés » réellement transmis au client (date d'envoi renseignée) */ delivered?: number };
   /** devisé HT (devis acceptés, à défaut envoyés, à défaut montant historique) ; 0 si inconnu */
   quotedHt: number;
   /** facturé HT net des notes de crédit */
@@ -37,7 +37,7 @@ export interface StatusSignals {
   hasTimesheet: boolean;
 }
 
-const PRE_WORK = ['lead', 'quote_needed', 'to_plan', 'scheduled'];
+const PRE_WORK = ['lead', 'quote_needed', 'quote_sent', 'to_plan', 'scheduled'];
 const FINISHED = ['done', 'to_invoice', 'invoiced', 'closed'];
 
 type Step = { to: WorksiteStatus; reason: string };
@@ -63,13 +63,15 @@ function step(s: string, sig: StatusSignals, trigger: StatusTrigger): Step | nul
       // terminé sur le terrain mais pas (entièrement) facturé
       if (s === 'done') return { to: 'to_invoice', reason: 'terminé, reste à facturer' };
       // un acompte émis = le client s'engage
-      if ((s === 'lead' || s === 'quote_needed') && sig.invoices > 0) return { to: 'to_plan', reason: 'acompte facturé' };
+      if ((s === 'lead' || s === 'quote_needed' || s === 'quote_sent') && sig.invoices > 0) return { to: 'to_plan', reason: 'acompte facturé' };
     }
     if (trigger === 'document') {
-      if ((s === 'lead' || s === 'quote_needed') && sig.quotes.accepted > 0) return { to: 'to_plan', reason: 'devis accepté' };
-      if (['lead', 'quote_needed', 'to_plan'].includes(s) && sig.quotes.declined > 0 && sig.quotes.accepted === 0 && sig.quotes.sent === 0 && sig.invoices === 0 && !sig.anyIntervention) {
+      if ((s === 'lead' || s === 'quote_needed' || s === 'quote_sent') && sig.quotes.accepted > 0) return { to: 'to_plan', reason: 'devis accepté' };
+      if (['lead', 'quote_needed', 'quote_sent', 'to_plan'].includes(s) && sig.quotes.declined > 0 && sig.quotes.accepted === 0 && sig.quotes.sent === 0 && sig.invoices === 0 && !sig.anyIntervention) {
         return { to: 'refused', reason: 'devis refusé' };
       }
+      // un devis vient d'être réellement transmis au client (e-mail depuis JJD, ou envoi confirmé hors JJD) : « Devis envoyé » — les relances de devis partent de là
+      if ((s === 'lead' || s === 'quote_needed') && (sig.quotes.delivered ?? 0) > 0 && sig.quotes.accepted === 0) return { to: 'quote_sent', reason: 'devis envoyé au client' };
     }
   }
 
@@ -102,7 +104,7 @@ async function loadSignals(id: string, status: string, historicQuotedHt: number 
   const startOfToday = new Date(now); startOfToday.setHours(0, 0, 0, 0);
   const startOfTomorrow = new Date(startOfToday.getTime() + 86400000);
   const [quoteDocs, quotedMap, invoicedMap, sales, creditNotes, events, timesheets] = await Promise.all([
-    prisma.document.findMany({ where: { kind: 'quote', worksiteId: id, lockedAt: { not: null } }, select: { status: true } }),
+    prisma.document.findMany({ where: { kind: 'quote', worksiteId: id, lockedAt: { not: null } }, select: { status: true, sentAt: true } }),
     worksiteQuotedHtBatch([id]),
     worksiteInvoicedHtBatch([id]),
     prisma.ledgerEntry.findMany({ where: { worksiteId: id, direction: 'sale' }, select: { paymentStatus: true } }),
@@ -113,7 +115,7 @@ async function loadSignals(id: string, status: string, historicQuotedHt: number 
   const count = (st: string) => quoteDocs.filter((q) => q.status === st).length;
   return {
     status,
-    quotes: { accepted: count('accepted'), sent: count('sent'), declined: count('declined') },
+    quotes: { accepted: count('accepted'), sent: count('sent'), declined: count('declined'), delivered: quoteDocs.filter((q) => q.status === 'sent' && q.sentAt).length },
     quotedHt: quotedMap.get(id) ?? historicQuotedHt ?? 0,
     invoicedHt: invoicedMap.get(id) ?? 0,
     invoices: sales.length,

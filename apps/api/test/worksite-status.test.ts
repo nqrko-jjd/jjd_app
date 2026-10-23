@@ -42,7 +42,10 @@ async function issued(kind: 'quote' | 'invoice', ht: number) {
 
 test('cycle complet : devis accepté → planifié → facturé → clôturé (archivé), tracé dans le journal', async () => {
   const quote = await issued('quote', 10000);
-  assert.equal((await status()).status, 'quote_needed', 'un devis seulement envoyé ne change rien');
+  assert.equal((await status()).status, 'quote_needed', 'un devis seulement émis (pas transmis) ne change rien');
+  const sentRes = await post(`/api/documents/${quote.id}/send`, { confirmedExternal: true });
+  assert.equal(sentRes.status, 200);
+  assert.equal((await status()).status, 'quote_sent', 'devis transmis au client : le chantier passe « Devis envoyé »');
   await post(`/api/documents/${quote.id}/status`, { status: 'accepted' });
   assert.equal((await status()).status, 'to_plan');
 
@@ -66,7 +69,7 @@ test('cycle complet : devis accepté → planifié → facturé → clôturé (a
   assert.equal(ws.status, 'closed');
   assert.equal(ws.archived, true);
   const log = await prisma.auditLog.findMany({ where: { entity: 'worksite', entityId: wsId, action: 'auto_status' }, orderBy: { at: 'asc' } });
-  assert.deepEqual(log.map((l) => (l.meta as { to: string }).to), ['to_plan', 'scheduled', 'invoiced', 'closed']);
+  assert.deepEqual(log.map((l) => (l.meta as { to: string }).to), ['quote_sent', 'to_plan', 'scheduled', 'invoiced', 'closed']);
 
   // suppression du créneau : le chantier clôturé n'est pas touché par le planning
   await fetch(`${base}/api/planning/${ev.body.event.id}`, { method: 'DELETE', headers: H() });

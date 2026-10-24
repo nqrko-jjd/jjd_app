@@ -781,6 +781,10 @@ model LedgerEntry {
 
   bankMatches   BankTransactionMatch[]
   refSightings  PurchaseRefSighting[]
+  purchaseLines PurchaseLine[]
+  // lecture des lignes d'article du PDF (voir lib/purchase-lines.ts) : date de passage et résultat (lines | none | unreadable | missing)
+  linesScannedAt  DateTime?
+  linesScanStatus String?
   creditsApplied      CreditApplication[] @relation("CreditApplicationCredit") // pour un avoir : où son crédit a été imputé
   creditsReceived     CreditApplication[] @relation("CreditApplicationInvoice") // pour une facture : avoirs imputés dessus
 
@@ -1956,4 +1960,25 @@ model CreditApplication {
 
   @@index([creditId])
   @@index([invoiceId])
+}
+
+/// Ligne d'article lue dans le PDF d'une facture ou d'un bordereau d'achat. Une ligne n'est enregistrée que si quantité × prix (remise comprise)
+/// retombe sur son total : aucune ligne « lue de travers » (voir lib/purchase-line-parse.ts). Sert à voir CE QU'ON ACHÈTE, article par article.
+model PurchaseLine {
+  id            String      @id @default(cuid())
+  ledgerEntryId String
+  ledgerEntry   LedgerEntry @relation(fields: [ledgerEntryId], references: [id], onDelete: Cascade)
+  position      Int
+  code          String? // code article du fournisseur
+  label         String
+  articleKey    String // regroupement : code propre au fournisseur, sinon libellé normalisé
+  qty           Float
+  unit          String?
+  unitPriceHt   Float // prix unitaire net (remise déduite)
+  discountPct   Float?
+  totalHt       Float
+  createdAt     DateTime    @default(now())
+
+  @@index([ledgerEntryId])
+  @@index([articleKey])
 }

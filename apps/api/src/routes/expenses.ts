@@ -30,6 +30,7 @@ import { toCsv, readTableBuffer, pick } from '../lib/table-io.js';
 import { invoiceMailboxConfigured, syncInvoiceMailbox, reprocessEmailEntries, scanInvoiceMailboxHistory, PROCESSED_MAILBOX } from '../lib/invoice-mailbox.js';
 import { scanAllEntriesForRefs } from '../lib/purchase-ref-scan.js';
 import { findPurchaseCandidates } from '../lib/purchase-candidates.js';
+import { scanLinesBatch, linesStats, articleSummary, articleOccurrences, type ArticleFilters } from '../lib/purchase-lines.js';
 
 export const expensesRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
@@ -476,6 +477,69 @@ expensesRouter.get(
   requireAuth(...OFFICE),
   asyncHandler(async (_req, res) => {
     res.json({ items: await findPurchaseCandidates() });
+  }),
+);
+
+/* ------------------------------------------------------------------ articles achetés (lignes lues dans les PDF) */
+
+const lineFilters = (q: Record<string, unknown>): ArticleFilters => {
+  const day = (v: unknown) => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v)) ? v : null);
+  const from = day(q.from), to = day(q.to);
+  return {
+    q: typeof q.q === 'string' ? q.q : undefined,
+    contactId: typeof q.contactId === 'string' && q.contactId ? q.contactId : undefined,
+    worksiteId: typeof q.worksiteId === 'string' && q.worksiteId ? q.worksiteId : undefined,
+    from: from ? new Date(`${from}T00:00:00.000Z`) : undefined,
+    to: to ? new Date(`${to}T23:59:59.999Z`) : undefined,
+    includeSlips: q.includeSlips === '1',
+  };
+};
+
+/** Avancement de la lecture des PDF d'achat (combien lus, lisibles, lignes trouvées). */
+expensesRouter.get('/lines/stats', requireAuth(...OFFICE), asyncHandler(async (_req, res) => { res.json(await linesStats()); }));
+
+/** Lit un lot de PDF (≈ 20 s) ; l'écran rappelle tant qu'il en reste. `rescan: true` repart de zéro (après une amélioration de la lecture). */
+expensesRouter.post(
+  '/scan-lines',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const body = z.object({ rescan: z.boolean().optional(), timeBudgetMs: z.number().int().optional() }).parse(req.body ?? {});
+    const result = await scanLinesBatch(body);
+    await prisma.auditLog.create({ data: { actorId: req.user!.id, action: 'purchase-lines.scan', entity: 'ledger', entityId: 'batch', meta: { ...result, rescan: !!body.rescan } } }).catch(() => undefined);
+    res.json(result);
+  }),
+);
+
+/** Articles regroupés (quantité, montant, prix mini / maxi / dernier) — filtres : q, contactId, worksiteId, from, to, includeSlips, tri, page. */
+expensesRouter.get(
+  '/lines/articles',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const { sort, dir, page: pageStr, pageSize: pageSizeStr } = req.query as Record<string, string>;
+    const rows = await articleSummary(lineFilters(req.query));
+    const sortDir = dir === 'asc' ? 1 : -1;
+    const by: Record<string, (r: (typeof rows)[number]) => number | string> = {
+      total: (r) => r.totalHt, qty: (r) => r.qty, purchases: (r) => r.purchases, last: (r) => r.lastDate ?? '', label: (r) => r.label.toLowerCase(), price: (r) => r.lastPrice,
+    };
+    const key = by[sort ?? 'total'] ?? by.total!;
+    rows.sort((a, b) => { const x = key(a), y = key(b); return (x < y ? -1 : x > y ? 1 : 0) * sortDir; });
+    const page = Math.max(1, Math.trunc(Number(pageStr)) || 1);
+    const pageSize = Math.min(200, Math.max(10, Math.trunc(Number(pageSizeStr)) || 50));
+    res.json({
+      items: rows.slice((page - 1) * pageSize, page * pageSize), page, pageSize, totalCount: rows.length, totalPages: Math.max(1, Math.ceil(rows.length / pageSize)),
+      totals: { articles: rows.length, spendHt: Math.round(rows.reduce((s, r) => s + r.totalHt, 0) * 100) / 100 },
+    });
+  }),
+);
+
+/** Détail d'un article : chaque achat (date, fournisseur, n°, chantier, quantité, prix). */
+expensesRouter.get(
+  '/lines/article',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const key = typeof req.query.key === 'string' ? req.query.key : '';
+    if (!key) throw new HttpError(422, 'Article manquant');
+    res.json({ items: await articleOccurrences(key, lineFilters(req.query)) });
   }),
 );
 

@@ -415,6 +415,9 @@ function AchatsInner() {
             >
               {scanningRefs ? 'Recherche…' : 'Détecter les réf. produits'}
             </button>
+            <Link href="/app/achats/articles" className="btn" title="Ce que vous achetez, article par article, lu dans les PDF des factures (quantités, montants, prix)">
+              Articles achetés
+            </Link>
             <button
               className="btn"
               onClick={() => setShowCandidates(true)}

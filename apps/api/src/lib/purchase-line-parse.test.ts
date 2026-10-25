@@ -45,3 +45,12 @@ test('clé d’article : code propre au fournisseur, sinon libellé normalisé',
   assert.equal(articleKey({ code: '107818', label: 'X' }, 'c1'), 'C:c1:107818');
   assert.equal(articleKey({ code: null, label: 'Pinceau  rond – N° 8' }, 'c1'), 'L:PINCEAU ROND N 8');
 });
+
+test('prix à 3 décimales avec un point (grossiste) : 516.619 = 516,619 €, pas 516 619 €', () => {
+  const c = parseLine('180003 CABLE XVB 5G 10MM GRIS 50M 1. PC 516.619 516.619 21.')!;
+  assert.equal(c.qty, 1); assert.equal(c.unitPriceHt, 516.62); assert.equal(c.totalHt, 516.62);
+  const r = parseLine('100501 RUG TRAPPE ALUPLANA 60X60CM 12.5 HYDRO 3. PC 47.921 -20. % 38.337 115.01')!;
+  assert.equal(r.qty, 3); assert.equal(r.discountPct, 20); assert.equal(r.totalHt, 115.01);
+  // avec une virgule dans la ligne, le point reste un séparateur de milliers
+  assert.equal(parseLine('Prestation chantier 7 € 200,00 1.400,00 €')!.totalHt, 1400);
+});

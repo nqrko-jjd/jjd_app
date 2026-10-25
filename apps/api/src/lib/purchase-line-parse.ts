@@ -30,13 +30,17 @@ function normalizeLine(raw: string, joinThousands: boolean): string {
   return s.replace(/€/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-function toNumber(tok: string): number | null {
+/**
+ * `euro` : la ligne contient des décimales à la virgule (« 81,30 ») : le point sépare alors les milliers (« 1.400,00 »).
+ * Sans virgule, le point est une décimale (« 516.619 » = 516,619 € : prix à 3 décimales d'un grossiste), jamais des milliers.
+ */
+function toNumber(tok: string, euro = true): number | null {
   let t = tok.replace(/%$/, '');
   if (!/^-?\d[\d.,]*$/.test(t)) return null;
   const neg = t.startsWith('-');
   t = t.replace(/^-/, '').replace(/\.$/, '');
   if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.');
-  else if (/^\d{1,3}(\.\d{3})+$/.test(t)) t = t.replace(/\./g, '');
+  else if (euro && /^\d{1,3}(\.\d{3})+$/.test(t)) t = t.replace(/\./g, '');
   const v = Number(t);
   return Number.isFinite(v) ? (neg ? -v : v) : null;
 }
@@ -56,18 +60,19 @@ export function parseLine(raw: string): ParsedLine | null {
 
 function parseWith(raw: string, joinThousands: boolean): ParsedLine | null {
   const toks = normalizeLine(raw, joinThousands).split(' ').filter(Boolean);
+  const euro = /\d,\d/.test(raw);
   if (toks.length < 4) return null;
   // suffixe de la ligne fait de nombres / unités / « % »
   let start = toks.length;
   while (start > 0) {
     const t = toks[start - 1]!;
-    if (toNumber(t) !== null || t === '%' || UNITS.has(t.toUpperCase())) start--; else break;
+    if (toNumber(t, euro) !== null || t === '%' || UNITS.has(t.toUpperCase())) start--; else break;
   }
   if (start === toks.length) return null;
   const entries: Entry[] = [];
   for (let i = start; i < toks.length; i++) {
     const t = toks[i]!;
-    const v = toNumber(t);
+    const v = toNumber(t, euro);
     if (v === null) continue;
     const isPct = t.endsWith('%') || toks[i + 1] === '%';
     entries.push({ idx: i, value: v, kind: isPct && v >= 0 ? 'pct' : v < 0 ? 'neg' : 'pos' });

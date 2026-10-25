@@ -1246,7 +1246,11 @@ expensesRouter.post(
     const e = await prisma.ledgerEntry.findUnique({ where: { id: req.params.id }, select: { id: true } });
     if (!e) throw new HttpError(404, 'Dépense introuvable');
     const rel = storeFile(req.file.buffer, req.file.originalname || 'facture.pdf', 'expenses');
-    await prisma.ledgerEntry.update({ where: { id: e.id }, data: { pdfPath: rel } });
+    // nouveau PDF : les lignes d'article lues dans l'ancien sont périmées, l'achat sera relu à la prochaine lecture
+    await prisma.$transaction([
+      prisma.purchaseLine.deleteMany({ where: { ledgerEntryId: e.id } }),
+      prisma.ledgerEntry.update({ where: { id: e.id }, data: { pdfPath: rel, linesScannedAt: null, linesScanStatus: null } }),
+    ]);
     res.status(201).json({ ok: true, pdfPath: rel });
   }),
 );

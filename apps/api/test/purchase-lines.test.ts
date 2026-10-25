@@ -86,3 +86,22 @@ test('lecture des PDF d’achat par lots, puis articles regroupés avec prix min
   const again = await post('/api/finance/expenses/scan-lines', { timeBudgetMs: 3000 });
   assert.equal(again.scanned, 0);
 });
+
+test('PDF remplacé sur un achat déjà lu : les anciennes lignes sont effacées et le nouveau PDF est relu', async (t) => {
+  if (!(await pdftotextAvailable())) return t.skip('pdftotext absent');
+  const entry = await prisma.ledgerEntry.findFirstOrThrow({ where: { id: { in: ids.e }, docNumber: 'L-2' } });
+  const header = ['FACTURE FOURNISSEUR', 'Adresse : Rue de la Loi 16 1000 Bruxelles'];
+  const fd = new FormData();
+  fd.append('file', new Blob([new Uint8Array(textPdf([...header, '5 ROULEAU LAINE 18CM P 3 4,00 12,00 21%', 'Total HTVA 12,00']))], { type: 'application/pdf' }), 'nouveau.pdf');
+  const up = await fetch(`${base}/api/finance/expenses/${entry.id}/pdf`, { method: 'POST', headers: { authorization: `Bearer ${token}` }, body: fd });
+  assert.equal(up.status, 201);
+  const after = await prisma.ledgerEntry.findUniqueOrThrow({ where: { id: entry.id }, select: { linesScannedAt: true, linesScanStatus: true } });
+  assert.equal(after.linesScannedAt, null, 'à relire');
+  assert.equal(await prisma.purchaseLine.count({ where: { ledgerEntryId: entry.id } }), 0, 'anciennes lignes effacées');
+  const r = await post('/api/finance/expenses/scan-lines', { timeBudgetMs: 5000 });
+  assert.ok(r.scanned >= 1);
+  const lines = await prisma.purchaseLine.findMany({ where: { ledgerEntryId: entry.id } });
+  assert.deepEqual(lines.map((l) => l.label), ['ROULEAU LAINE 18CM']);
+  // nettoyage du fichier déposé par l'envoi
+  await prisma.ledgerEntry.update({ where: { id: entry.id }, data: { pdfPath: `expenses/${FILES[1]}` } });
+});

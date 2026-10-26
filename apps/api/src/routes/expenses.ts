@@ -31,6 +31,7 @@ import { invoiceMailboxConfigured, syncInvoiceMailbox, reprocessEmailEntries, sc
 import { scanAllEntriesForRefs } from '../lib/purchase-ref-scan.js';
 import { findPurchaseCandidates } from '../lib/purchase-candidates.js';
 import { normalizeParts, replaceAllocations, mainWorksite, type AllocPart } from '../lib/ledger-allocation.js';
+import { mergeEntries } from '../lib/ledger-merge.js';
 import { scanLinesBatch, linesStats, articleSummary, articleOccurrences, getHidden, setHidden, type ArticleFilters } from '../lib/purchase-lines.js';
 
 export const expensesRouter = Router();
@@ -607,68 +608,9 @@ expensesRouter.post(
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
     const body = z.object({ ids: z.array(z.string().min(1)).min(2).max(30), keepId: z.string().optional(), dryRun: z.boolean().optional() }).parse(req.body ?? {});
-    const rows = await prisma.ledgerEntry.findMany({
-      where: { id: { in: body.ids } },
-      include: { allocations: { orderBy: { position: 'asc' } }, bankMatches: { select: { id: true, bankTransactionId: true, amount: true } }, worksite: { select: { ref: true } } },
-    });
-    if (rows.length !== new Set(body.ids).size) throw new HttpError(404, 'Une des lignes est introuvable.');
-    const first = rows[0]!;
-    if (rows.some((r) => r.direction !== first.direction) || !['purchase', 'credit_note'].includes(first.direction)) throw new HttpError(422, 'On ne fusionne que des factures d’achat entre elles, ou des notes de crédit entre elles.');
-    const num = (r: { docNumber: string | null }) => (r.docNumber ?? '').trim().toLowerCase();
-    if (!num(first) || rows.some((r) => num(r) !== num(first))) throw new HttpError(422, 'Les lignes doivent avoir le même n° de facture.');
-    if (rows.some((r) => !sameSupplier(r, first))) throw new HttpError(422, 'Les lignes doivent avoir le même fournisseur.');
-    const without = rows.filter((r) => !r.allocations.length && !r.worksiteId);
-    if (without.length) throw new HttpError(422, `Affectez d’abord un chantier à toutes les lignes (sans chantier : ${without.map((r) => r.docNumber ?? r.id).join(', ')}).`);
-
-    const keep = (body.keepId ? rows.find((r) => r.id === body.keepId) : undefined)
-      ?? [...rows].sort((a, b) => Number(b.bankMatches.length > 0) - Number(a.bankMatches.length > 0) || Number(!!b.pdfPath) - Number(!!a.pdfPath) || a.createdAt.getTime() - b.createdAt.getTime())[0]!;
-    const others = rows.filter((r) => r.id !== keep.id);
-    const sign = keep.ht < 0 ? -1 : 1;
-    const r2 = (n: number) => Math.round(n * 100) / 100;
-    const ht = r2(sign * rows.reduce((s, r) => s + Math.abs(r.ht), 0));
-    const ttc = rows.every((r) => r.ttc != null) ? r2(sign * rows.reduce((s, r) => s + Math.abs(r.ttc!), 0)) : null;
-    const vat = rows.some((r) => r.vatRecup != null) ? r2(sign * rows.reduce((s, r) => s + Math.abs(r.vatRecup ?? 0), 0)) : null;
-    const parts = normalizeParts(ht, rows.flatMap((r) => (r.allocations.length ? r.allocations.map((a) => ({ worksiteId: a.worksiteId, ht: a.ht })) : [{ worksiteId: r.worksiteId!, ht: r.ht }])));
-    const refs = new Map(rows.flatMap((r) => (r.worksiteId && r.worksite ? [[r.worksiteId, r.worksite.ref] as [string, string]] : [])));
-    const warnings: string[] = [];
-    if (new Set(rows.map((r) => r.ht.toFixed(2))).size === 1 && rows.length > 1) warnings.push('Toutes les lignes ont le même montant : s’il s’agit d’un doublon (la même facture saisie deux fois), supprimez l’un des exemplaires au lieu de fusionner, sinon le montant sera doublé.');
-    const preview = { survivorId: keep.id, docNumber: keep.docNumber, ht, ttc, vatRecup: vat, removed: others.map((r) => r.id), parts: parts.map((p) => ({ worksiteId: p.worksiteId, ref: refs.get(p.worksiteId) ?? null, ht: p.ht })), warnings };
-    if (body.dryRun) { res.json({ preview }); return; }
-
-    const allFox = (f: 'foxExportedAt' | 'foxTransmittedAt') => (rows.every((r) => r[f]) ? keep[f] : null);
-    const otherIds = others.map((r) => r.id);
-    await prisma.$transaction(async (tx) => {
-      await tx.ledgerEntry.update({
-        where: { id: keep.id },
-        data: {
-          ht, ttc, vatRecup: vat,
-          pdfPath: keep.pdfPath ?? others.find((r) => r.pdfPath)?.pdfPath ?? null,
-          foxExportedAt: allFox('foxExportedAt'), foxTransmittedAt: allFox('foxTransmittedAt'),
-          paymentStatus: rows.every((r) => (r.paymentStatus ?? '') === 'Payé') ? 'Payé' : keep.paymentStatus === 'Payé' && others.some((r) => (r.paymentStatus ?? '') !== 'Payé') ? 'Non payé' : keep.paymentStatus,
-          linesScannedAt: null, linesScanStatus: null,
-        },
-      });
-      await replaceAllocations(tx, keep.id, parts);
-      if (!parts.length) await tx.ledgerEntry.update({ where: { id: keep.id }, data: { worksiteId: keep.worksiteId } });
-      // paiements bancaires rapprochés : repris par la fiche restante (un même virement présent sur deux lignes ne compte qu'une fois : montants additionnés)
-      const keepMatches = new Map(keep.bankMatches.map((m) => [m.bankTransactionId, m]));
-      for (const o of others) for (const m of o.bankMatches) {
-        const same = keepMatches.get(m.bankTransactionId);
-        if (same) {
-          await tx.bankTransactionMatch.update({ where: { id: same.id }, data: { amount: same.amount != null && m.amount != null ? r2(same.amount + m.amount) : null } });
-          await tx.bankTransactionMatch.delete({ where: { id: m.id } });
-        } else { await tx.bankTransactionMatch.update({ where: { id: m.id }, data: { ledgerEntryId: keep.id } }); keepMatches.set(m.bankTransactionId, m); }
-      }
-      await tx.creditApplication.updateMany({ where: { creditId: { in: otherIds } }, data: { creditId: keep.id } });
-      await tx.creditApplication.updateMany({ where: { invoiceId: { in: otherIds } }, data: { invoiceId: keep.id } });
-      await tx.ledgerEntry.updateMany({ where: { linkedInvoiceId: { in: otherIds } }, data: { linkedInvoiceId: keep.id } });
-      await tx.purchaseReceipt.updateMany({ where: { ledgerEntryId: { in: otherIds } }, data: { ledgerEntryId: keep.id } });
-      await tx.vehicleRepair.updateMany({ where: { ledgerEntryId: { in: otherIds } }, data: { ledgerEntryId: keep.id } });
-      await tx.purchaseLine.deleteMany({ where: { ledgerEntryId: { in: [keep.id, ...otherIds] } } }); // relues au prochain passage (le PDF est celui de la fiche)
-      await tx.ledgerEntry.deleteMany({ where: { id: { in: otherIds } } });
-    });
-    await prisma.auditLog.create({ data: { actorId: req.user!.id, action: 'expense.merge', entity: 'ledger', entityId: keep.id, meta: { preview, removedRows: JSON.parse(JSON.stringify(others.map(({ bankMatches: _b, worksite: _w, ...r }) => r))) } } }).catch(() => undefined);
-    res.json({ preview, expense: await prisma.ledgerEntry.findUnique({ where: { id: keep.id }, include: inc }) });
+    const out = await mergeEntries(body.ids, { keepId: body.keepId, dryRun: body.dryRun, actorId: req.user!.id });
+    if (body.dryRun) { res.json({ preview: out.preview }); return; }
+    res.json({ preview: out.preview, expense: await prisma.ledgerEntry.findUnique({ where: { id: out.survivorId }, include: inc }) });
   }),
 );
 

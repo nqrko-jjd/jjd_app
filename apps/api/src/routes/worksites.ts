@@ -253,6 +253,7 @@ worksitesRouter.post(
     let updated = 0;
     let skipped = 0;
     const warnings: { row: number; message: string }[] = [];
+    const buildingCache = new Map<string, string | null>();
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i]!;
@@ -287,6 +288,17 @@ worksitesRouter.post(
         const c = await prisma.contact.findFirst({ where: { name: { equals: clientName }, type: { in: ['client', 'both'] } } });
         if (c) data.clientId = c.id;
         else warnings.push({ row: rowNum, message: `Client « ${clientName} » introuvable — non modifié` });
+      }
+      const buildingName = pick(row, 'immeuble', 'building');
+      if (buildingName) {
+        if (!buildingCache.has(buildingName)) {
+          const wanted = buildingName.trim().toLowerCase();
+          const found = (await prisma.contact.findMany({ where: { name: { contains: buildingName.trim(), ...insensitive } }, select: { id: true, kind: true, name: true } })).filter((c) => c.name.trim().toLowerCase() === wanted);
+          buildingCache.set(buildingName, (found.find((c) => c.kind === 'acp' || c.kind === 'developer') ?? found[0])?.id ?? null);
+        }
+        const buildingId = buildingCache.get(buildingName);
+        if (buildingId) data.acpId = buildingId;
+        else warnings.push({ row: rowNum, message: `Immeuble « ${buildingName} » introuvable (nom à l'identique de la fiche contact) — non modifié` });
       }
       const managerName = pick(row, 'chef de chantier', 'chef', 'manager');
       if (managerName) {

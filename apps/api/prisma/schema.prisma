@@ -510,6 +510,7 @@ model Worksite {
   @@index([status])
   @@index([entity])
   @@index([ref])
+  ledgerAllocations LedgerAllocation[]
 }
 
 /// Opportunité commerciale — le pipeline CRM.
@@ -782,6 +783,8 @@ model LedgerEntry {
   bankMatches   BankTransactionMatch[]
   refSightings  PurchaseRefSighting[]
   purchaseLines PurchaseLine[]
+  // répartition de la facture entre plusieurs chantiers (une seule fiche, un seul PDF, un seul paiement) — voir lib/ledger-allocation.ts
+  allocations   LedgerAllocation[]
   // lecture des lignes d'article du PDF (voir lib/purchase-lines.ts) : date de passage et résultat (lines | none | unreadable | missing)
   linesScannedAt  DateTime?
   linesScanStatus String?
@@ -1981,4 +1984,20 @@ model PurchaseLine {
 
   @@index([ledgerEntryId])
   @@index([articleKey])
+}
+
+/// Part d'une facture d'achat (ou note de crédit) affectée à un chantier. Quand une écriture a des parts, son coût se répartit entre ces chantiers
+/// (la somme des parts = le HT de l'écriture) ; `LedgerEntry.worksiteId` garde le chantier principal (la plus grosse part) pour l'affichage.
+model LedgerAllocation {
+  id            String      @id @default(cuid())
+  ledgerEntryId String
+  ledgerEntry   LedgerEntry @relation(fields: [ledgerEntryId], references: [id], onDelete: Cascade)
+  worksiteId    String
+  worksite      Worksite    @relation(fields: [worksiteId], references: [id])
+  position      Int         @default(0)
+  ht            Float
+  createdAt     DateTime    @default(now())
+
+  @@index([ledgerEntryId])
+  @@index([worksiteId])
 }

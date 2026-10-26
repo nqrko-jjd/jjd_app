@@ -2,6 +2,7 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '../db.js';
 import { round2 } from '@jjd/shared';
 import { allWorksitesTransport } from './vehicle-cost.js';
+import { expandAllocations, allocationSelect } from './ledger-allocation.js';
 
 /**
  * P&L consolidé — reproduit l'onglet « Dashboard Général » du fichier Excel.
@@ -195,11 +196,11 @@ export async function consolidatedPnl(input: ConsolidatedInput) {
  * « Part GT » = ÷ 3.
  */
 export async function profitShare(_year?: number) {
-  const [worksites, buys, salesRaw, creditNotesRaw, times, transportMap, materielTontonAgg, dejaPayeTontonAgg] = await Promise.all([
+  const [worksites, buysRaw, salesRaw, creditNotesRaw0, times, transportMap, materielTontonAgg, dejaPayeTontonAgg] = await Promise.all([
     prisma.worksite.findMany({ where: { kind: 'project', source: { not: 'demo' } }, select: { id: true, entity: true, ref: true, title: true } }),
     prisma.ledgerEntry.findMany({
       where: { direction: 'purchase', worksiteId: { not: null }, source: { not: 'demo' } },
-      select: { worksiteId: true, ht: true, categoryRaw: true },
+      select: { worksiteId: true, ht: true, categoryRaw: true, allocations: allocationSelect },
     }),
     prisma.ledgerEntry.findMany({
       where: { direction: 'sale', ...PAID_OR_PARTIAL, worksiteId: { not: null }, source: { not: 'demo' } },
@@ -208,7 +209,7 @@ export async function profitShare(_year?: number) {
     // Notes de crédit : réduisent le CA encaissé si "vente" (et payées), sinon le coût matériaux.
     prisma.ledgerEntry.findMany({
       where: { direction: 'credit_note', worksiteId: { not: null }, source: { not: 'demo' } },
-      select: { worksiteId: true, ht: true, categoryRaw: true, paymentStatus: true },
+      select: { worksiteId: true, ht: true, categoryRaw: true, paymentStatus: true, allocations: allocationSelect },
     }),
     prisma.timeEntry.groupBy({ by: ['worksiteId'], where: { status: { in: ['approved', 'submitted'] }, worksiteId: { not: null }, source: { not: 'demo' } }, _sum: { amount: true } }),
     allWorksitesTransport(),
@@ -221,6 +222,9 @@ export async function profitShare(_year?: number) {
   // "Rémunération - Ouvrier" (ouvriers JJD pointés) remplace l'estimation par pointage plutôt
   // que de s'y ajouter (sinon double compte). Les autres achats — dont "Rémunération -
   // Julien/Tonton/M7", personnes distinctes des ouvriers pointés — s'additionnent normalement.
+  // une facture répartie entre plusieurs chantiers compte pour la part de chacun
+  const buys = expandAllocations(buysRaw);
+  const creditNotesRaw = expandAllocations(creditNotesRaw0);
   const buyMap = new Map<string, number>();
   const invoicedLabourMap = new Map<string, number>();
   for (const b of buys) {

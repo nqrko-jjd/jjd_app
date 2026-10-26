@@ -1,4 +1,5 @@
 import { expenseBucket } from './analytics-breakdown.js';
+import { expandAllocations, allocationSelect } from './ledger-allocation.js';
 import { prisma } from '../db.js';
 import { round2 } from '@jjd/shared';
 import { section, SECTION_LABEL, entityOf, isOuvrierRemuneration, isCreditNoteSale, isVehicleFinancing, paidFraction, PAID_OR_PARTIAL, PAID_SHARE_SELECT } from './consolidated.js';
@@ -156,10 +157,10 @@ export async function analytics(input: AnalyticsInput = {}) {
 
   /* ---------------- top chantiers (marge réelle sur la fenêtre) ---------------- */
   const wsMap = new Map(worksites.map((w) => [w.id, w]));
-  const [buys, salesRaw, creditNotesRaw, timeByWs] = await Promise.all([
+  const [buysRaw, salesRaw, creditNotesRaw0, timeByWs] = await Promise.all([
     prisma.ledgerEntry.findMany({
       where: { direction: 'purchase', worksiteId: { not: null }, date: { gte: win.from }, source: { not: 'demo' } },
-      select: { worksiteId: true, ht: true, categoryRaw: true },
+      select: { worksiteId: true, ht: true, categoryRaw: true, allocations: allocationSelect },
     }),
     prisma.ledgerEntry.findMany({
       where: { direction: 'sale', ...PAID_OR_PARTIAL, worksiteId: { not: null }, date: { gte: win.from }, source: { not: 'demo' } },
@@ -167,7 +168,7 @@ export async function analytics(input: AnalyticsInput = {}) {
     }),
     prisma.ledgerEntry.findMany({
       where: { direction: 'credit_note', worksiteId: { not: null }, date: { gte: win.from }, source: { not: 'demo' } },
-      select: { worksiteId: true, ht: true, categoryRaw: true, paymentStatus: true },
+      select: { worksiteId: true, ht: true, categoryRaw: true, paymentStatus: true, allocations: allocationSelect },
     }),
     prisma.timeEntry.groupBy({ by: ['worksiteId'], where: { status: { in: ['approved', 'submitted'] }, worksiteId: { not: null }, date: { gte: win.from }, source: { not: 'demo' } }, _sum: { amount: true } }),
   ]);
@@ -175,6 +176,9 @@ export async function analytics(input: AnalyticsInput = {}) {
   // l'estimation par pointage plutôt que de s'y ajouter (sinon la main-d'œuvre compte deux fois).
   // Les autres achats — dont "Rémunération - Julien/Tonton/M7", personnes distinctes des ouvriers
   // pointés — s'additionnent normalement.
+  // une facture répartie entre plusieurs chantiers compte pour la part de chacun
+  const buys = expandAllocations(buysRaw);
+  const creditNotesRaw = expandAllocations(creditNotesRaw0);
   const buyW = new Map<string, number>();
   const invoicedLabourW = new Map<string, number>();
   for (const b of buys) {

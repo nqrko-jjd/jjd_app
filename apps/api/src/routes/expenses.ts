@@ -30,6 +30,7 @@ import { toCsv, readTableBuffer, pick } from '../lib/table-io.js';
 import { invoiceMailboxConfigured, syncInvoiceMailbox, reprocessEmailEntries, scanInvoiceMailboxHistory, PROCESSED_MAILBOX } from '../lib/invoice-mailbox.js';
 import { scanAllEntriesForRefs } from '../lib/purchase-ref-scan.js';
 import { findPurchaseCandidates } from '../lib/purchase-candidates.js';
+import { normalizeParts, replaceAllocations, mainWorksite, type AllocPart } from '../lib/ledger-allocation.js';
 import { scanLinesBatch, linesStats, articleSummary, articleOccurrences, getHidden, setHidden, type ArticleFilters } from '../lib/purchase-lines.js';
 
 export const expensesRouter = Router();
@@ -45,6 +46,8 @@ const inc = {
   linkedInvoice: { select: { id: true, docNumber: true, date: true, ttc: true, ht: true, paymentStatus: true } },
   bordereaux: { select: { id: true, docNumber: true, date: true, ht: true, ttc: true, pdfPath: true, worksiteId: true, worksite: { select: { ref: true } } }, orderBy: { date: 'asc' as const } },
   _count: { select: { bordereaux: true } },
+  // répartition entre plusieurs chantiers (une seule fiche) — voir lib/ledger-allocation.ts
+  allocations: { select: { worksiteId: true, ht: true, worksite: { select: { ref: true, title: true } } }, orderBy: { position: 'asc' as const } },
   receipts: { select: { id: true, source: true, xmlPath: true }, where: { source: 'peppol' } },
 } as const;
 
@@ -106,7 +109,7 @@ function buildWhere(q: Record<string, string>, payments?: Awaited<ReturnType<typ
   if (linked === '0') and.push({ linkedInvoiceId: null });
   if (linked === '1') and.push({ NOT: { linkedInvoiceId: null } });
   // une facture qui regroupe des bordereaux n'a pas forcément de chantier propre : elle compte aussi pour les chantiers de ses bordereaux
-  if (worksiteId) and.push({ OR: [{ worksiteId }, { bordereaux: { some: { worksiteId } } }] });
+  if (worksiteId) and.push({ OR: [{ worksiteId }, { allocations: { some: { worksiteId } } }, { bordereaux: { some: { worksiteId } } }] });
   if (vehicleId) and.push({ vehicleId });
   if (contactId) and.push({ contactId });
   if (category) and.push({ categoryRaw: category });
@@ -167,6 +170,22 @@ async function duplicateIdsFor(entries: { id: string; direction: string; docNumb
   return out;
 }
 
+/**
+ * Autres lignes de la MÊME facture (même fournisseur, même n°, même sens) : typiquement une ligne par chantier laissée par l'ancienne saisie ou par l'import Excel.
+ * Elles peuvent être fusionnées en une seule fiche avec une répartition par chantier (POST /merge).
+ */
+async function siblingIdsFor(entries: { id: string; direction: string; docNumber: string | null; contactId: string | null; supplierName: string | null }[]): Promise<Map<string, string[]>> {
+  const out = new Map<string, string[]>();
+  const nums = [...new Set(entries.filter((e) => e.docNumber && e.docNumber.trim().length > 2 && (e.direction === 'purchase' || e.direction === 'credit_note')).map((e) => e.docNumber!))];
+  if (!nums.length) return out;
+  const pool = await prisma.ledgerEntry.findMany({ where: { docNumber: { in: nums }, direction: { in: ['purchase', 'credit_note'] } }, select: { id: true, direction: true, docNumber: true, contactId: true, supplierName: true } });
+  const keyOf = (o: { direction: string; docNumber: string | null; contactId: string | null; supplierName: string | null }) => { const who = o.contactId ?? (o.supplierName ?? '').trim().toLowerCase(); return who ? `${o.direction}|${(o.docNumber ?? '').trim().toLowerCase()}|${who}` : null; };
+  const groups = new Map<string, string[]>();
+  for (const o of pool) { const k = keyOf(o); if (k) groups.set(k, [...(groups.get(k) ?? []), o.id]); }
+  for (const e of entries) { const k = keyOf(e); const g = k ? groups.get(k) : undefined; if (g && g.length > 1) out.set(e.id, g.filter((id) => id !== e.id)); }
+  return out;
+}
+
 /** Parmi deux exemplaires d'une même facture : « delete » pour celui qu'aucun paiement ne touche (l'autre est payé), « keep » pour celui qui est payé. */
 function duplicateAdvice(id: string, dups: Map<string, string[]>, payments: Awaited<ReturnType<typeof allocationSnapshot>>): 'delete' | 'keep' | null {
   const twins = dups.get(id);
@@ -211,14 +230,20 @@ expensesRouter.get(
     const page = Math.max(1, Math.trunc(Number(pageStr)) || 1);
     const pageSize = Math.min(5000, Math.max(20, Math.trunc(Number(pageSizeStr)) || 100));
     const receiptsToReview = await prisma.purchaseReceipt.count({ where: { status: 'review' } });
-    const totalsSelect = { id: true, ht: true, ttc: true, paymentStatus: true, direction: true, linkedInvoiceId: true, dueDate: true } as const;
+    const totalsSelect = { id: true, ht: true, ttc: true, paymentStatus: true, direction: true, linkedInvoiceId: true, dueDate: true, allocations: { select: { worksiteId: true, ht: true } } } as const;
+    // vue « d'un chantier » : une facture répartie ne compte que pour la part de CE chantier (montants et reste à payer au prorata)
+    const partRatio = (e: { ht: number; allocations?: { worksiteId: string; ht: number }[] }) => {
+      if (!query.worksiteId || !e.allocations?.length) return 1;
+      const p = e.allocations.find((a) => a.worksiteId === query.worksiteId);
+      return p && e.ht ? Math.abs(p.ht / e.ht) : p ? 1 : 0;
+    };
 
     // Filtre « payé / à régler / en retard » : l'état de paiement se calcule en mémoire (rapprochements bancaires, bordereau = sa facture).
     // On ne le met JAMAIS dans la requête SQL sous forme de listes d'identifiants : elles grossissent avec les rapprochements et
     // finiraient par dépasser les 32 767 paramètres que Postgres accepte.
     const paymentFilter = query.paid === '0' || query.paid === '1' || query.overdue === '1';
     let items: Awaited<ReturnType<typeof prisma.ledgerEntry.findMany<{ include: typeof inc }>>>;
-    let all: { id: string; ht: number; ttc: number | null; paymentStatus: string | null; direction: string; linkedInvoiceId: string | null; dueDate: Date | null }[];
+    let all: { id: string; ht: number; ttc: number | null; paymentStatus: string | null; direction: string; linkedInvoiceId: string | null; dueDate: Date | null; allocations?: { worksiteId: string; ht: number }[] }[];
     if (paymentFilter) {
       const candidates = await prisma.ledgerEntry.findMany({
         where: { AND: buildWhere(query, payments, { skipPayment: true }) },
@@ -257,21 +282,22 @@ expensesRouter.get(
           if (!e.linkedInvoiceId) acc.pendingSlips += 1;
           return acc;
         }
-        const ttc = e.ttc ?? e.ht;
-        const payment = expensePayment(e, payments);
+        const k = partRatio(e);
+        const ttc = (e.ttc ?? e.ht) * k;
+        const payment = { ...expensePayment(e, payments), remainingAmount: expensePayment(e, payments).remainingAmount * k };
         // une note de crédit réduit toujours les dépenses, qu'elle soit saisie en positif ou en négatif (l'import
         // contient les deux : le signe appliqué par-dessus un montant déjà négatif la comptait comme une dépense)
         if (e.direction === 'credit_note') {
-          acc.ht -= Math.abs(e.ht);
+          acc.ht -= Math.abs(e.ht * k);
           acc.ttc -= Math.abs(ttc);
           // « reste à payer » : seules les notes de crédit non réglées viennent en déduction (celles marquées payées
           // sont déjà soldées avec le fournisseur)
           acc.unpaidTtc -= payment.remainingAmount;
           return acc;
         }
-        acc.ht += e.ht;
+        acc.ht += e.ht * k;
         acc.ttc += ttc;
-        if (!payment.paid) {
+        if (!expensePayment(e, payments).paid) {
           acc.unpaidTtc += payment.remainingAmount;
           if (payment.remainingAmount > 0.01 && e.dueDate && e.dueDate < now) { acc.overdueCount += 1; acc.overdueTtc += payment.remainingAmount; }
         }
@@ -281,19 +307,26 @@ expensesRouter.get(
     );
 
     const dups = await duplicateIdsFor(items);
+    const siblings = await siblingIdsFor(items);
     res.json({
       receiptsToReview,
       items: await Promise.all(items.map(async (e) => ({
         ...e,
+        // vue d'un chantier : montants = part de ce chantier (la fiche entière reste visible : ouvrir la dépense)
+        ...(partRatio(e) !== 1 ? { partOfHt: e.ht, ht: Math.round(e.ht * partRatio(e) * 100) / 100, ttc: e.ttc != null ? Math.round(e.ttc * partRatio(e) * 100) / 100 : e.ttc } : {}),
         supplier: e.contact?.name ?? e.supplierName ?? null,
         categoryLabel: e.category?.label ?? e.categoryRaw ?? null,
         ...paymentOf(e, payments),
         worksiteAllocation: await allocationOf(e),
         hasPdf: !!e.pdfPath,
         editable: e.source !== 'xlsx',
+        // répartir entre plusieurs chantiers et supprimer : possible sur TOUTES les lignes (import Excel et fiches transmises à Fox comprises) ; la suppression d'une ligne
+        // de l'import sans doublon demande une confirmation explicite (force), voir DELETE
+        splittable: e.direction === 'purchase' || e.direction === 'credit_note',
+        siblingIds: siblings.get(e.id) ?? [],
         duplicateIds: dups.get(e.id) ?? [],
         duplicateAdvice: duplicateAdvice(e.id, dups, payments),
-        deletable: e.source !== 'xlsx' || dups.has(e.id),
+        deletable: true,
       }))),
       totals: {
         count: totals.count,
@@ -562,6 +595,83 @@ expensesRouter.get(
   }),
 );
 
+/* ------------------------------------------------------------------ fusionner les lignes d'une même facture */
+
+/**
+ * Fusionne plusieurs lignes d'une MÊME facture (même fournisseur, même n°, même sens) en une seule fiche répartie entre leurs chantiers :
+ * HT / TTC / TVA additionnés, une part par chantier, un seul PDF, un seul rapprochement bancaire (ceux des lignes fusionnées sont repris).
+ * `dryRun` : ne fait rien, renvoie ce qui serait fait. Les lignes supprimées sont conservées dans le journal.
+ */
+expensesRouter.post(
+  '/merge',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const body = z.object({ ids: z.array(z.string().min(1)).min(2).max(30), keepId: z.string().optional(), dryRun: z.boolean().optional() }).parse(req.body ?? {});
+    const rows = await prisma.ledgerEntry.findMany({
+      where: { id: { in: body.ids } },
+      include: { allocations: { orderBy: { position: 'asc' } }, bankMatches: { select: { id: true, bankTransactionId: true, amount: true } }, worksite: { select: { ref: true } } },
+    });
+    if (rows.length !== new Set(body.ids).size) throw new HttpError(404, 'Une des lignes est introuvable.');
+    const first = rows[0]!;
+    if (rows.some((r) => r.direction !== first.direction) || !['purchase', 'credit_note'].includes(first.direction)) throw new HttpError(422, 'On ne fusionne que des factures d’achat entre elles, ou des notes de crédit entre elles.');
+    const num = (r: { docNumber: string | null }) => (r.docNumber ?? '').trim().toLowerCase();
+    if (!num(first) || rows.some((r) => num(r) !== num(first))) throw new HttpError(422, 'Les lignes doivent avoir le même n° de facture.');
+    if (rows.some((r) => !sameSupplier(r, first))) throw new HttpError(422, 'Les lignes doivent avoir le même fournisseur.');
+    const without = rows.filter((r) => !r.allocations.length && !r.worksiteId);
+    if (without.length) throw new HttpError(422, `Affectez d’abord un chantier à toutes les lignes (sans chantier : ${without.map((r) => r.docNumber ?? r.id).join(', ')}).`);
+
+    const keep = (body.keepId ? rows.find((r) => r.id === body.keepId) : undefined)
+      ?? [...rows].sort((a, b) => Number(b.bankMatches.length > 0) - Number(a.bankMatches.length > 0) || Number(!!b.pdfPath) - Number(!!a.pdfPath) || a.createdAt.getTime() - b.createdAt.getTime())[0]!;
+    const others = rows.filter((r) => r.id !== keep.id);
+    const sign = keep.ht < 0 ? -1 : 1;
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+    const ht = r2(sign * rows.reduce((s, r) => s + Math.abs(r.ht), 0));
+    const ttc = rows.every((r) => r.ttc != null) ? r2(sign * rows.reduce((s, r) => s + Math.abs(r.ttc!), 0)) : null;
+    const vat = rows.some((r) => r.vatRecup != null) ? r2(sign * rows.reduce((s, r) => s + Math.abs(r.vatRecup ?? 0), 0)) : null;
+    const parts = normalizeParts(ht, rows.flatMap((r) => (r.allocations.length ? r.allocations.map((a) => ({ worksiteId: a.worksiteId, ht: a.ht })) : [{ worksiteId: r.worksiteId!, ht: r.ht }])));
+    const refs = new Map(rows.flatMap((r) => (r.worksiteId && r.worksite ? [[r.worksiteId, r.worksite.ref] as [string, string]] : [])));
+    const warnings: string[] = [];
+    if (new Set(rows.map((r) => r.ht.toFixed(2))).size === 1 && rows.length > 1) warnings.push('Toutes les lignes ont le même montant : s’il s’agit d’un doublon (la même facture saisie deux fois), supprimez l’un des exemplaires au lieu de fusionner, sinon le montant sera doublé.');
+    const preview = { survivorId: keep.id, docNumber: keep.docNumber, ht, ttc, vatRecup: vat, removed: others.map((r) => r.id), parts: parts.map((p) => ({ worksiteId: p.worksiteId, ref: refs.get(p.worksiteId) ?? null, ht: p.ht })), warnings };
+    if (body.dryRun) { res.json({ preview }); return; }
+
+    const allFox = (f: 'foxExportedAt' | 'foxTransmittedAt') => (rows.every((r) => r[f]) ? keep[f] : null);
+    const otherIds = others.map((r) => r.id);
+    await prisma.$transaction(async (tx) => {
+      await tx.ledgerEntry.update({
+        where: { id: keep.id },
+        data: {
+          ht, ttc, vatRecup: vat,
+          pdfPath: keep.pdfPath ?? others.find((r) => r.pdfPath)?.pdfPath ?? null,
+          foxExportedAt: allFox('foxExportedAt'), foxTransmittedAt: allFox('foxTransmittedAt'),
+          paymentStatus: rows.every((r) => (r.paymentStatus ?? '') === 'Payé') ? 'Payé' : keep.paymentStatus === 'Payé' && others.some((r) => (r.paymentStatus ?? '') !== 'Payé') ? 'Non payé' : keep.paymentStatus,
+          linesScannedAt: null, linesScanStatus: null,
+        },
+      });
+      await replaceAllocations(tx, keep.id, parts);
+      if (!parts.length) await tx.ledgerEntry.update({ where: { id: keep.id }, data: { worksiteId: keep.worksiteId } });
+      // paiements bancaires rapprochés : repris par la fiche restante (un même virement présent sur deux lignes ne compte qu'une fois : montants additionnés)
+      const keepMatches = new Map(keep.bankMatches.map((m) => [m.bankTransactionId, m]));
+      for (const o of others) for (const m of o.bankMatches) {
+        const same = keepMatches.get(m.bankTransactionId);
+        if (same) {
+          await tx.bankTransactionMatch.update({ where: { id: same.id }, data: { amount: same.amount != null && m.amount != null ? r2(same.amount + m.amount) : null } });
+          await tx.bankTransactionMatch.delete({ where: { id: m.id } });
+        } else { await tx.bankTransactionMatch.update({ where: { id: m.id }, data: { ledgerEntryId: keep.id } }); keepMatches.set(m.bankTransactionId, m); }
+      }
+      await tx.creditApplication.updateMany({ where: { creditId: { in: otherIds } }, data: { creditId: keep.id } });
+      await tx.creditApplication.updateMany({ where: { invoiceId: { in: otherIds } }, data: { invoiceId: keep.id } });
+      await tx.ledgerEntry.updateMany({ where: { linkedInvoiceId: { in: otherIds } }, data: { linkedInvoiceId: keep.id } });
+      await tx.purchaseReceipt.updateMany({ where: { ledgerEntryId: { in: otherIds } }, data: { ledgerEntryId: keep.id } });
+      await tx.vehicleRepair.updateMany({ where: { ledgerEntryId: { in: otherIds } }, data: { ledgerEntryId: keep.id } });
+      await tx.purchaseLine.deleteMany({ where: { ledgerEntryId: { in: [keep.id, ...otherIds] } } }); // relues au prochain passage (le PDF est celui de la fiche)
+      await tx.ledgerEntry.deleteMany({ where: { id: { in: otherIds } } });
+    });
+    await prisma.auditLog.create({ data: { actorId: req.user!.id, action: 'expense.merge', entity: 'ledger', entityId: keep.id, meta: { preview, removedRows: JSON.parse(JSON.stringify(others.map(({ bankMatches: _b, worksite: _w, ...r }) => r))) } } }).catch(() => undefined);
+    res.json({ preview, expense: await prisma.ledgerEntry.findUnique({ where: { id: keep.id }, include: inc }) });
+  }),
+);
+
 /* ------------------------------------------------------------------ export */
 
 /** Export groupé : les pièces jointes de plusieurs dépenses en un seul .zip (à glisser chez le comptable). */
@@ -786,7 +896,7 @@ expensesRouter.get(
     const payments = await allocationSnapshot();
     const bankMatches = matches.map((m) => ({ matchId: m.id, allocatedAmount: payments.amounts.get(m.id) ?? 0, ...m.bankTransaction }));
     const dupIds = (await duplicateIdsFor([e])).get(e.id) ?? [];
-    res.json({ expense: { ...e, ...paymentOf(e, payments), worksiteAllocation: await allocationOf(e), hasPdf: !!e.pdfPath, editable: e.source !== 'xlsx', duplicateIds: dupIds, duplicateAdvice: duplicateAdvice(e.id, new Map(dupIds.length ? [[e.id, dupIds]] : []), payments), deletable: e.source !== 'xlsx' || dupIds.length > 0, bankMatches } });
+    res.json({ expense: { ...e, ...paymentOf(e, payments), worksiteAllocation: await allocationOf(e), hasPdf: !!e.pdfPath, editable: e.source !== 'xlsx', splittable: e.direction === 'purchase' || e.direction === 'credit_note', siblingIds: (await siblingIdsFor([e])).get(e.id) ?? [], duplicateIds: dupIds, duplicateAdvice: duplicateAdvice(e.id, new Map(dupIds.length ? [[e.id, dupIds]] : []), payments), deletable: true, bankMatches } });
   }),
 );
 
@@ -965,11 +1075,15 @@ expensesRouter.post(
 
 /* ------------------------------------------------------------------ créer */
 
+const allocationsInput = z.array(z.object({ worksiteId: z.string().min(1), ht: z.coerce.number() })).max(40);
+
 expensesRouter.post(
   '/',
   requireAuth(...FIELD_OFFICE),
   asyncHandler(async (req, res) => {
     const d = expenseInput.parse(req.body);
+    // répartition entre plusieurs chantiers : une seule fiche, les parts s'enregistrent avec elle
+    const parts = req.body?.allocations !== undefined ? normalizeParts(d.ht, allocationsInput.parse(req.body.allocations)) : [];
     let supplierName = d.supplierName ?? null;
     if (d.contactId) {
       const c = await prisma.contact.findUnique({ where: { id: d.contactId }, select: { name: true } });
@@ -989,7 +1103,7 @@ expensesRouter.post(
         categoryRaw: d.categoryCode
           ? (await prisma.category.findUnique({ where: { code: d.categoryCode }, select: { label: true } }))?.label ?? null
           : null,
-        worksiteId: d.worksiteId ?? null,
+        worksiteId: parts.length ? mainWorksite(parts) : (d.worksiteId ?? null),
         vehicleId: d.vehicleId ?? null,
         ht: d.ht,
         vatRecup: d.vatRecup ?? null,
@@ -1003,6 +1117,11 @@ expensesRouter.post(
       },
       include: inc,
     });
+    if (parts.length) {
+      await prisma.$transaction((tx) => replaceAllocations(tx, e.id, parts));
+      res.status(201).json({ expense: await prisma.ledgerEntry.findUnique({ where: { id: e.id }, include: inc }) });
+      return;
+    }
     res.status(201).json({ expense: e });
   }),
 );
@@ -1057,6 +1176,14 @@ expensesRouter.patch(
     const existing = await prisma.ledgerEntry.findUnique({ where: { id: req.params.id } });
     if (!existing) throw new HttpError(404, 'Dépense introuvable');
     const d = expenseInput.partial().parse(req.body);
+    // répartition entre plusieurs chantiers : `allocations` = les parts (liste vide : plus de répartition) ; absent : on ne touche pas aux parts
+    const allocationsGiven = req.body?.allocations !== undefined;
+    const hadParts = await prisma.ledgerAllocation.count({ where: { ledgerEntryId: existing.id } });
+    const newHt = d.ht !== undefined ? d.ht : existing.ht;
+    const parts: AllocPart[] | undefined = allocationsGiven ? normalizeParts(newHt, allocationsInput.parse(req.body.allocations)) : undefined;
+    if (parts === undefined && hadParts && d.ht !== undefined && Math.abs(d.ht - existing.ht) > 0.01) {
+      throw new HttpError(422, 'Cette facture est répartie entre plusieurs chantiers : modifiez la répartition en même temps que le montant (la somme des parts doit égaler le HT).');
+    }
 
     const data: Record<string, unknown> = {};
     if (d.date) Object.assign(data, derive(d.date), { date: d.date });
@@ -1066,7 +1193,9 @@ expensesRouter.patch(
       data.docType = docTypeOf(d.direction);
     }
     if ('docNumber' in d) data.docNumber = d.docNumber ?? null;
-    if ('worksiteId' in d) data.worksiteId = d.worksiteId ?? null;
+    // facture répartie : le chantier principal vient des parts, l'écran renvoie seulement ce chantier-là (on n'y touche pas sans nouvelles parts)
+    if ('worksiteId' in d && !(parts === undefined && hadParts)) data.worksiteId = d.worksiteId ?? null;
+    if (parts?.length) data.worksiteId = mainWorksite(parts);
     if ('vehicleId' in d) data.vehicleId = d.vehicleId ?? null;
     if ('ht' in d) data.ht = d.ht;
     if ('vatRecup' in d) data.vatRecup = d.vatRecup ?? null;
@@ -1093,8 +1222,9 @@ expensesRouter.patch(
         : null;
     }
 
-    const e = await prisma.ledgerEntry.update({ where: { id: existing.id }, data, include: inc });
-    res.json({ expense: e });
+    await prisma.ledgerEntry.update({ where: { id: existing.id }, data });
+    if (parts !== undefined) await prisma.$transaction((tx) => replaceAllocations(tx, existing.id, parts));
+    res.json({ expense: await prisma.ledgerEntry.findUnique({ where: { id: existing.id }, include: inc }) });
   }),
 );
 
@@ -1107,10 +1237,15 @@ expensesRouter.delete(
     const e = await prisma.ledgerEntry.findUnique({ where: { id: req.params.id }, select: { id: true, source: true, direction: true, docNumber: true, contactId: true, supplierName: true, ht: true, ttc: true } });
     if (!e) throw new HttpError(404, 'Dépense introuvable');
     if (e.source === 'xlsx') {
-      // import historique protégé, sauf doublon avéré (l'autre exemplaire reste) ; un doublon rapproché à un paiement bancaire ne part pas : on supprime l'autre
-      if (!(await duplicateIdsFor([e])).has(e.id)) throw new HttpError(409, "Écriture de l'import historique Excel : suppression impossible (elle n'a pas de doublon).");
-      if (await prisma.bankTransactionMatch.count({ where: { ledgerEntryId: e.id } })) throw new HttpError(409, "Ce doublon est rapproché d'un paiement bancaire : supprimez plutôt l'autre exemplaire.");
+      // import historique Excel : supprimable, mais avec garde-fous — jamais si un paiement bancaire y est rapproché ; sans doublon ni autre ligne de la même facture,
+      // seulement après confirmation explicite (force=1) ; la ligne est conservée dans le journal pour pouvoir la restaurer
+      if (await prisma.bankTransactionMatch.count({ where: { ledgerEntryId: e.id } })) throw new HttpError(409, "Cette ligne est rapprochée d'un paiement bancaire : retirez d'abord le rapprochement, ou fusionnez-la avec les autres lignes de la facture.");
+      const twin = (await duplicateIdsFor([e])).has(e.id) || ((await siblingIdsFor([e])).get(e.id)?.length ?? 0) > 0;
+      if (!twin && req.query.force !== '1') throw new HttpError(409, "Écriture de l'import historique Excel sans doublon ni autre ligne de la même facture : confirmez la suppression.");
     }
+    if (await prisma.creditApplication.count({ where: { OR: [{ creditId: e.id }, { invoiceId: e.id }] } })) throw new HttpError(409, 'Un avoir est imputé sur cette facture : annulez d’abord l’imputation.');
+    const full = await prisma.ledgerEntry.findUnique({ where: { id: e.id }, include: { allocations: true } });
+    await prisma.auditLog.create({ data: { actorId: req.user!.id, action: 'expense.delete', entity: 'ledger', entityId: e.id, meta: { row: JSON.parse(JSON.stringify(full)) } } }).catch(() => undefined);
     // les BankTransactionMatch de cette dépense partent en cascade (onDelete: Cascade) ; il reste
     // à nettoyer le badge de confiance des transactions qui n'ont plus aucun rapprochement.
     const affectedTxIds = (await prisma.bankTransactionMatch.findMany({ where: { ledgerEntryId: req.params.id }, select: { bankTransactionId: true } })).map((m) => m.bankTransactionId);

@@ -53,6 +53,14 @@ interface Expense {
   deletable?: boolean;
   duplicateIds?: string[];
   duplicateAdvice?: 'delete' | 'keep' | null;
+  /** répartissable entre plusieurs chantiers : toutes les factures d'achat / notes de crédit, import Excel et fiches transmises à Fox comprises */
+  splittable?: boolean;
+  /** autres lignes de la MÊME facture (même fournisseur, même n°) : à fusionner en une seule fiche */
+  siblingIds?: string[];
+  /** répartition enregistrée sur la fiche : une part (HT) par chantier */
+  allocations?: { worksiteId: string; ht: number; worksite: { ref: string; title: string } }[];
+  /** vue d'un chantier : HT de la fiche entière (ht = la part de ce chantier) */
+  partOfHt?: number;
   source: string | null;
   // bordereau (direction "delivery_slip") -> facture reçue ensuite, une fois reliée
   linkedInvoiceId: string | null;
@@ -116,6 +124,7 @@ function AchatsInner() {
   const [pageSize, setPageSize] = useState(100);
   const [edit, setEdit] = useState<Expense | 'new' | { prefillFrom: Expense } | null>(null);
   const [linking, setLinking] = useState<Expense | null>(null);
+  const [merging, setMerging] = useState<Expense | null>(null);
   const [showCandidates, setShowCandidates] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [exporting, setExporting] = useState(false);
@@ -191,8 +200,15 @@ function AchatsInner() {
     window.open(url, '_blank');
   }
   async function remove(e: Expense) {
-    if (!window.confirm(e.editable ? `Supprimer la dépense ${e.docNumber ?? ''} (${e.supplier ?? ''}) ?` : `Supprimer ce doublon (${e.docNumber ?? ''}, ${e.supplier ?? ''}) ? L’autre exemplaire reste en place.`)) return;
-    try { await api(`/api/finance/expenses/${e.id}`, { method: 'DELETE' }); reload(); } catch (err) { window.alert((err as Error).message); }
+    const imported = !e.editable; // ligne de l'import historique Excel
+    const twin = !!e.duplicateIds?.length;
+    const siblings = !!e.siblingIds?.length;
+    const text = !imported ? `Supprimer la dépense ${e.docNumber ?? ''} (${e.supplier ?? ''}) ?`
+      : twin ? `Supprimer ce doublon (${e.docNumber ?? ''}, ${e.supplier ?? ''}) ? L’autre exemplaire reste en place.`
+      : siblings ? `Supprimer cette ligne de l’import Excel (${e.docNumber ?? ''}, ${e.supplier ?? ''}) ? Les autres lignes de la même facture restent en place.\n\nPour regrouper plusieurs lignes en une seule fiche, utilisez plutôt « Fusionner les lignes de cette facture ».`
+      : `Cette ligne vient de l’import historique Excel et n’a ni doublon ni autre ligne de la même facture.\n\nLa supprimer retire cette dépense (${e.docNumber ?? ''}, ${e.supplier ?? ''}) des comptes. Elle est conservée dans le journal.\n\nSupprimer quand même ?`;
+    if (!window.confirm(text)) return;
+    try { await api(`/api/finance/expenses/${e.id}${imported ? '?force=1' : ''}`, { method: 'DELETE' }); reload(); } catch (err) { window.alert((err as Error).message); }
   }
   async function unlinkSlip(e: Expense) {
     if (!window.confirm(`Délier ce bordereau de la facture ${e.linkedInvoice?.docNumber ?? ''} ?`)) return;
@@ -343,8 +359,9 @@ function AchatsInner() {
       e.paid
         ? { label: 'Marquer non payé', onClick: () => setPaidStatus(e, false) }
         : { label: 'Marquer payé', onClick: () => setPaidStatus(e, true) },
+      ...(e.siblingIds?.length ? [{ label: `Fusionner les lignes de cette facture (${e.siblingIds.length + 1})…`, onClick: () => setMerging(e) }] : []),
       ...(e.editable || e.deletable
-        ? ['separator' as const, { label: e.editable ? 'Supprimer' : 'Supprimer ce doublon', danger: true, onClick: () => remove(e) }]
+        ? ['separator' as const, { label: e.editable ? 'Supprimer' : e.duplicateIds?.length ? 'Supprimer ce doublon' : 'Supprimer (import Excel)', danger: true, onClick: () => remove(e) }]
         : []),
     ];
   }
@@ -362,8 +379,10 @@ function AchatsInner() {
           onSaved={() => { setEdit(null); reload(); }}
           onOpenOther={openById}
           onChanged={refreshOpen}
+          onMerge={(x) => { setEdit(null); setMerging(x); }}
         />
       )}
+      {merging && <MergeModal expense={merging} onClose={() => setMerging(null)} onMerged={() => { setMerging(null); reload(); }} />}
       {linking && (
         <LinkSlipModal
           slip={linking}
@@ -612,6 +631,16 @@ function AchatsInner() {
                         ↔ {e.worksiteAllocation!.length > 1 ? `${e.worksiteAllocation!.length} chantiers` : (e.worksiteAllocation![0]!.ref ?? 'chantier des bordereaux')}
                       </span>
                     )}
+                    {!!e.allocations && e.allocations.length > 1 && (
+                      <span className="badge plain" style={{ marginLeft: 6 }} title={e.allocations.map((a) => `${a.worksite.ref} : ${formatEur(a.ht)} HT`).join('\n')}>
+                        ⇆ {e.allocations.length} chantiers{e.partOfHt != null ? ` · part de ${formatEur(e.partOfHt)} HT` : ''}
+                      </span>
+                    )}
+                    {!!e.siblingIds?.length && (
+                      <span className="badge warn" style={{ marginLeft: 6, cursor: 'pointer' }} title="Même fournisseur et même n° que d’autres lignes : clic droit → Fusionner les lignes de cette facture" onClick={(ev) => { ev.stopPropagation(); setMerging(e); }}>
+                        {e.siblingIds.length + 1} lignes · à fusionner
+                      </span>
+                    )}
                     {e.direction === 'purchase' && !!e._count?.bordereaux && (
                       <span className="badge plain" style={{ marginLeft: 6 }} title={`Bordereau(x) relié(s) à cette facture, payés avec elle : ${(e.bordereaux ?? []).map((b) => b.docNumber ?? 'sans n°').join(', ')}`}>
                         📦 {e._count.bordereaux} bordereau{e._count.bordereaux > 1 ? 'x' : ''}
@@ -627,7 +656,7 @@ function AchatsInner() {
                       {e.foxTransmittedAt ? 'Fox : transmis le ' + formatDateBE(e.foxTransmittedAt) : e.foxExportedAt ? 'Fox : ZIP préparé · dépôt à confirmer' : 'Fox : à transmettre'}
                     </div>}
                   </td>
-                  <td className="mono">{e.worksite?.ref ?? (e.vehicle ? `🚗 ${vehicleName(e.vehicle)}` : '—')}</td>
+                  <td className="mono">{e.allocations && e.allocations.length > 1 ? `${e.worksite?.ref ?? e.allocations[0]!.worksite.ref} +${e.allocations.length - 1}` : (e.worksite?.ref ?? (e.vehicle ? `🚗 ${vehicleName(e.vehicle)}` : '—'))}</td>
                   <td>{e.categoryLabel ?? '—'}</td>
                   <td style={{ textAlign: 'right' }}><Money value={e.ht} /></td>
                   <td style={{ textAlign: 'right' }}><Money value={e.ttc ?? e.ht} /></td>
@@ -829,8 +858,11 @@ function ExpenseModal({
   onSaved,
   onOpenOther,
   onChanged,
+  onMerge,
 }: {
   expense: Expense | null;
+  /** fusionne les lignes de la même facture */
+  onMerge?: (e: Expense) => void;
   /** Bordereau d'origine : « Facture reçue… » depuis un bordereau — préremplit fournisseur/chantier,
    *  et la facture créée est reliée automatiquement au bordereau une fois enregistrée. */
   prefillFrom?: Expense | null;
@@ -867,7 +899,9 @@ function ExpenseModal({
   // remplacés par une répartition manuelle, HT par chantier. Sur une dépense existante, la 1re ligne
   // met à jour la dépense en place (son rapprochement bancaire éventuel y reste attaché) et les
   // suivantes créent les autres parts, avec le même PDF.
-  const [splits, setSplits] = useState<{ worksiteId: string; ht: string }[] | null>(null);
+  const [splits, setSplits] = useState<{ worksiteId: string; ht: string }[] | null>(
+    expense?.allocations && expense.allocations.length > 1 ? expense.allocations.map((a) => ({ worksiteId: a.worksiteId, ht: String(Math.abs(a.ht)) })) : null,
+  );
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
@@ -1029,39 +1063,24 @@ function ExpenseModal({
         if (splits.some((s) => !s.worksiteId || !(Number(s.ht) > 0))) {
           throw new Error('Chaque ligne de répartition doit avoir un chantier et un montant HT > 0.');
         }
-        const totalHt = splits.reduce((sum, s) => sum + Number(s.ht), 0);
+        const totalHt = Math.round(splits.reduce((sum, s) => sum + Number(s.ht), 0) * 100) / 100;
         // Sur une dépense existante, on ne change pas le montant global par mégarde : la somme doit rester égale.
         if (expense && Math.abs(totalHt - expense.ht) > 0.01) {
           throw new Error(`La somme des parts (${totalHt.toFixed(2)} €) doit égaler le HT de la facture (${expense.ht.toFixed(2)} €).`);
         }
-        const totalTtc = v.ttc === '' ? null : Number(v.ttc);
-        const totalVat = v.vatRecup === '' ? null : Number(v.vatRecup);
-        // PDF à recopier sur les nouvelles parts : celui qu'on vient de déposer, sinon celui déjà enregistré.
-        let sharedFile: File | null = pendingFile;
-        if (!sharedFile && expense?.hasPdf && pdfUrl) {
-          sharedFile = new File([await (await fetch(pdfUrl)).blob()], `${expense.docNumber ?? 'facture'}.pdf`, { type: 'application/pdf' });
-        }
-        for (const [i, s] of splits.entries()) {
-          const share = Number(s.ht) / totalHt;
-          const body = {
-            ...commonBody(),
-            worksiteId: s.worksiteId,
-            ht: Number(s.ht),
-            ttc: totalTtc != null ? Math.round(totalTtc * share * 100) / 100 : null,
-            vatRecup: totalVat != null ? Math.round(totalVat * share * 100) / 100 : null,
-          };
-          if (expense && i === 0) {
-            await api(`/api/finance/expenses/${expense.id}`, { method: 'PATCH', body });
-            if (pendingFile) await attachFile(expense.id);
-            continue;
-          }
-          const saved = await api<{ expense: { id: string } }>('/api/finance/expenses', { method: 'POST', body });
-          if (sharedFile) {
-            const fd = new FormData();
-            fd.append('file', sharedFile);
-            await apiUpload(`/api/finance/expenses/${saved.expense.id}/pdf`, fd);
-          }
-        }
+        // UNE seule fiche (un PDF, un paiement, un rapprochement) : la répartition est enregistrée avec elle
+        const body = {
+          ...commonBody(),
+          worksiteId: splits[0]!.worksiteId,
+          ht: totalHt,
+          ttc: v.ttc === '' ? null : Number(v.ttc),
+          vatRecup: v.vatRecup === '' ? null : Number(v.vatRecup),
+          allocations: splits.map((s) => ({ worksiteId: s.worksiteId, ht: Number(s.ht) })),
+        };
+        const saved = expense
+          ? await api<{ expense: { id: string } }>(`/api/finance/expenses/${expense.id}`, { method: 'PATCH', body })
+          : await api<{ expense: { id: string } }>('/api/finance/expenses', { method: 'POST', body });
+        await attachFile(saved.expense.id);
         onSaved();
         return;
       }
@@ -1072,6 +1091,8 @@ function ExpenseModal({
         ht: Number(v.ht || 0),
         vatRecup: v.vatRecup === '' ? null : Number(v.vatRecup),
         ttc: v.ttc === '' ? null : Number(v.ttc),
+        // la fiche était répartie et on revient à un seul chantier : on efface la répartition
+        ...(expense?.allocations && expense.allocations.length > 1 ? { allocations: [] as { worksiteId: string; ht: number }[] } : {}),
       };
       const saved = expense
         ? await api<{ expense: { id: string } }>(`/api/finance/expenses/${expense.id}`, { method: 'PATCH', body })
@@ -1095,6 +1116,13 @@ function ExpenseModal({
           <h2>{expense ? 'Modifier la dépense' : prefillFrom ? `Facture reçue — bordereau ${prefillFrom.docNumber ?? ''}` : tr("Nouvelle dépense")}</h2>
           <button type="button" className="btn ghost" onClick={onClose} aria-label={tr("Fermer")}>✕</button>
         </div>
+        {!!expense?.siblingIds?.length && onMerge && (
+          <div className="banner warn" style={{ margin: '0 1.2rem 0.6rem', display: 'block' }}>
+            <strong>Cette facture a {expense.siblingIds.length} autre{expense.siblingIds.length > 1 ? 's' : ''} ligne{expense.siblingIds.length > 1 ? 's' : ''}</strong> (même fournisseur, même n°).
+            <div className="muted" style={{ fontSize: '0.84rem', margin: '0.2rem 0 0.4rem' }}>Une seule fiche avec une répartition par chantier évite les doubles saisies : un PDF, un paiement, un rapprochement.</div>
+            <button type="button" className="btn" onClick={() => onMerge(expense)}>Fusionner les lignes de cette facture…</button>
+          </div>
+        )}
         {expense?.direction === 'purchase' && <LinkedSlips expense={expense} onOpen={onOpenOther} onChanged={onChanged} />}
         {(expense?.direction === 'purchase' || expense?.direction === 'credit_note') && <CreditApplications expense={expense} onChanged={onChanged} />}
         {prefillFrom && (
@@ -1182,13 +1210,13 @@ function ExpenseModal({
                 <button type="button" className="btn" onClick={() => setSplits((prev) => [...(prev ?? []), { worksiteId: '', ht: '' }])}>+ Chantier</button>
                 <span className="muted" style={{ fontSize: '0.8rem' }}>
                   Total réparti : {splits.reduce((sum, s) => sum + (Number(s.ht) || 0), 0)} €
-                  {expense && <> · HT de la facture : {expense.ht} € (la somme doit être identique){bankMatches.length > 0 && ' · le rapprochement bancaire reste attaché à la 1re ligne'}</>}
+                  {expense && <> · HT de la facture : {expense.ht} € (la somme doit être identique) · une seule fiche : un PDF, un paiement</>}
                 </span>
               </div>
             </div>
           ) : (
             <div className="field" style={{ gridColumn: '1 / -1' }}>
-              <label> {tr("Chantier")} {(!expense || expense.editable) && (
+              <label> {tr("Chantier")} {(!expense || expense.splittable !== false) && (
                   <button
                     type="button"
                     className="btn ghost"
@@ -1351,6 +1379,52 @@ function ExpenseModal({
  * normalement) — on cherche parmi les factures d'achat déjà enregistrées, filtrées d'abord sur
  * le même fournisseur.
  */
+interface MergePreview { survivorId: string; docNumber: string | null; ht: number; ttc: number | null; vatRecup: number | null; removed: string[]; parts: { worksiteId: string; ref: string | null; ht: number }[]; warnings: string[] }
+
+/** Fusionne les lignes d'une même facture en une seule fiche répartie par chantier : on montre d'abord le résultat, puis on confirme. */
+function MergeModal({ expense, onClose, onMerged }: { expense: Expense; onClose: () => void; onMerged: () => void }) {
+  const ids = [expense.id, ...(expense.siblingIds ?? [])];
+  const [preview, setPreview] = useState<MergePreview | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    api<{ preview: MergePreview }>('/api/finance/expenses/merge', { method: 'POST', body: { ids, dryRun: true } })
+      .then((r) => setPreview(r.preview)).catch((e) => setErr((e as Error).message));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  async function confirm() {
+    setBusy(true); setErr(null);
+    try { await api('/api/finance/expenses/merge', { method: 'POST', body: { ids } }); onMerged(); }
+    catch (e) { setErr((e as Error).message); setBusy(false); }
+  }
+  return (
+    <div className="modal-scrim" onClick={() => { if (!busy) onClose(); }}>
+      <div className="modal" style={{ maxWidth: 560 }} onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head"><h2>Fusionner les lignes de la facture {expense.docNumber ?? ''}</h2><button type="button" className="btn ghost" onClick={onClose} disabled={busy} aria-label="Fermer">✕</button></div>
+        <div className="modal-body" style={{ display: 'grid', gap: 12 }}>
+          <div className="muted">{expense.supplier ?? '—'} · {ids.length} lignes deviennent <strong>une seule fiche</strong>, répartie entre leurs chantiers. Un seul PDF, un seul paiement, un seul rapprochement bancaire.</div>
+          {!preview && !err && <p role="status">Calcul du résultat…</p>}
+          {preview && (
+            <>
+              <div className="card card-pad">
+                <div><strong>Total : {formatEur(preview.ht)} HT</strong>{preview.ttc != null && <span className="muted"> · {formatEur(preview.ttc)} TTC</span>}</div>
+                {preview.parts.map((p) => <div key={p.worksiteId} className="row" style={{ justifyContent: 'space-between' }}><span>{p.ref ?? 'Chantier'}</span><span className="tnum">{formatEur(p.ht)} HT</span></div>)}
+              </div>
+              {preview.warnings.map((w) => <p key={w} className="badge warn" style={{ whiteSpace: 'normal' }}>{w}</p>)}
+              <div className="muted" style={{ fontSize: '0.82rem' }}>Les {preview.removed.length} autre{preview.removed.length > 1 ? 's' : ''} ligne{preview.removed.length > 1 ? 's sont supprimées' : ' est supprimée'} (conservée{preview.removed.length > 1 ? 's' : ''} dans le journal) ; leurs paiements rapprochés sont repris par la fiche restante.</div>
+            </>
+          )}
+          {err && <p className="badge crit" role="alert" style={{ whiteSpace: 'normal' }}>{err}</p>}
+        </div>
+        <div className="modal-foot">
+          <button type="button" className="btn" onClick={onClose} disabled={busy}>Annuler</button>
+          <button type="button" className="btn primary" onClick={confirm} disabled={busy || !preview}>{busy ? 'Fusion…' : 'Fusionner'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function LinkSlipModal({ slip, onClose, onLinked }: { slip: Expense; onClose: () => void; onLinked: () => void }) {
   const [q, setQ] = useState('');
   const [sameSupplierOnly, setSameSupplierOnly] = useState(!!slip.contactId);

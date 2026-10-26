@@ -2,6 +2,7 @@ import { computeWorksiteMargin, type Entity, type WorksiteMargin } from '@jjd/sh
 import { prisma } from '../db.js';
 import { worksiteTransport, type WorksiteTransport } from './vehicle-cost.js';
 import { invoiceWorksiteAllocation } from './invoice-allocation.js';
+import { expandAllocations, allocationSelect } from './ledger-allocation.js';
 import { isOuvrierRemuneration, isCreditNoteSale, isVehicleFinancing, paidFraction } from './consolidated.js';
 
 /**
@@ -161,11 +162,12 @@ export async function slipCostShift(worksiteId: string): Promise<number> {
   const invoiceIds = [...new Set(involved.map((s) => s.linkedInvoiceId!))];
   if (!invoiceIds.length) return 0;
   const [invoices, slips] = await Promise.all([
-    prisma.ledgerEntry.findMany({ where: { id: { in: invoiceIds } }, select: { id: true, ht: true, worksiteId: true, docNumber: true, contactId: true, supplierName: true } }),
+    prisma.ledgerEntry.findMany({ where: { id: { in: invoiceIds } }, select: { id: true, ht: true, worksiteId: true, docNumber: true, contactId: true, supplierName: true, _count: { select: { allocations: true } } } }),
     prisma.ledgerEntry.findMany({ where: { direction: 'delivery_slip', linkedInvoiceId: { in: invoiceIds } }, select: { linkedInvoiceId: true, worksiteId: true, ht: true } }),
   ]);
   let delta = 0;
   for (const inv of invoices) {
+    if (inv._count.allocations) continue; // répartition enregistrée sur la fiche : elle fait foi (voir lib/ledger-allocation.ts)
     // facture déjà répartie par chantier à la saisie (une écriture par chantier, même n° de facture) : la répartition existe déjà, on n'y touche pas
     if (inv.docNumber && await prisma.ledgerEntry.count({ where: { direction: 'purchase', docNumber: inv.docNumber, id: { not: inv.id }, OR: [...(inv.contactId ? [{ contactId: inv.contactId }] : []), ...(inv.supplierName ? [{ supplierName: inv.supplierName }] : [])] } }) > 0) continue;
     const alloc = invoiceWorksiteAllocation(inv, slips.filter((s) => s.linkedInvoiceId === inv.id));
@@ -180,7 +182,9 @@ export async function worksiteMargin(worksiteId: string): Promise<WorksiteMargin
   if (!ws) return null;
 
   const [ledger, time, transport, labour] = await Promise.all([
-    prisma.ledgerEntry.findMany({ where: { worksiteId }, include: { document: { select: { status: true, paidAmount: true, totalTtc: true } } } }),
+    // une facture répartie entre plusieurs chantiers compte pour la part de CE chantier
+    prisma.ledgerEntry.findMany({ where: { OR: [{ worksiteId }, { allocations: { some: { worksiteId } } }] }, include: { document: { select: { status: true, paidAmount: true, totalTtc: true } }, allocations: allocationSelect } })
+      .then((rows) => expandAllocations(rows).filter((r) => r.worksiteId === worksiteId)),
     prisma.timeEntry.aggregate({
       where: { worksiteId, status: { in: ['approved', 'submitted'] }, date: null },
       _sum: { amount: true },

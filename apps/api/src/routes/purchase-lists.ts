@@ -5,6 +5,7 @@ import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, OFFICE, STAFF } from '../lib/auth.js';
 import { getCompany } from '../lib/documents.js';
+import { expandAllocations, allocationSelect } from '../lib/ledger-allocation.js';
 import { renderHtmlPdf } from '../lib/pdf.js';
 import type { QuoteLine } from '../lib/quote-plan.js';
 import {
@@ -23,8 +24,10 @@ type Row = { id: string; worksiteId: string | null; quoteId: string | null; titl
 
 async function spentHt(worksiteId: string | null): Promise<number> {
   if (!worksiteId) return 0;
-  const agg = await prisma.ledgerEntry.aggregate({ where: { worksiteId, direction: 'purchase' }, _sum: { ht: true } });
-  return Math.round((agg._sum.ht ?? 0) * 100) / 100;
+  // une facture répartie entre plusieurs chantiers compte pour la part de ce chantier
+  const rows = await prisma.ledgerEntry.findMany({ where: { direction: 'purchase', OR: [{ worksiteId }, { allocations: { some: { worksiteId } } }] }, select: { worksiteId: true, ht: true, allocations: allocationSelect } });
+  const total = expandAllocations(rows).filter((r) => r.worksiteId === worksiteId).reduce((s, r) => s + r.ht, 0);
+  return Math.round(total * 100) / 100;
 }
 const view = async (r: Row) => ({
   id: r.id, worksiteId: r.worksiteId, quoteId: r.quoteId, title: r.title, shared: !!r.shareToken, shareToken: r.shareToken,

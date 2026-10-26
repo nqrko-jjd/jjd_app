@@ -178,6 +178,7 @@ const WORKSITE_CSV_COLUMNS = [
   { key: 'priority', label: 'Priorité' },
   { key: 'entity', label: 'Entité' },
   { key: 'client', label: 'Client' },
+  { key: 'building', label: 'Immeuble' },
   { key: 'manager', label: 'Chef de chantier' },
   { key: 'city', label: 'Ville' },
   { key: 'quotedHt', label: 'Devisé HT' },
@@ -207,6 +208,7 @@ worksitesRouter.get(
       take: 5000,
       include: {
         client: { select: { name: true } },
+        acp: { select: { name: true } },
         manager: { select: { displayName: true, firstName: true } },
       },
     });
@@ -218,6 +220,7 @@ worksitesRouter.get(
       priority: WORKSITE_PRIORITY_LABEL[w.priority as keyof typeof WORKSITE_PRIORITY_LABEL] ?? w.priority,
       entity: ENTITY_LABEL[w.entity as keyof typeof ENTITY_LABEL] ?? w.entity,
       client: w.client?.name ?? '',
+      building: w.acp?.name ?? '',
       manager: w.manager?.displayName || w.manager?.firstName || '',
       city: w.city ?? '',
       quotedHt: w.quotedHt,

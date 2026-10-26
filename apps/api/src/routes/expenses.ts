@@ -703,6 +703,11 @@ const EXPENSE_CSV_COLUMNS = [
   { key: 'vatRecup', label: 'TVA récup' },
   { key: 'ttc', label: 'TTC' },
   { key: 'paymentStatus', label: 'Statut' },
+  { key: 'paidAmount', label: 'Payé TTC' },
+  { key: 'remainingAmount', label: 'Reste à payer TTC' },
+  { key: 'bankDate', label: 'Date du paiement (banque)' },
+  { key: 'bankMatch', label: 'Rapprochement bancaire' },
+  { key: 'communication', label: 'Communication' },
   { key: 'notes', label: 'Notes' },
 ];
 
@@ -718,7 +723,19 @@ expensesRouter.get(
       take: 5000,
       include: inc,
     });
-    const rows = items.map((e) => ({
+    // paiement réel : rapprochements bancaires (un bordereau prend celui de sa facture), pas seulement le statut saisi à la main
+    const payments = await allocationSnapshot();
+    const matches = await prisma.bankTransactionMatch.findMany({
+      where: { ledgerEntryId: { in: items.map((e) => e.linkedInvoice?.id ?? e.id) } },
+      select: { ledgerEntryId: true, bankTransaction: { select: { bookingDate: true, counterpartyName: true, description: true, communication: true } } },
+    });
+    const matchesOf = new Map<string, typeof matches>();
+    for (const m of matches) matchesOf.set(m.ledgerEntryId!, [...(matchesOf.get(m.ledgerEntryId!) ?? []), m]);
+    const d10 = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : '');
+    const rows = items.map((e) => {
+      const pay = paymentOf(e, payments);
+      const bank = (matchesOf.get(e.direction === 'delivery_slip' && e.linkedInvoice ? e.linkedInvoice.id : e.id) ?? []).sort((a, b) => (a.bankTransaction.bookingDate?.getTime() ?? 0) - (b.bankTransaction.bookingDate?.getTime() ?? 0));
+      return {
       id: e.id,
       date: e.date,
       dueDate: e.dueDate,
@@ -730,9 +747,15 @@ expensesRouter.get(
       ht: e.ht,
       vatRecup: e.vatRecup,
       ttc: e.ttc,
-      paymentStatus: e.paymentStatus ?? 'Non payé',
+      paymentStatus: pay.paymentStatus,
+      paidAmount: pay.paidAmount,
+      remainingAmount: pay.remainingAmount,
+      bankDate: bank.map((m) => d10(m.bankTransaction.bookingDate)).filter(Boolean).join(' ; '),
+      bankMatch: bank.map((m) => [d10(m.bankTransaction.bookingDate), m.bankTransaction.counterpartyName || m.bankTransaction.description || ''].filter(Boolean).join(' ')).join(' ; '),
+      communication: [...new Set(bank.map((m) => m.bankTransaction.communication?.trim()).filter(Boolean))].join(' ; '),
       notes: e.notes ?? '',
-    }));
+      };
+    });
     const csv = toCsv(EXPENSE_CSV_COLUMNS, rows);
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="achats-${new Date().toISOString().slice(0, 10)}.csv"`);

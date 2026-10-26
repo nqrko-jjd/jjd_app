@@ -47,6 +47,15 @@ function esc(s: string | null | undefined): string {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 }
 
+/** Adresse du client en lignes : la rue d'un côté, « code postal ville » à la ligne (l'adresse est stockée sur une ligne, séparée par une virgule). */
+export function addressLines(raw: string | null | undefined): string[] {
+  const text = (raw ?? '').trim();
+  if (!text) return [];
+  if (/\r?\n/.test(text)) return text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const m = /^(.*?),?\s*(\d{4,5}\s+[^,]+?)\s*$/.exec(text);
+  return m && m[1]!.trim() ? [m[1]!.trim(), m[2]!.trim()] : [text];
+}
+
 /** Construit le HTML imprimable d'un devis/facture/avoir — inspiré de la présentation TrustUp
  *  (bandeau de marque, bloc "Émetteur"/"Adressé à" en 2 colonnes, en-tête de tableau et total
  *  TTC en couleur pleine) mais avec la charte JJD (vert `#173f34` / or `#c5a35d`). */
@@ -55,10 +64,10 @@ export async function buildHtml(d: PdfDoc, co: Company): Promise<string> {
   const title = DOC_KIND_LABEL[d.kind] ?? d.kind;
   const ref = d.number ?? d.draftRef ?? '';
   const clientName = d.billingName ?? d.contact?.name ?? '';
-  const clientAddr = d.billingAddress ?? [
+  const clientAddr = addressLines(d.billingAddress ?? [
     [d.contact?.address, d.contact?.box && `bte ${d.contact.box}`].filter(Boolean).join(' '),
     [d.contact?.postalCode, d.contact?.city].filter(Boolean).join(' '),
-  ].filter(Boolean).join(', ');
+  ].filter(Boolean).join(', '));
   const clientVat = d.billingVat ?? d.contact?.vat;
   const hasDiscount = d.lines.some((l) => l.kind === 'item' && (l.discountPct ?? 0) > 0);
   const colspan = hasDiscount ? 6 : 5;
@@ -153,7 +162,7 @@ export async function buildHtml(d: PdfDoc, co: Company): Promise<string> {
         <div class="bill-to">
           <div class="lbl">Adressé à</div>
           <div class="party-name">${esc(clientName) || '—'}</div>
-          ${clientAddr ? `<div>${esc(clientAddr)}</div>` : ''}
+          ${clientAddr.map((l) => `<div>${esc(l)}</div>`).join('')}
           ${clientVat ? `<div>TVA ${esc(clientVat)}</div>` : ''}
           ${d.billingEmail ? `<div>${esc(d.billingEmail)}</div>` : ''}
         </div>

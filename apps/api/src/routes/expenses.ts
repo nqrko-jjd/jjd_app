@@ -31,7 +31,7 @@ import { invoiceMailboxConfigured, syncInvoiceMailbox, reprocessEmailEntries, sc
 import { scanAllEntriesForRefs } from '../lib/purchase-ref-scan.js';
 import { findPurchaseCandidates } from '../lib/purchase-candidates.js';
 import { normalizeParts, replaceAllocations, mainWorksite, type AllocPart } from '../lib/ledger-allocation.js';
-import { mergeEntries } from '../lib/ledger-merge.js';
+import { mergeEntries, invoiceBaseNumber } from '../lib/ledger-merge.js';
 import { scanLinesBatch, linesStats, articleSummary, articleOccurrences, getHidden, setHidden, type ArticleFilters } from '../lib/purchase-lines.js';
 
 export const expensesRouter = Router();
@@ -177,10 +177,19 @@ async function duplicateIdsFor(entries: { id: string; direction: string; docNumb
  */
 async function siblingIdsFor(entries: { id: string; direction: string; docNumber: string | null; contactId: string | null; supplierName: string | null }[]): Promise<Map<string, string[]>> {
   const out = new Map<string, string[]>();
-  const nums = [...new Set(entries.filter((e) => e.docNumber && e.docNumber.trim().length > 2 && (e.direction === 'purchase' || e.direction === 'credit_note')).map((e) => e.docNumber!))];
-  if (!nums.length) return out;
-  const pool = await prisma.ledgerEntry.findMany({ where: { docNumber: { in: nums }, direction: { in: ['purchase', 'credit_note'] } }, select: { id: true, direction: true, docNumber: true, contactId: true, supplierName: true } });
-  const keyOf = (o: { direction: string; docNumber: string | null; contactId: string | null; supplierName: string | null }) => { const who = o.contactId ?? (o.supplierName ?? '').trim().toLowerCase(); return who ? `${o.direction}|${(o.docNumber ?? '').trim().toLowerCase()}|${who}` : null; };
+  const cands = entries.filter((e) => e.docNumber && e.docNumber.trim().length > 2 && (e.direction === 'purchase' || e.direction === 'credit_note'));
+  if (!cands.length) return out;
+  // « 23/252741 - 113679 » : n° de facture + n° de bordereau — les lignes qui ne diffèrent que par ce suffixe sont la même facture
+  const nums = [...new Set(cands.flatMap((e) => [e.docNumber!, invoiceBaseNumber(e.docNumber)]))];
+  const contactIds = [...new Set(cands.map((e) => e.contactId).filter((x): x is string => !!x))];
+  const names = [...new Set(cands.map((e) => e.supplierName).filter((x): x is string => !!x))];
+  const sel = { id: true, direction: true, docNumber: true, contactId: true, supplierName: true } as const;
+  const [exact, suffixed] = await Promise.all([
+    prisma.ledgerEntry.findMany({ where: { docNumber: { in: nums }, direction: { in: ['purchase', 'credit_note'] } }, select: sel }),
+    prisma.ledgerEntry.findMany({ where: { docNumber: { contains: ' - ' }, direction: { in: ['purchase', 'credit_note'] }, OR: [...(contactIds.length ? [{ contactId: { in: contactIds } }] : []), ...(names.length ? [{ supplierName: { in: names } }] : [])] }, select: sel }),
+  ]);
+  const pool = [...new Map([...exact, ...suffixed].map((o) => [o.id, o])).values()];
+  const keyOf = (o: { direction: string; docNumber: string | null; contactId: string | null; supplierName: string | null }) => { const who = o.contactId ?? (o.supplierName ?? '').trim().toLowerCase(); return who ? `${o.direction}|${invoiceBaseNumber(o.docNumber).toLowerCase()}|${who}` : null; };
   const groups = new Map<string, string[]>();
   for (const o of pool) { const k = keyOf(o); if (k) groups.set(k, [...(groups.get(k) ?? []), o.id]); }
   for (const e of entries) { const k = keyOf(e); const g = k ? groups.get(k) : undefined; if (g && g.length > 1) out.set(e.id, g.filter((id) => id !== e.id)); }

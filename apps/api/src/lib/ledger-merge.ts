@@ -11,6 +11,17 @@ import { normalizeParts, replaceAllocations } from './ledger-allocation.js';
 const sameSupplier = (a: { contactId: string | null; supplierName: string | null }, b: { contactId: string | null; supplierName: string | null }) =>
   (!!a.contactId && a.contactId === b.contactId) || (!!a.supplierName && !!b.supplierName && a.supplierName.trim().toLowerCase() === b.supplierName.trim().toLowerCase());
 
+/**
+ * « 23/252741 - 113679 » = n° de facture + n° de bordereau : des lignes qui ne diffèrent que par ce suffixe sont la MÊME facture.
+ * Seul un suffixe de 5 à 8 chiffres est retiré, derrière un vrai numéro (au moins 4 chiffres) : « n° 526548 - Carte 7078… » (relevé de carte)
+ * ou « Loyer Mars - 2025 » (année) restent tels quels.
+ */
+export function invoiceBaseNumber(docNumber: string | null): string {
+  const s = (docNumber ?? '').trim();
+  const m = /^(.*\S)\s+-\s+(\d{5,8})$/.exec(s);
+  return m && /\d{4,}/.test(m[1]!) ? m[1]! : s;
+}
+
 export interface MergePreview { survivorId: string; docNumber: string | null; ht: number; ttc: number | null; vatRecup: number | null; removed: string[]; parts: { worksiteId: string; ref: string | null; ht: number }[]; warnings: string[] }
 
 /** `dryRun` : ne fait rien, renvoie ce qui serait fait. Les lignes supprimées sont conservées dans le journal. */
@@ -23,7 +34,7 @@ export async function mergeEntries(ids: string[], opts: { keepId?: string; dryRu
   if (rows.length !== new Set(ids).size) throw new HttpError(404, 'Une des lignes est introuvable.');
   const first = rows[0]!;
   if (rows.some((r) => r.direction !== first.direction) || !['purchase', 'credit_note'].includes(first.direction)) throw new HttpError(422, 'On ne fusionne que des factures d’achat entre elles, ou des notes de crédit entre elles.');
-  const num = (r: { docNumber: string | null }) => (r.docNumber ?? '').trim().toLowerCase();
+  const num = (r: { docNumber: string | null }) => invoiceBaseNumber(r.docNumber).toLowerCase();
   if (!num(first) || rows.some((r) => num(r) !== num(first))) throw new HttpError(422, 'Les lignes doivent avoir le même n° de facture.');
   if (rows.some((r) => !sameSupplier(r, first))) throw new HttpError(422, 'Les lignes doivent avoir le même fournisseur.');
   const without = rows.filter((r) => !r.allocations.length && !r.worksiteId);
@@ -41,7 +52,7 @@ export async function mergeEntries(ids: string[], opts: { keepId?: string; dryRu
   const refs = new Map(rows.flatMap((r) => (r.worksiteId && r.worksite ? [[r.worksiteId, r.worksite.ref] as [string, string]] : [])));
   const warnings: string[] = [];
   if (new Set(rows.map((r) => r.ht.toFixed(2))).size === 1 && rows.length > 1) warnings.push('Toutes les lignes ont le même montant : s’il s’agit d’un doublon (la même facture saisie deux fois), supprimez l’un des exemplaires au lieu de fusionner, sinon le montant sera doublé.');
-  const preview = { survivorId: keep.id, docNumber: keep.docNumber, ht, ttc, vatRecup: vat, removed: others.map((r) => r.id), parts: parts.map((p) => ({ worksiteId: p.worksiteId, ref: refs.get(p.worksiteId) ?? null, ht: p.ht })), warnings };
+  const preview = { survivorId: keep.id, docNumber: invoiceBaseNumber(keep.docNumber), ht, ttc, vatRecup: vat, removed: others.map((r) => r.id), parts: parts.map((p) => ({ worksiteId: p.worksiteId, ref: refs.get(p.worksiteId) ?? null, ht: p.ht })), warnings };
   if (opts.dryRun) return { preview, survivorId: keep.id };
 
   const allFox = (f: 'foxExportedAt' | 'foxTransmittedAt') => (rows.every((r) => r[f]) ? keep[f] : null);
@@ -51,6 +62,9 @@ export async function mergeEntries(ids: string[], opts: { keepId?: string; dryRu
       where: { id: keep.id },
       data: {
         ht, ttc, vatRecup: vat,
+        // la fiche porte le n° de la facture ; les n° d'origine des lignes (bordereaux) restent lisibles dans les notes
+        docNumber: invoiceBaseNumber(keep.docNumber),
+        ...(new Set(rows.map((r) => r.docNumber ?? '')).size > 1 ? { notes: [keep.notes, `Lignes fusionnées : ${rows.map((r) => r.docNumber).filter(Boolean).join(' | ')}`].filter(Boolean).join('\n') } : {}),
         pdfPath: keep.pdfPath ?? others.find((r) => r.pdfPath)?.pdfPath ?? null,
         foxExportedAt: allFox('foxExportedAt'), foxTransmittedAt: allFox('foxTransmittedAt'),
         paymentStatus: rows.every((r) => (r.paymentStatus ?? '') === 'Payé') ? 'Payé' : keep.paymentStatus === 'Payé' && others.some((r) => (r.paymentStatus ?? '') !== 'Payé') ? 'Non payé' : keep.paymentStatus,

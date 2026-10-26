@@ -111,3 +111,25 @@ test('suppression d’une ligne de l’import Excel : confirmation exigée sans 
   await prisma.bankTransactionMatch.create({ data: { bankTransactionId: tx.id, ledgerEntryId: paid.id, amount: 108 } });
   assert.equal((await call('DELETE', `/${paid.id}?force=1`)).status, 409, 'rapprochée à un paiement : jamais supprimée');
 });
+
+test('lignes d’une même facture portant chacune un suffixe de bordereau (« 23/999001 - 111111 ») : détectées et fusionnables', async () => {
+  const mkv = (suffix: string, ws: string, ht: number) => mk({ docNumber: `23/999001 - ${suffix}`, ht, ttc: Math.round(ht * 1.21 * 100) / 100, worksiteId: ws });
+  const a = await mkv('111111', ids.a!, 100), b = await mkv('222222', ids.b!, 250);
+  const autre = await mk({ docNumber: '23/999002 - 333333', ht: 40, ttc: 48.4, worksiteId: ids.a }); // une AUTRE facture
+  const carte = await mk({ docNumber: '526548 - Carte 707881005600000001', ht: 10, ttc: 12, worksiteId: ids.a });
+  const carte2 = await mk({ docNumber: '526548 - Carte 707881005600000001', ht: 12, ttc: 14.5, worksiteId: ids.b });
+
+  const list = await call('GET', `?contactId=${ids.c}`);
+  const sib = (id: string) => list.body.items.find((x: any) => x.id === id).siblingIds;
+  assert.deepEqual(sib(a.id), [b.id], 'les deux lignes de la facture 23/999001 se reconnaissent malgré leur suffixe différent');
+  assert.deepEqual(sib(autre.id), [], 'une autre facture n’est pas mélangée');
+  assert.deepEqual(sib(carte.id).sort(), [carte2.id].sort(), 'même n° exact : toujours reconnu comme avant');
+
+  assert.equal((await call('POST', '/merge', { ids: [a.id, autre.id] })).status, 422, 'deux factures différentes ne se fusionnent pas');
+  const done = await call('POST', '/merge', { ids: [a.id, b.id] });
+  assert.equal(done.status, 200);
+  assert.equal(done.body.expense.docNumber, '23/999001', 'la fiche porte le n° de la facture');
+  assert.match(done.body.expense.notes, /23\/999001 - 111111 \| 23\/999001 - 222222/, 'les n° d’origine restent lisibles dans les notes');
+  assert.equal(done.body.expense.ht, 350);
+  assert.equal(done.body.expense.allocations.length, 2);
+});

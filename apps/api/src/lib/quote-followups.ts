@@ -11,6 +11,7 @@ import { formatEur, formatDateBE } from '@jjd/shared';
 import { emailConfigured, sendEmailWithPdf } from './doc-mail.js';
 import { getCompany } from './documents.js';
 import { fillTemplate } from './reminders.js';
+import { markCrmFollowedUp } from './crm-sync.js';
 
 export interface FollowupStep { daysAfterSent: number; subject: string; body: string }
 /** after_sent : les paliers comptent les jours APRÈS l'envoi ; before_expiry : les jours AVANT la date d'expiration du devis. */
@@ -116,6 +117,7 @@ export async function sendQuoteFollowup(
   }
   await prisma.invoiceReminder.upsert({ where: { documentId_step: { documentId, step } }, create: { ...common, status: 'sent', sentAt: new Date() }, update: { ...common, status: 'sent', error: null, sentAt: new Date() } });
   await prisma.auditLog.create({ data: { actorId: o.userId ?? null, action: 'quote.followup', entity: 'document', entityId: documentId, meta: { step, to, auto: !!o.auto } } });
+  await markCrmFollowedUp((await prisma.document.findUnique({ where: { id: documentId }, select: { worksiteId: true } }))?.worksiteId); // pipeline : carte « Relancé »
   return { to };
 }
 

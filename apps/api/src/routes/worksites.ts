@@ -13,6 +13,7 @@ import { worksiteMargin, worksiteInvoicedHtBatch, withQuotedFromDocuments } from
 import { geocode } from '../lib/geocode.js';
 import { autoGeocodeWorksite } from '../lib/worksite-geo.js';
 import { syncChantierSafe } from '../lib/bricoloc.js';
+import { syncCrmFromWorksite } from '../lib/crm-sync.js';
 import { toCsv, readTableBuffer, pick } from '../lib/table-io.js';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
@@ -614,6 +615,7 @@ worksitesRouter.patch(
     await prisma.auditLog.create({
       data: { actorId: req.user!.id, action: 'update', entity: 'worksite', entityId: ws.id, meta: data },
     });
+    if (data.status) await syncCrmFromWorksite(ws.id); // pipeline : la carte du chantier suit son statut
     void pushBricoloc(ws.id);
     // l'adresse (ou l'immeuble) a changé : le point GPS est recalculé automatiquement
     if (data.address !== undefined || data.postalCode !== undefined || data.city !== undefined || buildingIdInput !== undefined) void autoGeocodeWorksite(ws.id, { force: true });

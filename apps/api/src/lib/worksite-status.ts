@@ -1,6 +1,7 @@
 import { prisma } from '../db.js';
 import { WORKSITE_STATUS_LABEL, type WorksiteStatus } from '@jjd/shared';
 import { worksiteQuotedHtBatch, worksiteInvoicedHtBatch } from './worksite-margin.js';
+import { syncCrmFromWorksite } from './crm-sync.js';
 
 /**
  * Statut d'un chantier qui avance tout seul, au gré de ce qui se passe (devis, planning, pointage, factures, paiements).
@@ -151,6 +152,7 @@ export async function refreshWorksiteStatus(worksiteId: string | null | undefine
         meta: { from: ws.status, to: next.to, reason: next.reason, trigger, label: `Statut passé automatiquement de « ${WORKSITE_STATUS_LABEL[ws.status as WorksiteStatus] ?? ws.status} » à « ${WORKSITE_STATUS_LABEL[next.to]} » (${next.reason})` },
       },
     });
+    await syncCrmFromWorksite(ws.id); // pipeline : la carte du chantier suit son statut
     return next.to;
   } catch (e) {
     // eslint-disable-next-line no-console

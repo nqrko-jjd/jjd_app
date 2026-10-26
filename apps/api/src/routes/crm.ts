@@ -18,6 +18,7 @@ crmRouter.get(
         contact: { select: { id: true, name: true } },
         acp: { select: { id: true, name: true } },
         owner: { select: { id: true, email: true } },
+        worksite: { select: { id: true, ref: true } },
         photos: { select: { id: true, url: true, thumbUrl: true }, orderBy: { createdAt: 'asc' } },
       },
     });

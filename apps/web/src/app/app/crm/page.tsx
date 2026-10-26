@@ -30,6 +30,7 @@ interface Opp {
   source: string | null; nextActionOn: string | null; nextActionNote: string | null;
   contact: { name: string } | null;
   acp: { name: string } | null;
+  worksite?: { id: string; ref: string } | null;
   problemType: string | null; unitLabel: string | null; urgent: boolean;
   onSiteContactName: string | null; onSiteContactPhone: string | null;
   accessNotes: string | null; visitPreference: string | null;
@@ -133,6 +134,7 @@ function CrmInner() {
                   <div key={o.id} className="kanban-card" aria-busy={moving===o.id}>
                     {(o.contact?.name ?? o.acp?.name) && <div className="eyebrow-mini">{o.contact?.name ?? o.acp?.name}</div>}
                     <button type="button" className="crm-card-title" onClick={() => o.requestBrief ? setViewing(o) : setEditing(o)}>{o.title}</button>
+                    {o.worksite && <a className="chip" style={{ marginTop: '0.25rem', display: 'inline-block' }} href={`/app/chantiers/${o.worksite.id}`} title="Ouvrir le chantier">🏗 {o.worksite.ref} →</a>}
                     {o.source === 'email-ia' && (
                       <span className="badge plain" style={{ fontSize: '0.68rem', marginTop: '0.2rem' }} title="Créée automatiquement depuis un mail par l'IA — à vérifier avant de la traiter comme confirmée">
                         🤖 Détectée par mail, à vérifier

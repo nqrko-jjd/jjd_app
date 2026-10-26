@@ -1,4 +1,5 @@
 import { refreshWorksiteStatus } from '../lib/worksite-status.js';
+import { syncCrmFromWorksite } from '../lib/crm-sync.js';
 import { Router } from 'express';
 import { validateExternalDeliveryRequest, externalDeliveryState } from '../lib/document-delivery.js';
 import path from 'node:path';
@@ -939,7 +940,7 @@ documentsRouter.post(
     await prisma.auditLog.create({
       data: { actorId: req.user!.id, action: 'send', entity: 'document', entityId: doc.id, meta: { channel: 'external', confirmedExternal: true } },
     });
-    if (doc.kind === 'quote') await refreshWorksiteStatus(updated.worksiteId, 'document'); // devis envoyé → chantier « Devis envoyé »
+    if (doc.kind === 'quote') { await refreshWorksiteStatus(updated.worksiteId, 'document'); await syncCrmFromWorksite(updated.worksiteId); } // devis envoyé → chantier « Devis envoyé » + carte pipeline
     res.json({
       document: updated,
       note: `${DOC_KIND_LABEL[doc.kind]} : envoi externe enregistré. Aucun document transmis par JJD.`,
@@ -983,7 +984,7 @@ async function sendDocumentEmail(docId: string, input: z.infer<typeof emailInput
     include: docInclude,
   });
   await prisma.auditLog.create({ data: { actorId, action: 'send', entity: 'document', entityId: doc.id, meta: { channel: 'email', to: input.to, signature: sig ? sig.request.id : undefined } } });
-  if (doc.kind === 'quote') await refreshWorksiteStatus(updated.worksiteId, 'document'); // devis envoyé → chantier « Devis envoyé »
+  if (doc.kind === 'quote') { await refreshWorksiteStatus(updated.worksiteId, 'document'); await syncCrmFromWorksite(updated.worksiteId); } // devis envoyé → chantier « Devis envoyé » + carte pipeline
   return { document: updated, note: `${DOC_KIND_LABEL[doc.kind] ?? 'Document'} envoyé par e-mail à ${input.to.join(', ')}${sig ? ', avec un lien de signature en ligne (valable 30 jours)' : ''}.` };
 }
 

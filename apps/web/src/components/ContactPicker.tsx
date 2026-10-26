@@ -21,7 +21,7 @@ export function ContactPicker({
   id?: string;
   value: string;
   onChange: (id: string, label: string) => void;
-  typeFilter?: 'client' | 'supplier';
+  typeFilter?: 'client' | 'supplier' | 'all';
   /** Restreint la recherche (pas la création) à une ou plusieurs catégories, ex. `['acp',
    *  'developer']` pour ne proposer que des immeubles/projets existants. */
   kindFilter?: string[];
@@ -31,10 +31,10 @@ export function ContactPicker({
 }) {
   async function search(q: string): Promise<PickerItem[]> {
     const kindParam = kindFilter?.length ? `&kind=${kindFilter.join(',')}` : '';
-    const r = await api<{ items: { id: string; name: string; city: string | null }[] }>(
+    const r = await api<{ items: { id: string; name: string; city: string | null; syndic?: { name: string } | null }[] }>(
       `/api/contacts?type=${typeFilter}&q=${encodeURIComponent(q)}${kindParam}&pageSize=20`,
     );
-    return r.items.slice(0, 8).map((c) => ({ id: c.id, name: c.name, sub: c.city ?? undefined }));
+    return r.items.slice(0, 8).map((c) => ({ id: c.id, name: c.name, sub: [c.syndic ? `c/o ${c.syndic.name}` : null, c.city].filter(Boolean).join(' · ') || undefined }));
   }
   async function resolveLabel(cid: string): Promise<string | null> {
     try {
@@ -57,7 +57,7 @@ export function ContactPicker({
       required={required}
       disabled={disabled}
       renderCreate={(query, onCreated, onCancel) => (
-        <ContactQuickCreate initialName={query} typeFilter={typeFilter} defaultKind={kindFilter?.length === 1 ? kindFilter[0] : undefined} onCreated={onCreated} onCancel={onCancel} />
+        <ContactQuickCreate initialName={query} typeFilter={typeFilter === 'all' ? 'client' : typeFilter}defaultKind={kindFilter?.length === 1 ? kindFilter[0] : undefined} onCreated={onCreated} onCancel={onCancel} />
       )}
     />
   );

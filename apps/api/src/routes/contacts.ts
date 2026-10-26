@@ -110,7 +110,7 @@ contactsRouter.get(
     if (type && type !== 'all') where.OR = [{ type }, { type: 'both' }];
     if (kind) where.kind = { in: kind.split(',') };
     if (q) {
-      where.AND = [{ OR: [{ name: { contains: q, ...insensitive } }, { city: { contains: q, ...insensitive } }, { vat: { contains: q, ...insensitive } }] }];
+      where.AND = [{ OR: [{ name: { contains: q, ...insensitive } }, { city: { contains: q, ...insensitive } }, { vat: { contains: q, ...insensitive } }, { syndic: { name: { contains: q, ...insensitive } } }] }]; // « Baltimo » retrouve aussi les gestionnaires de ce syndic
     }
     // pagination facultative (page absent = tout charger, utilisé par l'appli mobile)
     const paginated = pageStr !== undefined;

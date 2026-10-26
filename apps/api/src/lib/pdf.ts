@@ -39,7 +39,7 @@ export interface PdfDoc {
   vatRate?: number | null;
   depositPlan?: unknown;
   worksite: { ref: string } | null;
-  contact: { name: string; vat: string | null; address: string | null; box: string | null; postalCode: string | null; city: string | null } | null;
+  contact: { name: string; vat: string | null; address: string | null; box: string | null; postalCode: string | null; city: string | null; phone?: string | null; email?: string | null } | null;
   lines: PdfDocLine[];
 }
 
@@ -52,8 +52,13 @@ export function addressLines(raw: string | null | undefined): string[] {
   const text = (raw ?? '').trim();
   if (!text) return [];
   if (/\r?\n/.test(text)) return text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-  const m = /^(.*?),?\s*(\d{4,5}\s+[^,]+?)\s*$/.exec(text);
-  return m && m[1]!.trim() ? [m[1]!.trim(), m[2]!.trim()] : [text];
+  // « c/o Syndic » (facture adressée au siège du syndic) : sur sa propre ligne
+  const co = /^(c\/o\s[^,]+),\s*(.+)$/i.exec(text);
+  const head = co ? [co[1]!.trim()] : [];
+  const rest = co ? co[2]!.trim() : text;
+  const m = /^(.*?),?\s*(\d{4,5}\s+[^,]+?)\s*$/.exec(rest) ?? /^(.*?),\s*(\d{4,5})\s*$/.exec(rest); // 2e forme : code postal seul, après une virgule
+  if (m && m[1]!.trim()) return [...head, m[1]!.trim(), m[2]!.trim()];
+  return co ? [...head, ...rest.split(',').map((s) => s.trim()).filter(Boolean)] : [text];
 }
 
 /** Construit le HTML imprimable d'un devis/facture/avoir — inspiré de la présentation TrustUp
@@ -69,6 +74,7 @@ export async function buildHtml(d: PdfDoc, co: Company): Promise<string> {
     [d.contact?.postalCode, d.contact?.city].filter(Boolean).join(' '),
   ].filter(Boolean).join(', '));
   const clientVat = d.billingVat ?? d.contact?.vat;
+  const clientEmail = d.billingEmail ?? d.contact?.email;
   const hasDiscount = d.lines.some((l) => l.kind === 'item' && (l.discountPct ?? 0) > 0);
   const colspan = hasDiscount ? 6 : 5;
 
@@ -163,8 +169,9 @@ export async function buildHtml(d: PdfDoc, co: Company): Promise<string> {
           <div class="lbl">Adressé à</div>
           <div class="party-name">${esc(clientName) || '—'}</div>
           ${clientAddr.map((l) => `<div>${esc(l)}</div>`).join('')}
-          ${clientVat ? `<div>TVA ${esc(clientVat)}</div>` : ''}
-          ${d.billingEmail ? `<div>${esc(d.billingEmail)}</div>` : ''}
+          ${clientVat ? `<div>BCE ${esc(clientVat)}</div>` : ''}
+          ${d.contact?.phone ? `<div>Tél ${esc(d.contact.phone)}</div>` : ''}
+          ${clientEmail ? `<div>${esc(clientEmail)}</div>` : ''}
         </div>
       </section>
       ${d.title ? `<div class="object">${esc(d.title)}</div>` : ''}

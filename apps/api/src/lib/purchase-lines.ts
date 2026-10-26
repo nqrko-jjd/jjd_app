@@ -84,6 +84,30 @@ export async function linesStats() {
 
 export interface ArticleFilters { q?: string; contactId?: string; worksiteId?: string; from?: Date; to?: Date; includeSlips?: boolean }
 
+/* ------------------------------------------------------------------ articles / fournisseurs masqués */
+
+/** Ce qu'on ne veut pas voir (forfaits de sous-traitants, services…) : mémorisé, réversible, conservé quand on relit les PDF. */
+export interface HiddenRules { articles: { key: string; label: string }[]; suppliers: { id: string; name: string }[] }
+const HIDDEN_KEY = 'purchaseLinesHidden';
+
+export async function getHidden(): Promise<HiddenRules> {
+  const row = await prisma.setting.findUnique({ where: { key: HIDDEN_KEY } });
+  const v = (row?.value ?? {}) as Partial<HiddenRules>;
+  return { articles: Array.isArray(v.articles) ? v.articles : [], suppliers: Array.isArray(v.suppliers) ? v.suppliers : [] };
+}
+
+/** Masque (ou réaffiche avec `show`) des articles et / ou des fournisseurs entiers. */
+export async function setHidden(input: { articles?: { key: string; label: string }[]; suppliers?: { id: string; name: string }[]; show?: boolean }): Promise<HiddenRules> {
+  const cur = await getHidden();
+  const articles = new Map(cur.articles.map((a) => [a.key, a]));
+  const suppliers = new Map(cur.suppliers.map((s) => [s.id, s]));
+  for (const a of input.articles ?? []) { if (input.show) articles.delete(a.key); else articles.set(a.key, { key: a.key, label: a.label.slice(0, 200) }); }
+  for (const s of input.suppliers ?? []) { if (input.show) suppliers.delete(s.id); else suppliers.set(s.id, { id: s.id, name: s.name.slice(0, 120) }); }
+  const next: HiddenRules = { articles: [...articles.values()], suppliers: [...suppliers.values()] };
+  await prisma.setting.upsert({ where: { key: HIDDEN_KEY }, create: { key: HIDDEN_KEY, value: next as never }, update: { value: next as never } });
+  return next;
+}
+
 /** Par défaut, seules les factures d'achat comptent : un bordereau (enlèvement) est repris par la facture qui le suit, donc les compter aussi doublerait tout. */
 function entryWhere(f: ArticleFilters) {
   return {
@@ -98,30 +122,35 @@ const search = (q: string | undefined) => (q?.trim() ? { OR: [{ label: { contain
 export interface ArticleRow {
   key: string; label: string; code: string | null; unit: string | null; purchases: number; qty: number; totalHt: number;
   minPrice: number; maxPrice: number; lastPrice: number; lastDate: string | null; suppliers: string[];
+  /** fournisseurs avec leur identifiant (pour « masquer ce fournisseur ») */
+  supplierRefs: { id: string | null; name: string }[];
 }
 
 /** Articles regroupés : quantité totale, montant, nombre d'achats, prix mini / maxi / dernier prix, fournisseurs. */
 export async function articleSummary(f: ArticleFilters): Promise<ArticleRow[]> {
+  const hidden = await getHidden();
+  const hiddenKeys = new Set(hidden.articles.map((a) => a.key));
   const lines = await prisma.purchaseLine.findMany({
-    where: { ledgerEntry: entryWhere(f), ...search(f.q) },
-    select: { articleKey: true, code: true, label: true, unit: true, qty: true, unitPriceHt: true, totalHt: true, ledgerEntryId: true, ledgerEntry: { select: { date: true, supplierName: true, contact: { select: { name: true } } } } },
+    where: { ledgerEntry: { ...entryWhere(f), ...(hidden.suppliers.length ? { NOT: { contactId: { in: hidden.suppliers.map((s) => s.id) } } } : {}) }, ...search(f.q) },
+    select: { articleKey: true, code: true, label: true, unit: true, qty: true, unitPriceHt: true, totalHt: true, ledgerEntryId: true, ledgerEntry: { select: { date: true, supplierName: true, contactId: true, contact: { select: { name: true } } } } },
   });
   const groups = new Map<string, { row: ArticleRow; entries: Set<string>; lastTs: number }>();
   for (const l of lines) {
+    if (hiddenKeys.has(l.articleKey)) continue;
     const ts = l.ledgerEntry.date?.getTime() ?? 0;
     const supplier = l.ledgerEntry.contact?.name ?? l.ledgerEntry.supplierName ?? '—';
     let g = groups.get(l.articleKey);
-    if (!g) { g = { row: { key: l.articleKey, label: l.label, code: l.code, unit: l.unit, purchases: 0, qty: 0, totalHt: 0, minPrice: l.unitPriceHt, maxPrice: l.unitPriceHt, lastPrice: l.unitPriceHt, lastDate: null, suppliers: [] }, entries: new Set(), lastTs: -1 }; groups.set(l.articleKey, g); }
+    if (!g) { g = { row: { key: l.articleKey, label: l.label, code: l.code, unit: l.unit, purchases: 0, qty: 0, totalHt: 0, minPrice: l.unitPriceHt, maxPrice: l.unitPriceHt, lastPrice: l.unitPriceHt, lastDate: null, suppliers: [], supplierRefs: [] }, entries: new Set(), lastTs: -1 }; groups.set(l.articleKey, g); }
     g.entries.add(l.ledgerEntryId);
     g.row.qty += l.qty; g.row.totalHt += l.totalHt;
     g.row.minPrice = Math.min(g.row.minPrice, l.unitPriceHt); g.row.maxPrice = Math.max(g.row.maxPrice, l.unitPriceHt);
-    if (!g.row.suppliers.includes(supplier)) g.row.suppliers.push(supplier);
+    if (!g.row.suppliers.includes(supplier)) { g.row.suppliers.push(supplier); g.row.supplierRefs.push({ id: l.ledgerEntry.contactId, name: supplier }); }
     if (ts >= g.lastTs) { g.lastTs = ts; g.row.lastPrice = l.unitPriceHt; g.row.lastDate = l.ledgerEntry.date?.toISOString() ?? null; g.row.label = l.label; g.row.unit = l.unit ?? g.row.unit; }
   }
   return [...groups.values()].map(({ row, entries }) => ({
     ...row, purchases: entries.size, qty: Math.round(row.qty * 100) / 100, totalHt: Math.round(row.totalHt * 100) / 100,
     minPrice: Math.round(row.minPrice * 100) / 100, maxPrice: Math.round(row.maxPrice * 100) / 100, lastPrice: Math.round(row.lastPrice * 100) / 100,
-    suppliers: row.suppliers.slice(0, 4),
+    suppliers: row.suppliers.slice(0, 4), supplierRefs: row.supplierRefs.slice(0, 4),
   }));
 }
 
@@ -129,10 +158,10 @@ export async function articleSummary(f: ArticleFilters): Promise<ArticleRow[]> {
 export async function articleOccurrences(key: string, f: ArticleFilters) {
   const lines = await prisma.purchaseLine.findMany({
     where: { articleKey: key, ledgerEntry: entryWhere(f) },
-    select: { id: true, qty: true, unit: true, unitPriceHt: true, discountPct: true, totalHt: true, label: true, ledgerEntry: { select: { id: true, date: true, docNumber: true, direction: true, worksiteRef: true, worksite: { select: { ref: true } }, supplierName: true, contact: { select: { name: true } } } } },
+    select: { id: true, qty: true, unit: true, unitPriceHt: true, discountPct: true, totalHt: true, label: true, ledgerEntry: { select: { id: true, contactId: true, date: true, docNumber: true, direction: true, worksiteRef: true, worksite: { select: { ref: true } }, supplierName: true, contact: { select: { name: true } } } } },
     take: 500,
   });
   return lines
-    .map((l) => ({ id: l.id, entryId: l.ledgerEntry.id, date: l.ledgerEntry.date?.toISOString() ?? null, docNumber: l.ledgerEntry.docNumber, slip: l.ledgerEntry.direction === 'delivery_slip', supplier: l.ledgerEntry.contact?.name ?? l.ledgerEntry.supplierName ?? '—', worksiteRef: l.ledgerEntry.worksite?.ref ?? l.ledgerEntry.worksiteRef, label: l.label, qty: l.qty, unit: l.unit, unitPriceHt: l.unitPriceHt, discountPct: l.discountPct, totalHt: l.totalHt }))
+    .map((l) => ({ id: l.id, entryId: l.ledgerEntry.id, contactId: l.ledgerEntry.contactId, date: l.ledgerEntry.date?.toISOString() ?? null, docNumber: l.ledgerEntry.docNumber, slip: l.ledgerEntry.direction === 'delivery_slip', supplier: l.ledgerEntry.contact?.name ?? l.ledgerEntry.supplierName ?? '—', worksiteRef: l.ledgerEntry.worksite?.ref ?? l.ledgerEntry.worksiteRef, label: l.label, qty: l.qty, unit: l.unit, unitPriceHt: l.unitPriceHt, discountPct: l.discountPct, totalHt: l.totalHt }))
     .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
 }

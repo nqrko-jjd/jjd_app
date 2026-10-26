@@ -11,11 +11,13 @@ interface Stats { pdfCount: number; remaining: number; withLines: number; unread
 interface Article {
   key: string; label: string; code: string | null; unit: string | null; purchases: number; qty: number; totalHt: number;
   minPrice: number; maxPrice: number; lastPrice: number; lastDate: string | null; suppliers: string[];
+  supplierRefs: { id: string | null; name: string }[];
 }
 interface Occurrence {
-  id: string; entryId: string; date: string | null; docNumber: string | null; slip: boolean; supplier: string; worksiteRef: string | null;
+  id: string; entryId: string; contactId: string | null; date: string | null; docNumber: string | null; slip: boolean; supplier: string; worksiteRef: string | null;
   qty: number; unit: string | null; unitPriceHt: number; discountPct: number | null; totalHt: number;
 }
+interface Hidden { articles: { key: string; label: string }[]; suppliers: { id: string; name: string }[] }
 interface ScanResult { scanned: number; linesFound: number; unreadable: number; remaining: number; total: number }
 
 export default function ArticlesAchetesPage() {
@@ -36,9 +38,13 @@ function Inner() {
   const [open, setOpen] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const [progress, setProgress] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Map<string, string>>(new Map()); // clé → libellé des articles cochés
+  const [hiddenOpen, setHiddenOpen] = useState(false);
+  const [hideBusy, setHideBusy] = useState(false);
 
   useEffect(() => { const t = setTimeout(() => setDebounced(q.trim()), 300); return () => clearTimeout(t); }, [q]);
   useEffect(() => { setPage(1); setOpen(null); }, [debounced, from, to, includeSlips, sort, dir]);
+  useEffect(() => { setSelected(new Map()); }, [debounced, from, to, includeSlips, sort, dir, page]);
 
   const filters = new URLSearchParams();
   if (debounced) filters.set('q', debounced);
@@ -49,6 +55,7 @@ function Inner() {
   listQs.set('sort', sort); listQs.set('dir', dir); listQs.set('page', String(page)); listQs.set('pageSize', '50');
 
   const { data: stats, reload: reloadStats } = useApi<Stats>('/api/finance/expenses/lines/stats');
+  const { data: hidden, reload: reloadHidden } = useApi<Hidden>('/api/finance/expenses/lines/hidden');
   const { data, loading, error, reload } = useApi<{ items: Article[]; page: number; totalPages: number; totalCount: number; totals: { articles: number; spendHt: number } }>(`/api/finance/expenses/lines/articles?${listQs}`);
 
   async function readPdfs(rescan: boolean) {
@@ -71,6 +78,16 @@ function Inner() {
       reloadStats(); reload();
     } finally { setScanning(false); }
   }
+
+  /** Masque / réaffiche des articles ou des fournisseurs entiers : rien n'est supprimé, seulement caché de cette page. */
+  async function hide(body: { articles?: { key: string; label: string }[]; suppliers?: { id: string; name: string }[]; show?: boolean }) {
+    setHideBusy(true);
+    try { await api('/api/finance/expenses/lines/hide', { method: 'POST', body }); setSelected(new Map()); setOpen(null); reload(); reloadHidden(); }
+    catch (e) { setProgress(`Impossible de masquer : ${(e as Error).message}`); }
+    finally { setHideBusy(false); }
+  }
+  function toggleSel(a: Article) { setSelected((m) => { const n = new Map(m); if (n.has(a.key)) n.delete(a.key); else n.set(a.key, a.label); return n; }); }
+  const hiddenCount = (hidden?.articles.length ?? 0) + (hidden?.suppliers.length ?? 0);
 
   function sortBy(key: string) { if (sort === key) setDir(dir === 'asc' ? 'desc' : 'asc'); else { setSort(key); setDir(key === 'label' ? 'asc' : 'desc'); } }
   const arrow = (key: string) => (sort === key ? (dir === 'asc' ? ' ▲' : ' ▼') : '');
@@ -117,8 +134,30 @@ function Inner() {
         <label className="row" style={{ gap: 6, alignItems: 'center' }}><span className="muted">au</span><input className="input" type="date" style={{ maxWidth: 160 }} value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} aria-label="Date de fin" /></label>
         {(from || to) && <button className="btn ghost" onClick={() => { setFrom(''); setTo(''); }}>✕ Effacer les dates</button>}
         <label className="row" style={{ gap: 6, alignItems: 'center', fontSize: '0.88rem' }} title="Un bordereau d'enlèvement est repris par la facture qui le suit : les compter aussi double les quantités"><input type="checkbox" checked={includeSlips} onChange={(e) => setIncludeSlips(e.target.checked)} /> Inclure les bordereaux</label>
-        {data && <span className="muted" style={{ marginLeft: 'auto', fontSize: '0.85rem' }}>{data.totals.articles.toLocaleString('fr-BE')} articles · {formatEur(data.totals.spendHt)} HT</span>}
+        <span className="row" style={{ marginLeft: 'auto', gap: '0.6rem', alignItems: 'center' }}>
+          {data && <span className="muted" style={{ fontSize: '0.85rem' }}>{data.totals.articles.toLocaleString('fr-BE')} articles · {formatEur(data.totals.spendHt)} HT</span>}
+          {hiddenCount > 0 && <button type="button" className="btn ghost" onClick={() => setHiddenOpen((v) => !v)}>{hiddenOpen ? 'Fermer' : `Masqués (${hiddenCount})`}</button>}
+        </span>
       </div>
+      {hiddenOpen && hidden && (
+        <div className="card card-pad" style={{ marginBottom: '1rem' }}>
+          <strong>Masqués de cette page</strong> <span className="muted" style={{ fontSize: '0.84rem' }}>— rien n'est supprimé : réaffichez à tout moment.</span>
+          {hidden.suppliers.map((f) => (
+            <div key={f.id} className="row" style={{ gap: '0.6rem', alignItems: 'center', padding: '0.25rem 0' }}><span className="badge plain">fournisseur</span><span>{f.name}</span><button type="button" className="btn ghost" style={{ marginLeft: 'auto' }} disabled={hideBusy} onClick={() => hide({ suppliers: [f], show: true })}>Réafficher</button></div>
+          ))}
+          {hidden.articles.map((a) => (
+            <div key={a.key} className="row" style={{ gap: '0.6rem', alignItems: 'center', padding: '0.25rem 0' }}><span className="badge plain">article</span><span>{a.label}</span><button type="button" className="btn ghost" style={{ marginLeft: 'auto' }} disabled={hideBusy} onClick={() => hide({ articles: [a], show: true })}>Réafficher</button></div>
+          ))}
+        </div>
+      )}
+      {selected.size > 0 && (
+        <div className="card card-pad row" style={{ marginBottom: '1rem', gap: '0.8rem', alignItems: 'center', borderLeft: '4px solid var(--primary)' }}>
+          <strong>{selected.size} article{selected.size > 1 ? 's' : ''} sélectionné{selected.size > 1 ? 's' : ''}</strong>
+          <button type="button" className="btn primary" disabled={hideBusy} onClick={() => hide({ articles: [...selected].map(([key, label]) => ({ key, label })) })}>{hideBusy ? 'Masquage…' : 'Masquer la sélection'}</button>
+          <button type="button" className="btn ghost" onClick={() => setSelected(new Map())}>Annuler</button>
+          <span className="muted" style={{ fontSize: '0.82rem' }}>Ils ne seront plus affichés ni comptés dans le total (réversible).</span>
+        </div>
+      )}
 
       {loading && <SkeletonRows />}
       {error && !loading && <ErrorState message={error} onRetry={reload} />}
@@ -130,6 +169,7 @@ function Inner() {
           <table className="tbl">
             <thead>
               <tr>
+                <th style={{ width: 34 }}><input type="checkbox" aria-label="Tout sélectionner" checked={data.items.length > 0 && data.items.every((a) => selected.has(a.key))} onChange={(e) => setSelected(e.target.checked ? new Map(data.items.map((a) => [a.key, a.label])) : new Map())} /></th>
                 <th style={{ cursor: 'pointer' }} onClick={() => sortBy('label')}>Article{arrow('label')}</th>
                 <th style={{ textAlign: 'right', cursor: 'pointer' }} onClick={() => sortBy('purchases')}>Achats{arrow('purchases')}</th>
                 <th style={{ textAlign: 'right', cursor: 'pointer' }} onClick={() => sortBy('qty')}>Quantité{arrow('qty')}</th>
@@ -142,6 +182,7 @@ function Inner() {
               {data.items.map((a) => (
                 <Fragment key={a.key}>
                   <tr onClick={() => setOpen(open === a.key ? null : a.key)} style={{ cursor: 'pointer' }}>
+                    <td onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={`Sélectionner ${a.label}`} checked={selected.has(a.key)} onChange={() => toggleSel(a)} /></td>
                     <td>
                       <strong>{a.label}</strong>
                       <div className="muted" style={{ fontSize: '0.78rem' }}>{[a.code && `réf. ${a.code}`, a.suppliers.join(' · ')].filter(Boolean).join(' · ')}</div>
@@ -153,7 +194,15 @@ function Inner() {
                     <td style={{ textAlign: 'right' }} className="tnum">{a.lastDate ? formatDateBE(a.lastDate) : '—'}<div className="muted" style={{ fontSize: '0.78rem' }}>{formatEur(a.lastPrice)}</div></td>
                   </tr>
                   {open === a.key && (
-                    <tr><td colSpan={6} style={{ background: 'var(--surface-2, rgba(0,0,0,0.03))', padding: '0.6rem 1rem' }}><Occurrences articleKey={a.key} filters={filters} /></td></tr>
+                    <tr><td colSpan={7} style={{ background: 'var(--surface-2, rgba(0,0,0,0.03))', padding: '0.6rem 1rem' }}>
+                      <div className="row" style={{ gap: '0.5rem', marginBottom: 8, flexWrap: 'wrap' }}>
+                        <button type="button" className="btn ghost" disabled={hideBusy} onClick={() => hide({ articles: [{ key: a.key, label: a.label }] })}>Masquer cet article</button>
+                        {a.supplierRefs.filter((f) => f.id).map((f) => (
+                          <button key={f.id} type="button" className="btn ghost" disabled={hideBusy} title="Cache tous les articles lus chez ce fournisseur (ex. sous-traitant, forfaits, services)" onClick={() => { if (window.confirm(`Masquer tous les articles de « ${f.name} » ?`)) hide({ suppliers: [{ id: f.id!, name: f.name }] }); }}>Masquer tout « {f.name} »</button>
+                        ))}
+                      </div>
+                      <Occurrences articleKey={a.key} filters={filters} />
+                    </td></tr>
                   )}
                 </Fragment>
               ))}

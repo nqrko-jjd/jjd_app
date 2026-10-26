@@ -105,3 +105,26 @@ test('PDF remplacé sur un achat déjà lu : les anciennes lignes sont effacées
   // nettoyage du fichier déposé par l'envoi
   await prisma.ledgerEntry.update({ where: { id: entry.id }, data: { pdfPath: `expenses/${FILES[1]}` } });
 });
+
+test('masquer un article, ou tout un fournisseur (forfaits, services…) : il disparaît de la liste, réversible, sans rien supprimer', async (t) => {
+  if (!(await pdftotextAvailable())) return t.skip('pdftotext absent');
+  await post('/api/finance/expenses/scan-lines', { timeBudgetMs: 5000 });
+  const list = async () => (await get(`/api/finance/expenses/lines/articles?contactId=${ids.c}`)).items as { key: string; label: string; supplierRefs: { id: string | null; name: string }[] }[];
+  const before = await list();
+  const pinceau = before.find((a) => a.label.startsWith('PINCEAU'))!;
+  assert.equal(pinceau.supplierRefs[0]!.id, ids.c, 'l’identifiant du fournisseur est fourni pour pouvoir le masquer');
+
+  await post('/api/finance/expenses/lines/hide', { articles: [{ key: pinceau.key, label: pinceau.label }] });
+  assert.ok(!(await list()).some((a) => a.key === pinceau.key), 'article masqué');
+  assert.equal((await get('/api/finance/expenses/lines/hidden')).articles.length, 1);
+  assert.ok(await prisma.purchaseLine.count({ where: { articleKey: pinceau.key } }) > 0, 'les lignes lues sont conservées');
+
+  await post('/api/finance/expenses/lines/hide', { articles: [{ key: pinceau.key, label: pinceau.label }], show: true });
+  assert.ok((await list()).some((a) => a.key === pinceau.key), 'article réaffiché');
+
+  await post('/api/finance/expenses/lines/hide', { suppliers: [{ id: ids.c!, name: 'Grossiste Lignes Test' }] });
+  assert.equal((await list()).length, 0, 'tous les articles du fournisseur masqué disparaissent');
+  await post('/api/finance/expenses/lines/hide', { suppliers: [{ id: ids.c!, name: 'Grossiste Lignes Test' }], show: true });
+  assert.ok((await list()).length >= 2, 'fournisseur réaffiché');
+  await prisma.setting.deleteMany({ where: { key: 'purchaseLinesHidden' } });
+});

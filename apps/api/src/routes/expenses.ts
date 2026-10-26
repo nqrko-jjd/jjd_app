@@ -30,7 +30,7 @@ import { toCsv, readTableBuffer, pick } from '../lib/table-io.js';
 import { invoiceMailboxConfigured, syncInvoiceMailbox, reprocessEmailEntries, scanInvoiceMailboxHistory, PROCESSED_MAILBOX } from '../lib/invoice-mailbox.js';
 import { scanAllEntriesForRefs } from '../lib/purchase-ref-scan.js';
 import { findPurchaseCandidates } from '../lib/purchase-candidates.js';
-import { scanLinesBatch, linesStats, articleSummary, articleOccurrences, type ArticleFilters } from '../lib/purchase-lines.js';
+import { scanLinesBatch, linesStats, articleSummary, articleOccurrences, getHidden, setHidden, type ArticleFilters } from '../lib/purchase-lines.js';
 
 export const expensesRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
@@ -529,6 +529,25 @@ expensesRouter.get(
       items: rows.slice((page - 1) * pageSize, page * pageSize), page, pageSize, totalCount: rows.length, totalPages: Math.max(1, Math.ceil(rows.length / pageSize)),
       totals: { articles: rows.length, spendHt: Math.round(rows.reduce((s, r) => s + r.totalHt, 0) * 100) / 100 },
     });
+  }),
+);
+
+/** Articles et fournisseurs masqués (forfaits, services…) : liste pour pouvoir les réafficher. */
+expensesRouter.get('/lines/hidden', requireAuth(...OFFICE), asyncHandler(async (_req, res) => { res.json(await getHidden()); }));
+
+/** Masque des articles / fournisseurs entiers de la page « Articles achetés » ; `show: true` les réaffiche. Ne supprime aucune ligne lue. */
+expensesRouter.post(
+  '/lines/hide',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const body = z.object({
+      articles: z.array(z.object({ key: z.string().min(1).max(300), label: z.string().max(300) })).max(500).optional(),
+      suppliers: z.array(z.object({ id: z.string().min(1), name: z.string().max(200) })).max(100).optional(),
+      show: z.boolean().optional(),
+    }).parse(req.body ?? {});
+    const hidden = await setHidden(body);
+    await prisma.auditLog.create({ data: { actorId: req.user!.id, action: body.show ? 'purchase-lines.show' : 'purchase-lines.hide', entity: 'ledger', entityId: 'batch', meta: { articles: body.articles?.length ?? 0, suppliers: body.suppliers?.map((s) => s.name) ?? [] } } }).catch(() => undefined);
+    res.json(hidden);
   }),
 );
 

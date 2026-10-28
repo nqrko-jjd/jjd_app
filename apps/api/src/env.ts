@@ -40,6 +40,11 @@ export const env = {
   /** Assistant IA (chat) — brouillons de devis/planning/tâches. Sans clé = masqué. */
   anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? '',
 
+  /** Connecteur Claude (MCP, lecture seule) : jeton secret de l'adresse /mcp/<jeton>, 32 caractères minimum. Vide = éteint. */
+  claudeMcpToken: process.env.CLAUDE_MCP_TOKEN ?? '',
+  /** Compte au nom duquel le connecteur lit les données (doit faire partie de la direction). */
+  claudeMcpUserEmail: process.env.CLAUDE_MCP_USER_EMAIL ?? 'david@jjd-consult.be',
+
   /** Traceurs PAJ GPS (compte du portail PAJ Finder). Sans identifiants = suivi GPS désactivé. */
   pajEmail: (process.env.PAJ_EMAIL ?? '').trim(),
   pajPassword: process.env.PAJ_PASSWORD ?? '',

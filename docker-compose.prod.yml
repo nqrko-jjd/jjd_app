@@ -48,6 +48,9 @@ services:
       PAJ_PASSWORD: ${PAJ_PASSWORD:-}
       # Assistant IA (chat, brouillons) — laisser vide tant que non configuré
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # Connecteur Claude (MCP, lecture seule) — jeton secret de l'adresse /jjd-api/mcp/<jeton> ; vide = éteint
+      CLAUDE_MCP_TOKEN: ${CLAUDE_MCP_TOKEN:-}
+      CLAUDE_MCP_USER_EMAIL: ${CLAUDE_MCP_USER_EMAIL:-david@jjd-consult.be}
       # Envoi de documents par e-mail (SMTP de la boîte JJD) — vide = désactivé
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-465}

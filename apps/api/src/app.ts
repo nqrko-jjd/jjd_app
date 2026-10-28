@@ -47,6 +47,7 @@ import { geocodeRouter } from './routes/geocode.js';
 import { usersRouter } from './routes/users.js';
 import { pushRouter } from './routes/push.js';
 import { moderationRouter } from './routes/moderation.js';
+import { claudeMcpRouter } from './routes/claude-mcp.js';
 
 export function createApp() {
   const app = express();
@@ -116,6 +117,7 @@ export function createApp() {
   app.use('/api/public/sign', publicSignRouter);
   app.use('/api/geocode', geocodeRouter);
   app.use('/api/users', usersRouter);
+  app.use('/mcp', claudeMcpRouter); // connecteur Claude, lecture seule (voir routes/claude-mcp.ts)
 
   app.use(errorMiddleware);
   return app;

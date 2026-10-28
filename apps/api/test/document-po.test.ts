@@ -79,10 +79,23 @@ test('Peppol routes the raw PO and buyer reference into distinct structured fiel
       assert.equal(Object.hasOwn(payload.document, 'purchaseOrderReference'), !!poNumber?.trim());
       assert.equal(payload.document.buyerReference, 'DOSSIER-12');
       assert.equal(payload.document.paymentMeans[0].reference, '+++020/2600/41810+++');
-      assert.match(payload.document.note, /Chantier R-667/);
+      assert.doesNotMatch(payload.document.note ?? '', /R-667/, 'le n° de chantier ne doit pas être lu comme numéro de commande');
       const withoutBuyer = buildPeppolPayload({ ...d, customerRef: '  ' }, { iban: '' });
       assert.equal(Object.hasOwn(withoutBuyer.document, 'buyerReference'), false);
       assert.equal(withoutBuyer.document.purchaseOrderReference, poNumber?.trim() || undefined);
     }
   }
+});
+
+test('Peppol refuse une facture Matexi sans numéro de commande', () => {
+  const d = (poNumber: string | null, over = {}) => ({
+    kind: 'invoice', number: 'F2026-415', issuedOn: new Date('2026-10-09'), dueOn: null, structuredComm: null, customerRef: null, poNumber,
+    billingName: 'Matexi Projects SA', billingVat: 'BE0821445389', billingAddress: 'Franklin Rooseveltlaan 180, 8790 Waregem',
+    contact: null, worksite: { ref: 'R-731' }, totalTtc: 1250,
+    lines: [{ kind: 'item', label: 'Levées de remarques', qty: 1, unitPriceHt: 1250, discountPct: 0, vatRate: 0 }], ...over,
+  });
+  assert.throws(() => buildPeppolPayload(d(null), { iban: '' }), { status: 422, message: /numéro de commande/ });
+  assert.throws(() => buildPeppolPayload(d('  '), { iban: '' }), { status: 422 });
+  assert.equal(buildPeppolPayload(d('4500135137'), { iban: '' }).document.purchaseOrderReference, '4500135137');
+  assert.doesNotThrow(() => buildPeppolPayload(d(null, { billingName: 'Client Test', billingVat: 'BE1003823997' }), { iban: '' }));
 });

@@ -90,6 +90,9 @@ export function peppolExpectedTotals(lines: ReturnType<typeof peppolLines>) {
   return { ht: round2(ht), ttc: round2(ht + vat) };
 }
 
+/** TVA des clients qui exigent un numéro de commande sur chaque facture (Matexi Projects). */
+const PO_REQUIRED_VAT = ['BE0821445389'];
+
 export function buildPeppolPayload(d: PeppolDoc, co: Pick<Company, 'iban'> & { vatNote0?: string | null }) {
   const vat = vatForPeppol(d.billingVat ?? d.contact?.vat);
   const recipient = peppolAddressFromVat(d.billingVat ?? d.contact?.vat);
@@ -104,6 +107,11 @@ export function buildPeppolPayload(d: PeppolDoc, co: Pick<Company, 'iban'> & { v
   if (!name || !addr) throw new HttpError(422, 'Adresse du client incomplète (rue, code postal et ville) : complétez la fiche du client ou l’adresse de facturation.');
   if (!d.number) throw new HttpError(422, 'Document sans numéro : émettez-le avant de l’envoyer.');
 
+  // Ces clients rapprochent la facture sur leur numéro de commande : sans lui, leur système lit une autre référence (ex. le n° de chantier) ou rejette le document.
+  if (d.kind !== 'credit_note' && !d.poNumber?.trim() && (PO_REQUIRED_VAT.includes(vat) || /matexi/i.test(name))) {
+    throw new HttpError(422, `${name || 'Ce client'} exige un numéro de commande sur ses factures : renseignez « Référence de commande » sur le document avant l’envoi Peppol. Aucun envoi.`);
+  }
+
   const lines = peppolLines(d);
   if (!lines.length) throw new HttpError(422, 'Aucune ligne facturable sur ce document.');
   const exp = peppolExpectedTotals(lines);
@@ -112,7 +120,7 @@ export function buildPeppolPayload(d: PeppolDoc, co: Pick<Company, 'iban'> & { v
   }
 
   const iban = (co.iban ?? '').replace(/\s+/g, '');
-  const note = [d.customerRef && `Réf. client : ${d.customerRef}`, d.poNumber?.trim() && `Référence de commande : ${d.poNumber}`, d.worksite?.ref && `Chantier ${d.worksite.ref}`].filter(Boolean).join(' · ');
+  const note = [d.customerRef && `Réf. client : ${d.customerRef}`, d.poNumber?.trim() && `Référence de commande : ${d.poNumber}`].filter(Boolean).join(' · ');
   const issue = ymd(d.issuedOn ?? new Date());
   // catégorie AE (autoliquidation) : le réseau refuse le document sans motif d'exonération (code VATEX et/ou texte) au niveau de la TVA
   const reverseCharge = lines.some((l) => l.vat.category === 'AE');

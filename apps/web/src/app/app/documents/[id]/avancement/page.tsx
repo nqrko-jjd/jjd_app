@@ -21,7 +21,8 @@ const STATUS: Record<string, { label: string; tone: string }> = { draft: { label
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
 /**
- * États d'avancement d'un devis : on saisit l'avancement CUMULÉ (%) de chaque ligne ; le montant de l'état = total de la ligne × (cumulé − précédent).
+ * États d'avancement d'un devis : on saisit le % fait PENDANT cet état (ex. +10 % sur un poste déjà à 50 %) ; l'app en déduit le cumulé (60 %),
+ * qui reste ce qui est enregistré côté serveur. Montant de l'état = total de la ligne × % de cet état.
  * « Facturer » crée une facture brouillon (acomptes déjà facturés déduits au prorata).
  */
 export default function ProgressPage({ params }: { params: Promise<{ id: string }> }) {
@@ -29,7 +30,7 @@ export default function ProgressPage({ params }: { params: Promise<{ id: string 
   const router = useRouter();
   const { data, error, loading, reload } = useApi<Data>(`/api/progress/quote/${id}`);
   const [sel, setSel] = useState<string | null>(null);
-  const [pcts, setPcts] = useState<Record<string, string>>({});
+  const [pcts, setPcts] = useState<Record<string, string>>({}); // % réalisé PENDANT cet état (pas le cumulé)
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [hints, setHints] = useState<Record<string, string>>({}); // « 3/12 cochés » par ligne, après « Proposer d'après les tâches »
@@ -41,7 +42,8 @@ export default function ProgressPage({ params }: { params: Promise<{ id: string 
   // (ré)initialise les champs quand on change d'état ou que les données se rechargent
   useEffect(() => {
     if (!current) return;
-    setPcts(Object.fromEntries(current.lines.map((l) => [l.quoteLineId, String(l.cumulativePct)])));
+    const before = (lineId: string) => prev?.lines.find((l) => l.quoteLineId === lineId)?.cumulativePct ?? 0;
+    setPcts(Object.fromEntries(current.lines.map((l) => [l.quoteLineId, String(round2(l.cumulativePct - before(l.quoteLineId)))])));
   }, [current?.id, data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading && !data) return <SkeletonRows />;
@@ -50,9 +52,12 @@ export default function ProgressPage({ params }: { params: Promise<{ id: string 
   const editable = current?.status === 'draft';
   const prevPct = (lineId: string) => prev?.lines.find((l) => l.quoteLineId === lineId)?.cumulativePct ?? 0;
   const num = (v: string | undefined) => { const n = Number((v ?? '').replace(',', '.')); return Number.isFinite(n) ? n : 0; };
-  const liveAmount = (it: Item) => round2((it.totalHt * (num(pcts[it.id]) - prevPct(it.id))) / 100);
+  const cumPct = (lineId: string) => round2(prevPct(lineId) + num(pcts[lineId]));
+  const liveAmount = (it: Item) => round2((it.totalHt * num(pcts[it.id])) / 100);
   const liveTotal = round2(data.items.reduce((s, it) => s + liveAmount(it), 0));
-  const cumTotal = round2(data.items.reduce((s, it) => s + (it.totalHt * num(pcts[it.id])) / 100, 0));
+  const cumTotal = round2(data.items.reduce((s, it) => s + (it.totalHt * cumPct(it.id)) / 100, 0));
+  const overflow = data.items.filter((it) => cumPct(it.id) > 100.0001 || num(pcts[it.id]) < 0);
+  const linesBody = () => ({ lines: data.items.map((it) => ({ quoteLineId: it.id, cumulativePct: cumPct(it.id) })) });
   const dedRatio = data.depositRatio;
 
   async function run<T>(key: string, fn: () => Promise<T>, after?: (r: T) => void) {
@@ -62,11 +67,11 @@ export default function ProgressPage({ params }: { params: Promise<{ id: string 
   // propose l'avancement d'après les cases cochées des tâches du chantier ; jamais en dessous de l'état précédent ; rien n'est enregistré avant « Enregistrer »
   const fromTasks = () => run('tasks', () => api<{ suggestions: { quoteLineId: string; pct: number | null; done: number; total: number }[]; matched: number; tasks: number }>(`/api/progress/quote/${id}/from-tasks`), (r) => {
     if (!r.matched) { setMsg(r.tasks ? 'Aucune tâche ne correspond aux postes du devis.' : 'Aucune tâche créée depuis ce devis : utilisez « Créer des tâches depuis ce devis » sur le devis.'); return; }
-    setPcts((p) => { const n = { ...p }; for (const s of r.suggestions) if (s.pct !== null) n[s.quoteLineId] = String(Math.max(s.pct, prevPct(s.quoteLineId))); return n; });
+    setPcts((p) => { const n = { ...p }; for (const s of r.suggestions) if (s.pct !== null) n[s.quoteLineId] = String(round2(Math.max(s.pct, prevPct(s.quoteLineId)) - prevPct(s.quoteLineId))); return n; });
     setHints(Object.fromEntries(r.suggestions.filter((s) => s.pct !== null).map((s) => [s.quoteLineId, `${s.done}/${s.total} fait${s.done > 1 ? 's' : ''}`])));
     setMsg(`Avancement proposé pour ${r.matched} poste${r.matched > 1 ? 's' : ''} d’après les tâches : relisez, ajustez puis enregistrez.`);
   });
-  const save = () => run('save', () => api(`/api/progress/${current!.id}`, { method: 'PATCH', body: { lines: data.items.map((it) => ({ quoteLineId: it.id, cumulativePct: num(pcts[it.id]) })) } }));
+  const save = () => run('save', () => api(`/api/progress/${current!.id}`, { method: 'PATCH', body: linesBody() }));
 
   return (
     <>
@@ -109,7 +114,7 @@ export default function ProgressPage({ params }: { params: Promise<{ id: string 
               </div>
               <table className="tbl" style={{ minWidth: 720 }}>
                 <thead>
-                  <tr><th>Désignation</th><th style={{ textAlign: 'right' }}>Devis HT</th><th style={{ textAlign: 'right' }}>Déjà</th><th style={{ textAlign: 'right' }}>Avancement cumulé</th><th style={{ textAlign: 'right' }}>Cet état HT</th><th style={{ textAlign: 'right' }}>Total cumulé HT</th></tr>
+                  <tr><th>Désignation</th><th style={{ textAlign: 'right' }}>Devis HT</th><th style={{ textAlign: 'right' }}>Déjà</th><th style={{ textAlign: 'right' }}>Cet état</th><th style={{ textAlign: 'right' }}>Cumulé</th><th style={{ textAlign: 'right' }}>Cet état HT</th><th style={{ textAlign: 'right' }}>Total cumulé HT</th></tr>
                 </thead>
                 <tbody>
                   {data.items.map((it) => (
@@ -119,9 +124,10 @@ export default function ProgressPage({ params }: { params: Promise<{ id: string 
                       <td style={{ textAlign: 'right' }} className="muted">{prevPct(it.id)} %</td>
                       <td style={{ textAlign: 'right' }}>
                         {editable
-                          ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><input className="input" inputMode="decimal" style={{ width: 70, textAlign: 'right' }} value={pcts[it.id] ?? ''} onChange={(e) => setPcts((p) => ({ ...p, [it.id]: e.target.value }))} aria-label={`Avancement de ${it.label}`} />%</span>
-                          : `${num(pcts[it.id])} %`}
+                          ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>+<input className="input" inputMode="decimal" style={{ width: 70, textAlign: 'right' }} value={pcts[it.id] ?? ''} onChange={(e) => setPcts((p) => ({ ...p, [it.id]: e.target.value }))} aria-label={`Avancement réalisé pendant cet état pour ${it.label}`} title={`Reste ${round2(100 - prevPct(it.id))} % sur ce poste`} />%</span>
+                          : `+${num(pcts[it.id])} %`}
                       </td>
+                      <td style={{ textAlign: 'right', fontWeight: 600, color: cumPct(it.id) > 100.0001 ? 'var(--crit)' : undefined }}>{cumPct(it.id)} %</td>
                       <td style={{ textAlign: 'right' }}>{formatEur(liveAmount(it))}</td>
                       <td style={{ textAlign: 'right' }}>{formatEur(round2((it.totalHt * num(pcts[it.id])) / 100))}</td>
                     </tr>
@@ -129,11 +135,12 @@ export default function ProgressPage({ params }: { params: Promise<{ id: string 
                 </tbody>
                 <tfoot>
                   <tr style={{ fontWeight: 800 }}>
-                    <td>Total</td><td style={{ textAlign: 'right' }}>{formatEur(data.quoteTotalHt)}</td><td /><td style={{ textAlign: 'right' }}>{data.quoteTotalHt > 0 ? round2((cumTotal / data.quoteTotalHt) * 100) : 0} %</td>
+                    <td>Total</td><td style={{ textAlign: 'right' }}>{formatEur(data.quoteTotalHt)}</td><td /><td /><td style={{ textAlign: 'right' }}>{data.quoteTotalHt > 0 ? round2((cumTotal / data.quoteTotalHt) * 100) : 0} %</td>
                     <td style={{ textAlign: 'right' }}>{formatEur(liveTotal)}</td><td style={{ textAlign: 'right' }}>{formatEur(cumTotal)}</td>
                   </tr>
                 </tfoot>
               </table>
+              {editable && overflow.length > 0 && <p className="badge crit" style={{ margin: '0.8rem 0 0', padding: '0.4rem 0.7rem' }}>Le cumul dépasse 100 % (ou une valeur est négative) sur : {overflow.map((it) => it.label).join(', ')}.</p>}
               {dedRatio > 0 && (
                 <p className="muted" style={{ margin: '0.8rem 0 0', fontSize: '0.86rem' }}>
                   Acompte déjà facturé : {round2(dedRatio * 100)} % du devis → déduit au prorata sur la facture : <strong>− {formatEur(round2(liveTotal * dedRatio))} HT</strong>, soit <strong>{formatEur(round2(liveTotal * (1 - dedRatio)))} HT à facturer</strong> pour cet état.
@@ -158,6 +165,6 @@ export default function ProgressPage({ params }: { params: Promise<{ id: string 
   );
 
   async function save_() {
-    await api(`/api/progress/${current!.id}`, { method: 'PATCH', body: { lines: data!.items.map((it) => ({ quoteLineId: it.id, cumulativePct: num(pcts[it.id]) })) } });
+    await api(`/api/progress/${current!.id}`, { method: 'PATCH', body: linesBody() });
   }
 }

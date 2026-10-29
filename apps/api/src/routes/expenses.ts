@@ -448,7 +448,7 @@ expensesRouter.post('/receipts/:id/link',requireAuth(...OFFICE),asyncHandler(asy
 }));
 expensesRouter.post('/receipts/:id/create',requireAuth(...OFFICE),asyncHandler(async(req,res)=>{
   const data=z.object({
-    confirmedDistinct:z.literal(true),direction:z.enum(['purchase','credit_note']),
+    confirmedDistinct:z.literal(true),direction:z.enum(['purchase','credit_note','delivery_slip']),
     docNumber:z.string().trim().min(1).max(200),supplierName:z.string().trim().min(1).max(300),
     supplierVat:z.string().max(40).nullable().optional(),contactId:z.null(),
     date:z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(s=>Number.isFinite(Date.parse(s))),

@@ -48,10 +48,11 @@ export default function PurchaseReception({onImported}:{onImported:()=>void}) {
     </div>
   </section>;
 }
+const KIND_LABEL:Record<string,string>={purchase:'Facture',delivery_slip:'Bordereau',credit_note:'Note de crédit'};
 function ReceiptReview({receipt:r,done}:{receipt:Receipt;done:()=>void}) {
   const [open,setOpen]=useState(false);
   return <details className="card" style={{padding:12,marginBlock:12,minWidth:0}} onToggle={e=>setOpen(e.currentTarget.open)}>
-    <summary style={{cursor:'pointer'}}>{r.payload.supplierName||'Fournisseur à identifier'} · {r.payload.docNumber||'Numéro à compléter'} · {r.source==='peppol'?'Peppol':'Mail'}</summary>
+    <summary style={{cursor:'pointer'}}>{r.payload.supplierName||'Fournisseur à identifier'} · {r.payload.docNumber||'Numéro à compléter'} · {KIND_LABEL[r.payload.direction??'']??'Type à confirmer'} · {r.source==='peppol'?'Peppol':'Mail'}</summary>
     {open && <ReceiptContent receipt={r} done={done}/>}
   </details>;
 }
@@ -61,13 +62,13 @@ function ReceiptContent({receipt:r,done}:{receipt:Receipt;done:()=>void}) {
   const {data}=useApi<{items:{id:string;docNumber:string;supplier:string;ttc:number}[]}>('/api/finance/expenses?q='+encodeURIComponent(search)+'&pageSize=100');
   const [supplier,setSupplier]=useState(d.supplierName??''),[number,setNumber]=useState(d.docNumber??'');
   const [date,setDate]=useState(d.date??''),[ht,setHt]=useState(d.ht==null?'':String(Math.abs(d.ht))),[ttc,setTtc]=useState(d.ttc==null?'':String(Math.abs(d.ttc)));
-  const [kind,setKind]=useState(d.direction==='credit_note'?'credit_note':'purchase');
+  const [kind,setKind]=useState(d.direction==='credit_note'||d.direction==='delivery_slip'?d.direction:'purchase');
   const [notice,setNotice]=useState(''),[busy,setBusy]=useState(false);
   async function file(format:string) {
     try {const url=await apiBlobUrl('/api/finance/expenses/receipts/'+r.id+'/'+format);window.open(url,'_blank');setTimeout(()=>URL.revokeObjectURL(url),60000);}catch(e){setNotice((e as Error).message);}
   }
   async function submit(create:boolean) {
-    if(!window.confirm(create?'Créer une dépense distincte ? Confirmez avoir vérifié qu’il ne s’agit pas d’un doublon et corrigé les montants en euros.':'Rattacher ce document à l’achat sélectionné ? Ses paiements et son chantier seront conservés.'))return;
+    if(!window.confirm(create?(kind==='delivery_slip'?'Créer un bordereau en attente de facture ? Confirmez':'Créer une dépense distincte ? Confirmez')+' avoir vérifié qu’il ne s’agit pas d’un doublon et corrigé les montants en euros.':'Rattacher ce document à l’achat sélectionné ? Ses paiements et son chantier seront conservés.'))return;
     setBusy(true);setNotice('');
     try {
       await api('/api/finance/expenses/receipts/'+r.id+(create?'/create':'/link'),{method:'POST',body:create?{confirmedDistinct:true,direction:kind,docNumber:number,supplierName:supplier,supplierVat:d.supplierVat||null,contactId:null,date,ht:Number(ht),ttc:Number(ttc)}:{entryId}});
@@ -86,9 +87,9 @@ function ReceiptContent({receipt:r,done}:{receipt:Receipt;done:()=>void}) {
     </select></label>
     <button className="btn" disabled={busy||!entryId} onClick={()=>submit(false)}>Rattacher à cet achat</button>
     <details style={{marginTop:16}}>
-      <summary>Ce document est une nouvelle dépense</summary>
+      <summary>Ce document est une nouvelle pièce (facture, bordereau ou note de crédit)</summary>
       <div style={{display:'grid',gap:8,gridTemplateColumns:'repeat(auto-fit,minmax(min(100%,180px),1fr))',marginBlock:12}}>
-        <label>Type<select className="select" value={kind} onChange={e=>setKind(e.target.value)}><option value="purchase">Facture</option><option value="credit_note">Note de crédit</option></select></label>
+        <label>Type<select className="select" value={kind} onChange={e=>setKind(e.target.value)}><option value="purchase">Facture</option><option value="delivery_slip">Bordereau</option><option value="credit_note">Note de crédit</option></select></label>
         <label>Fournisseur<input className="input" value={supplier} onChange={e=>setSupplier(e.target.value)}/></label>
         <label>Numéro<input className="input" value={number} onChange={e=>setNumber(e.target.value)}/></label>
         <label>Date<input className="input" type="date" value={date} onChange={e=>setDate(e.target.value)}/></label>

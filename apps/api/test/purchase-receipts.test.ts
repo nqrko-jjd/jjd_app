@@ -1,7 +1,7 @@
 import {test,before,after} from 'node:test';
 import assert from 'node:assert/strict';
 import {prisma} from '../src/db.js';
-import {receivePurchase,linkPurchaseReceipt,type PurchaseData} from '../src/lib/purchase-receipts.js';
+import {receivePurchase,linkPurchaseReceipt,createReviewedPurchase,type PurchaseData} from '../src/lib/purchase-receipts.js';
 import {mapReceivedDocument,setPeppolReception,syncPeppolInbox} from '../src/lib/peppol-inbox.js';
 import {env} from '../src/env.js';
 const prefix='receive-test-'+Date.now();
@@ -51,6 +51,19 @@ test('conflicting amounts, uncertain identities and invalid documents stay in re
   assert.equal(incomplete.status,'review');
   const invalid=await receive('invalid',data(prefix+'G'),'peppol','Validation Peppol à vérifier.');
   assert.equal(invalid.status,'review');
+});
+test('un document en vérification peut devenir un bordereau, ou être rattaché à un bordereau malgré le type deviné',async()=>{
+  const users=await prisma.user.findFirstOrThrow({select:{id:true}});
+  const slipGuess=await receive('slip-review',{...data(prefix+'SLIP'),worksiteRef:'R-TEST'},'email','Données à vérifier.');
+  assert.equal(slipGuess.status,'review');
+  const created=await createReviewedPurchase(slipGuess.id,{...data(prefix+'SLIP'),direction:'delivery_slip',contactId:null},users.id);
+  assert.equal(created.direction,'delivery_slip');assert.equal(created.docType,'Bordereau');assert.equal(created.worksiteRef,'R-TEST');
+  const existing=await prisma.ledgerEntry.create({data:{direction:'delivery_slip',docNumber:prefix+'BD',supplierName:prefix,date:new Date('2026-10-15'),ht:100,ttc:121}});
+  ids.push(existing.id);
+  const asInvoice=await receive('slip-as-invoice',data(prefix+'BD-PDF'),'email','Données à vérifier.');
+  assert.equal((await linkPurchaseReceipt(asInvoice.id,existing.id,users.id)).ledgerEntryId,existing.id);
+  const credit=await receive('credit-to-slip',{...data(prefix+'NC2'),direction:'credit_note'},'email','Données à vérifier.');
+  await assert.rejects(linkPurchaseReceipt(credit.id,existing.id,users.id));
 });
 test('legacy invoice without imported receipt is matched by supplier VAT without altering payments',async()=>{
   const row=await prisma.ledgerEntry.create({data:{direction:'purchase',docNumber:prefix+'LEGACY',contactId,supplierName:prefix,date:new Date('2026-10-15'),ht:100,ttc:121,paymentStatus:'Payé'}});

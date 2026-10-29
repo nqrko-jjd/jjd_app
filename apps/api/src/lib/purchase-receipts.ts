@@ -9,6 +9,11 @@ export interface PurchaseData {
   ht: number | null; ttc: number | null; vatRate?: number | null;
   worksiteId?: string | null; worksiteRef?: string | null;
 }
+export const docTypeOf = (direction: string) =>
+  direction === 'credit_note' ? 'Note de crédit' : direction === 'delivery_slip' ? 'Bordereau' : "Facture d'achat";
+const payloadOf = (r: { payload: Prisma.JsonValue }) => (r.payload ?? {}) as unknown as Partial<PurchaseData>;
+/** Facture et bordereau se confondent souvent à la lecture du PDF ; une note de crédit, jamais. */
+const sameFamily = (a: string, b: string) => (a === 'credit_note') === (b === 'credit_note');
 export const normVat = (s?: string | null) => (s ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 const norm = (s?: string | null) => (s ?? '').normalize('NFKC').trim().toUpperCase().replace(/\s+/g, '');
 function complete(d: PurchaseData) {
@@ -62,7 +67,7 @@ export async function receivePurchase(input: {sourceRef:string;source:'email'|'p
     } else if (!reason) {
       const date = new Date(d.date!);
       const row = await tx.ledgerEntry.create({data:{
-        direction:d.direction,docType:d.direction==='credit_note'?'Note de crédit':d.direction==='delivery_slip'?'Bordereau':"Facture d'achat",
+        direction:d.direction,docType:docTypeOf(d.direction),
         docNumber:d.docNumber,supplierName:d.supplierName,supplierVat:d.supplierVat,contactId:d.contactId,
         date,dueDate:d.dueDate?new Date(d.dueDate):null,year:date.getFullYear(),month:String(date.getMonth()+1),quarter:'T'+Math.ceil((date.getMonth()+1)/3),
         ht:Math.abs(d.ht!),ttc:Math.abs(d.ttc!),vatRate:d.vatRate,worksiteId:d.worksiteId,worksiteRef:d.worksiteRef,
@@ -84,7 +89,9 @@ export async function linkPurchaseReceipt(id: string, entryId: string, actorId: 
     if (!receipt || !entry) throw new HttpError(404,'Document ou achat introuvable.');
     if (receipt.status !== 'review') throw new HttpError(409,'Ce document est déjà traité.');
     const d=receipt.payload as unknown as PurchaseData;
-    if (entry.direction!==d.direction) throw new HttpError(422,'Le type facture / note de crédit doit correspondre.');
+    // Le type deviné à la lecture du PDF peut se tromper entre facture et bordereau : le choix
+    // de l'achat existant fait foi. Seule une note de crédit reste séparée des deux autres.
+    if (!sameFamily(entry.direction,d.direction)) throw new HttpError(422,'Une note de crédit ne peut être rattachée qu’à une note de crédit.');
     if (!entry.pdfPath && receipt.pdfPath) await tx.ledgerEntry.update({where:{id:entryId},data:{pdfPath:receipt.pdfPath}});
     const updated=await tx.purchaseReceipt.update({where:{id},data:{ledgerEntryId:entryId,status:'imported',reason:null}});
     await tx.auditLog.create({data:{actorId,action:'link_receipt',entity:'ledgerEntry',entityId:entryId,meta:{receiptId:id}}});
@@ -100,10 +107,12 @@ export async function createReviewedPurchase(id:string,d:PurchaseData,actorId:st
     if(receipt.status!=='review') throw new HttpError(409,'Document déjà traité.');
     const date=new Date(d.date!);
     const row=await tx.ledgerEntry.create({data:{
-      direction:d.direction,docType:d.direction==='credit_note'?'Note de crédit':"Facture d'achat",
+      direction:d.direction,docType:docTypeOf(d.direction),
       docNumber:d.docNumber,supplierName:d.supplierName,supplierVat:d.supplierVat,contactId:d.contactId,
       date,dueDate:d.dueDate?new Date(d.dueDate):null,year:date.getFullYear(),month:String(date.getMonth()+1),quarter:'T'+Math.ceil((date.getMonth()+1)/3),
       ht:Math.abs(d.ht!),ttc:Math.abs(d.ttc!),pdfPath:receipt.pdfPath,source:receipt.source,paymentStatus:'Non payé',createdById:actorId,
+      // Garde le chantier lu sur le PDF : un bordereau sert justement à répartir la facture par chantier.
+      worksiteId:payloadOf(receipt).worksiteId??null,worksiteRef:payloadOf(receipt).worksiteRef??null,
     }});
     await tx.purchaseReceipt.update({where:{id},data:{ledgerEntryId:row.id,status:'imported',reason:null}});
     await tx.auditLog.create({data:{actorId,action:'create_from_receipt',entity:'ledgerEntry',entityId:row.id,meta:{receiptId:id,manualReview:true}}});

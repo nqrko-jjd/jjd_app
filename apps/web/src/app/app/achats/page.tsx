@@ -4,7 +4,7 @@ const PurchaseReception = dynamic(() => import('@/components/PurchaseReception')
 import { tr } from '@/lib/ui-language';
 import { vehicleName } from '@/lib/vehicle';
 import { SkeletonRows, ErrorState, EmptyState } from '@/components/States';
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
@@ -891,6 +891,8 @@ function ExpenseModal({
     ht: expense?.ht != null ? String(expense.ht) : prefillFrom?.ht ? String(prefillFrom.ht) : '',
     vatRecup: expense?.vatRecup != null ? String(expense.vatRecup) : prefillFrom?.ttc != null && prefillFrom.ht ? String(Math.round((prefillFrom.ttc - prefillFrom.ht) * 100) / 100) : '',
     ttc: expense?.ttc != null ? String(expense.ttc) : prefillFrom?.ttc != null ? String(prefillFrom.ttc) : '',
+    // taux de TVA (en %) : sert à calculer TVA et TTC depuis le HT, ou HT et TVA depuis le TTC
+    vatRate: initialVatRate(expense ?? (prefillFrom ? { vatRate: null, ht: prefillFrom.ht ?? 0, ttc: prefillFrom.ttc ?? null, vatRecup: null } : null)),
     notes: expense?.notes ?? (prefillFrom ? `Bordereau ${prefillFrom.docNumber ?? ''}`.trim() : ''),
     paymentStatus: (expense?.paid ? 'Payé' : 'Non payé') as 'Payé' | 'Non payé',
   });
@@ -958,6 +960,9 @@ function ExpenseModal({
         ht: prev.ht || (ht != null ? String(ht) : ''),
         vatRecup: prev.vatRecup || (vatRecup != null ? String(vatRecup) : ''),
         ttc: prev.ttc || (ex.totalTtc != null ? String(ex.totalTtc) : ''),
+        vatRate: prev.ht || prev.ttc ? prev.vatRate
+          : ex.vatRate != null && (VAT_RATES as readonly string[]).includes(String(r2(ex.vatRate * 100))) ? String(r2(ex.vatRate * 100))
+          : guessVatRate(ht, vatRecup),
       }));
       if (ex.otherWorksiteRefs.length) {
         const refs = [ex.worksiteRef, ...ex.otherWorksiteRefs].filter(Boolean) as string[];
@@ -1020,18 +1025,54 @@ function ExpenseModal({
     onClose();
   }
 
-  // auto-calcule TTC quand HT + TVA récup sont saisis et TTC vide
+  // Montants liés : HT + taux → TVA et TTC ; TTC + taux → HT et TVA ; TVA saisie à la main → TTC = HT + TVA.
+  // On retient le dernier montant tapé (HT ou TTC) pour savoir dans quel sens recalculer quand on change le taux.
+  const [anchor, setAnchor] = useState<'ht' | 'ttc'>('ht');
+  const splitsHt = splits ? r2(splits.reduce((sum, s) => sum + (Number(s.ht) || 0), 0)) : null;
+  function recalc(next: typeof v, from: 'ht' | 'ttc' | 'vat'): typeof v {
+    const ht = splitsHt ?? Number(next.ht);
+    const ttc = Number(next.ttc);
+    if (from === 'vat') {
+      const vat = Number(next.vatRecup);
+      if (next.vatRecup !== '' && Number.isFinite(vat) && next.ht !== '' && Number.isFinite(ht)) return { ...next, ttc: String(r2(ht + vat)), vatRate: guessVatRate(ht, vat) };
+      return next;
+    }
+    if (next.vatRate === 'mix') {
+      // plusieurs taux : on garde la TVA saisie et on boucle HT ↔ TTC avec elle
+      const vat = Number(next.vatRecup || 0);
+      if (from === 'ht' && next.ht !== '' && Number.isFinite(ht)) return { ...next, ttc: String(r2(ht + vat)) };
+      if (from === 'ttc' && next.ttc !== '' && Number.isFinite(ttc) && splitsHt == null && next.ht !== '') return { ...next, vatRecup: String(r2(ttc - Number(next.ht))) };
+      return next;
+    }
+    const rate = Number(next.vatRate) / 100;
+    if (from === 'ht' || splitsHt != null) {
+      if ((splitsHt == null && next.ht === '') || !Number.isFinite(ht)) return next;
+      if (from === 'ttc' && splitsHt != null) return next.ttc === '' ? next : { ...next, vatRecup: String(r2(ttc - ht)) };
+      const vat = r2(ht * rate);
+      return { ...next, vatRecup: String(vat), ttc: String(r2(ht + vat)) };
+    }
+    if (next.ttc === '' || !Number.isFinite(ttc)) return next;
+    const newHt = r2(ttc / (1 + rate));
+    return { ...next, ht: String(newHt), vatRecup: String(r2(ttc - newHt)) };
+  }
   function set(k: string, val: string) {
+    if (k === 'ht' || k === 'ttc') setAnchor(k);
     setV((prev) => {
       const next = { ...prev, [k]: val };
-      if ((k === 'ht' || k === 'vatRecup') && next.ht && !prev.ttc) {
-        const ht = Number(next.ht);
-        const vat = Number(next.vatRecup || 0);
-        if (!Number.isNaN(ht)) next.ttc = String(Math.round((ht + (vat || ht * 0.21)) * 100) / 100);
-      }
+      if (k === 'ht' || k === 'ttc') return recalc(next, k);
+      if (k === 'vatRecup') return recalc(next, 'vat');
+      if (k === 'vatRate') return recalc(next, anchor);
       return next;
     });
   }
+  // répartition sur plusieurs chantiers : le HT est la somme des parts, TVA et TTC suivent
+  // (pas à l'ouverture : une dépense existante garde ses montants tant qu'on ne touche pas aux parts)
+  const lastSplitsHt = useRef(splitsHt);
+  useEffect(() => {
+    if (splitsHt == null || splitsHt === lastSplitsHt.current) return;
+    lastSplitsHt.current = splitsHt;
+    setV((prev) => recalc(prev, 'ht'));
+  }, [splitsHt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function attachFile(expenseId: string) {
     if (!pendingFile) return;
@@ -1075,6 +1116,7 @@ function ExpenseModal({
           ht: totalHt,
           ttc: v.ttc === '' ? null : Number(v.ttc),
           vatRecup: v.vatRecup === '' ? null : Number(v.vatRecup),
+          vatRate: v.vatRate === 'mix' ? null : Number(v.vatRate) / 100,
           allocations: splits.map((s) => ({ worksiteId: s.worksiteId, ht: Number(s.ht) })),
         };
         const saved = expense
@@ -1091,6 +1133,7 @@ function ExpenseModal({
         ht: Number(v.ht || 0),
         vatRecup: v.vatRecup === '' ? null : Number(v.vatRecup),
         ttc: v.ttc === '' ? null : Number(v.ttc),
+        vatRate: v.vatRate === 'mix' ? null : Number(v.vatRate) / 100,
         // la fiche était répartie et on revient à un seul chantier : on efface la répartition
         ...(expense?.allocations && expense.allocations.length > 1 ? { allocations: [] as { worksiteId: string; ht: number }[] } : {}),
       };
@@ -1248,8 +1291,18 @@ function ExpenseModal({
             />
           </div>
           <div className="field">
-            <label>TVA récupérable</label>
-            <input className="input" type="number" step="any" value={v.vatRecup} onChange={(e) => set('vatRecup', e.target.value)} />
+            <label>Taux de TVA</label>
+            <select className="select" value={v.vatRate} onChange={(e) => set('vatRate', e.target.value)}>
+              <option value="21">21 %</option>
+              <option value="12">12 %</option>
+              <option value="6">6 %</option>
+              <option value="0">0 % (autoliquidation / exonéré)</option>
+              <option value="mix">Plusieurs taux (TVA à saisir)</option>
+            </select>
+          </div>
+          <div className="field">
+            <label>Montant TVA</label>
+            <input className="input" type="number" step="any" value={v.vatRecup} onChange={(e) => set('vatRecup', e.target.value)} title="Calculé d’après le taux ; modifiable pour un arrondi ou une facture à plusieurs taux" />
           </div>
           <div className="field">
             <label>{tr("Montant TTC")}</label>
@@ -1379,6 +1432,21 @@ function ExpenseModal({
  * normalement) — on cherche parmi les factures d'achat déjà enregistrées, filtrées d'abord sur
  * le même fournisseur.
  */
+/** Taux de TVA proposés dans le formulaire de dépense (en %), « mix » = plusieurs taux / montant saisi à la main. */
+const VAT_RATES = ['21', '12', '6', '0'] as const;
+const r2 = (n: number) => Math.round(n * 100) / 100;
+/** Taux standard le plus proche d'un HT/TVA donnés, sinon « mix » (taux multiples, arrondis du fournisseur…). */
+function guessVatRate(ht: number | null | undefined, vat: number | null | undefined): string {
+  if (!ht || vat == null || !Number.isFinite(ht) || !Number.isFinite(vat)) return '21';
+  const pct = (Math.abs(vat) / Math.abs(ht)) * 100;
+  return VAT_RATES.find((r) => Math.abs(Number(r) - pct) < 0.15) ?? 'mix';
+}
+function initialVatRate(e: { vatRate: number | null; ht: number; ttc: number | null; vatRecup: number | null } | null | undefined): string {
+  if (!e) return '21';
+  if (e.vatRate != null) { const pct = String(r2(e.vatRate * 100)); return (VAT_RATES as readonly string[]).includes(pct) ? pct : 'mix'; }
+  return guessVatRate(e.ht, e.vatRecup ?? (e.ttc != null ? e.ttc - e.ht : null));
+}
+
 interface MergePreview { survivorId: string; docNumber: string | null; ht: number; ttc: number | null; vatRecup: number | null; removed: string[]; parts: { worksiteId: string; ref: string | null; ht: number }[]; warnings: string[] }
 
 /** Fusionne les lignes d'une même facture en une seule fiche répartie par chantier : on montre d'abord le résultat, puis on confirme. */

@@ -1,7 +1,7 @@
 import {test,before,after} from 'node:test';
 import assert from 'node:assert/strict';
 import {prisma} from '../src/db.js';
-import {receivePurchase,linkPurchaseReceipt,createReviewedPurchase,type PurchaseData} from '../src/lib/purchase-receipts.js';
+import {receivePurchase,linkPurchaseReceipt,createReviewedPurchase,ignorePurchaseReceipt,type PurchaseData} from '../src/lib/purchase-receipts.js';
 import {mapReceivedDocument,setPeppolReception,syncPeppolInbox} from '../src/lib/peppol-inbox.js';
 import {env} from '../src/env.js';
 const prefix='receive-test-'+Date.now();
@@ -64,6 +64,16 @@ test('un document en vérification peut devenir un bordereau, ou être rattaché
   assert.equal((await linkPurchaseReceipt(asInvoice.id,existing.id,users.id)).ledgerEntryId,existing.id);
   const credit=await receive('credit-to-slip',{...data(prefix+'NC2'),direction:'credit_note'},'email','Données à vérifier.');
   await assert.rejects(linkPurchaseReceipt(credit.id,existing.id,users.id));
+});
+test('un document ignoré (conditions générales, rappel) sort de la liste et ne revient pas au réimport',async()=>{
+  const user=await prisma.user.findFirstOrThrow({select:{id:true}});
+  const cg=await receive('cg',{...data(prefix+'CG'),docNumber:null},'email');
+  assert.equal(cg.status,'review');
+  const ignored=await ignorePurchaseReceipt(cg.id,'Conditions générales',user.id);
+  assert.equal(ignored.status,'ignored');assert.equal(ignored.ledgerEntryId,null);
+  assert.equal((await receive('cg',{...data(prefix+'CG'),docNumber:null},'email')).status,'ignored');
+  await assert.rejects(ignorePurchaseReceipt(cg.id,null,user.id));
+  await prisma.auditLog.deleteMany({where:{entity:'purchaseReceipt',entityId:cg.id}});
 });
 test('legacy invoice without imported receipt is matched by supplier VAT without altering payments',async()=>{
   const row=await prisma.ledgerEntry.create({data:{direction:'purchase',docNumber:prefix+'LEGACY',contactId,supplierName:prefix,date:new Date('2026-10-15'),ht:100,ttc:121,paymentStatus:'Payé'}});

@@ -67,6 +67,12 @@ function ReceiptContent({receipt:r,done}:{receipt:Receipt;done:()=>void}) {
   async function file(format:string) {
     try {const url=await apiBlobUrl('/api/finance/expenses/receipts/'+r.id+'/'+format);window.open(url,'_blank');setTimeout(()=>URL.revokeObjectURL(url),60000);}catch(e){setNotice((e as Error).message);}
   }
+  async function ignore(why:string) {
+    if(!window.confirm('Ignorer ce document ('+why.toLowerCase()+') ? Il sort de la liste et ne sera créé ni rattaché nulle part.'))return;
+    setBusy(true);setNotice('');
+    try{await api('/api/finance/expenses/receipts/'+r.id+'/ignore',{method:'POST',body:{reason:why}});done();}
+    catch(e){setNotice((e as Error).message);}finally{setBusy(false);}
+  }
   async function submit(create:boolean) {
     if(!window.confirm(create?(kind==='delivery_slip'?'Créer un bordereau en attente de facture ? Confirmez':'Créer une dépense distincte ? Confirmez')+' avoir vérifié qu’il ne s’agit pas d’un doublon et corrigé les montants en euros.':'Rattacher ce document à l’achat sélectionné ? Ses paiements et son chantier seront conservés.'))return;
     setBusy(true);setNotice('');
@@ -80,6 +86,10 @@ function ReceiptContent({receipt:r,done}:{receipt:Receipt;done:()=>void}) {
     <div className="row" style={{gap:8,flexWrap:'wrap'}}>
       {r.pdfPath && <button className="btn" onClick={()=>file('pdf')}>Voir le PDF</button>}
       {r.xmlPath && <button className="btn" onClick={()=>file('xml')}>Télécharger l’original Peppol (XML)</button>}
+    </div>
+    <div className="row" style={{gap:8,flexWrap:'wrap',marginBlock:8}}>
+      <span className="muted">Pas une pièce à encoder :</span>
+      {['Conditions générales','Rappel de paiement','Autre document'].map(why=><button key={why} className="btn ghost" disabled={busy} onClick={()=>ignore(why)}>Ignorer · {why}</button>)}
     </div>
     <label>Rechercher un achat existant<input className="input" value={search} onChange={e=>setSearch(e.target.value)}/></label>
     <label>Achat correspondant<select className="select" style={{maxWidth:'100%'}} value={entryId} onChange={e=>setEntryId(e.target.value)}>

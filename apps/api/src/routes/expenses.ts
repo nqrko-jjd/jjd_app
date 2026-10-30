@@ -1,7 +1,7 @@
 import { invoiceWorksiteAllocation } from '../lib/invoice-allocation.js';
 import { matchCandidates, expensesWithoutPdf } from '../lib/expense-pdf-match.js';
 import { peppolReceptionStatus, setPeppolReception, syncPeppolInbox } from '../lib/peppol-inbox.js';
-import { linkPurchaseReceipt, createReviewedPurchase } from '../lib/purchase-receipts.js';
+import { linkPurchaseReceipt, createReviewedPurchase, ignorePurchaseReceipt } from '../lib/purchase-receipts.js';
 /**
  * Dépenses / factures d'achat — CRUD autour de LedgerEntry (grand livre).
  * L'historique Excel (~5000 lignes) et les saisies manuelles cohabitent ;
@@ -445,6 +445,10 @@ expensesRouter.get('/receipts/:id/:format',requireAuth(...OFFICE),asyncHandler(a
 expensesRouter.post('/receipts/:id/link',requireAuth(...OFFICE),asyncHandler(async(req,res)=>{
   const {entryId}=z.object({entryId:z.string().min(1)}).parse(req.body);
   res.json(await linkPurchaseReceipt(req.params.id!,entryId,req.user!.id));
+}));
+expensesRouter.post('/receipts/:id/ignore',requireAuth(...OFFICE),asyncHandler(async(req,res)=>{
+  const {reason}=z.object({reason:z.string().max(200).nullable().optional()}).parse(req.body??{});
+  res.json(await ignorePurchaseReceipt(req.params.id!,reason??null,req.user!.id));
 }));
 expensesRouter.post('/receipts/:id/create',requireAuth(...OFFICE),asyncHandler(async(req,res)=>{
   const data=z.object({

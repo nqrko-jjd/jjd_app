@@ -99,6 +99,22 @@ export async function linkPurchaseReceipt(id: string, entryId: string, actorId: 
   });
 }
 
+/**
+ * Écarte un document reçu qui n'est pas une pièce comptable (conditions générales, rappel d'une facture déjà connue…).
+ * Rien n'est supprimé : le document passe en « ignoré », sort de la liste à vérifier et ne revient pas au prochain import
+ * (l'import reconnaît le PDF à son empreinte).
+ */
+export async function ignorePurchaseReceipt(id:string,reason:string|null,actorId:string) {
+  return serial(async tx=>{
+    const receipt=await tx.purchaseReceipt.findUnique({where:{id}});
+    if(!receipt) throw new HttpError(404,'Document introuvable.');
+    if(receipt.status!=='review') throw new HttpError(409,'Document déjà traité.');
+    const updated=await tx.purchaseReceipt.update({where:{id},data:{status:'ignored',reason:reason?.trim()||'Ignoré'}});
+    await tx.auditLog.create({data:{actorId,action:'ignore_receipt',entity:'purchaseReceipt',entityId:id,meta:{reason:updated.reason}}});
+    return updated;
+  });
+}
+
 export async function createReviewedPurchase(id:string,d:PurchaseData,actorId:string) {
   if(!complete(d)) throw new HttpError(422,'Complétez le fournisseur, le numéro, la date et les montants.');
   return serial(async tx=>{

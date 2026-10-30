@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useApi } from '@/lib/use-api';
 import { api, apiBlobUrl } from '@/lib/api';
 import { formatDateBE } from '@/lib/ui';
@@ -36,6 +36,7 @@ export default function PurchaseReception({onImported}:{onImported:()=>void}) {
     {state?.last?.at && <p className="muted">Dernière tentative : {formatDateBE(state.last.at)} {new Date(state.last.at).toLocaleTimeString('fr-BE')}</p>}
     {!!state?.last?.errors?.length && <p role="alert">{state.last.errors.join(' · ')}</p>}
     {notice && <p role="status">{notice}</p>}
+    <MailboxHistory onProgress={()=>{reload();onImported();}}/>
     <h3>Documents à vérifier ({list?.total??0})</h3>
     <p>Un doute sur un doublon ou des données manquantes bloque la création automatique. Comparez le document avec les achats existants avant de le traiter.</p>
     {listError && <p role="alert">{listError}</p>}
@@ -47,6 +48,37 @@ export default function PurchaseReception({onImported}:{onImported:()=>void}) {
       <button className="btn" disabled={page*30>=(list?.total??0)} onClick={()=>setPage(p=>p+1)}>Suivant</button>
     </div>
   </section>;
+}
+type HistoryJob={configured:boolean;running:boolean;since:string|null;startedAt:string|null;finishedAt:string|null;folder:string|null;error:string|null;
+  stats:{folders:number;messagesScanned:number;pdfsFound:number;alreadyInSystem:number;created:number;unreliableExtraction:number;errors:string[]}|null};
+/** Import de tout l'historique de la boîte factures : rien n'est créé, les documents non retrouvés arrivent dans la liste à vérifier. */
+function MailboxHistory({onProgress}:{onProgress:()=>void}) {
+  const {data:job,reload}=useApi<HistoryJob>('/api/finance/expenses/mailbox-history');
+  const [since,setSince]=useState(new Date().getFullYear()+'-01-01'),[err,setErr]=useState(''),[busy,setBusy]=useState(false);
+  // pendant l'import : avancement rafraîchi toutes les 5 s, et la liste à vérifier se remplit au fur et à mesure
+  useEffect(()=>{ if(!job?.running) return; const t=setInterval(()=>{reload();onProgress();},5000); return ()=>clearInterval(t); },[job?.running]); // eslint-disable-line react-hooks/exhaustive-deps
+  if(!job?.configured) return null;
+  async function start(){
+    if(!window.confirm('Parcourir tous les mails de la boîte factures'+(since?' depuis le '+since.split('-').reverse().join('/'):'')+' ?\n\nAucune dépense n’est créée : un PDF qui correspond à un achat existant lui est joint, les autres arrivent dans « Documents à vérifier ». Les mails ne sont pas modifiés.'))return;
+    setBusy(true);setErr('');
+    try{await api('/api/finance/expenses/mailbox-history',{method:'POST',body:{since:since||null}});reload();}catch(e){setErr((e as Error).message);}finally{setBusy(false);}
+  }
+  const st=job.stats;
+  return <div className="card" style={{padding:12,marginBlock:12}}>
+    <strong>Historique de la boîte factures</strong>
+    <p className="muted" style={{marginTop:4}}>La synchronisation automatique traite les nouveaux mails. Ici, on reprend <strong>tous</strong> les mails déjà présents (lus ou non, tous les dossiers). Rien n’est créé automatiquement.</p>
+    <div className="row" style={{gap:8,flexWrap:'wrap',alignItems:'end'}}>
+      <label>Depuis le<input className="input" type="date" value={since} onChange={e=>setSince(e.target.value)} disabled={job.running}/></label>
+      <button className="btn" disabled={busy||job.running} onClick={start}>{job.running?'Import en cours…':'Importer l’historique'}</button>
+    </div>
+    {st && <p role="status" style={{marginBottom:0}}>
+      {job.running?'En cours'+(job.folder?' (dossier « '+job.folder.split(/[./]/).pop()+' »)':'')+' : ':job.finishedAt?'Terminé : ':''}
+      {st.messagesScanned} mail(s) lu(s), {st.pdfsFound} PDF · {st.alreadyInSystem} déjà connu(s) · {st.created-st.unreliableExtraction} joint(s) à un achat existant · <strong>{st.unreliableExtraction} à vérifier</strong>
+      {st.errors.length>0 && <> · {st.errors.length} erreur(s)</>}
+    </p>}
+    {job.error && <p role="alert">{job.error}</p>}
+    {err && <p role="alert">{err}</p>}
+  </div>;
 }
 const KIND_LABEL:Record<string,string>={purchase:'Facture',delivery_slip:'Bordereau',credit_note:'Note de crédit'};
 function ReceiptReview({receipt:r,done}:{receipt:Receipt;done:()=>void}) {

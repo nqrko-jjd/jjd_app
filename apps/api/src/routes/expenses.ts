@@ -27,7 +27,7 @@ import { allocationSnapshot } from '../lib/bank-allocation.js';
 import { purchaseRemaining } from '../lib/payment-tolerance.js';
 import { extractDocumentInfo, suggestExpenseCategory } from '../lib/document-extract.js';
 import { toCsv, readTableBuffer, pick } from '../lib/table-io.js';
-import { invoiceMailboxConfigured, syncInvoiceMailbox, reprocessEmailEntries, scanInvoiceMailboxHistory, PROCESSED_MAILBOX } from '../lib/invoice-mailbox.js';
+import { invoiceMailboxConfigured, syncInvoiceMailbox, reprocessEmailEntries, scanInvoiceMailboxHistory, PROCESSED_MAILBOX, startHistoryImport, historyJobStatus } from '../lib/invoice-mailbox.js';
 import { scanAllEntriesForRefs } from '../lib/purchase-ref-scan.js';
 import { findPurchaseCandidates } from '../lib/purchase-candidates.js';
 import { normalizeParts, replaceAllocations, mainWorksite, type AllocPart } from '../lib/ledger-allocation.js';
@@ -1050,6 +1050,22 @@ expensesRouter.post(
     res.json(stats);
   }),
 );
+
+/**
+ * Import de tout l'historique de la boîte factures (lus et non lus, tous dossiers), en tâche de fond :
+ * POST lance (une seule exécution à la fois), GET suit l'avancement. Ne crée aucune dépense (voir
+ * scanInvoiceMailboxHistory) : les documents non retrouvés partent dans « Documents à vérifier ».
+ */
+expensesRouter.get('/mailbox-history', requireAuth(...OFFICE), asyncHandler(async (_req, res) => {
+  res.json({ configured: invoiceMailboxConfigured(), ...historyJobStatus() });
+}));
+expensesRouter.post('/mailbox-history', requireAuth(...OFFICE), asyncHandler(async (req, res) => {
+  if (!invoiceMailboxConfigured()) throw new HttpError(409, 'Boîte mail non configurée');
+  const { since } = z.object({ since: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional() }).parse(req.body ?? {});
+  const job = startHistoryImport(since ? new Date(since) : null);
+  await prisma.auditLog.create({ data: { actorId: req.user!.id, action: 'mailbox_history_import', entity: 'purchaseReceipt', meta: { since: since ?? null } } });
+  res.json({ configured: true, ...job });
+}));
 
 /* ------------------------------------------------------------------ créer */
 

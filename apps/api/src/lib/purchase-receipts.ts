@@ -50,7 +50,11 @@ async function serial<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>): Prom
     }
   }
 }
-export async function receivePurchase(input: {sourceRef:string;source:'email'|'peppol';data:PurchaseData;pdfPath:string|null;xmlPath?:string|null;reason?:string|null}) {
+/**
+ * `reviewOnly` (import de l'historique) : jamais de dépense créée automatiquement — seul un achat retrouvé
+ * avec certitude reçoit le PDF ; tout le reste part dans « Documents à vérifier » avec ce motif.
+ */
+export async function receivePurchase(input: {sourceRef:string;source:'email'|'peppol';data:PurchaseData;pdfPath:string|null;xmlPath?:string|null;reason?:string|null;reviewOnly?:string|null}) {
   return serial(async tx => {
     const old = await tx.purchaseReceipt.findUnique({where:{sourceRef:input.sourceRef}});
     if (old) return old;
@@ -64,6 +68,8 @@ export async function receivePurchase(input: {sourceRef:string;source:'email'|'p
       if (input.pdfPath) await tx.ledgerEntry.updateMany({where:{id:ledgerEntryId,pdfPath:null},data:{pdfPath:input.pdfPath}});
     } else if (!reason && matches.possible.length) {
       reason = 'Doublon possible : ' + matches.possible.map(e=>e.id).join(', ');
+    } else if (!reason && input.reviewOnly) {
+      reason = input.reviewOnly;
     } else if (!reason) {
       const date = new Date(d.date!);
       const row = await tx.ledgerEntry.create({data:{

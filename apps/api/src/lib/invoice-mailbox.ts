@@ -25,6 +25,8 @@ import { extractDocumentInfo } from './document-extract.js';
 import { scanEntryForRefs } from './purchase-ref-scan.js';
 
 export const PROCESSED_MAILBOX = 'Traité par JJD App';
+/** Mot-clé IMAP posé sur un mail d'INBOX une fois vérifié par l'app : la synchro ne le relit plus, qu'il soit lu ou non. */
+export const CHECKED_KEYWORD = '$JJDChecked';
 
 // Pièces jointes PDF qui ne sont jamais une facture/note de crédit — conditions générales,
 // mentions légales… souvent jointes au même mail que la vraie facture (vu chez Vanlaethem
@@ -97,14 +99,14 @@ export async function findExistingMatch(extraction: Awaited<ReturnType<typeof ex
   const matches=await prisma.$transaction(tx=>purchaseMatches(tx,data));
   return matches.exact.length===1 && matches.possible.length===1?matches.exact[0]!.id:null;
 }
-async function importEmailPdf(buffer:Buffer,name:string) {
+async function importEmailPdf(buffer:Buffer,name:string,reviewOnly?:string) {
   const sourceRef='email:sha256:'+createHash('sha256').update(buffer).digest('hex');
   const old=await prisma.purchaseReceipt.findUnique({where:{sourceRef}});
   if(old) return {receipt:old,existing:true};
   const extraction=await extractDocumentInfo(buffer,'application/pdf',['supplier','both']);
   const data=await extractionData(extraction);
   const pdfPath=storeFile(buffer,name,'expenses');
-  const receipt=await receivePurchase({sourceRef,source:'email',data,pdfPath,
+  const receipt=await receivePurchase({sourceRef,source:'email',data,pdfPath,reviewOnly,
     reason:extraction.kind==='quote'?'Devis reçu : ce document n’est pas une facture.':null});
   return {receipt,existing:false};
 }
@@ -144,7 +146,13 @@ export async function syncInvoiceMailbox(): Promise<SyncStats> {
 
     const lock = await client.getMailboxLock('INBOX');
     try {
-      const uids = await client.search({ seen: false }, { uid: true });
+      // Tous les mails d'INBOX, lus ou non : un mail ouvert dans Outlook avant le passage de la synchro
+      // (donc « lu ») était jusqu'ici ignoré pour toujours. On écarte seulement ceux déjà vérifiés par l'app.
+      // Relire un mail déjà importé est sans risque : l'import reconnaît un PDF à son empreinte.
+      // Limité aux 30 derniers jours : les mails plus anciens passent par l'import de l'historique,
+      // qui ne crée jamais de dépense lui-même (voir scanInvoiceMailboxHistory).
+      const since = new Date(Date.now() - 30 * 86400000);
+      const uids = (await client.search({ unKeyword: CHECKED_KEYWORD, since }, { uid: true })) || [];
       for (const uid of uids as number[]) {
         stats.messagesSeen++;
         let allOk = true;
@@ -173,7 +181,7 @@ export async function syncInvoiceMailbox(): Promise<SyncStats> {
         // pas d'erreur -> lu, laissé en INBOX si rien à en tirer, déplacé sinon ; une erreur sur
         // au moins une pièce jointe laisse le mail non lu, retenté (sans doublon) au prochain sync
         if (allOk) {
-          await client.messageFlagsAdd(uid, ['\\Seen'], { uid: true });
+          await client.messageFlagsAdd(uid, ['\\Seen', CHECKED_KEYWORD], { uid: true });
           if (importedAny) await client.messageMove(uid, PROCESSED_MAILBOX, { uid: true });
         }
       }
@@ -191,21 +199,23 @@ interface ScanStats {
   messagesScanned: number;
   pdfsFound: number;
   alreadyInSystem: number;
-  created: number;
-  unreliableExtraction: number; // créées quand même (à vérifier), mais sans clé de dédoublonnage fiable
+  created: number; // nouveaux documents : joints à un achat retrouvé, sinon « à vérifier »
+  unreliableExtraction: number; // dont envoyés dans « Documents à vérifier »
   errors: string[];
 }
 
+// Dossiers jamais parcourus : envoyés, brouillons, indésirables, corbeille (noms FR/EN/NL, préfixe « INBOX. » éventuel).
+const SKIP_FOLDER_RE = /^(sent|sent items|sent messages|envoy[ée]s?|[ée]l[ée]ments envoy[ée]s|drafts?|brouillons?|junk|spam|ind[ée]sirables?|trash|deleted|deleted items|deleted messages|corbeille|prullenbak|verzonden|concepten)$/i;
+
 /**
- * Scan rétroactif (historique) : passe en revue TOUS les messages (lus ou non) des dossiers
- * donnés — par défaut, tous les dossiers de la boîte sauf Sent/Drafts/Junk/Trash et le
- * dossier de traitement de `syncInvoiceMailbox()`. Contrairement au sync courant, ne
- * modifie JAMAIS le mail (pas de \Seen, pas de déplacement) : le classement existant par
- * fournisseur reste intact, on ne fait qu'y piocher. Chaque PDF déjà retrouvé dans le grand
- * livre (`findExistingMatch`) est ignoré ; les nouveaux deviennent des dépenses « à
- * vérifier » comme le sync courant (`source: 'email'`).
+ * Import de l'historique : passe en revue TOUS les mails (lus ou non) des dossiers donnés — par défaut tous,
+ * sauf envoyés/brouillons/indésirables/corbeille et le dossier « Traité par JJD App » (déjà importé).
+ * Ne modifie JAMAIS un mail (ni lu, ni déplacé). Ne crée JAMAIS de dépense : un PDF qui correspond avec
+ * certitude à un achat existant lui est joint, tout le reste part dans « Documents à vérifier » — un premier
+ * scan rétroactif qui créait directement des dépenses a dû être effacé (fournisseurs mal reconnus).
+ * Un PDF déjà vu (même empreinte) est sauté sans nouvelle lecture, donc on peut relancer sans risque.
  */
-export async function scanInvoiceMailboxHistory(folders?: string[]): Promise<ScanStats> {
+export async function scanInvoiceMailboxHistory(folders?: string[], opts: { since?: Date | null; onProgress?: (s: ScanStats, folder: string) => void } = {}): Promise<ScanStats> {
   const stats: ScanStats = { folders: 0, messagesScanned: 0, pdfsFound: 0, alreadyInSystem: 0, created: 0, unreliableExtraction: 0, errors: [] };
   if (!invoiceMailboxConfigured()) return stats;
 
@@ -220,40 +230,43 @@ export async function scanInvoiceMailboxHistory(folders?: string[]): Promise<Sca
   await client.connect();
   try {
     const list = await client.list();
-    const allPaths = list.map((m) => m.path);
-    const skip = new Set(['Sent', 'Drafts', 'Junk', 'Trash']);
+    const allPaths = list.filter((m) => !m.flags?.has('\\Noselect')).map((m) => m.path);
+    const leaf = (p: string) => p.split(/[./]/).pop() ?? p;
     // un nom de dossier fourni par l'appelant (ex. PROCESSED_MAILBOX) peut différer du chemin
     // IMAP réel selon le séparateur du serveur ("INBOX.Traité par JJD App" chez certains) —
     // on le résout contre la liste réelle (égalité ou suffixe) avant de verrouiller le dossier
     const targets = folders
       ? folders.map((f) => allPaths.find((p) => p === f || p.endsWith(f)) ?? f)
-      : allPaths.filter((p) => !skip.has(p) && !p.includes(PROCESSED_MAILBOX));
+      : allPaths.filter((p) => !SKIP_FOLDER_RE.test(leaf(p)) && !p.includes(PROCESSED_MAILBOX));
 
     for (const path of targets) {
       const lock = await client.getMailboxLock(path).catch(() => null);
       if (!lock) { stats.errors.push(`dossier introuvable : ${path}`); continue; }
       stats.folders++;
       try {
-        const uids = await client.search({ all: true }, { uid: true });
-        for (const uid of uids as number[]) {
+        const uids = await client.search(opts.since ? { since: opts.since } : { all: true }, { uid: true });
+        for (const uid of (uids || []) as number[]) {
           stats.messagesScanned++;
           try {
             const msg = (await client.fetchOne(String(uid), { source: true, envelope: true }, { uid: true })) as FetchMessageObject | false;
             if (!msg || !msg.source) continue;
             const parsed = await simpleParser(msg.source);
+            const when = parsed.date ? parsed.date.toLocaleDateString('fr-BE') : '?';
+            const from = parsed.from?.text ? ` de ${parsed.from.text.slice(0, 80)}` : '';
             for (const att of parsed.attachments) {
               if (att.contentType !== 'application/pdf') continue;
               if (att.filename && NON_INVOICE_ATTACHMENT_RE.test(att.filename)) continue;
               stats.pdfsFound++;
-              const {receipt,existing}=await importEmailPdf(att.content,att.filename||'facture.pdf');
+              const {receipt,existing}=await importEmailPdf(att.content,att.filename||'facture.pdf',
+                `Historique de la boîte (dossier « ${leaf(path)} », mail du ${when}${from}) : à vérifier.`);
               if(existing) stats.alreadyInSystem++;
               else { stats.created++; if(receipt.status==='review') stats.unreliableExtraction++; }
               if(receipt.ledgerEntryId) await scanEntryForRefs(receipt.ledgerEntryId).catch(()=>{});
-
             }
           } catch (e) {
             stats.errors.push(`${path} uid ${uid} : ${(e as Error).message}`);
           }
+          opts.onProgress?.(stats, path);
         }
       } finally {
         lock.release();
@@ -263,6 +276,20 @@ export async function scanInvoiceMailboxHistory(folders?: string[]): Promise<Sca
     await client.logout().catch(() => client.close());
   }
   return stats;
+}
+
+/** Import de l'historique lancé depuis l'app : une seule exécution à la fois, en tâche de fond, avec son avancement. */
+export interface HistoryJob { running: boolean; since: string | null; startedAt: string | null; finishedAt: string | null; folder: string | null; stats: ScanStats | null; error: string | null }
+const historyJob: HistoryJob = { running: false, since: null, startedAt: null, finishedAt: null, folder: null, stats: null, error: null };
+export function historyJobStatus(): HistoryJob { return { ...historyJob, stats: historyJob.stats ? { ...historyJob.stats, errors: historyJob.stats.errors.slice(-20) } : null }; }
+export function startHistoryImport(since: Date | null): HistoryJob {
+  if (historyJob.running) return historyJobStatus();
+  Object.assign(historyJob, { running: true, since: since ? since.toISOString().slice(0, 10) : null, startedAt: new Date().toISOString(), finishedAt: null, folder: null, stats: null, error: null });
+  void scanInvoiceMailboxHistory(undefined, { since, onProgress: (s, folder) => { historyJob.stats = s; historyJob.folder = folder; } })
+    .then((s) => { historyJob.stats = s; })
+    .catch((e) => { historyJob.error = (e as Error).message; })
+    .finally(() => { historyJob.running = false; historyJob.finishedAt = new Date().toISOString(); historyJob.folder = null; });
+  return historyJobStatus();
 }
 
 export interface ReprocessStats {

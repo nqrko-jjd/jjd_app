@@ -75,6 +75,14 @@ test('un document ignoré (conditions générales, rappel) sort de la liste et n
   await assert.rejects(ignorePurchaseReceipt(cg.id,null,user.id));
   await prisma.auditLog.deleteMany({where:{entity:'purchaseReceipt',entityId:cg.id}});
 });
+test('import de l\'historique : jamais de dépense créée, un achat retrouvé avec certitude reçoit seulement le PDF',async()=>{
+  const fresh=await receivePurchase({sourceRef:prefix+'hist-new',source:'email',data:data(prefix+'HIST'),pdfPath:'/uploads/h.pdf',reviewOnly:'Historique : à vérifier.'});
+  assert.equal(fresh.status,'review');assert.equal(fresh.ledgerEntryId,null);assert.equal(fresh.reason,'Historique : à vérifier.');
+  assert.equal(await prisma.ledgerEntry.count({where:{docNumber:prefix+'HIST'}}),0);
+  const known=await receive('hist-known-src',data(prefix+'HIST2'));
+  const again=await receivePurchase({sourceRef:prefix+'hist-known',source:'email',data:data(prefix+'HIST2'),pdfPath:'/uploads/h2.pdf',reviewOnly:'Historique : à vérifier.'});
+  assert.equal(again.status,'imported');assert.equal(again.ledgerEntryId,known.ledgerEntryId);
+});
 test('legacy invoice without imported receipt is matched by supplier VAT without altering payments',async()=>{
   const row=await prisma.ledgerEntry.create({data:{direction:'purchase',docNumber:prefix+'LEGACY',contactId,supplierName:prefix,date:new Date('2026-10-15'),ht:100,ttc:121,paymentStatus:'Payé'}});
   ids.push(row.id);

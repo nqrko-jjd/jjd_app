@@ -432,7 +432,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
                 </label>
                 <label className="field" style={{ gridColumn: '1 / -1' }}>
                   <span>Adresse de facturation</span>
-                  <textarea className="input" rows={2} value={doc.billingAddress ?? ''} onChange={(e) => patch({ billingAddress: e.target.value || null })} placeholder={doc.contact?.address ?? ''} />
+                  <textarea className="input" rows={2} value={doc.billingAddress ?? ''} onChange={(e) => patch({ billingAddress: e.target.value || null })} placeholder={doc.billingAddressEffective ?? doc.contact?.address ?? ''} />
                 </label>
                 <label className="field">
                   <span>Contact / e-mail de facturation</span>

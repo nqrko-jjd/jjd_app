@@ -66,6 +66,8 @@ export interface DocFull {
   billingName: string | null;
   billingVat: string | null;
   billingAddress: string | null;
+  /** adresse réellement imprimée : celle du document, sinon « c/o syndic + adresse » ou l'adresse du client (calculée par l'API) */
+  billingAddressEffective?: string | null;
   billingEmail: string | null;
   customerRef: string | null;
   poNumber?: string | null;

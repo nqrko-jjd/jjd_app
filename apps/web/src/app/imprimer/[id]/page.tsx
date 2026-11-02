@@ -44,10 +44,10 @@ export default function PrintDocument({ params }: { params: Promise<{ id: string
   const title = DOC_KIND_LABEL[d.kind];
   const ref = d.number ?? d.draftRef ?? '';
   const clientName = d.billingName ?? d.contact?.name ?? '';
-  const clientAddr = d.billingAddress ?? [
+  const clientAddr = addressLines(d.billingAddressEffective ?? d.billingAddress ?? [
     [d.contact?.address, d.contact?.box && `bte ${d.contact.box}`].filter(Boolean).join(' '),
     [d.contact?.postalCode, d.contact?.city].filter(Boolean).join(' '),
-  ].filter(Boolean).join(', ');
+  ].filter(Boolean).join(', '));
   const clientVat = d.billingVat ?? d.contact?.vat;
   const hasDiscount = items.some((l) => l.kind === 'item' && l.discountPct > 0);
   // mention légale spécifique (taux réduit 6% habitation, autoliquidation 0%…), une fois par taux présent
@@ -86,7 +86,7 @@ export default function PrintDocument({ params }: { params: Promise<{ id: string
           <div className="bill-to">
             <div className="lbl">Adressé à</div>
             <div className="party-name">{clientName || '—'}</div>
-            {clientAddr && <div>{clientAddr}</div>}
+            {clientAddr.map((l, i) => <div key={i}>{l}</div>)}
             {clientVat && <div>TVA {clientVat}</div>}
             {d.billingEmail && <div>{d.billingEmail}</div>}
           </div>
@@ -286,3 +286,16 @@ const CSS = `
   .toolbar button { padding: 8px 14px; border: 1px solid #173f34; background: #173f34; color: #fff; border-radius: 8px; font-size: 12px; cursor: pointer; }
   @media print { .sheet { padding: 0; max-width: none; } .no-print { display: none !important; } }
 `;
+
+/** Adresse en lignes, comme sur le PDF (voir addressLines côté API, lib/pdf.ts) : « c/o Syndic » / rue / code postal + ville. */
+function addressLines(raw: string | null | undefined): string[] {
+  const text = (raw ?? '').trim();
+  if (!text) return [];
+  if (/\r?\n/.test(text)) return text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const co = /^(c\/o\s[^,]+),\s*(.+)$/i.exec(text);
+  const head = co ? [co[1]!.trim()] : [];
+  const rest = co ? co[2]!.trim() : text;
+  const m = /^(.*?)\s*[,\-–]?\s*(\d{4,5}\s+[^,]+?)\s*$/.exec(rest);
+  if (m && m[1]!.trim()) return [...head, m[1]!.trim(), m[2]!.trim()];
+  return [...head, ...rest.split(',').map((x) => x.trim()).filter(Boolean)];
+}

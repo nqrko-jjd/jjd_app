@@ -16,3 +16,8 @@ test('adresse sur le PDF : « c/o syndic » sur sa propre ligne', () => {
   assert.deepEqual(addressLines('c/o Baltimo, Av. Albert Elizabeth 62, Woluwe'), ['c/o Baltimo', 'Av. Albert Elizabeth 62', 'Woluwe'], 'sans code postal : une ligne par morceau');
   assert.deepEqual(addressLines('c/o Baltimo, Bruxelles'), ['c/o Baltimo', 'Bruxelles']);
 });
+
+test('adresse sur le PDF : séparateur « - » avant le code postal', () => {
+  assert.deepEqual(addressLines('Drève Richelle 156 - 1410 Waterloo'), ['Drève Richelle 156', '1410 Waterloo']);
+  assert.deepEqual(addressLines('c/o Baltimo, Avenue des Rossignols 5, 1310 La Hulpe'), ['c/o Baltimo', 'Avenue des Rossignols 5', '1310 La Hulpe']);
+});

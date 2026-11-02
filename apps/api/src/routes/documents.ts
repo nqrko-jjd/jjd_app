@@ -13,7 +13,7 @@ import { insensitive } from '../lib/search.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, OFFICE } from '../lib/auth.js';
 import { z } from 'zod';
-import { docInclude, buildLineRows, cloneLineRows, refreshDocTotals, issueDocument, getCompany, syncLedgerEntryForDocument, creditedTtc, partialCreditLines, applyCreditToParent } from '../lib/documents.js';
+import { docInclude, buildLineRows, cloneLineRows, refreshDocTotals, issueDocument, getCompany, syncLedgerEntryForDocument, creditedTtc, partialCreditLines, applyCreditToParent, effectiveBillingAddress } from '../lib/documents.js';
 import { renderDocumentPdf } from '../lib/pdf.js';
 import { sendViaPeppol, refreshPeppolStatus } from '../lib/peppol.js';
 import { emailInput, defaultEmail, sendEmailWithPdf, emailConfigured } from '../lib/doc-mail.js';
@@ -47,7 +47,8 @@ export async function getDocPdfBuffer(docId: string): Promise<{ buffer: Buffer; 
     if (existsSync(file)) return { buffer: readFileSync(file), filename };
   }
   const company = await getCompany();
-  const buffer = await renderDocumentPdf(doc, company);
+  // c/o du syndic + son adresse, même sur un brouillon ou un document importé sans adresse de facturation
+  const buffer = await renderDocumentPdf({ ...doc, billingAddress: await effectiveBillingAddress(doc) }, company);
   return { buffer, filename };
 }
 
@@ -337,7 +338,8 @@ documentsRouter.get(
     // devis signé en ligne : nom, date et heure, empreinte du PDF signé (affichés sur le devis imprimé / en PDF)
     const signed = doc.kind === 'quote' ? await prisma.quoteSignature.findFirst({ where: { documentId: doc.id, status: 'signed' }, orderBy: { signedAt: 'desc' } }) : null;
     const eSignature = signed?.signedAt ? { signerName: signed.signerName, signedAt: signed.signedAt, pdfHash: signed.pdfHash } : undefined;
-    res.json({ document: { ...doc, hasBankMatch: payments.length > 0, payments, billing, margin, eSignature }, company });
+    const billingAddressEffective = await effectiveBillingAddress(doc); // affichage / impression (c/o syndic inclus)
+    res.json({ document: { ...doc, billingAddressEffective, hasBankMatch: payments.length > 0, payments, billing, margin, eSignature }, company });
   }),
 );
 

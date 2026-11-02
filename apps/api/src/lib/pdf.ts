@@ -56,7 +56,7 @@ export function addressLines(raw: string | null | undefined): string[] {
   const co = /^(c\/o\s[^,]+),\s*(.+)$/i.exec(text);
   const head = co ? [co[1]!.trim()] : [];
   const rest = co ? co[2]!.trim() : text;
-  const m = /^(.*?),?\s*(\d{4,5}\s+[^,]+?)\s*$/.exec(rest) ?? /^(.*?),\s*(\d{4,5})\s*$/.exec(rest); // 2e forme : code postal seul, après une virgule
+  const m = /^(.*?)\s*[,\-–]?\s*(\d{4,5}\s+[^,]+?)\s*$/.exec(rest) ?? /^(.*?),\s*(\d{4,5})\s*$/.exec(rest); // 2e forme : code postal seul, après une virgule
   if (m && m[1]!.trim()) return [...head, m[1]!.trim(), m[2]!.trim()];
   return co ? [...head, ...rest.split(',').map((s) => s.trim()).filter(Boolean)] : [text];
 }

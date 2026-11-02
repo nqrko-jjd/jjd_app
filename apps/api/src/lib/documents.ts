@@ -119,6 +119,39 @@ export async function refreshDocTotals(documentId: string) {
  * et par année), fige l'instantané client, calcule échéance + communication
  * structurée pour les factures, pose le verrou.
  */
+const joinAddress = (c: { address: string | null; box: string | null; postalCode: string | null; city: string | null } | null | undefined) =>
+  c ? [[c.address, c.box && `bte ${c.box}`].filter(Boolean).join(' '), [c.postalCode, c.city].filter(Boolean).join(' ').trim()].filter(Boolean).join(', ') : '';
+
+/**
+ * Adresse de facturation par défaut d'un client. Une ACP (ou un projet de promoteur) gérée par un syndic est facturée
+ * au siège du syndic : « c/o Baltimo, Avenue des Rossignols 5, 1310 La Hulpe ». L'adresse du syndic est lue sur sa
+ * fiche contact (type « syndic », reliée au même syndic) — c'est là qu'elle est saisie ; la fiche Syndic interne n'en
+ * a généralement pas. Jamais l'adresse de l'immeuble : sans adresse de syndic connue, seul « c/o Syndic » est imprimé
+ * (sa fiche contact est à compléter).
+ */
+export async function defaultBillingAddress(contactId: string | null | undefined): Promise<string | null> {
+  if (!contactId) return null;
+  const contact = await prisma.contact.findUnique({ where: { id: contactId }, select: { kind: true, address: true, box: true, postalCode: true, city: true, syndicId: true, syndic: { select: { name: true, address: true, city: true } } } });
+  if (!contact) return null;
+  const own = joinAddress(contact);
+  if (!contact.syndicId || !contact.syndic || contact.kind === 'syndic') return own || null;
+  const syndicCard = await prisma.contact.findFirst({
+    where: { kind: 'syndic', syndicId: contact.syndicId, OR: [{ address: { not: null } }, { city: { not: null } }] },
+    orderBy: { updatedAt: 'desc' },
+    select: { address: true, box: true, postalCode: true, city: true },
+  });
+  const syndicAddr = joinAddress(syndicCard) || [contact.syndic.address, contact.syndic.city].filter(Boolean).join(', ');
+  const name = contact.syndic.name.split(/\r?\n/)[0]!.trim();
+  return [`c/o ${name}`, syndicAddr].filter(Boolean).join(', ');
+}
+
+/** Adresse à imprimer : celle saisie sur le document, sauf si elle est vide ou réduite à un « c/o Syndic » sans adresse. */
+export async function effectiveBillingAddress(doc: { billingAddress: string | null; contactId: string | null }): Promise<string | null> {
+  const typed = doc.billingAddress?.trim();
+  if (typed && !/^c\/o\s[^,\n]+$/i.test(typed)) return typed;
+  return (await defaultBillingAddress(doc.contactId)) ?? typed ?? null;
+}
+
 export async function issueDocument(documentId: string, opts: { issuedOn?: Date; dueDays?: number } = {}) {
   const doc = await prisma.document.findUnique({ where: { id: documentId }, include: { contact: { include: { syndic: true } } } });
   if (!doc) throw new HttpError(404, 'Document introuvable');
@@ -134,19 +167,9 @@ export async function issueDocument(documentId: string, opts: { issuedOn?: Date;
     ? belgianStructuredComm(year * 100000 + seq)
     : null;
 
-  const contactAddress =
-    [
-      [doc.contact?.address, doc.contact?.box && `bte ${doc.contact.box}`].filter(Boolean).join(' '),
-      [doc.contact?.postalCode, doc.contact?.city].filter(Boolean).join(' ').trim(),
-    ]
-      .filter(Boolean)
-      .join(', ');
   // L'ACP a une adresse (le chantier, là où on intervient) mais la facture part au
-  // siège du syndic qui la gère — d'où la mention « c/o Baltimo » / « c/o Kadaner ».
-  const syndic = doc.contact?.syndic;
-  const syndicAddress = syndic
-    ? [`c/o ${syndic.name}`, syndic.address, syndic.city].filter(Boolean).join(', ')
-    : null;
+  // siège du syndic qui la gère — d'où la mention « c/o Baltimo » / « c/o Kadaner » (voir defaultBillingAddress).
+  const billingAddress = await effectiveBillingAddress(doc);
 
   const updated = await prisma.document.update({
     where: { id: documentId },
@@ -161,7 +184,7 @@ export async function issueDocument(documentId: string, opts: { issuedOn?: Date;
       status: 'sent',
       billingName: doc.billingName ?? doc.contact?.name ?? null,
       billingVat: doc.billingVat ?? doc.contact?.vat ?? null,
-      billingAddress: doc.billingAddress ?? (syndicAddress || contactAddress || null),
+      billingAddress,
     },
     include: docInclude,
   });

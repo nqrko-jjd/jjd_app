@@ -43,6 +43,9 @@ export const env = {
   /** Traceurs PAJ GPS (compte du portail PAJ Finder). Sans identifiants = suivi GPS désactivé. */
   pajEmail: (process.env.PAJ_EMAIL ?? '').trim(),
   pajPassword: process.env.PAJ_PASSWORD ?? '',
+  /** Traccar auto-hébergé (boîtiers SinoTrack sans abonnement) : adresse interne + jeton d'API. Sans les deux = désactivé. */
+  traccarUrl: (process.env.TRACCAR_URL ?? '').trim(),
+  traccarToken: (process.env.TRACCAR_TOKEN ?? '').trim(),
 
   /** Envoi de documents par e-mail (SMTP de la boîte JJD, ex. info@jjd-consult.be). Sans identifiants = envoi par e-mail désactivé. */
   smtp: {

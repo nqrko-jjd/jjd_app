@@ -6,9 +6,12 @@
 import { prisma } from '../db.js';
 import { env } from '../env.js';
 import { HttpError } from './http.js';
+import { isTraccarId, lastTraccarPoint, listTraccarDevices, traccarConfigured, traccarPointsBetween } from './traccar.js';
 
 const BASE = 'https://connect.paj-gps.de/api/v1';
 export const pajConfigured = () => !!(env.pajEmail && env.pajPassword);
+/** Au moins une source de positions : PAJ et/ou Traccar (boîtiers SinoTrack, identifiants « tc:… »). */
+export const gpsConfigured = () => pajConfigured() || traccarConfigured();
 
 let session: { token: string; expires: number } | null = null;
 /** Tests : remplace la session (ou la vide). */
@@ -46,6 +49,11 @@ const arr = (v: unknown): Record<string, unknown>[] => Array.isArray(v) ? v as R
 export interface PajDevice { id: string; name: string }
 /** Traceurs du compte PAJ (pour les relier aux véhicules). Lecture tolérante : la forme exacte de la réponse n'est pas figée côté PAJ. */
 export async function listPajDevices(): Promise<PajDevice[]> {
+  const tc = traccarConfigured() ? await listTraccarDevices() : [];
+  if (!pajConfigured()) return tc;
+  return [...(await listPajOnly()), ...tc];
+}
+async function listPajOnly(): Promise<PajDevice[]> {
   const body = await authed('/device') as Record<string, unknown> | unknown[] | null;
   const rows = Array.isArray(body) ? arr(body) : arr((body as Record<string, unknown> | null)?.success ?? (body as Record<string, unknown> | null)?.data);
   return rows.map((d) => ({ id: String(d.id ?? d.device_id ?? ''), name: String(d.name ?? d.device_name ?? d.imei ?? d.id ?? '') })).filter((d) => d.id);
@@ -53,6 +61,7 @@ export async function listPajDevices(): Promise<PajDevice[]> {
 
 export interface PajPoint { lat: number; lng: number; at: Date; speed: number | null; battery: number | null }
 export async function lastPajPoint(deviceId: string): Promise<PajPoint | null> {
+  if (isTraccarId(deviceId)) return lastTraccarPoint(deviceId);
   const body = await authed(`/trackerdata/${encodeURIComponent(deviceId)}/last_points?lastPoints=1&gps=1&wifi=0`) as { success?: unknown } | null;
   const p = arr(body?.success)[0];
   if (!p) return null;
@@ -63,6 +72,7 @@ export async function lastPajPoint(deviceId: string): Promise<PajPoint | null> {
 
 /** Historique des points GPS d'un traceur entre deux dates (lecture seule), du plus ancien au plus récent. */
 export async function pajPointsBetween(deviceId: string, from: Date, to: Date): Promise<{ lat: number; lng: number; at: Date; speed: number | null }[]> {
+  if (isTraccarId(deviceId)) return traccarPointsBetween(deviceId, from, to);
   const q = `dateStart=${Math.floor(from.getTime() / 1000)}&dateEnd=${Math.floor(to.getTime() / 1000)}`;
   const body = await authed(`/trackerdata/${encodeURIComponent(deviceId)}/date_range?${q}`) as { success?: unknown } | null;
   return arr(body?.success)
@@ -73,7 +83,7 @@ export async function pajPointsBetween(deviceId: string, from: Date, to: Date): 
 
 /** Met à jour la dernière position connue de chaque véhicule relié à un traceur. Un échec sur un traceur n'arrête pas les autres. */
 export async function syncVehiclePositions(): Promise<number> {
-  if (!pajConfigured()) return 0;
+  if (!gpsConfigured()) return 0;
   const vehicles = await prisma.vehicle.findMany({ where: { active: true, pajDeviceId: { not: null } }, select: { id: true, pajDeviceId: true } });
   let n = 0;
   for (const v of vehicles) {

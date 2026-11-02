@@ -46,6 +46,9 @@ services:
       # Traceurs PAJ GPS (suivi des véhicules, avis d'arrivée aux clients) — vide = désactivé
       PAJ_EMAIL: ${PAJ_EMAIL:-}
       PAJ_PASSWORD: ${PAJ_PASSWORD:-}
+      # Traccar auto-hébergé (docker-compose.traccar.yml) pour les boîtiers SinoTrack — vide = désactivé
+      TRACCAR_URL: ${TRACCAR_URL:-}
+      TRACCAR_TOKEN: ${TRACCAR_TOKEN:-}
       # Assistant IA (chat, brouillons) — laisser vide tant que non configuré
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       # Envoi de documents par e-mail (SMTP de la boîte JJD) — vide = désactivé

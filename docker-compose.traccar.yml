@@ -1,0 +1,32 @@
+# Traccar (serveur de suivi GPS libre) pour les boîtiers SinoTrack ST-903 (protocole H02).
+# Pile SÉPARÉE de docker-compose.prod.yml : elle n'est PAS lancée par le déploiement automatique.
+# Lancement (une seule fois, depuis /opt/jjd sur le VPS) :
+#   docker compose -f docker-compose.traccar.yml up -d
+#
+# Seul le port 5013 (boîtiers → serveur) est ouvert vers Internet. L'interface web (8082) n'écoute
+# que sur le VPS lui-même : on y accède par tunnel SSH (ssh -L 8082:localhost:8082 bricoloc-vps).
+# L'API JJD joint Traccar par le réseau Docker partagé « edge » (http://jjd-traccar:8082).
+# Les boîtiers inconnus sont refusés : chaque boîtier doit être déclaré dans Traccar (identifiant = ID du boîtier).
+
+name: jjd-traccar
+
+services:
+  traccar:
+    image: traccar/traccar:6.17.0
+    container_name: jjd-traccar
+    restart: unless-stopped
+    ports:
+      - '5013:5013'
+      - '127.0.0.1:8082:8082'
+    volumes:
+      - traccar-data:/opt/traccar/data
+      - traccar-logs:/opt/traccar/logs
+    networks: [edge]
+
+volumes:
+  traccar-data:
+  traccar-logs:
+
+networks:
+  edge:
+    external: true

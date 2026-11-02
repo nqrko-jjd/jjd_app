@@ -4,7 +4,7 @@ import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, OFFICE } from '../lib/auth.js';
 import { emailConfigured } from '../lib/doc-mail.js';
-import { listPajDevices, pajConfigured, pajPointsBetween, syncVehiclePositions } from '../lib/paj.js';
+import { gpsConfigured, listPajDevices, pajPointsBetween, syncVehiclePositions } from '../lib/paj.js';
 import { siteVisit, summarizeDay } from '../lib/gps-day.js';
 import { computeArrivals, getArrivalSettings, saveArrivalSettings } from '../lib/arrival-notices.js';
 
@@ -34,7 +34,7 @@ gpsRouter.get(
     const events = await prisma.planningEvent.findMany({ where: { id: { in: history.map((h) => h.eventId) } }, select: { id: true, startAt: true, worksite: { select: { ref: true, client: { select: { name: true } } } } } });
     const byId = new Map(events.map((e) => [e.id, e]));
     res.json({
-      pajConfigured: pajConfigured(), emailConfigured: emailConfigured(), vehicles, sites, settings, arrivals,
+      pajConfigured: gpsConfigured(), emailConfigured: emailConfigured(), vehicles, sites, settings, arrivals,
       history: history.map((h) => ({ id: h.id, status: h.status, toEmail: h.toEmail, etaMinutes: h.etaMinutes, sentAt: h.sentAt, error: h.error, createdAt: h.createdAt, event: byId.get(h.eventId) ?? null })),
     });
   }),
@@ -70,7 +70,7 @@ gpsRouter.get(
   '/vehicles/:id/day',
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
-    if (!pajConfigured()) throw new HttpError(503, 'Le compte PAJ GPS n’est pas configuré sur le serveur.');
+    if (!gpsConfigured()) throw new HttpError(503, 'Aucune source GPS (PAJ ou Traccar) n’est configurée sur le serveur.');
     const v = await prisma.vehicle.findUnique({ where: { id: req.params.id }, select: { pajDeviceId: true } });
     if (!v?.pajDeviceId) throw new HttpError(404, 'Ce véhicule n’a pas de traceur.');
     const from = new Date(); from.setHours(0, 0, 0, 0);
@@ -83,7 +83,7 @@ gpsRouter.get(
   '/day-arrivals',
   requireAuth(...OFFICE),
   asyncHandler(async (_req, res) => {
-    if (!pajConfigured()) throw new HttpError(503, 'Le compte PAJ GPS n’est pas configuré sur le serveur.');
+    if (!gpsConfigured()) throw new HttpError(503, 'Aucune source GPS (PAJ ou Traccar) n’est configurée sur le serveur.');
     const from = new Date(); from.setHours(0, 0, 0, 0);
     const events = await prisma.planningEvent.findMany({
       where: { kind: 'intervention', startAt: { gte: from, lt: new Date(from.getTime() + 86_400_000) }, vehicles: { some: {} }, worksite: { lat: { not: null }, lng: { not: null } } },
@@ -106,7 +106,7 @@ gpsRouter.post(
   '/refresh',
   requireAuth(...OFFICE),
   asyncHandler(async (_req, res) => {
-    if (!pajConfigured()) throw new HttpError(503, 'Le compte PAJ GPS n’est pas configuré sur le serveur.');
+    if (!gpsConfigured()) throw new HttpError(503, 'Aucune source GPS (PAJ ou Traccar) n’est configurée sur le serveur.');
     res.json({ updated: await syncVehiclePositions() });
   }),
 );

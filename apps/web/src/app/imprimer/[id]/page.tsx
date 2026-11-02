@@ -2,7 +2,7 @@
 import { use, useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { formatEur, formatDateBE } from '@/lib/ui';
-import { DOC_KIND_LABEL, type DocFull, type Company } from '@/lib/doc-ui';
+import { DOC_KIND_LABEL, addressLines, type DocFull, type Company } from '@/lib/doc-ui';
 import { computeDocTotals, vatLegalNotes, DOCUMENT_LOGO, DOCUMENT_TERMS, DEPOSIT_TRIGGERS } from '@jjd/shared';
 
 export default function PrintDocument({ params }: { params: Promise<{ id: string }> }) {
@@ -287,15 +287,3 @@ const CSS = `
   @media print { .sheet { padding: 0; max-width: none; } .no-print { display: none !important; } }
 `;
 
-/** Adresse en lignes, comme sur le PDF (voir addressLines côté API, lib/pdf.ts) : « c/o Syndic » / rue / code postal + ville. */
-function addressLines(raw: string | null | undefined): string[] {
-  const text = (raw ?? '').trim();
-  if (!text) return [];
-  if (/\r?\n/.test(text)) return text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-  const co = /^(c\/o\s[^,]+),\s*(.+)$/i.exec(text);
-  const head = co ? [co[1]!.trim()] : [];
-  const rest = co ? co[2]!.trim() : text;
-  const m = /^(.*?)\s*[,\-–]?\s*(\d{4,5}\s+[^,]+?)\s*$/.exec(rest);
-  if (m && m[1]!.trim()) return [...head, m[1]!.trim(), m[2]!.trim()];
-  return [...head, ...rest.split(',').map((x) => x.trim()).filter(Boolean)];
-}

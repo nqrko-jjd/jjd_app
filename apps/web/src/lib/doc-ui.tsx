@@ -89,3 +89,16 @@ export interface Company {
   quoteTerms: string; invoiceTerms: string;
   vatNote6: string; vatNote0: string;
 }
+
+/** Adresse en lignes, comme sur le PDF (voir addressLines côté API, lib/pdf.ts) : « c/o Syndic » / rue / code postal + ville. */
+export function addressLines(raw: string | null | undefined): string[] {
+  const text = (raw ?? '').trim();
+  if (!text) return [];
+  if (/\r?\n/.test(text)) return text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const co = /^(c\/o\s[^,]+),\s*(.+)$/i.exec(text);
+  const head = co ? [co[1]!.trim()] : [];
+  const rest = co ? co[2]!.trim() : text;
+  const m = /^(.*?)\s*[,\-–]?\s*(\d{4,5}\s+[^,]+?)\s*$/.exec(rest);
+  if (m && m[1]!.trim()) return [...head, m[1]!.trim(), m[2]!.trim()];
+  return [...head, ...rest.split(',').map((x) => x.trim()).filter(Boolean)];
+}

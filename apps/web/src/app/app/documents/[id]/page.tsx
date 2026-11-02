@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { api, apiDownload } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { formatEur, formatDateBE } from '@/lib/ui';
-import { DocStatusBadge, DOC_KIND_LABEL, type DocFull, type DocLine } from '@/lib/doc-ui';
+import { DocStatusBadge, DOC_KIND_LABEL, addressLines, type DocFull, type DocLine } from '@/lib/doc-ui';
 import { ContactPicker } from '@/components/ContactPicker';
 import { AssigneePicker } from '@/components/AssigneePicker';
 import { WorksitePicker, type WsPickerOption } from '@/components/WorksitePicker';
@@ -416,29 +416,63 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
               </label>
             )}
 
+            {/* Ce qui sera imprimé dans « Adressé à » : vient de la fiche client (c/o du syndic pour une ACP) ;
+                le bloc ci-dessous ne sert qu'à facturer, pour CE document, quelqu'un d'autre que le client. */}
+            {(() => {
+              const custom = !!(doc.billingName || doc.billingVat || doc.billingAddress || doc.billingEmail);
+              const name = doc.billingName ?? doc.contact?.name ?? '';
+              const addr = addressLines(doc.billingAddress || doc.billingAddressEffective || null);
+              const coOnly = addr.length === 1 && /^c\/o\s/i.test(addr[0]!);
+              return (
+                <div className="doc-billing-preview" style={{ marginTop: '0.9rem', padding: '0.7rem 0.9rem', border: '1px solid var(--line, #ddd)', borderRadius: 8 }}>
+                  <div className="row" style={{ gap: '0.5rem', alignItems: 'baseline', flexWrap: 'wrap' }}>
+                    <strong>Adressé à</strong>
+                    <span className="muted" style={{ fontSize: '0.8rem' }}>{custom ? 'coordonnées personnalisées pour ce document' : 'automatique, d’après la fiche du client'}</span>
+                  </div>
+                  {name ? <div style={{ marginTop: 4 }}>{name}</div> : <div className="muted" style={{ marginTop: 4 }}>Choisissez d’abord le client.</div>}
+                  {addr.map((l, i) => <div key={i}>{l}</div>)}
+                  {(doc.billingVat ?? doc.contact?.vat) && <div className="muted">TVA {doc.billingVat ?? doc.contact?.vat}</div>}
+                  {doc.contact && !custom && (addr.length === 0 || coOnly) && (
+                    <div className="badge warn" style={{ marginTop: 6 }}>{coOnly ? 'Adresse du syndic manquante : complétez sa fiche contact.' : 'Adresse manquante : complétez la fiche du client.'}</div>
+                  )}
+                </div>
+              );
+            })()}
+
             <button type="button" className="doc-billing-toggle" onClick={() => setBillingOpen((o) => !o)}>
-              {billingOpen ? '▾' : '▸'} Coordonnées de facturation
-              <span className="doc-billing-note">indépendantes de l’adresse du chantier</span>
+              {billingOpen ? '▾' : '▸'} Facturer quelqu’un d’autre que le client
+              <span className="doc-billing-note">uniquement si c’est différent de la fiche client — sinon, ne rien remplir</span>
             </button>
             {billingOpen && (
-              <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', marginTop: '0.7rem' }}>
-                <label className="field">
-                  <span>Nom / raison sociale à facturer</span>
-                  <input className="input" value={doc.billingName ?? ''} onChange={(e) => patch({ billingName: e.target.value || null })} placeholder={doc.contact?.name ?? 'Nom du client'} />
-                </label>
-                <label className="field">
-                  <span>TVA à facturer</span>
-                  <input className="input" value={doc.billingVat ?? ''} onChange={(e) => patch({ billingVat: e.target.value || null })} placeholder={doc.contact?.vat ?? 'BE0…'} />
-                </label>
-                <label className="field" style={{ gridColumn: '1 / -1' }}>
-                  <span>Adresse de facturation</span>
-                  <textarea className="input" rows={2} value={doc.billingAddress ?? ''} onChange={(e) => patch({ billingAddress: e.target.value || null })} placeholder={doc.billingAddressEffective ?? doc.contact?.address ?? ''} />
-                </label>
-                <label className="field">
-                  <span>Contact / e-mail de facturation</span>
-                  <input className="input" type="email" value={doc.billingEmail ?? ''} onChange={(e) => patch({ billingEmail: e.target.value || null })} placeholder={doc.contact?.email ?? ''} />
-                </label>
-              </div>
+              <>
+                <p className="muted" style={{ fontSize: '0.84rem', margin: '0.5rem 0 0' }}>
+                  Ces champs remplacent, pour ce document seulement, les coordonnées de la fiche client
+                  {doc.billingAddressEffective && /^c\/o\s/i.test(doc.billingAddressEffective) ? ' (y compris le « c/o » du syndic)' : ''}. Laissez-les vides dans tous les autres cas.
+                </p>
+                <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', marginTop: '0.7rem' }}>
+                  <label className="field">
+                    <span>Autre nom / raison sociale</span>
+                    <input className="input" value={doc.billingName ?? ''} onChange={(e) => patch({ billingName: e.target.value || null })} placeholder={doc.contact?.name ?? 'Nom du client'} />
+                  </label>
+                  <label className="field">
+                    <span>Autre n° de TVA</span>
+                    <input className="input" value={doc.billingVat ?? ''} onChange={(e) => patch({ billingVat: e.target.value || null })} placeholder={doc.contact?.vat ?? 'BE0…'} />
+                  </label>
+                  <label className="field" style={{ gridColumn: '1 / -1' }}>
+                    <span>Autre adresse de facturation</span>
+                    <textarea className="input" rows={3} value={doc.billingAddress ?? ''} onChange={(e) => patch({ billingAddress: e.target.value || null })} placeholder={doc.billingAddressEffective ?? doc.contact?.address ?? ''} />
+                  </label>
+                  <label className="field">
+                    <span>Autre e-mail de facturation</span>
+                    <input className="input" type="email" value={doc.billingEmail ?? ''} onChange={(e) => patch({ billingEmail: e.target.value || null })} placeholder={doc.contact?.email ?? ''} />
+                  </label>
+                </div>
+                {(doc.billingName || doc.billingVat || doc.billingAddress || doc.billingEmail) && (
+                  <button type="button" className="btn ghost" style={{ marginTop: '0.5rem' }} onClick={() => patch({ billingName: null, billingVat: null, billingAddress: null, billingEmail: null })}>
+                    Revenir aux coordonnées de la fiche client
+                  </button>
+                )}
+              </>
             )}
           </div>
 

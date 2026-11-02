@@ -26,7 +26,7 @@ export default function FleetMap({ vehicles, sites, focusId }: { vehicles: MapVe
       if (!mapRef.current) {
         mapRef.current = L.map(el.current, { zoomControl: false, attributionControl: true }).setView([50.85, 4.35], 11);
         L.control.zoom({ position: 'bottomright' }).addTo(mapRef.current);
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { maxZoom: 19, subdomains: 'abcd', attribution: '© OpenStreetMap · © CARTO' }).addTo(mapRef.current);
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(mapRef.current);
         layerRef.current = L.layerGroup().addTo(mapRef.current);
       }
       const layer = layerRef.current!;

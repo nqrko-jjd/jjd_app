@@ -8,10 +8,11 @@ export interface MapSite { id: string; label: string; lat: number; lng: number; 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
 /**
- * Carte (fond CARTO / OpenStreetMap) : véhicules suivis en pastille verte qui pulse (grise si la position est ancienne),
- * chantiers du jour en repère doré, trait pointillé véhicule → chantier. `focusId` recentre la carte sur un véhicule ou un chantier.
+ * Carte (fond OpenStreetMap) : véhicules suivis en pastille verte qui pulse (grise si la position est ancienne),
+ * chantiers du jour en repère doré, trait pointillé véhicule → chantier. `focusId` recentre la carte sur un véhicule ou un chantier ;
+ * `track` dessine le parcours du jour du véhicule sélectionné.
  */
-export default function FleetMap({ vehicles, sites, focusId }: { vehicles: MapVehicle[]; sites: MapSite[]; focusId?: string | null }) {
+export default function FleetMap({ vehicles, sites, focusId, track }: { vehicles: MapVehicle[]; sites: MapSite[]; focusId?: string | null; track?: [number, number][] | null }) {
   const el = useRef<HTMLDivElement>(null);
   const mapRef = useRef<import('leaflet').Map | null>(null);
   const layerRef = useRef<import('leaflet').LayerGroup | null>(null);
@@ -42,6 +43,7 @@ export default function FleetMap({ vehicles, sites, focusId }: { vehicles: MapVe
         }
         L.marker([s.lat, s.lng], { icon: L.divIcon({ className: 'fm-wrap', html: `<div class="fm-site"><span class="fm-pin"></span><span class="fm-lbl">${esc(s.label)}</span></div>`, iconSize: [0, 0] }), zIndexOffset: 100 }).addTo(layer);
       }
+      if (track && track.length > 1) L.polyline(track, { color: '#b8862b', weight: 3, opacity: 0.85, lineJoin: 'round' }).addTo(layer);
       for (const v of vehicles) {
         points.push([v.lat, v.lng]); coords.current.set(v.id, [v.lat, v.lng]);
         const sub = `${v.speed != null && v.speed > 2 ? `${Math.round(v.speed)} km/h · ` : ''}${v.seenAgo}`;
@@ -50,7 +52,7 @@ export default function FleetMap({ vehicles, sites, focusId }: { vehicles: MapVe
       if (!fitted.current && points.length) { mapRef.current!.fitBounds(points, { padding: [60, 60], maxZoom: 15 }); fitted.current = true; }
     })();
     return () => { cancelled = true; };
-  }, [vehicles, sites]);
+  }, [vehicles, sites, track]);
 
   useEffect(() => {
     const p = focusId ? coords.current.get(focusId) : null;

@@ -61,6 +61,16 @@ export async function lastPajPoint(deviceId: string): Promise<PajPoint | null> {
   return { lat, lng, at: new Date(unix * 1000), speed: p.speed != null && Number.isFinite(Number(p.speed)) ? Number(p.speed) : null, battery: p.battery != null && Number.isFinite(Number(p.battery)) ? Number(p.battery) : null };
 }
 
+/** Historique des points GPS d'un traceur entre deux dates (lecture seule), du plus ancien au plus récent. */
+export async function pajPointsBetween(deviceId: string, from: Date, to: Date): Promise<{ lat: number; lng: number; at: Date; speed: number | null }[]> {
+  const q = `dateStart=${Math.floor(from.getTime() / 1000)}&dateEnd=${Math.floor(to.getTime() / 1000)}`;
+  const body = await authed(`/trackerdata/${encodeURIComponent(deviceId)}/date_range?${q}`) as { success?: unknown } | null;
+  return arr(body?.success)
+    .map((p) => ({ lat: Number(p.lat), lng: Number(p.lng), at: new Date(Number(p.dateunix) * 1000), speed: p.speed != null && Number.isFinite(Number(p.speed)) ? Number(p.speed) : null }))
+    .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng) && Number.isFinite(p.at.getTime()) && !(p.lat === 0 && p.lng === 0))
+    .sort((a, b) => a.at.getTime() - b.at.getTime());
+}
+
 /** Met à jour la dernière position connue de chaque véhicule relié à un traceur. Un échec sur un traceur n'arrête pas les autres. */
 export async function syncVehiclePositions(): Promise<number> {
   if (!pajConfigured()) return 0;

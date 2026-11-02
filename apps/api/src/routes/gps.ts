@@ -4,7 +4,8 @@ import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, OFFICE } from '../lib/auth.js';
 import { emailConfigured } from '../lib/doc-mail.js';
-import { listPajDevices, pajConfigured, syncVehiclePositions } from '../lib/paj.js';
+import { listPajDevices, pajConfigured, pajPointsBetween, syncVehiclePositions } from '../lib/paj.js';
+import { summarizeDay } from '../lib/gps-day.js';
 import { computeArrivals, getArrivalSettings, saveArrivalSettings } from '../lib/arrival-notices.js';
 
 /** Suivi GPS des véhicules (traceurs PAJ) et avis d'arrivée aux clients — bureau uniquement (lib/paj.ts, lib/arrival-notices.ts). */
@@ -61,6 +62,19 @@ gpsRouter.patch(
     }
     await prisma.vehicle.update({ where: { id: v.id }, data: { pajDeviceId: pajDeviceId || null, ...(pajDeviceId ? {} : { lastLat: null, lastLng: null, lastSeenAt: null, lastSpeed: null, lastBattery: null }) } });
     res.json({ ok: true });
+  }),
+);
+
+/** Journée d'un véhicule (depuis minuit) : immobilisé depuis quand, kilomètres, première sortie, tracé. Lu à la demande chez PAJ, rien n'est stocké. */
+gpsRouter.get(
+  '/vehicles/:id/day',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    if (!pajConfigured()) throw new HttpError(503, 'Le compte PAJ GPS n’est pas configuré sur le serveur.');
+    const v = await prisma.vehicle.findUnique({ where: { id: req.params.id }, select: { pajDeviceId: true } });
+    if (!v?.pajDeviceId) throw new HttpError(404, 'Ce véhicule n’a pas de traceur.');
+    const from = new Date(); from.setHours(0, 0, 0, 0);
+    try { res.json(summarizeDay(await pajPointsBetween(v.pajDeviceId, from, new Date()))); } catch (e) { throw e instanceof HttpError ? e : new HttpError(502, `PAJ GPS : ${(e as Error).message}`); }
   }),
 );
 

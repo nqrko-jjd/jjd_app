@@ -54,3 +54,17 @@ test('arrivée chantier : premier arrêt dans le rayon, simple passage ignoré, 
 test('arrivée chantier : jamais venu', () => {
   assert.deepEqual(siteVisit([P(8, 0, 50.7, 0)], { lat: 50.85, lng: 4.4 }), { arrivedAt: null, leftAt: null });
 });
+
+test('arrêts de la journée : durée minimale, veille comptée, arrêt en cours sans fin', () => {
+  const s = summarizeDay([
+    P(7, 0, 50.80, 0), P(7, 1, 50.80, 0), P(7, 2, 50.8, 0),           // 3 min seulement : pas un arrêt
+    P(7, 3, 50.81, 40),                                               // en route
+    P(8, 0, 50.85, 0), P(11, 30, 50.85, 30),                          // arrêt 8h00 → 11h30 (le traceur dormait entre les deux)
+    P(12, 0, 50.9, 0), P(12, 20, 50.9, 0),                            // arrêt en cours depuis 12h00
+  ]);
+  assert.equal(s.stops.length, 2);
+  assert.equal(s.stops[0]!.from, t(8, 0).toISOString());
+  assert.equal(s.stops[0]!.to, t(11, 30).toISOString());
+  assert.equal(s.stops[1]!.from, t(12, 0).toISOString());
+  assert.equal(s.stops[1]!.to, null);
+});

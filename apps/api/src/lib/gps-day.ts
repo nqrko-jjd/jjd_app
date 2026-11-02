@@ -2,6 +2,8 @@
 import { distanceKm } from './arrival-notices.js';
 
 export interface DayPoint { lat: number; lng: number; at: Date; speed: number | null }
+/** Arrêt d'au moins 5 minutes : début, fin (null = toujours à l'arrêt) et position. */
+export interface DayStop { from: string; to: string | null; lat: number; lng: number }
 export interface DaySummary {
   points: number;
   lastSignalAt: string | null;
@@ -12,11 +14,31 @@ export interface DaySummary {
   firstMoveAt: string | null;
   km: number;
   track: [number, number][];
+  stops: DayStop[];
 }
 
 const MOVING_KMH = 3;
 const JITTER_KM = 0.015; // sous 15 m entre deux points : bruit GPS à l'arrêt, ignoré dans le total
 const MAX_TRACK = 400;
+const MIN_STOP_MS = 5 * 60_000;
+const STOP_RADIUS_KM = 0.1;
+
+/** Arrêts de la journée : suites de points à l'arrêt, dans un rayon de 100 m, d'au moins 5 minutes (la veille du traceur compte dans la durée). */
+function findStops(pts: DayPoint[], moving: (p: DayPoint) => boolean): DayStop[] {
+  const stops: DayStop[] = [];
+  let i = 0;
+  while (i < pts.length) {
+    if (moving(pts[i]!)) { i++; continue; }
+    let j = i;
+    while (j + 1 < pts.length && !moving(pts[j + 1]!) && distanceKm(pts[i]!, pts[j + 1]!) <= STOP_RADIUS_KM) j++;
+    const open = j === pts.length - 1;
+    const end = open ? null : pts[j + 1]!.at;
+    const lastMs = (end ?? pts[j]!.at).getTime();
+    if (lastMs - pts[i]!.at.getTime() >= MIN_STOP_MS) stops.push({ from: pts[i]!.at.toISOString(), to: end?.toISOString() ?? null, lat: pts[i]!.lat, lng: pts[i]!.lng });
+    i = j + 1;
+  }
+  return stops;
+}
 
 export interface SiteVisit { arrivedAt: string | null; leftAt: string | null }
 /** Arrivée sur un chantier : premier point à l'arrêt dans le rayon ; départ : premier point hors du rayon ensuite. Un simple passage à vitesse normale ne compte pas. */
@@ -31,7 +53,7 @@ export function siteVisit(raw: DayPoint[], site: { lat: number; lng: number }, r
 
 export function summarizeDay(raw: DayPoint[]): DaySummary {
   const pts = [...raw].sort((a, b) => a.at.getTime() - b.at.getTime());
-  if (!pts.length) return { points: 0, lastSignalAt: null, stoppedSince: null, noMoveToday: false, firstMoveAt: null, km: 0, track: [] };
+  if (!pts.length) return { points: 0, lastSignalAt: null, stoppedSince: null, noMoveToday: false, firstMoveAt: null, km: 0, track: [], stops: [] };
   const moving = (p: DayPoint) => p.speed != null && p.speed >= MOVING_KMH;
 
   let km = 0;
@@ -54,6 +76,6 @@ export function summarizeDay(raw: DayPoint[]): DaySummary {
   const track = pts.filter((_, i) => i % step === 0 || i === pts.length - 1).map((p): [number, number] => [p.lat, p.lng]);
   return {
     points: pts.length, lastSignalAt: last.at.toISOString(), stoppedSince: stoppedSince?.toISOString() ?? null, noMoveToday,
-    firstMoveAt: firstMove?.at.toISOString() ?? null, km: Math.round(km * 10) / 10, track,
+    firstMoveAt: firstMove?.at.toISOString() ?? null, km: Math.round(km * 10) / 10, track, stops: findStops(pts, moving),
   };
 }

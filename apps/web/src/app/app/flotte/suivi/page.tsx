@@ -1,31 +1,15 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
-import dynamic from 'next/dynamic';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { PageHead, formatDateBE } from '@/lib/ui';
 import { SkeletonRows, ErrorState, EmptyState } from '@/components/States';
 import { MapPin } from 'lucide-react';
-import type { MapVehicle, MapSite } from '@/components/FleetMap';
+import CarteTab from './CarteTab';
+import { label, ago, type Data, type Device, type Settings, type Vehicle } from './types';
 
-const FleetMap = dynamic(() => import('@/components/FleetMap'), { ssr: false, loading: () => <SkeletonRows /> });
-
-interface Vehicle { id: string; code: string | null; name: string | null; plate: string | null; brand: string | null; model: string | null; pajDeviceId: string | null; lastLat: number | null; lastLng: number | null; lastSeenAt: string | null; lastSpeed: number | null; lastBattery: number | null }
-interface Settings { enabled: boolean; radiusKm: number; maxPositionAgeMin: number; copyToSelf: boolean; testTo: string; subject: string; body: string }
-interface Arrival { eventId: string; worksiteRef: string; client: string; to: string | null; startAt: string; vehicle: string; km: number; minutes: number; blocked: string | null }
-interface Hist { id: string; status: string; toEmail: string | null; etaMinutes: number | null; sentAt: string | null; error: string | null; createdAt: string; event: { startAt: string; worksite: { ref: string; client: { name: string } | null } } | null }
-interface Site { id: string; ref: string; client: string | null; lat: number; lng: number; startAt: string; vehicleIds: string[] }
-interface Data { pajConfigured: boolean; emailConfigured: boolean; vehicles: Vehicle[]; sites: Site[]; settings: Settings; arrivals: Arrival[]; history: Hist[] }
-interface Device { id: string; name: string }
 const PLACEHOLDERS = '{client} {minutes} {chantier} {heure} {societe} {telephone}';
-const label = (v: Vehicle) => [v.code, v.name ?? [v.brand, v.model].filter(Boolean).join(' '), v.plate].filter(Boolean).join(' · ') || 'Véhicule';
-const ago = (iso: string) => { const m = Math.round((Date.now() - new Date(iso).getTime()) / 60_000); return m < 1 ? 'à l’instant' : m < 60 ? `il y a ${m} min` : m < 1440 ? `il y a ${Math.round(m / 60)} h` : formatDateBE(iso); };
-
-interface Day { points: number; lastSignalAt: string | null; stoppedSince: string | null; noMoveToday: boolean; firstMoveAt: string | null; km: number; track: [number, number][] }
-interface Visit { eventId: string; vehicleId: string; arrivedAt: string | null; leftAt: string | null }
-const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' });
-const lasting = (iso: string) => { const m = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60_000)); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}`; };
 
 /** Suivi GPS (traceurs PAJ) : relier les traceurs aux véhicules, voir les dernières positions, régler les avis d'arrivée aux clients. */
 export default function SuiviGps() {
@@ -34,7 +18,6 @@ export default function SuiviGps() {
   const [devices, setDevices] = useState<Device[] | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
-  const [focus, setFocus] = useState<string | null>(null);
 
   // la carte se met à jour toute seule (positions relues par le serveur toutes les 2 minutes)
   useEffect(() => {
@@ -42,48 +25,13 @@ export default function SuiviGps() {
     const t = setInterval(reload, 60_000);
     return () => clearInterval(t);
   }, [tab, reload]);
-  // détail du véhicule sélectionné : journée lue à la demande chez PAJ (arrêté depuis quand, km, parcours)
-  const [day, setDay] = useState<{ id: string; d: Day } | null>(null);
-  const [dayErr, setDayErr] = useState<string | null>(null);
-  const focusIsVehicle = !!focus && !!data?.vehicles.some((v) => v.id === focus && v.pajDeviceId);
-  useEffect(() => {
-    if (tab !== 'map' || !focus || !focusIsVehicle) { setDay(null); setDayErr(null); return; }
-    let off = false;
-    const load = () => api<Day>(`/api/gps/vehicles/${focus}/day`).then((d) => { if (!off) { setDay({ id: focus, d }); setDayErr(null); } }).catch((e) => { if (!off) setDayErr((e as Error).message); });
-    load();
-    const t = setInterval(load, 60_000);
-    return () => { off = true; clearInterval(t); };
-  }, [tab, focus, focusIsVehicle]);
-  // heures d'arrivée / de départ sur les chantiers du jour (historique PAJ)
-  const [visits, setVisits] = useState<Visit[]>([]);
-  const hasSites = (data?.sites.length ?? 0) > 0;
-  useEffect(() => {
-    if (tab !== 'map' || !hasSites) return;
-    let off = false;
-    const load = () => api<{ arrivals: Visit[] }>('/api/gps/day-arrivals').then((r) => { if (!off) setVisits(r.arrivals); }).catch(() => {});
-    load();
-    const t = setInterval(load, 60_000);
-    return () => { off = true; clearInterval(t); };
-  }, [tab, hasSites]);
-  const visitText = (eventId: string, startAt: string) => {
-    const vs = visits.filter((x) => x.eventId === eventId);
-    const v = vs.find((x) => x.arrivedAt);
-    if (!v?.arrivedAt) return vs.length ? 'pas encore arrivé' : null;
-    const late = Math.round((new Date(v.arrivedAt).getTime() - new Date(startAt).getTime()) / 60_000);
-    return `arrivé à ${hhmm(v.arrivedAt)}${late > 5 ? ` (+${late} min)` : late < -5 ? ` (${-late} min d’avance)` : ' (à l’heure)'}${v.leftAt ? ` · reparti à ${hhmm(v.leftAt)}` : ''}`;
-  };
-  const mapVehicles = useMemo<MapVehicle[]>(() => (data?.vehicles ?? []).filter((v) => v.pajDeviceId && v.lastLat != null && v.lastLng != null && v.lastSeenAt).map((v) => ({
-    id: v.id, label: label(v), lat: v.lastLat!, lng: v.lastLng!, seenAgo: ago(v.lastSeenAt!), speed: v.lastSpeed, stale: Date.now() - new Date(v.lastSeenAt!).getTime() > 30 * 60_000,
-  })), [data]);
-  const mapSites = useMemo<MapSite[]>(() => (data?.sites ?? []).map((x) => ({ id: x.id, label: `${x.ref}${x.client ? ` · ${x.client}` : ''} · ${new Date(x.startAt).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' })}`, lat: x.lat, lng: x.lng, vehicleIds: x.vehicleIds })), [data]);
-
   if (loading && !data) return <SkeletonRows />;
   if (error || !data) return <ErrorState message={error ?? 'Erreur'} onRetry={reload} />;
   async function run(fn: () => Promise<string | void>) {
     setBusy(true); setMsg(null);
     try { const t = await fn(); setMsg({ ok: true, text: t || 'Fait.' }); reload(); } catch (e) { setMsg({ ok: false, text: (e as Error).message }); } finally { setBusy(false); }
   }
-  const loadDevices = () => run(async () => { const r = await api<{ devices: Device[] }>('/api/gps/devices'); setDevices(r.devices); return `Connexion PAJ réussie : ${r.devices.length} traceur(s) trouvé(s).`; });
+  const loadDevices = () => run(async () => { const r = await api<{ devices: Device[] }>('/api/gps/devices'); setDevices(r.devices); return `Connexion réussie : ${r.devices.length} traceur(s) trouvé(s).`; });
   const link = (v: Vehicle, pajDeviceId: string | null) => run(async () => { await api(`/api/gps/vehicles/${v.id}`, { method: 'PATCH', body: { pajDeviceId } }); return pajDeviceId ? 'Traceur relié.' : 'Traceur retiré.'; });
 
   return (
@@ -94,64 +42,22 @@ export default function SuiviGps() {
         sub={`${data.vehicles.filter((v) => v.pajDeviceId).length} véhicule(s) relié(s) à un traceur · avis d’arrivée ${data.settings.enabled ? 'activés' : 'désactivés'}`}
         action={<div className="row"><Link className="btn" href="/app/flotte">← Flotte</Link>{data.pajConfigured && <button className="btn" disabled={busy} onClick={() => run(async () => { const r = await api<{ updated: number }>('/api/gps/refresh', { method: 'POST', body: {} }); return `${r.updated} position(s) mise(s) à jour.`; })}>Actualiser les positions</button>}</div>}
       />
-      {!data.pajConfigured && <div className="badge warn" style={{ marginBottom: '1rem', padding: '0.5rem 0.8rem' }}>Le compte PAJ GPS n’est pas encore configuré sur le serveur (PAJ_EMAIL et PAJ_PASSWORD) : aucune position ne peut être lue.</div>}
+      {!data.pajConfigured && <div className="badge warn" style={{ marginBottom: '1rem', padding: '0.5rem 0.8rem' }}>Aucune source GPS n’est encore configurée sur le serveur (compte PAJ ou Traccar) : aucune position ne peut être lue.</div>}
       {msg && <div className={`badge ${msg.ok ? 'ok' : 'crit'}`} style={{ marginBottom: '1rem', padding: '0.5rem 0.8rem' }}>{msg.text}</div>}
       <div className="seg" style={{ marginBottom: '1rem' }}>
         <button className={tab === 'map' ? 'on' : ''} onClick={() => setTab('map')}>Carte</button>
-        <button className={tab === 'vehicles' ? 'on' : ''} onClick={() => setTab('vehicles')}>Véhicules</button>
+        <button className={tab === 'vehicles' ? 'on' : ''} onClick={() => setTab('vehicles')}>Traceurs</button>
         <button className={tab === 'arrivals' ? 'on' : ''} onClick={() => setTab('arrivals')}>Avis d’arrivée · {data.arrivals.length}</button>
         <button className={tab === 'settings' ? 'on' : ''} onClick={() => setTab('settings')}>Réglages</button>
       </div>
 
-      {tab === 'map' && (
-        <div className="fleet-map-layout">
-          <FleetMap vehicles={mapVehicles} sites={mapSites} focusId={focus} track={day && day.id === focus ? day.d.track : null} />
-          <div className="fm-list">
-            {mapVehicles.length === 0 && <p className="muted" style={{ margin: 0, fontSize: '0.88rem' }}>Aucune position pour le moment : reliez les véhicules à leur traceur dans l’onglet « Véhicules ».</p>}
-            {mapVehicles.map((v) => {
-              const raw = data.vehicles.find((x) => x.id === v.id);
-              const d = day && day.id === v.id ? day.d : null;
-              const planned = data.sites.filter((x) => x.vehicleIds.includes(v.id));
-              return (
-                <div key={v.id} style={{ display: 'grid', gap: '0.35rem' }}>
-                  <button type="button" className={`fm-card${v.stale ? ' stale' : ''}${focus === v.id ? ' on' : ''}`} onClick={() => setFocus(v.id)}>
-                    <span className="fm-state" />
-                    <span><strong>{v.label}</strong><small>{v.speed != null && v.speed > 2 ? `${Math.round(v.speed)} km/h · ` : 'à l’arrêt · '}{v.seenAgo}</small></span>
-                  </button>
-                  {focus === v.id && raw?.lastSeenAt && (
-                    <div className="panel" style={{ padding: '0.7rem 0.8rem', display: 'grid', gap: '0.3rem', fontSize: '0.84rem' }}>
-                      {d?.stoppedSince
-                        ? <div><strong>{d.noMoveToday ? 'Aucun déplacement aujourd’hui' : `À l’arrêt depuis ${hhmm(d.stoppedSince)}`}</strong> ({d.noMoveToday ? 'immobile depuis ' : ''}{lasting(d.stoppedSince)})</div>
-                        : d && <div><strong>En route</strong>{v.speed != null ? ` · ${Math.round(v.speed)} km/h` : ''}</div>}
-                      <div>Dernier signal : {hhmm(raw.lastSeenAt)} ({v.seenAgo}){raw.lastBattery != null ? ` · batterie ${Math.round(raw.lastBattery)} %` : ''}</div>
-                      {d && d.points > 0 && <div>Aujourd’hui : ≈ {d.km.toLocaleString('fr-BE')} km{d.firstMoveAt ? ` · premier départ à ${hhmm(d.firstMoveAt)}` : ''} · parcours tracé sur la carte</div>}
-                      {planned.map((x) => <div key={x.id}>Prévu : {x.ref}{x.client ? ` · ${x.client}` : ''} à {hhmm(x.startAt)}{visitText(x.id, x.startAt) ? <> — <strong>{visitText(x.id, x.startAt)}</strong></> : ''}</div>)}
-                      {v.stale && d?.stoppedSince && <div className="muted">Le traceur se met en veille quand le véhicule ne bouge pas : un dernier signal ancien est normal.</div>}
-                      {dayErr && <div style={{ color: 'var(--crit)' }}>Détail indisponible : {dayErr}</div>}
-                      {!d && !dayErr && <div className="muted">Chargement du détail…</div>}
-                      <div><MapPin size={14} style={{ verticalAlign: '-2px' }} /> <a href={`https://www.google.com/maps?q=${v.lat},${v.lng}`} target="_blank" rel="noreferrer">Ouvrir dans Google Maps</a></div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-            {mapSites.length > 0 && <div className="eyebrow" style={{ marginTop: '0.4rem' }}>Chantiers du jour</div>}
-            {mapSites.map((x) => (
-              <button key={x.id} type="button" className={`fm-card${focus === x.id ? ' on' : ''}`} onClick={() => setFocus(x.id)}>
-                <span className="fm-state" style={{ background: 'var(--gold)' }} />
-                <span><strong>{x.label.split(' · ')[0]}</strong><small>{x.label.split(' · ').slice(1).join(' · ')}{(() => { const t = data.sites.find((z) => z.id === x.id); const vt = t ? visitText(t.id, t.startAt) : null; return vt ? ` · ${vt}` : ''; })()}</small></span>
-              </button>
-            ))}
-            <p className="muted" style={{ margin: '0.2rem 0 0', fontSize: '0.78rem' }}>Mise à jour automatique · gris = position de plus de 30 minutes.</p>
-          </div>
-        </div>
-      )}
+      {tab === 'map' && <CarteTab data={data} onGoTraceurs={() => setTab('vehicles')} />}
 
       {tab === 'vehicles' && (
         <div className="panel" style={{ padding: '1rem', display: 'grid', gap: '0.8rem' }}>
           <div className="row" style={{ gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
             <button className="btn" disabled={busy || !data.pajConfigured} onClick={loadDevices}>Tester la connexion et lister les traceurs</button>
-            <span className="muted" style={{ fontSize: '0.84rem' }}>Reliez chaque véhicule à son traceur PAJ ; la position est lue toutes les 2 minutes.</span>
+            <span className="muted" style={{ fontSize: '0.84rem' }}>Reliez chaque véhicule à son traceur (PAJ ou Traccar) ; la position est lue toutes les 2 minutes.</span>
           </div>
           {data.vehicles.map((v) => (
             <div key={v.id} className="row" style={{ gap: '0.8rem', alignItems: 'center', flexWrap: 'wrap', borderTop: '1px solid var(--line)', paddingTop: '0.7rem' }}>

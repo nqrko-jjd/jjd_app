@@ -18,6 +18,17 @@ const MOVING_KMH = 3;
 const JITTER_KM = 0.015; // sous 15 m entre deux points : bruit GPS à l'arrêt, ignoré dans le total
 const MAX_TRACK = 400;
 
+export interface SiteVisit { arrivedAt: string | null; leftAt: string | null }
+/** Arrivée sur un chantier : premier point à l'arrêt dans le rayon ; départ : premier point hors du rayon ensuite. Un simple passage à vitesse normale ne compte pas. */
+export function siteVisit(raw: DayPoint[], site: { lat: number; lng: number }, radiusKm = 0.2): SiteVisit {
+  const pts = [...raw].sort((a, b) => a.at.getTime() - b.at.getTime());
+  const inside = (p: DayPoint) => distanceKm(p, site) <= radiusKm;
+  const i = pts.findIndex((p) => inside(p) && !(p.speed != null && p.speed >= MOVING_KMH));
+  if (i < 0) return { arrivedAt: null, leftAt: null };
+  const out = pts.findIndex((p, j) => j > i && !inside(p));
+  return { arrivedAt: pts[i]!.at.toISOString(), leftAt: out >= 0 ? pts[out]!.at.toISOString() : null };
+}
+
 export function summarizeDay(raw: DayPoint[]): DaySummary {
   const pts = [...raw].sort((a, b) => a.at.getTime() - b.at.getTime());
   if (!pts.length) return { points: 0, lastSignalAt: null, stoppedSince: null, noMoveToday: false, firstMoveAt: null, km: 0, track: [] };

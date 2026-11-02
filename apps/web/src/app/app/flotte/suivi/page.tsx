@@ -23,6 +23,7 @@ const label = (v: Vehicle) => [v.code, v.name ?? [v.brand, v.model].filter(Boole
 const ago = (iso: string) => { const m = Math.round((Date.now() - new Date(iso).getTime()) / 60_000); return m < 1 ? 'à l’instant' : m < 60 ? `il y a ${m} min` : m < 1440 ? `il y a ${Math.round(m / 60)} h` : formatDateBE(iso); };
 
 interface Day { points: number; lastSignalAt: string | null; stoppedSince: string | null; noMoveToday: boolean; firstMoveAt: string | null; km: number; track: [number, number][] }
+interface Visit { eventId: string; vehicleId: string; arrivedAt: string | null; leftAt: string | null }
 const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' });
 const lasting = (iso: string) => { const m = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60_000)); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}`; };
 
@@ -53,6 +54,24 @@ export default function SuiviGps() {
     const t = setInterval(load, 60_000);
     return () => { off = true; clearInterval(t); };
   }, [tab, focus, focusIsVehicle]);
+  // heures d'arrivée / de départ sur les chantiers du jour (historique PAJ)
+  const [visits, setVisits] = useState<Visit[]>([]);
+  const hasSites = (data?.sites.length ?? 0) > 0;
+  useEffect(() => {
+    if (tab !== 'map' || !hasSites) return;
+    let off = false;
+    const load = () => api<{ arrivals: Visit[] }>('/api/gps/day-arrivals').then((r) => { if (!off) setVisits(r.arrivals); }).catch(() => {});
+    load();
+    const t = setInterval(load, 60_000);
+    return () => { off = true; clearInterval(t); };
+  }, [tab, hasSites]);
+  const visitText = (eventId: string, startAt: string) => {
+    const vs = visits.filter((x) => x.eventId === eventId);
+    const v = vs.find((x) => x.arrivedAt);
+    if (!v?.arrivedAt) return vs.length ? 'pas encore arrivé' : null;
+    const late = Math.round((new Date(v.arrivedAt).getTime() - new Date(startAt).getTime()) / 60_000);
+    return `arrivé à ${hhmm(v.arrivedAt)}${late > 5 ? ` (+${late} min)` : late < -5 ? ` (${-late} min d’avance)` : ' (à l’heure)'}${v.leftAt ? ` · reparti à ${hhmm(v.leftAt)}` : ''}`;
+  };
   const mapVehicles = useMemo<MapVehicle[]>(() => (data?.vehicles ?? []).filter((v) => v.pajDeviceId && v.lastLat != null && v.lastLng != null && v.lastSeenAt).map((v) => ({
     id: v.id, label: label(v), lat: v.lastLat!, lng: v.lastLng!, seenAgo: ago(v.lastSeenAt!), speed: v.lastSpeed, stale: Date.now() - new Date(v.lastSeenAt!).getTime() > 30 * 60_000,
   })), [data]);
@@ -106,7 +125,7 @@ export default function SuiviGps() {
                         : d && <div><strong>En route</strong>{v.speed != null ? ` · ${Math.round(v.speed)} km/h` : ''}</div>}
                       <div>Dernier signal : {hhmm(raw.lastSeenAt)} ({v.seenAgo}){raw.lastBattery != null ? ` · batterie ${Math.round(raw.lastBattery)} %` : ''}</div>
                       {d && d.points > 0 && <div>Aujourd’hui : ≈ {d.km.toLocaleString('fr-BE')} km{d.firstMoveAt ? ` · premier départ à ${hhmm(d.firstMoveAt)}` : ''} · parcours tracé sur la carte</div>}
-                      {planned.map((x) => <div key={x.id}>Prévu : {x.ref}{x.client ? ` · ${x.client}` : ''} à {hhmm(x.startAt)}</div>)}
+                      {planned.map((x) => <div key={x.id}>Prévu : {x.ref}{x.client ? ` · ${x.client}` : ''} à {hhmm(x.startAt)}{visitText(x.id, x.startAt) ? <> — <strong>{visitText(x.id, x.startAt)}</strong></> : ''}</div>)}
                       {v.stale && d?.stoppedSince && <div className="muted">Le traceur se met en veille quand le véhicule ne bouge pas : un dernier signal ancien est normal.</div>}
                       {dayErr && <div style={{ color: 'var(--crit)' }}>Détail indisponible : {dayErr}</div>}
                       {!d && !dayErr && <div className="muted">Chargement du détail…</div>}
@@ -120,7 +139,7 @@ export default function SuiviGps() {
             {mapSites.map((x) => (
               <button key={x.id} type="button" className={`fm-card${focus === x.id ? ' on' : ''}`} onClick={() => setFocus(x.id)}>
                 <span className="fm-state" style={{ background: 'var(--gold)' }} />
-                <span><strong>{x.label.split(' · ')[0]}</strong><small>{x.label.split(' · ').slice(1).join(' · ')}</small></span>
+                <span><strong>{x.label.split(' · ')[0]}</strong><small>{x.label.split(' · ').slice(1).join(' · ')}{(() => { const t = data.sites.find((z) => z.id === x.id); const vt = t ? visitText(t.id, t.startAt) : null; return vt ? ` · ${vt}` : ''; })()}</small></span>
               </button>
             ))}
             <p className="muted" style={{ margin: '0.2rem 0 0', fontSize: '0.78rem' }}>Mise à jour automatique · gris = position de plus de 30 minutes.</p>

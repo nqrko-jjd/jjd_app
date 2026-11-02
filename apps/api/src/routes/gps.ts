@@ -5,7 +5,7 @@ import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, OFFICE } from '../lib/auth.js';
 import { emailConfigured } from '../lib/doc-mail.js';
 import { listPajDevices, pajConfigured, pajPointsBetween, syncVehiclePositions } from '../lib/paj.js';
-import { summarizeDay } from '../lib/gps-day.js';
+import { siteVisit, summarizeDay } from '../lib/gps-day.js';
 import { computeArrivals, getArrivalSettings, saveArrivalSettings } from '../lib/arrival-notices.js';
 
 /** Suivi GPS des véhicules (traceurs PAJ) et avis d'arrivée aux clients — bureau uniquement (lib/paj.ts, lib/arrival-notices.ts). */
@@ -75,6 +75,30 @@ gpsRouter.get(
     if (!v?.pajDeviceId) throw new HttpError(404, 'Ce véhicule n’a pas de traceur.');
     const from = new Date(); from.setHours(0, 0, 0, 0);
     try { res.json(summarizeDay(await pajPointsBetween(v.pajDeviceId, from, new Date()))); } catch (e) { throw e instanceof HttpError ? e : new HttpError(502, `PAJ GPS : ${(e as Error).message}`); }
+  }),
+);
+
+/** Heures d'arrivée / de départ des véhicules sur les chantiers du jour (d'après l'historique PAJ, à la demande). */
+gpsRouter.get(
+  '/day-arrivals',
+  requireAuth(...OFFICE),
+  asyncHandler(async (_req, res) => {
+    if (!pajConfigured()) throw new HttpError(503, 'Le compte PAJ GPS n’est pas configuré sur le serveur.');
+    const from = new Date(); from.setHours(0, 0, 0, 0);
+    const events = await prisma.planningEvent.findMany({
+      where: { kind: 'intervention', startAt: { gte: from, lt: new Date(from.getTime() + 86_400_000) }, vehicles: { some: {} }, worksite: { lat: { not: null }, lng: { not: null } } },
+      select: { id: true, worksite: { select: { lat: true, lng: true } }, vehicles: { select: { vehicle: { select: { id: true, pajDeviceId: true } } } } },
+    });
+    const cache = new Map<string, Awaited<ReturnType<typeof pajPointsBetween>>>();
+    const arrivals: { eventId: string; vehicleId: string; arrivedAt: string | null; leftAt: string | null }[] = [];
+    try {
+      for (const e of events) for (const { vehicle } of e.vehicles) {
+        if (!vehicle.pajDeviceId) continue;
+        if (!cache.has(vehicle.pajDeviceId)) cache.set(vehicle.pajDeviceId, await pajPointsBetween(vehicle.pajDeviceId, from, new Date()));
+        arrivals.push({ eventId: e.id, vehicleId: vehicle.id, ...siteVisit(cache.get(vehicle.pajDeviceId)!, { lat: e.worksite.lat!, lng: e.worksite.lng! }) });
+      }
+    } catch (err) { throw err instanceof HttpError ? err : new HttpError(502, `PAJ GPS : ${(err as Error).message}`); }
+    res.json({ arrivals });
   }),
 );
 

@@ -2,7 +2,7 @@
 import { use, useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { formatEur, formatDateBE } from '@/lib/ui';
-import { DOC_KIND_LABEL, addressLines, type DocFull, type Company } from '@/lib/doc-ui';
+import { DOC_KIND_LABEL, addressLines, clientIdLabel, type DocFull, type Company } from '@/lib/doc-ui';
 import { computeDocTotals, vatLegalNotes, DOCUMENT_LOGO, DOCUMENT_TERMS, DEPOSIT_TRIGGERS } from '@jjd/shared';
 
 export default function PrintDocument({ params }: { params: Promise<{ id: string }> }) {
@@ -87,7 +87,7 @@ export default function PrintDocument({ params }: { params: Promise<{ id: string
             <div className="lbl">Adressé à</div>
             <div className="party-name">{clientName || '—'}</div>
             {clientAddr.map((l, i) => <div key={i}>{l}</div>)}
-            {clientVat && <div>TVA {clientVat}</div>}
+            {clientVat && <div>{clientIdLabel(d.contact?.kind)} {clientVat}</div>}
             {d.billingEmail && <div>{d.billingEmail}</div>}
           </div>
         </section>

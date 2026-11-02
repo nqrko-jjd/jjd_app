@@ -145,7 +145,7 @@ function ContactsInner() {
                 <SortTh k="name" sort={sort} filter={colFilter}>{tr("Nom")}</SortTh>
                 <SortTh k="kind" sort={sort} filter={colFilter}>Type</SortTh>
                 <SortTh k="city" sort={sort} filter={colFilter}>Ville</SortTh>
-                <SortTh k="vat" sort={sort} filter={colFilter}>TVA</SortTh>
+                <SortTh k="vat" sort={sort} filter={colFilter}>TVA / BCE</SortTh>
                 <SortTh k="contact" sort={sort} filter={colFilter}>Contact</SortTh>
                 <SortTh k="worksites" sort={sort} align="right" filter={colFilter}>{tr("Chantiers")}</SortTh>
                 <th>Statut</th>

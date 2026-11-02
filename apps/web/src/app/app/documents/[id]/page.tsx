@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { api, apiDownload } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { formatEur, formatDateBE } from '@/lib/ui';
-import { DocStatusBadge, DOC_KIND_LABEL, addressLines, type DocFull, type DocLine } from '@/lib/doc-ui';
+import { DocStatusBadge, DOC_KIND_LABEL, addressLines, clientIdLabel, type DocFull, type DocLine } from '@/lib/doc-ui';
 import { ContactPicker } from '@/components/ContactPicker';
 import { AssigneePicker } from '@/components/AssigneePicker';
 import { WorksitePicker, type WsPickerOption } from '@/components/WorksitePicker';
@@ -431,7 +431,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
                   </div>
                   {name ? <div style={{ marginTop: 4 }}>{name}</div> : <div className="muted" style={{ marginTop: 4 }}>Choisissez d’abord le client.</div>}
                   {addr.map((l, i) => <div key={i}>{l}</div>)}
-                  {(doc.billingVat ?? doc.contact?.vat) && <div className="muted">TVA {doc.billingVat ?? doc.contact?.vat}</div>}
+                  {(doc.billingVat ?? doc.contact?.vat) && <div className="muted">{clientIdLabel(doc.contact?.kind)} {doc.billingVat ?? doc.contact?.vat}</div>}
                   {doc.contact && !custom && (addr.length === 0 || coOnly) && (
                     <div className="badge warn" style={{ marginTop: 6 }}>{coOnly ? 'Adresse du syndic manquante : complétez sa fiche contact.' : 'Adresse manquante : complétez la fiche du client.'}</div>
                   )}
@@ -455,7 +455,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
                     <input className="input" value={doc.billingName ?? ''} onChange={(e) => patch({ billingName: e.target.value || null })} placeholder={doc.contact?.name ?? 'Nom du client'} />
                   </label>
                   <label className="field">
-                    <span>Autre n° de TVA</span>
+                    <span>{doc.contact?.kind === 'acp' ? 'Autre n° BCE' : 'Autre n° de TVA'}</span>
                     <input className="input" value={doc.billingVat ?? ''} onChange={(e) => patch({ billingVat: e.target.value || null })} placeholder={doc.contact?.vat ?? 'BE0…'} />
                   </label>
                   <label className="field" style={{ gridColumn: '1 / -1' }}>

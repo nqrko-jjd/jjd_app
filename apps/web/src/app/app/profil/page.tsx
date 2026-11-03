@@ -24,6 +24,20 @@ export default function ProfilePage() {
     } catch { setError(tr('Impossible d’enregistrer les modifications. Réessayez.')); }
     finally { setBusy(false); }
   }
+  const [pw, setPw] = useState({ current: '', next: '', again: '' });
+  const [pwMsg, setPwMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  async function changePassword(event: React.FormEvent) {
+    event.preventDefault(); setPwMsg(null);
+    if (pw.next.length < 6) return setPwMsg({ ok: false, text: tr('Le nouveau mot de passe doit faire au moins 6 caractères.') });
+    if (pw.next !== pw.again) return setPwMsg({ ok: false, text: tr('Les deux nouveaux mots de passe sont différents.') });
+    setBusy(true);
+    try {
+      await api('/api/auth/password', { method: 'POST', body: { currentPassword: pw.current, newPassword: pw.next } });
+      setPw({ current: '', next: '', again: '' });
+      setPwMsg({ ok: true, text: tr('Mot de passe modifié.') });
+    } catch (e) { setPwMsg({ ok: false, text: (e as Error).message || tr('Impossible de modifier le mot de passe.') }); }
+    finally { setBusy(false); }
+  }
   async function language(locale: string) {
     if (!isUiLocale(locale)) return;
     setBusy(true); setError('');
@@ -54,6 +68,16 @@ export default function ProfilePage() {
           <label className="field" htmlFor="profile-email">{tr('E-mail de contact')}<input id="profile-email" className="input" type="email" autoComplete="email" maxLength={254} value={email} onChange={e => setEmail(e.target.value)} disabled={busy} /></label>
           <div><button className="btn primary" type="submit" disabled={busy}>{tr(busy ? 'Enregistrement…' : 'Enregistrer')}</button></div>
         </form>}
+      </section>
+      <section className="card card-pad">
+        <h2 style={{ marginTop: 0 }}>{tr('Mot de passe')}</h2>
+        <form onSubmit={changePassword} style={{ display: 'grid', gap: '1rem' }}>
+          <label className="field" htmlFor="pw-current">{tr('Mot de passe actuel')}<input id="pw-current" className="input" type="password" autoComplete="current-password" required value={pw.current} onChange={e => setPw({ ...pw, current: e.target.value })} disabled={busy} /></label>
+          <label className="field" htmlFor="pw-new">{tr('Nouveau mot de passe')}<input id="pw-new" className="input" type="password" autoComplete="new-password" required minLength={6} value={pw.next} onChange={e => setPw({ ...pw, next: e.target.value })} disabled={busy} /></label>
+          <label className="field" htmlFor="pw-again">{tr('Répéter le nouveau mot de passe')}<input id="pw-again" className="input" type="password" autoComplete="new-password" required minLength={6} value={pw.again} onChange={e => setPw({ ...pw, again: e.target.value })} disabled={busy} /></label>
+          <div><button className="btn primary" type="submit" disabled={busy}>{tr('Changer mon mot de passe')}</button></div>
+          {pwMsg && <p className={pwMsg.ok ? undefined : 'error'} role={pwMsg.ok ? 'status' : 'alert'}>{pwMsg.text}</p>}
+        </form>
       </section>
       {error && <p className="error" role="alert">{error}</p>}
       {saved && <p role="status">{tr('Informations enregistrées.')}</p>}

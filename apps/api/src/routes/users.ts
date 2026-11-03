@@ -103,7 +103,7 @@ usersRouter.patch(
   }),
 );
 
-/** Génère un nouveau mot de passe temporaire, renvoyé une seule fois (à communiquer à la main). */
+/** Nouveau mot de passe : celui choisi par l'admin (`password`), sinon un code provisoire généré, renvoyé une seule fois. */
 usersRouter.post(
   '/:id/reset-password',
   requireAuth('admin'),
@@ -111,7 +111,9 @@ usersRouter.post(
     const target = await prisma.user.findUnique({ where: { id: req.params.id }, select: { email: true } });
     if (!target) throw new HttpError(404, 'Compte introuvable');
     const { phone } = accountLogin(target.email);
-    const password = newSecret(phone);
+    const chosen = typeof req.body?.password === 'string' ? req.body.password.trim() : '';
+    if (chosen && (chosen.length < 6 || chosen.length > 200)) throw new HttpError(422, 'Le mot de passe doit faire au moins 6 caractères');
+    const password = chosen || newSecret(phone);
     const user = await prisma.user.update({ where: { id: req.params.id }, data: { passwordHash: await hashPassword(password) } });
     res.json({ ...accountLogin(user.email), password });
   }),

@@ -3,7 +3,7 @@ import { loginSchema, resolveLoginEmail, normalizeName } from '@jjd/shared';
 import { z } from 'zod';
 import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
-import { signToken, verifyPassword, requireAuth } from '../lib/auth.js';
+import { signToken, verifyPassword, hashPassword, requireAuth } from '../lib/auth.js';
 import { LOCALES } from '../lib/translate.js';
 import { assertLoginAllowed, recordLoginFailure, clearLoginFailures } from '../lib/login-throttle.js';
 
@@ -28,6 +28,26 @@ authRouter.patch('/profile', requireAuth(), asyncHandler(async (req, res) => {
     normalizedName: normalizeName(`${input.firstName} ${input.lastName ?? ''}`.trim()),
   } });
   res.json({ person });
+}));
+
+const ownPassword = z.object({ currentPassword: z.string().min(1).max(200), newPassword: z.string().min(6).max(200) }).strict();
+
+/** Changer son propre mot de passe (il faut connaître l'actuel). */
+authRouter.post('/password', requireAuth(), asyncHandler(async (req, res) => {
+  const result = ownPassword.safeParse(req.body);
+  if (!result.success) throw new HttpError(422, 'Le nouveau mot de passe doit faire au moins 6 caractères');
+  const fwd = String(req.headers['x-forwarded-for'] ?? '').split(',')[0]!.trim();
+  const ip = fwd || req.ip || 'unknown';
+  const account = `pwd:${req.user!.id}`;
+  assertLoginAllowed(account, ip);
+  const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
+  if (!user || !(await verifyPassword(result.data.currentPassword, user.passwordHash))) {
+    recordLoginFailure(account, ip);
+    throw new HttpError(403, 'Mot de passe actuel incorrect');
+  }
+  clearLoginFailures(account);
+  await prisma.user.update({ where: { id: user.id }, data: { passwordHash: await hashPassword(result.data.newPassword) } });
+  res.json({ ok: true });
 }));
 
 authRouter.post(

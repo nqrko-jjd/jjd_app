@@ -1,7 +1,7 @@
 'use client';
 import { tr } from '@/lib/ui-language';
 import { SkeletonRows } from '@/components/States';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useApi } from '@/lib/use-api';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -139,6 +139,8 @@ function UsersTab() {
   const { data, reload } = useApi<{ items: UserRow[] }>('/api/users');
   const [msg, setMsg] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const msgRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (msg) msgRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, [msg]);
   const { data: pick } = useApi<{ people: { id: string; name: string }[] }>(creating ? '/api/meta/pickers' : null);
   const linkedPersonIds = new Set((data?.items ?? []).map((u) => u.personId).filter(Boolean));
   const unlinkedPeople = (pick?.people ?? []).filter((p) => !linkedPersonIds.has(p.id));
@@ -161,10 +163,11 @@ function UsersTab() {
     reload();
   }
   async function resetPassword(id: string) {
-    if (!confirm('Générer un nouveau mot de passe pour ce compte ?')) return;
+    const typed = prompt('Nouveau mot de passe pour ce compte (6 caractères minimum). Laisse vide pour en générer un automatiquement.');
+    if (typed === null) return;
     try {
-      const r = await api<{ login: string; password: string }>(`/api/users/${id}/reset-password`, { method: 'POST' });
-      setMsg(`Nouveau code pour ${r.login} : ${r.password} — à communiquer à la personne, il ne sera plus affiché.`);
+      const r = await api<{ login: string; password: string }>(`/api/users/${id}/reset-password`, { method: 'POST', body: typed.trim() ? { password: typed.trim() } : {} });
+      setMsg(`Nouveau mot de passe pour ${r.login} : ${r.password} — à communiquer à la personne, il ne sera plus affiché.`);
     } catch (e) {
       setMsg((e as Error).message);
     }
@@ -196,7 +199,7 @@ function UsersTab() {
         />
       )}
       {msg && (
-        <div className="card card-pad" style={{ marginBottom: '1rem', borderColor: 'var(--ok)' }}>
+        <div ref={msgRef} className="card card-pad" style={{ marginBottom: '1rem', borderColor: 'var(--ok)' }}>
           {msg} <button className="btn ghost" style={{ marginLeft: '0.5rem' }} onClick={() => setMsg(null)}>✕</button>
         </div>
       )}

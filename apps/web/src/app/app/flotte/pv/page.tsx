@@ -171,9 +171,6 @@ function FineModal({ fine, vehicles, people, onClose, onSaved }: { fine: Fine | 
               <option value="">— inconnu —</option>
               {people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
-            {v.driverPersonId && Number(String(v.amount).replace(',', '.')) > 0 && (
-              <span className="muted" style={{ fontSize: '0.82rem' }}>Ce PV sera ajouté aux dettes de cette personne (« À retenir » dans le décompte du mois) jusqu’à ce que vous le passiez en « Réglé » sur sa fiche.</span>
-            )}
             {fine && (fine.planned.drivers.length > 0 || fine.planned.team.length > 0) && (
               <span className="muted" style={{ fontSize: '0.82rem' }}>Planning ce jour-là : {fine.planned.drivers.length ? `conducteur du véhicule : ${fine.planned.drivers.join(', ')}` : 'pas de conducteur renseigné'}{fine.planned.team.length ? ` · équipe : ${fine.planned.team.join(', ')}` : ''}</span>
             )}

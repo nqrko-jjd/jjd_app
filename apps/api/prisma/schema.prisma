@@ -160,7 +160,6 @@ model PersonAdjustment {
   note        String?
   settled     Boolean   @default(false) // déjà déduit de la paie / remboursé
   settledOn   DateTime?
-  fineId      String?   @unique // dette créée automatiquement par un PV (voir lib/fine-debt.ts)
   createdById String?
   createdBy   User?     @relation("PersonAdjustmentAuthor", fields: [createdById], references: [id])
   createdAt   DateTime  @default(now())

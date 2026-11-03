@@ -15,6 +15,7 @@ import { refreshWorksiteStatus } from '../lib/worksite-status.js';
 import { attachPhotoRoutes } from '../lib/photo-upload.js';
 import { vehicleCostBreakdown } from '../lib/vehicle-cost.js';
 import { storeFile, UPLOADS_DIR } from '../lib/media.js';
+import { syncFineDebt, dropFineDebt } from '../lib/fine-debt.js';
 
 const docUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 
@@ -575,6 +576,7 @@ vehiclesRouter.post(
     const vehicleId = d.vehicleId || (await vehicleByPlate(d.plateRaw));
     if (!vehicleId && !d.plateRaw) throw new HttpError(422, 'Indiquez le véhicule ou sa plaque.');
     const fine = await prisma.fine.create({ data: { ...d, vehicleId: vehicleId ?? null, paidOn: d.status === 'Payé' ? (d.paidOn ?? new Date()) : null } });
+    await syncFineDebt(fine.id);
     await prisma.auditLog.create({ data: { actorId: req.user!.id, action: 'fine.create', entity: 'Fine', entityId: fine.id, meta: { reference: d.reference ?? null, amount: d.amount ?? null } } });
     res.status(201).json({ fine });
   }),
@@ -594,6 +596,7 @@ vehiclesRouter.patch(
     }
     if ('status' in d) data.paidOn = d.status === 'Payé' ? (d.paidOn ?? cur.paidOn ?? new Date()) : null;
     const fine = await prisma.fine.update({ where: { id: cur.id }, data });
+    await syncFineDebt(fine.id);
     res.json({ fine });
   }),
 );
@@ -604,6 +607,7 @@ vehiclesRouter.delete(
   asyncHandler(async (req, res) => {
     const cur = await prisma.fine.findUnique({ where: { id: req.params.fineId } });
     if (!cur) throw new HttpError(404, 'PV introuvable');
+    await dropFineDebt(cur.id);
     await prisma.fine.delete({ where: { id: cur.id } });
     await prisma.auditLog.create({ data: { actorId: req.user!.id, action: 'fine.delete', entity: 'Fine', entityId: cur.id, meta: { reference: cur.reference, amount: cur.amount } } });
     res.json({ ok: true });

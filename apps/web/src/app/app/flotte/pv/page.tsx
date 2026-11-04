@@ -1,7 +1,7 @@
 'use client';
 import { tr } from '@/lib/ui-language';
 import { SkeletonRows, ErrorState, EmptyState } from '@/components/States';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
 import { api, apiBlobUrl, apiUpload } from '@/lib/api';
@@ -33,6 +33,8 @@ export default function PvPage() {
   const { data: vehData } = useApi<{ items: VehicleOpt[] }>('/api/vehicles');
   const { data: pick } = useApi<{ people: { id: string; name: string }[] }>('/api/meta/pickers');
   const [edit, setEdit] = useState<Fine | 'new' | null>(null);
+  const [dropped, setDropped] = useState<File | null>(null);
+  const [over, setOver] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const items = data?.items ?? [];
@@ -54,6 +56,14 @@ export default function PvPage() {
         sub={data ? `${items.length} PV · ${formatEur(total)}${dueNow ? ` · ${dueNow} PV en retard` : ''}` : undefined}
         action={<div className="row"><Link href="/app/flotte" className="btn">← Flotte</Link><button className="btn primary" onClick={() => setEdit('new')}>+ Nouveau PV</button></div>}
       />
+      <div
+        onDragOver={(e) => { e.preventDefault(); setOver(true); }}
+        onDragLeave={() => setOver(false)}
+        onDrop={(e) => { e.preventDefault(); setOver(false); const f = e.dataTransfer.files?.[0]; if (f) { setDropped(f); setEdit('new'); } }}
+        style={{ border: `2px dashed ${over ? 'var(--accent, #1f5f46)' : 'var(--line, #cfd8d3)'}`, borderRadius: 12, padding: '0.9rem 1rem', marginBottom: '1rem', textAlign: 'center', fontSize: '0.9rem', background: over ? 'rgba(31,95,70,0.06)' : 'transparent' }}
+      >
+        Glisse ici le PDF (ou la photo) d’un nouveau PV : il est lu automatiquement et le formulaire se pré-remplit.
+      </div>
       {msg && <div className={`badge ${msg.ok ? 'ok' : 'crit'}`} style={{ marginBottom: '1rem', padding: '0.5rem 0.8rem' }}>{msg.text}</div>}
       <div className="row" style={{ marginBottom: '1rem', gap: '0.8rem', flexWrap: 'wrap', alignItems: 'center' }}>
         <label className="row" style={{ gap: '0.4rem' }}><input type="checkbox" checked={unpaid} onChange={(e) => setUnpaid(e.target.checked)} /> Impayés uniquement</label>
@@ -106,21 +116,45 @@ export default function PvPage() {
           </table>
         </div>
       )}
-      {edit && <FineModal fine={edit === 'new' ? null : edit} vehicles={vehData?.items ?? []} people={pick?.people ?? []} onClose={() => setEdit(null)} onSaved={(text) => { setEdit(null); setMsg({ ok: true, text }); reload(); }} />}
+      {edit && <FineModal key={dropped?.name ?? 'm'} fine={edit === 'new' ? null : edit} initialFile={edit === 'new' ? dropped : null} vehicles={vehData?.items ?? []} people={pick?.people ?? []} onClose={() => { setEdit(null); setDropped(null); }} onSaved={(text) => { setEdit(null); setDropped(null); setMsg({ ok: true, text }); reload(); }} />}
     </>
   );
 }
 
-function FineModal({ fine, vehicles, people, onClose, onSaved }: { fine: Fine | null; vehicles: VehicleOpt[]; people: { id: string; name: string }[]; onClose: () => void; onSaved: (text: string) => void }) {
+function FineModal({ fine, initialFile, vehicles, people, onClose, onSaved }: { fine: Fine | null; initialFile?: File | null; vehicles: VehicleOpt[]; people: { id: string; name: string }[]; onClose: () => void; onSaved: (text: string) => void }) {
   const [v, setV] = useState({
     vehicleId: fine?.vehicle?.id ?? '', plateRaw: fine?.plateRaw ?? '', date: dayInput(fine?.date ?? null), time: fine?.time ?? '', reference: fine?.reference ?? '', payTo: fine?.payTo ?? '',
     street: fine?.street ?? '', postalCode: fine?.postalCode ?? '', type: fine?.type ?? '', amount: fine?.amount != null ? String(fine.amount) : '', dueOn: dayInput(fine?.dueOn ?? null), reminder1On: dayInput(fine?.reminder1On ?? null),
     reminder2On: dayInput(fine?.reminder2On ?? null), paid: fine?.status === 'Payé', paidOn: dayInput(fine?.paidOn ?? null), driverPersonId: fine?.driverPersonId ?? '', note: fine?.note ?? '',
   });
-  const [file, setFile] = useState<File | null>(null);
+  const [file, setFile] = useState<File | null>(initialFile ?? null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [reading, setReading] = useState<string | null>(null);
   const set = (k: keyof typeof v, val: string | boolean) => setV((s) => ({ ...s, [k]: val }));
+
+  /** Nouveau PV : lit le fichier déposé et remplit les champs encore vides (rien n'est écrasé). */
+  async function readFile(f: File | null) {
+    setFile(f);
+    if (!f || fine) return;
+    setReading('Lecture du PV en cours…');
+    try {
+      const fd = new FormData();
+      fd.append('file', f);
+      const r = await apiUpload<{ found: { plate: string | null; date: string | null; time: string | null; reference: string | null; payTo: string | null; street: string | null; postalCode: string | null; type: string | null; amount: number | null; dueOn: string | null; note: string | null } | null; vehicleId: string | null }>('/api/vehicles/fines/extract', fd);
+      if (!r.found) { setReading('Lecture automatique impossible : remplis les champs à la main.'); return; }
+      const x = r.found;
+      setV((s) => ({
+        ...s,
+        vehicleId: s.vehicleId || r.vehicleId || '', plateRaw: s.plateRaw || x.plate || '', date: s.date || x.date || '', time: s.time || x.time || '',
+        reference: s.reference || x.reference || '', payTo: s.payTo || x.payTo || '', street: s.street || x.street || '', postalCode: s.postalCode || x.postalCode || '',
+        type: s.type || x.type || '', amount: s.amount || (x.amount != null ? String(x.amount) : ''), dueOn: s.dueOn || x.dueOn || '', note: s.note || x.note || '',
+      }));
+      setReading('PV lu : vérifie les champs, choisis le conducteur, puis enregistre.');
+    } catch (e) { setReading(`Lecture automatique impossible (${(e as Error).message}). Remplis les champs à la main.`); }
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (initialFile) void readFile(initialFile); }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault(); setBusy(true); setErr(null);
@@ -171,6 +205,9 @@ function FineModal({ fine, vehicles, people, onClose, onSaved }: { fine: Fine | 
               <option value="">— inconnu —</option>
               {people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
+            {v.driverPersonId && Number(String(v.amount).replace(',', '.')) > 0 && (
+              <span className="muted" style={{ fontSize: '0.82rem' }}>Ce PV sera ajouté aux dettes de cette personne (« À retenir » dans le décompte du mois) jusqu’à ce que vous le passiez en « Réglé » sur sa fiche.</span>
+            )}
             {fine && (fine.planned.drivers.length > 0 || fine.planned.team.length > 0) && (
               <span className="muted" style={{ fontSize: '0.82rem' }}>Planning ce jour-là : {fine.planned.drivers.length ? `conducteur du véhicule : ${fine.planned.drivers.join(', ')}` : 'pas de conducteur renseigné'}{fine.planned.team.length ? ` · équipe : ${fine.planned.team.join(', ')}` : ''}</span>
             )}
@@ -182,7 +219,8 @@ function FineModal({ fine, vehicles, people, onClose, onSaved }: { fine: Fine | 
           </div>
           <div className="field" style={{ gridColumn: '1 / -1' }}>
             <label>Scan ou photo du PV (PDF ou image){fine?.hasPdf ? ' — un fichier est déjà joint, en choisir un nouveau le remplace' : ''}</label>
-            <FileDrop file={file} onFile={setFile} disabled={busy} />
+            <FileDrop file={file} onFile={(f) => void readFile(f)} disabled={busy} />
+            {reading && <span className="muted" style={{ fontSize: '0.82rem' }}>{reading}</span>}
           </div>
         </div>
         {err && <div className="badge crit" style={{ margin: '0 1.2rem', padding: '0.4rem 0.7rem' }}>{err}</div>}

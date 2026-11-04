@@ -447,6 +447,35 @@ timesheetRouter.get(
   }),
 );
 
+/**
+ * Activité récente (chef / bureau) : TOUS les pointages des N derniers jours, quel que soit leur état —
+ * compteurs en cours, à valider, validés, refusés —, avec heures de début/fin et lieu. La file « à valider »
+ * ne montre que les pointages terminés et non validés, donc ni ceux qui pointent en ce moment ni ceux déjà validés.
+ */
+timesheetRouter.get(
+  '/activity',
+  requireAuth('admin', 'office', 'foreman'),
+  asyncHandler(async (req, res) => {
+    const days = Math.min(60, Math.max(1, Number(req.query.days) || 14));
+    const since = new Date(Date.now() - days * 86_400_000);
+    const where: Record<string, unknown> = { OR: [{ status: 'running' }, { date: { gte: since } }, { startedAt: { gte: since } }] };
+    if (req.user!.role === 'foreman') {
+      if (!req.user!.personId) return res.json({ items: [] });
+      where.worksite = { managerId: req.user!.personId };
+    }
+    const items = await prisma.timeEntry.findMany({
+      where,
+      orderBy: [{ startedAt: 'desc' }, { date: 'desc' }],
+      include: {
+        person: { select: { displayName: true, firstName: true, photoThumbUrl: true } },
+        worksite: { select: { ref: true, title: true } },
+      },
+      take: 1500,
+    });
+    res.json({ items });
+  }),
+);
+
 /** Un chef de chantier ne peut agir que sur les pointages de ses propres chantiers. */
 async function assertForemanOwnsEntry(req: import('express').Request, entryId: string) {
   if (req.user!.role !== 'foreman') return;

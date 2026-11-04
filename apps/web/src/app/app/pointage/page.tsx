@@ -101,6 +101,8 @@ export default function PointagePage() {
 
       <PlannedTimesheet onChanged={reload} />
 
+      <RecentActivity version={data?.items.length ?? 0} />
+
       {items.length > 0 && (
         <div className="kpis" style={{ marginBottom: '1.4rem' }}>
           <Kpi ic={Clock} label={tr("Heures")} value={formatHours(totalHours)} sub={`${byPerson.size} collaborateur${byPerson.size > 1 ? 's' : ''}`} hero />
@@ -208,6 +210,87 @@ export default function PointagePage() {
         </Banner>
       )}
     </>
+  );
+}
+
+interface Activity {
+  id: string; date: string | null; startedAt: string | null; endedAt: string | null; hours: number | null; amount: number | null; task: string | null; note: string | null;
+  status: string; source: string | null; geoFlag: boolean; geoDistance: number | null; startLat: number | null; startLng: number | null;
+  person: { displayName: string | null; firstName: string; photoThumbUrl: string | null };
+  worksite: { ref: string; title: string } | null;
+}
+const hhmm = (iso: string | null) => (iso ? new Intl.DateTimeFormat('fr-BE', { timeZone: 'Europe/Brussels', hour: '2-digit', minute: '2-digit' }).format(new Date(iso)) : '—');
+const dayBE = (iso: string | null) => (iso ? new Intl.DateTimeFormat('fr-BE', { timeZone: 'Europe/Brussels', weekday: 'short', day: '2-digit', month: '2-digit' }).format(new Date(iso)) : '—');
+const STATUS: Record<string, { label: string; cls: string }> = {
+  running: { label: 'En cours', cls: 'warn' }, submitted: { label: 'À valider', cls: 'warn' }, approved: { label: 'Validé', cls: 'ok' }, rejected: { label: 'Refusé', cls: 'crit' },
+};
+const nameOf = (p: Activity['person']) => p.displayName || p.firstName;
+
+/** Qui pointe en ce moment + tous les pointages des derniers jours (début, fin, chantier, lieu, état), validés ou non. */
+function RecentActivity({ version }: { version: number }) {
+  const [days, setDays] = useState(7);
+  const [who, setWho] = useState('');
+  const [status, setStatus] = useState('');
+  const { data, loading, error, reload } = useApi<{ items: Activity[] }>(`/api/timesheet/activity?days=${days}`);
+  useEffect(() => { reload(); }, [version]); // eslint-disable-line react-hooks/exhaustive-deps
+  const all = data?.items ?? [];
+  const running = all.filter((e) => e.status === 'running');
+  const rows = all.filter((e) => (!status || e.status === status) && (!who.trim() || nameOf(e.person).toLowerCase().includes(who.trim().toLowerCase())));
+  return (
+    <div className="card" style={{ marginBottom: '1.2rem', padding: '1rem 1.1rem' }}>
+      <div className="row" style={{ alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap', marginBottom: '0.6rem' }}>
+        <strong>Pointages récents</strong>
+        <span className="hint">{running.length ? `${running.length} au travail en ce moment` : 'Personne ne pointe en ce moment'}</span>
+        <span style={{ marginLeft: 'auto' }} />
+        <input className="input" style={{ maxWidth: 160 }} placeholder="Personne…" value={who} onChange={(e) => setWho(e.target.value)} aria-label="Filtrer par personne" />
+        <select className="select" style={{ width: 'auto' }} value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Filtrer par état">
+          <option value="">Tous les états</option><option value="running">En cours</option><option value="submitted">À valider</option><option value="approved">Validés</option><option value="rejected">Refusés</option>
+        </select>
+        <select className="select" style={{ width: 'auto' }} value={days} onChange={(e) => setDays(Number(e.target.value))} aria-label="Période">
+          <option value={1}>Aujourd’hui</option><option value={7}>7 jours</option><option value={14}>14 jours</option><option value={31}>31 jours</option>
+        </select>
+      </div>
+      {running.length > 0 && (
+        <div className="row" style={{ gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.7rem' }}>
+          {running.map((e) => (
+            <span key={e.id} className="badge warn" style={{ padding: '0.35rem 0.6rem' }}>
+              ● {nameOf(e.person)} · {e.worksite ? e.worksite.ref : 'sans chantier'} · depuis {hhmm(e.startedAt)}{e.geoFlag ? ` · hors zone (${e.geoDistance} m)` : ''}
+            </span>
+          ))}
+        </div>
+      )}
+      {loading && !data && <SkeletonRows />}
+      {error && !loading && <ErrorState message={error} onRetry={reload} />}
+      {data && rows.length === 0 && <div className="muted" style={{ fontSize: '0.85rem' }}>Aucun pointage sur cette période.</div>}
+      {rows.length > 0 && (
+        <div className="tbl-wrap" style={{ maxHeight: 420, overflowY: 'auto' }}>
+          <table className="tbl">
+            <thead><tr><th>Jour</th><th>Personne</th><th>Chantier</th><th>Début</th><th>Fin</th><th style={{ textAlign: 'right' }}>Heures</th><th>Lieu</th><th>Origine</th><th>État</th></tr></thead>
+            <tbody>
+              {rows.map((e) => {
+                const st = STATUS[e.status] ?? { label: e.status, cls: '' };
+                return (
+                  <tr key={e.id} style={e.geoFlag ? { background: 'var(--warn-soft)' } : undefined} title={[e.task, e.note].filter(Boolean).join(' — ') || undefined}>
+                    <td className="tnum">{dayBE(e.startedAt ?? e.date)}</td>
+                    <td>{nameOf(e.person)}</td>
+                    <td>{e.worksite ? <><span className="mono">{e.worksite.ref}</span> {e.worksite.title}</> : <span className="muted">—</span>}</td>
+                    <td className="tnum">{hhmm(e.startedAt)}</td>
+                    <td className="tnum">{e.status === 'running' ? '…' : hhmm(e.endedAt)}</td>
+                    <td className="tnum" style={{ textAlign: 'right' }}>{e.status === 'running' ? '—' : formatHours(e.hours)}</td>
+                    <td>
+                      {e.geoFlag ? <span className="badge crit">Hors zone · {e.geoDistance} m</span> : e.geoDistance != null ? <span className="badge ok">Sur place</span> : <span className="muted">—</span>}
+                      {e.startLat != null && e.startLng != null && <> <a href={`https://www.google.com/maps?q=${e.startLat},${e.startLng}`} target="_blank" rel="noreferrer" style={{ fontSize: '0.78rem' }}>📍</a></>}
+                    </td>
+                    <td className="muted" style={{ fontSize: '0.78rem' }}>{e.source === 'timer' ? 'Appli (compteur)' : e.source === 'planning' ? 'Planning' : e.source ?? 'Saisie'}</td>
+                    <td><span className={`badge ${st.cls}`}>{st.label}</span></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -25,7 +25,7 @@ Réponds UNIQUEMENT avec un objet JSON valide (aucun texte avant/après, aucun b
   "plate": string | null,        // plaque du véhicule, ex. "1-ABC-123"
   "date": "YYYY-MM-DD" | null,   // date de l'INFRACTION (pas la date d'envoi du courrier)
   "time": "HH:MM" | null,        // heure de l'infraction
-  "reference": string | null,    // référence de la lettre : s'il y a un « Systeemnummer » / « numéro de système » (ex. PPBXL/26CB741520), prends-le en remplaçant "/" par "-" (PPBXL-26CB741520) ; sinon le n° de PV ou de dossier
+  "reference": string | null,    // référence de la lettre : s'il y a un « Systeemnummer » / « numéro de système » (ex. PPBXL/26CB741520), recopie-le EXACTEMENT comme sur le document, avec son "/" (PPBXL/26CB741520), sans le modifier ; sinon le n° de PV ou de dossier
   "payTo": string | null,        // qui encaisse (ville, police, SPF, société de stationnement)
   "street": string | null,       // lieu de l'infraction (rue)
   "postalCode": string | null,   // code postal et commune du lieu, ex. "7100 La Louvière"

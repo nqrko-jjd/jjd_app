@@ -23,12 +23,49 @@ const vLabel = (v: { brand: string | null; model: string | null; plate: string |
 const today = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Brussels' }).format(new Date());
 const late = (f: Fine) => f.status !== 'Payé' && [f.dueOn, f.reminder1On, f.reminder2On].some((d) => d && d.slice(0, 10) < today());
 
+type ColKey = 'date' | 'vehicle' | 'type' | 'payTo' | 'ref' | 'driver' | 'amount' | 'dueOn' | 'status';
+const COLS: { key: ColKey; label: string; right?: boolean }[] = [
+  { key: 'date', label: 'Date' }, { key: 'vehicle', label: 'Véhicule' }, { key: 'type', label: 'Type' }, { key: 'payTo', label: 'À payer à' }, { key: 'ref', label: 'Réf' },
+  { key: 'driver', label: 'Conducteur' }, { key: 'amount', label: 'Montant', right: true }, { key: 'dueOn', label: 'Échéance' }, { key: 'status', label: 'Statut' },
+];
+/** Texte de chaque colonne : sert au filtre (« contient »). */
+const CELL: Record<ColKey, (f: Fine) => string> = {
+  date: (f) => `${formatDateBE(f.date)} ${f.time ?? ''}`,
+  vehicle: (f) => (f.vehicle ? vLabel(f.vehicle) : (f.plateRaw ?? '')),
+  type: (f) => [f.type, f.street, f.postalCode].filter(Boolean).join(' '),
+  payTo: (f) => f.payTo ?? '',
+  ref: (f) => f.reference ?? '',
+  driver: (f) => f.driverName ?? f.planned.drivers.join(', '),
+  amount: (f) => (f.amount != null ? String(f.amount).replace('.', ',') : ''),
+  dueOn: (f) => formatDateBE(f.dueOn),
+  status: (f) => `${f.status === 'Payé' ? 'payé' : 'impayé'}${late(f) ? ' en retard' : ''}`,
+};
+/** Valeur de tri de chaque colonne (dates en ISO, montant en nombre). */
+const SORT: Record<ColKey, (f: Fine) => string | number> = {
+  date: (f) => `${f.date?.slice(0, 10) ?? ''} ${f.time ?? ''}`,
+  vehicle: (f) => CELL.vehicle(f), type: (f) => CELL.type(f), payTo: (f) => CELL.payTo(f), ref: (f) => CELL.ref(f), driver: (f) => CELL.driver(f),
+  amount: (f) => f.amount ?? -1, dueOn: (f) => f.dueOn?.slice(0, 10) ?? '', status: (f) => CELL.status(f),
+};
+const refKey = (r: string | null) => (r ?? '').toUpperCase().replace(/[\s/\-.]/g, '');
+const plateKey = (f: Fine) => (f.vehicle?.plate ?? f.plateRaw ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+/** PV en double : même référence (« PPBXL/26… » = « PPBXL-26… »), ou même plaque + même date + même heure. Renvoie id → raison. */
+function findDuplicates(list: Fine[]): Map<string, string> {
+  const out = new Map<string, string>();
+  const groups = (keyOf: (f: Fine) => string, why: string) => {
+    const m = new Map<string, Fine[]>();
+    for (const f of list) { const k = keyOf(f); if (k) m.set(k, [...(m.get(k) ?? []), f]); }
+    for (const g of m.values()) if (g.length > 1) for (const f of g) out.set(f.id, out.get(f.id) ?? why);
+  };
+  groups((f) => (refKey(f.reference).length >= 6 ? refKey(f.reference) : ''), 'Même référence qu’un autre PV');
+  groups((f) => (plateKey(f) && f.date ? `${plateKey(f)}|${f.date.slice(0, 10)}|${f.time ?? ''}` : ''), 'Même plaque, même date et même heure qu’un autre PV');
+  return out;
+}
+
 /** PV / amendes de la flotte : ajouter, modifier, marquer payé, joindre le scan, retrouver qui conduisait (planning), supprimer. */
 export default function PvPage() {
-  const [unpaid, setUnpaid] = useState(true);
   const [q, setQ] = useState('');
   const [vehicleId, setVehicleId] = useState('');
-  const qs = useMemo(() => new URLSearchParams({ ...(unpaid ? { unpaid: '1' } : {}), ...(q.trim() ? { q: q.trim() } : {}), ...(vehicleId ? { vehicleId } : {}) }).toString(), [unpaid, q, vehicleId]);
+  const qs = useMemo(() => new URLSearchParams({ ...(q.trim() ? { q: q.trim() } : {}), ...(vehicleId ? { vehicleId } : {}) }).toString(), [q, vehicleId]);
   const { data, loading, error, reload } = useApi<{ items: Fine[] }>(`/api/vehicles/fines${qs ? `?${qs}` : ''}`);
   const { data: vehData } = useApi<{ items: VehicleOpt[] }>('/api/vehicles');
   const { data: pick } = useApi<{ people: { id: string; name: string }[] }>('/api/meta/pickers');
@@ -37,9 +74,26 @@ export default function PvPage() {
   const [over, setOver] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
-  const items = data?.items ?? [];
+  const rawItems = data?.items ?? [];
+  const [sort, setSort] = useState<{ key: ColKey; dir: 1 | -1 } | null>(null);
+  const [cols, setCols] = useState<Partial<Record<ColKey, string>>>({});
+  const [dupOnly, setDupOnly] = useState(false);
+  const dups = useMemo(() => findDuplicates(rawItems), [rawItems]);
+  const items = useMemo(() => {
+    const active = (Object.entries(cols) as [ColKey, string][]).filter(([, t]) => t.trim());
+    let list = rawItems.filter((f) => (!dupOnly || dups.has(f.id)) && active.every(([k, t]) => CELL[k](f).toLowerCase().includes(t.trim().toLowerCase())));
+    if (sort) {
+      const { key, dir } = sort;
+      list = [...list].sort((a, b) => {
+        const x = SORT[key](a), y = SORT[key](b);
+        return (typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y), 'fr', { numeric: true })) * dir;
+      });
+    }
+    return list;
+  }, [rawItems, cols, sort, dupOnly, dups]);
   const total = items.reduce((s, f) => s + (f.amount ?? 0), 0);
   const dueNow = items.filter(late).length;
+  const filtered = dupOnly || Object.values(cols).some((t) => t?.trim());
 
   async function run(fn: () => Promise<unknown>, ok: string) {
     setMsg(null);
@@ -66,7 +120,8 @@ export default function PvPage() {
       </div>
       {msg && <div className={`badge ${msg.ok ? 'ok' : 'crit'}`} style={{ marginBottom: '1rem', padding: '0.5rem 0.8rem' }}>{msg.text}</div>}
       <div className="row" style={{ marginBottom: '1rem', gap: '0.8rem', flexWrap: 'wrap', alignItems: 'center' }}>
-        <label className="row" style={{ gap: '0.4rem' }}><input type="checkbox" checked={unpaid} onChange={(e) => setUnpaid(e.target.checked)} /> Impayés uniquement</label>
+        <label className="row" style={{ gap: '0.4rem' }} title="Même référence, ou même plaque + date + heure."><input type="checkbox" checked={dupOnly} onChange={(e) => setDupOnly(e.target.checked)} /> Doublons uniquement ({dups.size})</label>
+        {filtered && <button className="btn ghost" onClick={() => { setCols({}); setDupOnly(false); }}>Effacer les filtres</button>}
         <input className="input" style={{ maxWidth: 240 }} placeholder="Référence, plaque, lieu, type…" value={q} onChange={(e) => setQ(e.target.value)} />
         <select className="select" style={{ width: 'auto', maxWidth: 260 }} value={vehicleId} onChange={(e) => setVehicleId(e.target.value)} aria-label="Véhicule">
           <option value="">Tous les véhicules</option>
@@ -75,12 +130,31 @@ export default function PvPage() {
       </div>
       {loading && !data && <SkeletonRows />}
       {error && !loading && <ErrorState message={error} onRetry={reload} />}
-      {data && items.length === 0 && <EmptyState icon={ReceiptText} title="Aucun PV" text={unpaid ? 'Aucun PV impayé. Décochez « Impayés uniquement » pour voir tout l’historique, ou ajoutez-en un.' : 'Aucun PV ne correspond.'} action={<button className="btn primary" onClick={() => setEdit('new')}>+ Nouveau PV</button>} />}
-      {data && items.length > 0 && (
+      {data && items.length === 0 && filtered && rawItems.length > 0 && <EmptyState icon={ReceiptText} title="Aucun PV" text="Aucun PV ne correspond aux filtres." action={<button className="btn" onClick={() => { setCols({}); setDupOnly(false); }}>Effacer les filtres</button>} />}
+      {data && items.length === 0 && !(filtered && rawItems.length > 0) && <EmptyState icon={ReceiptText} title="Aucun PV" text="Aucun PV pour l’instant : ajoutez-en un ou glissez un PDF ci-dessus." action={<button className="btn primary" onClick={() => setEdit('new')}>+ Nouveau PV</button>} />}
+      {data && rawItems.length > 0 && (
         <div className="tbl-wrap">
           <table className="tbl">
             <thead>
-              <tr><th>{tr("Date")}</th><th>{tr("Véhicule")}</th><th>Type</th><th>À payer à</th><th>Réf</th><th>Conducteur</th><th style={{ textAlign: 'right' }}>Montant</th><th>Échéance</th><th>Statut</th><th /></tr>
+              <tr>
+                {COLS.map((c) => (
+                  <th key={c.key} style={{ textAlign: c.right ? 'right' : undefined }} aria-sort={sort?.key === c.key ? (sort.dir === 1 ? 'ascending' : 'descending') : 'none'}>
+                    <button type="button" className="btn ghost" style={{ padding: 0, font: 'inherit', fontWeight: 'inherit' }} onClick={() => setSort((s) => (s?.key === c.key ? (s.dir === 1 ? { key: c.key, dir: -1 } : null) : { key: c.key, dir: 1 }))}>
+                      {tr(c.label)}{sort?.key === c.key ? (sort.dir === 1 ? ' ▲' : ' ▼') : ''}
+                    </button>
+                  </th>
+                ))}
+                <th />
+              </tr>
+              <tr>
+                {COLS.map((c) => (
+                  <th key={c.key} style={{ fontWeight: 'normal' }}>
+                    <input className="input" style={{ width: '100%', minWidth: 60, padding: '0.2rem 0.4rem', fontSize: '0.78rem', textAlign: c.right ? 'right' : undefined }} placeholder="Filtrer" aria-label={`Filtrer : ${c.label}`}
+                      value={cols[c.key] ?? ''} onChange={(e) => setCols((s) => ({ ...s, [c.key]: e.target.value }))} />
+                  </th>
+                ))}
+                <th />
+              </tr>
             </thead>
             <tbody>
               {items.map((f) => (
@@ -96,7 +170,7 @@ export default function PvPage() {
                   </td>
                   <td>{f.type ?? '—'}{f.street ? <div className="muted" style={{ fontSize: '0.76rem' }}>{f.street}{f.postalCode ? `, ${f.postalCode}` : ''}</div> : null}</td>
                   <td>{f.payTo ?? '—'}</td>
-                  <td className="mono" style={{ fontSize: '0.78rem' }}>{f.reference ?? '—'}</td>
+                  <td className="mono" style={{ fontSize: '0.78rem' }}>{f.reference ?? '—'}{dups.has(f.id) && <span className="badge warn" style={{ marginLeft: 4 }} title={dups.get(f.id)}>doublon ?</span>}</td>
                   <td>{f.driverName ?? (f.planned.drivers.length ? <span className="muted" title="D’après le planning ce jour-là">{f.planned.drivers.join(', ')} ?</span> : '—')}</td>
                   <td style={{ textAlign: 'right' }}><Money value={f.amount} /></td>
                   <td className="tnum">{formatDateBE(f.dueOn)}</td>

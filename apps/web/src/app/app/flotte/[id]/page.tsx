@@ -107,6 +107,9 @@ export default function VehicleDetail({ params }: { params: Promise<{ id: string
     { name: 'fuelConsoL100', label: 'Consommation (L/100 km)', type: 'number' },
     { name: 'fuelPricePerL', label: 'Prix carburant (€/L)', type: 'number' },
     { name: 'costPerKmExtra', label: 'Coût/km supplémentaire (€)', type: 'number', placeholder: 'pneus, entretien…' },
+    { name: 'insuranceProvider', label: 'Assurance : compagnie' },
+    { name: 'insuranceMonthly', label: 'Assurance : prime (€/mois)', type: 'number' },
+    { name: 'insuranceAnnual', label: 'Assurance : prime (€/an)', type: 'number', placeholder: 'si pas de prime mensuelle' },
     { name: 'parkingMonthly', label: 'Parking / garage (€/mois)', type: 'number' },
     { name: 'otherMonthly', label: 'Autres frais fixes (€/mois)', type: 'number', placeholder: 'GPS, télépéage…' },
   ];
@@ -152,6 +155,7 @@ export default function VehicleDetail({ params }: { params: Promise<{ id: string
             circulationTax: v.circulationTax, biv: v.biv, equipment: v.equipment, note: v.note,
             fuelConsoL100: v.fuelConsoL100, fuelPricePerL: v.fuelPricePerL, costPerKmExtra: v.costPerKmExtra,
             parkingMonthly: v.parkingMonthly, otherMonthly: v.otherMonthly,
+            insuranceProvider: v.insurances[0]?.provider ?? null, insuranceMonthly: v.insurances[0]?.monthlyAmount ?? null, insuranceAnnual: v.insurances[0]?.annualAmount ?? null,
           }}
           onClose={() => setEditing(false)}
           onSubmit={async (body) => { await api(`/api/vehicles/${v.id}`, { method: 'PATCH', body }); reload(); }}

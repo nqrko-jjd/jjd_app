@@ -502,6 +502,19 @@ vehiclesRouter.patch(
       data[k] = d[k] ?? null;
     }
     await prisma.vehicle.update({ where: { id: req.params.id }, data });
+    // assurance (1re ligne du véhicule) : assureur + prime mensuelle ou annuelle, saisies depuis la fiche
+    const b = req.body ?? {};
+    if (['insuranceProvider', 'insuranceMonthly', 'insuranceAnnual'].some((k) => k in b)) {
+      const ins = z.object({
+        insuranceProvider: z.string().trim().max(120).nullish(),
+        insuranceMonthly: z.coerce.number().min(0).max(100000).nullish(),
+        insuranceAnnual: z.coerce.number().min(0).max(1000000).nullish(),
+      }).parse(Object.fromEntries(Object.entries(b).map(([k, x]) => [k, x === '' ? null : x])));
+      const cur = await prisma.insurance.findFirst({ where: { vehicleId: req.params.id }, orderBy: { createdAt: 'asc' } });
+      const row = { provider: ins.insuranceProvider || null, monthlyAmount: ins.insuranceMonthly ?? null, annualAmount: ins.insuranceAnnual ?? null };
+      if (cur) await prisma.insurance.update({ where: { id: cur.id }, data: row });
+      else if (row.provider || row.monthlyAmount != null || row.annualAmount != null) await prisma.insurance.create({ data: { ...row, vehicleId: req.params.id } });
+    }
     res.json({ vehicle: await withCost(req.params.id!) });
   }),
 );

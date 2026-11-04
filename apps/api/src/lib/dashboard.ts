@@ -2,6 +2,8 @@ import { plannedProposals, brusselsDay } from './planned-time.js';
 import { prisma } from '../db.js';
 import { round2 } from '@jjd/shared';
 import { forecastReceivable } from './consolidated.js';
+import { allocationSnapshot } from './bank-allocation.js';
+import { purchaseRemaining } from './payment-tolerance.js';
 
 const DAY = 86_400_000;
 
@@ -120,7 +122,7 @@ export async function bureauDashboard() {
     // factures d'achat échues et pas encore payées — pendant fournisseur, symétrique des « Impayés » client
     prisma.ledgerEntry.findMany({
       where: { direction: 'purchase', dueDate: { not: null, lt: now }, NOT: { paymentStatus: 'Payé' } },
-      select: { ht: true, ttc: true },
+      select: { id: true, ht: true, ttc: true },
     }),
     forecastReceivable(),
     // chantiers « en observation / attente » (séchage, contrôle, attente terrain) : à garder à l'œil jusqu'à la reprise
@@ -133,13 +135,18 @@ export async function bureauDashboard() {
   const overdueAmount = round2(overdue.reduce((s, d) => s + Math.max(0, (d.totalTtc || 0) - (d.paidAmount || 0)), 0));
   const receivableAmount = round2(receivable.reduce((s, d) => s + Math.max(0, (d.totalTtc || 0) - (d.paidAmount || 0)), 0));
   const quotesPendingAmount = round2(quotesPending.reduce((s, d) => s + (d.totalHt || 0), 0));
-  const supplierOverdueAmount = round2(supplierOverdue.reduce((s, e) => s + (e.ttc ?? e.ht), 0));
+  // fournisseurs : on compte le RESTE à payer (paiements partiels rapprochés en banque déduits), pas la facture entière
+  const supplierPayments = supplierOverdue.length ? await allocationSnapshot() : null;
+  const supplierOverdueLeft = supplierOverdue
+    .map((e) => purchaseRemaining(Math.abs(e.ttc ?? e.ht), Math.min(Math.abs(e.ttc ?? e.ht), supplierPayments?.ledgerPaid.get(e.id) ?? 0)))
+    .filter((left) => left > 0.01);
+  const supplierOverdueAmount = round2(supplierOverdueLeft.reduce((s, left) => s + left, 0));
 
   const alerts: Alert[] = [];
   if (overdue.length)
     alerts.push({ kind: 'overdue_invoices', severity: 'critical', label: 'Factures échues impayées', count: overdue.length, amount: overdueAmount, href: '/app/documents?kind=invoice&statut=overdue' });
-  if (supplierOverdue.length)
-    alerts.push({ kind: 'overdue_supplier_invoices', severity: 'critical', label: 'Factures fournisseurs échues', count: supplierOverdue.length, amount: supplierOverdueAmount, href: '/app/achats?paid=0' });
+  if (supplierOverdueLeft.length)
+    alerts.push({ kind: 'overdue_supplier_invoices', severity: 'critical', label: 'Factures fournisseurs échues', count: supplierOverdueLeft.length, amount: supplierOverdueAmount, href: '/app/achats?paid=0' });
   if (worksitesToInvoice)
     alerts.push({ kind: 'to_invoice', severity: 'warning', label: 'Chantiers terminés à facturer', count: worksitesToInvoice, href: '/app/chantiers?statut=to_invoice' });
   if (onHoldCount)
@@ -173,7 +180,7 @@ export async function bureauDashboard() {
       overdueAmount,
       overdueCount: overdue.length,
       supplierOverdueAmount,
-      supplierOverdueCount: supplierOverdue.length,
+      supplierOverdueCount: supplierOverdueLeft.length,
       openWorksites: activeCount,
       onHoldWorksites: onHoldCount,
       teamsOnSiteToday,

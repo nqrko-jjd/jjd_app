@@ -1,7 +1,8 @@
 'use client';
 import { tr } from '@/lib/ui-language';
 import { SkeletonRows, ErrorState, EmptyState } from '@/components/States';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { DocScanner, type ScannedDoc } from '@/components/DocScanner';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
 import { api, apiBlobUrl, apiUpload } from '@/lib/api';
@@ -73,8 +74,38 @@ export default function PvPage() {
   const [dropped, setDropped] = useState<File | null>(null);
   const [over, setOver] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [scanning, setScanning] = useState(false);
 
   const rawItems = data?.items ?? [];
+  // clés des PV déjà connus (+ ceux créés pendant le scan) : un PV scanné deux fois n'est créé qu'une fois
+  const knownKeys = useRef(new Set<string>());
+  useEffect(() => { for (const f of rawItems) { if (refKey(f.reference).length >= 6) knownKeys.current.add(refKey(f.reference)); if (plateKey(f) && f.date) knownKeys.current.add(`${plateKey(f)}|${f.date.slice(0, 10)}|${f.time ?? ''}`); } }, [rawItems]);
+
+  /** Un document scanné → lecture par l'IA → un PV créé (conducteur à choisir ensuite) avec le scan en pièce jointe. */
+  async function scanOne(doc: ScannedDoc): Promise<string> {
+    const fd = new FormData();
+    fd.append('file', doc.pdf);
+    const r = await apiUpload<{ found: { plate: string | null; date: string | null; time: string | null; reference: string | null; payTo: string | null; street: string | null; postalCode: string | null; type: string | null; amount: number | null; dueOn: string | null; note: string | null } | null; vehicleId: string | null }>('/api/vehicles/fines/extract', fd);
+    const x = r.found;
+    const rk = refKey(x?.reference ?? null);
+    const pk = x?.plate && x.date ? `${(x.plate).toUpperCase().replace(/[^A-Z0-9]/g, '')}|${x.date}|${x.time ?? ''}` : '';
+    if ((rk.length >= 6 && knownKeys.current.has(rk)) || (pk && knownKeys.current.has(pk))) return `Doublon ignoré : ${x?.reference ?? x?.plate} existe déjà`;
+    const created = await api<{ fine: { id: string } }>('/api/vehicles/fines', {
+      method: 'POST',
+      body: {
+        vehicleId: r.vehicleId, plateRaw: x?.plate ?? null, date: x?.date ?? null, time: x?.time ?? null, reference: x?.reference ?? null, payTo: x?.payTo ?? null, street: x?.street ?? null,
+        postalCode: x?.postalCode ?? null, type: x?.type ?? null, amount: x?.amount ?? null, dueOn: x?.dueOn ?? null,
+        note: x ? (x.note ?? null) : 'Scan non lu automatiquement — à compléter',
+      },
+    });
+    const up = new FormData();
+    up.append('file', doc.pdf);
+    await apiUpload(`/api/vehicles/fines/${created.fine.id}/file`, up);
+    if (rk.length >= 6) knownKeys.current.add(rk);
+    if (pk) knownKeys.current.add(pk);
+    reload();
+    return x ? `PV créé : ${x.reference ?? 'sans référence'} · ${x.plate ?? 'plaque ?'}${x.date ? ` · ${x.date}` : ''}` : 'PV créé, mais illisible : à compléter à la main';
+  }
   const [sort, setSort] = useState<{ key: ColKey; dir: 1 | -1 } | null>(null);
   const [cols, setCols] = useState<Partial<Record<ColKey, string>>>({});
   const [dupOnly, setDupOnly] = useState(false);
@@ -108,8 +139,9 @@ export default function PvPage() {
       <PageHead
         title="PV / amendes"
         sub={data ? `${items.length} PV · ${formatEur(total)}${dueNow ? ` · ${dueNow} PV en retard` : ''}` : undefined}
-        action={<div className="row"><Link href="/app/flotte" className="btn">← Flotte</Link><button className="btn primary" onClick={() => setEdit('new')}>+ Nouveau PV</button></div>}
+        action={<div className="row"><Link href="/app/flotte" className="btn">← Flotte</Link><button className="btn" onClick={() => setScanning(true)}>📷 Scanner des PV</button><button className="btn primary" onClick={() => setEdit('new')}>+ Nouveau PV</button></div>}
       />
+      {scanning && <DocScanner title="Scanner des PV" singleDefault={false} handle={scanOne} onClose={() => { setScanning(false); reload(); }} />}
       <div
         onDragOver={(e) => { e.preventDefault(); setOver(true); }}
         onDragLeave={() => setOver(false)}

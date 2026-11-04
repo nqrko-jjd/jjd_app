@@ -17,6 +17,7 @@ import { ContextMenu, useContextMenu, type MenuItem } from '@/components/Context
 import { PaginationBar } from '@/components/PaginationBar';
 import { ComboBox } from '@/components/ComboBox';
 import { FileDrop } from '@/components/FileDrop';
+import { DocScanner, type ScannedDoc } from '@/components/DocScanner';
 
 interface Expense {
   id: string;
@@ -123,6 +124,10 @@ function AchatsInner() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(100);
   const [edit, setEdit] = useState<Expense | 'new' | { prefillFrom: Expense } | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const scannedKeys = useRef(new Set<string>()); // n° de facture + montant déjà créés pendant ce scan
+  const [dropped, setDropped] = useState<File | null>(null); // PDF/photo glissé sur la page : ouvre « Nouvelle dépense » et la lit
+  const [over, setOver] = useState(false);
   const [linking, setLinking] = useState<Expense | null>(null);
   const [merging, setMerging] = useState<Expense | null>(null);
   const [showCandidates, setShowCandidates] = useState(false);
@@ -166,6 +171,36 @@ function AchatsInner() {
   const [reprocessing, setReprocessing] = useState(false);
   const [scanningProcessed, setScanningProcessed] = useState(false);
   const [scanningRefs, setScanningRefs] = useState(false);
+
+  /** Un document scanné → première page lue par l'IA → une dépense créée (à vérifier) avec le scan en pièce jointe. */
+  async function scanOne(doc: ScannedDoc): Promise<string> {
+    const fd = new FormData();
+    fd.append('file', doc.firstPage);
+    const r = await apiUpload<{
+      extraction: { supplierName?: string | null; contactId?: string | null; issuedOn: string | null; totalHt: number | null; totalTtc: number | null; totalVat: number | null; vatRate: number | null; docNumber: string | null } | null;
+      suggestedCategory: { code: string } | null;
+    }>('/api/finance/expenses/extract', fd);
+    const ex = r.extraction;
+    const key = ex?.docNumber ? `${ex.docNumber.trim().toLowerCase()}|${ex.totalTtc ?? ''}` : '';
+    const known = (data?.items ?? []).some((e) => ex?.docNumber && e.docNumber?.trim().toLowerCase() === ex.docNumber.trim().toLowerCase() && (ex.totalTtc == null || e.ttc == null || Math.abs(e.ttc - ex.totalTtc) < 0.02));
+    if (key && (known || scannedKeys.current.has(key))) return `Doublon ignoré : n° ${ex?.docNumber} existe déjà`;
+    const created = await api<{ expense: { id: string } }>('/api/finance/expenses', {
+      method: 'POST',
+      body: {
+        date: ex?.issuedOn || new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Brussels' }).format(new Date()), direction: 'purchase',
+        supplierName: ex?.contactId ? null : (ex?.supplierName ?? null), contactId: ex?.contactId ?? null, docNumber: ex?.docNumber ?? null,
+        categoryCode: r.suggestedCategory?.code ?? null, worksiteId: null,
+        ht: ex?.totalHt ?? 0, vatRecup: ex?.totalVat ?? null, ttc: ex?.totalTtc ?? null, vatRate: ex?.vatRate ?? null,
+        notes: ex ? 'Scanné — à vérifier (fournisseur, chantier, catégorie)' : 'Scanné — lecture impossible, à compléter', paymentStatus: 'Non payé',
+      },
+    });
+    const up = new FormData();
+    up.append('file', doc.pdf);
+    await apiUpload(`/api/finance/expenses/${created.expense.id}/pdf`, up);
+    if (key) scannedKeys.current.add(key);
+    reload();
+    return ex ? `Dépense créée : ${ex.supplierName ?? 'fournisseur ?'} · ${ex.totalTtc != null ? `${ex.totalTtc} €` : 'montant ?'}${ex.docNumber ? ` · n° ${ex.docNumber}` : ''}` : 'Dépense créée, mais illisible : à compléter à la main';
+  }
 
   const expenseAccessors = {
     date: (e: Expense) => (e.date ? new Date(e.date) : null),
@@ -371,12 +406,13 @@ function AchatsInner() {
       {ctx.menu && <ContextMenu x={ctx.menu.x} y={ctx.menu.y} items={rowMenu(ctx.menu.row)} onClose={ctx.close} />}
       {edit && meta && (
         <ExpenseModal
-          key={typeof edit === 'object' && edit && 'id' in edit ? edit.id : typeof edit === 'object' && edit && 'prefillFrom' in edit ? 'prefill' : 'new'}
+          key={typeof edit === 'object' && edit && 'id' in edit ? edit.id : typeof edit === 'object' && edit && 'prefillFrom' in edit ? 'prefill' : `new-${dropped?.name ?? ''}`}
           expense={edit === 'new' || (typeof edit === 'object' && 'prefillFrom' in edit) ? null : edit}
           prefillFrom={typeof edit === 'object' && edit && 'prefillFrom' in edit ? edit.prefillFrom : null}
+          initialFile={edit === 'new' ? dropped : null}
           meta={meta}
-          onClose={() => setEdit(null)}
-          onSaved={() => { setEdit(null); reload(); }}
+          onClose={() => { setEdit(null); setDropped(null); }}
+          onSaved={() => { setEdit(null); setDropped(null); reload(); }}
           onOpenOther={openById}
           onChanged={refreshOpen}
           onMerge={(x) => { setEdit(null); setMerging(x); }}
@@ -446,10 +482,21 @@ function AchatsInner() {
             </button>
               </div>
             </details>
+            <button className="btn" onClick={() => setScanning(true)}>📷 Scanner des factures</button>
             <button className="btn primary" onClick={() => setEdit('new')}>+ Nouvelle dépense</button>
           </div>
         }
       />
+      {scanning && <DocScanner title="Scanner des factures" singleDefault handle={scanOne} onClose={() => { setScanning(false); reload(); }} />}
+
+      <div
+        onDragOver={(e) => { e.preventDefault(); setOver(true); }}
+        onDragLeave={() => setOver(false)}
+        onDrop={(e) => { e.preventDefault(); setOver(false); const f = e.dataTransfer.files?.[0]; if (f) { setDropped(f); setEdit('new'); } }}
+        style={{ border: `2px dashed ${over ? 'var(--accent, #1f5f46)' : 'var(--line, #cfd8d3)'}`, borderRadius: 12, padding: '0.9rem 1rem', marginBottom: '1rem', textAlign: 'center', fontSize: '0.9rem', background: over ? 'rgba(31,95,70,0.06)' : 'transparent' }}
+      >
+        Glisse ici le PDF (ou la photo) d’une facture : il est lu automatiquement et la nouvelle dépense se pré-remplit.
+      </div>
 
       <details className="card fox-export-panel" style={{ padding: 16, marginBottom: 16 }} onToggle={e=>setReceptionOpen(e.currentTarget.open)}>
         <summary style={{cursor:'pointer',fontWeight:600}}>Réception Peppol / mails · documents à vérifier {data?.receiptsToReview ? <span className="badge warn">{data.receiptsToReview}</span> : null}</summary>
@@ -853,6 +900,7 @@ function LinkedSlips({ expense, onOpen, onChanged }: { expense: Expense; onOpen:
 function ExpenseModal({
   expense,
   prefillFrom,
+  initialFile,
   meta,
   onClose,
   onSaved,
@@ -861,6 +909,8 @@ function ExpenseModal({
   onMerge,
 }: {
   expense: Expense | null;
+  /** fichier glissé sur la page : lu dès l'ouverture de la nouvelle dépense */
+  initialFile?: File | null;
   /** fusionne les lignes de la même facture */
   onMerge?: (e: Expense) => void;
   /** Bordereau d'origine : « Facture reçue… » depuis un bordereau — préremplit fournisseur/chantier,
@@ -907,8 +957,9 @@ function ExpenseModal({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(initialFile ?? null);
   const [extracting, setExtracting] = useState(false);
+  const [readDone, setReadDone] = useState(false);
   const [extractNote, setExtractNote] = useState<string | null>(null);
   const [bankMatches, setBankMatches] = useState<BankMatch[]>([]);
   const [bankSug, setBankSug] = useState<BankTx[] | null>(null);
@@ -923,6 +974,7 @@ function ExpenseModal({
   async function handleFile(f: File | null) {
     setPendingFile(f);
     setExtractNote(null);
+    setReadDone(false);
     if (!f || expense) return;
     setExtracting(true);
     try {
@@ -971,8 +1023,10 @@ function ExpenseModal({
       }
     } catch {
       // best-effort : en cas d'échec le fichier reste joint, saisie à la main
+      setExtractNote('Lecture automatique impossible : le fichier reste joint, remplis les champs à la main.');
     } finally {
       setExtracting(false);
+      setReadDone(true);
     }
   }
 
@@ -981,6 +1035,9 @@ function ExpenseModal({
     window.addEventListener('keydown', onEsc);
     return () => window.removeEventListener('keydown', onEsc);
   }, [onClose]);
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (initialFile && !expense) void handleFile(initialFile); }, []);
 
   useEffect(() => {
     if (expense?.hasPdf) apiBlobUrl(`/api/finance/expenses/${expense.id}/pdf`).then(setPdfUrl).catch(() => {});
@@ -1324,9 +1381,10 @@ function ExpenseModal({
             <label>
               Pièce jointe (PDF ou photo)
               {!expense && <span className="muted" style={{ fontWeight: 400, fontSize: '0.8rem' }}> — un PDF texte préremplit le formulaire</span>}
-              {extracting && <span className="muted" style={{ fontSize: '0.8rem' }}> · lecture en cours…</span>}
             </label>
             <FileDrop file={pendingFile} onFile={handleFile} existingUrl={pdfUrl} />
+            {extracting && <p className="muted" style={{ fontSize: '0.82rem', marginTop: '0.4rem', marginBottom: 0 }}>Lecture du document en cours…</p>}
+            {!extracting && readDone && !extractNote && <p className="muted" style={{ fontSize: '0.82rem', marginTop: '0.4rem', marginBottom: 0 }}>Document lu : vérifie les champs, puis enregistre.</p>}
             {extractNote && <p className="muted" style={{ fontSize: '0.8rem', marginTop: '0.4rem', marginBottom: 0 }}>{extractNote}</p>}
           </div>
 

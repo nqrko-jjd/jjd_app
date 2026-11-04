@@ -17,6 +17,7 @@ const PROMPT = `Tu lis un PV, une amende ou une demande de paiement belge (polic
 
 Lis TOUTES les pages : les infos sont réparties (courrier d'accompagnement avec référence et délai, puis copie du PV avec le lieu, l'heure, la plaque, la vitesse mesurée…). Si les pages se contredisent, prends la date/heure/lieu du PV lui-même.
 Ce document peut être une « vraie » amende (avec un montant à payer) OU une demande d'identification du conducteur (« vraag om inlichtingen » / demande de renseignements) sans montant : dans ce cas "amount" = null (ne reprends JAMAIS un montant de menace type « minimum 500 € »), "dueOn" = la date limite pour identifier le conducteur (date d'envoi + délai indiqué, ex. 15 jours), et "note" commence par « Identification du conducteur à faire avant le JJ/MM/AAAA ».
+Si tu as pris le n° de système comme "reference", ajoute le n° de PV (ex. « PV BR.95.C8.651610/2026 ») dans "note".
 Pour un excès de vitesse, ajoute dans "note" la vitesse mesurée/retenue et la limite.
 
 Réponds UNIQUEMENT avec un objet JSON valide (aucun texte avant/après, aucun bloc markdown), avec exactement ces clés :
@@ -24,7 +25,7 @@ Réponds UNIQUEMENT avec un objet JSON valide (aucun texte avant/après, aucun b
   "plate": string | null,        // plaque du véhicule, ex. "1-ABC-123"
   "date": "YYYY-MM-DD" | null,   // date de l'INFRACTION (pas la date d'envoi du courrier)
   "time": "HH:MM" | null,        // heure de l'infraction
-  "reference": string | null,    // référence / n° de PV ou de dossier
+  "reference": string | null,    // référence de la lettre : s'il y a un « Systeemnummer » / « numéro de système » (ex. PPBXL/26CB741520), prends-le en remplaçant "/" par "-" (PPBXL-26CB741520) ; sinon le n° de PV ou de dossier
   "payTo": string | null,        // qui encaisse (ville, police, SPF, société de stationnement)
   "street": string | null,       // lieu de l'infraction (rue)
   "postalCode": string | null,   // code postal et commune du lieu, ex. "7100 La Louvière"

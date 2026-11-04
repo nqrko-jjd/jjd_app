@@ -271,7 +271,7 @@ function DocumentsInner() {
       />
 
       {pendingImport && (
-        <div className="modal-scrim" onClick={() => setPendingImport(null)}>
+        <div className="modal-scrim">
           <div className="modal" style={{ maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-head">
               <h2>Que veux-tu importer ?</h2>

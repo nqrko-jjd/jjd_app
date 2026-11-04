@@ -120,7 +120,7 @@ function SendModal({ p, onClose, onSend, busy }: { p: Proposal; onClose: () => v
   const [body, setBody] = useState(p.body);
   const [to, setTo] = useState(p.to ?? '');
   return (
-    <div className="modal-scrim" onClick={onClose}>
+    <div className="modal-scrim">
       <form className="modal" style={{ maxWidth: 640 }} onClick={(e) => e.stopPropagation()} onSubmit={(e) => { e.preventDefault(); onSend(subject, body, to); }}>
         <div className="modal-head"><h2>Relance {p.step}/{p.stepCount} · {p.number}</h2><button type="button" className="btn ghost" onClick={onClose} aria-label="Fermer">✕</button></div>
         <div className="modal-body">

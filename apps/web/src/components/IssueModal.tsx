@@ -16,7 +16,7 @@ export function IssueModal({ docId, kindLabel, onConfirm, onClose, busy }: { doc
   }, [onClose]);
   const blocked = !!checks?.errors.length;
   return (
-    <div className="modal-scrim" onClick={onClose}>
+    <div className="modal-scrim">
       <div className="modal" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-head"><h2>Un dernier coup d’œil ?</h2><button type="button" className="btn ghost" onClick={onClose} aria-label="Fermer">✕</button></div>
         <div className="modal-body" style={{ display: 'block' }}>

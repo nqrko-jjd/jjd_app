@@ -195,7 +195,7 @@ export default function CommandeDetail({ params }: { params: Promise<{ id: strin
       </div>
 
       {priceReq && (
-        <div className="modal-scrim" onClick={() => setPriceReq(null)}>
+        <div className="modal-scrim">
           <form className="modal" style={{ maxWidth: 620 }} onClick={(e) => e.stopPropagation()} onSubmit={(e) => { e.preventDefault(); sendPriceRequest(); }}>
             <div className="modal-head"><h2>Demande de prix · {order.contact.name}</h2><button type="button" className="btn ghost" onClick={() => setPriceReq(null)} aria-label="Fermer">✕</button></div>
             <div className="modal-body">

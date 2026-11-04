@@ -2669,3 +2669,12 @@ body.nav-collapsed .navlink .nav-badge { position: absolute; top: 2px; right: 2p
   .gps-side { max-height: none; overflow: visible; }
 }
 @media (prefers-reduced-motion: reduce) { .fm-dot::after { animation: none; } .gps-veh, .gps-site { transition: none; } }
+
+/* Formulaires en fenêtre : champs et listes déroulantes bien cerclés (contraste net sur le fond), fond de formulaire légèrement teinté */
+.modal > .modal-body { background: #f3f7f4; }
+.modal .field .input, .modal .field .select, .modal .field textarea.input {
+  border: 1.5px solid #8ea598; background-color: #fff; box-shadow: 0 1px 2px rgba(20, 50, 35, .10);
+}
+.modal .field .select { cursor: pointer; }
+.modal .field .input:hover, .modal .field .select:hover { border-color: #5f7f6e; }
+.modal .field .input:focus, .modal .field .select:focus { border-color: #225a42; box-shadow: 0 0 0 3px rgba(50, 105, 74, .2); }

@@ -42,7 +42,7 @@ export function InvoiceWizardModal({ quote, onClose, onCreated, onFreeDeposit }:
   );
 
   return (
-    <div className="modal-scrim" onClick={onClose}>
+    <div className="modal-scrim">
       <div className="modal" style={{ maxWidth: 600 }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-head"><h2>Facturer le devis {quote.number ?? quote.draftRef}</h2><button type="button" className="btn ghost" onClick={onClose} aria-label="Fermer">✕</button></div>
         <div className="modal-body" style={{ display: 'block' }}>

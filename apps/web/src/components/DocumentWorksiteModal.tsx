@@ -66,7 +66,7 @@ export function DocumentWorksiteModal({ document: doc, onClose, onLinked }: {
     } finally { saving.current = false; setBusy(false); }
   }
 
-  return <div className="modal-scrim" onClick={() => { if (!busy) onClose(); }}>
+  return <div className="modal-scrim">
     <form ref={form} className="modal" role="dialog" aria-modal="true" aria-labelledby={titleId} onClick={(e) => e.stopPropagation()} onSubmit={submit} style={{ width: '100%', maxWidth: 620 }}>
       <div className="modal-head">
         <div className="modal-heading"><span className="modal-eyebrow">{tr("Devis & factures")}</span><h2 id={titleId}>{doc.worksite ? 'Changer le chantier lié' : 'Lier à un chantier'}</h2></div>

@@ -157,7 +157,7 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
   return (
     <>
       {merging && (
-        <div className="modal-scrim" onClick={() => setMerging(false)}>
+        <div className="modal-scrim">
           <div className="modal" style={{ maxWidth: 640, maxHeight: '92vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-head"><h2>Fusionner un doublon dans « {c.name} »</h2><button className="btn ghost" onClick={() => setMerging(false)} aria-label={tr("Fermer")}>✕</button></div>
             <div style={{ padding: '1rem', display: 'grid', gap: '0.8rem' }}>

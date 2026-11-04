@@ -610,7 +610,7 @@ function QtyDialog({ item, initialUnit, action, rack, onCancel, onConfirm, onRes
   const verb = action === 'in' ? 'entrer' : action === 'out' ? 'sortir' : 'retourner';
 
   return (
-    <div className="modal-scrim" onClick={onCancel}>
+    <div className="modal-scrim">
       <form
         className="modal"
         style={{ maxWidth: 460 }}

@@ -52,7 +52,7 @@ export function DepositModal({ quote, onClose, onCreated }: {
   }
 
   return (
-    <div className="modal-scrim" onClick={onClose}>
+    <div className="modal-scrim">
       <form className="modal" style={{ maxWidth: 560 }} onClick={(e) => e.stopPropagation()} onSubmit={(e) => { e.preventDefault(); if (!valid) { setErr('Choisissez un pourcentage entre 1 et 100.'); return; } create({ depositPct: pctNum }); }}>
         <div className="modal-head">
           <h2>Facture d’acompte · devis {quote.number ?? quote.draftRef}</h2>

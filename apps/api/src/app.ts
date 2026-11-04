@@ -47,6 +47,8 @@ import { geocodeRouter } from './routes/geocode.js';
 import { usersRouter } from './routes/users.js';
 import { pushRouter } from './routes/push.js';
 import { moderationRouter } from './routes/moderation.js';
+import { journalRouter } from './routes/journal.js';
+import { activityLog } from './lib/activity-log.js';
 
 export function createApp() {
   const app = express();
@@ -54,6 +56,7 @@ export function createApp() {
   app.use(express.json({ limit: '2mb' }));
   if (process.env.NODE_ENV !== 'test') app.use(morgan('dev'));
   app.use(attachUser);
+  app.use(activityLog); // journal « qui fait quoi » (voir lib/activity-log.ts)
   app.use(entityScopeMiddleware); // comptes limités à une entité : liste blanche de routes + filtrage des données (voir lib/entity-scope.ts)
 
   app.get('/health', (_req, res) => res.json({ ok: true, service: 'jjd-api' }));
@@ -116,6 +119,7 @@ export function createApp() {
   app.use('/api/public/sign', publicSignRouter);
   app.use('/api/geocode', geocodeRouter);
   app.use('/api/users', usersRouter);
+  app.use('/api/journal', journalRouter);
 
   app.use(errorMiddleware);
   return app;

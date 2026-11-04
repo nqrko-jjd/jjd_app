@@ -1466,7 +1466,7 @@ function MergeModal({ expense, onClose, onMerged }: { expense: Expense; onClose:
     catch (e) { setErr((e as Error).message); setBusy(false); }
   }
   return (
-    <div className="modal-scrim" onClick={() => { if (!busy) onClose(); }}>
+    <div className="modal-scrim">
       <div className="modal" style={{ maxWidth: 560 }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-head"><h2>Fusionner les lignes de la facture {expense.docNumber ?? ''}</h2><button type="button" className="btn ghost" onClick={onClose} disabled={busy} aria-label="Fermer">✕</button></div>
         <div className="modal-body" style={{ display: 'grid', gap: 12 }}>

@@ -73,7 +73,7 @@ export function CreditLinkModal({ subject, onClose, onLinked }: { subject: LinkS
   const credited = (d: Candidate) => Math.round(d.children.filter((c) => c.lockedAt).reduce((s, c) => s + Math.abs(c.totalTtc ?? 0), 0) * 100) / 100;
 
   return (
-    <div className="modal-scrim" onClick={() => { if (!busy) onClose(); }}>
+    <div className="modal-scrim">
       <form className="modal" role="dialog" aria-modal="true" aria-labelledby={titleId} onClick={(e) => e.stopPropagation()} onSubmit={submit} style={{ width: '100%', maxWidth: 680 }}>
         <div className="modal-head">
           <div className="modal-heading">

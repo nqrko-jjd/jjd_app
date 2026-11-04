@@ -78,7 +78,7 @@ export function QuotePlanModal({ quoteId, onClose }: { quoteId: string; onClose:
   }
 
   return (
-    <div className="modal-scrim" onClick={onClose}>
+    <div className="modal-scrim">
       <div className="modal" style={{ maxWidth: 980, maxHeight: '92vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-head"><h2>Programme prévisionnel d’après le devis</h2><button className="btn ghost" onClick={onClose} aria-label={tr("Fermer")}>✕</button></div>
         <div style={{ padding: '1rem', display: 'grid', gap: '0.9rem' }}>

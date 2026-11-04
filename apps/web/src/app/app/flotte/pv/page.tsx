@@ -251,7 +251,7 @@ function FineModal({ fine, initialFile, vehicles, people, onClose, onSaved }: { 
   }
 
   return (
-    <div className="modal-scrim" onClick={onClose}>
+    <div className="modal-scrim">
       <form className="modal" style={{ maxWidth: 700, maxHeight: '92vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()} onSubmit={submit}>
         <div className="modal-head"><h2>{fine ? 'Modifier le PV' : 'Nouveau PV / amende'}</h2><button type="button" className="btn ghost" onClick={onClose} aria-label={tr("Fermer")}>✕</button></div>
         <div className="modal-body">

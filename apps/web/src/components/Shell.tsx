@@ -14,7 +14,8 @@ import { loginLabel } from '@jjd/shared';
 import dynamic from 'next/dynamic';
 const CompanionLauncher = dynamic(() => import('./CompanionLauncher').then(module => module.CompanionLauncher), { ssr: false });
 
-type Item = { href: string; label: string; ic: LucideIcon; roles?: string[]; ext?: boolean; noBottomTab?: boolean };
+type Item = { href: string; label: string; ic: LucideIcon; roles?: string[]; ext?: boolean; noBottomTab?: boolean; owner?: boolean };
+const OWNER_EMAIL = 'david@jjd-consult.be'; // entrées réservées au propriétaire (journal d'activité)
 type Group = { title: string; ic?: LucideIcon; items: Item[] };
 
 const ROLE_LABEL: Record<string, string> = {
@@ -111,6 +112,7 @@ const NAV: Group[] = [
     { href: '/app/boite-ia', label: 'Boîte IA', ic: Sparkles, roles: ['admin', 'office'] },
     { href: '/app/controle', label: 'File de contrôle', ic: Flag, roles: ['admin', 'office'] },
     { href: '/app/parametres', label: 'Paramètres', ic: Settings, roles: ['admin', 'office'] },
+    { href: '/app/journal', label: 'Journal d’activité', ic: ClipboardList, roles: ['admin'], owner: true },
     { href: '/portail', label: 'Portail client', ic: ExternalLink, ext: true },
   ] },
 ];
@@ -167,7 +169,7 @@ export function Shell({ children, navigationPaths }: { children: React.ReactNode
     return () => clearInterval(t);
   }, [isStaff, reloadUnread]);
 
-  const visible = (i: Item) => (!navigationPaths || navigationPaths.includes(i.href)) && (!i.roles || !!(user && i.roles.includes(user.role)));
+  const visible = (i: Item) => (!navigationPaths || navigationPaths.includes(i.href)) && (!i.roles || !!(user && i.roles.includes(user.role))) && (!i.owner || user?.email?.toLowerCase() === OWNER_EMAIL);
   const isWorker = user?.role === 'worker';
   const isForeman = user?.role === 'foreman';
   const isStorekeeper = user?.role === 'storekeeper';

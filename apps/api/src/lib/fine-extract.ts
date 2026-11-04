@@ -15,6 +15,10 @@ export interface FineExtraction {
 
 const PROMPT = `Tu lis un PV, une amende ou une demande de paiement belge (police, commune, SPW, zone de stationnement, taxe de circulation, LEZ…), en français ou en néerlandais. Le destinataire est une société (JJD Consult) : ignore-le.
 
+Lis TOUTES les pages : les infos sont réparties (courrier d'accompagnement avec référence et délai, puis copie du PV avec le lieu, l'heure, la plaque, la vitesse mesurée…). Si les pages se contredisent, prends la date/heure/lieu du PV lui-même.
+Ce document peut être une « vraie » amende (avec un montant à payer) OU une demande d'identification du conducteur (« vraag om inlichtingen » / demande de renseignements) sans montant : dans ce cas "amount" = null (ne reprends JAMAIS un montant de menace type « minimum 500 € »), "dueOn" = la date limite pour identifier le conducteur (date d'envoi + délai indiqué, ex. 15 jours), et "note" commence par « Identification du conducteur à faire avant le JJ/MM/AAAA ».
+Pour un excès de vitesse, ajoute dans "note" la vitesse mesurée/retenue et la limite.
+
 Réponds UNIQUEMENT avec un objet JSON valide (aucun texte avant/après, aucun bloc markdown), avec exactement ces clés :
 {
   "plate": string | null,        // plaque du véhicule, ex. "1-ABC-123"

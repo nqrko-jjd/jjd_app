@@ -1,8 +1,10 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { jpegsToPdf } from '@/lib/scan-pdf';
+import { loadCv, detectQuad, warpAndClean, type Pt, type ScanMode } from '@/lib/doc-cv';
 
-export interface ScannedDoc { pdf: File; firstPage: File; pages: number }
+/** `firstPage` : image de la 1re page (scan fait ici) ; null pour un PDF importé tel quel (Genius Scan…). */
+export interface ScannedDoc { pdf: File; firstPage: File | null; pages: number }
 interface Job { id: number; label: string; status: 'work' | 'ok' | 'err'; text: string }
 
 /** Cadre le document : repère la zone claire (la feuille) sur une vignette, puis recadre et renforce le contraste à pleine résolution. */
@@ -66,6 +68,17 @@ export function DocScanner({ title, singleDefault, handle, onClose }: { title: s
   const [jobs, setJobs] = useState<Job[]>([]);
   const [single, setSingle] = useState(singleDefault);
   const [busy, setBusy] = useState(false);
+  const cvRef = useRef<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const overlayRef = useRef<HTMLCanvasElement>(null);
+  const [engine, setEngine] = useState<'loading' | 'ready' | 'basic'>('loading');
+  const [found, setFound] = useState(false);
+  const [waiting, setWaiting] = useState(false); // feuille déjà scannée toujours dans le cadre : en attente qu'on la retire
+  const [auto, setAuto] = useState(true);
+  const [mode, setMode] = useState<ScanMode>('color');
+  const autoRef = useRef(true);
+  const busyRef = useRef(false);
+  const captureRef = useRef<() => Promise<void>>(async () => undefined);
+  const importRef = useRef<HTMLInputElement>(null);
   const chain = useRef<Promise<void>>(Promise.resolve());
   const seq = useRef(0);
 
@@ -84,6 +97,85 @@ export function DocScanner({ title, singleDefault, handle, onClose }: { title: s
     return () => { stop = true; streamRef.current?.getTracks().forEach((t) => t.stop()); };
   }, []);
 
+  useEffect(() => {
+    let stop = false;
+    loadCv().then((cv) => { if (!stop) { cvRef.current = cv; setEngine('ready'); } }).catch(() => { if (!stop) setEngine('basic'); });
+    return () => { stop = true; };
+  }, []);
+
+  // Contour de la feuille en direct + validation automatique : quand la feuille reste immobile, un trait vert fait le tour du cadre ;
+  // une fois le tour bouclé, le scan est validé tout seul. Il faut ensuite retirer / changer la page pour armer le suivant.
+  useEffect(() => {
+    if (engine !== 'ready') return;
+    let prev: Pt[] | null = null;
+    let stableSince: number | null = null;
+    let lostSince: number | null = null;
+    let armed = true;
+    const STABLE_MS = 1300;
+    const timer = window.setInterval(() => {
+      const v = videoRef.current, o = overlayRef.current, cv = cvRef.current;
+      if (!v || !o || !cv || !v.videoWidth || document.hidden) return;
+      let quad: Pt[] | null = null;
+      try { quad = detectQuad(cv, v, v.videoWidth, v.videoHeight); } catch { quad = null; }
+      const now = performance.now();
+      let progress = 0;
+      if (!quad) {
+        prev = null; stableSince = null;
+        if (lostSince == null) lostSince = now;
+        if (now - lostSince > 800) armed = true;
+      } else {
+        lostSince = null;
+        const moved = prev ? Math.max(...quad.map((p, i) => Math.hypot(p.x - prev![i]!.x, p.y - prev![i]!.y))) : 1;
+        if (moved > 0.03 || stableSince == null) stableSince = now;
+        prev = quad;
+        if (armed && autoRef.current && !busyRef.current) {
+          progress = Math.min(1, (now - stableSince) / STABLE_MS);
+          if (progress >= 1) { armed = false; stableSince = now; progress = 0; void captureRef.current(); }
+        }
+      }
+      setFound(!!quad); setWaiting(!!quad && !armed);
+      o.width = v.videoWidth; o.height = v.videoHeight;
+      const ctx = o.getContext('2d')!;
+      ctx.clearRect(0, 0, o.width, o.height);
+      if (quad) {
+        const pts = quad.map((p) => ({ x: p.x * o.width, y: p.y * o.height }));
+        const lw = Math.max(5, o.width / 220);
+        ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+        ctx.beginPath(); pts.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y))); ctx.closePath();
+        ctx.fillStyle = 'rgba(61,220,132,0.14)'; ctx.fill();
+        ctx.lineWidth = lw; ctx.strokeStyle = 'rgba(255,255,255,0.75)'; ctx.stroke();
+        if (progress > 0) {
+          // trait de progression qui fait le tour du cadre
+          const edges = pts.map((p, i) => ({ a: p, b: pts[(i + 1) % 4]!, len: Math.hypot(pts[(i + 1) % 4]!.x - p.x, pts[(i + 1) % 4]!.y - p.y) }));
+          let left = progress * edges.reduce((t, e) => t + e.len, 0);
+          ctx.strokeStyle = '#3ddc84'; ctx.lineWidth = lw * 1.4;
+          ctx.beginPath(); ctx.moveTo(pts[0]!.x, pts[0]!.y);
+          for (const e of edges) {
+            const f = Math.min(1, left / e.len);
+            ctx.lineTo(e.a.x + (e.b.x - e.a.x) * f, e.a.y + (e.b.y - e.a.y) * f);
+            left -= e.len; if (left <= 0) break;
+          }
+          ctx.stroke();
+        }
+      }
+    }, 250);
+    return () => window.clearInterval(timer);
+  }, [engine]);
+
+  /** Vrai scan : détecte la feuille, la redresse et nettoie le fond ; sans moteur ou sans feuille détectée, simple recadrage. */
+  async function scanFrame(src: CanvasImageSource, w: number, h: number): Promise<{ blob: Blob; w: number; h: number }> {
+    const cv = cvRef.current;
+    if (cv) {
+      try {
+        const quad = detectQuad(cv, src, w, h);
+        const cvs = warpAndClean(cv, src, w, h, quad, mode);
+        const blob = await new Promise<Blob>((res, rej) => cvs.toBlob((b) => (b ? res(b) : rej(new Error('Image impossible à créer'))), 'image/jpeg', 0.85));
+        return { blob, w: cvs.width, h: cvs.height };
+      } catch { /* retombe sur le recadrage simple */ }
+    }
+    return processFrame(src, w, h);
+  }
+
   function addPage(p: { blob: Blob; w: number; h: number }, finish: boolean) {
     const page = { ...p, url: URL.createObjectURL(p.blob) };
     const next = [...pages, page];
@@ -92,14 +184,31 @@ export function DocScanner({ title, singleDefault, handle, onClose }: { title: s
 
   async function capture() {
     const v = videoRef.current;
-    if (!v || !v.videoWidth) return;
-    setBusy(true);
-    try { addPage(await processFrame(v, v.videoWidth, v.videoHeight), single); } finally { setBusy(false); }
+    if (!v || !v.videoWidth || busyRef.current) return;
+    busyRef.current = true; setBusy(true);
+    try { addPage(await scanFrame(v, v.videoWidth, v.videoHeight), single); } finally { busyRef.current = false; setBusy(false); }
   }
+  captureRef.current = capture;
+  autoRef.current = auto;
   async function fromFile(f: File | undefined) {
     if (!f) return;
     setBusy(true);
-    try { const bmp = await createImageBitmap(f); addPage(await processFrame(bmp, bmp.width, bmp.height), single); } catch { setCamErr('Image illisible.'); } finally { setBusy(false); }
+    try { const bmp = await createImageBitmap(f); addPage(await scanFrame(bmp, bmp.width, bmp.height), single); } catch { setCamErr('Image illisible.'); } finally { setBusy(false); }
+  }
+
+  /** Fichiers déjà scannés ailleurs (Genius Scan, scanner du téléphone…) : un document par fichier, PDF gardé tel quel. */
+  function importFiles(files: FileList | null) {
+    if (!files?.length) return;
+    for (const f of Array.from(files)) {
+      const id = ++seq.current;
+      setJobs((j) => [{ id, label: `Fichier ${f.name}`, status: 'work', text: 'Envoi et lecture…' }, ...j]);
+      const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
+      const doc: ScannedDoc = { pdf: f, firstPage: isPdf ? null : f, pages: 1 };
+      chain.current = chain.current.then(async () => {
+        try { const text = await handle(doc); setJobs((j) => j.map((x) => (x.id === id ? { ...x, status: 'ok', text } : x))); }
+        catch (e) { setJobs((j) => j.map((x) => (x.id === id ? { ...x, status: 'err', text: (e as Error).message || 'Échec' } : x))); }
+      });
+    }
   }
 
   async function finishDoc(list: typeof pages) {
@@ -135,12 +244,22 @@ export function DocScanner({ title, singleDefault, handle, onClose }: { title: s
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.6rem 0.9rem' }}>
         <strong style={{ flex: 1 }}>{title}</strong>
         <label style={{ fontSize: '0.82rem', display: 'flex', gap: 6, alignItems: 'center' }}>
-          <input type="checkbox" checked={single} onChange={(e) => setSingle(e.target.checked)} /> 1 photo = 1 document
+          <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} /> Auto
+        </label>
+        <button type="button" onClick={() => setMode((m) => (m === 'color' ? 'bw' : 'color'))} style={{ ...btn, padding: '0.4rem 0.7rem', fontSize: '0.82rem', background: '#2a332e', color: '#fff' }} title="Rendu du scan : document (couleurs, fond blanc) ou noir et blanc">
+          {mode === 'color' ? 'Couleur' : 'N&B'}
+        </button>
+        <label style={{ fontSize: '0.82rem', display: 'flex', gap: 6, alignItems: 'center' }}>
+          <input type="checkbox" checked={single} onChange={(e) => setSingle(e.target.checked)} /> 1 page = 1 doc
         </label>
         <button type="button" onClick={close} style={{ ...btn, padding: '0.5rem 0.8rem', background: '#2a332e', color: '#fff' }}>Fermer</button>
       </div>
       <div style={{ flex: 1, minHeight: 0, position: 'relative', background: '#000' }}>
         <video ref={videoRef} playsInline muted style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+        <canvas ref={overlayRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', pointerEvents: 'none' }} />
+        <div style={{ position: 'absolute', left: 0, right: 0, bottom: 8, textAlign: 'center', fontSize: '0.82rem', textShadow: '0 1px 3px #000' }}>
+          {engine === 'loading' ? 'Chargement du moteur de scan…' : engine === 'basic' ? 'Mode simple (moteur de scan indisponible)' : waiting ? '✓ Scanné — retire la page ou présente la suivante' : found ? (auto ? 'Ne bouge plus… le scan se valide tout seul' : 'Feuille détectée ✓ — touche Scanner') : 'Cherche la feuille… pose-la sur un fond contrasté'}
+        </div>
         {camErr && <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', padding: '1.5rem', textAlign: 'center' }}>{camErr}</div>}
         {pages.length > 0 && (
           <div style={{ position: 'absolute', left: 8, right: 8, top: 8, display: 'flex', gap: 6, overflowX: 'auto' }}>
@@ -158,6 +277,8 @@ export function DocScanner({ title, singleDefault, handle, onClose }: { title: s
         </div>
       )}
       <div style={{ display: 'flex', gap: '0.6rem', padding: '0.7rem 0.9rem calc(0.7rem + env(safe-area-inset-bottom))', alignItems: 'center' }}>
+        <button type="button" onClick={() => importRef.current?.click()} style={{ ...btn, background: '#2a332e', color: '#fff' }} title="Importer des PDF ou photos déjà scannés (Genius Scan…)">Importer</button>
+        <input ref={importRef} type="file" accept="application/pdf,image/*" multiple hidden onChange={(e) => { importFiles(e.target.files); e.target.value = ''; }} />
         <button type="button" onClick={() => fileRef.current?.click()} style={{ ...btn, background: '#2a332e', color: '#fff' }}>Photo</button>
         <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden onChange={(e) => { void fromFile(e.target.files?.[0]); e.target.value = ''; }} />
         <button type="button" disabled={busy || !!camErr} onClick={() => void capture()} style={{ ...btn, flex: 1, background: '#2f8f5b', color: '#fff', opacity: busy || camErr ? 0.5 : 1 }}>

@@ -175,12 +175,13 @@ function AchatsInner() {
   /** Un document scanné → première page lue par l'IA → une dépense créée (à vérifier) avec le scan en pièce jointe. */
   async function scanOne(doc: ScannedDoc): Promise<string> {
     const fd = new FormData();
-    fd.append('file', doc.firstPage);
+    fd.append('file', doc.firstPage ?? doc.pdf); // scan fait ici : 1re page en image (lue par l'IA) ; PDF importé : lecture du PDF
     const r = await apiUpload<{
-      extraction: { supplierName?: string | null; contactId?: string | null; issuedOn: string | null; totalHt: number | null; totalTtc: number | null; totalVat: number | null; vatRate: number | null; docNumber: string | null } | null;
+      extraction: { supplierName?: string | null; contactName?: string | null; contactId?: string | null; textExtracted?: boolean; issuedOn: string | null; totalHt: number | null; totalTtc: number | null; totalVat: number | null; vatRate: number | null; docNumber: string | null } | null;
       suggestedCategory: { code: string } | null;
     }>('/api/finance/expenses/extract', fd);
-    const ex = r.extraction;
+    // un PDF scanné sans texte n'est pas lisible par cette voie : fiche créée « à compléter » avec le fichier
+    const ex = r.extraction && r.extraction.textExtracted !== false ? { ...r.extraction, supplierName: r.extraction.supplierName ?? r.extraction.contactName ?? null } : null;
     const key = ex?.docNumber ? `${ex.docNumber.trim().toLowerCase()}|${ex.totalTtc ?? ''}` : '';
     const known = (data?.items ?? []).some((e) => ex?.docNumber && e.docNumber?.trim().toLowerCase() === ex.docNumber.trim().toLowerCase() && (ex.totalTtc == null || e.ttc == null || Math.abs(e.ttc - ex.totalTtc) < 0.02));
     if (key && (known || scannedKeys.current.has(key))) return `Doublon ignoré : n° ${ex?.docNumber} existe déjà`;

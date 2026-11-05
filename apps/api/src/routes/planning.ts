@@ -888,6 +888,7 @@ absencesRouter.post(
   requireAuth(...STAFF),
   asyncHandler(async (req, res) => {
     const d = absenceInput.parse(req.body);
+    if (d.endsOn < d.startsOn) { res.status(400).json({ error: 'La date de fin est avant la date de début.' }); return; }
     const absence = await prisma.absence.create({
       data: { personId: d.personId, kind: d.kind, startsOn: d.startsOn, endsOn: d.endsOn, note: d.note ?? null },
     });
@@ -900,6 +901,7 @@ absencesRouter.patch(
   requireAuth(...STAFF),
   asyncHandler(async (req, res) => {
     const d = absenceInput.partial().parse(req.body);
+    if (d.startsOn && d.endsOn && d.endsOn < d.startsOn) { res.status(400).json({ error: 'La date de fin est avant la date de début.' }); return; }
     const absence = await prisma.absence.update({
       where: { id: req.params.id },
       data: {

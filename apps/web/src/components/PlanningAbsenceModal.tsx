@@ -33,6 +33,7 @@ export function PlanningAbsenceModal({
 
   async function submit() {
     if (!f.personId || !f.startsOn || !f.endsOn) { setError('Personne et période requises.'); return; }
+    if (f.endsOn < f.startsOn) { setError('La date de fin est avant la date de début.'); return; }
     setBusy(true);
     setError(null);
     try {
@@ -66,8 +67,8 @@ export function PlanningAbsenceModal({
               {ABSENCE_KINDS.map((k) => <option key={k} value={k}>{ABSENCE_KIND_LABEL[k]}</option>)}
             </select>
           </div>
-          <div className="field"><label>Du</label><input className="input" type="date" value={f.startsOn} onChange={(e) => setF({ ...f, startsOn: e.target.value })} /></div>
-          <div className="field"><label>Au</label><input className="input" type="date" value={f.endsOn} onChange={(e) => setF({ ...f, endsOn: e.target.value })} /></div>
+          <div className="field"><label>Du</label><input className="input" type="date" value={f.startsOn} onChange={(e) => { const v = e.target.value; setF({ ...f, startsOn: v, endsOn: !f.endsOn || f.endsOn < v ? v : f.endsOn }); }} /></div>
+          <div className="field"><label>Au</label><input className="input" type="date" min={f.startsOn || undefined} value={f.endsOn} onChange={(e) => setF({ ...f, endsOn: e.target.value })} /></div>
           <div className="field full"><label>{tr("Note (facultatif)")}</label><input className="input" value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} /></div>
         </div>
         <div className="modal-foot">

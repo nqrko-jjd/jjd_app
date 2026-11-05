@@ -21,6 +21,7 @@ import { prisma } from '../db.js';
 import { insensitive } from './search.js';
 import { guessWorksiteFromText } from './worksite-guess.js';
 import { inlineCidImages, mailPlainText, sanitizeMailHtml } from './mail-render.js';
+import { NOISE_LABEL, noiseReason, triageMail } from './mail-triage.js';
 
 export function mailSuggestionsConfigured(): boolean {
   const m = env.leadsMailbox;
@@ -149,6 +150,10 @@ async function guessWorksiteId(hint: string | null): Promise<string | null> {
 interface SyncStats {
   messagesSeen: number;
   suggestionsCreated: number;
+  /** écartés sans aucun appel à l'IA (réponse automatique, newsletter, « merci »…) */
+  skippedWithoutAi: number;
+  /** écartés par le premier tri du petit modèle, sans passer par Sonnet */
+  skippedByTriage: number;
   errors: string[];
 }
 
@@ -222,7 +227,7 @@ export async function fetchMailAttachment(messageId: string, index: number): Pro
  * stable) : un message déjà dans MailSuggestion (suggestion créée ou non) n'est jamais réanalysé.
  */
 export async function syncMailSuggestions(sinceDays = 3): Promise<SyncStats> {
-  const stats: SyncStats = { messagesSeen: 0, suggestionsCreated: 0, errors: [] };
+  const stats: SyncStats = { messagesSeen: 0, suggestionsCreated: 0, skippedWithoutAi: 0, skippedByTriage: 0, errors: [] };
   if (!mailSuggestionsConfigured()) return stats;
 
   const client = new ImapFlow({
@@ -241,17 +246,45 @@ export async function syncMailSuggestions(sinceDays = 3): Promise<SyncStats> {
       const uids = await client.search({ since }, { uid: true });
       for (const uid of uids as number[]) {
         try {
-          const msg = (await client.fetchOne(String(uid), { source: true, envelope: true }, { uid: true })) as FetchMessageObject | false;
-          if (!msg || !msg.source) continue;
-          const messageId = msg.envelope?.messageId || `uid-${uid}-${env.leadsMailbox.host}`;
+          // D'abord l'enveloppe seule : un mail déjà traité n'est plus téléchargé en entier à chaque passage.
+          const head = (await client.fetchOne(String(uid), { envelope: true }, { uid: true })) as FetchMessageObject | false;
+          if (!head) continue;
+          const messageId = head.envelope?.messageId || `uid-${uid}-${env.leadsMailbox.host}`;
           if (await prisma.mailSuggestion.findUnique({ where: { messageId } })) continue;
+          const msg = (await client.fetchOne(String(uid), { source: true }, { uid: true })) as FetchMessageObject | false;
+          if (!msg || !msg.source) continue;
           stats.messagesSeen++;
 
           const parsed = await simpleParser(msg.source);
           const from = parsed.from?.text ?? '';
           const subject = parsed.subject ?? '';
           const body = (parsed.text || parsed.html || '').toString();
-          const attachment = pickAttachment(parsed.attachments ?? []);
+          let attachment = pickAttachment(parsed.attachments ?? []);
+
+          // 1. Écarté sans IA : réponses automatiques, retours d'erreur, newsletters, simples « merci ».
+          const noise = noiseReason({ headerLines: parsed.headerLines ?? [], from, subject, body, hasAttachment: !!attachment });
+          if (noise) {
+            await prisma.mailSuggestion.create({ data: { messageId, subject, fromAddress: from, receivedAt: parsed.date ?? null, resolvedNote: `Écarté sans IA : ${NOISE_LABEL[noise]}` } });
+            stats.skippedWithoutAi++;
+            continue;
+          }
+
+          // 2. Premier tri par le petit modèle (texte seul). En cas d'échec : analyse complète comme avant.
+          if ((body.trim() || attachment) && env.leadsMailbox.triageModel) {
+            const triage = await triageMail(aiClient, env.leadsMailbox.triageModel, {
+              from, subject, body,
+              attachments: (parsed.attachments ?? []).filter((a) => a.contentDisposition !== 'inline').map((a) => ({ filename: a.filename ?? 'sans nom', contentType: a.contentType })),
+            });
+            if (triage && !triage.actionable) {
+              await prisma.mailSuggestion.create({ data: { messageId, subject, fromAddress: from, receivedAt: parsed.date ?? null, resolvedNote: 'Écarté au premier tri : rien à faire' } });
+              stats.skippedByTriage++;
+              continue;
+            }
+            // La pièce jointe n'est envoyée à Sonnet que si elle compte (ou si le mail n'a pas de texte).
+            if (triage && !triage.needsAttachment && body.trim()) attachment = null;
+          }
+
+          // 3. Analyse complète par Sonnet.
           const extraction = body.trim() || attachment ? await extractSuggestion(subject, from, body, attachment) : null;
 
           if (extraction?.isActionable && extraction.kind) {

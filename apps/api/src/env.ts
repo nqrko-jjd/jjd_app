@@ -126,6 +126,8 @@ export const env = {
     port: Number(process.env.LEADS_IMAP_PORT ?? 993),
     user: process.env.LEADS_IMAP_USER ?? '',
     password: process.env.LEADS_IMAP_PASSWORD ?? '',
+    /** Petit modèle du premier tri (voir lib/mail-triage.ts) ; vide = pas de tri, analyse complète de chaque mail comme avant. */
+    triageModel: process.env.MAIL_TRIAGE_MODEL ?? 'claude-haiku-4-5',
   },
 
   /**

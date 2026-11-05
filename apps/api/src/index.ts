@@ -162,9 +162,9 @@ if (mailSuggestionsConfigured()) {
   const runMailSync = () => {
     syncMailSuggestions()
       .then((stats) => {
-        if (stats.suggestionsCreated || stats.errors.length) {
+        if (stats.messagesSeen || stats.errors.length) {
           // eslint-disable-next-line no-console
-          console.log(`[mail-suggestions] ${stats.messagesSeen} message(s) analysé(s), ${stats.suggestionsCreated} suggestion(s) créée(s)${stats.errors.length ? `, ${stats.errors.length} erreur(s) : ${stats.errors.join(' | ')}` : ''}`);
+          console.log(`[mail-suggestions] ${stats.messagesSeen} nouveau(x) message(s) : ${stats.skippedWithoutAi} écarté(s) sans IA, ${stats.skippedByTriage} au premier tri, ${stats.suggestionsCreated} suggestion(s) créée(s)${stats.errors.length ? `, ${stats.errors.length} erreur(s) : ${stats.errors.join(' | ')}` : ''}`);
         }
       })
       .catch((e) => console.error('[mail-suggestions] échec de synchronisation :', e.message));

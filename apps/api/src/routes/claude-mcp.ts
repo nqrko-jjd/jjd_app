@@ -1,14 +1,14 @@
 /**
- * Connecteur Claude (protocole MCP, transport HTTP « streamable » avec réponses JSON) — LECTURE SEULE.
+ * Connecteur Claude (protocole MCP, transport HTTP « streamable » avec réponses JSON) — lecture, plus brouillons, envoi de mail et tâches sur demande de David.
  *
  * Adresse : POST {PUBLIC_API_URL}/mcp/<CLAUDE_MCP_TOKEN>  (en production : https://new.jjd-consult.be/jjd-api/mcp/<jeton>).
  * Le jeton dans l'adresse sert de mot de passe : l'adresse ne se partage pas. Tant que CLAUDE_MCP_TOKEN
  * n'est pas défini (32 caractères minimum), le connecteur est éteint et répond 404.
  *
  * Il agit au nom de CLAUDE_MCP_USER_EMAIL (défaut : david@jjd-consult.be), qui doit faire partie de la
- * direction. Chiffres, chantiers, planning, tâches et mails en consultation. Une seule écriture possible :
- * save_mail_draft dépose un BROUILLON dans le dossier Brouillons de la boîte (lib/mail-desk.ts). Rien n'est
- * jamais envoyé, validé ni modifié dans l'appli.
+ * direction. Chiffres, chantiers, planning, tâches et mails en consultation. Écritures possibles, toujours à la
+ * demande de David : save_mail_draft (brouillon), send_mail (envoi, confirmedByDavid obligatoire),
+ * complete_task et create_task (tâches). Rien d'autre n'est validé ni modifié dans l'appli (devis, factures…).
  */
 import { Router, type Request, type Response } from 'express';
 import { timingSafeEqual } from 'node:crypto';
@@ -21,7 +21,7 @@ import { DATA_TOOLS, DATA_TOOL_NAMES } from '../lib/assistant-data.js';
 import { isDirection } from '../lib/assistant-quota.js';
 import { runTool } from './assistant.js';
 import type { AuthUser } from '../lib/auth.js';
-import { mailDeskConfigured, listInbox, readMail, saveDraft } from '../lib/mail-desk.js';
+import { mailDeskConfigured, listInbox, readMail, saveDraft, sendMail } from '../lib/mail-desk.js';
 
 export const claudeMcpRouter = Router();
 
@@ -56,8 +56,14 @@ const EXTRA_TOOLS: McpTool[] = [
     inputSchema: { type: 'object', properties: { messageId: { type: 'string' } }, required: ['messageId'] } },
   { name: 'save_mail_draft', description: "PRÉPARE un mail sans l'envoyer : l'enregistre comme brouillon dans le dossier Brouillons de la boîte de David, qui le relit et l'envoie lui-même depuis son webmail. Pour répondre, donne replyToMessageId (destinataire, objet « Re: » et citation remplis automatiquement ; replyAll pour garder les personnes en copie). Pour un nouveau mail, donne to et subject. body = texte du mail uniquement, signé « David ». Ne l'utilise que si David a demandé de préparer une réponse.",
     inputSchema: { type: 'object', properties: { replyToMessageId: { type: 'string' }, replyAll: { type: 'boolean' }, to: { type: 'string' }, cc: { type: 'string' }, subject: { type: 'string' }, body: { type: 'string' } }, required: ['body'] } },
+  { name: 'send_mail', description: "ENVOIE VRAIMENT un mail depuis la boîte de David (copie rangée dans Envoyés). À n'utiliser QUE si David vient de relire le texte exact et a dit de l'envoyer (« envoie », bouton Envoyer) : sinon utilise save_mail_draft. confirmedByDavid doit valoir true. Mêmes champs que save_mail_draft.",
+    inputSchema: { type: 'object', properties: { replyToMessageId: { type: 'string' }, replyAll: { type: 'boolean' }, to: { type: 'string' }, cc: { type: 'string' }, subject: { type: 'string' }, body: { type: 'string' }, confirmedByDavid: { type: 'boolean', description: 'true seulement si David a validé ce texte et demandé l’envoi' } }, required: ['body', 'confirmedByDavid'] } },
+  { name: 'complete_task', description: "Marque une tâche de l'appli JJD comme faite (taskId obtenu avec open_tasks). Seulement si David le demande.",
+    inputSchema: { type: 'object', properties: { taskId: { type: 'string' } }, required: ['taskId'] } },
+  { name: 'create_task', description: "Crée une tâche dans l'appli JJD (générale, ou sur un chantier via worksiteId). Seulement si David le demande. priority : low|normal|high|urgent ; dueOn : AAAA-MM-JJ.",
+    inputSchema: { type: 'object', properties: { title: { type: 'string' }, description: { type: 'string' }, worksiteId: { type: 'string' }, priority: { type: 'string', enum: ['low', 'normal', 'high', 'urgent'] }, dueOn: { type: 'string' } }, required: ['title'] } },
 ];
-const WRITE_TOOLS = new Set(['save_mail_draft']);
+const WRITE_TOOLS = new Set(['save_mail_draft', 'send_mail', 'complete_task', 'create_task']);
 
 const TOOLS: McpTool[] = [
   ...SEARCH_TOOLS,
@@ -69,7 +75,7 @@ const SEARCH_NAMES = new Set(SEARCH_TOOLS.map((t) => t.name));
 const day = (d: Date | null | undefined) => (d ? d.toISOString().slice(0, 10) : null);
 const PRIORITY_ORDER: Record<string, number> = { urgent: 0, high: 1, normal: 2, low: 3 };
 
-async function runExtraTool(name: string, raw: Record<string, unknown>): Promise<unknown> {
+async function runExtraTool(name: string, raw: Record<string, unknown>, who: { id: string; name: string }): Promise<unknown> {
   switch (name) {
     case 'list_worksites': {
       const i = z.object({ status: z.string().trim().max(20).optional(), query: z.string().trim().min(1).max(100).optional(), limit: z.number().int().min(1).max(50).optional() }).strict().parse(raw);
@@ -91,7 +97,7 @@ async function runExtraTool(name: string, raw: Record<string, unknown>): Promise
         select: { id: true, title: true, status: true, priority: true, dueOn: true, source: true, worksite: { select: { ref: true, title: true } }, assignees: { select: { person: { select: { displayName: true, firstName: true } } } } },
       });
       const sorted = rows.sort((a, b) => (PRIORITY_ORDER[a.priority] ?? 9) - (PRIORITY_ORDER[b.priority] ?? 9) || (a.dueOn?.getTime() ?? Infinity) - (b.dueOn?.getTime() ?? Infinity)).slice(0, i.limit ?? 40);
-      return { nombre: rows.length, taches: sorted.map((t) => ({ titre: t.title, statut: t.status, priorite: t.priority, echeance: day(t.dueOn), chantier: t.worksite?.ref ?? null, chantierTitre: t.worksite?.title ?? null, assignes: t.assignees.map((a) => a.person.displayName || a.person.firstName), proposeeParIa: t.source === 'ai-draft' })) };
+      return { nombre: rows.length, taches: sorted.map((t) => ({ id: t.id, titre: t.title, statut: t.status, priorite: t.priority, echeance: day(t.dueOn), chantier: t.worksite?.ref ?? null, chantierTitre: t.worksite?.title ?? null, assignes: t.assignees.map((a) => a.person.displayName || a.person.firstName), proposeeParIa: t.source === 'ai-draft' })) };
     }
     case 'mail_suggestions': {
       const i = z.object({ status: z.enum(['pending', 'applied', 'dismissed', 'all']).optional(), kind: z.enum(['lead', 'appointment', 'worksite_note', 'payment_reminder', 'other']).optional(), limit: z.number().int().min(1).max(50).optional() }).strict().parse(raw);
@@ -130,6 +136,28 @@ async function runExtraTool(name: string, raw: Record<string, unknown>): Promise
         .refine((v) => v.replyToMessageId || (v.to && v.subject), { message: 'replyToMessageId, ou bien to et subject' }).parse(raw);
       const r = await saveDraft(i);
       return { ok: true, envoye: false, note: 'Brouillon enregistré, rien n’a été envoyé. David le relit et l’envoie depuis son webmail.', ...r };
+    }
+    case 'send_mail': {
+      if (!mailDeskConfigured()) return { erreur: 'La boîte mail n’est pas configurée sur le serveur (LEADS_IMAP_*).' };
+      const i = z.object({ replyToMessageId: z.string().min(3).max(300).optional(), replyAll: z.boolean().optional(), to: z.string().max(500).optional(), cc: z.string().max(500).optional(), subject: z.string().max(250).optional(), body: z.string().min(1).max(20000), confirmedByDavid: z.boolean() }).strict()
+        .refine((v) => v.replyToMessageId || (v.to && v.subject), { message: 'replyToMessageId, ou bien to et subject' }).parse(raw);
+      if (i.confirmedByDavid !== true) return { erreur: 'Envoi refusé : David doit relire le texte et demander l’envoi. Utilise save_mail_draft en attendant.' };
+      const { confirmedByDavid: _c, ...mail } = i;
+      return { ok: true, ...(await sendMail(mail)) };
+    }
+    case 'complete_task': {
+      const i = z.object({ taskId: z.string().min(1).max(60) }).strict().parse(raw);
+      const t = await prisma.worksiteTask.findUnique({ where: { id: i.taskId }, select: { id: true, title: true, status: true } });
+      if (!t) return { erreur: 'Tâche introuvable — utilise open_tasks.' };
+      if (t.status === 'done') return { ok: true, deja: true, titre: t.title };
+      await prisma.worksiteTask.update({ where: { id: t.id }, data: { status: 'done', doneAt: new Date(), doneByName: who.name } });
+      return { ok: true, titre: t.title, statut: 'done' };
+    }
+    case 'create_task': {
+      const i = z.object({ title: z.string().trim().min(2).max(200), description: z.string().trim().max(2000).optional(), worksiteId: z.string().min(1).max(60).optional(), priority: z.enum(['low', 'normal', 'high', 'urgent']).optional(), dueOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }).strict().parse(raw);
+      if (i.worksiteId && !(await prisma.worksite.findUnique({ where: { id: i.worksiteId }, select: { id: true } }))) return { erreur: 'Chantier introuvable — utilise search_worksites.' };
+      const t = await prisma.worksiteTask.create({ data: { title: i.title, description: i.description, worksiteId: i.worksiteId ?? null, priority: i.priority ?? 'normal', dueOn: i.dueOn ? new Date(`${i.dueOn}T12:00:00Z`) : null, createdById: who.id, source: 'claude' } });
+      return { ok: true, id: t.id, titre: t.title };
     }
     default:
       return { erreur: `Outil inconnu : ${name}` };
@@ -180,7 +208,7 @@ export async function handleRpc(msg: RpcMessage, user: AuthUser): Promise<object
         protocolVersion: SUPPORTED_VERSIONS.includes(asked) ? asked : SUPPORTED_VERSIONS[0],
         capabilities: { tools: { listChanged: false } },
         serverInfo: { name: 'jjd-consult', title: 'JJD Consult', version: '1.0.0' },
-        instructions: "Données de gestion de JJD Consult (rénovation, Bruxelles et Brabant wallon) et boîte mail de David. Tout est en lecture seule, sauf save_mail_draft qui prépare un brouillon sans jamais l'envoyer. Commence par search_worksites pour retrouver l'id d'un chantier. Montants en euros, HT sauf mention. R-069 et R-152 sont des dépenses privées des associés, à exclure des analyses de l'entreprise.",
+        instructions: "Données de gestion de JJD Consult (rénovation, Bruxelles et Brabant wallon) et boîte mail de David. Tout est en lecture seule, sauf : save_mail_draft (brouillon), send_mail (envoi, seulement quand David a relu et demandé l'envoi), complete_task et create_task (tâches, sur demande de David). Commence par search_worksites pour retrouver l'id d'un chantier. Montants en euros, HT sauf mention. R-069 et R-152 sont des dépenses privées des associés, à exclure des analyses de l'entreprise.",
       } };
     }
     case 'ping':
@@ -194,7 +222,7 @@ export async function handleRpc(msg: RpcMessage, user: AuthUser): Promise<object
       try {
         let result: unknown;
         if (SEARCH_NAMES.has(name) || DATA_TOOL_NAMES.has(name)) result = (await runTool(name, args, user.id)).result;
-        else result = await runExtraTool(name, args);
+        else result = await runExtraTool(name, args, { id: user.id, name: 'David (via Claude)' });
         return { jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: asText(result) }] } };
       } catch (e) {
         const text = e instanceof ZodError ? `Paramètres invalides : ${e.issues.map((x) => `${x.path.join('.') || 'arguments'} ${x.message}`).join(' ; ')}`

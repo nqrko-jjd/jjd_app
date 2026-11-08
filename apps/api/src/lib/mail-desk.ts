@@ -4,11 +4,11 @@
  * Même boîte et mêmes identifiants que la Boîte IA (LEADS_IMAP_*), déjà configurés sur le serveur :
  * aucune reconnexion côté Claude. Lecture en BODY.PEEK (aucun \Seen posé, rien n'est déplacé).
  * La seule écriture possible est l'ajout d'un BROUILLON dans le dossier Brouillons : rien n'est
- * jamais envoyé. David relit le brouillon dans son webmail et l'envoie lui-même.
+ * envoyé par l'assistant de lui-même : David relit le brouillon, ou clique lui-même sur « Envoyer » (sendMail).
  */
 import { ImapFlow, type FetchMessageObject } from 'imapflow';
 import { simpleParser } from 'mailparser';
-import nodemailer from 'nodemailer';
+import nodemailer, { type Transporter } from 'nodemailer';
 import { env } from '../env.js';
 import { mailSuggestionsConfigured, fetchMailSource } from './lead-mailbox.js';
 import { mailPlainText } from './mail-render.js';
@@ -89,11 +89,10 @@ async function buildRaw(mail: Record<string, unknown>): Promise<Buffer> {
   return info.message as Buffer;
 }
 
-/**
- * Enregistre un brouillon (réponse à un mail existant, ou nouveau mail) dans le dossier Brouillons.
- * N'envoie rien. Retourne le dossier utilisé.
- */
-export async function saveDraft(input: { replyToMessageId?: string; replyAll?: boolean; to?: string; cc?: string; subject?: string; body: string }) {
+type ComposeInput = { replyToMessageId?: string; replyAll?: boolean; to?: string; cc?: string; subject?: string; body: string };
+
+/** Prépare le message (destinataires, objet, fil de discussion, citation) sans rien contacter d'autre que la boîte en lecture. */
+async function compose(input: ComposeInput) {
   const me = env.leadsMailbox.user;
   let to = input.to ?? '', cc = input.cc ?? '', subject = input.subject ?? '', inReplyTo: string | undefined, references: string[] | undefined, quote = '';
   if (input.replyToMessageId) {
@@ -119,10 +118,58 @@ export async function saveDraft(input: { replyToMessageId?: string; replyAll?: b
     quote = `\n\n${when ? `Le ${when}, ` : ''}${original.from?.text ?? ''} a écrit :\n` + mailPlainText(original.text, typeof original.html === 'string' ? original.html : '').split('\n').slice(0, 80).map((l) => `> ${l}`).join('\n');
   }
   if (!to) throw new Error('Destinataire manquant.');
-  const raw = await buildRaw({ from: me, to, cc: cc || undefined, subject, text: input.body + quote, inReplyTo, references, date: new Date() });
+  const mail = { from: me, to, cc: cc || undefined, subject, text: input.body + quote, inReplyTo, references, date: new Date() };
+  return { mail, to, cc, subject };
+}
+
+async function folderPath(c: ImapFlow, use: '\\Drafts' | '\\Sent', names: RegExp): Promise<string | null> {
+  const boxes = await c.list();
+  return boxes.find((b) => b.specialUse === use)?.path ?? boxes.find((b) => names.test(b.path))?.path ?? null;
+}
+
+/**
+ * Enregistre un brouillon (réponse à un mail existant, ou nouveau mail) dans le dossier Brouillons.
+ * N'envoie rien. Retourne le dossier utilisé.
+ */
+export async function saveDraft(input: ComposeInput) {
+  const { mail, to, cc, subject } = await compose(input);
+  const raw = await buildRaw(mail);
   return withClient(async (c) => {
     const path = await draftsPath(c);
     await c.append(path, raw, ['\\Draft', '\\Seen']);
     return { dossier: path, a: to, cc: cc || null, sujet: subject };
   });
+}
+
+/** SMTP de la boîte de David : même serveur et mêmes identifiants que la lecture (LEADS_IMAP_*), sauf MAIL_DESK_SMTP_HOST/PORT. */
+let smtp: Transporter | null = null;
+function smtpTransport(): Transporter {
+  const port = env.mailDeskSmtp.port;
+  smtp ??= nodemailer.createTransport({
+    host: env.mailDeskSmtp.host || env.leadsMailbox.host, port, secure: port === 465, requireTLS: port === 587,
+    auth: { user: env.leadsMailbox.user, pass: env.leadsMailbox.password },
+    connectionTimeout: 15_000, greetingTimeout: 15_000, socketTimeout: 30_000,
+  });
+  return smtp;
+}
+/** Tests : remplace le transport SMTP. */
+export function setMailDeskTransportForTests(t: Transporter | null) { smtp = t; }
+
+/**
+ * ENVOIE un mail depuis la boîte de David, puis en range une copie dans « Envoyés ».
+ * Uniquement sur demande explicite de David (bouton « Envoyer » du QG, ou « envoie-le » dans une conversation).
+ */
+export async function sendMail(input: ComposeInput) {
+  const { mail, to, cc, subject } = await compose(input);
+  const info = await smtpTransport().sendMail(mail);
+  let rangeDans: string | null = null;
+  try {
+    const raw = await buildRaw({ ...mail, messageId: info.messageId });
+    rangeDans = await withClient(async (c) => {
+      const path = await folderPath(c, '\\Sent', /^(inbox[./])?(sent|sent items|sent messages|envoy[ée]s|[ée]l[ée]ments envoy[ée]s|verzonden)$/i);
+      if (path) await c.append(path, raw, ['\\Seen']);
+      return path;
+    });
+  } catch { /* le mail est parti : la copie dans Envoyés est un plus */ }
+  return { envoye: true, a: to, cc: cc || null, sujet: subject, messageId: info.messageId, copieDans: rangeDans };
 }

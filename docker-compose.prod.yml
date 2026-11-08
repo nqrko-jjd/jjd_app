@@ -51,6 +51,8 @@ services:
       # Connecteur Claude (MCP, lecture seule) — jeton secret de l'adresse /jjd-api/mcp/<jeton> ; vide = éteint
       CLAUDE_MCP_TOKEN: ${CLAUDE_MCP_TOKEN:-}
       CLAUDE_MCP_USER_EMAIL: ${CLAUDE_MCP_USER_EMAIL:-david@jjd-consult.be}
+      MAIL_DESK_SMTP_HOST: ${MAIL_DESK_SMTP_HOST:-}
+      MAIL_DESK_SMTP_PORT: ${MAIL_DESK_SMTP_PORT:-465}
       # Envoi de documents par e-mail (SMTP de la boîte JJD) — vide = désactivé
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-465}

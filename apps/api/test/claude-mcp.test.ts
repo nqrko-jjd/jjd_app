@@ -50,7 +50,7 @@ test('initialize puis tools/list : outils en lecture seule uniquement', async ()
   assert.ok(!names.some((n) => n.startsWith('create_')), 'aucun outil de création exposé');
   assert.ok(names.includes('inbox_recent') && names.includes('save_mail_draft'));
   const writers = list.body.result.tools.filter((t: { annotations: { readOnlyHint: boolean } }) => !t.annotations.readOnlyHint).map((t: { name: string }) => t.name);
-  assert.deepEqual(writers, ['save_mail_draft'], 'seul le brouillon de mail écrit quelque chose');
+  assert.deepEqual(writers.sort(), ['complete_task', 'create_task', 'save_mail_draft', 'send_mail'], 'seuls mails et tâches écrivent');
 });
 
 test('tools/call : recherche, chantiers en cours, tâches ouvertes', async () => {
@@ -60,6 +60,17 @@ test('tools/call : recherche, chantiers en cours, tâches ouvertes', async () =>
   assert.equal(JSON.parse(l.body.result.content[0].text).chantiers[0].ref, 'R-MCP-TEST');
   const t = await rpc({ jsonrpc: '2.0', id: 5, method: 'tools/call', params: { name: 'open_tasks', arguments: { worksiteId } } });
   assert.equal(JSON.parse(t.body.result.content[0].text).taches[0].priorite, 'urgent');
+});
+
+test('tâches : créer puis marquer faite', async () => {
+  const c = await rpc({ jsonrpc: '2.0', id: 10, method: 'tools/call', params: { name: 'create_task', arguments: { title: 'Rappeler le syndic', worksiteId, priority: 'high', dueOn: '2026-11-10' } } });
+  const created = JSON.parse(c.body.result.content[0].text);
+  assert.equal(created.ok, true);
+  const d = await rpc({ jsonrpc: '2.0', id: 11, method: 'tools/call', params: { name: 'complete_task', arguments: { taskId: created.id } } });
+  assert.equal(JSON.parse(d.body.result.content[0].text).statut, 'done');
+  const row = await prisma.worksiteTask.findUnique({ where: { id: created.id } });
+  assert.equal(row?.status, 'done');
+  assert.ok(row?.doneAt);
 });
 
 test('paramètres invalides : erreur lisible, pas de plantage', async () => {

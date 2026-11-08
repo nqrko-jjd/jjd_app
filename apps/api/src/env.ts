@@ -126,6 +126,12 @@ export const env = {
    * (jamais de \Seen, jamais de déplacement, voir lib/lead-mailbox.ts) pour repérer les
    * demandes clients et créer des pistes Pipeline "à vérifier". Sans config = désactivé.
    */
+  /** Envoi depuis la boîte de David (connecteur Claude) : par défaut le même serveur que LEADS_IMAP_HOST, port 465. */
+  mailDeskSmtp: {
+    host: (process.env.MAIL_DESK_SMTP_HOST ?? '').trim(),
+    port: Number(process.env.MAIL_DESK_SMTP_PORT ?? 465),
+  },
+
   leadsMailbox: {
     host: process.env.LEADS_IMAP_HOST ?? '',
     port: Number(process.env.LEADS_IMAP_PORT ?? 993),

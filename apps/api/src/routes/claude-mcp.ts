@@ -22,6 +22,7 @@ import { isDirection } from '../lib/assistant-quota.js';
 import { runTool } from './assistant.js';
 import type { AuthUser } from '../lib/auth.js';
 import { todaySiteArrivals } from '../lib/site-arrivals.js';
+import { readWebPage, webSearch } from '../lib/web-reader.js';
 import { boxConfigured, boxesStatus, boxAddress, listFolders, listInbox, readMail, saveDraft, sendMail } from '../lib/mail-desk.js';
 
 export const claudeMcpRouter = Router();
@@ -63,6 +64,10 @@ const EXTRA_TOOLS: McpTool[] = [
     inputSchema: { type: 'object', properties: { box: { type: 'string', enum: ['info', 'david', 'invoices'], description: 'Boîte : info (défaut, info@), david (david@) ou invoices (factures fournisseurs)' }, replyToMessageId: { type: 'string' }, replyAll: { type: 'boolean' }, to: { type: 'string' }, cc: { type: 'string' }, subject: { type: 'string' }, body: { type: 'string' }, confirmedByDavid: { type: 'boolean', description: 'true seulement si David a validé ce texte et demandé l’envoi' } }, required: ['body', 'confirmedByDavid'] } },
   { name: 'site_arrivals', description: "Arrivées sur chantier aujourd'hui : pour chaque intervention planifiée, chantier, début prévu, équipe, véhicule, heure d'arrivée et de départ d'après le GPS du véhicule, et statut (sur_place, reparti, en_retard = pas arrivé 30 min après le début prévu, prevu, sans_gps). retardMinutes indique un retard. Lecture seule.",
     inputSchema: { type: 'object', properties: {} } },
+  { name: 'web_search', description: "Recherche sur le web (résultats en français pour la Belgique d'abord) : titre, adresse et extrait de chaque résultat. Pour les prix, concurrents, réglementation, annonces, fournisseurs. Lecture seule.",
+    inputSchema: { type: 'object', properties: { query: { type: 'string' }, limit: { type: 'integer', description: '1 à 10 (défaut 8)' } }, required: ['query'] } },
+  { name: 'web_page', description: "Lit une page web publique et renvoie son titre, sa description, son texte et ses liens. Les pages construites en JavaScript (Instagram, Facebook, LinkedIn) renvoient peu de texte. Lecture seule.",
+    inputSchema: { type: 'object', properties: { url: { type: 'string' }, maxChars: { type: 'integer', description: '1000 à 30000 (défaut 12000)' } }, required: ['url'] } },
   { name: 'complete_task', description: "Marque une tâche de l'appli JJD comme faite (taskId obtenu avec open_tasks). Seulement si David le demande.",
     inputSchema: { type: 'object', properties: { taskId: { type: 'string' } }, required: ['taskId'] } },
   { name: 'create_task', description: "Crée une tâche dans l'appli JJD (générale, ou sur un chantier via worksiteId). Seulement si David le demande. priority : low|normal|high|urgent ; dueOn : AAAA-MM-JJ.",
@@ -162,6 +167,14 @@ async function runExtraTool(name: string, raw: Record<string, unknown>, who: { i
       z.object({}).strict().parse(raw);
       const r = await todaySiteArrivals();
       return { gpsConfigure: r.gps, nombre: r.arrivees.length, arrivees: r.arrivees };
+    }
+    case 'web_search': {
+      const i = z.object({ query: z.string().trim().min(2).max(200), limit: z.number().int().min(1).max(10).optional() }).strict().parse(raw);
+      try { return await webSearch(i.query, i.limit ?? 8); } catch (e) { return { erreur: `Recherche impossible : ${(e as Error).message}` }; }
+    }
+    case 'web_page': {
+      const i = z.object({ url: z.string().trim().min(8).max(2000), maxChars: z.number().int().min(1000).max(30000).optional() }).strict().parse(raw);
+      try { return await readWebPage(i.url, i.maxChars ?? 12000); } catch (e) { return { erreur: `Page illisible : ${(e as Error).message}` }; }
     }
     case 'complete_task': {
       const i = z.object({ taskId: z.string().min(1).max(60) }).strict().parse(raw);

@@ -22,7 +22,7 @@ import { isDirection } from '../lib/assistant-quota.js';
 import { runTool } from './assistant.js';
 import type { AuthUser } from '../lib/auth.js';
 import { todaySiteArrivals } from '../lib/site-arrivals.js';
-import { mailDeskConfigured, listInbox, readMail, saveDraft, sendMail } from '../lib/mail-desk.js';
+import { boxConfigured, boxesStatus, boxAddress, listFolders, listInbox, readMail, saveDraft, sendMail } from '../lib/mail-desk.js';
 
 export const claudeMcpRouter = Router();
 
@@ -51,14 +51,16 @@ const EXTRA_TOOLS: McpTool[] = [
     inputSchema: { type: 'object', properties: { status: { type: 'string', enum: ['pending', 'applied', 'dismissed', 'all'] }, kind: { type: 'string', enum: ['lead', 'appointment', 'worksite_note', 'payment_reminder', 'other'] }, limit: { type: 'integer', description: '1 à 50 (défaut 25)' } } } },
   { name: 'worksite_mails', description: "Derniers mails et notes classés sur UN chantier (id obtenu avec search_worksites) : sujet, expéditeur, date et début du texte.",
     inputSchema: { type: 'object', properties: { worksiteId: { type: 'string' }, limit: { type: 'integer', description: '1 à 20 (défaut 10)' } }, required: ['worksiteId'] } },
-  { name: 'inbox_recent', description: "Derniers mails reçus dans la boîte principale (david@), du plus récent au plus ancien : expéditeur, sujet, date, lu ou non, extrait. Lecture seule, ne marque rien comme lu. Filtres : days (1 à 30, défaut 3), unreadOnly, query (mot cherché dans sujet, expéditeur ou texte), limit (1 à 30, défaut 20).",
-    inputSchema: { type: 'object', properties: { days: { type: 'integer' }, unreadOnly: { type: 'boolean' }, query: { type: 'string' }, limit: { type: 'integer' } } } },
-  { name: 'read_mail', description: "Texte complet d'un mail de la boîte de réception (messageId obtenu avec inbox_recent), avec destinataires et liste des pièces jointes. Lecture seule.",
-    inputSchema: { type: 'object', properties: { messageId: { type: 'string' } }, required: ['messageId'] } },
-  { name: 'save_mail_draft', description: "PRÉPARE un mail sans l'envoyer : l'enregistre comme brouillon dans le dossier Brouillons de la boîte de David, qui le relit et l'envoie lui-même depuis son webmail. Pour répondre, donne replyToMessageId (destinataire, objet « Re: » et citation remplis automatiquement ; replyAll pour garder les personnes en copie). Pour un nouveau mail, donne to et subject. body = texte du mail uniquement, signé « David ». Ne l'utilise que si David a demandé de préparer une réponse.",
-    inputSchema: { type: 'object', properties: { replyToMessageId: { type: 'string' }, replyAll: { type: 'boolean' }, to: { type: 'string' }, cc: { type: 'string' }, subject: { type: 'string' }, body: { type: 'string' } }, required: ['body'] } },
-  { name: 'send_mail', description: "ENVOIE VRAIMENT un mail depuis la boîte de David (copie rangée dans Envoyés). À n'utiliser QUE si David vient de relire le texte exact et a dit de l'envoyer (« envoie », bouton Envoyer) : sinon utilise save_mail_draft. confirmedByDavid doit valoir true. Mêmes champs que save_mail_draft.",
-    inputSchema: { type: 'object', properties: { replyToMessageId: { type: 'string' }, replyAll: { type: 'boolean' }, to: { type: 'string' }, cc: { type: 'string' }, subject: { type: 'string' }, body: { type: 'string' }, confirmedByDavid: { type: 'boolean', description: 'true seulement si David a validé ce texte et demandé l’envoi' } }, required: ['body', 'confirmedByDavid'] } },
+  { name: 'mail_folders', description: "Les boîtes mail de JJD (info@, david@, invoices@) et leurs dossiers, avec le nombre de mails et de non lus. Sans box : l'état des trois boîtes.",
+    inputSchema: { type: 'object', properties: { box: { type: 'string', enum: ['info', 'david', 'invoices'], description: 'Boîte : info (défaut, info@), david (david@) ou invoices (factures fournisseurs)' } } } },
+  { name: 'inbox_recent', description: "Derniers mails d'une boîte (info par défaut) et d'un dossier (INBOX par défaut ; noms des dossiers avec mail_folders), du plus récent au plus ancien : expéditeur, sujet, date, lu ou non, extrait. Lecture seule, ne marque rien comme lu. Filtres : days (1 à 365, défaut 3), unreadOnly, query (mot cherché dans sujet, expéditeur ou texte), limit (1 à 30, défaut 20).",
+    inputSchema: { type: 'object', properties: { box: { type: 'string', enum: ['info', 'david', 'invoices'], description: 'Boîte : info (défaut, info@), david (david@) ou invoices (factures fournisseurs)' }, folder: { type: 'string' }, days: { type: 'integer' }, unreadOnly: { type: 'boolean' }, query: { type: 'string' }, limit: { type: 'integer' } } } },
+  { name: 'read_mail', description: "Texte complet d'un mail (messageId, box et folder obtenus avec inbox_recent ; sans folder, cherche dans tous les dossiers), avec destinataires et liste des pièces jointes. Lecture seule.",
+    inputSchema: { type: 'object', properties: { messageId: { type: 'string' }, box: { type: 'string', enum: ['info', 'david', 'invoices'], description: 'Boîte : info (défaut, info@), david (david@) ou invoices (factures fournisseurs)' }, folder: { type: 'string' } }, required: ['messageId'] } },
+  { name: 'save_mail_draft', description: "PRÉPARE un mail sans l'envoyer : l'enregistre comme brouillon dans le dossier Brouillons de la boîte choisie (box, celle du mail d'origine), qui le relit et l'envoie lui-même depuis son webmail. Pour répondre, donne replyToMessageId (destinataire, objet « Re: » et citation remplis automatiquement ; replyAll pour garder les personnes en copie). Pour un nouveau mail, donne to et subject. body = texte du mail uniquement, signé « David ». Ne l'utilise que si David a demandé de préparer une réponse.",
+    inputSchema: { type: 'object', properties: { box: { type: 'string', enum: ['info', 'david', 'invoices'], description: 'Boîte : info (défaut, info@), david (david@) ou invoices (factures fournisseurs)' }, replyToMessageId: { type: 'string' }, replyAll: { type: 'boolean' }, to: { type: 'string' }, cc: { type: 'string' }, subject: { type: 'string' }, body: { type: 'string' } }, required: ['body'] } },
+  { name: 'send_mail', description: "ENVOIE VRAIMENT un mail depuis la boîte choisie (box) (copie rangée dans Envoyés). À n'utiliser QUE si David vient de relire le texte exact et a dit de l'envoyer (« envoie », bouton Envoyer) : sinon utilise save_mail_draft. confirmedByDavid doit valoir true. Mêmes champs que save_mail_draft.",
+    inputSchema: { type: 'object', properties: { box: { type: 'string', enum: ['info', 'david', 'invoices'], description: 'Boîte : info (défaut, info@), david (david@) ou invoices (factures fournisseurs)' }, replyToMessageId: { type: 'string' }, replyAll: { type: 'boolean' }, to: { type: 'string' }, cc: { type: 'string' }, subject: { type: 'string' }, body: { type: 'string' }, confirmedByDavid: { type: 'boolean', description: 'true seulement si David a validé ce texte et demandé l’envoi' } }, required: ['body', 'confirmedByDavid'] } },
   { name: 'site_arrivals', description: "Arrivées sur chantier aujourd'hui : pour chaque intervention planifiée, chantier, début prévu, équipe, véhicule, heure d'arrivée et de départ d'après le GPS du véhicule, et statut (sur_place, reparti, en_retard = pas arrivé 30 min après le début prévu, prevu, sans_gps). retardMinutes indique un retard. Lecture seule.",
     inputSchema: { type: 'object', properties: {} } },
   { name: 'complete_task', description: "Marque une tâche de l'appli JJD comme faite (taskId obtenu avec open_tasks). Seulement si David le demande.",
@@ -122,28 +124,36 @@ async function runExtraTool(name: string, raw: Record<string, unknown>, who: { i
       });
       return { chantier: ws.ref, titre: ws.title, mails: rows.map((m) => ({ type: m.kind, sujet: m.subject, de: m.fromAddress, a: m.toAddress, recu: m.receivedAt?.toISOString() ?? null, extrait: (m.bodyText ?? '').replace(/\s+/g, ' ').trim().slice(0, 1200), note: m.note })) };
     }
+    case 'mail_folders': {
+      const i = z.object({ box: z.enum(['info', 'david', 'invoices']).optional() }).strict().parse(raw);
+      if (!i.box) return { boites: boxesStatus() };
+      if (!boxConfigured(i.box)) return { erreur: `La boîte « ${i.box} » n’est pas configurée sur le serveur.`, boites: boxesStatus() };
+      return { boite: i.box, adresse: boxAddress(i.box), dossiers: await listFolders(i.box) };
+    }
     case 'inbox_recent': {
-      if (!mailDeskConfigured()) return { erreur: 'La boîte mail n’est pas configurée sur le serveur (LEADS_IMAP_*).' };
-      const i = z.object({ days: z.number().int().min(1).max(30).optional(), unreadOnly: z.boolean().optional(), query: z.string().trim().min(2).max(80).optional(), limit: z.number().int().min(1).max(30).optional() }).strict().parse(raw);
-      const mails = await listInbox({ days: i.days ?? 3, limit: i.limit ?? 20, unreadOnly: i.unreadOnly ?? false, query: i.query });
-      return { nombre: mails.length, mails };
+      const i = z.object({ box: z.enum(['info', 'david', 'invoices']).optional(), folder: z.string().trim().min(1).max(200).optional(), days: z.number().int().min(1).max(365).optional(), unreadOnly: z.boolean().optional(), query: z.string().trim().min(2).max(80).optional(), limit: z.number().int().min(1).max(30).optional() }).strict().parse(raw);
+      const box = i.box ?? 'info';
+      if (!boxConfigured(box)) return { erreur: `La boîte « ${box} » n’est pas configurée sur le serveur.`, boites: boxesStatus() };
+      const mails = await listInbox({ box, folder: i.folder, days: i.days ?? 3, limit: i.limit ?? 20, unreadOnly: i.unreadOnly ?? false, query: i.query });
+      return { boite: box, dossier: i.folder ?? 'INBOX', nombre: mails.length, mails };
     }
     case 'read_mail': {
-      if (!mailDeskConfigured()) return { erreur: 'La boîte mail n’est pas configurée sur le serveur (LEADS_IMAP_*).' };
-      const i = z.object({ messageId: z.string().min(3).max(300) }).strict().parse(raw);
-      return (await readMail(i.messageId)) ?? { erreur: 'Mail introuvable dans la boîte de réception.' };
+      const i = z.object({ messageId: z.string().min(3).max(300), box: z.enum(['info', 'david', 'invoices']).optional(), folder: z.string().trim().min(1).max(200).optional() }).strict().parse(raw);
+      const box = i.box ?? 'info';
+      if (!boxConfigured(box)) return { erreur: `La boîte « ${box} » n’est pas configurée sur le serveur.` };
+      return (await readMail(i.messageId, box, i.folder)) ?? { erreur: 'Mail introuvable dans cette boîte.' };
     }
     case 'save_mail_draft': {
-      if (!mailDeskConfigured()) return { erreur: 'La boîte mail n’est pas configurée sur le serveur (LEADS_IMAP_*).' };
-      const i = z.object({ replyToMessageId: z.string().min(3).max(300).optional(), replyAll: z.boolean().optional(), to: z.string().max(500).optional(), cc: z.string().max(500).optional(), subject: z.string().max(250).optional(), body: z.string().min(1).max(20000) }).strict()
+      const i = z.object({ box: z.enum(['info', 'david', 'invoices']).optional(), replyToMessageId: z.string().min(3).max(300).optional(), replyAll: z.boolean().optional(), to: z.string().max(500).optional(), cc: z.string().max(500).optional(), subject: z.string().max(250).optional(), body: z.string().min(1).max(20000) }).strict()
         .refine((v) => v.replyToMessageId || (v.to && v.subject), { message: 'replyToMessageId, ou bien to et subject' }).parse(raw);
+      if (!boxConfigured(i.box ?? 'info')) return { erreur: `La boîte « ${i.box ?? 'info'} » n’est pas configurée sur le serveur.` };
       const r = await saveDraft(i);
       return { ok: true, envoye: false, note: 'Brouillon enregistré, rien n’a été envoyé. David le relit et l’envoie depuis son webmail.', ...r };
     }
     case 'send_mail': {
-      if (!mailDeskConfigured()) return { erreur: 'La boîte mail n’est pas configurée sur le serveur (LEADS_IMAP_*).' };
-      const i = z.object({ replyToMessageId: z.string().min(3).max(300).optional(), replyAll: z.boolean().optional(), to: z.string().max(500).optional(), cc: z.string().max(500).optional(), subject: z.string().max(250).optional(), body: z.string().min(1).max(20000), confirmedByDavid: z.boolean() }).strict()
+      const i = z.object({ box: z.enum(['info', 'david', 'invoices']).optional(), replyToMessageId: z.string().min(3).max(300).optional(), replyAll: z.boolean().optional(), to: z.string().max(500).optional(), cc: z.string().max(500).optional(), subject: z.string().max(250).optional(), body: z.string().min(1).max(20000), confirmedByDavid: z.boolean() }).strict()
         .refine((v) => v.replyToMessageId || (v.to && v.subject), { message: 'replyToMessageId, ou bien to et subject' }).parse(raw);
+      if (!boxConfigured(i.box ?? 'info')) return { erreur: `La boîte « ${i.box ?? 'info'} » n’est pas configurée sur le serveur.` };
       if (i.confirmedByDavid !== true) return { erreur: 'Envoi refusé : David doit relire le texte et demander l’envoi. Utilise save_mail_draft en attendant.' };
       const { confirmedByDavid: _c, ...mail } = i;
       return { ok: true, ...(await sendMail(mail)) };

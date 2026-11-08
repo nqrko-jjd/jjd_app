@@ -49,6 +49,7 @@ import { pushRouter } from './routes/push.js';
 import { moderationRouter } from './routes/moderation.js';
 import { journalRouter } from './routes/journal.js';
 import { activityLog } from './lib/activity-log.js';
+import { claudeMcpRouter } from './routes/claude-mcp.js';
 
 export function createApp() {
   const app = express();
@@ -120,6 +121,7 @@ export function createApp() {
   app.use('/api/geocode', geocodeRouter);
   app.use('/api/users', usersRouter);
   app.use('/api/journal', journalRouter);
+  app.use('/mcp', claudeMcpRouter); // connecteur Claude (voir routes/claude-mcp.ts)
 
   app.use(errorMiddleware);
   return app;

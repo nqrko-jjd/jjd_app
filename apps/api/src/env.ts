@@ -40,6 +40,11 @@ export const env = {
   /** Assistant IA (chat) — brouillons de devis/planning/tâches. Sans clé = masqué. */
   anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? '',
 
+  /** Connecteur Claude (MCP, lecture seule) : jeton secret de l'adresse /mcp/<jeton>, 32 caractères minimum. Vide = éteint. */
+  claudeMcpToken: process.env.CLAUDE_MCP_TOKEN ?? '',
+  /** Compte au nom duquel le connecteur lit les données (doit faire partie de la direction). */
+  claudeMcpUserEmail: process.env.CLAUDE_MCP_USER_EMAIL ?? 'david@jjd-consult.be',
+
   /** Traceurs PAJ GPS (compte du portail PAJ Finder). Sans identifiants = suivi GPS désactivé. */
   pajEmail: (process.env.PAJ_EMAIL ?? '').trim(),
   pajPassword: process.env.PAJ_PASSWORD ?? '',
@@ -124,6 +129,12 @@ export const env = {
    * (jamais de \Seen, jamais de déplacement, voir lib/lead-mailbox.ts) pour repérer les
    * demandes clients et créer des pistes Pipeline "à vérifier". Sans config = désactivé.
    */
+  /** Envoi depuis la boîte de David (connecteur Claude) : par défaut le même serveur que LEADS_IMAP_HOST, port 465. */
+  mailDeskSmtp: {
+    host: (process.env.MAIL_DESK_SMTP_HOST ?? '').trim(),
+    port: Number(process.env.MAIL_DESK_SMTP_PORT ?? 465),
+  },
+
   leadsMailbox: {
     host: process.env.LEADS_IMAP_HOST ?? '',
     port: Number(process.env.LEADS_IMAP_PORT ?? 993),

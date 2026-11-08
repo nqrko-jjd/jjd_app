@@ -135,6 +135,14 @@ export const env = {
     port: Number(process.env.MAIL_DESK_SMTP_PORT ?? 465),
   },
 
+  /** Boîte personnelle de David (connecteur Claude) ; hôte par défaut = LEADS_IMAP_HOST. */
+  davidMailbox: {
+    host: process.env.DAVID_IMAP_HOST ?? '',
+    port: Number(process.env.DAVID_IMAP_PORT ?? 993),
+    user: process.env.DAVID_IMAP_USER ?? '',
+    password: process.env.DAVID_IMAP_PASSWORD ?? '',
+  },
+
   leadsMailbox: {
     host: process.env.LEADS_IMAP_HOST ?? '',
     port: Number(process.env.LEADS_IMAP_PORT ?? 993),

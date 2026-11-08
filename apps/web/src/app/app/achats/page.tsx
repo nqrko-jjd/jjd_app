@@ -128,6 +128,10 @@ function AchatsInner() {
   const scannedKeys = useRef(new Set<string>()); // n° de facture + montant déjà créés pendant ce scan
   const [dropped, setDropped] = useState<File | null>(null); // PDF/photo glissé sur la page : ouvre « Nouvelle dépense » et la lit
   const [over, setOver] = useState(false);
+  // import en lot : plusieurs PDF d'un coup → une dépense par fichier (lue par l'IA, à vérifier), avec le compte rendu fichier par fichier
+  const [batch, setBatch] = useState<{ name: string; state: 'wait' | 'run' | 'ok' | 'err'; msg: string }[] | null>(null);
+  const [batchBusy, setBatchBusy] = useState(false);
+  const batchInput = useRef<HTMLInputElement>(null);
   const [linking, setLinking] = useState<Expense | null>(null);
   const [merging, setMerging] = useState<Expense | null>(null);
   const [showCandidates, setShowCandidates] = useState(false);
@@ -201,6 +205,24 @@ function AchatsInner() {
     if (key) scannedKeys.current.add(key);
     reload();
     return ex ? `Dépense créée : ${ex.supplierName ?? 'fournisseur ?'} · ${ex.totalTtc != null ? `${ex.totalTtc} €` : 'montant ?'}${ex.docNumber ? ` · n° ${ex.docNumber}` : ''}` : 'Dépense créée, mais illisible : à compléter à la main';
+  }
+
+  async function runBatch(list: File[]) {
+    if (batchBusy || !list.length) return;
+    const files = list.slice(0, 60);
+    setBatchBusy(true);
+    const rows = files.map((f) => ({ name: f.name, state: 'wait' as 'wait' | 'run' | 'ok' | 'err', msg: 'En attente' }));
+    setBatch(rows.map((r) => ({ ...r })));
+    const upd = (i: number, state: 'run' | 'ok' | 'err', msg: string) => { rows[i] = { ...rows[i]!, state, msg }; setBatch(rows.map((r) => ({ ...r }))); };
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i]!;
+      if (!/\.pdf$/i.test(f.name) && f.type !== 'application/pdf') { upd(i, 'err', 'Ignoré : seuls les PDF sont acceptés ici (pour une photo, utilise « Scanner des factures »)'); continue; }
+      upd(i, 'run', 'Lecture en cours…');
+      try { upd(i, 'ok', await scanOne({ pdf: f, firstPage: null, pages: 1 })); }
+      catch (e) { upd(i, 'err', (e as Error).message || 'Échec'); }
+    }
+    setBatchBusy(false);
+    reload();
   }
 
   const expenseAccessors = {
@@ -483,6 +505,8 @@ function AchatsInner() {
             </button>
               </div>
             </details>
+            <input ref={batchInput} type="file" accept="application/pdf,.pdf" multiple hidden onChange={(e) => { const l = Array.from(e.target.files ?? []); e.target.value = ''; void runBatch(l); }} />
+            <button className="btn" disabled={batchBusy} onClick={() => batchInput.current?.click()} title="Choisis plusieurs PDF : chacun est lu et crée sa dépense">📄 Importer des PDF en lot</button>
             <button className="btn" onClick={() => setScanning(true)}>📷 Scanner des factures</button>
             <button className="btn primary" onClick={() => setEdit('new')}>+ Nouvelle dépense</button>
           </div>
@@ -493,11 +517,28 @@ function AchatsInner() {
       <div
         onDragOver={(e) => { e.preventDefault(); setOver(true); }}
         onDragLeave={() => setOver(false)}
-        onDrop={(e) => { e.preventDefault(); setOver(false); const f = e.dataTransfer.files?.[0]; if (f) { setDropped(f); setEdit('new'); } }}
+        onDrop={(e) => { e.preventDefault(); setOver(false); const l = Array.from(e.dataTransfer.files ?? []); if (l.length > 1) { void runBatch(l); } else if (l[0]) { setDropped(l[0]); setEdit('new'); } }}
         style={{ border: `2px dashed ${over ? 'var(--accent, #1f5f46)' : 'var(--line, #cfd8d3)'}`, borderRadius: 12, padding: '0.9rem 1rem', marginBottom: '1rem', textAlign: 'center', fontSize: '0.9rem', background: over ? 'rgba(31,95,70,0.06)' : 'transparent' }}
       >
         Glisse ici le PDF (ou la photo) d’une facture : il est lu automatiquement et la nouvelle dépense se pré-remplit.
+        <br /><strong>Plusieurs PDF d’un coup</strong> : chacun crée sa dépense, à vérifier ensuite (ou bouton « Importer des PDF en lot »).
       </div>
+      {batch && (
+        <div className="card" style={{ padding: 14, marginBottom: 16 }}>
+          <div className="row" style={{ marginBottom: 8 }}>
+            <strong>Import en lot · {batch.filter((b) => b.state === 'ok').length}/{batch.length} créées</strong>
+            {!batchBusy && <button className="btn ghost" style={{ marginLeft: 'auto' }} onClick={() => setBatch(null)}>Fermer</button>}
+          </div>
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 4, fontSize: '0.88rem' }}>
+            {batch.map((b, i) => (
+              <li key={i} style={{ color: b.state === 'err' ? 'var(--crit, #b3261e)' : undefined }}>
+                {b.state === 'ok' ? '✓' : b.state === 'err' ? '✗' : b.state === 'run' ? '…' : '·'} <strong>{b.name}</strong> — <span className="muted" style={{ color: 'inherit' }}>{b.msg}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="muted" style={{ fontSize: '0.8rem', margin: '8px 0 0' }}>Les dépenses créées sont marquées « Scanné — à vérifier » : contrôle le fournisseur, le chantier et la catégorie.</p>
+        </div>
+      )}
 
       <details className="card fox-export-panel" style={{ padding: 16, marginBottom: 16 }} onToggle={e=>setReceptionOpen(e.currentTarget.open)}>
         <summary style={{cursor:'pointer',fontWeight:600}}>Réception Peppol / mails · documents à vérifier {data?.receiptsToReview ? <span className="badge warn">{data.receiptsToReview}</span> : null}</summary>

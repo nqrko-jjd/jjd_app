@@ -10,6 +10,7 @@ import { PageHead, StatusBadge, Money, ProgressCell } from '@/lib/ui';
 import { NewWorksiteWizard } from '@/components/NewWorksiteWizard';
 import { ContextMenu, useContextMenu, openActions, type MenuItem } from '@/components/ContextMenu';
 import { PaginationBar } from '@/components/PaginationBar';
+import { useFullRows } from '@/lib/full-rows';
 import { useSort, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
 import { ArrowRight, Building2, CalendarPlus, LayoutGrid, List, MapPin, UserRound } from 'lucide-react';
@@ -92,7 +93,16 @@ function ChantiersInner() {
     status: (w: WS) => WORKSITE_STATUS_LABEL[w.status as keyof typeof WORKSITE_STATUS_LABEL] ?? w.status,
     invoicedHt: (w: WS) => w.invoicedHt,
   };
-  const sort = useSort<WS>(data?.items ?? [], wsAccessors);
+  // tri sur TOUS les chantiers (pas seulement la page de 100) : chargement complet dès qu'un tri est actif
+  const baseQs = (() => { const p = new URLSearchParams(params); p.delete('page'); p.delete('pageSize'); return p.toString(); })();
+  const [needFull, setNeedFull] = useState(false);
+  const full = useFullRows<WS>('/api/worksites', baseQs, needFull, String(data?.totalCount ?? ''));
+  const sort = useSort<WS>(full.rows ?? data?.items ?? [], wsAccessors);
+  useEffect(() => { setNeedFull(sort.sortKey != null); }, [sort.sortKey]);
+  const fullMode = full.rows != null;
+  useEffect(() => { if (fullMode) setPage(1); }, [sort.sortKey, sort.sortDir, fullMode]);
+  const viewRows = fullMode ? sort.rows.slice((page - 1) * pageSize, page * pageSize) : sort.rows;
+  const viewPages = fullMode ? Math.max(1, Math.ceil(sort.rows.length / pageSize)) : (data?.totalPages ?? 1);
 
   const { data: counts, reload: reloadCounts } = useApi<{ total: number; byStatus: Record<string, number>; byStatusActive?: Record<string, number> }>(
     kind === 'project' ? '/api/worksites/counts' : null,
@@ -127,7 +137,7 @@ function ChantiersInner() {
     });
   }
   function toggleAll() {
-    setSelected((s) => (s.size === sort.rows.length ? new Set() : new Set(sort.rows.map((w) => w.id))));
+    setSelected((s) => (s.size === viewRows.length ? new Set() : new Set(viewRows.map((w) => w.id))));
   }
   async function bulkSetStatus(newStatus: string) {
     const ids = [...selected];
@@ -257,7 +267,7 @@ function ChantiersInner() {
       {error && !loading && <ErrorState message={error} onRetry={reload} />}
       {data && view === 'cards' && kind === 'project' && (
         <div className="worksite-card-grid">
-          {sort.rows.map((w, index) => {
+          {viewRows.map((w, index) => {
             const progress = WORKSITE_PROGRESS_PCT[w.status as WorksiteStatus] ?? 0;
             const manager = w.manager?.displayName ?? w.manager?.firstName ?? 'À attribuer';
             return (
@@ -319,8 +329,8 @@ function ChantiersInner() {
               </article>
             );
           })}
-          {sort.rows.length === 0 && <div className="state worksite-empty"><Building2 size={30} /><h3>{tr("Aucun chantier trouvé")}</h3><p>Modifiez votre recherche ou choisissez un autre statut.</p></div>}
-          <div className="worksite-card-pagination"><PaginationBar page={data.page} totalPages={data.totalPages} pageSize={pageSize} onPage={setPage} onPageSize={(s) => { setPageSize(s); setPage(1); }} /></div>
+          {viewRows.length === 0 && <div className="state worksite-empty"><Building2 size={30} /><h3>{tr("Aucun chantier trouvé")}</h3><p>Modifiez votre recherche ou choisissez un autre statut.</p></div>}
+          <div className="worksite-card-pagination"><PaginationBar page={fullMode ? page : data.page} totalPages={viewPages} pageSize={pageSize} onPage={setPage} onPageSize={(s) => { setPageSize(s); setPage(1); }} /></div>
         </div>
       )}
       {data && (view === 'list' || kind !== 'project') && (
@@ -332,7 +342,7 @@ function ChantiersInner() {
                 <th style={{ width: 28 }}>
                   <input
                     type="checkbox"
-                    checked={sort.rows.length > 0 && selected.size === sort.rows.length}
+                    checked={viewRows.length > 0 && selected.size === viewRows.length}
                     onChange={toggleAll}
                     aria-label="Tout sélectionner"
                   />
@@ -346,7 +356,7 @@ function ChantiersInner() {
               </tr>
             </thead>
             <tbody>
-              {sort.rows.map((w) => (
+              {viewRows.map((w) => (
                 <tr
                   key={w.id}
                   className={`row-link${ctx.menu?.row.id === w.id ? ' ctx-target' : ''}`}
@@ -378,7 +388,7 @@ function ChantiersInner() {
             </tbody>
           </table>
         </div>
-        <PaginationBar inCard page={data.page} totalPages={data.totalPages} pageSize={pageSize} onPage={setPage} onPageSize={(s) => { setPageSize(s); setPage(1); }} />
+        <PaginationBar inCard page={fullMode ? page : data.page} totalPages={viewPages} pageSize={pageSize} onPage={setPage} onPageSize={(s) => { setPageSize(s); setPage(1); }} />
         </div>
       )}
     </>

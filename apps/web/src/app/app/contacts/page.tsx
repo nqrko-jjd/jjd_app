@@ -10,6 +10,7 @@ import { PageHead, Avatar } from '@/lib/ui';
 import { FormModal } from '@/components/FormModal';
 import { ContextMenu, useContextMenu, openActions, type MenuItem } from '@/components/ContextMenu';
 import { PaginationBar } from '@/components/PaginationBar';
+import { useFullRows } from '@/lib/full-rows';
 import { ViewToggle, useViewMode } from '@/components/ViewToggle';
 import { useSort, useColumnFilter, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
@@ -87,8 +88,18 @@ function ContactsInner() {
     contact: (c: Contact) => c.email ?? c.phone,
     worksites: (c: Contact) => c._count.worksites,
   };
-  const colFilter = useColumnFilter<Contact>(data?.items ?? [], contactAccessors);
+  // tri / filtres de colonnes sur TOUS les contacts (pas seulement la page de 100) : chargement complet dès qu'un des deux est actif
+  const baseQs = (() => { const p = new URLSearchParams(params); p.delete('page'); p.delete('pageSize'); return p.toString(); })();
+  const [needFull, setNeedFull] = useState(false);
+  const full = useFullRows<Contact>('/api/contacts', baseQs, needFull, String(data?.totalCount ?? ''));
+  const allContacts = full.rows ?? data?.items ?? [];
+  const colFilter = useColumnFilter<Contact>(allContacts, contactAccessors);
   const sort = useSort<Contact>(colFilter.rows, contactAccessors);
+  useEffect(() => { setNeedFull(colFilter.active || sort.sortKey != null); }, [colFilter.active, sort.sortKey]);
+  const fullMode = full.rows != null;
+  useEffect(() => { if (fullMode) setPage(1); }, [colFilter.filters, colFilter.multi, sort.sortKey, sort.sortDir, fullMode]);
+  const viewRows = fullMode ? sort.rows.slice((page - 1) * pageSize, page * pageSize) : sort.rows;
+  const viewPages = fullMode ? Math.max(1, Math.ceil(sort.rows.length / pageSize)) : (data?.totalPages ?? 1);
 
   return (
     <>
@@ -105,7 +116,9 @@ function ContactsInner() {
       <PageHead
         eyebrow={tr("Gestion")}
         title="Contacts"
-        sub={data ? `${data.totalCount} contacts · page ${data.page}/${data.totalPages} · clic droit pour les actions rapides` : undefined}
+        sub={data ? (needFull
+          ? (full.loading || !fullMode ? 'Chargement de tous les contacts pour trier / filtrer sur l’ensemble…' : `${sort.rows.length} résultat${sort.rows.length > 1 ? 's' : ''} sur ${data.totalCount} contacts (tri et filtres sur tous les contacts) · page ${page}/${viewPages}`)
+          : `${data.totalCount} contacts · page ${data.page}/${data.totalPages} · clic droit pour les actions rapides`) : undefined}
         action={<button className="btn primary" onClick={() => setCreating(true)}>+ Nouveau contact</button>}
       />
       <div className="row list-filters" style={{ marginBottom: '1rem' }}>
@@ -121,7 +134,7 @@ function ContactsInner() {
       {error && !loading && <ErrorState message={error} onRetry={reload} />}
       {data && mode === 'gallery' && (
         <div className="gallery-grid">
-          {sort.rows.map((c) => (
+          {viewRows.map((c) => (
             <Link key={c.id} href={`/app/contacts/${c.id}`} className="card gallery-card">
               <div className="gallery-thumb" style={{ borderRadius: '10px 10px 0 0' }}>
                 <Avatar src={c.photoThumbUrl} label={c.name} size={56} />
@@ -153,7 +166,7 @@ function ContactsInner() {
               </tr>
             </thead>
             <tbody>
-              {sort.rows.map((c) => (
+              {viewRows.map((c) => (
                 <tr
                   key={c.id}
                   className={`row-link${ctx.menu?.row.id === c.id ? ' ctx-target' : ''}`}
@@ -181,7 +194,7 @@ function ContactsInner() {
       )}
 
       {data && (
-        <PaginationBar page={data.page} totalPages={data.totalPages} pageSize={pageSize} onPage={setPage} onPageSize={(s) => { setPageSize(s); setPage(1); }} />
+        <PaginationBar page={fullMode ? page : data.page} totalPages={viewPages} pageSize={pageSize} onPage={setPage} onPageSize={(s) => { setPageSize(s); setPage(1); }} />
       )}
     </>
   );

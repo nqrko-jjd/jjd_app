@@ -15,6 +15,7 @@ import { useSort, useColumnFilter, SortTh } from '@/lib/sort';
 import { rowNav } from '@/lib/rowNav';
 import { ContextMenu, useContextMenu, type MenuItem } from '@/components/ContextMenu';
 import { PaginationBar } from '@/components/PaginationBar';
+import { useFullRows } from '@/lib/full-rows';
 import { ComboBox } from '@/components/ComboBox';
 import { FileDrop } from '@/components/FileDrop';
 import { DocScanner, type ScannedDoc } from '@/components/DocScanner';
@@ -169,6 +170,10 @@ function AchatsInner() {
     pageSize: number;
     totalPages: number;
   }>(`/api/finance/expenses?${params}`);
+  // tri / filtres de colonnes : portent sur TOUTES les dépenses (pas seulement la page de 100) → chargement complet dès qu'un des deux est actif
+  const baseQs = (() => { const p = new URLSearchParams(params); p.delete('page'); p.delete('pageSize'); return p.toString(); })();
+  const [needFull, setNeedFull] = useState(false);
+  const full = useFullRows<Expense>('/api/finance/expenses', baseQs, needFull, JSON.stringify(data?.totals ?? null));
   const { data: meta } = useApi<Meta>('/api/finance/expenses/meta');
   const { data: mailbox } = useApi<{ configured: boolean }>('/api/finance/expenses/mailbox-status');
   const [syncingMailbox, setSyncingMailbox] = useState(false);
@@ -245,8 +250,15 @@ function AchatsInner() {
     ttc: (e: Expense) => e.ttc ?? e.ht,
     status: (e: Expense) => (e.paid ? 1 : 0),
   };
-  const colFilter = useColumnFilter<Expense>(data?.items ?? [], expenseAccessors);
+  const allExpenses = full.rows ?? data?.items ?? [];
+  const colFilter = useColumnFilter<Expense>(allExpenses, expenseAccessors);
   const sort = useSort<Expense>(colFilter.rows, expenseAccessors);
+  useEffect(() => { setNeedFull(colFilter.active || sort.sortKey != null); }, [colFilter.active, sort.sortKey]);
+  const fullMode = full.rows != null;
+  useEffect(() => { if (fullMode) setPage(1); }, [colFilter.filters, colFilter.multi, sort.sortKey, sort.sortDir, fullMode]);
+  // en mode complet la pagination se fait ici (sur l'ensemble filtré et trié) ; sinon c'est la page du serveur
+  const viewRows = fullMode ? sort.rows.slice((page - 1) * pageSize, page * pageSize) : sort.rows;
+  const viewPages = fullMode ? Math.max(1, Math.ceil(sort.rows.length / pageSize)) : (data?.totalPages ?? 1);
 
   const total = data?.totals.ttc ?? 0;
   const unpaidTotal = data?.totals.unpaidTtc ?? 0;
@@ -292,7 +304,7 @@ function AchatsInner() {
     });
   }
   function toggleAll() {
-    const withPdf = sort.rows.filter((e) => e.hasPdf);
+    const withPdf = viewRows.filter((e) => e.hasPdf);
     setSelected((s) => (s.size === withPdf.length && withPdf.every((e) => s.has(e.id)) ? new Set() : new Set(withPdf.map((e) => e.id))));
   }
   async function exportZip() {
@@ -313,7 +325,7 @@ function AchatsInner() {
 
 
   const foxEligible = (e: Expense) => e.direction === 'purchase' || (e.direction === 'credit_note' && !/vente|dit auto/i.test(e.categoryRaw ?? ''));
-  const selectedExpenses = (data?.items ?? []).filter(e => selected.has(e.id));
+  const selectedExpenses = allExpenses.filter(e => selected.has(e.id));
   const foxSelection = selectedExpenses.length === selected.size && selectedExpenses.length > 0 && selectedExpenses.every(foxEligible);
   async function exportFox() {
     if (!foxSelection) return;
@@ -464,7 +476,9 @@ function AchatsInner() {
       <PageHead
         eyebrow="Comptabilité"
         title="Achats / Dépenses"
-        sub={data ? `${data.totals.count} ligne${data.totals.count > 1 ? 's' : ''} · page ${data.page}/${data.totalPages} · clic droit pour les actions rapides` : undefined}
+        sub={data ? (needFull
+          ? (full.loading || !fullMode ? 'Chargement de toutes les dépenses pour trier / filtrer sur l’ensemble…' : `${sort.rows.length} résultat${sort.rows.length > 1 ? 's' : ''} sur ${data.totals.count} lignes (tri et filtres sur toutes les dépenses) · page ${page}/${viewPages}`)
+          : `${data.totals.count} ligne${data.totals.count > 1 ? 's' : ''} · page ${data.page}/${data.totalPages} · clic droit pour les actions rapides`) : undefined}
         action={
           <div className="row">
             {selected.size > 0 && (
@@ -560,7 +574,7 @@ function AchatsInner() {
         <p className="muted">Le suivi commence ici : les anciens dépôts dans Fox ne sont pas connus automatiquement. Vous pouvez les sélectionner puis les marquer comme transmis.</p>
         <div className="row" style={{ flexWrap: 'wrap', gap: 8 }}>
           <button className="btn" onClick={() => { setFox('pending'); setType(''); }}>Voir les factures à transmettre</button>
-          <button className="btn" onClick={() => setSelected(new Set(sort.rows.filter(e => foxEligible(e) && e.hasPdf && !e.foxTransmittedAt).slice(0, 300).map(e => e.id)))}>Sélectionner les PDF à transmettre de cette page</button>
+          <button className="btn" onClick={() => setSelected(new Set(viewRows.filter(e => foxEligible(e) && e.hasPdf && !e.foxTransmittedAt).slice(0, 300).map(e => e.id)))}>Sélectionner les PDF à transmettre de cette page</button>
           <button className="btn primary" disabled={!foxSelection || foxBusy || selected.size > 300} onClick={exportFox}>{foxBusy ? 'Traitement…' : 'Télécharger pour Fox (' + selected.size + ')'}</button>
           <button className="btn" disabled={!foxSelection || foxBusy || selected.size > 300} onClick={() => confirmFox(true)}>Marquer comme transmis à Fox</button>
         </div>
@@ -679,7 +693,7 @@ function AchatsInner() {
                 <th style={{ width: 28 }}>
                   <input
                     type="checkbox"
-                    checked={sort.rows.some((e) => e.hasPdf) && sort.rows.filter((e) => e.hasPdf).every((e) => selected.has(e.id))}
+                    checked={viewRows.some((e) => e.hasPdf) && viewRows.filter((e) => e.hasPdf).every((e) => selected.has(e.id))}
                     onChange={toggleAll}
                     aria-label="Tout sélectionner (pièces jointes disponibles)"
                   />
@@ -696,7 +710,7 @@ function AchatsInner() {
               </tr>
             </thead>
             <tbody>
-              {sort.rows.map((e) => (
+              {viewRows.map((e) => (
                 <tr
                   key={e.id}
                   className={`row-link${ctx.menu?.row.id === e.id ? ' ctx-target' : ''}`}
@@ -782,7 +796,7 @@ function AchatsInner() {
       )}
 
       {data && (
-        <PaginationBar page={data.page} totalPages={data.totalPages} pageSize={pageSize} onPage={setPage} onPageSize={(s) => { setPageSize(s); setPage(1); }} />
+        <PaginationBar page={fullMode ? page : data.page} totalPages={viewPages} pageSize={pageSize} onPage={setPage} onPageSize={(s) => { setPageSize(s); setPage(1); }} />
       )}
     </>
   );

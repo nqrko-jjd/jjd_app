@@ -186,8 +186,18 @@ function AchatsInner() {
     }>('/api/finance/expenses/extract', fd);
     // un PDF scanné sans texte n'est pas lisible par cette voie : fiche créée « à compléter » avec le fichier
     const ex = r.extraction && r.extraction.textExtracted !== false ? { ...r.extraction, supplierName: r.extraction.supplierName ?? r.extraction.contactName ?? null } : null;
-    const key = ex?.docNumber ? `${ex.docNumber.trim().toLowerCase()}|${ex.totalTtc ?? ''}` : '';
-    const known = (data?.items ?? []).some((e) => ex?.docNumber && e.docNumber?.trim().toLowerCase() === ex.docNumber.trim().toLowerCase() && (ex.totalTtc == null || e.ttc == null || Math.abs(e.ttc - ex.totalTtc) < 0.02));
+    // un n° de facture lu sans aucun chiffre (« Client », « Facture »…) est une erreur de lecture : pas un critère de doublon
+    const reliableNo = !!ex?.docNumber && /\d/.test(ex.docNumber) && ex.docNumber.trim().length >= 4;
+    const key = reliableNo && ex?.docNumber ? `${ex.docNumber.trim().toLowerCase()}|${ex.totalTtc ?? ''}` : '';
+    const sameDoc = (e: { docNumber: string | null; ttc: number | null }) => !!ex?.docNumber && e.docNumber?.trim().toLowerCase() === ex.docNumber.trim().toLowerCase() && (ex.totalTtc == null || e.ttc == null || Math.abs(e.ttc - ex.totalTtc) < 0.02);
+    // la liste affichée ne montre qu'une page : on cherche le n° dans TOUTES les dépenses, pas seulement dans cette page
+    let known = false;
+    if (reliableNo && ex?.docNumber) {
+      try {
+        const found = await api<{ items: { docNumber: string | null; ttc: number | null }[] }>(`/api/finance/expenses?q=${encodeURIComponent(ex.docNumber.trim())}&pageSize=50&page=1`);
+        known = found.items.some(sameDoc);
+      } catch { known = (data?.items ?? []).some(sameDoc); }
+    }
     if (key && (known || scannedKeys.current.has(key))) return `Doublon ignoré : n° ${ex?.docNumber} existe déjà`;
     const created = await api<{ expense: { id: string } }>('/api/finance/expenses', {
       method: 'POST',
@@ -526,13 +536,13 @@ function AchatsInner() {
       {batch && (
         <div className="card" style={{ padding: 14, marginBottom: 16 }}>
           <div className="row" style={{ marginBottom: 8 }}>
-            <strong>Import en lot · {batch.filter((b) => b.state === 'ok').length}/{batch.length} créées</strong>
+            <strong>Import en lot · {batch.filter((b) => b.state === 'ok' && b.msg.startsWith('Dépense créée')).length} créée(s) · {batch.filter((b) => b.state === 'ok' && b.msg.startsWith('Doublon')).length} déjà présente(s) · {batch.filter((b) => b.state === 'err').length} en échec · {batch.length} fichier(s)</strong>
             {!batchBusy && <button className="btn ghost" style={{ marginLeft: 'auto' }} onClick={() => setBatch(null)}>Fermer</button>}
           </div>
           <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 4, fontSize: '0.88rem' }}>
             {batch.map((b, i) => (
               <li key={i} style={{ color: b.state === 'err' ? 'var(--crit, #b3261e)' : undefined }}>
-                {b.state === 'ok' ? '✓' : b.state === 'err' ? '✗' : b.state === 'run' ? '…' : '·'} <strong>{b.name}</strong> — <span className="muted" style={{ color: 'inherit' }}>{b.msg}</span>
+                {b.state === 'ok' ? (b.msg.startsWith('Doublon') ? '=' : '✓') : b.state === 'err' ? '✗' : b.state === 'run' ? '…' : '·'} <strong>{b.name}</strong> — <span className="muted" style={{ color: 'inherit' }}>{b.msg}</span>
               </li>
             ))}
           </ul>

@@ -6,8 +6,9 @@
  * n'est pas défini (32 caractères minimum), le connecteur est éteint et répond 404.
  *
  * Il agit au nom de CLAUDE_MCP_USER_EMAIL (défaut : david@jjd-consult.be), qui doit faire partie de la
- * direction. Aucun outil n'écrit, n'envoie ni ne valide quoi que ce soit : chiffres, chantiers, planning,
- * tâches et mails (Boîte IA + mails classés sur les chantiers) en consultation uniquement.
+ * direction. Chiffres, chantiers, planning, tâches et mails en consultation. Une seule écriture possible :
+ * save_mail_draft dépose un BROUILLON dans le dossier Brouillons de la boîte (lib/mail-desk.ts). Rien n'est
+ * jamais envoyé, validé ni modifié dans l'appli.
  */
 import { Router, type Request, type Response } from 'express';
 import { timingSafeEqual } from 'node:crypto';
@@ -20,6 +21,7 @@ import { DATA_TOOLS, DATA_TOOL_NAMES } from '../lib/assistant-data.js';
 import { isDirection } from '../lib/assistant-quota.js';
 import { runTool } from './assistant.js';
 import type { AuthUser } from '../lib/auth.js';
+import { mailDeskConfigured, listInbox, readMail, saveDraft } from '../lib/mail-desk.js';
 
 export const claudeMcpRouter = Router();
 
@@ -48,7 +50,14 @@ const EXTRA_TOOLS: McpTool[] = [
     inputSchema: { type: 'object', properties: { status: { type: 'string', enum: ['pending', 'applied', 'dismissed', 'all'] }, kind: { type: 'string', enum: ['lead', 'appointment', 'worksite_note', 'payment_reminder', 'other'] }, limit: { type: 'integer', description: '1 à 50 (défaut 25)' } } } },
   { name: 'worksite_mails', description: "Derniers mails et notes classés sur UN chantier (id obtenu avec search_worksites) : sujet, expéditeur, date et début du texte.",
     inputSchema: { type: 'object', properties: { worksiteId: { type: 'string' }, limit: { type: 'integer', description: '1 à 20 (défaut 10)' } }, required: ['worksiteId'] } },
+  { name: 'inbox_recent', description: "Derniers mails reçus dans la boîte principale (david@), du plus récent au plus ancien : expéditeur, sujet, date, lu ou non, extrait. Lecture seule, ne marque rien comme lu. Filtres : days (1 à 30, défaut 3), unreadOnly, query (mot cherché dans sujet, expéditeur ou texte), limit (1 à 30, défaut 20).",
+    inputSchema: { type: 'object', properties: { days: { type: 'integer' }, unreadOnly: { type: 'boolean' }, query: { type: 'string' }, limit: { type: 'integer' } } } },
+  { name: 'read_mail', description: "Texte complet d'un mail de la boîte de réception (messageId obtenu avec inbox_recent), avec destinataires et liste des pièces jointes. Lecture seule.",
+    inputSchema: { type: 'object', properties: { messageId: { type: 'string' } }, required: ['messageId'] } },
+  { name: 'save_mail_draft', description: "PRÉPARE un mail sans l'envoyer : l'enregistre comme brouillon dans le dossier Brouillons de la boîte de David, qui le relit et l'envoie lui-même depuis son webmail. Pour répondre, donne replyToMessageId (destinataire, objet « Re: » et citation remplis automatiquement ; replyAll pour garder les personnes en copie). Pour un nouveau mail, donne to et subject. body = texte du mail uniquement, signé « David ». Ne l'utilise que si David a demandé de préparer une réponse.",
+    inputSchema: { type: 'object', properties: { replyToMessageId: { type: 'string' }, replyAll: { type: 'boolean' }, to: { type: 'string' }, cc: { type: 'string' }, subject: { type: 'string' }, body: { type: 'string' } }, required: ['body'] } },
 ];
+const WRITE_TOOLS = new Set(['save_mail_draft']);
 
 const TOOLS: McpTool[] = [
   ...SEARCH_TOOLS,
@@ -104,6 +113,24 @@ async function runExtraTool(name: string, raw: Record<string, unknown>): Promise
       });
       return { chantier: ws.ref, titre: ws.title, mails: rows.map((m) => ({ type: m.kind, sujet: m.subject, de: m.fromAddress, a: m.toAddress, recu: m.receivedAt?.toISOString() ?? null, extrait: (m.bodyText ?? '').replace(/\s+/g, ' ').trim().slice(0, 1200), note: m.note })) };
     }
+    case 'inbox_recent': {
+      if (!mailDeskConfigured()) return { erreur: 'La boîte mail n’est pas configurée sur le serveur (LEADS_IMAP_*).' };
+      const i = z.object({ days: z.number().int().min(1).max(30).optional(), unreadOnly: z.boolean().optional(), query: z.string().trim().min(2).max(80).optional(), limit: z.number().int().min(1).max(30).optional() }).strict().parse(raw);
+      const mails = await listInbox({ days: i.days ?? 3, limit: i.limit ?? 20, unreadOnly: i.unreadOnly ?? false, query: i.query });
+      return { nombre: mails.length, mails };
+    }
+    case 'read_mail': {
+      if (!mailDeskConfigured()) return { erreur: 'La boîte mail n’est pas configurée sur le serveur (LEADS_IMAP_*).' };
+      const i = z.object({ messageId: z.string().min(3).max(300) }).strict().parse(raw);
+      return (await readMail(i.messageId)) ?? { erreur: 'Mail introuvable dans la boîte de réception.' };
+    }
+    case 'save_mail_draft': {
+      if (!mailDeskConfigured()) return { erreur: 'La boîte mail n’est pas configurée sur le serveur (LEADS_IMAP_*).' };
+      const i = z.object({ replyToMessageId: z.string().min(3).max(300).optional(), replyAll: z.boolean().optional(), to: z.string().max(500).optional(), cc: z.string().max(500).optional(), subject: z.string().max(250).optional(), body: z.string().min(1).max(20000) }).strict()
+        .refine((v) => v.replyToMessageId || (v.to && v.subject), { message: 'replyToMessageId, ou bien to et subject' }).parse(raw);
+      const r = await saveDraft(i);
+      return { ok: true, envoye: false, note: 'Brouillon enregistré, rien n’a été envoyé. David le relit et l’envoie depuis son webmail.', ...r };
+    }
     default:
       return { erreur: `Outil inconnu : ${name}` };
   }
@@ -153,13 +180,13 @@ export async function handleRpc(msg: RpcMessage, user: AuthUser): Promise<object
         protocolVersion: SUPPORTED_VERSIONS.includes(asked) ? asked : SUPPORTED_VERSIONS[0],
         capabilities: { tools: { listChanged: false } },
         serverInfo: { name: 'jjd-consult', title: 'JJD Consult', version: '1.0.0' },
-        instructions: "Données de gestion de JJD Consult (rénovation, Bruxelles et Brabant wallon), en lecture seule. Commence par search_worksites pour retrouver l'id d'un chantier. Montants en euros, HT sauf mention. R-069 et R-152 sont des dépenses privées des associés, à exclure des analyses de l'entreprise.",
+        instructions: "Données de gestion de JJD Consult (rénovation, Bruxelles et Brabant wallon) et boîte mail de David. Tout est en lecture seule, sauf save_mail_draft qui prépare un brouillon sans jamais l'envoyer. Commence par search_worksites pour retrouver l'id d'un chantier. Montants en euros, HT sauf mention. R-069 et R-152 sont des dépenses privées des associés, à exclure des analyses de l'entreprise.",
       } };
     }
     case 'ping':
       return { jsonrpc: '2.0', id, result: {} };
     case 'tools/list':
-      return { jsonrpc: '2.0', id, result: { tools: TOOLS.map((t) => ({ ...t, annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false } })) } };
+      return { jsonrpc: '2.0', id, result: { tools: TOOLS.map((t) => ({ ...t, annotations: { readOnlyHint: !WRITE_TOOLS.has(t.name), destructiveHint: false, idempotentHint: !WRITE_TOOLS.has(t.name), openWorldHint: false } })) } };
     case 'tools/call': {
       const name = String(msg.params?.name ?? '');
       const args = (msg.params?.arguments && typeof msg.params.arguments === 'object' ? msg.params.arguments : {}) as Record<string, unknown>;

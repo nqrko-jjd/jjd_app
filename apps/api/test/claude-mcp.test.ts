@@ -47,8 +47,10 @@ test('initialize puis tools/list : outils en lecture seule uniquement', async ()
   const list = await rpc({ jsonrpc: '2.0', id: 2, method: 'tools/list' });
   const names: string[] = list.body.result.tools.map((t: { name: string }) => t.name);
   assert.ok(names.includes('search_worksites') && names.includes('business_summary') && names.includes('mail_suggestions'));
-  assert.ok(!names.some((n) => n.startsWith('create_')), 'aucun outil d’écriture exposé');
-  assert.ok(list.body.result.tools.every((t: { annotations: { readOnlyHint: boolean } }) => t.annotations.readOnlyHint));
+  assert.ok(!names.some((n) => n.startsWith('create_')), 'aucun outil de création exposé');
+  assert.ok(names.includes('inbox_recent') && names.includes('save_mail_draft'));
+  const writers = list.body.result.tools.filter((t: { annotations: { readOnlyHint: boolean } }) => !t.annotations.readOnlyHint).map((t: { name: string }) => t.name);
+  assert.deepEqual(writers, ['save_mail_draft'], 'seul le brouillon de mail écrit quelque chose');
 });
 
 test('tools/call : recherche, chantiers en cours, tâches ouvertes', async () => {
@@ -65,4 +67,11 @@ test('paramètres invalides : erreur lisible, pas de plantage', async () => {
   assert.equal(r.body.result.isError, true);
   const u = await rpc({ jsonrpc: '2.0', id: 7, method: 'tools/call', params: { name: 'create_devis_draft', arguments: {} } });
   assert.equal(u.body.error.code, -32602);
+});
+
+test('mails : boîte non configurée en test, réponse claire sans plantage', async () => {
+  const r = await rpc({ jsonrpc: '2.0', id: 8, method: 'tools/call', params: { name: 'inbox_recent', arguments: {} } });
+  assert.match(r.body.result.content[0].text, /pas configurée/);
+  const d = await rpc({ jsonrpc: '2.0', id: 9, method: 'tools/call', params: { name: 'save_mail_draft', arguments: { body: 'x' } } });
+  assert.ok(r.status === 200 && d.status === 200);
 });

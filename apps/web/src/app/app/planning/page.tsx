@@ -132,9 +132,11 @@ export default function PlanningPage() {
     setGcalBusy(true);
     try {
       const r = await api<{ total: number; synced: number; errors: string[] }>(`/api/planning/gcal-backfill${reformat ? '?reformat=1' : ''}`, { method: 'POST' });
-      alert(r.total === 0
+      // congés et absences : journée entière grise « Congé Prénom » (rattrape ceux saisis avant la synchro)
+      const a = await api<{ total: number; synced: number }>('/api/absences/gcal-backfill', { method: 'POST' }).catch(() => ({ total: 0, synced: 0 }));
+      alert(r.total + a.total === 0
         ? 'Tout était déjà synchronisé — rien à faire.'
-        : `${r.synced}/${r.total} événement(s) envoyé(s) vers Google Agenda.${r.errors.length ? `\n${r.errors.length} échec(s), voir logs serveur.` : ''}`);
+        : `${r.synced}/${r.total} événement(s) et ${a.synced}/${a.total} congé(s) envoyé(s) vers Google Agenda.${r.errors.length ? `\n${r.errors.length} échec(s), voir logs serveur.` : ''}`);
     } catch (e) {
       alert(`Échec : ${(e as Error).message}`);
     } finally {

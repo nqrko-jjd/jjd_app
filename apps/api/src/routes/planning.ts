@@ -10,7 +10,7 @@ import { insensitive } from '../lib/search.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, STAFF, OFFICE } from '../lib/auth.js';
 import { upsertEvent, deleteEvent, gcalEnabled } from '../lib/gcal.js';
-import { composeGcalEvent, composeGcalGroup } from '../lib/gcal-format.js';
+import { composeGcalEvent, composeGcalGroup, composeGcalAbsence } from '../lib/gcal-format.js';
 import { refreshWorksiteStatus } from '../lib/worksite-status.js';
 import { attachPhotoRoutes } from '../lib/photo-upload.js';
 import { vehicleCostBreakdown } from '../lib/vehicle-cost.js';
@@ -862,6 +862,30 @@ consumablesRouter.post(
 
 export const absencesRouter = Router();
 
+/** Envoie (ou met à jour) l'absence dans Google Agenda : journée entière, grise, « Congé Prénom ». Sans effet si la synchro est coupée. */
+async function syncAbsenceToGoogle(id: string): Promise<boolean> {
+  if (!gcalEnabled()) return false;
+  const a = await prisma.absence.findUnique({ where: { id }, include: { person: { select: { firstName: true, displayName: true } } } });
+  if (!a) return false;
+  const gid = await upsertEvent(a.googleEventId, composeGcalAbsence(a));
+  if (gid && gid !== a.googleEventId) await prisma.absence.update({ where: { id }, data: { googleEventId: gid } });
+  return !!gid;
+}
+
+/** Rattrapage : envoie dans Google les absences pas encore synchronisées, du mois passé à l'avenir. */
+absencesRouter.post(
+  '/gcal-backfill',
+  requireAuth(...OFFICE),
+  asyncHandler(async (_req, res) => {
+    if (!gcalEnabled()) throw new HttpError(422, 'Synchro Google Agenda non configurée');
+    const since = new Date(); since.setMonth(since.getMonth() - 1);
+    const missing = await prisma.absence.findMany({ where: { googleEventId: null, endsOn: { gte: since } }, select: { id: true } });
+    let synced = 0;
+    for (const a of missing) if (await syncAbsenceToGoogle(a.id).catch(() => false)) synced++;
+    res.json({ total: missing.length, synced });
+  }),
+);
+
 absencesRouter.get(
   '/',
   requireAuth(...STAFF),
@@ -892,6 +916,7 @@ absencesRouter.post(
     const absence = await prisma.absence.create({
       data: { personId: d.personId, kind: d.kind, startsOn: d.startsOn, endsOn: d.endsOn, note: d.note ?? null },
     });
+    await syncAbsenceToGoogle(absence.id).catch(() => {});
     res.status(201).json({ absence });
   }),
 );
@@ -912,6 +937,7 @@ absencesRouter.patch(
         note: d.note,
       },
     });
+    await syncAbsenceToGoogle(absence.id).catch(() => {});
     res.json({ absence });
   }),
 );
@@ -920,7 +946,8 @@ absencesRouter.delete(
   '/:id',
   requireAuth(...STAFF),
   asyncHandler(async (req, res) => {
-    await prisma.absence.delete({ where: { id: req.params.id } });
+    const gone = await prisma.absence.delete({ where: { id: req.params.id } });
+    if (gone.googleEventId) await deleteEvent(gone.googleEventId);
     res.status(204).end();
   }),
 );

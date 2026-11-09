@@ -43,6 +43,23 @@ const hhmm = (d: Date) => new Intl.DateTimeFormat('fr-BE', { hour: '2-digit', mi
 /** Couleurs Google Agenda : les rendez-vous d'affaire en JAUNE (« Banane », id 5) comme dans les anciennes fiches ;
  *  les interventions gardent la couleur de l'agenda (bleu). À la mise à jour, l'absence de couleur remet celle de l'agenda. */
 export const GCAL_COLOR_MEETING = '5';
+/** Congés et absences : GRIS (« Graphite », id 8), journée entière, comme les anciennes fiches « Congé Melvi ». */
+export const GCAL_COLOR_ABSENCE = '8';
+const ABSENCE_TITLE: Record<string, string> = { leave: 'Congé', training: 'Formation', other: 'Absent' };
+const dayKey = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Brussels' }).format(d); // AAAA-MM-JJ, jour belge
+/** Fiche Google d'une absence : « Congé Patrick », du premier au dernier jour inclus (Google veut le lendemain comme fin). */
+export function composeGcalAbsence(a: { kind: string; startsOn: Date; endsOn: Date; note: string | null; person: { firstName: string | null; displayName: string } }) {
+  const name = (a.person.firstName || a.person.displayName).trim();
+  const start = new Date(dayKey(a.startsOn) + 'T12:00:00Z');
+  const end = new Date(dayKey(a.endsOn) + 'T12:00:00Z');
+  end.setUTCDate(end.getUTCDate() + 1);
+  return {
+    summary: `${ABSENCE_TITLE[a.kind] ?? 'Absent'} ${name}`,
+    description: a.note ? clean(a.note) : undefined,
+    colorId: GCAL_COLOR_ABSENCE,
+    start, end, allDay: true, free: true,
+  };
+}
 
 type GcalComposed = { summary: string; description: string; location: string | undefined; colorId: string | undefined };
 /** Blocs « Mission » et « Ouvriers » déjà composés (fiche regroupant plusieurs créneaux d'un même chantier le même jour). */

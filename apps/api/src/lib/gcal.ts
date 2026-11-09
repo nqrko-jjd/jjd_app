@@ -53,6 +53,8 @@ interface EventInput {
   start: Date;
   end: Date;
   allDay?: boolean;
+  /** « disponible » : la fiche n'occupe pas l'agenda (congés, comme les anciennes fiches faites à la main). */
+  free?: boolean;
 }
 
 function toResource(e: EventInput) {
@@ -62,6 +64,7 @@ function toResource(e: EventInput) {
     description: e.description,
     location: e.location,
     colorId: e.colorId,
+    transparency: e.free ? 'transparent' : undefined,
     start: e.allDay ? { date: d(e.start) } : { dateTime: e.start.toISOString() },
     end: e.allDay ? { date: d(e.end) } : { dateTime: e.end.toISOString() },
   };

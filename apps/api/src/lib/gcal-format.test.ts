@@ -99,3 +99,18 @@ test('fiche importée de Google : l’UID « …@google.com » devient l’ident
   assert.equal(await resolveApiEventId(byUid, 'xyz@outlook.com', 'cal'), 'real1');
   assert.equal(await resolveApiEventId(byUid, 'inconnu@outlook.com', 'cal'), 'inconnu@outlook.com');
 });
+
+test('congé : journée entière grise « Congé Prénom », fin = lendemain du dernier jour', async () => {
+  const { composeGcalAbsence, GCAL_COLOR_ABSENCE } = await import('./gcal-format.js');
+  const g = composeGcalAbsence({ kind: 'leave', startsOn: new Date('2026-11-10T00:00:00Z'), endsOn: new Date('2026-11-12T00:00:00Z'), note: null, person: { firstName: 'Patrick', displayName: 'Patrick D.' } });
+  assert.equal(g.summary, 'Congé Patrick');
+  assert.equal(g.colorId, GCAL_COLOR_ABSENCE);
+  assert.equal(g.allDay, true); assert.equal(g.free, true);
+  assert.equal(g.start.toISOString().slice(0, 10), '2026-11-10');
+  assert.equal(g.end.toISOString().slice(0, 10), '2026-11-13');
+  // date enregistrée à minuit heure belge (= 23h UTC la veille) : on garde le jour belge
+  const h = composeGcalAbsence({ kind: 'training', startsOn: new Date('2026-11-09T23:00:00Z'), endsOn: new Date('2026-11-09T23:00:00Z'), note: 'VCA', person: { firstName: null, displayName: 'Coco' } });
+  assert.equal(h.summary, 'Formation Coco');
+  assert.equal(h.start.toISOString().slice(0, 10), '2026-11-10');
+  assert.equal(h.end.toISOString().slice(0, 10), '2026-11-11');
+});

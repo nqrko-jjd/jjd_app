@@ -1010,6 +1010,7 @@ model Absence {
   startsOn  DateTime // jour de début (journée pleine)
   endsOn    DateTime // jour de fin inclus
   note      String?
+  googleEventId String? @unique // fiche « Congé Prénom » (journée entière, grise) dans Google Agenda
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

@@ -42,7 +42,7 @@ interface Suggestion {
 }
 interface PontoStatus {
   configured: boolean; connected: boolean; redirectUri: string;
-  accounts: { id: string; iban: string | null; label: string | null; balance: number | null; lastSyncAt: string | null }[];
+  accounts: { id: string; iban: string | null; label: string | null; balance: number | null; balanceAt: string | null; lastSyncAt: string | null }[];
 }
 
 const CONF_LABEL: Record<string, string> = { strong: 'auto ✓✓', good: 'auto ✓', manual: 'manuel' };
@@ -331,6 +331,34 @@ function BanqueInner() {
             />
           </div>
         </div>
+        {ponto && ponto.accounts.length > 0 && (
+          <div style={{ marginTop: '0.8rem', borderTop: '1px solid var(--line, #dfe6e2)', paddingTop: '0.7rem' }}>
+            <strong>Solde des comptes</strong>
+            <table className="tbl" style={{ marginTop: '0.4rem' }}>
+              <thead><tr><th>Compte</th><th>IBAN</th><th style={{ textAlign: 'right' }}>Solde</th><th>Au</th></tr></thead>
+              <tbody>
+                {ponto.accounts.map((a) => (
+                  <tr key={a.id}>
+                    <td>{a.label ?? '—'}</td>
+                    <td className="muted">{a.iban ?? '—'}</td>
+                    <td style={{ textAlign: 'right', fontWeight: 600 }}>{a.balance != null ? <Money value={a.balance} /> : <span className="muted">inconnu</span>}</td>
+                    <td className="muted">{a.balanceAt ? new Date(a.balanceAt).toLocaleString('fr-BE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+              {ponto.accounts.filter((a) => a.balance != null).length > 1 && (
+                <tfoot>
+                  <tr>
+                    <td colSpan={2}><strong>Total</strong></td>
+                    <td style={{ textAlign: 'right', fontWeight: 700 }}><Money value={ponto.accounts.reduce((s, a) => s + (a.balance ?? 0), 0)} /></td>
+                    <td />
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+            <div className="muted" style={{ fontSize: '0.8rem', marginTop: '0.3rem' }}>Soldes donnés par la banque à chaque synchronisation (bouton « Synchroniser »). Les cartes Visa/Mastercard importées par relevé n’ont pas de solde.</div>
+          </div>
+        )}
         <div className="muted" style={{ marginTop: '0.5rem', fontSize: '0.82rem' }}>
           « Importer un relevé » = pour les paiements absents du flux Ponto (cartes Visa/Mastercard). CSV, ou PDF « État des dépenses » de carte. « Capture d’écran » = photo de l’historique de l’appli carte, lue par IA — utile avant l’arrivée du relevé PDF officiel du mois. Ré-importer les mêmes lignes ne crée pas de doublons.
         </div>

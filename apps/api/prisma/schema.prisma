@@ -1010,12 +1010,13 @@ model Absence {
   startsOn  DateTime // jour de début (journée pleine)
   endsOn    DateTime // jour de fin inclus
   note      String?
-  googleEventId String? @unique // fiche « Congé Prénom » (journée entière, grise) dans Google Agenda
+  googleEventId String? // fiche « Congé Prénom » (journée entière, grise) dans Google Agenda — index simple, PAS @unique : db push refuse d'ajouter un @unique et empêche l'API de démarrer
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([personId])
   @@index([startsOn])
+  @@index([googleEventId])
 }
 
 model EventAssignment {

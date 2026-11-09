@@ -72,7 +72,7 @@ export interface DocFull {
   customerRef: string | null;
   poNumber?: string | null;
   worksite: { id: string; ref: string; title: string } | null;
-  contact: { id: string; name: string; vat: string | null; address: string | null; box: string | null; postalCode: string | null; city: string | null; email: string | null } | null;
+  contact: { id: string; name: string; kind?: string | null; vat: string | null; address: string | null; box: string | null; postalCode: string | null; city: string | null; email: string | null } | null;
   parent: { id: string; kind: string; number: string | null; draftRef: string | null; status?: string; totalTtc?: number; issuedOn?: string | null } | null;
   children: { id: string; kind: string; number: string | null; draftRef: string | null; status: string; totalTtc?: number; issuedOn?: string | null; lockedAt?: string | null }[];
   lines: DocLine[];
@@ -88,4 +88,22 @@ export interface Company {
   iban: string; bankDetails?: string; email: string; phone: string; website: string;
   quoteTerms: string; invoiceTerms: string;
   vatNote6: string; vatNote0: string;
+}
+
+/** Adresse en lignes, comme sur le PDF (voir addressLines côté API, lib/pdf.ts) : « c/o Syndic » / rue / code postal + ville. */
+export function addressLines(raw: string | null | undefined): string[] {
+  const text = (raw ?? '').trim();
+  if (!text) return [];
+  if (/\r?\n/.test(text)) return text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const co = /^(c\/o\s[^,]+),\s*(.+)$/i.exec(text);
+  const head = co ? [co[1]!.trim()] : [];
+  const rest = co ? co[2]!.trim() : text;
+  const m = /^(.*?)\s*[,\-–]?\s*(\d{4,5}\s+[^,]+?)\s*$/.exec(rest);
+  if (m && m[1]!.trim()) return [...head, m[1]!.trim(), m[2]!.trim()];
+  return [...head, ...rest.split(',').map((x) => x.trim()).filter(Boolean)];
+}
+
+/** Une ACP n'est pas assujettie à la TVA : son numéro est un numéro d'entreprise (BCE), pas un n° de TVA. */
+export function clientIdLabel(kind: string | null | undefined): string {
+  return kind === 'acp' ? 'N° BCE' : 'TVA';
 }

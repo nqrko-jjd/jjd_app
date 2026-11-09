@@ -255,7 +255,7 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
       <div className="info-grid" style={{ marginBottom: '1.4rem' }}>
         <Info label="E-mail" value={c.email ?? '—'} />
         <Info label={tr("Téléphone")} value={c.phone ?? '—'} />
-        <Info label="TVA" value={formatVat(c.vat) ?? '—'} />
+        <Info label={c.kind === 'acp' ? 'N° BCE' : 'TVA'} value={formatVat(c.vat) ?? '—'} />
         <Info label={tr("Adresse")} value={[[c.address, c.box && `bte ${c.box}`].filter(Boolean).join(', '), c.postalCode, c.city].filter(Boolean).join(' ') || '—'} />
         {isSupplier && <Info label="N° de client chez lui" value={c.customerNumber ?? '—'} />}
         {isSupplier && <Info label={tr("Paiement")} value={c.onAccount ? 'En compte' : 'Comptant'} />}

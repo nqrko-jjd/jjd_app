@@ -39,7 +39,7 @@ export interface PdfDoc {
   vatRate?: number | null;
   depositPlan?: unknown;
   worksite: { ref: string } | null;
-  contact: { name: string; vat: string | null; address: string | null; box: string | null; postalCode: string | null; city: string | null; phone?: string | null; email?: string | null } | null;
+  contact: { name: string; kind?: string | null; vat: string | null; address: string | null; box: string | null; postalCode: string | null; city: string | null; phone?: string | null; email?: string | null } | null;
   lines: PdfDocLine[];
 }
 
@@ -169,7 +169,7 @@ export async function buildHtml(d: PdfDoc, co: Company): Promise<string> {
           <div class="lbl">Adressé à</div>
           <div class="party-name">${esc(clientName) || '—'}</div>
           ${clientAddr.map((l) => `<div>${esc(l)}</div>`).join('')}
-          ${clientVat ? `<div>BCE ${esc(clientVat)}</div>` : ''}
+          ${clientVat ? `<div>${d.contact?.kind === 'acp' ? 'N° BCE' : 'TVA'} ${esc(clientVat)}</div>` : ''}
           ${d.contact?.phone ? `<div>Tél ${esc(d.contact.phone)}</div>` : ''}
           ${clientEmail ? `<div>${esc(clientEmail)}</div>` : ''}
         </div>

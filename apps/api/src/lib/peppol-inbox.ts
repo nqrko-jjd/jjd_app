@@ -4,6 +4,7 @@ import { storeFile } from './media.js';
 import { peppolConfigured } from './peppol.js';
 import { receivePurchase, normVat, type PurchaseData } from './purchase-receipts.js';
 import { HttpError } from './http.js';
+import { notifyMobile } from './native-push.js';
 
 async function request(route: string, pdf=false) {
   if (!peppolConfigured()) throw new HttpError(503,'Connexion Peppol non configurée.');
@@ -101,6 +102,13 @@ async function run() {
     }
     if(pages>100) result.errors.push('Historique supérieur à 5000 documents : reprise complémentaire nécessaire.');
   } catch(e) {result.errors.push((e as Error).message);}
+  // notification au bureau seulement pour les documents NOUVEAUX (les déjà importés sont ignorés plus haut, donc pas de répétition)
+  if(result.imported+result.review>0) {
+    try {
+      const staff=await prisma.user.findMany({where:{active:true,role:{in:['admin','office']}},select:{id:true}});
+      await notifyMobile(staff.map(u=>u.id),'/achats','Nouvelle facture Peppol reçue');
+    } catch {console.warn('[peppol-inbox] notification impossible');}
+  }
   await prisma.setting.upsert({where:{key:'peppolReceptionLast'},create:{key:'peppolReceptionLast',value:result},update:{value:result}});
   return result;
 }

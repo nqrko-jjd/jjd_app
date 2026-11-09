@@ -48,8 +48,8 @@ export const GCAL_COLOR_ABSENCE = '8';
 const ABSENCE_TITLE: Record<string, string> = { leave: 'Congé', training: 'Formation', other: 'Absent' };
 const dayKey = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Brussels' }).format(d); // AAAA-MM-JJ, jour belge
 /** Fiche Google d'une absence : « Congé Patrick », du premier au dernier jour inclus (Google veut le lendemain comme fin). */
-export function composeGcalAbsence(a: { kind: string; startsOn: Date; endsOn: Date; note: string | null; person: { firstName: string | null; displayName: string } }) {
-  const name = (a.person.firstName || a.person.displayName).trim();
+export function composeGcalAbsence(a: { kind: string; startsOn: Date; endsOn: Date; note: string | null; person: { firstName: string | null; displayName: string | null } }) {
+  const name = (a.person.firstName || a.person.displayName || '').trim();
   const start = new Date(dayKey(a.startsOn) + 'T12:00:00Z');
   const end = new Date(dayKey(a.endsOn) + 'T12:00:00Z');
   end.setUTCDate(end.getUTCDate() + 1);

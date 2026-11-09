@@ -105,6 +105,40 @@ export async function monthlyStatement(personId: string, year: number, month: nu
   };
 }
 
+/**
+ * Ce qu'un ouvrier voit de SA paie : jamais le taux horaire ni un montant « heures × taux », seulement ses jours prestés
+ * et son montant en main par jour (payoutPerDay, sinon le jour facturé/coûté hourlyRate × dailyHours — même règle que le décompte du bureau).
+ */
+export async function workerPayConfig(personId: string) {
+  const p = await prisma.person.findUnique({ where: { id: personId }, select: { payoutPerDay: true, hourlyRate: true, dailyHours: true } });
+  const dayAmount = p?.payoutPerDay ?? (p?.hourlyRate != null ? round2(p.hourlyRate * (p.dailyHours ?? 10)) : null);
+  return { payoutPerDay: p?.payoutPerDay ?? null, dayAmount };
+}
+
+/** Montant par pointage vu par l'ouvrier : le jour prêté (validé) compte UNE fois, sur le premier pointage du jour ; les autres lignes du jour n'affichent aucun montant. */
+export function dayAmountByEntry(entries: { id: string; date: Date | null; status: string }[], dayAmount: number | null): Map<string, number | null> {
+  const out = new Map<string, number | null>();
+  const seen = new Set<string>();
+  for (const e of [...entries].sort((a, b) => (a.date?.getTime() ?? 0) - (b.date?.getTime() ?? 0))) {
+    if (e.status === 'approved' && e.date && dayAmount != null && !seen.has(dayKey(e.date))) { seen.add(dayKey(e.date)); out.set(e.id, dayAmount); }
+    else out.set(e.id, null);
+  }
+  return out;
+}
+
+export async function workerStatementView(s: Awaited<ReturnType<typeof monthlyStatement>>) {
+  const { payoutPerDay, dayAmount } = await workerPayConfig(s.personId);
+  const perEntry = dayAmountByEntry(s.entries, dayAmount);
+  return {
+    ...s,
+    totalAmount: payoutPerDay != null ? round2(s.totalDays * payoutPerDay) : s.totalAmount,
+    guaranteeAmount: 0,
+    dayAmount,
+    byWorksite: s.byWorksite.map((r) => ({ ref: r.ref, title: r.title, hours: r.hours, days: r.days })),
+    entries: s.entries.map((e) => ({ ...e, amount: perEntry.get(e.id) ?? null })),
+  };
+}
+
 /** Décompte du mois pour toute l'équipe (préparation des paiements). */
 export async function teamMonthlyStatement(year: number, month: number) {
   const people = await prisma.person.findMany({

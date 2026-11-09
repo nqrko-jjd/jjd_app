@@ -6,7 +6,7 @@ import { timeEntryInput, timerStartInput, timerStopInput, round2, distanceMeters
 import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, STAFF, OFFICE } from '../lib/auth.js';
-import { monthlyStatement, teamMonthlyStatement } from '../lib/statement.js';
+import { monthlyStatement, teamMonthlyStatement, workerStatementView, workerPayConfig, dayAmountByEntry } from '../lib/statement.js';
 import { plannedProposals, dayDate, type Proposal } from '../lib/planned-time.js';
 import { toCsv, readTableBuffer, pick } from '../lib/table-io.js';
 
@@ -149,6 +149,13 @@ timesheetRouter.get(
       include: { worksite: { select: { ref: true, title: true } } },
       take: 200,
     });
+    // ouvrier / chef d'équipe : ni taux horaire ni montant « heures × taux » — le montant d'un jour presté est son tarif en main par jour
+    if (req.user.role === 'worker' || req.user.role === 'foreman') {
+      const { dayAmount } = await workerPayConfig(req.user.personId);
+      const perEntry = dayAmountByEntry(items, dayAmount);
+      res.json({ items: items.map(({ rateUsed: _rate, ...e }) => ({ ...e, amount: perEntry.get(e.id) ?? null })) });
+      return;
+    }
     res.json({ items });
   }),
 );
@@ -581,7 +588,15 @@ statementsRouter.get(
     const now = new Date();
     const year = Number(req.query.year ?? now.getFullYear());
     const month = Number(req.query.month ?? now.getMonth() + 1);
-    res.json(await monthlyStatement(req.params.personId!, year, month));
+    const stmt = await monthlyStatement(req.params.personId!, year, month);
+    // un ouvrier ne voit que sa propre paie, et sous la forme « jours × tarif en main » (voir workerStatementView)
+    const role = req.user?.role;
+    if (role === 'worker' || role === 'foreman') {
+      const own = !!req.user?.personId && req.user.personId === req.params.personId;
+      if (own) { res.json(await workerStatementView(stmt)); return; }
+      if (role === 'worker') throw new HttpError(403, 'Accès refusé.');
+    }
+    res.json(stmt);
   }),
 );
 

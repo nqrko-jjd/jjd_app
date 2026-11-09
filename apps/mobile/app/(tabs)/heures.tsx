@@ -22,6 +22,7 @@ interface Entry {
 interface Statement {
   totalHours: number;
   totalAmount: number;
+  totalDays?: number;
   pendingCount: number;
   byWorksite: { ref: string; title: string; hours: number; amount: number }[];
 }
@@ -81,9 +82,10 @@ export default function Heures() {
         <View style={s.card}>
           <Text style={s.label}>{isCurrentMonth ? 'Ce mois-ci' : `${MONTHS[m - 1]} ${y}`}</Text>
           <View style={s.rowBetween}>
-            <Text style={s.big}>{statement.totalHours} h</Text>
+            <Text style={s.big}>{statement.totalDays != null ? `${statement.totalDays} j` : `${statement.totalHours} h`}</Text>
             <Text style={s.big}>{statement.totalAmount.toLocaleString(dateLocale())} €</Text>
           </View>
+          {statement.totalDays != null && <Text style={s.muted}>{statement.totalHours} h · tarif en main par jour</Text>}
           {statement.pendingCount > 0 && (
             <Text style={{ color: T.accent }}>{statement.pendingCount} pointage(s) en attente de validation</Text>
           )}
@@ -102,7 +104,7 @@ export default function Heures() {
           </View>
           <Text style={s.muted}>{e.worksite?.title}</Text>
           <View style={s.rowBetween}>
-            <Text style={s.ink}>{e.hours != null ? `${e.hours} h` : '—'} · {e.amount != null ? `${e.amount} €` : '—'}</Text>
+            <Text style={s.ink}>{e.hours != null ? `${e.hours} h` : '—'}{e.amount != null ? ` · ${e.amount} €` : ''}</Text>
             <Text style={[s.tag, e.status === 'approved' && { color: T.ok }, e.status === 'rejected' && { color: T.crit }]}>
               {STATUS[e.status] ?? e.status}
             </Text>

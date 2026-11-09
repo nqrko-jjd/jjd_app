@@ -12,7 +12,7 @@ interface Entry {
   worksite: { ref: string; title: string } | null;
 }
 interface Statement {
-  totalHours: number; totalAmount: number; pendingCount: number;
+  totalHours: number; totalAmount: number; totalDays?: number; pendingCount: number;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -52,8 +52,8 @@ export default function MesHeuresPage() {
 
       {statement && (
         <div className="kpis" style={{ marginBottom: '1.2rem' }}>
-          <Kpi ic={Sigma} label={tr("Heures")} value={formatHours(statement.totalHours)} sub={`${MONTHS[m - 1]} ${y}`} hero />
-          <Kpi ic={Euro} label="Montant" value={<Money value={statement.totalAmount} />} sub={tr("Avant retenues")} />
+          <Kpi ic={Sigma} label={tr("Jours travaillés")} value={statement.totalDays ?? 0} sub={`${formatHours(statement.totalHours)} · ${MONTHS[m - 1]} ${y}`} hero />
+          <Kpi ic={Euro} label="Montant" value={<Money value={statement.totalAmount} />} sub={tr("Tarif en main par jour · avant retenues")} />
           {statement.pendingCount > 0 && (
             <Kpi ic={Clock} label={tr("À valider")} value={statement.pendingCount} sub={tr("En attente du bureau")} warn />
           )}
@@ -70,7 +70,7 @@ export default function MesHeuresPage() {
           </div>
           <div className="muted">{e.worksite?.title}</div>
           <div className="row" style={{ justifyContent: 'space-between', marginTop: '0.3rem' }}>
-            <span>{e.hours != null ? formatHours(e.hours) : '—'} · {e.amount != null ? <Money value={e.amount} /> : '—'}</span>
+            <span>{e.hours != null ? formatHours(e.hours) : '—'}{e.amount != null ? <> · <Money value={e.amount} /> {tr("(jour)")}</> : ''}</span>
             <span className={`badge ${e.status === 'approved' ? 'ok' : e.status === 'rejected' ? 'crit' : ''}`}>{STATUS_LABEL[e.status] ?? e.status}</span>
           </div>
         </div>

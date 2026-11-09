@@ -250,12 +250,15 @@ function AchatsInner() {
     ttc: (e: Expense) => e.ttc ?? e.ht,
     status: (e: Expense) => (e.paid ? 1 : 0),
   };
-  const allExpenses = full.rows ?? data?.items ?? [];
+  // « Doublons seulement » : chaque dépense chargée porte déjà ses doublons (duplicateIds), calculés sur toute la base
+  const [onlyDup, setOnlyDup] = useState(false);
+  const loadedExpenses = full.rows ?? data?.items ?? [];
+  const allExpenses = onlyDup ? loadedExpenses.filter((e) => !!e.duplicateIds?.length) : loadedExpenses;
   const colFilter = useColumnFilter<Expense>(allExpenses, expenseAccessors);
   const sort = useSort<Expense>(colFilter.rows, expenseAccessors);
-  useEffect(() => { setNeedFull(colFilter.active || sort.sortKey != null); }, [colFilter.active, sort.sortKey]);
+  useEffect(() => { setNeedFull(onlyDup || colFilter.active || sort.sortKey != null); }, [onlyDup, colFilter.active, sort.sortKey]);
   const fullMode = full.rows != null;
-  useEffect(() => { if (fullMode) setPage(1); }, [colFilter.filters, colFilter.multi, sort.sortKey, sort.sortDir, fullMode]);
+  useEffect(() => { if (fullMode) setPage(1); }, [colFilter.filters, colFilter.multi, sort.sortKey, sort.sortDir, fullMode, onlyDup]);
   // en mode complet la pagination se fait ici (sur l'ensemble filtré et trié) ; sinon c'est la page du serveur
   const viewRows = fullMode ? sort.rows.slice((page - 1) * pageSize, page * pageSize) : sort.rows;
   const viewPages = fullMode ? Math.max(1, Math.ceil(sort.rows.length / pageSize)) : (data?.totalPages ?? 1);
@@ -481,6 +484,9 @@ function AchatsInner() {
           : `${data.totals.count} ligne${data.totals.count > 1 ? 's' : ''} · page ${data.page}/${data.totalPages} · clic droit pour les actions rapides`) : undefined}
         action={
           <div className="row">
+            <button className={onlyDup ? 'btn primary' : 'btn'} onClick={() => setOnlyDup((v) => !v)} aria-pressed={onlyDup} title="N’affiche que les factures saisies en double (même fournisseur, même n°, même montant) — clic droit sur une ligne pour supprimer le doublon">
+              {onlyDup ? '✓ Doublons seulement' : 'Doublons seulement'}
+            </button>
             {selected.size > 0 && (
               <button className="btn" disabled={exporting} onClick={exportZip} title="Pièce jointe de chaque dépense sélectionnée, dans un seul .zip">
                 📦 Exporter {selected.size} pièce{selected.size > 1 ? 's' : ''} jointe{selected.size > 1 ? 's' : ''} (zip)

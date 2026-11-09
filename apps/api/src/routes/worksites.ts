@@ -351,7 +351,8 @@ worksitesRouter.get(
     // Les ouvriers ont leur propre vue (tâches + fil de chantier, /:id/field) — pas les
     // devis/factures ni la rentabilité si jamais ils atterrissent quand même sur cette route.
     const isWorker = req.user!.role === 'worker';
-    const margin = isWorker ? null : await worksiteMargin(ws.id);
+    // la rentabilité (devisé, facturé, coût main-d'œuvre, marge) n'est pas pour les ouvriers ni pour les chefs d'équipe : bureau et admin seulement
+    const margin = isWorker || req.user!.role === 'foreman' ? null : await worksiteMargin(ws.id);
 
     // Fil « dernière activité » de la vue d'ensemble — pas un vrai journal d'événements,
     // juste un condensé des signaux déjà en base (messages de statut du fil, tâches
@@ -382,7 +383,9 @@ worksitesRouter.get(
     if (ws.lat == null && (ws.address || ws.city)) void autoGeocodeWorksite(ws.id); // anciens chantiers : point GPS posé en arrière-plan, visible au prochain affichage
     const { acp, ...wsRest } = (await withQuotedFromDocuments([ws]))[0]!;
     const shaped = { ...wsRest, contacts: ws.contacts.map(currentContact), building: acp };
-    res.json({ worksite: isWorker ? { ...shaped, documents: [] } : shaped, margin, activity: isWorker ? [] : activity });
+    // devis et factures du chantier : bureau et admin seulement (ni ouvriers ni chefs d'équipe)
+    const noDocs = isWorker || req.user!.role === 'foreman';
+    res.json({ worksite: noDocs ? { ...shaped, documents: [] } : shaped, margin, activity: isWorker ? [] : activity });
   }),
 );
 

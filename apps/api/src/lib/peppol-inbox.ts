@@ -1,10 +1,14 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { env } from '../env.js';
 import { prisma } from '../db.js';
-import { storeFile } from './media.js';
+import { storeFile, UPLOADS_DIR } from './media.js';
 import { peppolConfigured } from './peppol.js';
 import { receivePurchase, normVat, type PurchaseData } from './purchase-receipts.js';
 import { HttpError } from './http.js';
 import { notifyMobile } from './native-push.js';
+import { extractEmbeddedPdf } from './peppol-pdf.js';
+export { extractEmbeddedPdf };
 
 async function request(route: string, pdf=false) {
   if (!peppolConfigured()) throw new HttpError(503,'Connexion Peppol non configurée.');
@@ -59,6 +63,29 @@ export function mapReceivedDocument(doc:RemoteDocument,companyId:string) {
   const reason=doc.validation?.result!=='valid'?'Validation Peppol à vérifier.':p?.currency!=='EUR'?'Devise non EUR : traitement manuel requis.':null;
   return {data,reason};
 }
+/**
+ * Rattrapage, une seule fois : les documents Peppol déjà reçus avaient la mise en page générée comme PDF. On la
+ * remplace par le PDF d'origine lu dans leur XML (sur la réception et sur la dépense qui portait ce même PDF).
+ */
+async function repairPeppolOriginalPdfs() {
+  const flag=await prisma.setting.findUnique({where:{key:'peppolOriginalPdfRepair'}});
+  if(flag) return;
+  let replaced=0;
+  const receipts=await prisma.purchaseReceipt.findMany({where:{source:'peppol',xmlPath:{not:null}},select:{id:true,xmlPath:true,pdfPath:true,ledgerEntryId:true}});
+  for(const r of receipts) {
+    try {
+      const xml=readFileSync(path.join(UPLOADS_DIR,r.xmlPath!.replace(/^\/uploads\//,'')),'utf8');
+      const original=extractEmbeddedPdf(xml);
+      if(!original) continue;
+      const pdfPath=storeFile(original,'facture-originale.pdf','expenses');
+      await prisma.purchaseReceipt.update({where:{id:r.id},data:{pdfPath}});
+      if(r.ledgerEntryId) await prisma.ledgerEntry.updateMany({where:{id:r.ledgerEntryId,OR:[{pdfPath:r.pdfPath},{pdfPath:null}]},data:{pdfPath}});
+      replaced++;
+    } catch(e) {console.warn('[peppol-inbox] PDF d’origine non repris pour',r.id,(e as Error).message);}
+  }
+  await prisma.setting.create({data:{key:'peppolOriginalPdfRepair',value:{at:new Date().toISOString(),receipts:receipts.length,replaced}}});
+}
+
 let running:Promise<unknown>|null=null;
 export function syncPeppolInbox() {
   if(running) return running;
@@ -69,6 +96,7 @@ async function run() {
   if((setting?.value as {enabled?:boolean}|null)?.enabled!==true) return {imported:0,review:0,errors:[],disabled:true};
   const result={imported:0,review:0,errors:[] as string[],at:new Date().toISOString()};
   try {
+    await repairPeppolOriginalPdfs().catch(e=>result.errors.push('Reprise des PDF d’origine : '+(e as Error).message));
     const status=await peppolReceptionStatus();
     if(!status.recipient || !status.verified) throw new HttpError(409,'Réception Peppol inactive chez le prestataire.');
     // Paged history also covers documents read by another client. Local receipt IDs make replay safe.
@@ -91,9 +119,11 @@ async function run() {
             const matches=contacts.filter(c=>normVat(c.vat)===data.supplierVat);
             if(matches.length===1) data.contactId=matches[0]!.id;
           }
-          const pdf=await request('/documents/'+encodeURIComponent(item.id)+'/render/pdf',true) as Buffer;
+          // PDF d'origine du fournisseur s'il est joint au XML ; sinon, mise en page générée par le prestataire
+          const original=extractEmbeddedPdf(doc.xml);
+          const pdf=original ?? await request('/documents/'+encodeURIComponent(item.id)+'/render/pdf',true) as Buffer;
           if(!pdf.subarray(0,1024).includes(Buffer.from('%PDF-'))) throw new HttpError(502,'PDF Peppol illisible.');
-          const pdfPath=storeFile(pdf,'peppol.pdf','expenses');
+          const pdfPath=storeFile(pdf,original?'facture-originale.pdf':'peppol.pdf','expenses');
           const xmlPath=storeFile(Buffer.from(doc.xml,'utf8'),'peppol.xml','expenses');
           const receipt=await receivePurchase({sourceRef:ref,source:'peppol',data,pdfPath,xmlPath,reason});
           if(receipt.status==='review') result.review++; else result.imported++;

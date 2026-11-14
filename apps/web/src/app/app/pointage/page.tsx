@@ -20,6 +20,7 @@ function toDateInput(d: Date) { return `${d.getFullYear()}-${String(d.getMonth()
 
 interface Pending {
   id: string; worksiteId: string | null; date: string | null; hours: number | null; amount: number | null; task: string | null;
+  startedAt: string | null; endedAt: string | null; // pointage au compteur : heure d'arrivée et de départ
   geoFlag: boolean; geoDistance: number | null; startLat: number | null; startLng: number | null;
   person: { displayName: string | null; firstName: string; photoThumbUrl: string | null };
   worksite: { ref: string; title: string } | null;
@@ -163,7 +164,7 @@ export default function PointagePage() {
               <div className="tbl-wrap">
                 <table className="tbl">
                   <thead>
-                    <tr><th>{tr("Date")}</th><th>{tr("Chantier")}</th><th>Tâche</th><th>Lieu</th><th style={{ textAlign: 'right' }}>{tr("Heures")}</th><th style={{ textAlign: 'right' }}>Montant</th><th></th></tr>
+                    <tr><th>{tr("Date")}</th><th>{tr("Chantier")}</th><th>Tâche</th><th>Lieu</th><th>Début – Fin</th><th style={{ textAlign: 'right' }}>{tr("Heures")}</th><th style={{ textAlign: 'right' }}>Montant</th><th></th></tr>
                   </thead>
                   <tbody>
                     {entries.map((e) => (
@@ -183,6 +184,9 @@ export default function PointagePage() {
                               </a>
                             )}
                           </div>
+                        </td>
+                        <td className="tnum" style={{ whiteSpace: 'nowrap' }} title={e.startedAt ? 'Heures pointées au compteur' : 'Saisi en heures, sans compteur'}>
+                          {e.startedAt ? `${hhmm(e.startedAt)} – ${e.endedAt ? hhmm(e.endedAt) : '…'}` : <span className="muted">—</span>}
                         </td>
                         <td style={{ textAlign: 'right' }} className="tnum">{formatHours(e.hours)}</td>
                         <td style={{ textAlign: 'right' }}><Money value={e.amount} /></td>

@@ -177,14 +177,37 @@ planningRouter.get(
   }),
 );
 
+/**
+ * Un rendez-vous n'a pas toujours de chantier (fournisseur, prospect, banque…). Plutôt que de l'imputer à un chantier ou à un
+ * poste au hasard, on le range sous un poste de frais dédié « E-RDV · Rendez-vous sans chantier », créé au premier besoin.
+ */
+const MEETING_FALLBACK_REF = 'E-RDV';
+async function meetingFallbackWorksiteId(): Promise<string> {
+  const found = await prisma.worksite.findUnique({ where: { ref: MEETING_FALLBACK_REF }, select: { id: true } });
+  if (found) return found.id;
+  const created = await prisma.worksite.upsert({
+    where: { ref: MEETING_FALLBACK_REF },
+    update: {},
+    create: { ref: MEETING_FALLBACK_REF, title: 'Rendez-vous sans chantier', kind: 'overhead' },
+    select: { id: true },
+  });
+  return created.id;
+}
+async function resolveEventWorksiteId(kind: string, worksiteId: string | null | undefined): Promise<string> {
+  if (worksiteId) return worksiteId;
+  if (kind === 'meeting') return meetingFallbackWorksiteId();
+  throw new HttpError(422, 'Choisissez le chantier de l’intervention.');
+}
+
 planningRouter.post(
   '/',
   requireAuth(...STAFF),
   asyncHandler(async (req, res) => {
     const d = planningEventInput.parse(req.body);
+    if (d.kind === 'meeting' && !d.worksiteId && !d.title?.trim()) throw new HttpError(422, 'Indiquez l’objet du rendez-vous.');
     const ev = await prisma.planningEvent.create({
       data: {
-        worksiteId: d.worksiteId,
+        worksiteId: await resolveEventWorksiteId(d.kind, d.worksiteId),
         title: d.title ?? null,
         startAt: d.startAt,
         endAt: d.endAt,
@@ -225,10 +248,13 @@ planningRouter.patch(
   asyncHandler(async (req, res) => {
     const d = planningEventInput.partial().parse(req.body);
     const before = await prisma.planningEvent.findUnique({ where: { id: req.params.id }, select: { worksiteId: true, startAt: true, kind: true, source: true } });
+    // chantier retiré d'un rendez-vous (null explicite) → poste « Rendez-vous sans chantier »
+    const nextWorksiteId = d.worksiteId === undefined ? undefined
+      : await resolveEventWorksiteId(d.kind ?? before?.kind ?? 'intervention', d.worksiteId);
     await prisma.planningEvent.update({
       where: { id: req.params.id },
       data: {
-        worksiteId: d.worksiteId ?? undefined,
+        worksiteId: nextWorksiteId,
         title: d.title,
         startAt: d.startAt ?? undefined,
         endAt: d.endAt ?? undefined,

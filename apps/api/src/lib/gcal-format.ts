@@ -71,7 +71,8 @@ export function composeGcalEvent(ev: GcalEventSource, ov: BlockOverride = {}): G
   const parts = [w.ref, clean(w.title)];
   const t = clean(ev.title);
   if (t && !clean(w.title).toLowerCase().includes(t.toLowerCase())) parts.push(t);
-  const summary = parts.filter(Boolean).join(' - ');
+  // rendez-vous sans chantier (poste « E-RDV ») : juste « RDV - objet »
+  const summary = w.ref === 'E-RDV' ? `RDV - ${t || 'Rendez-vous'}` : parts.filter(Boolean).join(' - ');
 
   const blocks: string[] = [];
   const access = [clean(ev.accessNote), w.acp?.accessNote ? clean(w.acp.accessNote) : '', w.acp?.digicode ? `Digicode : ${w.acp.digicode}` : ''].filter(Boolean);

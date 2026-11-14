@@ -214,7 +214,8 @@ export const crmOpportunityInput = z.object({
 });
 
 export const planningEventInput = z.object({
-  worksiteId: nonEmpty,
+  // obligatoire pour une intervention ; facultatif pour un rendez-vous (rattaché sinon au poste « Rendez-vous sans chantier »)
+  worksiteId: z.string().trim().nullish(),
   title: z.string().trim().nullish(),
   startAt: z.coerce.date(),
   endAt: z.coerce.date(),

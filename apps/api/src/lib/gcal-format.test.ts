@@ -114,3 +114,11 @@ test('congé : journée entière grise « Congé Prénom », fin = lendemain du 
   assert.equal(h.start.toISOString().slice(0, 10), '2026-11-10');
   assert.equal(h.end.toISOString().slice(0, 10), '2026-11-11');
 });
+
+test('rendez-vous sans chantier (poste E-RDV) : titre « RDV - objet » et adresse du rendez-vous', async () => {
+  const { composeGcalEvent } = await import('./gcal-format.js');
+  const ev = { ...base, kind: 'meeting', title: 'Clipublic', meetingOnSite: false, meetingAddress: 'Rue du Bosquet 21', meetingBox: null, meetingPostalCode: '1060', meetingCity: 'Saint-Gilles', worksite: { ...base.worksite, ref: 'E-RDV', title: 'Rendez-vous sans chantier' } };
+  const r = composeGcalEvent(ev as typeof base);
+  assert.equal(r.summary, 'RDV - Clipublic');
+  assert.equal(r.location, 'Rue du Bosquet 21, 1060 Saint-Gilles');
+});

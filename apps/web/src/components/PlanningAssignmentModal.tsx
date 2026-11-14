@@ -73,7 +73,8 @@ export function PlanningAssignmentModal({
   const [f, setF] = useState(() => ({
     kind: (seed?.kind ?? 'intervention') as string,
     title: seed?.title ?? '',
-    worksiteId: seed?.worksite.id ?? prefill?.worksiteId ?? '',
+    // un rendez-vous rangé sous « E-RDV · Rendez-vous sans chantier » s'affiche sans chantier
+    worksiteId: seed?.worksite.ref === 'E-RDV' ? '' : seed?.worksite.id ?? prefill?.worksiteId ?? '',
     date: initDate,
     start: seed ? toTimeInput(seed.startAt) : '08:30',
     end: seed ? toTimeInput(seed.endAt) : '17:00',
@@ -88,7 +89,8 @@ export function PlanningAssignmentModal({
     tasksNote: seed?.tasksNote ?? '',
     departureFrom: seed?.departureFrom ?? '',
     departureTime: seed?.departureAt ? toTimeInput(seed.departureAt) : '',
-    meetingOnSite: seed?.meetingOnSite ?? true,
+    // rendez-vous : adresse saisie à chaque fois par défaut (souvent ailleurs que sur le chantier)
+    meetingOnSite: seed ? (seed.worksite.ref === 'E-RDV' ? false : seed.meetingOnSite) : false,
     meetingAddress: seed?.meetingAddress ?? '',
     meetingBox: seed?.meetingBox ?? '',
     meetingPostalCode: seed?.meetingPostalCode ?? '',
@@ -129,7 +131,7 @@ export function PlanningAssignmentModal({
     const extra = seed?.worksite;
     const base = extra && !worksites.some((w) => w.id === extra.id) ? [{ ...extra }, ...worksites] : worksites;
     if (f.kind !== 'meeting') return base;
-    const charges = (overheadData?.items ?? []).filter((w) => !base.some((b) => b.id === w.id)).map((w) => ({ id: w.id, ref: w.ref, title: `${w.title} (charge, sans chantier)`, city: w.city ?? null }));
+    const charges = (overheadData?.items ?? []).filter((w) => w.ref !== 'E-RDV' && !base.some((b) => b.id === w.id)).map((w) => ({ id: w.id, ref: w.ref, title: `${w.title} (charge, sans chantier)`, city: w.city ?? null }));
     return [...base, ...charges];
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [worksites, seed?.worksite.id, f.kind, overheadData]);
@@ -177,7 +179,10 @@ export function PlanningAssignmentModal({
   }
 
   async function submit() {
-    if (!f.worksiteId || !f.date || !f.start || !f.end) { setError('Chantier, date et créneau sont requis.'); return; }
+    if (!f.date || !f.start || !f.end) { setError('Date et créneau sont requis.'); return; }
+    if (f.kind !== 'meeting' && !f.worksiteId) { setError('Choisissez le chantier de l’intervention.'); return; }
+    if (f.kind === 'meeting' && !f.worksiteId && !f.title.trim()) { setError('Indiquez l’objet du rendez-vous.'); return; }
+    const onSite = f.kind === 'meeting' ? f.meetingOnSite && !!f.worksiteId : f.meetingOnSite;
     setBusy(true);
     setError(null);
     try {
@@ -185,7 +190,7 @@ export function PlanningAssignmentModal({
       const base = {
         kind: f.kind,
         title: f.title.trim() || null,
-        worksiteId: f.worksiteId,
+        worksiteId: f.worksiteId || null,
         allDay: false,
         status: f.status,
         personIds: f.personIds,
@@ -196,11 +201,11 @@ export function PlanningAssignmentModal({
         equipmentIds: f.equipmentIds,
         tasksNote: f.tasksNote.trim() || null,
         departureFrom: f.departureFrom.trim() || null,
-        meetingOnSite: f.meetingOnSite,
-        meetingAddress: f.meetingOnSite ? null : f.meetingAddress.trim() || null,
-        meetingBox: f.meetingOnSite ? null : f.meetingBox.trim() || null,
-        meetingPostalCode: f.meetingOnSite ? null : f.meetingPostalCode.trim() || null,
-        meetingCity: f.meetingOnSite ? null : f.meetingCity.trim() || null,
+        meetingOnSite: onSite,
+        meetingAddress: onSite ? null : f.meetingAddress.trim() || null,
+        meetingBox: onSite ? null : f.meetingBox.trim() || null,
+        meetingPostalCode: onSite ? null : f.meetingPostalCode.trim() || null,
+        meetingCity: onSite ? null : f.meetingCity.trim() || null,
         note: f.note.trim() || null,
         accessNote: f.accessNote.trim() || null,
       };
@@ -271,63 +276,68 @@ export function PlanningAssignmentModal({
           )}
 
           <fieldset>
-            <legend>01 · {f.kind === 'meeting' ? 'Chantier & créneau du rendez-vous' : 'Chantier & créneau'}</legend>
-            <div className="field full" style={{ marginBottom: '0.85rem' }}>
-              <label>{f.kind === 'meeting' ? 'Chantier (ou charge si pas de chantier : dépôt, enlèvement…)' : tr("Chantier")}</label>
-              <WorksitePicker
-                value={f.worksiteId}
-                onChange={(v) => setF((cur) => ({ ...cur, worksiteId: v }))}
-                options={worksiteOptions}
-              />
-            </div>
-            <div className="field full" style={{ marginBottom: '0.85rem' }}>
-              <label>{f.kind === 'meeting' ? tr("Objet du rendez-vous") : tr("Titre (facultatif)")}</label>
-              <input
-                className="input"
-                value={f.title}
-                onChange={(e) => setF({ ...f, title: e.target.value })}
-                placeholder={f.kind === 'meeting' ? 'RDV avec l’architecte Dupont' : ''}
-              />
-            </div>
+            <legend>01 · {f.kind === 'meeting' ? 'Objet, lieu & créneau du rendez-vous' : 'Chantier & créneau'}</legend>
+            {f.kind !== 'meeting' && (
+              <>
+                <div className="field full" style={{ marginBottom: '0.85rem' }}>
+                  <label>{tr("Chantier")}</label>
+                  <WorksitePicker value={f.worksiteId} onChange={(v) => setF((cur) => ({ ...cur, worksiteId: v }))} options={worksiteOptions} />
+                </div>
+                <div className="field full" style={{ marginBottom: '0.85rem' }}>
+                  <label>{tr("Titre (facultatif)")}</label>
+                  <input className="input" value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} />
+                </div>
+              </>
+            )}
 
             {f.kind === 'meeting' && (
-              <div className="field full" style={{ marginBottom: '0.85rem' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 400 }}>
-                  <input
-                    type="checkbox"
-                    checked={f.meetingOnSite}
-                    onChange={(e) => setF({ ...f, meetingOnSite: e.target.checked })}
-                  />
-                  Sur place — à l’adresse du chantier
-                </label>
-                {!f.meetingOnSite && (
-                  <div style={{ marginTop: '0.6rem' }}>
-                    <div className="field full" style={{ marginBottom: '0.6rem' }}>
-                      <label>{tr("Adresse")}</label>
-                      <AddressAutocomplete
-                        value={f.meetingAddress}
-                        onChange={(v) => setF((cur) => ({ ...cur, meetingAddress: v }))}
-                        onSelect={(hit) => setF((cur) => ({ ...cur, meetingAddress: hit.street, meetingPostalCode: hit.postalCode, meetingCity: hit.city }))}
-                        placeholder="Rue et numéro — resto, bureau de l’architecte…"
-                      />
-                    </div>
-                    <div className="wiz-grid">
-                      <div className="field">
-                        <label>Boîte</label>
-                        <input className="input" value={f.meetingBox} onChange={(e) => setF({ ...f, meetingBox: e.target.value })} placeholder="ex. 4 (sans « bte »)" />
+              <>
+                <div className="field full" style={{ marginBottom: '0.85rem' }}>
+                  <label>{tr("Objet du rendez-vous")}</label>
+                  <input className="input" value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} placeholder="RDV Clipublic, architecte Dupont, banque…" />
+                </div>
+                <div className="field full" style={{ marginBottom: '0.85rem' }}>
+                  {f.worksiteId && (
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 400, marginBottom: '0.4rem' }}>
+                      <input type="checkbox" checked={f.meetingOnSite} onChange={(e) => setF({ ...f, meetingOnSite: e.target.checked })} />
+                      Sur place — à l’adresse du chantier rattaché
+                    </label>
+                  )}
+                  {!(f.worksiteId && f.meetingOnSite) && (
+                    <>
+                      <div className="field full" style={{ marginBottom: '0.6rem' }}>
+                        <label>{tr("Adresse")}</label>
+                        <AddressAutocomplete
+                          value={f.meetingAddress}
+                          onChange={(v) => setF((cur) => ({ ...cur, meetingAddress: v }))}
+                          onSelect={(hit) => setF((cur) => ({ ...cur, meetingAddress: hit.street, meetingPostalCode: hit.postalCode, meetingCity: hit.city }))}
+                          placeholder="Rue et numéro — bureau, fournisseur, resto…"
+                        />
                       </div>
-                      <div className="field">
-                        <label>Code postal</label>
-                        <input className="input" value={f.meetingPostalCode} onChange={(e) => setF({ ...f, meetingPostalCode: e.target.value })} />
+                      <div className="wiz-grid">
+                        <div className="field">
+                          <label>Boîte</label>
+                          <input className="input" value={f.meetingBox} onChange={(e) => setF({ ...f, meetingBox: e.target.value })} placeholder="ex. 4 (sans « bte »)" />
+                        </div>
+                        <div className="field">
+                          <label>Code postal</label>
+                          <input className="input" value={f.meetingPostalCode} onChange={(e) => setF({ ...f, meetingPostalCode: e.target.value })} />
+                        </div>
+                        <div className="field">
+                          <label>Ville</label>
+                          <input className="input" value={f.meetingCity} onChange={(e) => setF({ ...f, meetingCity: e.target.value })} />
+                        </div>
                       </div>
-                    </div>
-                    <div className="field" style={{ marginTop: '0.6rem' }}>
-                      <label>Ville</label>
-                      <input className="input" value={f.meetingCity} onChange={(e) => setF({ ...f, meetingCity: e.target.value })} />
-                    </div>
-                  </div>
-                )}
-              </div>
+                    </>
+                  )}
+                </div>
+                <div className="field full" style={{ marginBottom: '0.85rem' }}>
+                  <label>Rattacher à un chantier (facultatif)</label>
+                  <WorksitePicker value={f.worksiteId} onChange={(v) => setF((cur) => ({ ...cur, worksiteId: v, meetingOnSite: v ? cur.meetingOnSite : false }))} options={worksiteOptions} />
+                  <small className="muted">Seulement si le rendez-vous concerne un chantier. Sinon, laissez vide : il est classé « Rendez-vous sans chantier » et n’est imputé à aucun chantier.</small>
+                  {f.worksiteId && <button type="button" className="btn ghost" style={{ marginTop: '0.4rem' }} onClick={() => setF((cur) => ({ ...cur, worksiteId: '', meetingOnSite: false }))}>Retirer le chantier</button>}
+                </div>
+              </>
             )}
 
             <div className="wiz-grid">

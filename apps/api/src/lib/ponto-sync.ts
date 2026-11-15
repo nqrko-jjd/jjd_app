@@ -2,6 +2,7 @@ import { prisma } from '../db.js';
 import { pontoConfigured, refreshAccounts, fetchAccountTransactions } from './ponto.js';
 import { autoMatchAll } from './bank-match.js';
 import { pairTwins } from './bank-twins.js';
+import { accountDisplayName } from './bank-names.js';
 
 let running = false;
 
@@ -21,6 +22,12 @@ export async function syncPonto(): Promise<{ accounts: number; imported: number;
     let imported = 0;
     let adopted = 0;
     for (const acc of accounts) {
+      // nom lisible (« Belfius ••4521 ») : les lignes déjà importées sous le libellé brut de Ponto sont renommées,
+      // celles renommées à la main gardent leur nom
+      const name = accountDisplayName(acc) ?? acc.label;
+      if (name && name !== acc.label) {
+        await prisma.bankTransaction.updateMany({ where: { accountId: acc.id, OR: [{ bank: null }, { bank: acc.label ?? '' }] }, data: { bank: name } });
+      }
       const txs = await fetchAccountTransactions({ id: acc.id, externalId: acc.externalId! }, knownPontoIds);
       for (const t of txs) {
         const known = await prisma.bankTransaction.findFirst({ where: { OR: [{ externalId: t.externalId }, { pontoId: t.externalId }] }, select: { id: true } });
@@ -54,7 +61,7 @@ export async function syncPonto(): Promise<{ accounts: number; imported: number;
         await prisma.bankTransaction.create({
           data: {
             externalId: t.externalId, accountId: acc.id, bookingDate: t.bookingDate, valueDate: t.valueDate,
-            bank: acc.label, amount: t.amount, currency: t.currency, counterpartyName: t.counterpartyName,
+            bank: name, amount: t.amount, currency: t.currency, counterpartyName: t.counterpartyName,
             counterpartyAccount: t.counterpartyAccount, description: t.description, communication: t.communication,
             structuredComm: t.structuredComm, side: t.side, source: 'ponto',
           },

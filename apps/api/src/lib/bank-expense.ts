@@ -9,6 +9,7 @@
  */
 import { prisma } from '../db.js';
 import { HttpError } from './http.js';
+import { findFleetHit, type FleetHit, type FleetIndex } from './bank-fleet.js';
 
 export interface BankExpenseRule {
   id: string;
@@ -62,9 +63,9 @@ const derive = (date: Date) => {
 /** Crée la dépense « sans facture » d'une sortie bancaire et la rapproche pour tout le montant restant. */
 export async function createExpenseFromBankTx(
   txId: string,
-  input: { worksiteId: string; supplierName: string; notes?: string | null },
+  input: { worksiteId: string; supplierName: string; notes?: string | null; vehicleId?: string | null; fineId?: string | null },
   actorId: string | null,
-  how: 'manual' | 'rule' = 'manual',
+  how: 'manual' | 'rule' | 'fleet' = 'manual',
 ) {
   return prisma.$transaction(async (db) => {
     const tx = await db.bankTransaction.findUnique({ where: { id: txId }, include: { matches: { select: { amount: true } } } });
@@ -88,18 +89,21 @@ export async function createExpenseFromBankTx(
         supplierName: input.supplierName.trim() || tx.counterpartyName || 'Banque',
         worksiteId: ws.id,
         worksiteRef: ws.ref,
+        vehicleId: input.vehicleId || null,
         // montant payé, TVA comprise s'il y en a : sans facture, pas de TVA récupérable connue
         ht: amount,
         ttc: amount,
         notes: [input.notes?.trim(), `Créée depuis le relevé bancaire : ${label}`].filter(Boolean).join('\n'),
         paymentStatus: 'Payé',
         paidOn: date,
-        source: how === 'rule' ? 'bank-rule' : 'bank',
+        source: how === 'rule' ? 'bank-rule' : how === 'fleet' ? 'bank-fleet' : 'bank',
         createdById: actorId,
       },
     });
     await db.bankTransactionMatch.create({ data: { bankTransactionId: tx.id, ledgerEntryId: entry.id, amount } });
-    await db.bankTransaction.update({ where: { id: tx.id }, data: { matchConfidence: how === 'rule' ? 'rule' : 'manual', matchedAt: new Date() } });
+    await db.bankTransaction.update({ where: { id: tx.id }, data: { matchConfidence: how, matchedAt: new Date() } });
+    // PV reconnu : il passe « Payé » à la date du relevé
+    if (input.fineId) await db.fine.updateMany({ where: { id: input.fineId, OR: [{ status: null }, { status: { not: 'Payé' } }] }, data: { status: 'Payé', paidOn: date } });
     return entry;
   });
 }
@@ -127,10 +131,73 @@ export async function deleteBankExpenseRule(id: string) {
   await saveRules(rules.filter((r) => r.id !== id));
 }
 
-/** Applique les règles aux sorties non rapprochées (sans facture trouvée par le rapprochement automatique). */
-export async function applyBankExpenseRules(only?: BankExpenseRule[]): Promise<{ created: number }> {
+/** Flotte : financements, assurances et PV non payés, pour la reconnaissance des sorties bancaires. */
+export async function loadFleetIndex(): Promise<FleetIndex> {
+  const [vehicles, insurances, fines] = await Promise.all([
+    prisma.vehicle.findMany({
+      select: {
+        id: true, code: true, plate: true, brand: true, model: true, acquisitionMode: true, financeCompany: true,
+        financeContract: true, monthlyPayment: true, financeEndOn: true, payments: { select: { dueOn: true, amount: true } },
+      },
+    }),
+    prisma.insurance.findMany({ select: { vehicleId: true, provider: true, contractNumber: true, monthlyAmount: true, annualAmount: true } }),
+    prisma.fine.findMany({ where: { OR: [{ status: null }, { status: { not: 'Payé' } }] }, select: { id: true, vehicleId: true, reference: true, amount: true, payTo: true } }),
+  ]);
+  return { vehicles, insurances, fines };
+}
+
+/** Poste de frais (E-12…) d'une reconnaissance « flotte » → id du chantier-poste ; null s'il n'existe pas. */
+const postIdCache = new Map<string, string | null>();
+export async function overheadIdByRef(ref: string): Promise<string | null> {
+  if (!postIdCache.has(ref)) {
+    const w = await prisma.worksite.findFirst({ where: { ref, kind: 'overhead' }, select: { id: true } });
+    postIdCache.set(ref, w?.id ?? null);
+  }
+  return postIdCache.get(ref)!;
+}
+export async function fleetHitForTx(txId: string): Promise<(FleetHit & { worksiteId: string | null }) | null> {
+  const tx = await prisma.bankTransaction.findUnique({ where: { id: txId }, select: { amount: true, bookingDate: true, counterpartyName: true, description: true, communication: true, counterpartyAccount: true } });
+  if (!tx) return null;
+  const hit = findFleetHit(tx, await loadFleetIndex());
+  return hit ? { ...hit, worksiteId: await overheadIdByRef(hit.postRef) } : null;
+}
+
+/**
+ * Applique les règles aux sorties non rapprochées (sans facture trouvée par le rapprochement automatique),
+ * puis — sauf si on n'applique qu'une règle précise — la reconnaissance « flotte » (crédits, leasing, assurances, PV).
+ */
+export async function applyBankExpenseRules(only?: BankExpenseRule[]): Promise<{ created: number; fleet: number }> {
   const rules = only ?? (await listBankExpenseRules());
-  if (!rules.length) return { created: 0 };
+  const ruleCount = rules.length ? await applyRules(rules) : 0;
+  const fleet = only ? 0 : await applyFleet().catch((e) => { console.warn('[bank-expense] flotte', (e as Error).message); return 0; });
+  return { created: ruleCount + fleet, fleet };
+}
+
+async function applyFleet(): Promise<number> {
+  const idx = await loadFleetIndex();
+  if (!idx.vehicles.length && !idx.insurances.length && !idx.fines.length) return 0;
+  const txs = await prisma.bankTransaction.findMany({
+    where: { amount: { lt: 0 }, pairedTxId: null, matches: { none: {} } },
+    select: { id: true, amount: true, bookingDate: true, counterpartyName: true, description: true, communication: true, counterpartyAccount: true },
+  });
+  let created = 0;
+  for (const tx of txs) {
+    const hit = findFleetHit(tx, idx);
+    if (!hit) continue;
+    const worksiteId = await overheadIdByRef(hit.postRef);
+    if (!worksiteId) continue;
+    try {
+      await createExpenseFromBankTx(tx.id, { worksiteId, supplierName: hit.supplierName, notes: hit.label, vehicleId: hit.vehicleId, fineId: hit.fineId }, null, 'fleet');
+      if (hit.fineId) idx.fines = idx.fines.filter((f) => f.id !== hit.fineId);
+      created++;
+    } catch (e) {
+      console.warn('[bank-expense] flotte non appliquée à', tx.id, (e as Error).message);
+    }
+  }
+  return created;
+}
+
+async function applyRules(rules: BankExpenseRule[]): Promise<number> {
   const txs = await prisma.bankTransaction.findMany({
     where: { amount: { lt: 0 }, pairedTxId: null, matches: { none: {} } },
     select: { id: true, counterpartyName: true, description: true, communication: true, counterpartyAccount: true },
@@ -147,5 +214,5 @@ export async function applyBankExpenseRules(only?: BankExpenseRule[]): Promise<{
       console.warn('[bank-expense] règle', rule.pattern, 'non appliquée à', tx.id, (e as Error).message);
     }
   }
-  return { created };
+  return created;
 }

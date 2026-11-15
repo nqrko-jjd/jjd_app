@@ -43,10 +43,10 @@ interface Suggestion {
 }
 interface PontoStatus {
   configured: boolean; connected: boolean; redirectUri: string;
-  accounts: { id: string; iban: string | null; label: string | null; balance: number | null; balanceAt: string | null; lastSyncAt: string | null }[];
+  accounts: { id: string; iban: string | null; label: string | null; rawLabel?: string | null; balance: number | null; balanceAt: string | null; lastSyncAt: string | null }[];
 }
 
-const CONF_LABEL: Record<string, string> = { strong: 'auto ✓✓', good: 'auto ✓', manual: 'manuel', rule: 'règle' };
+const CONF_LABEL: Record<string, string> = { strong: 'auto ✓✓', good: 'auto ✓', manual: 'manuel', rule: 'règle', fleet: 'flotte' };
 
 function matchAmount(m: Match): number {
   if (m.amount != null) return m.amount; // part du virement affectée à cette facture (paiement groupé)
@@ -221,7 +221,7 @@ function BanqueInner() {
     setBusy('match'); setFlash(null);
     try {
       const r = await api<{ strong: number; good: number; scanned: number; byRule?: number }>('/api/finance/bank/auto-match', { method: 'POST' });
-      setFlash(`${r.strong + r.good} transaction(s) rapprochée(s) (${r.strong} sûres, ${r.good} probables) sur ${r.scanned} examinées.${r.byRule ? ` ${r.byRule} paiement(s) sans facture classé(s) par règle.` : ''}`);
+      setFlash(`${r.strong + r.good} transaction(s) rapprochée(s) (${r.strong} sûres, ${r.good} probables) sur ${r.scanned} examinées.${r.byRule ? ` ${r.byRule} paiement(s) sans facture classé(s) (flotte ou règle).` : ''}`);
       reload();
     } catch (e) { setFlash((e as Error).message); }
     finally { setBusy(null); }
@@ -347,7 +347,7 @@ function BanqueInner() {
               <tbody>
                 {ponto.accounts.map((a) => (
                   <tr key={a.id}>
-                    <td>{a.label ?? '—'}</td>
+                    <td>{a.label ?? '—'}{a.rawLabel && a.rawLabel !== a.label ? <span className="muted" style={{ fontSize: '0.78rem' }}> · {a.rawLabel}</span> : null}</td>
                     <td className="muted">{a.iban ?? '—'}</td>
                     <td style={{ textAlign: 'right', fontWeight: 600 }}>{a.balance != null ? <Money value={a.balance} /> : <span className="muted">inconnu</span>}</td>
                     <td className="muted">{a.balanceAt ? new Date(a.balanceAt).toLocaleString('fr-BE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'}</td>

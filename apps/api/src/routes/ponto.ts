@@ -7,6 +7,7 @@ import {
   pontoConfigured, pontoMode, buildAuthUrl, handleCallback, refreshAccounts, pontoDisconnect,
 } from '../lib/ponto.js';
 import { syncPonto } from '../lib/ponto-sync.js';
+import { accountDisplayName } from '../lib/bank-names.js';
 
 export const pontoRouter = Router();
 
@@ -25,7 +26,7 @@ pontoRouter.get(
       connected: configured && (mode === 'custom' || !!tokens),
       redirectUri: env.ponto.redirectUri,
       accounts: accounts.map((a) => ({
-        id: a.id, iban: a.iban, label: a.label, balance: a.balance,
+        id: a.id, iban: a.iban, label: accountDisplayName(a) ?? a.label, rawLabel: a.label, balance: a.balance,
         balanceAt: a.balanceAt, lastSyncAt: a.lastSyncAt,
       })),
     });

@@ -6,6 +6,7 @@ import { Money } from '@/lib/ui';
 import { WorksitePicker, type WsPickerOption } from '@/components/WorksitePicker';
 import { WORKSITE_STATUS_OPEN } from '@jjd/shared';
 
+interface FleetHit { kind: 'financing' | 'insurance' | 'fine'; vehicleId: string | null; fineId: string | null; worksiteId: string | null; supplierName: string; label: string }
 interface WsRef { id: string; ref: string; title: string; city?: string | null }
 
 /**
@@ -14,7 +15,7 @@ interface WsRef { id: string; ref: string; title: string; city?: string | null }
  * En option, une règle fait la même chose pour les prochains prélèvements identiques.
  */
 export function BankExpenseCreate({ txId, onDone }: { txId: string; onDone: (message: string) => void }) {
-  const { data: draft } = useApi<{ supplierName: string; pattern: string; remaining: number }>(`/api/finance/bank/${txId}/expense-draft`);
+  const { data: draft } = useApi<{ supplierName: string; pattern: string; remaining: number; fleet: FleetHit | null }>(`/api/finance/bank/${txId}/expense-draft`);
   const { data: overhead } = useApi<{ items: WsRef[] }>('/api/worksites?kind=overhead');
   const { data: projects } = useApi<{ items: WsRef[] }>(`/api/worksites?status=${WORKSITE_STATUS_OPEN.join(',')}`);
   const [worksiteId, setWorksiteId] = useState('');
@@ -29,6 +30,8 @@ export function BankExpenseCreate({ txId, onDone }: { txId: string; onDone: (mes
     if (!draft) return;
     setSupplierName(draft.supplierName);
     setPattern(draft.pattern);
+    // reconnu via la flotte : poste pré-choisi, et pas besoin de règle (la fiche véhicule suffit pour les mois suivants)
+    if (draft.fleet) { if (draft.fleet.worksiteId) setWorksiteId(draft.fleet.worksiteId); setNotes(draft.fleet.label); setWithRule(false); }
   }, [draft]);
 
   // postes de frais d'abord (cas le plus courant pour un crédit ou une domiciliation), puis les chantiers
@@ -45,7 +48,7 @@ export function BankExpenseCreate({ txId, onDone }: { txId: string; onDone: (mes
     try {
       const r = await api<{ ruleApplied: number }>(`/api/finance/bank/${txId}/expense`, {
         method: 'POST',
-        body: { worksiteId, supplierName: supplierName.trim(), notes: notes.trim() || null, rulePattern: withRule ? pattern.trim() : null },
+        body: { worksiteId, supplierName: supplierName.trim(), notes: notes.trim() || null, rulePattern: withRule ? pattern.trim() : null, vehicleId: draft?.fleet?.vehicleId ?? null, fineId: draft?.fleet?.fineId ?? null },
       });
       onDone(
         'Dépense créée et rapprochée.'
@@ -62,6 +65,11 @@ export function BankExpenseCreate({ txId, onDone }: { txId: string; onDone: (mes
         Pour un paiement qui n’a pas de facture (mensualité de crédit, domiciliation, frais bancaires, parking…) : la dépense est créée
         à partir de cette ligne{draft ? <> pour <strong><Money value={draft.remaining} /></strong></> : null}, le relevé faisant office de justificatif.
       </p>
+      {draft?.fleet && (
+        <div className="badge ok" style={{ whiteSpace: 'normal', padding: '0.45rem 0.6rem', justifySelf: 'start' }}>
+          Reconnu grâce à la flotte : {draft.fleet.label}{draft.fleet.fineId ? ' — le PV passera « Payé »' : ''}
+        </div>
+      )}
       <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '0.7rem' }}>
         <div className="field">
           <label htmlFor="bank-exp-ws">Poste ou chantier</label>

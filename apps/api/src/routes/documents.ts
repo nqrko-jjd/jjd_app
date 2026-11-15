@@ -16,6 +16,7 @@ import { z } from 'zod';
 import { docInclude, buildLineRows, cloneLineRows, refreshDocTotals, issueDocument, getCompany, syncLedgerEntryForDocument, creditedTtc, partialCreditLines, applyCreditToParent, effectiveBillingAddress } from '../lib/documents.js';
 import { renderDocumentPdf } from '../lib/pdf.js';
 import { interventionInfo } from '../lib/intervention-info.js';
+import { renderReportPdf, signedReportsForDocument } from '../lib/report-pdf.js';
 import { sendViaPeppol, refreshPeppolStatus } from '../lib/peppol.js';
 import { emailInput, defaultEmail, sendEmailWithPdf, emailConfigured } from '../lib/doc-mail.js';
 import { createSignatureRequest, revokeSignature, signLinkBlock } from '../lib/quote-sign.js';
@@ -977,7 +978,10 @@ async function sendDocumentEmail(docId: string, input: z.infer<typeof emailInput
   // signature en ligne : le PDF envoyé est figé et un lien personnel est ajouté au message
   const sig = input.sign ? await createSignatureRequest(doc.id, actorId ?? '', pdf, input.to) : null;
   try {
-    await sendEmailWithPdf(sig ? { ...input, message: input.message + signLinkBlock(sig.url, sig.expiresAt) } : input, pdf);
+    // facture ACP : rapport(s) d'intervention signé(s) de la période joints (demandé par les syndics pour valider la facture)
+    const acp = doc.kind !== 'quote' && doc.contactId ? (await prisma.contact.findUnique({ where: { id: doc.contactId }, select: { kind: true } }))?.kind === 'acp' : false;
+    const reports = acp ? await Promise.all((await signedReportsForDocument(doc)).map((id) => renderReportPdf(id).catch(() => null))) : [];
+    await sendEmailWithPdf(sig ? { ...input, message: input.message + signLinkBlock(sig.url, sig.expiresAt) } : input, pdf, false, reports.filter((r): r is { buffer: Buffer; filename: string } => !!r));
   } catch (e) {
     if (sig) await revokeSignature(sig.request.id); // l'e-mail n'est pas parti : le lien ne doit pas rester actif
     throw e;

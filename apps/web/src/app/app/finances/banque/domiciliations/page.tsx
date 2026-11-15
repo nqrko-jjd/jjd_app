@@ -29,6 +29,8 @@ export default function DomiciliationsPage() {
   const [filter, setFilter] = useState<'todo' | 'all'>('todo');
   const [edit, setEdit] = useState<DirectDebit | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
+  // toutes les règles « sans facture », y compris celles qui ne visent pas une domiciliation (crédit, frais, parking…)
+  const { data: allRules, reload: reloadRules } = useApi<{ items: Rule[] }>('/api/finance/bank-expense-rules');
 
   const options = useMemo((): WsPickerOption[] => [
     ...(overhead?.items ?? []).filter((w) => w.ref !== 'E-RDV').map((w) => ({ id: w.id, ref: w.ref, title: `${w.title} (poste de frais)`, city: null })),
@@ -42,7 +44,7 @@ export default function DomiciliationsPage() {
     if (!window.confirm(`Supprimer la règle « ${r.pattern} » ? Les dépenses déjà créées restent ; seuls les prochains prélèvements ne seront plus classés.`)) return;
     await api(`/api/finance/bank-expense-rules/${r.id}`, { method: 'DELETE' });
     setFlash('Règle supprimée.');
-    reload();
+    reload(); reloadRules();
   }
 
   return (
@@ -117,6 +119,28 @@ export default function DomiciliationsPage() {
         </div>
       )}
 
+      {allRules && allRules.items.length > 0 && (
+        <>
+          <div className="section-title" style={{ marginTop: '1.6rem' }}>Toutes les règles de classement <span className="hint">{allRules.items.length}</span></div>
+          <div className="tbl-wrap">
+            <table className="tbl">
+              <thead><tr><th>Texte reconnu sur le relevé</th><th>Poste / chantier</th><th>Fournisseur</th><th>Note</th><th></th></tr></thead>
+              <tbody>
+                {allRules.items.map((r) => (
+                  <tr key={r.id}>
+                    <td><strong>{r.pattern}</strong></td>
+                    <td>{r.worksite ? `${r.worksite.ref} · ${r.worksite.title}` : '—'}</td>
+                    <td>{r.supplierName}</td>
+                    <td className="muted">{r.notes ?? ''}</td>
+                    <td><button className="btn ghost" style={{ padding: '0.2rem 0.45rem', fontSize: '0.78rem' }} title="Supprimer la règle" onClick={() => removeRule(r)}>✕</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
       {edit && (
         <ClassifyModal
           dd={edit}
@@ -125,7 +149,7 @@ export default function DomiciliationsPage() {
           onDone={(applied) => {
             setEdit(null);
             setFlash(`Règle enregistrée${applied ? ` : ${applied} prélèvement(s) classé(s)` : ''}.`);
-            reload();
+            reload(); reloadRules();
           }}
         />
       )}

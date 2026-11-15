@@ -60,13 +60,13 @@ export function defaultEmail(d: {
 }
 
 /** Envoie l'e-mail ; lève une erreur (rien d'enregistré) si le serveur SMTP refuse. */
-export async function sendEmailWithPdf(input: Pick<EmailInput, 'to' | 'subject' | 'message' | 'copyToSelf'>, pdf: { buffer: Buffer; filename: string }, withoutAttachment = false): Promise<void> {
+export async function sendEmailWithPdf(input: Pick<EmailInput, 'to' | 'subject' | 'message' | 'copyToSelf'>, pdf: { buffer: Buffer; filename: string }, withoutAttachment = false, extra: { buffer: Buffer; filename: string }[] = []): Promise<void> {
   if (!emailConfigured()) throw new HttpError(503, 'Envoi par e-mail non configuré : le serveur d’envoi de la boîte JJD n’est pas encore branché.');
   try {
     await getTransport().sendMail({
       from: fromAddress(), replyTo: fromAddress(), to: input.to, ...(input.copyToSelf ? { bcc: fromAddress() } : {}),
       subject: input.subject, text: input.message,
-      ...(withoutAttachment ? {} : { attachments: [{ filename: pdf.filename, content: pdf.buffer, contentType: 'application/pdf' }] }),
+      ...(withoutAttachment ? {} : { attachments: [pdf, ...extra].map((f) => ({ filename: f.filename, content: f.buffer, contentType: 'application/pdf' })) }),
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'erreur inconnue';

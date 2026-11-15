@@ -499,6 +499,7 @@ worksitesRouter.post(
         city: data.city ?? null,
         unitLabel: data.unitLabel ?? null,
         accessNotes: data.accessNotes ?? null,
+        siteBrief: data.siteBrief ?? null,
         startedOn: data.startedOn ?? null,
         endedOn: data.endedOn ?? null,
         quotedHt: data.quotedHt ?? null,
@@ -540,7 +541,7 @@ worksitesRouter.post(
           clientId: src.clientId, acpId: src.acpId, billToContactId: src.billToContactId,
           billTo: src.billTo, billToAttn: src.billToAttn, billToEmail: src.billToEmail,
           address: src.address, box: src.box, postalCode: src.postalCode, city: src.city,
-          unitLabel: src.unitLabel, accessNotes: src.accessNotes,
+          unitLabel: src.unitLabel, accessNotes: src.accessNotes, siteBrief: src.siteBrief,
           ownerName: src.ownerName, ownerPhone: src.ownerPhone, ownerEmail: src.ownerEmail,
           tenantName: src.tenantName, tenantPhone: src.tenantPhone, tenantPhone2: src.tenantPhone2, tenantEmail: src.tenantEmail,
           contacts: { create: src.contacts.map((contact) => ({

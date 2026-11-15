@@ -120,6 +120,7 @@ export const worksiteInput = z.object({
   city: z.string().trim().nullish(),
   unitLabel: z.string().trim().nullish(),
   accessNotes: z.string().trim().nullish(),
+  siteBrief: z.string().trim().max(3000).nullish(),
   startedOn: z.coerce.date().nullish(),
   endedOn: z.coerce.date().nullish(),
   quotedHt: z.number().nonnegative().nullish(),

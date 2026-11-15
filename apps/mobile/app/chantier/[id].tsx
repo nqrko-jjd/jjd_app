@@ -46,7 +46,7 @@ interface Detail {
     ref: string; title: string; status: string; statusRaw: string | null; entity: string;
     address: string | null; city: string | null; box: string | null; unitLabel: string | null;
     startedOn: string | null; endedOn: string | null;
-    description: string | null; accessNotes: string | null; requestKind: string | null;
+    description: string | null; accessNotes: string | null; siteBrief?: string | null; requestKind: string | null;
     billTo: string | null;
     ownerName: string | null; ownerPhone: string | null; ownerEmail: string | null;
     tenantName: string | null; tenantPhone: string | null; tenantPhone2: string | null; tenantEmail: string | null;
@@ -126,6 +126,13 @@ export default function ChantierDetail() {
           <View style={{ flex: 1 }}><Text style={{ color: T.ink, fontWeight: '800' }}>Suivi mails</Text><Text style={{ color: T.ink2, fontSize: 12.5 }}>Mails et notes de ce chantier, avec les pièces jointes</Text></View>
           <Feather name="chevron-right" size={20} color={T.ink3} />
         </Pressable>
+      )}
+
+      {!!w.siteBrief && (
+        <Card>
+          <Label>À faire sur place</Label>
+          <Text style={{ color: T.ink, fontSize: 15, lineHeight: 22 }}>{w.siteBrief}</Text>
+        </Card>
       )}
 
       <Card>

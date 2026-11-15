@@ -28,9 +28,7 @@ import {
   WORKSITE_CONTACT_ROLE_LABEL, WORKSITE_CONTACT_FOR_LABEL,
   ENTITIES, ENTITY_LABEL, formatHours, type WorksiteMargin,
 } from '@jjd/shared';
-import {
-  FileText, Euro, TrendingUp, Wallet, Fuel, Percent, MessageSquare,
-} from 'lucide-react';
+import { Percent } from 'lucide-react';
 
 interface Detail {
   worksite: {
@@ -39,7 +37,7 @@ interface Detail {
     postalCode: string | null; entity: string; address: string | null; box: string | null; city: string | null; unitLabel: string | null; billTo: string | null;
     lat: number | null; lng: number | null; geoSetAt: string | null;
     startedOn: string | null; endedOn: string | null; quotedHt: number | null; quoteRef: string | null; description: string | null;
-    accessNotes: string | null;
+    accessNotes: string | null; siteBrief: string | null;
     billToAttn: string | null; billToEmail: string | null; clientRef: string | null;
     billingCadence: string | null; billingConditions: string | null;
     ownerName: string | null; ownerPhone: string | null; ownerEmail: string | null;
@@ -154,6 +152,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
     { name: 'clientRef', label: 'Référence client / bon de commande' },
     { name: 'billingCadence', label: 'Rythme de facturation', type: 'select', options: WORKSITE_BILLING_CADENCES.map((c) => ({ value: c, label: WORKSITE_BILLING_CADENCE_LABEL[c] })) },
     { name: 'billingConditions', label: 'Conditions convenues', type: 'textarea', full: true },
+    { name: 'siteBrief', label: 'À faire sur place (résumé des travaux)', type: 'textarea', full: true },
     { name: 'accessNotes', label: 'Accès et prise de rendez-vous', type: 'textarea', full: true },
     { name: 'description', label: 'Description', type: 'textarea', full: true },
 
@@ -186,7 +185,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
             startedOn: toDateInput(w.startedOn), endedOn: toDateInput(w.endedOn),
             quotedHt: w.quotedHt, quoteRef: w.quoteRef, billToContactId: w.billToContact?.id ?? '', statusRaw: w.statusRaw, description: w.description,
             billToAttn: w.billToAttn, billToEmail: w.billToEmail, clientRef: w.clientRef,
-            billingCadence: w.billingCadence, billingConditions: w.billingConditions, accessNotes: w.accessNotes,
+            billingCadence: w.billingCadence, billingConditions: w.billingConditions, accessNotes: w.accessNotes, siteBrief: w.siteBrief,
             ownerName: w.ownerName, ownerPhone: w.ownerPhone, ownerEmail: w.ownerEmail,
             tenantName: w.tenantName, tenantPhone: w.tenantPhone, tenantPhone2: w.tenantPhone2, tenantEmail: w.tenantEmail,
           }}
@@ -239,36 +238,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
 
       {tab === 'overview' && (
         <>
-          {data.margin && (
-            <div className="kpis worksite-detail-kpis" style={{ marginBottom: '1.5rem' }}>
-              <Kpi ic={FileText} label="Devisé HT" value={<Money value={data.margin.quotedHt} />} sub="Montant du marché" />
-              <Kpi
-                ic={Euro}
-                label="Facturé HT"
-                value={<Money value={data.margin.invoicedHt} />}
-                sub={data.margin.quotedHt > 0 ? `${Math.round((data.margin.invoicedHt / data.margin.quotedHt) * 100)} % du marché` : 'Rien facturé pour l’instant'}
-              />
-              <Kpi
-                ic={Wallet}
-                label="Reste à encaisser"
-                value={<Money value={Math.max(0, data.margin.invoicedHt - data.margin.paidHt)} />}
-                sub={data.margin.invoicedHt > 0 ? `${eur(data.margin.paidHt)} déjà encaissé sur ${eur(data.margin.invoicedHt)} facturé` : 'Rien facturé pour l’instant'}
-                warn={data.margin.invoicedHt - data.margin.paidHt > 0.5}
-              />
-              {(() => {
-                // la marge la plus parlante selon l'état du dossier : réelle dès qu'il y a de l'encaissé, sinon sur le facturé, sinon prévue sur le devisé
-                const m = data.margin;
-                const [value, sub] = m.paidHt > 0
-                  ? [m.realMargin, `${m.realMarginPct != null ? `${m.realMarginPct} % · ` : ''}encaissé ${eur(m.paidHt)} − coûts ${eur(m.totalCost)}`]
-                  : m.invoicedHt > 0
-                    ? [m.invoicedMargin, `sur le facturé (rien encaissé) · coûts ${eur(m.totalCost)}`]
-                    : m.quotedHt > 0
-                      ? [m.forecastMargin, `prévue : devisé − coûts engagés (${eur(m.totalCost)})`]
-                      : [0, 'Pas encore de données'];
-                return <Kpi ic={TrendingUp} label={tr("Marge")} value={<Money value={value} sign />} sub={sub} neg={value < 0} />;
-              })()}
-            </div>
-          )}
+          <SiteBrief worksiteId={w.id} value={w.siteBrief} description={w.description} canEdit={canSeeMails} onSaved={reload} />
 
           <Glance w={w} nextEvent={nextEvent} onTab={setTab} />
 
@@ -795,5 +765,63 @@ function Info({ label, value }: { label: string; value: React.ReactNode }) {
       <div className="k">{label}</div>
       <div className="v">{value}</div>
     </div>
+  );
+}
+
+/**
+ * « À faire sur place » : quelques lignes sur les travaux à réaliser, en tête de la fiche — ce que l'équipe doit
+ * savoir en arrivant. Modifiable directement ici (bureau).
+ */
+function SiteBrief({ worksiteId, value, description, canEdit, onSaved }: { worksiteId: string; value: string | null; description: string | null; canEdit: boolean; onSaved: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(value ?? '');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  useEffect(() => { if (!editing) setText(value ?? ''); }, [value, editing]);
+
+  async function save() {
+    setBusy(true); setErr('');
+    try {
+      await api(`/api/worksites/${worksiteId}`, { method: 'PATCH', body: { siteBrief: text.trim() || null } });
+      setEditing(false);
+      onSaved();
+    } catch (e) { setErr((e as Error).message); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <section className="card card-pad" style={{ marginBottom: '1rem', borderLeft: '4px solid var(--primary)' }}>
+      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+        <div className="section-title" style={{ margin: 0 }}>À faire sur place</div>
+        {canEdit && !editing && <button className="btn" onClick={() => setEditing(true)}>{value ? 'Modifier' : 'Écrire le résumé'}</button>}
+      </div>
+      {editing ? (
+        <div style={{ display: 'grid', gap: '0.5rem' }}>
+          <textarea
+            className="input"
+            rows={6}
+            autoFocus
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder={'Une ligne par point, par exemple :\n- Démonter l’ancienne baignoire, poser le receveur de douche\n- Carrelage mural 60×120 (choix client à confirmer)\n- Attention : clé chez le concierge, ascenseur à protéger'}
+            style={{ resize: 'vertical', fontFamily: 'inherit' }}
+          />
+          {!text && description && (
+            <button type="button" className="btn ghost" style={{ justifySelf: 'start' }} onClick={() => setText(description)}>Reprendre la description du chantier</button>
+          )}
+          {err && <p role="alert" className="badge crit" style={{ margin: 0 }}>{err}</p>}
+          <div className="row" style={{ gap: '0.5rem' }}>
+            <button className="btn primary" disabled={busy} onClick={save}>{busy ? 'Enregistrement…' : 'Enregistrer'}</button>
+            <button className="btn" onClick={() => { setEditing(false); setText(value ?? ''); }}>Annuler</button>
+          </div>
+        </div>
+      ) : value ? (
+        <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.55 }}>{value}</div>
+      ) : (
+        <p className="muted" style={{ margin: 0 }}>
+          Pas encore de résumé. {canEdit ? 'Quelques lignes sur les travaux à réaliser et les points d’attention : c’est la première chose que l’équipe verra.' : ''}
+        </p>
+      )}
+    </section>
   );
 }

@@ -18,6 +18,7 @@ import { pontoConfigured } from './lib/ponto.js';
 import { syncPonto } from './lib/ponto-sync.js';
 import { sweepWorksiteStatuses } from './lib/worksite-status.js';
 import { refreshPendingPeppol } from './lib/peppol.js';
+import { migrateCompanyPersonsToContacts } from './lib/contact-members.js';
 
 function lanAddresses(): string[] {
   const out: string[] = [];
@@ -92,6 +93,10 @@ async function runMarkOverdue() {
   }
 }
 await runMarkOverdue();
+// une seule fois : les « personnes de contact » des syndics/promoteurs deviennent de vraies fiches (gestionnaires)
+migrateCompanyPersonsToContacts()
+  .then((r) => { if (r) console.log(`[contacts] gestionnaires : ${r.created} fiche(s) créée(s), ${r.reused} reprise(s), ${r.relinked} lien(s) mis à jour`); })
+  .catch((e) => console.error('[contacts] reprise des gestionnaires échouée :', e.message));
 // connexion bancaire Ponto : synchro automatique (3 par jour : la banque limite les accès sans client présent), puis rapprochement
 if (pontoConfigured()) {
   const runPonto = () => syncPonto()

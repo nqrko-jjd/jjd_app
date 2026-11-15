@@ -31,6 +31,7 @@ export const contactInput = z.object({
   promoterId: z.string().nullish(),
   buildingId: z.string().nullish(),
   note: z.string().nullish(),
+  jobTitle: z.string().trim().max(80).nullish(), // fonction (gestionnaire, comptable…)
   customerNumber: z.string().trim().nullish(), // fournisseur : notre n° de client chez lui
   onAccount: z.boolean().optional(), // fournisseur : achats en compte
 });

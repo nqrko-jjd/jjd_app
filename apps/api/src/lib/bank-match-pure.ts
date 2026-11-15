@@ -72,6 +72,9 @@ export function partyCoherent(tx: TxLite, l: LedgerLite, alias?: AliasCheck): bo
   if (l.direction === 'sale') return true; // un client paie souvent via un tiers (notaire, syndic, banque) : pas de filtre
   const words = partyWords(tx);
   if (!words.length) return true;
+  // frais bancaires (« FRAIS DE GESTION CARTE », « PARTICIPATION AUX FRAIS ») : facturés par la banque elle-même
+  if (/\b(frais|cout|couts|participation|interets?|commission)\b/.test(norm(tx.counterpartyName || tx.description || '').split(' ').slice(0, 4).join(' '))
+    && /\b(belfius|ing|bnp|kbc|isabel)\b/.test(norm(`${l.supplierName ?? ''} ${l.contactName ?? ''}`))) return true;
   const party = words.join(' ');
   if (nameOverlap(party, l.supplierName ?? '') || nameOverlap(party, l.contactName ?? '')) return true;
   // préfixe commun (« sanimat » / « sani mat », « bigmat » / « big mat »)

@@ -40,6 +40,9 @@ interface Detail {
     worksites: { id: string; ref: string; title: string; status: string; quotedHt: number | null }[];
     user?: { email: string } | null;
     contactPersons: ContactPerson[];
+    jobTitle?: string | null;
+    members?: { id: string; name: string; jobTitle: string | null; email: string | null; phone: string | null; user: { email: string; lastLoginAt: string | null } | null }[];
+    personDossiers?: { id: string; ref: string; title: string; status: string; city: string | null }[];
     purchases: Purchase[];
     purchaseBalance: BalanceLine[];
     supplierAccount?: { openTtc: number; unallocatedTotal: number; overdue: number };
@@ -79,6 +82,7 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
   }>(merging && dupId ? `/api/contacts/merge-preview?keepId=${id}&removeId=${dupId}` : null);
   const { data: allContacts } = useApi<{ items: { id: string; name: string; type: string; vat: string | null; city: string | null }[] }>(merging ? '/api/contacts' : null);
   const [personModal, setPersonModal] = useState<'new' | ContactPerson | null>(null);
+  const [memberModal, setMemberModal] = useState(false);
   const [portalInfo, setPortalInfo] = useState<{ email: string; portal: string } | null>(null);
   const [purchasesShown, setPurchasesShown] = useState(PAGE);
   const [balanceShown, setBalanceShown] = useState(PAGE);
@@ -204,11 +208,33 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
           fields={CONTACT_FIELDS(c.type, pick?.syndics ?? [], pick?.promoters ?? [])}
           initial={{
             name: c.name, ...(c.kind === 'individual' ? splitContactName(c.name) : {}), type: c.type, kind: c.kind, email: c.email, phone: c.phone,
-            vat: c.vat, address: c.address, box: c.box, postalCode: c.postalCode, city: c.city, note: c.note,
+            vat: c.vat, address: c.address, box: c.box, postalCode: c.postalCode, city: c.city, note: c.note, jobTitle: c.jobTitle ?? '',
             buildingId: c.building?.id ?? '', syndicId: c.syndic?.id ?? '', promoterId: c.promoter?.id ?? '', customerNumber: c.customerNumber, onAccount: c.onAccount,
           }}
           onClose={() => setEditing(false)}
           onSubmit={async (v) => { await api(`/api/contacts/${id}`, { method: 'PATCH', body: composeContactPayload(v) }); reload(); }}
+        />
+      )}
+      {memberModal && (
+        <FormModal
+          title={`Nouveau gestionnaire · ${c.name}`}
+          fields={[
+            { name: 'firstName', label: 'Prénom', required: true },
+            { name: 'lastName', label: 'Nom' },
+            { name: 'jobTitle', label: 'Fonction', placeholder: 'Gestionnaire, comptabilité…' },
+            { name: 'email', label: 'E-mail' },
+            { name: 'phone', label: 'Téléphone' },
+          ]}
+          initial={{ jobTitle: 'Gestionnaire' }}
+          onClose={() => setMemberModal(false)}
+          onSubmit={async (v) => {
+            await api('/api/contacts', {
+              method: 'POST',
+              body: { ...composeContactPayload(v), type: 'client', kind: 'individual', ...(c.kind === 'syndic' ? { syndicId: c.syndic?.id } : { promoterId: c.promoter?.id }) },
+            });
+            setMemberModal(false);
+            reload();
+          }}
         />
       )}
       {personModal && (
@@ -287,6 +313,46 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
 
       <ContactLinks id={c.id} refreshKey={linksKey} />
 
+      {/* Syndic / promoteur : ses gestionnaires sont des fiches à part entière (recherche, chantiers, accès portail à SES dossiers) */}
+      {c.members && (c.kind === 'syndic' || c.kind === 'promoter') && (
+        <>
+          <div className="section-title">Gestionnaires <span className="hint">{c.members.length}</span>
+            <button className="btn" style={{ marginLeft: 'auto', padding: '0.2rem 0.6rem', fontSize: '0.78rem' }} onClick={() => setMemberModal(true)}>+ Ajouter un gestionnaire</button>
+          </div>
+          {c.members.length === 0 ? (
+            <div className="card card-pad muted" style={{ marginBottom: '1.6rem' }}>Aucun gestionnaire. Chacun a sa fiche : on peut le choisir sur un chantier ou un immeuble, et lui ouvrir un accès au portail limité à ses dossiers.</div>
+          ) : (
+            <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', marginBottom: '1.6rem' }}>
+              {c.members.map((m) => (
+                <Link key={m.id} href={`/app/contacts/${m.id}`} className="card card-pad" style={{ display: 'block' }}>
+                  {m.jobTitle && <div className="eyebrow">{m.jobTitle}</div>}
+                  <div style={{ fontWeight: 700, margin: '0.2rem 0' }}>{m.name}</div>
+                  {m.phone && <div>{m.phone}</div>}
+                  {m.email && <div className="muted" style={{ fontSize: '0.85rem' }}>{m.email}</div>}
+                  <div style={{ marginTop: '0.4rem' }}>{m.user ? <span className="badge ok">Accès portail</span> : <span className="badge plain">Pas d’accès portail</span>}</div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Personne : les dossiers où elle intervient (contact du chantier ou de l'immeuble) — ce qu'elle verra sur le portail */}
+      {c.personDossiers && c.personDossiers.length > 0 && (
+        <>
+          <div className="section-title">Ses dossiers <span className="hint">{c.personDossiers.length}</span></div>
+          <div className="card card-pad" style={{ marginBottom: '1.6rem', display: 'grid', gap: '0.35rem' }}>
+            {c.personDossiers.map((w) => (
+              <Link key={w.id} href={`/app/chantiers/${w.id}`} className="row" style={{ justifyContent: 'space-between', gap: '0.6rem' }}>
+                <span><strong>{w.ref}</strong> · {w.title}{w.city ? <span className="muted"> · {w.city}</span> : null}</span>
+                <span className="muted" style={{ fontSize: '0.8rem' }}>{w.status}</span>
+              </Link>
+            ))}
+          </div>
+        </>
+      )}
+
+      {!(c.kind === 'syndic' || c.kind === 'promoter') && (<>
       {/* Personnes de contact — utile pour tout type, en particulier les fournisseurs */}
       <div className="section-title"> {tr("Personnes de contact")} <span className="hint">{c.contactPersons.length}</span>
         <button className="btn" style={{ marginLeft: 'auto', padding: '0.2rem 0.6rem', fontSize: '0.78rem' }} onClick={() => setPersonModal('new')}>+ Ajouter</button>
@@ -309,6 +375,8 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
           ))}
         </div>
       )}
+
+      </>)}
 
       {/* Compte client : facturé, reste à encaisser, et argent reçu SANS facture (acompte à facturer, trop-perçu à rendre) */}
       {(c.clientAccount.invoicedTtc !== 0 || c.clientAccount.unallocatedTotal > 0) && (

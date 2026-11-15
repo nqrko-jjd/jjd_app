@@ -71,6 +71,11 @@ export const CONTACT_FIELDS = (
         { name: 'lastName', label: 'Nom' },
       ] : [{ name: 'name', label: isSupplierOnly ? 'Nom de l’entreprise / fournisseur' : 'Nom', required: true, full: true }]),
       ...(isAcp ? [{ name: 'syndicId', label: 'Syndic (adresse de facturation "c/o")', type: 'select' as const, options: syndics.map((s) => ({ value: s.id, label: s.name })) }] : []),
+      // une personne peut travailler chez un syndic (gestionnaire) : elle apparaît alors sur la fiche du syndic
+      ...(isIndividual ? [
+        { name: 'syndicId', label: 'Travaille chez (syndic)', type: 'select' as const, options: [{ value: '', label: '—' }, ...syndics.map((s) => ({ value: s.id, label: s.name }))] },
+        { name: 'jobTitle', label: 'Fonction', placeholder: 'Gestionnaire, comptabilité…' },
+      ] : []),
       ...(isDeveloper ? [{ name: 'promoterId', label: 'Promoteur', type: 'select' as const, options: promoters.map((p) => ({ value: p.id, label: p.name })) }] : []),
       ...(!isSupplierOnly && !isAcpOrDeveloper ? [{ name: 'buildingId', label: 'Immeuble / ACP rattaché(e)', type: 'contact' as const, contactKindFilter: ['acp', 'developer'], placeholder: 'Nom de l’immeuble / ACP…', full: true }] : []),
       { name: 'email', label: 'E-mail' },

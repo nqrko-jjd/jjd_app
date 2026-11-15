@@ -276,6 +276,7 @@ model Contact {
   normalizedName String
   type           String   @default("client") // client | supplier | both
   kind           String? // individual | company | acp | syndic | developer | promoter | public
+  jobTitle       String? // fonction d'une personne au sein de sa société (gestionnaire chez un syndic, comptabilité…)
   email          String?
   phone          String?
   vat            String?

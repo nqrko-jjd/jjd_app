@@ -13,6 +13,7 @@ import { attachPhotoRoutes } from '../lib/photo-upload.js';
 import { withQuotedFromDocuments } from '../lib/worksite-margin.js';
 import { mergeContacts } from '../lib/contact-merge.js';
 import { contactLinks, describeLinks, mergePreview } from '../lib/contact-links.js';
+import { membersWhere, personWorksitesWhere } from '../lib/contact-members.js';
 
 const isPaidStr = (s: string | null) =>
   (s ?? '').toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').trim() === 'paye';
@@ -163,6 +164,16 @@ contactsRouter.get(
     });
     if (!found) throw new HttpError(404, 'Contact introuvable');
     const contact = shapeContact({ ...found, worksites: await withQuotedFromDocuments(found.worksites) });
+    // syndic / promoteur : ses gestionnaires (fiches à part entière) ; personne : les dossiers où elle intervient
+    const mw = membersWhere(found);
+    const members = mw ? await prisma.contact.findMany({
+      where: mw, orderBy: { name: 'asc' },
+      select: { id: true, name: true, jobTitle: true, email: true, phone: true, user: { select: { email: true, lastLoginAt: true } } },
+    }) : [];
+    const personDossiers = !mw && (found.kind === 'individual' || !found.kind) ? await prisma.worksite.findMany({
+      where: personWorksitesWhere(found.id), orderBy: { updatedAt: 'desc' }, take: 50,
+      select: { id: true, ref: true, title: true, status: true, city: true },
+    }) : [];
 
     // Achats : tout l'historique (achats + notes de crédit) — sert au résumé, à la liste
     // récente affichée et au solde du compte (« en compte » chez le fournisseur : les
@@ -215,6 +226,8 @@ contactsRouter.get(
     res.json({
       contact: {
         ...contact,
+        members,
+        personDossiers,
         clientAccount: clientAcct,
         purchases: [...ledger].reverse().map((p) => {
           const total = Math.abs(p.ttc ?? p.ht);

@@ -72,7 +72,9 @@ export function worksiteScope(u: PortalUser): object {
   if (u.buildingId) return { acpId: u.buildingId };
   if (u.syndicId) return { acp: { syndicId: u.syndicId } };
   if (u.promoterId) return { acp: { promoterId: u.promoterId } };
-  return { OR: [{ clientId: u.contactId }, { acpId: u.contactId }] };
+  // client, ACP… et toute personne listée comme contact du chantier ou de l'immeuble (un gestionnaire de syndic
+  // voit ainsi SES dossiers, pas tout le portefeuille du syndic)
+  return { OR: [{ clientId: u.contactId }, { acpId: u.contactId }, ...(u.contactId ? [{ contacts: { some: { contactId: u.contactId } } }, { acp: { acpKeyContacts: { some: { contactId: u.contactId } } } }] : [])] };
 }
 
 /** Clause Prisma (contre `Contact`) : les immeubles/ACP/projets visibles par ce client. */
@@ -80,5 +82,5 @@ export function buildingScope(u: PortalUser): object {
   if (u.buildingId) return { id: u.buildingId };
   if (u.syndicId) return { syndicId: u.syndicId, kind: { in: ACP_KINDS } };
   if (u.promoterId) return { promoterId: u.promoterId, kind: { in: ACP_KINDS } };
-  return { OR: [{ id: u.contactId, kind: { in: ACP_KINDS } }, { acpWorksites: { some: { clientId: u.contactId } } }] };
+  return { OR: [{ id: u.contactId, kind: { in: ACP_KINDS } }, { acpWorksites: { some: { clientId: u.contactId } } }, ...(u.contactId ? [{ kind: { in: ACP_KINDS }, acpKeyContacts: { some: { contactId: u.contactId } } }, { kind: { in: ACP_KINDS }, acpWorksites: { some: { contacts: { some: { contactId: u.contactId } } } } }] : [])] };
 }

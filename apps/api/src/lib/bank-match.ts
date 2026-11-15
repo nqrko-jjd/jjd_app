@@ -193,31 +193,32 @@ export { pickMatch, partyWords, nameOverlap, type TxLite, type LedgerLite, type 
 import { pickMatch, partyWords, partyCoherent, norm, digits, DAY, amountOf, sideMatches, type TxLite, type LedgerLite, type AliasCheck } from './bank-match-pure.js';
 
 
-/** Alias confirmés : libellé bancaire → fournisseur, appris des rapprochements faits ou validés à la main. */
+/**
+ * Alias : libellé bancaire → fournisseur (« ILONATO » = BigMat, « BRICO MATERIAUX » = BMK…), appris
+ *  - des rapprochements faits ou confirmés à la main (ou par communication structurée), dès la 1re fois ;
+ *  - des rapprochements automatiques, à partir de 3 transactions différentes avec la même paire (habitude, pas hasard).
+ */
 export async function buildAliasCheck(): Promise<AliasCheck> {
-  // alias confirmés : libellé bancaire → fournisseur, appris des rapprochements faits ou validés à la main
-  const aliasMap = new Map<string, Set<string>>();
-  {
-    const confirmed = await prisma.bankTransaction.findMany({
-      where: { matchConfidence: { in: ['manual', 'strong'] }, amount: { lt: 0 } },
-      select: { counterpartyName: true, description: true, matches: { select: { ledgerEntry: { select: { supplierName: true, contact: { select: { name: true } } } } } } },
-    });
-    for (const t of confirmed) {
-      const w = partyWords(t)[0];
-      if (!w) continue;
-      for (const m of t.matches) {
-        for (const n of [m.ledgerEntry?.supplierName, m.ledgerEntry?.contact?.name]) {
-          if (!n) continue;
-          const set = aliasMap.get(w) ?? new Set<string>();
-          set.add(norm(n));
-          aliasMap.set(w, set);
-        }
-      }
+  const confirmed = new Map<string, Set<string>>();
+  const seen = new Map<string, number>();
+  const txs = await prisma.bankTransaction.findMany({
+    where: { amount: { lt: 0 }, matches: { some: { ledgerEntryId: { not: null } } } },
+    select: { matchConfidence: true, counterpartyName: true, description: true, matches: { select: { ledgerEntry: { select: { supplierName: true, contact: { select: { name: true } } } } } } },
+  });
+  for (const t of txs) {
+    const w = partyWords(t)[0];
+    if (!w) continue;
+    const sure = t.matchConfidence === 'manual' || t.matchConfidence === 'strong';
+    const names: Set<string> = new Set(t.matches.flatMap((m) => [m.ledgerEntry?.supplierName, m.ledgerEntry?.contact?.name]).filter((n): n is string => !!n).map(norm));
+    for (const n of names) {
+      if (sure) { const set = confirmed.get(w) ?? new Set<string>(); set.add(n); confirmed.set(w, set); }
+      const k = `${w}|${n}`;
+      seen.set(k, (seen.get(k) ?? 0) + 1);
     }
   }
   return (tx, l) => {
-    const set = aliasMap.get(partyWords(tx)[0] ?? '');
-    return !!set && [l.supplierName, l.contactName].some((n) => !!n && set.has(norm(n)));
+    const w = partyWords(tx)[0] ?? '';
+    return [l.supplierName, l.contactName].some((n) => !!n && (confirmed.get(w)?.has(norm(n)) || (seen.get(`${w}|${norm(n)}`) ?? 0) >= 3));
   };
 }
 

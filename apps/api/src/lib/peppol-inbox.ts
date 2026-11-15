@@ -8,6 +8,8 @@ import { receivePurchase, normVat, type PurchaseData } from './purchase-receipts
 import { HttpError } from './http.js';
 import { notifyMobile } from './native-push.js';
 import { extractEmbeddedPdf } from './peppol-pdf.js';
+import { worksiteFromText } from './document-extract.js';
+import { pdfToRawText, pdftotextAvailable } from './bank-pdf.js';
 export { extractEmbeddedPdf };
 
 async function request(route: string, pdf=false) {
@@ -51,6 +53,33 @@ type RemoteDocument = {
 };
 const amount=(s:unknown)=>typeof s==='string' && /^-?\d+(\.\d{1,4})?$/.test(s) && Number.isFinite(Number(s)) ? Number(s) : null;
 const date=(s:unknown)=>typeof s==='string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && Number.isFinite(Date.parse(s)) && new Date(s).toISOString().slice(0,10)===s ? s : null;
+/** Texte où chercher une référence chantier : le PDF d'origine (texte) + le XML sans ses pièces jointes en base64. */
+export async function peppolSearchText(xml:string,pdf:Buffer|null):Promise<string> {
+  const fields=xml.replace(/<[^>]*EmbeddedDocumentBinaryObject[^>]*>[\s\S]*?<\/[^>]*EmbeddedDocumentBinaryObject>/g,' ').replace(/<[^>]+>/g,' ');
+  let pdfText='';
+  if(pdf && await pdftotextAvailable()) pdfText=await pdfToRawText(pdf).catch(()=>'');
+  return pdfText+'\n'+fields;
+}
+
+/** Rattrapage : dépenses Peppol / e-mail sans chantier dont le PDF cite une référence R-/E- connue. */
+export async function fillMissingWorksiteRefs():Promise<number> {
+  const entries=await prisma.ledgerEntry.findMany({where:{worksiteId:null,pdfPath:{not:null},source:{in:['peppol','email']},direction:{in:['purchase','credit_note','delivery_slip']}},select:{id:true,pdfPath:true,receipts:{select:{xmlPath:true}}},take:2000});
+  let filled=0;
+  for(const e of entries) {
+    try {
+      const file=path.join(UPLOADS_DIR,e.pdfPath!.replace(/^\/?uploads\//,''));
+      const pdf=readFileSync(file);
+      const xmlRel=e.receipts.find(r=>r.xmlPath)?.xmlPath;
+      const xml=xmlRel?readFileSync(path.join(UPLOADS_DIR,xmlRel.replace(/^\/?uploads\//,'')),'utf8'):'';
+      const w=await worksiteFromText(await peppolSearchText(xml,pdf));
+      if(!w.worksiteId) continue;
+      await prisma.ledgerEntry.update({where:{id:e.id},data:{worksiteId:w.worksiteId,worksiteRef:w.worksiteRef}});
+      filled++;
+    } catch {/* PDF absent ou illisible */}
+  }
+  return filled;
+}
+
 export function mapReceivedDocument(doc:RemoteDocument,companyId:string) {
   if(!doc.id || doc.companyId!==companyId || doc.direction!=='incoming') throw new HttpError(422,'Document Peppol hors de la société destinataire.');
   if(!['invoice','creditNote'].includes(doc.type)) throw new HttpError(422,'Type Peppol non pris en charge : '+doc.type);
@@ -125,6 +154,11 @@ async function run() {
           if(!pdf.subarray(0,1024).includes(Buffer.from('%PDF-'))) throw new HttpError(502,'PDF Peppol illisible.');
           const pdfPath=storeFile(pdf,original?'facture-originale.pdf':'peppol.pdf','expenses');
           const xmlPath=storeFile(Buffer.from(doc.xml,'utf8'),'peppol.xml','expenses');
+          // chantier cité par le fournisseur (« Votre référence: R883 ») : dans le PDF, ou dans les champs du XML
+          if(!data.worksiteId) {
+            const w=await worksiteFromText(await peppolSearchText(doc.xml,original)).catch(()=>null);
+            if(w?.worksiteId) {data.worksiteId=w.worksiteId;data.worksiteRef=w.worksiteRef;}
+          }
           const receipt=await receivePurchase({sourceRef:ref,source:'peppol',data,pdfPath,xmlPath,reason});
           if(receipt.status==='review') result.review++; else result.imported++;
         } catch(e) {result.errors.push(String(item.id)+': '+(e as Error).message);}

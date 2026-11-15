@@ -176,6 +176,19 @@ export function findWorksiteRefCandidates(text: string): string[] {
   )];
 }
 
+/**
+ * Chantier cité dans le texte d'une facture (« Votre référence:: R883 » chez Sani Mat → R-883). Toutes les
+ * références citées peuvent correspondre à un chantier réel (une facture peut en couvrir plusieurs) : la 1re
+ * connue est retenue, les autres sont signalées pour répartir la dépense.
+ */
+export async function worksiteFromText(text: string): Promise<{ worksiteId: string | null; worksiteRef: string | null; otherWorksiteRefs: string[] }> {
+  const refs = findWorksiteRefCandidates(text);
+  if (!refs.length) return { worksiteId: null, worksiteRef: null, otherWorksiteRefs: [] };
+  const matches = await prisma.worksite.findMany({ where: { ref: { in: refs } }, select: { id: true, ref: true } });
+  const ordered = refs.map((r) => matches.find((w) => w.ref === r)).filter((w): w is { id: string; ref: string } => !!w);
+  return { worksiteId: ordered[0]?.id ?? null, worksiteRef: ordered[0]?.ref ?? null, otherWorksiteRefs: ordered.slice(1).map((w) => w.ref) };
+}
+
 export interface ParsedDocumentText {
   kind: DocumentExtraction['kind'];
   issuedOn: string | null;
@@ -368,22 +381,7 @@ export async function extractDocumentInfo(
   // chantier : référence JJD (R-xxx / E-xx) citée dans le document — pas toujours telle
   // quelle : un fournisseur la reprend souvent sans tiret ni zéros de tête dans son propre
   // champ "Votre référence" (ex. "R069" pour "R-69"), donc on normalise avant de chercher
-  let worksiteId: string | null = null;
-  let worksiteRef: string | null = null;
-  let otherWorksiteRefs: string[] = [];
-  const refs = findWorksiteRefCandidates(text);
-  if (refs.length) {
-    // toutes les références citées peuvent correspondre à un chantier réel (une facture
-    // peut couvrir plusieurs chantiers) -> on ne pré-remplit que la 1ère, les autres sont
-    // juste signalées pour que l'utilisateur sache qu'il faut peut-être répartir la dépense
-    const matches = await prisma.worksite.findMany({ where: { ref: { in: refs } }, select: { id: true, ref: true } });
-    const ordered = refs.map((r) => matches.find((w) => w.ref === r)).filter((w): w is { id: string; ref: string } => !!w);
-    if (ordered.length) {
-      worksiteId = ordered[0]!.id;
-      worksiteRef = ordered[0]!.ref;
-      otherWorksiteRefs = ordered.slice(1).map((w) => w.ref);
-    }
-  }
+  const { worksiteId, worksiteRef, otherWorksiteRefs } = await worksiteFromText(text);
 
   return {
     kind, issuedOn, dueOn, docNumber,

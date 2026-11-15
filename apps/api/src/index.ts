@@ -1,4 +1,4 @@
-import { syncPeppolInbox } from './lib/peppol-inbox.js';
+import { syncPeppolInbox, fillMissingWorksiteRefs } from './lib/peppol-inbox.js';
 import os from 'node:os';
 import { createApp } from './app.js';
 import { env } from './env.js';
@@ -180,6 +180,15 @@ if (mailSuggestionsConfigured() && !MAIL_SUGGESTIONS_PAUSED) {
   setInterval(runMailSync, 20 * 60_000);
 }
 
+// une seule fois : chantier (R-xxx) relu dans les PDF des factures Peppol / e-mail déjà reçues sans chantier
+setTimeout(async () => {
+  try {
+    if (await prisma.setting.findUnique({ where: { key: 'worksiteRefsFromPdf-1' } })) return;
+    const filled = await fillMissingWorksiteRefs();
+    await prisma.setting.create({ data: { key: 'worksiteRefsFromPdf-1', value: { at: new Date().toISOString(), filled } } });
+    console.log(`[achats] chantier retrouvé dans le PDF pour ${filled} facture(s)`);
+  } catch (e) { console.error('[achats] reprise des chantiers échouée :', (e as Error).message); }
+}, 60_000);
 const runPeppolInbox=()=>syncPeppolInbox().catch(e=>console.error('[peppol-inbox]',e.message));
 setTimeout(runPeppolInbox,75000);
 setInterval(runPeppolInbox,10*60_000);

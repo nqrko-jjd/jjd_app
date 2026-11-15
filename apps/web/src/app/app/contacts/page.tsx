@@ -26,6 +26,7 @@ interface Contact {
   syndic: { name: string } | null;
   building: { id: string; name: string } | null;
   _count: { worksites: number };
+  matchedPersons?: { id: string; name: string; role: string | null; email: string | null; phone: string | null }[];
 }
 
 export default function ContactsPage() {
@@ -141,6 +142,7 @@ function ContactsInner() {
               </div>
               <div className="gallery-body">
                 <div className="gallery-title">{c.name}</div>
+                {(c.matchedPersons ?? []).map((p) => <div key={p.id} style={{ fontSize: '0.8rem', marginTop: 2 }}>👤 <strong>{p.name}</strong>{p.role ? ` · ${p.role}` : ''}{p.phone ? ` · ${p.phone}` : ''}</div>)}
                 <div className="gallery-sub">
                   {c.kind ? CLIENT_KIND_LABEL[c.kind as keyof typeof CLIENT_KIND_LABEL] : c.type === 'supplier' ? tr("Fournisseur") : '—'}
                   {c.city && ` · ${c.city}`}
@@ -178,6 +180,7 @@ function ContactsInner() {
                     <Link href={`/app/contacts/${c.id}`}>{c.name}</Link>
                     {c.syndic && <div className="muted" style={{ fontSize: '0.78rem' }}>c/o {c.syndic.name}</div>}
                     {c.building && <div className="muted" style={{ fontSize: '0.78rem' }}>ACP : {c.building.name}</div>}
+                    {(c.matchedPersons ?? []).map((p) => <div key={p.id} style={{ fontSize: '0.8rem', marginTop: 2 }}>👤 <strong>{p.name}</strong>{p.role ? ` · ${p.role}` : ''}{p.phone ? ` · ${p.phone}` : ''}</div>)}
                   </td>
                   <td>{c.kind ? CLIENT_KIND_LABEL[c.kind as keyof typeof CLIENT_KIND_LABEL] : c.type === 'supplier' ? tr("Fournisseur") : '—'}</td>
                   <td>{c.city ?? '—'}</td>

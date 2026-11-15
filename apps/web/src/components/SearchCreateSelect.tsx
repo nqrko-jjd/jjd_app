@@ -10,6 +10,8 @@ export interface PickerItem {
   /** Données additionnelles portées par ce résultat (ex. l'immeuble lié à un contact) —
    *  transmises telles quelles au 3e argument de `onChange` quand ce résultat est choisi. */
   meta?: Record<string, unknown>;
+  /** clé d'affichage quand plusieurs résultats portent le même id (ex. une société et sa personne de contact) */
+  key?: string;
 }
 
 /**
@@ -108,6 +110,7 @@ export function SearchCreateSelect({
 
   function pick(item: PickerItem) {
     pickedRef.current = true;
+    resolvedFor.current = item.id; // garde le libellé choisi (ex. la personne) au lieu de le remplacer par le nom de la fiche
     onChange(item.id, item.name, item.meta);
     setQuery(item.name);
     setOpen(false);
@@ -163,7 +166,7 @@ export function SearchCreateSelect({
         <ul className="picker-menu" role="listbox">
           {items.map((it, i) => (
             <li
-              key={it.id}
+              key={it.key ?? it.id}
               onMouseDown={(e) => { e.preventDefault(); pick(it); }}
               onMouseEnter={() => setActive(i)}
               className={i === active ? 'is-active' : undefined}

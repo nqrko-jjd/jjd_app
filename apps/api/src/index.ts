@@ -158,7 +158,9 @@ if (invoiceMailboxConfigured()) {
  * (pas de \Seen, pas de déplacement) : décalage de démarrage différent de la boîte factures
  * pour ne pas les faire démarrer à la même seconde.
  */
-if (mailSuggestionsConfigured()) {
+// Boîte IA en pause (masquée dans le menu) : plus d'analyse automatique des mails — remettre à false pour la relancer.
+const MAIL_SUGGESTIONS_PAUSED = true;
+if (mailSuggestionsConfigured() && !MAIL_SUGGESTIONS_PAUSED) {
   const runMailSync = () => {
     syncMailSuggestions()
       .then((stats) => {

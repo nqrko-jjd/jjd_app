@@ -99,6 +99,11 @@ contactsRouter.get(
   }),
 );
 
+/** Personne de contact dont le nom, l'e-mail ou le téléphone contient le texte cherché. */
+function personMatch(q: string) {
+  return { OR: [{ name: { contains: q, ...insensitive } }, { email: { contains: q, ...insensitive } }, ...(/\d{3}/.test(q) ? [{ phone: { contains: q } }] : [])] };
+}
+
 contactsRouter.get(
   '/',
   requireAuth(...STAFF),
@@ -110,7 +115,7 @@ contactsRouter.get(
     if (type && type !== 'all') where.OR = [{ type }, { type: 'both' }];
     if (kind) where.kind = { in: kind.split(',') };
     if (q) {
-      where.AND = [{ OR: [{ name: { contains: q, ...insensitive } }, { city: { contains: q, ...insensitive } }, { vat: { contains: q, ...insensitive } }, { syndic: { name: { contains: q, ...insensitive } } }] }]; // « Baltimo » retrouve aussi les gestionnaires de ce syndic
+      where.AND = [{ OR: [{ name: { contains: q, ...insensitive } }, { city: { contains: q, ...insensitive } }, { vat: { contains: q, ...insensitive } }, { syndic: { name: { contains: q, ...insensitive } } }, { contactPersons: { some: personMatch(q) } }] }]; // « Baltimo » retrouve aussi les gestionnaires de ce syndic ; « Valensart » retrouve Baltimo par sa personne de contact
     }
     // pagination facultative (page absent = tout charger, utilisé par l'appli mobile)
     const paginated = pageStr !== undefined;
@@ -127,12 +132,14 @@ contactsRouter.get(
           promoter: { select: { id: true, name: true } },
           linkedAcp: { select: { id: true, name: true } },
           _count: { select: { worksites: true } },
+          // personnes de contact (gestionnaire, comptabilité…) qui correspondent à la recherche
+          ...(q ? { contactPersons: { where: personMatch(q), orderBy: { position: 'asc' as const }, select: { id: true, name: true, role: true, email: true, phone: true } } } : {}),
         },
       }),
       prisma.contact.count({ where }),
     ]);
     res.json({
-      items: items.map(shapeContact),
+      items: items.map((c) => ({ ...shapeContact(c), matchedPersons: (c as { contactPersons?: unknown[] }).contactPersons ?? [] })),
       page, pageSize, totalCount, totalPages: Math.max(1, Math.ceil(totalCount / pageSize)),
     });
   }),

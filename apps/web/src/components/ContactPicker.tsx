@@ -21,7 +21,7 @@ export function ContactPicker({
 }: {
   id?: string;
   value: string;
-  onChange: (id: string, label: string) => void;
+  onChange: (id: string, label: string, meta?: PickerItem['meta']) => void;
   typeFilter?: 'client' | 'supplier' | 'all';
   /** Restreint la recherche (pas la création) à une ou plusieurs catégories, ex. `['acp',
    *  'developer']` pour ne proposer que des immeubles/projets existants. */
@@ -34,10 +34,18 @@ export function ContactPicker({
 }) {
   async function search(q: string): Promise<PickerItem[]> {
     const kindParam = kindFilter?.length ? `&kind=${kindFilter.join(',')}` : '';
-    const r = await api<{ items: { id: string; name: string; city: string | null; syndic?: { name: string } | null }[] }>(
+    const r = await api<{ items: { id: string; name: string; city: string | null; syndic?: { name: string } | null; matchedPersons?: { id: string; name: string; role: string | null; email: string | null; phone: string | null }[] }[] }>(
       `/api/contacts?type=${typeFilter}&q=${encodeURIComponent(q)}${kindParam}&pageSize=20`,
     );
-    return r.items.slice(0, q.trim() ? 8 : 20).map((c) => ({ id: c.id, name: c.name, sub: [c.syndic ? `c/o ${c.syndic.name}` : null, c.city].filter(Boolean).join(' · ') || undefined }));
+    return r.items.slice(0, q.trim() ? 8 : 20).flatMap((c): PickerItem[] => [
+      // personne de contact d'une société (gestionnaire chez un syndic, comptabilité d'un fournisseur…) : trouvée par son nom
+      ...(c.matchedPersons ?? []).map((p) => ({
+        id: c.id, key: `${c.id}:${p.id}`, name: p.name,
+        sub: `${p.role ? `${p.role} · ` : ''}chez ${c.name}`,
+        meta: { person: p, companyName: c.name },
+      })),
+      { id: c.id, name: c.name, sub: [c.syndic ? `c/o ${c.syndic.name}` : null, c.city].filter(Boolean).join(' · ') || undefined },
+    ]);
   }
   async function resolveLabel(cid: string): Promise<string | null> {
     try {

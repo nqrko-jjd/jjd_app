@@ -109,7 +109,7 @@ const NAV: Group[] = [
     { href: '/app/flotte/suivi', label: 'Suivi GPS', ic: Truck, roles: ['admin', 'office'] },
   ] },
   { title: 'Administration', ic: Settings, items: [
-    { href: '/app/boite-ia', label: 'Boîte IA', ic: Sparkles, roles: ['admin', 'office'] },
+    // Boîte IA masquée pour l'instant (page toujours accessible par /app/boite-ia)
     { href: '/app/controle', label: 'File de contrôle', ic: Flag, roles: ['admin', 'office'] },
     { href: '/app/parametres', label: 'Paramètres', ic: Settings, roles: ['admin', 'office'] },
     { href: '/app/journal', label: 'Journal d’activité', ic: ClipboardList, roles: ['admin'], owner: true },
@@ -162,7 +162,7 @@ export function Shell({ children, navigationPaths }: { children: React.ReactNode
   const isStaff = !!user && user.role !== 'client' && user.role !== 'storekeeper';
   const { data: unread, reload: reloadUnread } = useApi<{ internal: number; client: number }>(isStaff ? '/api/messagerie/unread-count' : null);
   const unreadTotal = (unread?.internal ?? 0) + (unread?.client ?? 0);
-  const { data: mailBox } = useApi<{ total: number }>(bureau ? '/api/mail-suggestions/counts' : null);
+  const mailBox = null as { total: number } | null; // compteur de la Boîte IA (masquée pour l'instant)
   useEffect(() => {
     if (!isStaff) return;
     const t = setInterval(reloadUnread, 20000);

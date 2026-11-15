@@ -11,10 +11,13 @@ export function ContactRoleEditor({ value, onChange, building = false, onPending
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const request = useRef(0);
-  async function select(id: string) {
+  async function select(id: string, meta?: Record<string, unknown>) {
     const seq = ++request.current;
     setError('');
     if (!id) { setLoading(false); onChange({ ...value, contactId: null }); return; }
+    // personne de contact d'une société (ex. Eric de Valensart chez Baltimo) : ses coordonnées à elle, liées à la fiche de la société
+    const person = meta?.person as { name: string; phone: string | null; email: string | null } | undefined;
+    if (person) { onChange({ ...value, contactId: id, name: person.name, phone: person.phone, email: person.email }); return; }
     setLoading(true); onPending?.(true);
     try {
       const { contact } = await api<{ contact: { id: string; name: string; phone: string | null; email: string | null } }>(`/api/contacts/${id}`);
@@ -25,7 +28,7 @@ export function ContactRoleEditor({ value, onChange, building = false, onPending
   const roles = building ? BUILDING_CONTACT_ROLES : WORKSITE_CONTACT_ROLES;
   const labels: Record<string, string> = building ? BUILDING_CONTACT_ROLE_LABEL : WORKSITE_CONTACT_ROLE_LABEL;
   return <div className="wiz-grid">
-    <div className="field full"><label>Personne à joindre</label><ContactPicker typeFilter="all" value={value.contactId ?? ''} onChange={(id) => void select(id)} placeholder="Chercher ou créer une fiche Contact…" disabled={loading}/></div>
+    <div className="field full"><label>Personne à joindre</label><ContactPicker typeFilter="all" value={value.contactId ?? ''} onChange={(id, _label, meta) => void select(id, meta)} placeholder="Chercher une personne ou une société, ou créer une fiche…" disabled={loading}/></div>
     {loading && <p className="full" role="status">Chargement des coordonnées…</p>}
     {error && <p className="wiz-error full" role="alert">{error}</p>}
     {value.contactId ? <div className="wiz-note full"><strong>{value.name}</strong>{[value.phone, value.email].filter(Boolean).join(' · ') || 'Coordonnées à compléter dans Contacts.'}<div><Link href={`/app/contacts/${value.contactId}`} target="_blank" rel="noreferrer">Ouvrir la fiche Contact</Link></div></div> : value.name ? <div className="wiz-note full"><strong>Coordonnées historiques conservées</strong>{value.name} · {[value.phone, value.email].filter(Boolean).join(' · ')}<div>Choisissez la fiche correspondante ci-dessus pour la rattacher. Aucun rapprochement automatique.</div></div> : null}

@@ -2,7 +2,7 @@
 import { use, useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { formatEur, formatDateBE } from '@/lib/ui';
-import { DOC_KIND_LABEL, addressLines, clientIdLabel, type DocFull, type Company } from '@/lib/doc-ui';
+import { DOC_KIND_LABEL, addressLines, clientIdLabel, interventionLines, type DocFull, type Company } from '@/lib/doc-ui';
 import { computeDocTotals, vatLegalNotes, DOCUMENT_LOGO, DOCUMENT_TERMS, DEPOSIT_TRIGGERS } from '@jjd/shared';
 
 export default function PrintDocument({ params }: { params: Promise<{ id: string }> }) {
@@ -94,7 +94,10 @@ export default function PrintDocument({ params }: { params: Promise<{ id: string
 
         {d.title && <div className="object">{d.title}</div>}
         {d.customerRef && <div className="client-ref">Réf. client : <strong>{d.customerRef}</strong></div>}
-        {d.poNumber?.trim() && <div className="client-ref">Référence de commande : <strong>{d.poNumber}</strong></div>}
+        {d.intervention ? (() => {
+          const rows = interventionLines(d.intervention, d.kind, formatDateBE);
+          return rows.length ? <div className="intervention">{rows.map(([k, v]) => <div key={k}><span>{k}</span><strong>{v}</strong></div>)}</div> : null;
+        })() : d.poNumber?.trim() && <div className="client-ref">Référence de commande : <strong>{d.poNumber}</strong></div>}
         {d.intro && <p className="intro">{d.intro}</p>}
 
         <table className="lines">
@@ -246,6 +249,10 @@ const CSS = `
   .object { font-weight: 700; font-size: 13px; margin: 4px 0 8px; color: #26372f; }
   .client-ref { font-size: 11px; margin: -4px 0 8px; color: #55655d; }
   .client-ref strong { color: #26372f; }
+  .intervention { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 18px; font-size: 10.5px; margin: 0 0 10px; padding: 7px 10px; border: 1px solid #dfe6e2; border-radius: 6px; background: #f7f9f8; }
+  .intervention div { display: flex; gap: 6px; }
+  .intervention span { color: #55655d; min-width: 118px; }
+  .intervention strong { color: #26372f; font-weight: 600; }
   .intro { margin: 0 0 12px; color: #55606e; }
 
   table.lines { width: 100%; border-collapse: collapse; margin-top: 6px; }

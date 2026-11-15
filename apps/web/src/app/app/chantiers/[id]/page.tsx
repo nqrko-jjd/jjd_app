@@ -37,7 +37,7 @@ interface Detail {
     postalCode: string | null; entity: string; address: string | null; box: string | null; city: string | null; unitLabel: string | null; billTo: string | null;
     lat: number | null; lng: number | null; geoSetAt: string | null;
     startedOn: string | null; endedOn: string | null; quotedHt: number | null; quoteRef: string | null; description: string | null;
-    accessNotes: string | null; siteBrief: string | null;
+    accessNotes: string | null; siteBrief: string | null; partType: string | null;
     billToAttn: string | null; billToEmail: string | null; clientRef: string | null;
     billingCadence: string | null; billingConditions: string | null;
     ownerName: string | null; ownerPhone: string | null; ownerEmail: string | null;
@@ -142,6 +142,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
     { name: 'postalCode', label: 'Code postal' },
     { name: 'city', label: 'Ville' },
     { name: 'unitLabel', label: 'Lot, étage, bâtiment ou zone' },
+    { name: 'partType', label: 'Partie concernée (pour les factures ACP)', type: 'select', options: [{ value: '', label: '—' }, { value: 'commun', label: 'Partie commune' }, { value: 'privatif', label: 'Partie privative' }] },
     { name: 'startedOn', label: 'Début', type: 'date' },
     { name: 'endedOn', label: 'Fin', type: 'date' },
     { name: 'quotedHt', label: 'Total devisé HT', type: 'number' },
@@ -185,7 +186,7 @@ export default function ChantierDetail({ params }: { params: Promise<{ id: strin
             startedOn: toDateInput(w.startedOn), endedOn: toDateInput(w.endedOn),
             quotedHt: w.quotedHt, quoteRef: w.quoteRef, billToContactId: w.billToContact?.id ?? '', statusRaw: w.statusRaw, description: w.description,
             billToAttn: w.billToAttn, billToEmail: w.billToEmail, clientRef: w.clientRef,
-            billingCadence: w.billingCadence, billingConditions: w.billingConditions, accessNotes: w.accessNotes, siteBrief: w.siteBrief,
+            billingCadence: w.billingCadence, billingConditions: w.billingConditions, accessNotes: w.accessNotes, siteBrief: w.siteBrief, partType: w.partType ?? '',
             ownerName: w.ownerName, ownerPhone: w.ownerPhone, ownerEmail: w.ownerEmail,
             tenantName: w.tenantName, tenantPhone: w.tenantPhone, tenantPhone2: w.tenantPhone2, tenantEmail: w.tenantEmail,
           }}

@@ -34,8 +34,29 @@ export interface DocLine {
   costHt?: number | null;
 }
 
+export interface InterventionInfo {
+  building: string | null; address: string | null; unit: string | null; dates: string[]; orderRef: string | null;
+  requestedBy: string | null; part: 'commun' | 'privatif' | null; signedReport: { date: string; signer: string | null } | null; missing: string[];
+}
+/** Lignes du bloc « Intervention » (ACP) — même contenu que le PDF serveur (lib/pdf.ts). */
+export function interventionLines(i: InterventionInfo, kind: string, fmt: (d: string) => string): [string, string][] {
+  const dates = i.dates.map(fmt);
+  const rows: [string, string | null][] = [
+    ['Immeuble', i.building],
+    ['Adresse', i.address],
+    ['Entrée / lot', i.unit],
+    [kind === 'quote' ? '' : dates.length > 1 ? 'Dates d’intervention' : 'Date d’intervention', kind === 'quote' ? null : dates.length > 6 ? `${dates[0]} au ${dates[dates.length - 1]} (${dates.length} jours)` : dates.join(', ') || null],
+    ['Bon de commande', i.orderRef],
+    ['Demandé par', i.requestedBy],
+    ['Partie', i.part === 'commun' ? 'Commune' : i.part === 'privatif' ? 'Privative' : null],
+    [kind === 'quote' ? '' : 'Rapport d’intervention', kind === 'quote' || !i.signedReport ? null : `signé le ${fmt(i.signedReport.date)}${i.signedReport.signer ? ` par ${i.signedReport.signer}` : ''}`],
+  ];
+  return rows.filter((r): r is [string, string] => !!r[0] && !!r[1]);
+}
+
 export interface DocFull {
   id: string;
+  intervention?: InterventionInfo | null;
   kind: string;
   number: string | null;
   draftRef: string | null;

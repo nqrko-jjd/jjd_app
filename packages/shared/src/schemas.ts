@@ -122,6 +122,7 @@ export const worksiteInput = z.object({
   unitLabel: z.string().trim().nullish(),
   accessNotes: z.string().trim().nullish(),
   siteBrief: z.string().trim().max(3000).nullish(),
+  partType: z.enum(['commun', 'privatif']).nullish().or(z.literal('').transform(() => null)),
   startedOn: z.coerce.date().nullish(),
   endedOn: z.coerce.date().nullish(),
   quotedHt: z.number().nonnegative().nullish(),

@@ -469,6 +469,7 @@ model Worksite {
   unitLabel    String? // lot, étage, bâtiment ou zone concernée (immeubles à plusieurs lots)
   accessNotes  String? // accès et prise de rendez-vous — comment/quand intervenir sur place
   siteBrief    String? // « à faire sur place » : résumé court des travaux, en tête de la fiche chantier
+  partType     String? // commun | privatif — demandé par les syndics sur chaque facture
   startedOn    DateTime?
   endedOn      DateTime?
   lat          Float? // point GPS de référence (capturé au 1er pointage sur place, ajustable)

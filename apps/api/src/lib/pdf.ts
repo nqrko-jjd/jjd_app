@@ -19,6 +19,8 @@ export interface PdfDocLine extends DocLineLike {
   description: string | null;
   unit: string | null;
 }
+import type { InterventionInfo } from './intervention-info.js';
+
 export interface PdfDoc {
   kind: string;
   number: string | null;
@@ -39,6 +41,7 @@ export interface PdfDoc {
   vatRate?: number | null;
   depositPlan?: unknown;
   worksite: { ref: string } | null;
+  intervention?: InterventionInfo | null;
   contact: { name: string; kind?: string | null; vat: string | null; address: string | null; box: string | null; postalCode: string | null; city: string | null; phone?: string | null; email?: string | null } | null;
   lines: PdfDocLine[];
 }
@@ -176,7 +179,7 @@ export async function buildHtml(d: PdfDoc, co: Company): Promise<string> {
       </section>
       ${d.title ? `<div class="object">${esc(d.title)}</div>` : ''}
       ${d.customerRef ? `<div class="client-ref">Réf. client : <strong>${esc(d.customerRef)}</strong></div>` : ''}
-      ${d.poNumber?.trim() ? `<div class="client-ref">Référence de commande : <strong>${esc(d.poNumber)}</strong></div>` : ''}
+      ${d.intervention ? interventionBlock(d.intervention, d.kind) : d.poNumber?.trim() ? `<div class="client-ref">Référence de commande : <strong>${esc(d.poNumber)}</strong></div>` : ''}
       ${d.intro ? `<p class="intro">${esc(d.intro)}</p>` : ''}
       <table class="lines">
         <thead><tr>
@@ -267,6 +270,10 @@ const CSS = `
   .object { font-weight: 700; font-size: 13px; margin: 4px 0 8px; color: #26372f; }
   .client-ref { font-size: 11px; margin: -4px 0 8px; color: #55655d; }
   .client-ref strong { color: #26372f; }
+  .intervention { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 18px; font-size: 10.5px; margin: 0 0 10px; padding: 7px 10px; border: 1px solid #dfe6e2; border-radius: 6px; background: #f7f9f8; }
+  .intervention div { display: flex; gap: 6px; }
+  .intervention span { color: #55655d; min-width: 118px; }
+  .intervention strong { color: #26372f; font-weight: 600; }
   .intro { margin: 0 0 12px; color: #55606e; }
 
   table.lines { width: 100%; border-collapse: collapse; margin-top: 6px; }
@@ -354,4 +361,25 @@ export async function renderHtmlPdf(html: string): Promise<Buffer> {
   } finally {
     await page.close();
   }
+}
+
+/** Bloc « Intervention » (ACP) : immeuble, adresse, entrée/lot, dates, bon de commande, demandeur, commun/privatif. */
+export function interventionLines(i: InterventionInfo, kind: string): [string, string][] {
+  const dates = i.dates.map((x) => formatDateBE(x));
+  const rows: [string, string | null][] = [
+    ['Immeuble', i.building],
+    ['Adresse', i.address],
+    ['Entrée / lot', i.unit],
+    [kind === 'quote' ? '' : dates.length > 1 ? 'Dates d’intervention' : 'Date d’intervention', kind === 'quote' ? null : dates.length > 6 ? `${dates[0]} au ${dates[dates.length - 1]} (${dates.length} jours)` : dates.join(', ') || null],
+    ['Bon de commande', i.orderRef],
+    ['Demandé par', i.requestedBy],
+    ['Partie', i.part === 'commun' ? 'Commune' : i.part === 'privatif' ? 'Privative' : null],
+    [kind === 'quote' ? '' : 'Rapport d’intervention', kind === 'quote' || !i.signedReport ? null : `signé le ${formatDateBE(i.signedReport.date)}${i.signedReport.signer ? ` par ${i.signedReport.signer}` : ''}`],
+  ];
+  return rows.filter((r): r is [string, string] => !!r[0] && !!r[1]);
+}
+function interventionBlock(i: InterventionInfo, kind: string): string {
+  const rows = interventionLines(i, kind);
+  if (!rows.length) return '';
+  return `<div class="intervention">${rows.map(([k, v]) => `<div><span>${esc(k)}</span><strong>${esc(v)}</strong></div>`).join('')}</div>`;
 }

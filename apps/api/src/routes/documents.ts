@@ -15,6 +15,7 @@ import { requireAuth, OFFICE } from '../lib/auth.js';
 import { z } from 'zod';
 import { docInclude, buildLineRows, cloneLineRows, refreshDocTotals, issueDocument, getCompany, syncLedgerEntryForDocument, creditedTtc, partialCreditLines, applyCreditToParent, effectiveBillingAddress } from '../lib/documents.js';
 import { renderDocumentPdf } from '../lib/pdf.js';
+import { interventionInfo } from '../lib/intervention-info.js';
 import { sendViaPeppol, refreshPeppolStatus } from '../lib/peppol.js';
 import { emailInput, defaultEmail, sendEmailWithPdf, emailConfigured } from '../lib/doc-mail.js';
 import { createSignatureRequest, revokeSignature, signLinkBlock } from '../lib/quote-sign.js';
@@ -48,7 +49,7 @@ export async function getDocPdfBuffer(docId: string): Promise<{ buffer: Buffer; 
   }
   const company = await getCompany();
   // c/o du syndic + son adresse, même sur un brouillon ou un document importé sans adresse de facturation
-  const buffer = await renderDocumentPdf({ ...doc, billingAddress: await effectiveBillingAddress(doc) }, company);
+  const buffer = await renderDocumentPdf({ ...doc, billingAddress: await effectiveBillingAddress(doc), intervention: await interventionInfo(doc) }, company);
   return { buffer, filename };
 }
 
@@ -339,7 +340,8 @@ documentsRouter.get(
     const signed = doc.kind === 'quote' ? await prisma.quoteSignature.findFirst({ where: { documentId: doc.id, status: 'signed' }, orderBy: { signedAt: 'desc' } }) : null;
     const eSignature = signed?.signedAt ? { signerName: signed.signerName, signedAt: signed.signedAt, pdfHash: signed.pdfHash } : undefined;
     const billingAddressEffective = await effectiveBillingAddress(doc); // affichage / impression (c/o syndic inclus)
-    res.json({ document: { ...doc, billingAddressEffective, hasBankMatch: payments.length > 0, payments, billing, margin, eSignature }, company });
+    const intervention = await interventionInfo(doc); // ACP : bloc « Intervention » exigé par les syndics, et ce qui manque
+    res.json({ document: { ...doc, billingAddressEffective, intervention, hasBankMatch: payments.length > 0, payments, billing, margin, eSignature }, company });
   }),
 );
 

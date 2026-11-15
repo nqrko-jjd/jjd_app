@@ -408,6 +408,14 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
                   <small className="muted">Affiché sur le document comme « Référence de commande ».</small>
                 </label>
               </div>
+              {/* ACP : ce que les syndics exigent sur chaque facture (Baltimo…) — repris du chantier, imprimé dans le bloc « Intervention » */}
+              {doc.intervention && isInvoiceLike && doc.intervention.missing.length > 0 && (
+                <div className="card card-pad" style={{ gridColumn: '1 / -1', background: 'var(--warn-soft)', fontSize: '0.85rem' }}>
+                  <strong>Facture pour une ACP : il manque encore</strong>
+                  <ul style={{ margin: '0.3rem 0 0.3rem 1.1rem', padding: 0 }}>{doc.intervention.missing.map((m) => <li key={m}>{m}</li>)}</ul>
+                  <span className="muted">Le syndic demande ces informations pour valider la facture sans retard de paiement. Elles se complètent sur la fiche du chantier{doc.worksite ? <> (<a href={`/app/chantiers/${doc.worksite.id}`} target="_blank" rel="noreferrer">ouvrir {doc.worksite.ref}</a>)</> : null}, puis rechargez cette page.</span>
+                </div>
+              )}
             </div>
             {isQuote && (
               <label className="field" style={{ marginTop: '0.7rem' }}>

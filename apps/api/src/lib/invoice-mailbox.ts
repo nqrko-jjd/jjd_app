@@ -319,3 +319,39 @@ export async function reprocessEmailEntries(): Promise<ReprocessStats> {
   }
   return stats;
 }
+
+/**
+ * Rattrapage ciblé après correction de l'extracteur (factures Clicpublic) : montants lus à tort dans les
+ * conditions générales annexées (« minimum de 100,00 Eur » → TTC 100) et fournisseur « Total » pris pour le
+ * libellé « Total HT ». Relit le PDF des dépenses concernées et remplace HT / TTC / taux, et le fournisseur
+ * quand il valait « Total ». `dryRun` liste sans rien modifier.
+ */
+export async function repairSuspiciousTotals(dryRun = true) {
+  const entries = await prisma.ledgerEntry.findMany({
+    where: { direction: 'purchase', pdfPath: { not: null }, OR: [{ ttc: 100 }, { supplierName: 'Total' }] },
+    select: { id: true, docNumber: true, supplierName: true, contactId: true, ht: true, ttc: true, vatRate: true, pdfPath: true },
+  });
+  const changes: { id: string; docNumber: string | null; before: unknown; after: unknown }[] = [];
+  const errors: string[] = [];
+  for (const e of entries) {
+    try {
+      const filePath = nodePath.join(UPLOADS_DIR, e.pdfPath!.replace(/^\/?uploads\//, ''));
+      if (!existsSync(filePath)) { errors.push(`${e.docNumber ?? e.id} : PDF introuvable`); continue; }
+      const x = await extractDocumentInfo(readFileSync(filePath), 'application/pdf', ['supplier', 'both']);
+      const data: Record<string, unknown> = {};
+      if (x.totalTtc != null && Math.abs(x.totalTtc - (e.ttc ?? 0)) > 0.005) {
+        data.ttc = x.totalTtc;
+        const ht = x.totalHt ?? Math.round((x.totalTtc / (1 + (x.vatRate ?? 0.21))) * 100) / 100;
+        if (Math.abs(ht - e.ht) > 0.005) data.ht = ht;
+        if (x.vatRate != null && x.vatRate !== e.vatRate) data.vatRate = x.vatRate;
+      }
+      if (e.supplierName === 'Total' && x.contactId && x.contactName && x.contactName !== 'Total') {
+        data.supplierName = x.contactName; data.contactId = x.contactId;
+      }
+      if (!Object.keys(data).length) continue;
+      changes.push({ id: e.id, docNumber: e.docNumber, before: { supplierName: e.supplierName, ht: e.ht, ttc: e.ttc }, after: data });
+      if (!dryRun) await prisma.ledgerEntry.update({ where: { id: e.id }, data });
+    } catch (err) { errors.push(`${e.docNumber ?? e.id} : ${(err as Error).message}`); }
+  }
+  return { scanned: entries.length, changes, errors, dryRun };
+}

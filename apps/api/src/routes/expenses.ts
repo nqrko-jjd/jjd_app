@@ -27,7 +27,7 @@ import { allocationSnapshot } from '../lib/bank-allocation.js';
 import { purchaseRemaining } from '../lib/payment-tolerance.js';
 import { extractDocumentInfo, suggestExpenseCategory } from '../lib/document-extract.js';
 import { toCsv, readTableBuffer, pick } from '../lib/table-io.js';
-import { invoiceMailboxConfigured, syncInvoiceMailbox, reprocessEmailEntries, scanInvoiceMailboxHistory, PROCESSED_MAILBOX } from '../lib/invoice-mailbox.js';
+import { invoiceMailboxConfigured, syncInvoiceMailbox, reprocessEmailEntries, repairSuspiciousTotals, scanInvoiceMailboxHistory, PROCESSED_MAILBOX } from '../lib/invoice-mailbox.js';
 import { scanAllEntriesForRefs } from '../lib/purchase-ref-scan.js';
 import { findPurchaseCandidates } from '../lib/purchase-candidates.js';
 import { normalizeParts, replaceAllocations, mainWorksite, type AllocPart } from '../lib/ledger-allocation.js';
@@ -1016,6 +1016,14 @@ expensesRouter.post(
   asyncHandler(async (_req, res) => {
     const stats = await reprocessEmailEntries();
     res.json(stats);
+  }),
+);
+/** Rattrapage des montants mal lus (TTC 100 tiré des conditions générales, fournisseur « Total ») — `?apply=1` pour écrire. */
+expensesRouter.post(
+  '/repair-totals',
+  requireAuth('admin'),
+  asyncHandler(async (req, res) => {
+    res.json(await repairSuspiciousTotals(req.query.apply !== '1'));
   }),
 );
 

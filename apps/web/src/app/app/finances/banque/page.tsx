@@ -529,8 +529,8 @@ function BanqueInner() {
         const t = openTxRow;
         const close = () => { setOpenTx(null); setManualQ(''); setPairQ(''); };
         return (
-          <div className="modal-scrim" onClick={close}>
-            <div className="modal" role="dialog" aria-modal="true" aria-labelledby="bank-rec-title" style={{ maxWidth: 860 }} onClick={(e) => e.stopPropagation()}>
+          <div className="modal-scrim">
+            <div className="modal" role="dialog" aria-modal="true" aria-labelledby="bank-rec-title" style={{ maxWidth: 860 }}>
               <div className="modal-head">
                 <div className="modal-heading"><span className="modal-eyebrow">Rapprochement bancaire</span><h2 id="bank-rec-title">{t.counterpartyName ?? t.bank ?? 'Transaction'} · <Money value={t.amount} sign /></h2></div>
                 <button type="button" className="btn ghost" onClick={close} aria-label={tr("Fermer")}>✕</button>

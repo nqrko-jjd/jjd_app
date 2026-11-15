@@ -11,6 +11,28 @@ export interface PurchaseData {
 }
 export const docTypeOf = (direction: string) =>
   direction === 'credit_note' ? 'Note de crédit' : direction === 'delivery_slip' ? 'Bordereau' : "Facture d'achat";
+/**
+ * TVA d'une facture importée (Peppol, mail) : montant = TTC − HT, taux déduit si absent — sans cela le montant
+ * de TVA restait vide jusqu'à ce qu'on retouche un chiffre à la main.
+ */
+export function vatFields(ht: number, ttc: number, rate?: number | null): { vatRecup: number; vatRate: number | null } {
+  const vat = Math.round((Math.abs(ttc) - Math.abs(ht)) * 100) / 100;
+  if (rate != null) return { vatRecup: vat, vatRate: rate };
+  if (!ht) return { vatRecup: vat, vatRate: null };
+  const guess = [0.21, 0.12, 0.06, 0].find((r) => Math.abs(Math.abs(ht) * r - vat) <= Math.max(0.05, Math.abs(ht) * 0.002));
+  return { vatRecup: vat, vatRate: guess ?? null };
+}
+/** Catégorie habituelle du fournisseur (≥ 60 % de ses achats déjà catégorisés, au moins 2) — ex. Sani Mat → Matériel. */
+export async function supplierCategory(tx: Prisma.TransactionClient, contactId: string | null): Promise<string | null> {
+  if (!contactId) return null;
+  const hist = await tx.ledgerEntry.groupBy({
+    by: ['categoryCode'], where: { direction: 'purchase', contactId, categoryCode: { not: null }, source: { not: 'demo' } },
+    _count: true, orderBy: { _count: { categoryCode: 'desc' } },
+  });
+  const total = hist.reduce((s, h) => s + h._count, 0);
+  const top = hist[0];
+  return top?.categoryCode && total >= 2 && top._count / total >= 0.6 ? top.categoryCode : null;
+}
 const payloadOf = (r: { payload: Prisma.JsonValue }) => (r.payload ?? {}) as unknown as Partial<PurchaseData>;
 /** Facture et bordereau se confondent souvent à la lecture du PDF ; une note de crédit, jamais. */
 const sameFamily = (a: string, b: string) => (a === 'credit_note') === (b === 'credit_note');
@@ -66,11 +88,13 @@ export async function receivePurchase(input: {sourceRef:string;source:'email'|'p
       reason = 'Doublon possible : ' + matches.possible.map(e=>e.id).join(', ');
     } else if (!reason) {
       const date = new Date(d.date!);
+      const categoryCode = d.direction === 'delivery_slip' ? null : await supplierCategory(tx, d.contactId);
       const row = await tx.ledgerEntry.create({data:{
+        ...vatFields(d.ht!, d.ttc!, d.vatRate), categoryCode,
         direction:d.direction,docType:docTypeOf(d.direction),
         docNumber:d.docNumber,supplierName:d.supplierName,supplierVat:d.supplierVat,contactId:d.contactId,
         date,dueDate:d.dueDate?new Date(d.dueDate):null,year:date.getFullYear(),month:String(date.getMonth()+1),quarter:'T'+Math.ceil((date.getMonth()+1)/3),
-        ht:Math.abs(d.ht!),ttc:Math.abs(d.ttc!),vatRate:d.vatRate,worksiteId:d.worksiteId,worksiteRef:d.worksiteRef,
+        ht:Math.abs(d.ht!),ttc:Math.abs(d.ttc!),worksiteId:d.worksiteId,worksiteRef:d.worksiteRef,
         pdfPath:input.pdfPath,source:input.source,paymentStatus:'Non payé',
       }});
       ledgerEntryId=row.id;
@@ -122,7 +146,9 @@ export async function createReviewedPurchase(id:string,d:PurchaseData,actorId:st
     if(!receipt) throw new HttpError(404,'Document introuvable.');
     if(receipt.status!=='review') throw new HttpError(409,'Document déjà traité.');
     const date=new Date(d.date!);
+    const categoryCode=d.direction==='delivery_slip'?null:await supplierCategory(tx,d.contactId);
     const row=await tx.ledgerEntry.create({data:{
+      ...vatFields(d.ht!,d.ttc!,d.vatRate),categoryCode,
       direction:d.direction,docType:docTypeOf(d.direction),
       docNumber:d.docNumber,supplierName:d.supplierName,supplierVat:d.supplierVat,contactId:d.contactId,
       date,dueDate:d.dueDate?new Date(d.dueDate):null,year:date.getFullYear(),month:String(date.getMonth()+1),quarter:'T'+Math.ceil((date.getMonth()+1)/3),
@@ -134,4 +160,25 @@ export async function createReviewedPurchase(id:string,d:PurchaseData,actorId:st
     await tx.auditLog.create({data:{actorId,action:'create_from_receipt',entity:'ledgerEntry',entityId:row.id,meta:{receiptId:id,manualReview:true}}});
     return row;
   });
+}
+
+/** Rattrapage unique : TVA et catégorie des factures déjà importées (Peppol / mail) où elles manquent. */
+export async function fillImportedVatAndCategory(): Promise<{ vat: number; category: number }> {
+  const rows = await prisma.ledgerEntry.findMany({
+    where: { source: { in: ['peppol', 'email'] }, direction: { in: ['purchase', 'credit_note'] }, OR: [{ vatRecup: null }, { categoryCode: null }] },
+    select: { id: true, ht: true, ttc: true, vatRate: true, vatRecup: true, categoryCode: true, contactId: true, direction: true },
+  });
+  let vat = 0, category = 0;
+  const cache = new Map<string, string | null>();
+  for (const r of rows) {
+    const data: Record<string, unknown> = {};
+    if (r.vatRecup == null && r.ttc != null) { const v = vatFields(r.ht, r.ttc, r.vatRate); data.vatRecup = v.vatRecup; if (r.vatRate == null) data.vatRate = v.vatRate; vat++; }
+    if (r.categoryCode == null && r.contactId && r.direction === 'purchase') {
+      if (!cache.has(r.contactId)) cache.set(r.contactId, await supplierCategory(prisma, r.contactId));
+      const c = cache.get(r.contactId);
+      if (c) { data.categoryCode = c; category++; }
+    }
+    if (Object.keys(data).length) await prisma.ledgerEntry.update({ where: { id: r.id }, data });
+  }
+  return { vat, category };
 }

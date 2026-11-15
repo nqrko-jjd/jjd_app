@@ -1015,7 +1015,7 @@ function ExpenseModal({
     vehicleId: (expense ?? prefillFrom)?.vehicleId ?? '',
     // « Facture reçue… » depuis un bordereau : on part des montants du bordereau (à remplacer par ceux de la facture si elle en regroupe plusieurs)
     ht: expense?.ht != null ? String(expense.ht) : prefillFrom?.ht ? String(prefillFrom.ht) : '',
-    vatRecup: expense?.vatRecup != null ? String(expense.vatRecup) : prefillFrom?.ttc != null && prefillFrom.ht ? String(Math.round((prefillFrom.ttc - prefillFrom.ht) * 100) / 100) : '',
+    vatRecup: expense?.vatRecup != null ? String(expense.vatRecup) : expense?.ttc != null && expense.ht ? String(Math.round((Math.abs(expense.ttc) - Math.abs(expense.ht)) * 100) / 100) : prefillFrom?.ttc != null && prefillFrom.ht ? String(Math.round((prefillFrom.ttc - prefillFrom.ht) * 100) / 100) : '',
     ttc: expense?.ttc != null ? String(expense.ttc) : prefillFrom?.ttc != null ? String(prefillFrom.ttc) : '',
     // taux de TVA (en %) : sert à calculer TVA et TTC depuis le HT, ou HT et TVA depuis le TTC
     vatRate: initialVatRate(expense ?? (prefillFrom ? { vatRate: null, ht: prefillFrom.ht ?? 0, ttc: prefillFrom.ttc ?? null, vatRecup: null } : null)),

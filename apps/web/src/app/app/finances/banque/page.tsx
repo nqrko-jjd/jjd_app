@@ -107,6 +107,7 @@ function BanqueInner() {
   // transactions qui l'ont réglée, prioritaire sur le filtre "matched" habituel.
   const [documentFilter, setDocumentFilter] = useState<string | null>(null);
   useEffect(() => { setDocumentFilter(sp.get('documentId')); }, [sp]);
+  useEffect(() => { const q0 = sp.get('q'); if (q0) setQ(q0); }, [sp]);
 
   useEffect(() => { setPage(1); }, [q, bank, matched, documentFilter, dateMode, dateFrom, dateTo]);
 
@@ -268,7 +269,7 @@ function BanqueInner() {
       <PageHead
         title="Rapprochement bancaire"
         sub={data ? `${data.matched} / ${data.total} transactions rapprochées · page ${data.page}/${data.totalPages}` : undefined}
-        action={<Link href="/app/finances" className="btn">← Finances</Link>}
+        action={<><Link href="/app/finances/banque/domiciliations" className="btn">Domiciliations</Link><Link href="/app/finances" className="btn">← Finances</Link></>}
       />
 
       {documentFilter && (

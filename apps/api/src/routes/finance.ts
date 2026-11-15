@@ -21,7 +21,8 @@ import { purchaseRemaining } from '../lib/payment-tolerance.js';
 import { PAYMENT_TOLERANCE } from '../lib/payment-tolerance.js';
 import { RECONCILED, UNRECONCILED, pairSuggestions, pairTransactions, unpairTransaction } from '../lib/bank-pair.js';
 import { normalizeBankLabel } from '../lib/bank-names.js';
-import { createExpenseFromBankTx, addBankExpenseRule, listBankExpenseRules, deleteBankExpenseRule, suggestPattern, fleetHitForTx, guessSupplier } from '../lib/bank-expense.js';
+import { createExpenseFromBankTx, addBankExpenseRule, listBankExpenseRules, deleteBankExpenseRule, suggestPattern, fleetHitForTx, guessSupplier, txText, ruleMatches } from '../lib/bank-expense.js';
+import { parseDirectDebit } from '../lib/bank-direct-debit-parse.js';
 
 export const financeRouter = Router();
 financeRouter.get('/suppliers', requireAuth(...OFFICE), asyncHandler(async (_req, res) => {
@@ -683,6 +684,79 @@ financeRouter.post('/bank/:id/expense', requireAuth(...OFFICE), asyncHandler(asy
   if (d.rulePattern) ruleApplied = (await addBankExpenseRule({ pattern: d.rulePattern, worksiteId: d.worksiteId, supplierName: d.supplierName, contactId: d.contactId ?? null, notes: d.notes }, req.user!.id)).applied;
   await prisma.auditLog.create({ data: { actorId: req.user!.id, action: 'bank_expense', entity: 'bank_transaction', entityId: req.params.id!, meta: { ledgerEntryId: entry.id, rule: d.rulePattern ?? null, ruleApplied } } });
   res.status(201).json({ expenseId: entry.id, ruleApplied });
+}));
+/**
+ * Domiciliations : un groupe par mandat (ou par créancier si le libellé n'en donne pas), avec combien de
+ * prélèvements restent à rapprocher, et la règle qui les classe s'il y en a une.
+ */
+financeRouter.get('/bank/direct-debits', requireAuth(...OFFICE), asyncHandler(async (req, res) => {
+  const months = Math.min(60, Math.max(3, Number(req.query.months) || 24));
+  const since = new Date(); since.setMonth(since.getMonth() - months);
+  const txs = await prisma.bankTransaction.findMany({
+    where: {
+      amount: { lt: 0 }, bookingDate: { gte: since },
+      OR: ['domicil', 'Mandaat', 'Direct Debit'].flatMap((w) => [{ description: { contains: w, ...insensitive } }, { communication: { contains: w, ...insensitive } }]),
+    },
+    select: {
+      id: true, bookingDate: true, amount: true, bank: true, counterpartyName: true, description: true, communication: true, counterpartyAccount: true, pairedTxId: true,
+      matches: { select: { ledgerEntry: { select: { source: true, worksiteRef: true, supplierName: true } }, documentId: true } },
+    },
+    orderBy: { bookingDate: 'desc' },
+  });
+  const rules = await listBankExpenseRules();
+  const ruleWs = await prisma.worksite.findMany({ where: { id: { in: rules.map((r) => r.worksiteId) } }, select: { id: true, ref: true, title: true } });
+  type Group = {
+    key: string; mandate: string | null; creditor: string | null; banks: Set<string>; count: number; unmatched: number;
+    byInvoice: number; byRuleOrFleet: number; lastDate: Date | null; lastAmount: number | null; total12m: number;
+    sampleText: string; lastPost: string | null; unmatchedIds: string[];
+  };
+  const groups = new Map<string, Group>();
+  const yearAgo = Date.now() - 365 * 86_400_000;
+  for (const t of txs) {
+    const dd = parseDirectDebit(t);
+    if (!dd) continue;
+    const key = dd.mandate ? `m:${dd.mandate}` : `c:${(dd.creditor ?? t.counterpartyName ?? '?').toLowerCase()}`;
+    const g = groups.get(key) ?? {
+      key, mandate: dd.mandate, creditor: dd.creditor, banks: new Set<string>(), count: 0, unmatched: 0, byInvoice: 0, byRuleOrFleet: 0,
+      lastDate: null, lastAmount: null, total12m: 0, sampleText: txText(t), lastPost: null, unmatchedIds: [],
+    };
+    if (!g.creditor && dd.creditor) g.creditor = dd.creditor;
+    if (t.bank) g.banks.add(t.bank);
+    g.count++;
+    if (!g.lastDate) { g.lastDate = t.bookingDate; g.lastAmount = t.amount; }
+    if (t.bookingDate && t.bookingDate.getTime() >= yearAgo) g.total12m += t.amount ?? 0;
+    if (t.pairedTxId) { /* remboursé : neutre */ }
+    else if (!t.matches.length) { g.unmatched++; g.unmatchedIds.push(t.id); }
+    else if (t.matches.some((m) => (m.ledgerEntry?.source ?? '').startsWith('bank'))) {
+      g.byRuleOrFleet++;
+      g.lastPost ??= t.matches.find((m) => m.ledgerEntry?.worksiteRef)?.ledgerEntry?.worksiteRef ?? null;
+    } else g.byInvoice++;
+    groups.set(key, g);
+  }
+  const items = [...groups.values()].map((g) => {
+    const rule = rules.find((r) => ruleMatches(r.pattern, g.sampleText)) ?? null;
+    return {
+      key: g.key, mandate: g.mandate, creditor: g.creditor, banks: [...g.banks], count: g.count, unmatched: g.unmatched,
+      byInvoice: g.byInvoice, byRuleOrFleet: g.byRuleOrFleet, lastDate: g.lastDate, lastAmount: g.lastAmount,
+      total12m: Math.round(g.total12m * 100) / 100, lastPost: g.lastPost, firstUnmatchedId: g.unmatchedIds[0] ?? null,
+      rule: rule ? { ...rule, worksite: ruleWs.find((w) => w.id === rule.worksiteId) ?? null } : null,
+    };
+  }).sort((a, b) => b.unmatched - a.unmatched || a.total12m - b.total12m);
+  res.json({ items, months });
+}));
+const ruleInput = z.object({
+  pattern: z.string().trim().min(3).max(120),
+  worksiteId: z.string().min(1),
+  contactId: z.string().nullish(),
+  supplierName: z.string().trim().min(1).max(120),
+  notes: z.string().max(500).nullish(),
+});
+/** Crée (ou remplace, même texte) une règle et l'applique tout de suite à l'historique non rapproché. */
+financeRouter.post('/bank-expense-rules', requireAuth(...OFFICE), asyncHandler(async (req, res) => {
+  const d = ruleInput.parse(req.body ?? {});
+  const { rule, applied } = await addBankExpenseRule({ ...d, contactId: d.contactId ?? null }, req.user!.id);
+  await prisma.auditLog.create({ data: { actorId: req.user!.id, action: 'bank_expense_rule', entity: 'setting', entityId: rule.id, meta: { pattern: rule.pattern, applied } } });
+  res.status(201).json({ rule, applied });
 }));
 financeRouter.get('/bank-expense-rules', requireAuth(...OFFICE), asyncHandler(async (_req, res) => {
   const rules = await listBankExpenseRules();

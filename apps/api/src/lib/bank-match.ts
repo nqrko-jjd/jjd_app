@@ -20,6 +20,7 @@
  * contrepartie qui correspond, suffit à lever l'ambiguïté sans risque réel de
  * faux positif.
  */
+import { applyBankExpenseRules } from './bank-expense.js';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../db.js';
 import { round2 } from '@jjd/shared';
@@ -327,7 +328,7 @@ export async function backfillBankMatches(): Promise<number> {
  */
 export async function autoMatchAll(
   opts: { onlyUnmatched?: boolean; txFilter?: Prisma.BankTransactionWhereInput } = {},
-): Promise<{ strong: number; good: number; scanned: number }> {
+): Promise<{ strong: number; good: number; scanned: number; byRule: number }> {
   const txs = await prisma.bankTransaction.findMany({
     // une transaction liée à un remboursement n'a jamais de facture : jamais rapprochée automatiquement
     where: { pairedTxId: null, ...(opts.onlyUnmatched === false ? {} : { matches: { none: {} } }), ...opts.txFilter },
@@ -487,5 +488,7 @@ export async function autoMatchAll(
   }
 
   const strong = accepted.filter((u) => u.confidence === 'strong').length;
-  return { strong, good: accepted.length - strong, scanned: txs.length };
+  // sorties sans facture qui reviennent (crédit, domiciliation…) : dépense créée d'après les règles enregistrées
+  const rules = await applyBankExpenseRules().catch((e) => { console.warn('[bank-match] règles de dépenses :', (e as Error).message); return { created: 0 }; });
+  return { strong, good: accepted.length - strong, scanned: txs.length, byRule: rules.created };
 }

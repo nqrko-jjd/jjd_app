@@ -11,6 +11,7 @@ import { PageHead, Money, formatDateBE } from '@/lib/ui';
 import { PaginationBar } from '@/components/PaginationBar';
 import { FormModal } from '@/components/FormModal';
 import { BankClientAssign } from '@/components/BankClientAssign';
+import { BankExpenseCreate } from '@/components/BankExpenseCreate';
 
 interface Match {
   id: string;
@@ -45,7 +46,7 @@ interface PontoStatus {
   accounts: { id: string; iban: string | null; label: string | null; balance: number | null; balanceAt: string | null; lastSyncAt: string | null }[];
 }
 
-const CONF_LABEL: Record<string, string> = { strong: 'auto ✓✓', good: 'auto ✓', manual: 'manuel' };
+const CONF_LABEL: Record<string, string> = { strong: 'auto ✓✓', good: 'auto ✓', manual: 'manuel', rule: 'règle' };
 
 function matchAmount(m: Match): number {
   if (m.amount != null) return m.amount; // part du virement affectée à cette facture (paiement groupé)
@@ -124,6 +125,13 @@ function BanqueInner() {
   const { data: aiStatus } = useApi<{ enabled: boolean }>('/api/assistant/status');
   const [openTx, setOpenTx] = useState<string | null>(null);
   useEffect(() => { if (sp.get('transactionId')) setOpenTx(sp.get('transactionId')); }, [sp]);
+  // Échap ferme la fenêtre de rapprochement (sauf si la fenêtre « montant affecté » est ouverte par-dessus)
+  useEffect(() => {
+    if (!openTx) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !document.querySelectorAll('.modal-scrim')[1]) { setOpenTx(null); setManualQ(''); setPairQ(''); } };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [openTx]);
   const [manualQ, setManualQ] = useState('');
   const suggQs = manualQ.trim() ? `?q=${encodeURIComponent(manualQ.trim())}` : '';
   const { data: sugg, loading: suggLoading, reload: reloadSugg } = useApi<{ items: Suggestion[]; remaining: number }>(openTx ? `/api/finance/bank/${openTx}/suggestions${suggQs}` : null);
@@ -212,8 +220,8 @@ function BanqueInner() {
   async function autoMatch() {
     setBusy('match'); setFlash(null);
     try {
-      const r = await api<{ strong: number; good: number; scanned: number }>('/api/finance/bank/auto-match', { method: 'POST' });
-      setFlash(`${r.strong + r.good} transaction(s) rapprochée(s) (${r.strong} sûres, ${r.good} probables) sur ${r.scanned} examinées.`);
+      const r = await api<{ strong: number; good: number; scanned: number; byRule?: number }>('/api/finance/bank/auto-match', { method: 'POST' });
+      setFlash(`${r.strong + r.good} transaction(s) rapprochée(s) (${r.strong} sûres, ${r.good} probables) sur ${r.scanned} examinées.${r.byRule ? ` ${r.byRule} paiement(s) sans facture classé(s) par règle.` : ''}`);
       reload();
     } catch (e) { setFlash((e as Error).message); }
     finally { setBusy(null); }
@@ -498,90 +506,14 @@ function BanqueInner() {
                       )}
                     </td>
                     <td>
-                      {!t.pairedTx && <button className="btn" style={{ padding: '0.2rem 0.5rem', fontSize: '0.76rem' }} onClick={() => { setOpenTx(openTx === t.id ? null : t.id); setManualQ(''); setPairQ(''); }}>
-                        {openTx === t.id ? tr("Fermer") : t.matches.length ? '+ Ajouter' : 'Rapprocher'}
+                      {!t.pairedTx && <button className="btn" style={{ padding: '0.2rem 0.5rem', fontSize: '0.76rem' }} onClick={() => { setOpenTx(t.id); setManualQ(''); setPairQ(''); }}>
+                        {t.matches.length ? '+ Ajouter' : 'Rapprocher'}
                       </button>}
                     </td>
                     <td>
                       <button className="btn ghost" style={{ padding: '0.2rem 0.5rem', fontSize: '0.76rem' }} onClick={() => setEditTx(t)} title="Corriger cette ligne (date, banque, montant, communication…)"> {tr("Modifier")} </button>
                     </td>
                   </tr>
-                  {openTx === t.id && !t.pairedTx && (
-                    <tr>
-                      <td colSpan={8} style={{ background: 'var(--surface-2)', padding: '0.8rem 0.9rem' }}>
-                        <div className="row" style={{ marginBottom: '0.6rem', gap: '0.5rem', alignItems: 'center' }}>
-                          <div className="eyebrow" style={{ margin: 0 }}>{manualQ.trim() ? 'Recherche' : 'Factures proposées (achat & vente)'}</div>
-                          {sugg && (
-                            <span className="muted" style={{ fontSize: '0.8rem' }}>reste à affecter : <Money value={sugg.remaining} /></span>
-                          )}
-                          <input
-                            className="input"
-                            style={{ maxWidth: 260, marginLeft: 'auto' }}
-                            placeholder="Chercher toi-même : n°, fournisseur, chantier…"
-                            value={manualQ}
-                            onChange={(e) => setManualQ(e.target.value)}
-                          />
-                        </div>
-                        {suggLoading ? tr("Recherche…") : !sugg ? tr("Recherche…") : sugg.items.length === 0 ? (
-                          <span className="muted">
-                            {manualQ.trim() ? 'Aucune correspondance.' : 'Aucune proposition automatique — cherche toi-même ci-dessus.'}
-                          </span>
-                        ) : (
-                          <div className="grid" style={{ gap: '0.4rem' }}>
-                            {sugg.items.map((s) => (
-                              <button
-                                key={`${s.kind}-${s.id}`}
-                                className="btn"
-                                style={{ justifyContent: 'space-between' }}
-                                onClick={() => setAllocation({ txId: t.id, ...(s.kind === 'ledger' ? { ledgerId: s.id } : { documentId: s.id }), label: s.label, amount: Math.min(s.amount ?? 0, sugg.remaining) })}
-                              >
-                                <span>
-                                  <span className={`badge ${s.direction === 'sale' ? 'ok' : 'plain'}`} style={{ marginRight: 6 }}>
-                                    {s.direction === 'sale' ? 'Vente' : 'Achat'}
-                                  </span>
-                                  {s.worksiteRef ? `${s.worksiteRef} · ` : ''}{s.label} · {formatDateBE(s.date)}
-                                </span>
-                                <span>Reste à régler : <Money value={s.amount} /></span>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                        {t.matches.length === 0 && (
-                          <div style={{ marginTop: '1rem', paddingTop: '0.8rem', borderTop: '1px solid var(--line)' }}>
-                            <div className="row" style={{ marginBottom: '0.5rem', gap: '0.5rem', alignItems: 'center' }}>
-                              <div className="eyebrow" style={{ margin: 0 }}>Ou lier un remboursement</div>
-                              <span className="muted" style={{ fontSize: '0.8rem' }}>
-                                {(t.amount ?? 0) > 0 ? 'une sortie' : 'une entrée'} du même montant qui annule celle-ci (double paiement remboursé…) — aucune facture n’est touchée
-                              </span>
-                              <input
-                                className="input"
-                                style={{ maxWidth: 220, marginLeft: 'auto' }}
-                                placeholder="Chercher : nom, communication…"
-                                value={pairQ}
-                                onChange={(e) => setPairQ(e.target.value)}
-                              />
-                            </div>
-                            {pairLoading || !pairSugg ? <span className="muted">{tr("Recherche…")}</span> : pairSugg.items.length === 0 ? (
-                              <span className="muted">Aucune transaction de sens opposé et de même montant à rapprocher.</span>
-                            ) : (
-                              <div className="grid" style={{ gap: '0.4rem' }}>
-                                {pairSugg.items.map((p) => (
-                                  <button key={p.id} className="btn" style={{ justifyContent: 'space-between' }} onClick={() => pairTx(t.id, p)}>
-                                    <span>
-                                      <span className="badge plain" style={{ marginRight: 6 }}>↔</span>
-                                      {formatDateBE(p.bookingDate)} · {p.counterpartyName ?? p.bank ?? '—'}
-                                      {p.communication ? <span className="muted"> · {p.communication.replace(/\s+/g, ' ').slice(0, 70)}</span> : null}
-                                    </span>
-                                    <Money value={p.amount} sign />
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  )}
                 </Fragment>
               ))}
             </tbody>
@@ -592,6 +524,98 @@ function BanqueInner() {
       {data && (
         <PaginationBar page={data.page} totalPages={data.totalPages} pageSize={pageSize} onPage={setPage} onPageSize={(s) => { setPageSize(s); setPage(1); }} />
       )}
+
+      {openTxRow && !openTxRow.pairedTx && (() => {
+        const t = openTxRow;
+        const close = () => { setOpenTx(null); setManualQ(''); setPairQ(''); };
+        return (
+          <div className="modal-scrim" onClick={close}>
+            <div className="modal" role="dialog" aria-modal="true" aria-labelledby="bank-rec-title" style={{ maxWidth: 860 }} onClick={(e) => e.stopPropagation()}>
+              <div className="modal-head">
+                <div className="modal-heading"><span className="modal-eyebrow">Rapprochement bancaire</span><h2 id="bank-rec-title">{t.counterpartyName ?? t.bank ?? 'Transaction'} · <Money value={t.amount} sign /></h2></div>
+                <button type="button" className="btn ghost" onClick={close} aria-label={tr("Fermer")}>✕</button>
+              </div>
+              <div style={{ padding: '1rem 1.15rem', display: 'grid', gap: '1.1rem' }}>
+                <div className="muted" style={{ fontSize: '0.82rem', lineHeight: 1.45 }}>
+                  <strong style={{ color: 'var(--ink)' }}>{formatDateBE(t.bookingDate)}</strong>{t.bank ? ` · ${t.bank}` : ''}
+                  {t.communication && <div className="mono">{t.communication}</div>}
+                  {t.description && <div style={{ wordBreak: 'break-word' }}>{t.description}</div>}
+                </div>
+
+                {t.matches.length > 0 && (
+                  <div className="muted" style={{ fontSize: '0.82rem' }}>
+                    Déjà rapproché : {t.matches.map(matchLabel).join(', ')} — <Money value={t.matches.reduce((s, m) => s + matchAmount(m), 0)} /> / <Money value={Math.abs(t.amount ?? 0)} />
+                  </div>
+                )}
+
+                <section>
+                  <div className="row" style={{ marginBottom: '0.6rem', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <div className="eyebrow" style={{ margin: 0 }}>{manualQ.trim() ? 'Recherche' : 'Factures proposées (achat & vente)'}</div>
+                    {sugg && <span className="muted" style={{ fontSize: '0.8rem' }}>reste à affecter : <Money value={sugg.remaining} /></span>}
+                    <input className="input" style={{ maxWidth: 260, marginLeft: 'auto' }} placeholder="Chercher : n°, fournisseur, chantier…" value={manualQ} onChange={(e) => setManualQ(e.target.value)} />
+                  </div>
+                  {suggLoading || !sugg ? <span className="muted">{tr("Recherche…")}</span> : sugg.items.length === 0 ? (
+                    <span className="muted">{manualQ.trim() ? 'Aucune correspondance.' : 'Aucune facture proposée — cherchez ci-dessus, ou créez la dépense ci-dessous s’il n’y a pas de facture.'}</span>
+                  ) : (
+                    <div className="grid" style={{ gap: '0.4rem', maxHeight: 280, overflowY: 'auto' }}>
+                      {sugg.items.map((s) => (
+                        <button
+                          key={`${s.kind}-${s.id}`}
+                          className="btn"
+                          style={{ justifyContent: 'space-between', textAlign: 'left' }}
+                          onClick={() => setAllocation({ txId: t.id, ...(s.kind === 'ledger' ? { ledgerId: s.id } : { documentId: s.id }), label: s.label, amount: Math.min(s.amount ?? 0, sugg.remaining) })}
+                        >
+                          <span>
+                            <span className={`badge ${s.direction === 'sale' ? 'ok' : 'plain'}`} style={{ marginRight: 6 }}>{s.direction === 'sale' ? 'Vente' : 'Achat'}</span>
+                            {s.worksiteRef ? `${s.worksiteRef} · ` : ''}{s.label} · {formatDateBE(s.date)}
+                          </span>
+                          <span>Reste à régler : <Money value={s.amount} /></span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </section>
+
+                {(t.amount ?? 0) < 0 && (
+                  <section style={{ paddingTop: '0.9rem', borderTop: '1px solid var(--line)' }}>
+                    <div className="eyebrow" style={{ marginBottom: '0.5rem' }}>Pas de facture ? Créer la dépense</div>
+                    <BankExpenseCreate key={t.id} txId={t.id} onDone={(msg) => { setFlash(msg); close(); reload(); }} />
+                  </section>
+                )}
+
+                {t.matches.length === 0 && (
+                  <section style={{ paddingTop: '0.9rem', borderTop: '1px solid var(--line)' }}>
+                    <div className="row" style={{ marginBottom: '0.5rem', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <div className="eyebrow" style={{ margin: 0 }}>Ou lier un remboursement</div>
+                      <span className="muted" style={{ fontSize: '0.8rem' }}>
+                        {(t.amount ?? 0) > 0 ? 'une sortie' : 'une entrée'} du même montant qui annule celle-ci (double paiement remboursé…)
+                      </span>
+                      <input className="input" style={{ maxWidth: 220, marginLeft: 'auto' }} placeholder="Chercher : nom, communication…" value={pairQ} onChange={(e) => setPairQ(e.target.value)} />
+                    </div>
+                    {pairLoading || !pairSugg ? <span className="muted">{tr("Recherche…")}</span> : pairSugg.items.length === 0 ? (
+                      <span className="muted">Aucune transaction de sens opposé et de même montant.</span>
+                    ) : (
+                      <div className="grid" style={{ gap: '0.4rem' }}>
+                        {pairSugg.items.map((p) => (
+                          <button key={p.id} className="btn" style={{ justifyContent: 'space-between' }} onClick={() => pairTx(t.id, p)}>
+                            <span>
+                              <span className="badge plain" style={{ marginRight: 6 }}>↔</span>
+                              {formatDateBE(p.bookingDate)} · {p.counterpartyName ?? p.bank ?? '—'}
+                              {p.communication ? <span className="muted"> · {p.communication.replace(/\s+/g, ' ').slice(0, 70)}</span> : null}
+                            </span>
+                            <Money value={p.amount} sign />
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                )}
+              </div>
+              <div className="modal-foot"><button type="button" className="btn" onClick={close}>{tr("Fermer")}</button></div>
+            </div>
+          </div>
+        );
+      })()}
 
       {allocation && <FormModal
         title={'Montant affecté · ' + allocation.label}

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import type { Prisma } from '@prisma/client';
+import { z } from 'zod';
 import multer from 'multer';
 import { prisma } from '../db.js';
 import { insensitive } from '../lib/search.js';
@@ -19,6 +20,7 @@ import { allocationSnapshot, freezeLegacyAllocations } from '../lib/bank-allocat
 import { purchaseRemaining } from '../lib/payment-tolerance.js';
 import { PAYMENT_TOLERANCE } from '../lib/payment-tolerance.js';
 import { RECONCILED, UNRECONCILED, pairSuggestions, pairTransactions, unpairTransaction } from '../lib/bank-pair.js';
+import { createExpenseFromBankTx, addBankExpenseRule, listBankExpenseRules, deleteBankExpenseRule, suggestPattern } from '../lib/bank-expense.js';
 
 export const financeRouter = Router();
 financeRouter.get('/suppliers', requireAuth(...OFFICE), asyncHandler(async (_req, res) => {
@@ -645,6 +647,41 @@ financeRouter.delete('/bank/:id/matches/:matchId', requireAuth(...OFFICE), async
     return found;
   }, { isolationLevel: 'Serializable', timeout: 30000 });
   await refreshAllocationDocument(m.ledgerEntryId, m.documentId);
+  res.json({ ok: true });
+}));
+
+/**
+ * Sortie SANS facture (crédit, domiciliation, frais bancaires…) : ce qu'on propose pour créer la dépense depuis la ligne
+ * (fournisseur, texte de règle), puis la création, avec en option une règle pour les prélèvements identiques suivants.
+ */
+financeRouter.get('/bank/:id/expense-draft', requireAuth(...OFFICE), asyncHandler(async (req, res) => {
+  const tx = await prisma.bankTransaction.findUnique({ where: { id: req.params.id }, include: { matches: { select: { amount: true } } } });
+  if (!tx) throw new HttpError(404, 'Transaction introuvable');
+  const already = tx.matches.some((m) => m.amount == null) ? Math.abs(tx.amount ?? 0) : tx.matches.reduce((s, m) => s + (m.amount ?? 0), 0);
+  const remaining = Math.round((Math.abs(tx.amount ?? 0) - already) * 100) / 100;
+  res.json({ supplierName: tx.counterpartyName ?? '', pattern: suggestPattern(tx), remaining });
+}));
+const bankExpenseInput = z.object({
+  worksiteId: z.string().min(1),
+  supplierName: z.string().trim().min(1).max(120),
+  notes: z.string().max(500).nullish(),
+  rulePattern: z.string().trim().max(120).nullish(),
+});
+financeRouter.post('/bank/:id/expense', requireAuth(...OFFICE), asyncHandler(async (req, res) => {
+  const d = bankExpenseInput.parse(req.body ?? {});
+  const entry = await createExpenseFromBankTx(req.params.id!, d, req.user!.id);
+  let ruleApplied = 0;
+  if (d.rulePattern) ruleApplied = (await addBankExpenseRule({ pattern: d.rulePattern, worksiteId: d.worksiteId, supplierName: d.supplierName, notes: d.notes }, req.user!.id)).applied;
+  await prisma.auditLog.create({ data: { actorId: req.user!.id, action: 'bank_expense', entity: 'bank_transaction', entityId: req.params.id!, meta: { ledgerEntryId: entry.id, rule: d.rulePattern ?? null, ruleApplied } } });
+  res.status(201).json({ expenseId: entry.id, ruleApplied });
+}));
+financeRouter.get('/bank-expense-rules', requireAuth(...OFFICE), asyncHandler(async (_req, res) => {
+  const rules = await listBankExpenseRules();
+  const ws = await prisma.worksite.findMany({ where: { id: { in: rules.map((r) => r.worksiteId) } }, select: { id: true, ref: true, title: true } });
+  res.json({ items: rules.map((r) => ({ ...r, worksite: ws.find((w) => w.id === r.worksiteId) ?? null })) });
+}));
+financeRouter.delete('/bank-expense-rules/:ruleId', requireAuth(...OFFICE), asyncHandler(async (req, res) => {
+  await deleteBankExpenseRule(req.params.ruleId!);
   res.json({ ok: true });
 }));
 

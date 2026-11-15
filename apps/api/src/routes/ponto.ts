@@ -26,7 +26,7 @@ pontoRouter.get(
       connected: configured && (mode === 'custom' || !!tokens),
       redirectUri: env.ponto.redirectUri,
       accounts: accounts.map((a) => ({
-        id: a.id, iban: a.iban, label: accountDisplayName(a) ?? a.label, rawLabel: a.label, balance: a.balance,
+        id: a.id, iban: a.iban, label: accountDisplayName(a, accounts) ?? a.label, rawLabel: a.label, balance: a.balance,
         balanceAt: a.balanceAt, lastSyncAt: a.lastSyncAt,
       })),
     });

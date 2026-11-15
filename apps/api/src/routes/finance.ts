@@ -20,6 +20,7 @@ import { allocationSnapshot, freezeLegacyAllocations } from '../lib/bank-allocat
 import { purchaseRemaining } from '../lib/payment-tolerance.js';
 import { PAYMENT_TOLERANCE } from '../lib/payment-tolerance.js';
 import { RECONCILED, UNRECONCILED, pairSuggestions, pairTransactions, unpairTransaction } from '../lib/bank-pair.js';
+import { normalizeBankLabel } from '../lib/bank-names.js';
 import { createExpenseFromBankTx, addBankExpenseRule, listBankExpenseRules, deleteBankExpenseRule, suggestPattern, fleetHitForTx } from '../lib/bank-expense.js';
 
 export const financeRouter = Router();
@@ -42,6 +43,7 @@ const bankRefs = (s: string | null) => new Set([...(s ?? '').matchAll(/REF\.?\s*
  *  Plus d'heuristique « même montant à quelques jours + début de nom identique » : elle écartait de vraies opérations
  *  (parkings, prélèvements récurrents). Deux lignes du même fichier ne se comparent jamais entre elles. */
 export async function insertBankRows(rows: ParsedBankRow[], bankLabel: string, source: string) {
+  bankLabel = normalizeBankLabel(bankLabel);
   const runStart = new Date();
   let imported = 0;
   let duplicates = 0;

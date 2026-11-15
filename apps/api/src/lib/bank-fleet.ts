@@ -34,7 +34,8 @@ const norm = (s: string | null | undefined) => (s ?? '').normalize('NFD').replac
 const digits = (s: string | null | undefined) => (s ?? '').replace(/\D/g, '');
 /** suites de chiffres du libellé, séparateurs (espace - / . +) retirés : « 071-9542735-33 » → « 071954273533 » */
 function digitRuns(text: string): string[] {
-  return (text.match(/\d[\d\s\-/.+]*\d/g) ?? []).map(digits).filter((d) => d.length >= 5);
+  // un seul espace toléré entre deux groupes : « 071 9542735 33 » oui, deux n° séparés par plusieurs espaces non
+  return (text.match(/\d(?:[\d\-/.+]| (?=\d))*\d/g) ?? []).map(digits).filter((d) => d.length >= 5);
 }
 /** un n° de contrat (≥ 6 chiffres) présent dans le libellé */
 export function numberInText(num: string | null | undefined, runs: string[]): boolean {

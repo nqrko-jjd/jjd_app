@@ -24,7 +24,7 @@ export async function syncPonto(): Promise<{ accounts: number; imported: number;
     for (const acc of accounts) {
       // nom lisible (« Belfius ••4521 ») : les lignes déjà importées sous le libellé brut de Ponto sont renommées,
       // celles renommées à la main gardent leur nom
-      const name = accountDisplayName(acc) ?? acc.label;
+      const name = accountDisplayName(acc, accounts) ?? acc.label;
       if (name && name !== acc.label) {
         await prisma.bankTransaction.updateMany({ where: { accountId: acc.id, OR: [{ bank: null }, { bank: acc.label ?? '' }] }, data: { bank: name } });
       }

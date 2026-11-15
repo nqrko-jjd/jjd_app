@@ -17,11 +17,24 @@ export function bankNameFromIban(iban: string | null | undefined): string | null
   return RANGES.find(([a, b]) => code >= a && code <= b)?.[2] ?? null;
 }
 
-export function accountDisplayName(acc: { iban: string | null; label: string | null }): string | null {
+/**
+ * Nom d'un compte : le nom de la banque seul (« Belfius », « ING ») — le même que celui des relevés historiques,
+ * pour que le filtre « compte » les regroupe ; avec les 4 derniers chiffres seulement si la même banque a
+ * plusieurs comptes (`siblings` = tous les comptes connus).
+ */
+export function accountDisplayName(acc: { iban: string | null; label: string | null }, siblings: { iban: string | null }[] = []): string | null {
   const iban = (acc.iban ?? '').replace(/\s/g, '');
   const last4 = iban.length >= 4 ? iban.slice(-4) : '';
   const bank = bankNameFromIban(iban);
-  if (bank) return `${bank}${last4 ? ` ••${last4}` : ''}`;
+  if (bank) {
+    const same = siblings.filter((s) => bankNameFromIban(s.iban) === bank).length;
+    return same > 1 && last4 ? `${bank} ••${last4}` : bank;
+  }
   if (acc.label && last4 && !acc.label.includes(last4)) return `${acc.label} ••${last4}`;
   return acc.label ?? (iban || null);
+}
+
+/** Libellé saisi à l'import : « VISA **8307 » et « VISA ••8307 » deviennent le même compte. */
+export function normalizeBankLabel(label: string): string {
+  return label.replace(/\*{2,}(?=\d)/g, '••').replace(/\s+/g, ' ').trim();
 }

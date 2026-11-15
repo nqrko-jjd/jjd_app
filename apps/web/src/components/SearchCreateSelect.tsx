@@ -30,6 +30,7 @@ export function SearchCreateSelect({
   placeholder,
   required,
   disabled,
+  browseOnFocus,
 }: {
   id?: string;
   value: string;
@@ -41,6 +42,8 @@ export function SearchCreateSelect({
   placeholder?: string;
   required?: boolean;
   disabled?: boolean;
+  /** champ vide + clic : affiche directement la liste (sans devoir taper 2 lettres) */
+  browseOnFocus?: boolean;
 }) {
   const [query, setQuery] = useState('');
   const [items, setItems] = useState<PickerItem[]>([]);
@@ -75,6 +78,7 @@ export function SearchCreateSelect({
     if (timer.current) clearTimeout(timer.current);
     abort.current?.abort();
     if (q.trim().length < 2) {
+      if (browseOnFocus && q.trim().length === 0) { void browse(); return; }
       setItems([]);
       setOpen(false);
       return;
@@ -94,6 +98,12 @@ export function SearchCreateSelect({
         setBusy(false);
       }
     }, 300);
+  }
+
+  // « parcourir » : liste complète (premiers résultats) dès qu'on clique dans le champ vide
+  async function browse() {
+    setBusy(true);
+    try { setItems(await search('')); setOpen(true); setActive(-1); } catch { /* sans gravité */ } finally { setBusy(false); }
   }
 
   function pick(item: PickerItem) {
@@ -129,7 +139,10 @@ export function SearchCreateSelect({
             setQuery(e.target.value);
             runSearch(e.target.value);
           }}
-          onFocus={() => { if (items.length > 0 && !pickedRef.current) setOpen(true); }}
+          onFocus={() => {
+            if (items.length > 0 && !pickedRef.current) setOpen(true);
+            else if (browseOnFocus && !value && query.trim().length < 2) void browse();
+          }}
           onKeyDown={(e) => {
             if (!open) return;
             const optCount = items.length + 1; // +1 = ligne "+ Créer"
@@ -147,23 +160,13 @@ export function SearchCreateSelect({
         )}
       </div>
       {open && (
-        <ul
-          style={{
-            position: 'absolute', zIndex: 30, top: 'calc(100% + 2px)', left: 0, right: 0,
-            margin: 0, padding: '0.25rem', listStyle: 'none',
-            background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: '8px',
-            boxShadow: '0 6px 20px rgba(0,0,0,0.15)', maxHeight: '260px', overflowY: 'auto',
-          }}
-        >
+        <ul className="picker-menu" role="listbox">
           {items.map((it, i) => (
             <li
               key={it.id}
               onMouseDown={(e) => { e.preventDefault(); pick(it); }}
               onMouseEnter={() => setActive(i)}
-              style={{
-                padding: '0.4rem 0.55rem', borderRadius: '6px', cursor: 'pointer', fontSize: '0.87rem',
-                color: 'var(--ink)', background: i === active ? 'var(--surface-2)' : 'transparent',
-              }}
+              className={i === active ? 'is-active' : undefined}
             >
               {it.name}
               {it.sub && <span className="muted" style={{ marginLeft: '0.4em' }}>{it.sub}</span>}
@@ -173,11 +176,7 @@ export function SearchCreateSelect({
             <li
               onMouseDown={(e) => { e.preventDefault(); setCreating(true); setOpen(false); }}
               onMouseEnter={() => setActive(items.length)}
-              style={{
-                padding: '0.4rem 0.55rem', borderRadius: '6px', cursor: 'pointer', fontSize: '0.87rem',
-                color: 'var(--primary)', fontWeight: 600,
-                background: active === items.length ? 'var(--surface-2)' : 'transparent',
-              }}
+              className={`is-create${active === items.length ? ' is-active' : ''}`}
             >
               + {createLabel}{query.trim() ? ` « ${query.trim()} »` : ''}
             </li>

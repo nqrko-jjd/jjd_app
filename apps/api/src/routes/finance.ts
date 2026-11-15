@@ -21,7 +21,7 @@ import { purchaseRemaining } from '../lib/payment-tolerance.js';
 import { PAYMENT_TOLERANCE } from '../lib/payment-tolerance.js';
 import { RECONCILED, UNRECONCILED, pairSuggestions, pairTransactions, unpairTransaction } from '../lib/bank-pair.js';
 import { normalizeBankLabel } from '../lib/bank-names.js';
-import { createExpenseFromBankTx, addBankExpenseRule, listBankExpenseRules, deleteBankExpenseRule, suggestPattern, fleetHitForTx } from '../lib/bank-expense.js';
+import { createExpenseFromBankTx, addBankExpenseRule, listBankExpenseRules, deleteBankExpenseRule, suggestPattern, fleetHitForTx, guessSupplier } from '../lib/bank-expense.js';
 
 export const financeRouter = Router();
 financeRouter.get('/suppliers', requireAuth(...OFFICE), asyncHandler(async (_req, res) => {
@@ -663,11 +663,14 @@ financeRouter.get('/bank/:id/expense-draft', requireAuth(...OFFICE), asyncHandle
   const remaining = Math.round((Math.abs(tx.amount ?? 0) - already) * 100) / 100;
   // reconnu grâce à la flotte (crédit / leasing / assurance / PV d'un véhicule) : poste et fournisseur pré-remplis
   const fleet = (tx.amount ?? 0) < 0 ? await fleetHitForTx(tx.id) : null;
-  res.json({ supplierName: fleet?.supplierName ?? tx.counterpartyName ?? '', pattern: suggestPattern(tx), remaining, fleet });
+  const supplierName = fleet?.supplierName ?? tx.counterpartyName ?? '';
+  const supplier = await guessSupplier(supplierName);
+  res.json({ supplierName, supplier, pattern: suggestPattern(tx), remaining, fleet });
 }));
 const bankExpenseInput = z.object({
   worksiteId: z.string().min(1),
   supplierName: z.string().trim().min(1).max(120),
+  contactId: z.string().nullish(),
   notes: z.string().max(500).nullish(),
   rulePattern: z.string().trim().max(120).nullish(),
   vehicleId: z.string().nullish(),
@@ -677,7 +680,7 @@ financeRouter.post('/bank/:id/expense', requireAuth(...OFFICE), asyncHandler(asy
   const d = bankExpenseInput.parse(req.body ?? {});
   const entry = await createExpenseFromBankTx(req.params.id!, d, req.user!.id, d.vehicleId || d.fineId ? 'fleet' : 'manual');
   let ruleApplied = 0;
-  if (d.rulePattern) ruleApplied = (await addBankExpenseRule({ pattern: d.rulePattern, worksiteId: d.worksiteId, supplierName: d.supplierName, notes: d.notes }, req.user!.id)).applied;
+  if (d.rulePattern) ruleApplied = (await addBankExpenseRule({ pattern: d.rulePattern, worksiteId: d.worksiteId, supplierName: d.supplierName, contactId: d.contactId ?? null, notes: d.notes }, req.user!.id)).applied;
   await prisma.auditLog.create({ data: { actorId: req.user!.id, action: 'bank_expense', entity: 'bank_transaction', entityId: req.params.id!, meta: { ledgerEntryId: entry.id, rule: d.rulePattern ?? null, ruleApplied } } });
   res.status(201).json({ expenseId: entry.id, ruleApplied });
 }));

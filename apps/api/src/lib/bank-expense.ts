@@ -9,6 +9,7 @@
  */
 import { prisma } from '../db.js';
 import { HttpError } from './http.js';
+import { insensitive } from './search.js';
 import { findFleetHit, type FleetHit, type FleetIndex } from './bank-fleet.js';
 
 export interface BankExpenseRule {
@@ -17,6 +18,8 @@ export interface BankExpenseRule {
   pattern: string;
   worksiteId: string;
   supplierName: string;
+  /** fiche fournisseur (Contact) */
+  contactId?: string | null;
   notes: string | null;
   createdAt: string;
   createdById: string | null;
@@ -63,7 +66,7 @@ const derive = (date: Date) => {
 /** Crée la dépense « sans facture » d'une sortie bancaire et la rapproche pour tout le montant restant. */
 export async function createExpenseFromBankTx(
   txId: string,
-  input: { worksiteId: string; supplierName: string; notes?: string | null; vehicleId?: string | null; fineId?: string | null },
+  input: { worksiteId: string; supplierName: string; contactId?: string | null; notes?: string | null; vehicleId?: string | null; fineId?: string | null },
   actorId: string | null,
   how: 'manual' | 'rule' | 'fleet' = 'manual',
 ) {
@@ -79,6 +82,7 @@ export async function createExpenseFromBankTx(
     const amount = Math.round((Math.abs(tx.amount ?? 0) - already) * 100) / 100;
     if (amount <= 0) throw new HttpError(409, 'Ce paiement est déjà entièrement rapproché.');
     const date = tx.bookingDate ?? tx.valueDate ?? new Date();
+    const contact = input.contactId ? await db.contact.findUnique({ where: { id: input.contactId }, select: { id: true, name: true } }) : null;
     const label = [tx.counterpartyName, tx.description].filter(Boolean).join(' · ').replace(/\s+/g, ' ').slice(0, 300);
     const entry = await db.ledgerEntry.create({
       data: {
@@ -86,7 +90,8 @@ export async function createExpenseFromBankTx(
         date,
         direction: 'purchase',
         docType: 'Sans facture (relevé bancaire)',
-        supplierName: input.supplierName.trim() || tx.counterpartyName || 'Banque',
+        supplierName: contact?.name || input.supplierName.trim() || tx.counterpartyName || 'Banque',
+        contactId: contact?.id ?? null,
         worksiteId: ws.id,
         worksiteRef: ws.ref,
         vehicleId: input.vehicleId || null,
@@ -110,7 +115,7 @@ export async function createExpenseFromBankTx(
 
 /** Ajoute une règle et l'applique aussitôt aux sorties pas encore rapprochées qui la vérifient. */
 export async function addBankExpenseRule(
-  input: { pattern: string; worksiteId: string; supplierName: string; notes?: string | null },
+  input: { pattern: string; worksiteId: string; supplierName: string; contactId?: string | null; notes?: string | null },
   actorId: string | null,
 ): Promise<{ rule: BankExpenseRule; applied: number }> {
   const pattern = input.pattern.trim();
@@ -118,7 +123,7 @@ export async function addBankExpenseRule(
   const rules = await listBankExpenseRules();
   const rule: BankExpenseRule = {
     id: `r_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
-    pattern, worksiteId: input.worksiteId, supplierName: input.supplierName.trim(), notes: input.notes?.trim() || null,
+    pattern, worksiteId: input.worksiteId, supplierName: input.supplierName.trim(), contactId: input.contactId ?? null, notes: input.notes?.trim() || null,
     createdAt: new Date().toISOString(), createdById: actorId,
   };
   await saveRules([...rules.filter((r) => norm(r.pattern) !== norm(pattern)), rule]);
@@ -208,11 +213,26 @@ async function applyRules(rules: BankExpenseRule[]): Promise<number> {
     const rule = rules.find((r) => ruleMatches(r.pattern, text));
     if (!rule) continue;
     try {
-      await createExpenseFromBankTx(tx.id, { worksiteId: rule.worksiteId, supplierName: rule.supplierName, notes: rule.notes }, rule.createdById, 'rule');
+      await createExpenseFromBankTx(tx.id, { worksiteId: rule.worksiteId, supplierName: rule.supplierName, contactId: rule.contactId ?? null, notes: rule.notes }, rule.createdById, 'rule');
       created++;
     } catch (e) {
       console.warn('[bank-expense] règle', rule.pattern, 'non appliquée à', tx.id, (e as Error).message);
     }
   }
   return created;
+}
+
+/**
+ * Fiche fournisseur probable pour un nom lu sur le relevé (« BMW FINANCIAL SERVICES BELGIUM NV », « AXA ») :
+ * un fournisseur dont le nom contient le 1er mot significatif, le plus court d'abord (« AXA » avant « AXA Bank »).
+ */
+export async function guessSupplier(name: string | null | undefined): Promise<{ id: string; name: string } | null> {
+  const stop = new Set(['sa', 'nv', 'srl', 'bv', 'bvba', 'sprl', 'the', 'les', 'van', 'de', 'la', 'le']);
+  const word = norm(name ?? '').split(/[^a-z0-9]+/).find((w) => w.length >= 3 && !stop.has(w));
+  if (!word) return null;
+  const rows = await prisma.contact.findMany({
+    where: { type: { in: ['supplier', 'both'] }, name: { contains: word, ...insensitive } },
+    select: { id: true, name: true }, take: 10,
+  });
+  return rows.sort((a, b) => a.name.length - b.name.length)[0] ?? null;
 }

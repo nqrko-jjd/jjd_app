@@ -17,6 +17,7 @@ export function ContactPicker({
   placeholder,
   required,
   disabled,
+  browse,
 }: {
   id?: string;
   value: string;
@@ -28,13 +29,15 @@ export function ContactPicker({
   placeholder?: string;
   required?: boolean;
   disabled?: boolean;
+  /** affiche la liste dès le clic dans le champ vide */
+  browse?: boolean;
 }) {
   async function search(q: string): Promise<PickerItem[]> {
     const kindParam = kindFilter?.length ? `&kind=${kindFilter.join(',')}` : '';
     const r = await api<{ items: { id: string; name: string; city: string | null; syndic?: { name: string } | null }[] }>(
       `/api/contacts?type=${typeFilter}&q=${encodeURIComponent(q)}${kindParam}&pageSize=20`,
     );
-    return r.items.slice(0, 8).map((c) => ({ id: c.id, name: c.name, sub: [c.syndic ? `c/o ${c.syndic.name}` : null, c.city].filter(Boolean).join(' · ') || undefined }));
+    return r.items.slice(0, q.trim() ? 8 : 20).map((c) => ({ id: c.id, name: c.name, sub: [c.syndic ? `c/o ${c.syndic.name}` : null, c.city].filter(Boolean).join(' · ') || undefined }));
   }
   async function resolveLabel(cid: string): Promise<string | null> {
     try {
@@ -56,6 +59,7 @@ export function ContactPicker({
       placeholder={placeholder ?? (typeFilter === 'supplier' ? 'Nom du fournisseur…' : 'Nom du client…')}
       required={required}
       disabled={disabled}
+      browseOnFocus={browse}
       renderCreate={(query, onCreated, onCancel) => (
         <ContactQuickCreate initialName={query} typeFilter={typeFilter === 'all' ? 'client' : typeFilter}defaultKind={kindFilter?.length === 1 ? kindFilter[0] : undefined} onCreated={onCreated} onCancel={onCancel} />
       )}

@@ -5,6 +5,7 @@ import { api } from '@/lib/api';
 import { Money } from '@/lib/ui';
 import { WorksitePicker, type WsPickerOption } from '@/components/WorksitePicker';
 import { WORKSITE_STATUS_OPEN } from '@jjd/shared';
+import { ContactPicker } from '@/components/ContactPicker';
 
 interface FleetHit { kind: 'financing' | 'insurance' | 'fine'; vehicleId: string | null; fineId: string | null; worksiteId: string | null; supplierName: string; label: string }
 interface WsRef { id: string; ref: string; title: string; city?: string | null }
@@ -15,11 +16,12 @@ interface WsRef { id: string; ref: string; title: string; city?: string | null }
  * En option, une règle fait la même chose pour les prochains prélèvements identiques.
  */
 export function BankExpenseCreate({ txId, onDone }: { txId: string; onDone: (message: string) => void }) {
-  const { data: draft } = useApi<{ supplierName: string; pattern: string; remaining: number; fleet: FleetHit | null }>(`/api/finance/bank/${txId}/expense-draft`);
+  const { data: draft } = useApi<{ supplierName: string; pattern: string; remaining: number; fleet: FleetHit | null; supplier: { id: string; name: string } | null }>(`/api/finance/bank/${txId}/expense-draft`);
   const { data: overhead } = useApi<{ items: WsRef[] }>('/api/worksites?kind=overhead');
   const { data: projects } = useApi<{ items: WsRef[] }>(`/api/worksites?status=${WORKSITE_STATUS_OPEN.join(',')}`);
   const [worksiteId, setWorksiteId] = useState('');
   const [supplierName, setSupplierName] = useState('');
+  const [contactId, setContactId] = useState('');
   const [notes, setNotes] = useState('');
   const [withRule, setWithRule] = useState(true);
   const [pattern, setPattern] = useState('');
@@ -28,7 +30,8 @@ export function BankExpenseCreate({ txId, onDone }: { txId: string; onDone: (mes
 
   useEffect(() => {
     if (!draft) return;
-    setSupplierName(draft.supplierName);
+    setSupplierName(draft.supplier?.name ?? draft.supplierName);
+    setContactId(draft.supplier?.id ?? '');
     setPattern(draft.pattern);
     // reconnu via la flotte : poste pré-choisi, et pas besoin de règle (la fiche véhicule suffit pour les mois suivants)
     if (draft.fleet) { if (draft.fleet.worksiteId) setWorksiteId(draft.fleet.worksiteId); setNotes(draft.fleet.label); setWithRule(false); }
@@ -42,13 +45,13 @@ export function BankExpenseCreate({ txId, onDone }: { txId: string; onDone: (mes
 
   async function submit() {
     if (!worksiteId) { setError('Choisissez le poste ou le chantier.'); return; }
-    if (!supplierName.trim()) { setError('Indiquez le fournisseur (banque, assureur…).'); return; }
+    if (!contactId) { setError('Choisissez le fournisseur dans la liste, ou créez-le.'); return; }
     if (withRule && pattern.trim().length < 3) { setError('Le texte de la règle doit faire au moins 3 caractères.'); return; }
     setBusy(true); setError('');
     try {
       const r = await api<{ ruleApplied: number }>(`/api/finance/bank/${txId}/expense`, {
         method: 'POST',
-        body: { worksiteId, supplierName: supplierName.trim(), notes: notes.trim() || null, rulePattern: withRule ? pattern.trim() : null, vehicleId: draft?.fleet?.vehicleId ?? null, fineId: draft?.fleet?.fineId ?? null },
+        body: { worksiteId, contactId, supplierName: supplierName.trim(), notes: notes.trim() || null, rulePattern: withRule ? pattern.trim() : null, vehicleId: draft?.fleet?.vehicleId ?? null, fineId: draft?.fleet?.fineId ?? null },
       });
       onDone(
         'Dépense créée et rapprochée.'
@@ -77,7 +80,8 @@ export function BankExpenseCreate({ txId, onDone }: { txId: string; onDone: (mes
         </div>
         <div className="field">
           <label htmlFor="bank-exp-supplier">Fournisseur</label>
-          <input id="bank-exp-supplier" className="input" value={supplierName} onChange={(e) => setSupplierName(e.target.value)} placeholder="Belfius, AXA, Interparking…" />
+          <ContactPicker id="bank-exp-supplier" browse typeFilter="supplier" value={contactId} onChange={(id, label) => { setContactId(id); setSupplierName(label); }} placeholder="Chercher : Belfius, AXA, Interparking…" />
+          {!contactId && draft?.supplierName && <span className="muted" style={{ fontSize: '0.76rem' }}>Sur le relevé : {draft.supplierName}</span>}
         </div>
         <div className="field" style={{ gridColumn: '1 / -1' }}>
           <label htmlFor="bank-exp-notes">Note (facultatif)</label>

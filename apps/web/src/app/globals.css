@@ -2678,3 +2678,21 @@ body.nav-collapsed .navlink .nav-badge { position: absolute; top: 2px; right: 2p
 .modal .field .select { cursor: pointer; }
 .modal .field .input:hover, .modal .field .select:hover { border-color: #5f7f6e; }
 .modal .field .input:focus, .modal .field .select:focus { border-color: #225a42; box-shadow: 0 0 0 3px rgba(50, 105, 74, .2); }
+
+/* Listes déroulantes des champs « chercher » (chantier, contact…) : bien détachées du formulaire */
+.picker-menu {
+  position: absolute; z-index: 80; top: calc(100% + 4px); left: 0; right: 0;
+  margin: 0; padding: 0.3rem; list-style: none;
+  background: #fff; border: 1.5px solid var(--primary); border-radius: 10px;
+  box-shadow: 0 14px 36px rgba(13, 38, 31, 0.28), 0 2px 6px rgba(13, 38, 31, 0.12);
+  max-height: 300px; overflow-y: auto;
+}
+.picker-menu > li { padding: 0.45rem 0.6rem; border-radius: 7px; cursor: pointer; font-size: 0.87rem; color: var(--ink); }
+.picker-menu > li + li { border-top: 1px solid #eef2ef; }
+.picker-menu > li.is-active { background: var(--primary-soft); }
+.picker-menu > li.is-selected { background: #dfe9e2; }
+.picker-menu > li.is-create { color: var(--primary); font-weight: 600; }
+.picker-menu > li.is-empty { cursor: default; color: var(--ink-3); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .picker-menu { background: var(--surface); } :root:not([data-theme="light"]) .picker-menu > li + li { border-top-color: var(--line); } }
+:root[data-theme="dark"] .picker-menu { background: var(--surface); }
+:root[data-theme="dark"] .picker-menu > li + li { border-top-color: var(--line); }

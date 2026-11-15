@@ -75,26 +75,16 @@ export function WorksitePicker({
         }}
       />
       {open && (
-        <ul
-          style={{
-            position: 'absolute', zIndex: 30, top: 'calc(100% + 2px)', left: 0, right: 0,
-            margin: 0, padding: '0.25rem', listStyle: 'none',
-            background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: '8px',
-            boxShadow: '0 6px 20px rgba(0,0,0,0.15)', maxHeight: '280px', overflowY: 'auto',
-          }}
-        >
+        <ul className="picker-menu" role="listbox">
           {filtered.length === 0 && (
-            <li style={{ padding: '0.5rem 0.6rem', fontSize: '0.85rem', color: 'var(--ink-3)' }}>Aucun chantier trouvé.</li>
+            <li className="is-empty">Aucun chantier trouvé.</li>
           )}
           {filtered.map((w, i) => (
             <li
               key={w.id}
               onMouseDown={(e) => { e.preventDefault(); pick(w); }}
               onMouseEnter={() => setActive(i)}
-              style={{
-                padding: '0.45rem 0.6rem', borderRadius: '6px', cursor: 'pointer',
-                background: i === active ? 'var(--surface-2)' : (w.id === value ? 'var(--primary-soft)' : 'transparent'),
-              }}
+              className={i === active ? 'is-active' : w.id === value ? 'is-selected' : undefined}
             >
               <div style={{ fontWeight: 700, fontSize: '0.87rem' }}>
                 {w.ref} <span style={{ fontWeight: 400, color: 'var(--ink-2)' }}>· {w.title}</span>

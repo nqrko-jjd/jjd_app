@@ -33,6 +33,7 @@ import { findPurchaseCandidates } from '../lib/purchase-candidates.js';
 import { normalizeParts, replaceAllocations, mainWorksite, type AllocPart } from '../lib/ledger-allocation.js';
 import { mergeEntries, invoiceBaseNumber } from '../lib/ledger-merge.js';
 import { scanLinesBatch, linesStats, articleSummary, articleOccurrences, getHidden, setHidden, type ArticleFilters } from '../lib/purchase-lines.js';
+import { getCompany } from '../lib/documents.js';
 
 export const expensesRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
@@ -669,9 +670,15 @@ expensesRouter.get(
 const foxIds = z.object({ ids: z.array(z.string().min(1)).min(1).max(300) });
 expensesRouter.post('/fox-export', requireAuth(...OFFICE), asyncHandler(async (req, res) => {
   const ids = [...new Set(foxIds.parse(req.body).ids)];
-  const items = await prisma.ledgerEntry.findMany({ where: { id: { in: ids } }, include: { contact: { select: { name: true, vat: true } } }, orderBy: { id: 'asc' } });
+  const withXml = req.body?.xml === true; // + XML UBL (comme avec Peppol), pour l'import dans le logiciel du comptable
+  const items = await prisma.ledgerEntry.findMany({
+    where: { id: { in: ids } },
+    include: { contact: { select: { name: true, vat: true, address: true, postalCode: true, city: true } }, receipts: { select: { source: true, xmlPath: true } } },
+    orderBy: { id: 'asc' },
+  });
   if (items.length !== ids.length) throw new HttpError(404, 'Une dépense sélectionnée est introuvable. Actualisez la liste.');
-  const zip = await prepareFoxZip(items);
+  const co = withXml ? await getCompany() : null;
+  const zip = await prepareFoxZip(items, { xml: withXml, customer: co ? { name: co.name, vat: co.vat || 'BE1003823997', street: co.address || null, postalCode: co.postalCode || null, city: co.city || null } : undefined });
   await prisma.$transaction([
     prisma.ledgerEntry.updateMany({ where: { id: { in: ids } }, data: { foxExportedAt: new Date() } }),
     prisma.auditLog.create({ data: { actorId: req.user!.id, action: 'fox_export', entity: 'ledgerEntry', meta: { ids } } }),

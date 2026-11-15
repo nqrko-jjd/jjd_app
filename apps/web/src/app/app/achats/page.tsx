@@ -330,16 +330,17 @@ function AchatsInner() {
   const foxEligible = (e: Expense) => e.direction === 'purchase' || (e.direction === 'credit_note' && !/vente|dit auto/i.test(e.categoryRaw ?? ''));
   const selectedExpenses = allExpenses.filter(e => selected.has(e.id));
   const foxSelection = selectedExpenses.length === selected.size && selectedExpenses.length > 0 && selectedExpenses.every(foxEligible);
+  const [foxXml, setFoxXml] = useState(true);
   async function exportFox() {
     if (!foxSelection) return;
     if (selectedExpenses.some(e => e.foxTransmittedAt) && !window.confirm('La sélection contient des factures déjà marquées transmises à Fox. Les télécharger à nouveau ?')) return;
     setFoxBusy(true); setFoxNotice('');
     try {
-      const url = await apiBlobUrl('/api/finance/expenses/fox-export', { method: 'POST', body: { ids: [...selected] } });
+      const url = await apiBlobUrl('/api/finance/expenses/fox-export', { method: 'POST', body: { ids: [...selected], xml: foxXml } });
       const a = document.createElement('a');
       a.href = url; a.download = 'fox-' + new Date().toISOString().slice(0, 10) + '.zip'; a.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 60000);
-      setFoxNotice('ZIP préparé. Extrayez les PDF, glissez-les dans Fox, puis confirmez ci-dessous le dépôt réussi. Aucune facture n’est encore marquée transmise.');
+      setFoxNotice(`ZIP préparé${foxXml ? ' (PDF + XML UBL)' : ''}. Extrayez-le, glissez les fichiers dans Fox, puis confirmez ci-dessous le dépôt réussi. Aucune facture n’est encore marquée transmise.`);
       reload();
     } catch (e) { setFoxNotice((e as Error).message); }
     finally { setFoxBusy(false); }
@@ -581,6 +582,9 @@ function AchatsInner() {
         <div className="row" style={{ flexWrap: 'wrap', gap: 8 }}>
           <button className="btn" onClick={() => { setFox('pending'); setType(''); }}>Voir les factures à transmettre</button>
           <button className="btn" onClick={() => setSelected(new Set(viewRows.filter(e => foxEligible(e) && e.hasPdf && !e.foxTransmittedAt).slice(0, 300).map(e => e.id)))}>Sélectionner les PDF à transmettre de cette page</button>
+          <label className="row" style={{ gap: 6, alignItems: 'center' }} title="Un fichier XML (format Peppol / UBL) à côté de chaque PDF, avec le PDF joint dedans : celui reçu par Peppol tel quel, sinon généré depuis la dépense.">
+            <input type="checkbox" checked={foxXml} onChange={(e) => setFoxXml(e.target.checked)} /> Avec les XML (UBL, comme Peppol)
+          </label>
           <button className="btn primary" disabled={!foxSelection || foxBusy || selected.size > 300} onClick={exportFox}>{foxBusy ? 'Traitement…' : 'Télécharger pour Fox (' + selected.size + ')'}</button>
           <button className="btn" disabled={!foxSelection || foxBusy || selected.size > 300} onClick={() => confirmFox(true)}>Marquer comme transmis à Fox</button>
         </div>

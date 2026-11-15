@@ -4,14 +4,21 @@ import { createHash } from 'node:crypto';
 import { zipSync } from 'fflate';
 import { HttpError } from './http.js';
 import { UPLOADS_DIR } from './media.js';
+import { buildPurchaseUbl, purchaseAmounts, type UblParty } from './ubl-purchase.js';
 
-type FoxEntry = { id: string; direction: string; categoryRaw: string | null; pdfPath: string | null; docNumber: string | null; supplierName: string | null; contactId: string | null; contact: { name: string; vat: string | null } | null };
+type FoxEntry = {
+  id: string; direction: string; categoryRaw: string | null; pdfPath: string | null; docNumber: string | null; supplierName: string | null; contactId: string | null;
+  contact: { name: string; vat: string | null; address?: string | null; postalCode?: string | null; city?: string | null } | null;
+  // pour le XML (facultatif)
+  date?: Date | null; dueDate?: Date | null; ht?: number; ttc?: number | null; vatRate?: number | null; supplierVat?: string | null;
+  receipts?: { source: string; xmlPath: string | null }[];
+};
 const normalize = (value: string) => value.normalize('NFKC').trim().toUpperCase().replace(/\s+/g, '');
 export function foxEligible(e: Pick<FoxEntry, 'direction' | 'categoryRaw'>) {
   return e.direction === 'purchase' || (e.direction === 'credit_note' && !/vente|dit auto/i.test(e.categoryRaw ?? ''));
 }
 /** All-or-nothing: never silently omit a selected document or export duplicate PDFs. */
-export async function prepareFoxZip(items: FoxEntry[]) {
+export async function prepareFoxZip(items: FoxEntry[], opts: { xml?: boolean; customer?: UblParty } = {}) {
   const root = await realpath(UPLOADS_DIR);
   const files: Record<string, Uint8Array> = {};
   const hashes = new Set<string>(), references = new Set<string>();
@@ -35,7 +42,32 @@ export async function prepareFoxZip(items: FoxEntry[]) {
     if (hashes.has(hash) || (ref && references.has(ref))) throw new HttpError(409, label + ' : doublon possible dans la sélection. Vérifiez les achats avant l’export Fox.');
     hashes.add(hash); if (ref) references.add(ref);
     const safe = (value: string) => value.replace(/[^\p{L}\p{N}._-]+/gu, '-').slice(0, 90);
-    files[safe(e.contact?.name || e.supplierName || 'Fournisseur') + '_' + safe(label) + '_' + e.id + '.pdf'] = bytes;
+    const base = safe(e.contact?.name || e.supplierName || 'Fournisseur') + '_' + safe(label) + '_' + e.id;
+    files[base + '.pdf'] = bytes;
+    // XML UBL à côté du PDF (même nom) : celui reçu par Peppol tel quel, sinon généré avec le PDF joint dedans
+    if (opts.xml) {
+      const peppolXml = e.receipts?.find((r) => r.source === 'peppol' && r.xmlPath)?.xmlPath;
+      let xml: Uint8Array | null = null;
+      if (peppolXml) {
+        const xf = path.resolve(root, peppolXml.replace(/^\/?uploads\//, ''));
+        if (!path.relative(root, xf).startsWith('..')) xml = await readFile(xf).catch(() => null);
+      }
+      if (!xml) {
+        const a = purchaseAmounts({ ht: e.ht ?? 0, ttc: e.ttc ?? null, vatRate: e.vatRate ?? null });
+        xml = Buffer.from(buildPurchaseUbl({
+          kind: e.direction === 'credit_note' ? 'credit_note' : 'invoice',
+          number: e.docNumber || e.id,
+          issueDate: e.date ?? new Date(),
+          dueDate: e.dueDate ?? null,
+          supplier: { name: e.contact?.name || e.supplierName || 'Fournisseur', vat: e.contact?.vat ?? e.supplierVat ?? null, street: e.contact?.address ?? null, postalCode: e.contact?.postalCode ?? null, city: e.contact?.city ?? null },
+          customer: opts.customer ?? { name: 'JJD Consult SRL', vat: 'BE1003823997' },
+          ht: a.ht, vatRate: a.rate, vat: a.vat,
+          description: `Facture ${label}${e.categoryRaw ? ` · ${e.categoryRaw}` : ''}`,
+          pdf: { filename: base + '.pdf', bytes },
+        }), 'utf8');
+      }
+      files[base + '.xml'] = xml;
+    }
   }
   return Buffer.from(zipSync(files, { level: 0 }));
 }

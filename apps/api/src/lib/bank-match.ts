@@ -189,119 +189,57 @@ export async function documentIdForLedger(ledgerId: string): Promise<string | nu
   return docs.length === 1 ? docs[0]!.id : null;
 }
 
-export interface TxLite {
-  id: string;
-  amount: number | null;
-  bookingDate: Date | null;
-  structuredComm: string | null;
-  counterpartyName: string | null;
-  side: string | null; // "in" | "out"
-}
-export interface LedgerLite {
-  id: string;
-  ttc: number | null;
-  ht: number;
-  date: Date | null;
-  direction: string; // sale | purchase | credit_note
-  bankComm: string | null;
-  supplierName: string | null;
-  contactName: string | null;
-  documentId: string | null;
-}
+export { pickMatch, partyWords, nameOverlap, type TxLite, type LedgerLite, type AliasCheck } from './bank-match-pure.js';
+import { pickMatch, partyWords, partyCoherent, norm, digits, DAY, amountOf, sideMatches, type TxLite, type LedgerLite, type AliasCheck } from './bank-match-pure.js';
 
-const digits = (s: string | null | undefined) => (s ?? '').replace(/\D/g, '');
-const norm = (s: string | null | undefined) =>
-  (s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
 
-const DAY = 86_400_000;
-
-// mots trop génériques pour discriminer une contrepartie
-const STOP = new Set(['acp', 'sprl', 'bvba', 'srl', 'nv', 'sa', 'the', 'les', 'des', 'and', 'ets', 'via']);
-/** Deux libellés partagent-ils un mot significatif (> 3 lettres, hors mots vides) ? */
-export function nameOverlap(a: string, b: string): boolean {
-  const keep = (w: string) => w.length > 3 && !STOP.has(w);
-  const wa = new Set(norm(a).split(/\s+/).filter(keep));
-  return norm(b).split(/\s+/).filter(keep).some((w) => wa.has(w));
-}
-
-function sideMatches(tx: TxLite, l: LedgerLite): boolean {
-  // Sens de transaction inconnu (import incomplet) : `!== 'out'` et `!== 'in'` sont
-  // tous les deux vrais pour null, donc un achat ET une vente passaient le filtre à
-  // tort — repéré via un faux rapprochement (paiement client matché à un achat sans
-  // rapport, tous deux à 110€, le sens de la transaction n'ayant jamais été importé).
-  // Sans le sens, impossible de confirmer la cohérence : on écarte plutôt que deviner.
-  if (!tx.side) return false;
-  if (l.direction === 'sale') return tx.side !== 'out'; // encaissement
-  if (l.direction === 'purchase') return tx.side !== 'in'; // décaissement
-  return true; // note de crédit : les deux sens possibles
-}
-
-const amountOf = (l: LedgerLite) => Math.abs(l.ttc ?? l.ht ?? 0);
-
-/** Cherche la meilleure écriture pour une transaction. */
-export function pickMatch(tx: TxLite, candidates: LedgerLite[]): { ledgerId: string; confidence: 'strong' | 'good' } | null {
-  const amt = Math.abs(tx.amount ?? 0);
-  if (!amt) return null;
-  const ledgers = candidates.length > 1 ? [...new Map(candidates.map((l) => [l.id, l])).values()] : candidates;
-
-  // 1. communication structurée
-  if (tx.structuredComm && tx.structuredComm.length >= 10) {
-    const hit = ledgers.filter((l) => digits(l.bankComm) && digits(l.bankComm) === tx.structuredComm);
-    if (hit.length === 1) return { ledgerId: hit[0]!.id, confidence: 'strong' };
-  }
-
-  // 2. montant + date + sens
-  const near = ledgers.filter((l) => {
-    if (!sideMatches(tx, l)) return false;
-    if (Math.abs(amountOf(l) - amt) > 0.02) return false;
-    if (tx.bookingDate && l.date && Math.abs(tx.bookingDate.getTime() - l.date.getTime()) > 45 * DAY) return false;
-    return true;
-  });
-  // Facture annulée par une note de crédit du MÊME montant : l'encaissement (entrant) va sur la facture, le remboursement (sortant) sur la
-  // note de crédit — sans cela le même montant donnait deux candidats et rien n'était rapproché.
-  if (tx.side === 'in' && near.some((l) => l.direction === 'sale')) {
-    const sales = near.filter((l) => l.direction !== 'credit_note');
-    if (sales.length === 1) return { ledgerId: sales[0]!.id, confidence: 'good' };
-    near.splice(0, near.length, ...sales);
-  }
-  if (near.length === 1) return { ledgerId: near[0]!.id, confidence: 'good' };
-
-  // Paiement récurrent (loyer, abonnement) : même tiers, même montant chaque mois. On retient l'écriture la plus proche en
-  // date quand elle est nettement plus proche que les autres (≤ 20 jours, et au moins 10 jours d'avance).
-  if (near.length > 1 && tx.bookingDate) {
-    const party = (l: LedgerLite) => norm(l.supplierName ?? l.contactName);
-    const first = party(near[0]!);
-    if (first && near.every((l) => party(l) === first)) {
-      const ranked = near.filter((l) => l.date)
-        .map((l) => ({ l, d: Math.abs(tx.bookingDate!.getTime() - l.date!.getTime()) / DAY }))
-        .sort((x, y) => x.d - y.d);
-      if (ranked.length >= 2 && ranked[0]!.d <= 20 && ranked[1]!.d - ranked[0]!.d >= 10) return { ledgerId: ranked[0]!.l.id, confidence: 'good' };
-    }
-  }
-
-  // 3. montant + date + nom de contrepartie (départage plusieurs candidats)
-  if (near.length > 1 && tx.counterpartyName) {
-    const byName = near.filter(
-      (l) => nameOverlap(tx.counterpartyName!, l.supplierName ?? '') || nameOverlap(tx.counterpartyName!, l.contactName ?? ''),
-    );
-    if (byName.length === 1) return { ledgerId: byName[0]!.id, confidence: 'good' };
-  }
-
-  // 4. montant + sens + nom, sans limite de date — paiements très en retard (> 45 j) où
-  // la date de l'écriture (émission de la facture, souvent un artefact d'import historique)
-  // n'a jamais reflété une vraie date de paiement. Restreint à une correspondance de montant
-  // UNIQUE dans tout le grand livre + nom de contrepartie cohérent, pour limiter le risque de
-  // faux positif malgré l'absence de filtre sur la date.
-  if (tx.counterpartyName) {
-    const sameAmount = ledgers.filter((l) => sideMatches(tx, l) && Math.abs(amountOf(l) - amt) <= 0.02);
-    if (sameAmount.length === 1) {
-      const l = sameAmount[0]!;
-      if (nameOverlap(tx.counterpartyName, l.supplierName ?? '') || nameOverlap(tx.counterpartyName, l.contactName ?? '')) {
-        return { ledgerId: l.id, confidence: 'good' };
+/** Alias confirmés : libellé bancaire → fournisseur, appris des rapprochements faits ou validés à la main. */
+export async function buildAliasCheck(): Promise<AliasCheck> {
+  // alias confirmés : libellé bancaire → fournisseur, appris des rapprochements faits ou validés à la main
+  const aliasMap = new Map<string, Set<string>>();
+  {
+    const confirmed = await prisma.bankTransaction.findMany({
+      where: { matchConfidence: { in: ['manual', 'strong'] }, amount: { lt: 0 } },
+      select: { counterpartyName: true, description: true, matches: { select: { ledgerEntry: { select: { supplierName: true, contact: { select: { name: true } } } } } } },
+    });
+    for (const t of confirmed) {
+      const w = partyWords(t)[0];
+      if (!w) continue;
+      for (const m of t.matches) {
+        for (const n of [m.ledgerEntry?.supplierName, m.ledgerEntry?.contact?.name]) {
+          if (!n) continue;
+          const set = aliasMap.get(w) ?? new Set<string>();
+          set.add(norm(n));
+          aliasMap.set(w, set);
+        }
       }
     }
   }
-  return null;
+  return (tx, l) => {
+    const set = aliasMap.get(partyWords(tx)[0] ?? '');
+    return !!set && [l.supplierName, l.contactName].some((n) => !!n && set.has(norm(n)));
+  };
+}
+
+/**
+ * Rapprochements automatiques « au montant » douteux : la transaction est liée à un achat dont le fournisseur
+ * ne correspond pas au libellé bancaire (ni nom commun, ni alias confirmé). À revoir à la main.
+ */
+export async function suspiciousMatchTxIds(): Promise<string[]> {
+  const alias = await buildAliasCheck();
+  const txs = await prisma.bankTransaction.findMany({
+    where: { matchConfidence: 'good', matches: { some: { ledgerEntryId: { not: null } } } },
+    select: {
+      id: true, amount: true, bookingDate: true, structuredComm: true, counterpartyName: true, side: true, description: true,
+      matches: { select: { ledgerEntry: { select: { id: true, ttc: true, ht: true, date: true, direction: true, bankComm: true, supplierName: true, documentId: true, contact: { select: { name: true } } } } } },
+    },
+  });
+  return txs.filter((t) => t.matches.some((m) => {
+    const l = m.ledgerEntry;
+    if (!l) return false;
+    const lite: LedgerLite = { id: l.id, ttc: l.ttc, ht: l.ht, date: l.date, direction: l.direction, bankComm: l.bankComm, supplierName: l.supplierName, contactName: l.contact?.name ?? null, documentId: l.documentId };
+    return !partyCoherent(t as TxLite, lite, alias);
+  })).map((t) => t.id);
 }
 
 /**
@@ -335,6 +273,8 @@ export async function autoMatchAll(
     select: { id: true, amount: true, bookingDate: true, structuredComm: true, counterpartyName: true, side: true, description: true, communication: true, counterpartyAccount: true },
     orderBy: { bookingDate: 'desc' },
   });
+
+  const alias = await buildAliasCheck();
 
   const ledgerRows = await prisma.ledgerEntry.findMany({
     select: {
@@ -424,7 +364,7 @@ export async function autoMatchAll(
     if (tx.structuredComm) pool.push(...(byComm.get(tx.structuredComm) ?? []));
     for (let d = -2; d <= 2; d++) pool.push(...(byAmount.get(amt + d) ?? []));
     const open = pool.filter((l) => (paid.get(l.id) ?? 0) + 0.02 < amountOf(l)); // une écriture déjà soldée par d'autres paiements n'est plus candidate
-    const m = pickMatch(tx as TxLite, open);
+    const m = pickMatch(tx as TxLite, open, alias);
     if (m) {
       const amount = round2(Math.min(Math.abs(tx.amount ?? 0), outstanding(ledgers.find(l => l.id === m.ledgerId)!)));
       if (amount <= 0.01) continue;

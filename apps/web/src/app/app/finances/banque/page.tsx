@@ -379,6 +379,7 @@ function BanqueInner() {
         <select className="select" style={{ maxWidth: 180 }} value={matched} onChange={(e) => setMatched(e.target.value)}>
           <option value="0">À rapprocher</option>
           <option value="1">Rapprochées</option>
+          <option value="suspect">À vérifier (rapprochement douteux)</option>
           <option value="">{tr("Toutes")}</option>
         </select>
         <select className="select" style={{ maxWidth: 150 }} value={bank} onChange={(e) => setBank(e.target.value)}>
@@ -413,6 +414,13 @@ function BanqueInner() {
         )}
       </div>
 
+      {matched === 'suspect' && (
+        <div className="card card-pad" style={{ marginBottom: '1rem', fontSize: '0.86rem', background: 'var(--warn-soft)' }}>
+          Rapprochements faits automatiquement « au montant », dont le fournisseur ne correspond pas au libellé bancaire
+          (ex. un Supercharger Tesla lié à un ticket Baustoff du même prix). Pour chacun : <strong>✕</strong> à côté de la facture
+          s’il est faux, ou <strong>« C’est bien ça »</strong> s’il est juste (il ne sera plus signalé, et le nom sera retenu pour la suite).
+        </div>
+      )}
       {loading && <SkeletonRows />}
 
       {error && !loading && <ErrorState message={error} onRetry={reload} />}
@@ -494,6 +502,9 @@ function BanqueInner() {
                             </div>
                           )}
                         </div>
+                      )}
+                      {matched === 'suspect' && t.matches.length > 0 && (
+                        <button className="btn" style={{ marginTop: 4, padding: '0.15rem 0.5rem', fontSize: '0.74rem' }} onClick={async () => { await api(`/api/finance/bank/${t.id}/confirm-match`, { method: 'POST' }); reload(); }}>✓ C’est bien ça</button>
                       )}
                       {(t.amount ?? 0) !== 0 && !t.pairedTx && (
                         <BankClientAssign

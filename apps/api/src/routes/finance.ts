@@ -8,7 +8,7 @@ import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, requirePartner, OFFICE } from '../lib/auth.js';
 import { consolidatedPnl, profitShare, forecastReceivable } from '../lib/consolidated.js';
 import { analytics } from '../lib/analytics.js';
-import { autoMatchAll, recomputeDocumentPayment, documentIdForLedger } from '../lib/bank-match.js';
+import { autoMatchAll, recomputeDocumentPayment, documentIdForLedger, suspiciousMatchTxIds } from '../lib/bank-match.js';
 import { parseBankCsv, decodeCsvBuffer, type ParsedBankRow } from '../lib/bank-csv.js';
 import { parseCardStatement, pdfToRawText, pdftotextAvailable } from '../lib/bank-pdf.js';
 import { parseScreenshots, screenshotImportAvailable } from '../lib/bank-screenshot.js';
@@ -286,6 +286,8 @@ financeRouter.get(
     }
     else if (matched === '1') and.push(RECONCILED);
     else if (matched === '0') and.push(UNRECONCILED);
+    // rapprochements automatiques douteux (montant identique, mais commerçant sans rapport avec le fournisseur)
+    else if (matched === 'suspect') and.push({ id: { in: await suspiciousMatchTxIds() } });
     // période : « du » / « au » (AAAA-MM-JJ, bornes incluses) ; le même jour des deux côtés = une date précise
     const isDay = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v));
     if (isDay(from)) and.push({ bookingDate: { gte: new Date(`${from}T00:00:00.000Z`) } });
@@ -765,6 +767,13 @@ financeRouter.get('/bank-expense-rules', requireAuth(...OFFICE), asyncHandler(as
 }));
 financeRouter.delete('/bank-expense-rules/:ruleId', requireAuth(...OFFICE), asyncHandler(async (req, res) => {
   await deleteBankExpenseRule(req.params.ruleId!);
+  res.json({ ok: true });
+}));
+
+/** « C'est bien ça » : un rapprochement automatique douteux confirmé passe en « manuel » (et sert d'alias ensuite). */
+financeRouter.post('/bank/:id/confirm-match', requireAuth(...OFFICE), asyncHandler(async (req, res) => {
+  const tx = await prisma.bankTransaction.update({ where: { id: req.params.id }, data: { matchConfidence: 'manual' } });
+  await prisma.auditLog.create({ data: { actorId: req.user!.id, action: 'bank_confirm_match', entity: 'bank_transaction', entityId: tx.id, meta: {} } });
   res.json({ ok: true });
 }));
 

@@ -14,7 +14,7 @@ import { parseCardStatement, pdfToRawText, pdftotextAvailable } from '../lib/ban
 import { parseScreenshots, screenshotImportAvailable } from '../lib/bank-screenshot.js';
 import { toCsv, readTableBuffer, pick } from '../lib/table-io.js';
 import { parseAmount, parseLooseDate } from '@jjd/shared';
-import { syncLedgerEntryForDocument } from '../lib/documents.js';
+import { syncLedgerEntryForDocument, creditedTtcMap } from '../lib/documents.js';
 import { supplierAccounts } from '../lib/supplier-account.js';
 import { allocationSnapshot, freezeLegacyAllocations } from '../lib/bank-allocation.js';
 import { purchaseRemaining } from '../lib/payment-tolerance.js';
@@ -422,7 +422,8 @@ async function alreadySettled(
     const paid = snapshot.docPaid.get(d.id) ?? d.paidAmount;
     ledgerRemaining.set(l.id, ['paid', 'credited', 'draft', 'declined'].includes(d.status) && !snapshot.docPaid.has(d.id) ? 0 : Math.max(0, Math.round((Math.abs(l.ttc ?? l.ht) - paid) * 100) / 100));
   }
-  const docRemaining = new Map(docs.map(d => [d.id, ['credited', 'declined', 'draft'].includes(d.status) ? 0 : snapshot.docPaid.has(d.id) ? Math.max(0, Math.round((Math.abs(d.totalTtc) - (snapshot.docPaid.get(d.id) ?? 0)) * 100) / 100) : d.status === 'paid' ? 0 : Math.max(0, Math.abs(d.totalTtc) - (d.paidAmount ?? 0))]));
+  const creditedOf = await creditedTtcMap(docs.map(d => d.id)); // notes de crédit déjà émises : déduites du reste à encaisser
+  const docRemaining = new Map(docs.map(d => [d.id, ['credited', 'declined', 'draft'].includes(d.status) ? 0 : snapshot.docPaid.has(d.id) ? Math.max(0, Math.round((Math.abs(d.totalTtc) - (snapshot.docPaid.get(d.id) ?? 0) - (creditedOf.get(d.id) ?? 0)) * 100) / 100) : d.status === 'paid' ? 0 : Math.max(0, Math.abs(d.totalTtc) - (d.paidAmount ?? 0) - (creditedOf.get(d.id) ?? 0))]));
   return { ledger: new Set([...ledgerRemaining].filter(([,a]) => a <= 0.01).map(([id]) => id)), doc: new Set([...docRemaining].filter(([,a]) => a <= 0.01).map(([id]) => id)), ledgerRemaining, docRemaining };
 }
 

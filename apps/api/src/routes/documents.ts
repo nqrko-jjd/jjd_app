@@ -824,7 +824,7 @@ documentsRouter.post(
     const amount = typeof req.body?.amount === 'number' ? req.body.amount : doc.totalTtc;
     const paidOn = req.body?.paidOn ? new Date(req.body.paidOn) : new Date();
     const paidAmount = Math.round((doc.paidAmount + amount) * 100) / 100;
-    const status = paidAmount + PAYMENT_TOLERANCE >= doc.totalTtc ? 'paid' : 'partial';
+    const status = paidAmount + (await creditedTtc(doc.id)) + PAYMENT_TOLERANCE >= doc.totalTtc ? 'paid' : 'partial'; // le crédit déjà émis se déduit du reste à payer
     const updated = await prisma.document.update({
       where: { id: doc.id },
       data: { paidAmount, paidOn: status === 'paid' ? paidOn : doc.paidOn, status },

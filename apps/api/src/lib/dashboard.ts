@@ -4,6 +4,7 @@ import { round2 } from '@jjd/shared';
 import { forecastReceivable } from './consolidated.js';
 import { allocationSnapshot } from './bank-allocation.js';
 import { purchaseRemaining } from './payment-tolerance.js';
+import { creditedTtcMap } from './documents.js';
 
 const DAY = 86_400_000;
 
@@ -132,8 +133,11 @@ export async function bureauDashboard() {
   const teamsOnSiteToday = new Set(todayEvents.map((e) => e.teamId).filter((id): id is string => !!id)).size;
   const fieldToday = await fieldTodayList(todayStart, todayEnd);
 
-  const overdueAmount = round2(overdue.reduce((s, d) => s + Math.max(0, (d.totalTtc || 0) - (d.paidAmount || 0)), 0));
-  const receivableAmount = round2(receivable.reduce((s, d) => s + Math.max(0, (d.totalTtc || 0) - (d.paidAmount || 0)), 0));
+  // reste à encaisser = total − paiements reçus − notes de crédit déjà émises sur la facture
+  const creditedOf = await creditedTtcMap([...overdue, ...receivable].map((d) => d.id));
+  const leftOf = (d: { id: string; totalTtc: number | null; paidAmount: number | null }) => Math.max(0, (d.totalTtc || 0) - (d.paidAmount || 0) - (creditedOf.get(d.id) ?? 0));
+  const overdueAmount = round2(overdue.reduce((s, d) => s + leftOf(d), 0));
+  const receivableAmount = round2(receivable.reduce((s, d) => s + leftOf(d), 0));
   const quotesPendingAmount = round2(quotesPending.reduce((s, d) => s + (d.totalHt || 0), 0));
   // fournisseurs : on compte le RESTE à payer (paiements partiels rapprochés en banque déduits), pas la facture entière
   const supplierPayments = supplierOverdue.length ? await allocationSnapshot() : null;

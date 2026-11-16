@@ -199,15 +199,31 @@ export async function creditedTtc(parentId: string): Promise<number> {
   return round2(cns.reduce((s, c) => s + Math.abs(c.totalTtc), 0));
 }
 
+/** Total TTC crédité par facture (notes de crédit émises rattachées), en valeur absolue — sert à déduire le crédit des « restes à payer ». */
+export async function creditedTtcMap(parentIds: string[]): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  const ids = [...new Set(parentIds)];
+  for (let i = 0; i < ids.length; i += 2000) {
+    const cns = await prisma.document.findMany({ where: { parentId: { in: ids.slice(i, i + 2000) }, kind: 'credit_note', lockedAt: { not: null } }, select: { parentId: true, totalTtc: true } });
+    for (const c of cns) if (c.parentId) out.set(c.parentId, round2((out.get(c.parentId) ?? 0) + Math.abs(c.totalTtc)));
+  }
+  return out;
+}
+
 /**
  * Une facture intégralement créditée (à la tolérance d'arrondi près) passe « créditée » : elle n'est plus à encaisser
- * et son statut de paiement n'est plus recalculé. Un crédit partiel ne change pas son statut. Idempotent.
+ * et son statut de paiement n'est plus recalculé. Un crédit PARTIEL est déduit du reste à payer ; s'il solde, avec les
+ * paiements déjà reçus, tout le montant, la facture passe « payée ». Idempotent.
  */
 export async function applyCreditToParent(parentId: string) {
-  const p = await prisma.document.findUnique({ where: { id: parentId }, select: { id: true, kind: true, status: true, totalTtc: true } });
+  const p = await prisma.document.findUnique({ where: { id: parentId }, select: { id: true, kind: true, status: true, totalTtc: true, paidAmount: true } });
   if (!p || (p.kind !== 'invoice' && p.kind !== 'deposit_invoice') || p.status === 'draft' || p.status === 'credited' || p.totalTtc <= 0) return;
-  if ((await creditedTtc(p.id)) + PAYMENT_TOLERANCE >= p.totalTtc) {
+  const credited = await creditedTtc(p.id);
+  if (credited + PAYMENT_TOLERANCE >= p.totalTtc) {
     await prisma.document.update({ where: { id: p.id }, data: { status: 'credited' } });
+    await syncLedgerEntryForDocument(p.id);
+  } else if (credited > 0 && p.paidAmount > 0 && ['sent', 'partial', 'overdue'].includes(p.status) && p.paidAmount + credited + PAYMENT_TOLERANCE >= p.totalTtc) {
+    await prisma.document.update({ where: { id: p.id }, data: { status: 'paid' } });
     await syncLedgerEntryForDocument(p.id);
   }
 }
@@ -309,7 +325,8 @@ export async function syncLedgerEntryForDocument(documentId: string) {
   const isCredit = doc.kind === 'credit_note';
   const sgn = (n: number) => (isCredit ? -Math.abs(n) : n); // une note de crédit réduit le CA : montants négatifs au grand livre
   // une note de crédit, ou une facture CRÉDITÉE (annulée), n'est jamais « à encaisser » au grand livre, même si elle a reçu un paiement partiel ou nul
-  const paymentStatus = isCredit || doc.status === 'credited' || (doc.totalTtc > 0 && doc.paidAmount + PAYMENT_TOLERANCE >= doc.totalTtc) ? 'Payé' : 'Non payé';
+  const creditedOnInvoice = isCredit ? 0 : await creditedTtc(doc.id); // un crédit partiel déjà émis compte comme « réglé » pour cette part
+  const paymentStatus = isCredit || doc.status === 'credited' || (doc.totalTtc > 0 && doc.paidAmount + creditedOnInvoice + PAYMENT_TOLERANCE >= doc.totalTtc) ? 'Payé' : 'Non payé';
   const supplierName = doc.billingName ?? doc.contact?.name ?? null;
   const period = deriveLedgerPeriod(doc.issuedOn);
 
@@ -363,7 +380,8 @@ export async function markOverdueInvoices(now: Date = new Date()) {
     where: { kind: { in: ['invoice', 'deposit_invoice'] }, status: { in: ['sent', 'partial', 'overdue'] }, paidAmount: { gt: 0 }, totalTtc: { gt: 0 } },
     select: { id: true, totalTtc: true, paidAmount: true },
   });
-  for (const d of nearlyPaid.filter((x) => x.paidAmount + PAYMENT_TOLERANCE >= x.totalTtc)) {
+  const creditedOf = await creditedTtcMap(nearlyPaid.map((x) => x.id));
+  for (const d of nearlyPaid.filter((x) => x.paidAmount + (creditedOf.get(x.id) ?? 0) + PAYMENT_TOLERANCE >= x.totalTtc)) {
     await prisma.document.update({ where: { id: d.id }, data: { status: 'paid' } });
     await syncLedgerEntryForDocument(d.id);
   }

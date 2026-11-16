@@ -278,7 +278,7 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
     setPlanOpen(true);
   }
   const isInvoiceLike = doc.kind === 'invoice' || doc.kind === 'deposit_invoice';
-  const remaining = Math.max(0, totals.totalTtc - doc.paidAmount);
+  const remaining = Math.max(0, totals.totalTtc - doc.paidAmount - (isInvoiceLike ? creditedTtc : 0)); // les notes de crédit déjà émises se déduisent du reste à payer
   const colspan = 5 + (showDiscount ? 1 : 0) + (showCost ? 1 : 0);
   function prepareDelivery() { setDeliveryOpen(true); requestAnimationFrame(() => document.getElementById('document-delivery')?.scrollIntoView({ behavior: 'smooth', block: 'start' })); }
 
@@ -725,6 +725,9 @@ export default function DocumentEditor({ params }: { params: Promise<{ id: strin
               ))}
               {isInvoiceLike && doc.paidAmount > 0 && (
                 <div className="doc-recap-row"><span>{doc.status === 'paid' ? 'Réglé' : 'Acompte déjà réglé'}</span><span>− {formatEur(doc.paidAmount)}</span></div>
+              )}
+              {isInvoiceLike && creditedTtc > 0.005 && (
+                <div className="doc-recap-row"><span>{creditedTtc + 0.5 >= Math.abs(doc.totalTtc) ? 'Facture créditée' : 'Notes de crédit'}</span><span>− {formatEur(creditedTtc)}</span></div>
               )}
               {isInvoiceLike && (
                 <div className="doc-recap-row strong"><span>Reste à payer</span><span>{formatEur(remaining)}</span></div>

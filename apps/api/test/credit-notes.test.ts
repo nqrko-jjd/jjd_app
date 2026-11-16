@@ -137,3 +137,33 @@ test('facture CRÉDITÉE : un paiement rattaché met à jour son « payé » san
   await prisma.bankTransactionMatch.deleteMany({ where: { bankTransactionId: tx.id } });
   await prisma.bankTransaction.delete({ where: { id: tx.id } });
 });
+
+test('crédit partiel + paiement du reste : la facture est soldée (le crédit se déduit du reste à payer)', async () => {
+  const inv = await issuedInvoice(1000); // 1 060 € TTC
+  assert.equal((await post(`/api/documents/${inv.id}/credit-note`, { amountTtc: 530, reason: 'moitié créditée', issue: true })).status, 201);
+  const { creditedTtcMap } = await import('../src/lib/documents.js');
+  assert.equal((await creditedTtcMap([inv.id])).get(inv.id), 530, 'le crédit émis est comptabilisé');
+  assert.notEqual((await prisma.document.findUniqueOrThrow({ where: { id: inv.id } })).status, 'credited', 'un crédit partiel ne « crédite » pas la facture');
+
+  // le client règle les 530 € restants : 530 payés + 530 crédités = 1 060 → payée (et non « partielle »)
+  const r = await post(`/api/documents/${inv.id}/mark-paid`, { amount: 530 });
+  assert.equal(r.status, 200);
+  assert.equal((await prisma.document.findUniqueOrThrow({ where: { id: inv.id } })).status, 'paid');
+  assert.equal((await prisma.ledgerEntry.findUniqueOrThrow({ where: { documentId: inv.id } })).paymentStatus, 'Payé');
+});
+
+test('paiement d\'abord, note de crédit partielle ensuite : la facture passe payée dès que le crédit solde le reste', async () => {
+  const inv = await issuedInvoice(1000); // 1 060 € TTC
+  assert.equal((await post(`/api/documents/${inv.id}/mark-paid`, { amount: 530 })).status, 200);
+  assert.equal((await prisma.document.findUniqueOrThrow({ where: { id: inv.id } })).status, 'partial');
+  assert.equal((await post(`/api/documents/${inv.id}/credit-note`, { amountTtc: 530, issue: true })).status, 201);
+  assert.equal((await prisma.document.findUniqueOrThrow({ where: { id: inv.id } })).status, 'paid');
+});
+
+test('crédit partiel sans paiement : la facture reste à encaisser', async () => {
+  const inv = await issuedInvoice(1000);
+  assert.equal((await post(`/api/documents/${inv.id}/credit-note`, { amountTtc: 530, issue: true })).status, 201);
+  const st = (await prisma.document.findUniqueOrThrow({ where: { id: inv.id } })).status;
+  assert.ok(['sent', 'overdue'].includes(st), `statut attendu « envoyée », reçu ${st}`);
+  assert.equal((await prisma.ledgerEntry.findUniqueOrThrow({ where: { documentId: inv.id } })).paymentStatus, 'Non payé');
+});

@@ -9,6 +9,7 @@ import { round2 } from '@jjd/shared';
 import { prisma } from '../db.js';
 import { insensitive } from './search.js';
 import { bureauDashboard } from './dashboard.js';
+import { creditedTtcMap } from './documents.js';
 import { analytics } from './analytics.js';
 import { worksiteMargin } from './worksite-margin.js';
 import { teamMonthlyStatement } from './statement.js';
@@ -168,11 +169,12 @@ export async function runDataTool(name: string, raw: Record<string, unknown>): P
       const i = schemas.unpaid_invoices.parse(raw);
       const rows = await prisma.document.findMany({
         where: { kind: { in: ['invoice', 'deposit_invoice'] }, status: i.overdueOnly ? 'overdue' : { in: ['sent', 'partial', 'overdue'] }, source: { not: 'demo' } },
-        select: { number: true, status: true, totalTtc: true, paidAmount: true, issuedOn: true, dueOn: true, contact: { select: { name: true } }, worksite: { select: { ref: true } } },
+        select: { id: true, number: true, status: true, totalTtc: true, paidAmount: true, issuedOn: true, dueOn: true, contact: { select: { name: true } }, worksite: { select: { ref: true } } },
       });
+      const creditedOf = await creditedTtcMap(rows.map((d) => d.id)); // notes de crédit déjà émises : déduites du reste dû
       const now = Date.now();
       const items = rows
-        .map((d) => ({ numero: d.number, statut: d.status, client: d.contact?.name ?? null, chantier: d.worksite?.ref ?? null, ttc: d.totalTtc, paye: d.paidAmount, resteTtc: round2(Math.max(0, d.totalTtc - d.paidAmount)), echeance: day(d.dueOn), retardJours: d.dueOn && d.dueOn.getTime() < now ? Math.floor((now - d.dueOn.getTime()) / 86_400_000) : 0 }))
+        .map((d) => ({ numero: d.number, statut: d.status, client: d.contact?.name ?? null, chantier: d.worksite?.ref ?? null, ttc: d.totalTtc, paye: d.paidAmount, credite: creditedOf.get(d.id) ?? 0, resteTtc: round2(Math.max(0, d.totalTtc - d.paidAmount - (creditedOf.get(d.id) ?? 0))), echeance: day(d.dueOn), retardJours: d.dueOn && d.dueOn.getTime() < now ? Math.floor((now - d.dueOn.getTime()) / 86_400_000) : 0 }))
         .filter((d) => d.resteTtc > 0.5)
         .sort((a, b) => b.resteTtc - a.resteTtc);
       return bounded({ nombre: items.length, totalResteTtc: round2(items.reduce((s, d) => s + d.resteTtc, 0)), plusGrosses: items.slice(0, 30) });

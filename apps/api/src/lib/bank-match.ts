@@ -24,7 +24,7 @@ import { applyBankExpenseRules } from './bank-expense.js';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../db.js';
 import { round2 } from '@jjd/shared';
-import { syncLedgerEntryForDocument } from './documents.js';
+import { syncLedgerEntryForDocument, creditedTtc } from './documents.js';
 import { allocationSnapshot, freezeLegacyAllocations } from './bank-allocation.js';
 import { PAYMENT_TOLERANCE, purchaseRemaining } from './payment-tolerance.js';
 
@@ -61,7 +61,9 @@ export async function recomputeDocumentPayment(documentId: string) {
   const paidAmount = snapshot.docPaid.get(documentId) ?? 0;
   const bookingDates = matches.map((m) => m.bankTransaction.bookingDate).filter((d): d is Date => !!d).sort((a, b) => b.getTime() - a.getTime());
   const paidOn = bookingDates[0] ?? null;
-  const status = credited ? 'credited' : matches.length === 0 ? 'sent' : paidAmount + PAYMENT_TOLERANCE >= doc.totalTtc ? 'paid' : 'partial';
+  // un crédit partiel déjà émis (note de crédit rattachée) se déduit du montant à encaisser : 1 240 € reçus + 1 240 € d'avoir soldent une facture de 2 480 €
+  const creditedOnInvoice = credited || matches.length === 0 ? 0 : await creditedTtc(documentId);
+  const status = credited ? 'credited' : matches.length === 0 ? 'sent' : paidAmount + creditedOnInvoice + PAYMENT_TOLERANCE >= doc.totalTtc ? 'paid' : 'partial';
 
   await prisma.document.update({ where: { id: documentId }, data: { status, paidAmount, paidOn } });
   await syncLedgerEntryForDocument(documentId);

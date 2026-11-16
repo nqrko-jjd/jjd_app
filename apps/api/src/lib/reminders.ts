@@ -10,7 +10,7 @@ import { prisma } from '../db.js';
 import { HttpError } from './http.js';
 import { formatEur, formatDateBE } from '@jjd/shared';
 import { emailConfigured, sendEmailWithPdf } from './doc-mail.js';
-import { getCompany } from './documents.js';
+import { getCompany, creditedTtcMap } from './documents.js';
 
 export interface ReminderStep { daysAfterDue: number; subject: string; body: string }
 export interface ReminderSettings { autoSend: boolean; copyToSelf: boolean; minBalance: number; minDaysBetween: number; steps: ReminderStep[] }
@@ -59,10 +59,11 @@ export function fillTemplate(t: string, v: Record<string, string>): string {
 type DocForReminder = {
   id: string; number: string | null; draftRef: string | null; totalTtc: number; paidAmount: number; dueOn: Date | null; structuredComm: string | null;
   billingEmail: string | null; billingName: string | null; contact: { id: string; name: string; email: string | null } | null;
+  creditedTtc?: number; // notes de crédit déjà émises sur cette facture : déduites du reste à réclamer
 };
 
 export function composeReminder(doc: DocForReminder, step: ReminderStep, company: { name: string; phone: string }, daysLate: number) {
-  const balance = round2(doc.totalTtc - doc.paidAmount);
+  const balance = round2(doc.totalTtc - doc.paidAmount - (doc.creditedTtc ?? 0));
   const vars = {
     client: doc.billingName ?? doc.contact?.name ?? '', numero: doc.number ?? doc.draftRef ?? '', montant: formatEur(doc.totalTtc), restant: formatEur(balance),
     echeance: doc.dueOn ? formatDateBE(doc.dueOn) : '', jours: String(daysLate), communication: doc.structuredComm ?? '—', societe: company.name, telephone: company.phone ?? '',
@@ -84,10 +85,11 @@ export async function computeProposals(now = new Date()): Promise<Proposal[]> {
     include: { contact: { select: { id: true, name: true, email: true, reminderMode: true } }, reminders: true },
     orderBy: { dueOn: 'asc' },
   });
+  const creditedOf = await creditedTtcMap(docs.map((d) => d.id));
   const out: Proposal[] = [];
   for (const d of docs) {
     if (d.contact?.reminderMode === 'off') continue;
-    const balance = round2(d.totalTtc - d.paidAmount);
+    const balance = round2(d.totalTtc - d.paidAmount - (creditedOf.get(d.id) ?? 0)); // jamais de relance pour la part déjà créditée
     if (balance < Math.max(0.5, settings.minBalance)) continue;
     const daysLate = Math.floor((now.getTime() - d.dueOn!.getTime()) / DAY);
     const reached = settings.steps.map((s, i) => ({ s, n: i + 1 })).filter((x) => x.s.daysAfterDue <= daysLate);
@@ -97,7 +99,7 @@ export async function computeProposals(now = new Date()): Promise<Proposal[]> {
     if (!next) continue;
     const lastSent = d.reminders.filter((r) => r.status === 'sent' && r.sentAt).sort((a, b) => b.sentAt!.getTime() - a.sentAt!.getTime())[0]?.sentAt ?? null;
     if (lastSent && (now.getTime() - lastSent.getTime()) / DAY < settings.minDaysBetween) continue;
-    const msg = composeReminder(d, next.s, company, daysLate);
+    const msg = composeReminder({ ...d, creditedTtc: creditedOf.get(d.id) ?? 0 }, next.s, company, daysLate);
     const to = d.billingEmail ?? d.contact?.email ?? null;
     out.push({
       documentId: d.id, number: d.number, client: d.billingName ?? d.contact?.name ?? '—', contactId: d.contact?.id ?? null, to, balance: msg.balance, dueOn: d.dueOn, daysLate,

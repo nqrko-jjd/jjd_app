@@ -145,7 +145,7 @@ interface Detail {
     personDossiers?: { id: string; ref: string; title: string; status: string; city: string | null }[];
     purchases: Purchase[];
     purchaseBalance: BalanceLine[];
-    supplierAccount?: { openTtc: number; unallocatedTotal: number; overdue: number; credits?: number; balance?: number; invoices?: { id: string; number: string | null; date: string | null; dueDate: string | null; total: number; paid: number; remaining: number }[] };
+    supplierAccount?: { openTtc: number; unallocatedTotal: number; overdue: number; overdueNet?: number; credits?: number; balance?: number; invoices?: { id: string; number: string | null; date: string | null; dueDate: string | null; total: number; paid: number; remaining: number }[] };
     purchaseSummary: { count: number; ht: number; ttc: number; balance: number };
     clientAccount: {
       invoicedTtc: number; openTtc: number; unallocatedTotal: number; balance: number;
@@ -577,9 +577,9 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
             <Kpi ic={FileText} label={tr("Factures")} value={c.purchaseSummary.count} sub="Achats enregistrés" />
           </div>
           {c.supplierAccount && <div className="kpis" style={{ marginBottom: '1rem' }}>
-            <Kpi ic={FileText} label="Factures restant à régler" value={<Money value={c.supplierAccount.openTtc} />} />
+            <Kpi ic={FileText} label="Reste à payer" value={<Money value={Math.max(0, c.supplierAccount.balance ?? c.supplierAccount.openTtc)} />} sub={(c.supplierAccount.credits ?? 0) + c.supplierAccount.unallocatedTotal > 0.01 ? `factures ouvertes ${formatEur(c.supplierAccount.openTtc)} − crédits ${formatEur((c.supplierAccount.credits ?? 0) + c.supplierAccount.unallocatedTotal)}` : 'Factures ouvertes'} />
             <Kpi ic={Wallet} label="Acomptes disponibles" value={<Money value={c.supplierAccount.unallocatedTotal} />} sub="Paiements à répartir sur les factures" />
-            <Kpi ic={Scale} label="Factures échues" value={<Money value={c.supplierAccount.overdue} />} warn={c.supplierAccount.overdue > 0} />
+            <Kpi ic={Scale} label="Échu à payer" value={<Money value={c.supplierAccount.overdueNet ?? c.supplierAccount.overdue} />} warn={(c.supplierAccount.overdueNet ?? c.supplierAccount.overdue) > 0} sub={(c.supplierAccount.overdueNet ?? c.supplierAccount.overdue) < c.supplierAccount.overdue - 0.01 ? `factures échues ${formatEur(c.supplierAccount.overdue)}, notes de crédit déduites` : undefined} />
           </div>}
           <div className="row" style={{ marginBottom: '1rem' }}><Link className="btn" href="/app/finances/fournisseurs">Gérer les comptes fournisseurs</Link></div>
           <CollapsibleSection

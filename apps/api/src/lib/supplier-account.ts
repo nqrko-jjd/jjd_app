@@ -68,5 +68,8 @@ export async function supplierAccounts() {
     g.unallocatedTotal += remaining;
     g.advances.push({ id: t.id, date: t.bookingDate, bank: t.bank, amount: Math.abs(t.amount ?? 0), remaining });
   }
-  return [...groups.values()].map(g => ({ ...g, reconciledCreditIds: settlements.get(g.contactId ?? '')?.settledCreditIds ?? [], openTtc: round2(g.openTtc), overdue: round2(g.overdue), dueSoon: round2(g.dueSoon), credits: round2(g.credits), unallocatedTotal: round2(g.unallocatedTotal), balance: round2(g.openTtc - g.credits - g.unallocatedTotal), invoices: g.invoices.sort((a,b) => (a.dueDate?.getTime() ?? Infinity) - (b.dueDate?.getTime() ?? Infinity)) })).sort((a,b) => b.overdue - a.overdue || a.name.localeCompare(b.name));
+  return [...groups.values()].map(g => ({ ...g, reconciledCreditIds: settlements.get(g.contactId ?? '')?.settledCreditIds ?? [], openTtc: round2(g.openTtc), overdue: round2(g.overdue), dueSoon: round2(g.dueSoon), credits: round2(g.credits), unallocatedTotal: round2(g.unallocatedTotal), balance: round2(g.openTtc - g.credits - g.unallocatedTotal),
+    // ce qui est réellement dû à échéance : les notes de crédit et paiements non répartis viennent d'abord en
+    // déduction des factures échues (comme le relevé du fournisseur : Baustoff « A payer 424,27 », pas 792,29)
+    overdueNet: round2(Math.max(0, g.overdue - g.credits - g.unallocatedTotal)), invoices: g.invoices.sort((a,b) => (a.dueDate?.getTime() ?? Infinity) - (b.dueDate?.getTime() ?? Infinity)) })).sort((a,b) => b.overdue - a.overdue || a.name.localeCompare(b.name));
 }

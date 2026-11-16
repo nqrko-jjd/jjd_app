@@ -149,6 +149,7 @@ peopleRouter.get(
         legalDocs: { orderBy: { expiresOn: 'asc' } },
         equipment: true,
         user: { select: { id: true, email: true, role: true } },
+        payeeContact: { select: { id: true, name: true } },
         adjustments: { orderBy: { date: 'desc' } },
       },
     });

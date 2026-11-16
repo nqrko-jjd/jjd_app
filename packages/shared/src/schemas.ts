@@ -153,6 +153,7 @@ export const personInput = z.object({
   languages: z.array(z.string()).default([]),
   specialties: z.array(z.string()).default([]),
   emergencyContact: z.string().trim().nullish(),
+  payeeContactId: z.string().nullish().or(z.literal('').transform(() => null)), // payé via cette société
   active: z.boolean().default(true),
   note: z.string().nullish(),
 });

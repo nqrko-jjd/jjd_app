@@ -119,6 +119,9 @@ model Person {
   languages        Json? // ["fr","pt","es"]
   specialties      Json? // ["maçon","carreleur","électricien"]
   emergencyContact String?
+  // société par laquelle la personne est payée (sous-traitant, indépendant : ex. Melvina via « Oma&cocas »)
+  payeeContactId   String?
+  payeeContact     Contact? @relation("PersonPayee", fields: [payeeContactId], references: [id], onDelete: SetNull)
   active           Boolean  @default(true)
   note             String?
   photoUrl         String?
@@ -336,6 +339,7 @@ model Contact {
   acpUnits         BuildingUnit[]    @relation("AcpUnit")
   residentUsers    User[]            @relation("ResidentOfAcp")
   contactPersons   ContactPerson[]
+  paidPeople       Person[]          @relation("PersonPayee")
 
   @@index([normalizedName])
   @@index([type])

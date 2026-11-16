@@ -87,7 +87,7 @@ usersRouter.patch(
   '/:id',
   requireAuth('admin'),
   asyncHandler(async (req, res) => {
-    const { role, active, portalAccess } = req.body as { role?: string; active?: boolean; portalAccess?: string };
+    const { role, active, portalAccess, personId } = req.body as { role?: string; active?: boolean; portalAccess?: string; personId?: string | null };
     if (req.params.id === req.user!.id && (active === false || (role && role !== 'admin'))) {
       throw new HttpError(409, 'Impossible de te désactiver ou de changer ton propre rôle depuis cet écran.');
     }
@@ -98,6 +98,15 @@ usersRouter.patch(
     }
     if (active !== undefined) data.active = !!active;
     if (portalAccess !== undefined) data.portalAccess = portalAccess === 'limited' ? 'limited' : 'full';
+    // relier le compte à sa fiche Équipe (ou le détacher : null) — ex. compte melvina@ ↔ fiche Melvina
+    if (personId !== undefined) {
+      if (personId) {
+        const person = await prisma.person.findUnique({ where: { id: personId }, include: { user: true } });
+        if (!person) throw new HttpError(404, 'Fiche équipe introuvable');
+        if (person.user && person.user.id !== req.params.id) throw new HttpError(409, 'Cette personne a déjà un autre compte');
+      }
+      data.personId = personId || null;
+    }
     const user = await prisma.user.update({ where: { id: req.params.id }, data });
     res.json({ user: { id: user.id, role: user.role, active: user.active, portalAccess: user.portalAccess } });
   }),

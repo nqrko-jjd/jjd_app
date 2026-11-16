@@ -8,6 +8,7 @@ import { api, apiBlobUrl, apiUpload } from '@/lib/api';
 import { PageHead, Money, formatDateBE, Kpi } from '@/lib/ui';
 import { Wallet, Sigma, Building2, CalendarDays, CalendarPlus, UserX } from 'lucide-react';
 import { FormModal, toDateInput, type FieldDef } from '@/components/FormModal';
+import { ContactPicker } from '@/components/ContactPicker';
 import { DocWithFileModal } from '@/components/DocWithFileModal';
 import { PhotoHeader } from '@/components/PhotoHeader';
 import { PlanningAssignmentModal } from '@/components/PlanningAssignmentModal';
@@ -25,6 +26,7 @@ import type { PlanningEv, PlanAbsence, PlanVehicleRef, PlanPerson } from '@/comp
 interface Adjustment { id: string; type: string; amount: number; date: string; note: string | null; settled: boolean; settledOn: string | null }
 interface Detail {
   person: {
+    payeeContact?: { id: string; name: string } | null;
     id: string; firstName: string; lastName: string | null; displayName: string | null;
     role: string; contractType: string; hourlyRate: number | null; dailyHours: number; photoUrl: string | null;
     phone: string | null; email: string | null; address: string | null; box: string | null;
@@ -279,6 +281,7 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
           <Info label={tr("Adresse")} value={[p.address, p.box && `bte ${p.box}`].filter(Boolean).join(', ') || '—'} />
           <Info label="Langues" value={(p.languages ?? []).join(', ') || '—'} />
           <Info label="Contact d'urgence" value={p.emergencyContact ?? '—'} />
+          <Info label="Payé via (société)" value={<PayeePicker personId={p.id} payee={p.payeeContact ?? null} onSaved={reload} />} />
           <Info
             label="Compte appli"
             value={p.user
@@ -532,4 +535,17 @@ function Info({ label, value }: { label: string; value: React.ReactNode }) {
       <div className="v">{value}</div>
     </div>
   );
+}
+
+/** Société par laquelle la personne est payée (indépendant, sous-traitant) — fiche fournisseur liée. */
+function PayeePicker({ personId, payee, onSaved }: { personId: string; payee: { id: string; name: string } | null; onSaved: () => void }) {
+  const [edit, setEdit] = useState(false);
+  async function save(contactId: string | null) {
+    await api(`/api/people/${personId}`, { method: 'PATCH', body: { payeeContactId: contactId } });
+    setEdit(false); onSaved();
+  }
+  if (edit) return <div style={{ display: 'grid', gap: 4 }}><ContactPicker typeFilter="supplier" browse value={payee?.id ?? ''} onChange={(cid) => void save(cid || null)} placeholder="Chercher la société…" /><button className="btn ghost" style={{ justifySelf: 'start', padding: '0.1rem 0.4rem', fontSize: '0.75rem' }} onClick={() => setEdit(false)}>Annuler</button></div>;
+  return payee
+    ? <span><Link href={`/app/contacts/${payee.id}`}>{payee.name}</Link> <button className="btn ghost" style={{ padding: '0.1rem 0.4rem', fontSize: '0.75rem' }} onClick={() => setEdit(true)}>Modifier</button></span>
+    : <button className="btn ghost" style={{ padding: '0.1rem 0.4rem', fontSize: '0.78rem' }} onClick={() => setEdit(true)}>— Indiquer la société</button>;
 }

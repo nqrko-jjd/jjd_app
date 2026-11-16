@@ -19,6 +19,106 @@ import { CLIENT_KIND_LABEL, formatVat } from '@jjd/shared';
 
 const PAGE = 30;
 
+type ContactTab = 'info' | 'worksites' | 'client-open' | 'client-hist' | 'supplier-open' | 'supplier-hist';
+interface ClientDoc {
+  id: string; kind: string; number: string | null; status: string; totalTtc: number | null; paidAmount?: number | null;
+  issuedOn: string | null; dueOn: string | null; worksite?: { ref: string } | null;
+}
+const KIND_LABEL: Record<string, string> = { invoice: 'Facture', deposit_invoice: 'Facture d’acompte', credit_note: 'Note de crédit' };
+const STATUS_LABEL: Record<string, string> = { paid: 'Payée', sent: 'Envoyée', partial: 'Partiellement payée', overdue: 'En retard', draft: 'Brouillon', cancelled: 'Annulée' };
+
+/** « +12 jours » (échu) / « −5 jours » (à venir), comme Horus. */
+function DueBadge({ due }: { due: string | null }) {
+  if (!due) return <span className="muted">—</span>;
+  const days = Math.round((Date.now() - new Date(due).getTime()) / 86_400_000);
+  const cls = days > 30 ? 'crit' : days > 0 ? 'warn' : 'ok';
+  return <span className={`badge ${cls}`}>{days > 0 ? `+${days}` : days} jour{Math.abs(days) > 1 ? 's' : ''}</span>;
+}
+
+/** Export Excel (CSV ; séparateur ; et virgule décimale pour Excel belge). */
+function downloadCsv(filename: string, head: string[], rows: (string | number | null)[][]) {
+  const cell = (v: string | number | null) => typeof v === 'number' ? v.toFixed(2).replace('.', ',') : `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const csv = '\ufeff' + [head.map(cell), ...rows.map((r) => r.map(cell))].map((r) => r.join(';')).join('\r\n');
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+}
+
+function TabFoot({ label, total, onExport }: { label: string; total: number; onExport: () => void }) {
+  return (
+    <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', margin: '0.7rem 0 1.4rem', flexWrap: 'wrap', gap: '0.6rem' }}>
+      <div className="card card-pad" style={{ padding: '0.45rem 0.8rem' }}>{label} : <strong><Money value={total} /></strong></div>
+      <div className="row" style={{ gap: '0.4rem' }}>
+        <button className="btn" onClick={onExport}>Export Excel</button>
+        <button className="btn" onClick={() => window.print()}>Imprimer / PDF</button>
+      </div>
+    </div>
+  );
+}
+
+function ClientDocsTable({ docs, open, name }: { docs: ClientDoc[]; open?: boolean; name: string }) {
+  const sign = (d: ClientDoc) => (d.kind === 'credit_note' ? -1 : 1) * Math.abs(d.totalTtc ?? 0);
+  const left = (d: ClientDoc) => Math.max(0, Math.abs(d.totalTtc ?? 0) - (d.paidAmount ?? 0));
+  const total = docs.reduce((s, d) => s + (open ? left(d) : sign(d)), 0);
+  return (
+    <>
+      {docs.length === 0 ? <div className="card card-pad muted">{open ? 'Aucune facture impayée.' : 'Aucune facture.'}</div> : (
+        <div className="tbl-wrap">
+          <table className="tbl">
+            <thead><tr><th>Date</th><th>Type</th><th>N°</th><th>Chantier</th><th style={{ textAlign: 'right' }}>Montant</th>{open ? <><th style={{ textAlign: 'right' }}>Reste dû</th><th>Échéance</th><th></th></> : <th>Statut</th>}</tr></thead>
+            <tbody>
+              {docs.map((d) => (
+                <tr key={d.id}>
+                  <td className="tnum">{formatDateBE(d.issuedOn)}</td>
+                  <td>{KIND_LABEL[d.kind] ?? d.kind}</td>
+                  <td><Link href={`/app/documents/${d.id}`}>{d.number}</Link></td>
+                  <td>{d.worksite?.ref ?? '—'}</td>
+                  <td style={{ textAlign: 'right' }}><Money value={sign(d)} /></td>
+                  {open ? <><td style={{ textAlign: 'right' }}><strong><Money value={left(d)} /></strong></td><td className="tnum">{formatDateBE(d.dueOn)}</td><td><DueBadge due={d.dueOn} /></td></>
+                    : <td><span className={`badge ${d.status === 'paid' ? 'ok' : d.status === 'overdue' ? 'crit' : 'plain'}`}>{STATUS_LABEL[d.status] ?? d.status}</span></td>}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <TabFoot label={open ? 'Reste à encaisser' : 'Total facturé TTC'} total={total} onExport={() => downloadCsv(`${name} - ${open ? 'impayes' : 'historique'} client.csv`,
+        ['Date', 'Type', 'N°', 'Chantier', 'Montant TTC', ...(open ? ['Reste dû', 'Échéance'] : ['Statut'])],
+        docs.map((d) => [formatDateBE(d.issuedOn), KIND_LABEL[d.kind] ?? d.kind, d.number, d.worksite?.ref ?? '', sign(d), ...(open ? [left(d), formatDateBE(d.dueOn)] : [STATUS_LABEL[d.status] ?? d.status])]))} />
+    </>
+  );
+}
+
+function SupplierOpenTable({ rows, name, credits, advances }: { rows: { id: string; number: string | null; date: string | null; dueDate: string | null; total: number; paid: number; remaining: number }[]; name: string; credits: number; advances: number }) {
+  const total = rows.reduce((s, r) => s + r.remaining, 0);
+  const sorted = [...rows].sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
+  return (
+    <>
+      {sorted.length === 0 ? <div className="card card-pad muted">Aucune facture fournisseur à régler.</div> : (
+        <div className="tbl-wrap">
+          <table className="tbl">
+            <thead><tr><th>Date</th><th>N°</th><th style={{ textAlign: 'right' }}>Montant</th><th style={{ textAlign: 'right' }}>Reste à payer</th><th>Échéance</th><th></th></tr></thead>
+            <tbody>
+              {sorted.map((r) => (
+                <tr key={r.id}>
+                  <td className="tnum">{formatDateBE(r.date)}</td>
+                  <td><Link href={`/app/achats?q=${encodeURIComponent(r.number ?? '')}`}>{r.number ?? '—'}</Link></td>
+                  <td style={{ textAlign: 'right' }}><Money value={r.total} /></td>
+                  <td style={{ textAlign: 'right' }}><strong><Money value={r.remaining} /></strong></td>
+                  <td className="tnum">{formatDateBE(r.dueDate)}</td>
+                  <td><DueBadge due={r.dueDate} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {(credits > 0.01 || advances > 0.01) && <p className="muted" style={{ fontSize: '0.84rem', margin: '0.5rem 0 0' }}>À déduire : {credits > 0.01 ? <>notes de crédit non imputées <Money value={credits} /></> : null}{credits > 0.01 && advances > 0.01 ? ' · ' : ''}{advances > 0.01 ? <>paiements non répartis <Money value={advances} /></> : null}.</p>}
+      <TabFoot label="Reste à payer" total={total} onExport={() => downloadCsv(`${name} - impayes fournisseur.csv`, ['Date', 'N°', 'Montant TTC', 'Reste à payer', 'Échéance'], sorted.map((r) => [formatDateBE(r.date), r.number, r.total, r.remaining, formatDateBE(r.dueDate)]))} />
+    </>
+  );
+}
+
 interface ContactPerson { id: string; role: string | null; name: string; email: string | null; phone: string | null }
 interface Purchase {
   id: string; date: string | null; docNumber: string | null; categoryRaw: string | null;
@@ -45,7 +145,7 @@ interface Detail {
     personDossiers?: { id: string; ref: string; title: string; status: string; city: string | null }[];
     purchases: Purchase[];
     purchaseBalance: BalanceLine[];
-    supplierAccount?: { openTtc: number; unallocatedTotal: number; overdue: number };
+    supplierAccount?: { openTtc: number; unallocatedTotal: number; overdue: number; credits?: number; balance?: number; invoices?: { id: string; number: string | null; date: string | null; dueDate: string | null; total: number; paid: number; remaining: number }[] };
     purchaseSummary: { count: number; ht: number; ttc: number; balance: number };
     clientAccount: {
       invoicedTtc: number; openTtc: number; unallocatedTotal: number; balance: number;
@@ -83,6 +183,9 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
   const { data: allContacts } = useApi<{ items: { id: string; name: string; type: string; vat: string | null; city: string | null }[] }>(merging ? '/api/contacts' : null);
   const [personModal, setPersonModal] = useState<'new' | ContactPerson | null>(null);
   const [memberModal, setMemberModal] = useState(false);
+  // fiche en onglets (inspiré d'Horus) : tout le compte du tiers, client ET fournisseur, sans tout faire défiler
+  const [tab, setTab] = useState<ContactTab>('info');
+  const { data: clientDocs } = useApi<{ items: ClientDoc[] }>(`/api/documents?contactId=${id}&pageSize=500`);
   const [portalInfo, setPortalInfo] = useState<{ email: string; portal: string } | null>(null);
   const [purchasesShown, setPurchasesShown] = useState(PAGE);
   const [balanceShown, setBalanceShown] = useState(PAGE);
@@ -278,7 +381,15 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
 
 
 
-      <div className="info-grid" style={{ marginBottom: '1.4rem' }}>
+      {/* bandeau d'identité toujours visible : adresse, téléphone, e-mail (comme Horus) */}
+      <div className="contact-band">
+        {[[c.address, c.box && `bte ${c.box}`].filter(Boolean).join(', '), [c.postalCode, c.city].filter(Boolean).join(' ')].filter(Boolean).join(' · ') && <span>📍 {[[c.address, c.box && `bte ${c.box}`].filter(Boolean).join(', '), [c.postalCode, c.city].filter(Boolean).join(' ')].filter(Boolean).join(' · ')}</span>}
+        {c.phone && <a href={`tel:${c.phone}`}>📞 {c.phone}</a>}
+        {c.email && <a href={`mailto:${c.email}`}>✉️ {c.email}</a>}
+        {c.vat && <span>{c.kind === 'acp' ? 'BCE' : 'TVA'} {formatVat(c.vat)}</span>}
+      </div>
+
+      {tab === 'info' && <div className="info-grid" style={{ marginBottom: '1.4rem' }}>
         <Info label="E-mail" value={c.email ?? '—'} />
         <Info label={tr("Téléphone")} value={c.phone ?? '—'} />
         <Info label={c.kind === 'acp' ? 'N° BCE' : 'TVA'} value={formatVat(c.vat) ?? '—'} />
@@ -300,7 +411,7 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
             </div>
           </div>
         )}
-      </div>
+      </div>}
 
       {portalInfo && (
         <div className="card card-pad" style={{ marginBottom: '1.4rem', borderLeft: '3px solid var(--ok)' }}>
@@ -311,6 +422,32 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
         </div>
       )}
 
+      {(() => {
+        const docs = (clientDocs?.items ?? []).filter((d) => d.kind !== 'quote' && d.number);
+        const openDocs = docs.filter((d) => d.kind !== 'credit_note' && ['sent', 'partial', 'overdue'].includes(d.status));
+        const supOpen = (c.supplierAccount?.invoices ?? []).filter((i) => i.remaining > 0.01);
+        const showClient = isClientLike || docs.length > 0;
+        const tabs: [ContactTab, string, number | null][] = [
+          ['info', 'Informations', null],
+          ...(showClient ? [['worksites', 'Chantiers', c.worksites.length] as [ContactTab, string, number]] : []),
+          ...(showClient ? [['client-open', 'Impayés client', openDocs.length] as [ContactTab, string, number], ['client-hist', 'Historique client', docs.length] as [ContactTab, string, number]] : []),
+          ...(isSupplier ? [['supplier-open', 'Impayés fournisseur', supOpen.length] as [ContactTab, string, number], ['supplier-hist', 'Historique fournisseur', c.purchases.length] as [ContactTab, string, number]] : []),
+        ];
+        return (
+          <>
+            <div className="page-tabs" style={{ marginBottom: '1rem' }}>
+              {tabs.map(([k, label, n]) => (
+                <button key={k} className={`page-tab${tab === k ? ' active' : ''}`} onClick={() => setTab(k)}>{label}{n ? <> <span className="n">{n}</span></> : null}</button>
+              ))}
+            </div>
+            {tab === 'client-open' && <ClientDocsTable docs={openDocs} open name={c.name} />}
+            {tab === 'client-hist' && <ClientDocsTable docs={docs} name={c.name} />}
+            {tab === 'supplier-open' && <SupplierOpenTable rows={supOpen} name={c.name} credits={c.supplierAccount?.credits ?? 0} advances={c.supplierAccount?.unallocatedTotal ?? 0} />}
+          </>
+        );
+      })()}
+
+      {tab === 'info' && (<>
       <ContactLinks id={c.id} refreshKey={linksKey} />
 
       {/* Syndic / promoteur : ses gestionnaires sont des fiches à part entière (recherche, chantiers, accès portail à SES dossiers) */}
@@ -378,8 +515,10 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
 
       </>)}
 
+      </>)}
+
       {/* Compte client : facturé, reste à encaisser, et argent reçu SANS facture (acompte à facturer, trop-perçu à rendre) */}
-      {(c.clientAccount.invoicedTtc !== 0 || c.clientAccount.unallocatedTotal > 0) && (
+      {(tab === 'client-open' || tab === 'client-hist') && (c.clientAccount.invoicedTtc !== 0 || c.clientAccount.unallocatedTotal > 0) && (
         <>
           <div className="section-title">Compte client</div>
           <div className="kpis" style={{ marginBottom: '1rem' }}>
@@ -422,7 +561,7 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
       )}
 
       {/* Achats — fournisseurs uniquement */}
-      {isSupplier && (
+      {isSupplier && tab === 'supplier-hist' && (
         <>
           <div className="section-title">Achats chez ce fournisseur</div>
           <div className="kpis" style={{ marginBottom: '1rem' }}>
@@ -538,7 +677,7 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
         </>
       )}
 
-      {isClientLike && (
+      {tab === 'worksites' && (
         <section>
           <h2 style={{ marginBottom: '0.7rem' }}>{tr("Chantiers (")}{c.worksites.length})</h2>
           {c.worksites.length === 0 ? (

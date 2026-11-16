@@ -11,6 +11,7 @@ import { runAutoFollowups } from './lib/quote-followups.js';
 import { runAutoReviewRequests } from './lib/review-requests.js';
 import { syncVehiclePositions, gpsConfigured } from './lib/paj.js';
 import { runArrivalNotices } from './lib/arrival-notices.js';
+import { runDepartureReminders } from './lib/departure-reminders.js';
 import { getDocPdfBuffer, runScheduledEmails } from './routes/documents.js';
 import { backfillBankMatches } from './lib/bank-match.js';
 import { backfillWorksiteGeo } from './lib/worksite-geo.js';
@@ -197,6 +198,12 @@ setTimeout(async () => {
     console.log(`[achats] TVA complétée sur ${r.vat} facture(s), catégorie sur ${r.category}`);
   } catch (e) { console.error('[achats] reprise TVA / catégorie échouée :', (e as Error).message); }
 }, 60_000);
+
+// rappel de départ avant intervention (inactif tant que le réglage `departureReminders` n'est pas activé)
+const runDepartureRemindersJob = () => runDepartureReminders().then((n) => { if (n) console.log(`[départ] ${n} rappel(s) envoyé(s)`); }).catch((e) => console.error('[départ] échec :', e.message));
+setTimeout(runDepartureRemindersJob, 90_000);
+setInterval(runDepartureRemindersJob, 2 * 60_000);
+
 const runPeppolInbox=()=>syncPeppolInbox().catch(e=>console.error('[peppol-inbox]',e.message));
 setTimeout(runPeppolInbox,75000);
 setInterval(runPeppolInbox,10*60_000);

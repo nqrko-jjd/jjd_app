@@ -4,7 +4,7 @@ import { STAFF } from './auth.js';
 export const isExpoToken = (s: unknown): s is string => typeof s === 'string' && /^(Expo|Exponent)PushToken\[[A-Za-z0-9_-]+\]$/.test(s) && s.length < 256;
 
 /** Generic lock-screen content: no client, worksite address or message text. */
-export async function notifyMobile(userIds: string[], route: string, title: string): Promise<void> {
+export async function notifyMobile(userIds: string[], route: string, title: string, body = 'Ouvrez JJD Chantier pour consulter les nouveautés.'): Promise<void> {
   const subs = await prisma.pushSubscription.findMany({ where: { userId: { in: [...new Set(userIds)] }, user: { active: true } } });
   const mobile = subs.filter(s => isExpoToken(s.endpoint));
   for (let offset = 0; offset < mobile.length; offset += 100) {
@@ -12,7 +12,7 @@ export async function notifyMobile(userIds: string[], route: string, title: stri
     try {
       const response = await fetch('https://exp.host/--/api/v2/push/send', {
         method: 'POST', headers: { 'Content-Type': 'application/json', ...(process.env.EXPO_ACCESS_TOKEN ? { Authorization: `Bearer ${process.env.EXPO_ACCESS_TOKEN}` } : {}) },
-        body: JSON.stringify(batch.map(s => ({ to: s.endpoint, title, body: 'Ouvrez JJD Chantier pour consulter les nouveautés.', sound: 'default', channelId: 'jjd', data: { route, userId: s.userId } }))),
+        body: JSON.stringify(batch.map(s => ({ to: s.endpoint, title, body, sound: 'default', channelId: 'jjd', data: { route, userId: s.userId } }))),
         signal: AbortSignal.timeout(10000),
       });
       if (!response.ok) { console.warn('[mobile-push] delivery request failed', response.status); continue; }

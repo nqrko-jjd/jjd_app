@@ -22,9 +22,15 @@ import {
 import { Users, CircleCheck, Building2, CalendarOff, CalendarPlus, UserX, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { PlanningEv, PlanAbsence, PlanVehicleRef } from '@/components/planningTypes';
 
+/** Tarif à la journée : le montant remis par jour s'il est défini, sinon taux horaire × heures du jour garanti. */
+function dayRate(p: { hourlyRate: number | null; payoutPerDay?: number | null; dailyHours?: number | null }): number | null {
+  if (p.payoutPerDay != null) return p.payoutPerDay;
+  return p.hourlyRate != null ? Math.round(p.hourlyRate * (p.dailyHours ?? 10) * 100) / 100 : null;
+}
+
 interface Person {
   id: string; firstName: string; lastName: string | null; displayName: string | null;
-  role: string; contractType: string; hourlyRate: number | null; phone: string | null;
+  role: string; contractType: string; hourlyRate: number | null; payoutPerDay?: number | null; dailyHours?: number | null; phone: string | null;
   active: boolean; languages: string[] | null; specialties: string[] | null; photoThumbUrl: string | null;
   _count: { legalDocs: number; timeEntries: number };
 }
@@ -150,7 +156,7 @@ function EquipeInner() {
     name,
     role: (p: Person) => PERSON_ROLE_LABEL[p.role as keyof typeof PERSON_ROLE_LABEL] ?? p.role,
     contract: (p: Person) => WORKER_CONTRACT_LABEL[p.contractType as keyof typeof WORKER_CONTRACT_LABEL] ?? p.contractType,
-    rate: (p: Person) => p.hourlyRate,
+    rate: (p: Person) => dayRate(p),
     languages: (p: Person) => (p.languages ?? []).join(' '),
     specialties: (p: Person) => (p.specialties ?? []).join(' '),
     docs: (p: Person) => p._count.legalDocs,
@@ -292,7 +298,7 @@ function EquipeInner() {
                 <SortTh k="role" sort={sort} filter={colFilter}>Rôle</SortTh>
                 <SortTh k="specialties" sort={sort} filter={colFilter}>Spécialités</SortTh>
                 <SortTh k="contract" sort={sort} filter={colFilter}>{tr("Contrat")}</SortTh>
-                <SortTh k="rate" sort={sort} align="right" filter={colFilter}>Taux</SortTh>
+                <SortTh k="rate" sort={sort} align="right" filter={colFilter}>Jour</SortTh>
                 <SortTh k="languages" sort={sort} filter={colFilter}>Langues</SortTh>
                 <SortTh k="docs" sort={sort} filter={colFilter}>Docs</SortTh>
                 <SortTh k="entries" sort={sort} filter={colFilter}>Pointages</SortTh>
@@ -321,7 +327,12 @@ function EquipeInner() {
                     <td>{PERSON_ROLE_LABEL[p.role as keyof typeof PERSON_ROLE_LABEL] ?? p.role}</td>
                     <td style={{ fontSize: '0.82rem' }}>{(p.specialties ?? []).join(', ') || '—'}</td>
                     <td>{WORKER_CONTRACT_LABEL[p.contractType as keyof typeof WORKER_CONTRACT_LABEL] ?? p.contractType}</td>
-                    <td style={{ textAlign: 'right' }}>{p.hourlyRate != null ? <Money value={p.hourlyRate} /> : <span className="badge warn">{tr("à définir")}</span>}</td>
+                    <td style={{ textAlign: 'right' }} title={p.hourlyRate != null ? `${p.hourlyRate.toLocaleString('fr-BE', { minimumFractionDigits: 2 })} €/h × ${p.dailyHours ?? 10} h` : undefined}>
+                      {dayRate(p) != null ? <Money value={dayRate(p)} /> : <span className="badge warn">{tr("à définir")}</span>}
+                      {p.payoutPerDay != null && p.hourlyRate != null && Math.abs(p.payoutPerDay - p.hourlyRate * (p.dailyHours ?? 10)) > 0.5 && (
+                        <div className="muted" style={{ fontSize: '0.74rem' }}>coûté <Money value={p.hourlyRate * (p.dailyHours ?? 10)} /></div>
+                      )}
+                    </td>
                     <td className="mono" style={{ fontSize: '0.8rem' }}>{(p.languages ?? []).join(' ') || '—'}</td>
                     <td className="tnum">{p._count.legalDocs || ''}</td>
                     <td className="tnum">{p._count.timeEntries || ''}</td>

@@ -8,7 +8,7 @@ import { PageHead, Money, Kpi, formatDateBE } from '@/lib/ui';
 import { SkeletonRows, ErrorState } from '@/components/States';
 
 interface Supplier {
-  id: string; contactId: string | null; name: string; openTtc: number; overdue: number; dueSoon: number;
+  id: string; contactId: string | null; name: string; openTtc: number; overdue: number; overdueNet?: number; dueSoon: number;
   credits: number; unallocatedTotal: number; balance: number; nextDue: string | null;
   invoices: { id: string; number: string | null; date: string | null; dueDate: string | null; total: number; paid: number; remaining: number }[];
   advances: { id: string; date: string | null; bank: string | null; amount: number; remaining: number }[];
@@ -27,7 +27,7 @@ export default function SuppliersPage() {
     {loading ? <SkeletonRows /> : error ? <ErrorState message={error} onRetry={reload} /> : <>
       <div className="kpis" style={{ marginBottom: '1.2rem' }}>
         <Kpi ic={Scale} label="Soldes à régler" value={<Money value={sum(s => Math.max(0,s.balance))} />} sub="Après acomptes et notes de crédit" />
-        <Kpi ic={AlertTriangle} label="Factures échues" value={<Money value={sum(s => s.overdue)} />} warn={sum(s => s.overdue) > 0} sub="Avant affectation des crédits disponibles" />
+        <Kpi ic={AlertTriangle} label="Échu à payer" value={<Money value={sum(s => s.overdueNet ?? s.overdue)} />} warn={sum(s => s.overdueNet ?? s.overdue) > 0} sub="Notes de crédit et acomptes déduits" />
         <Kpi ic={CalendarClock} label="Échéances sous 30 jours" value={<Money value={sum(s => s.dueSoon)} />} sub="Factures encore ouvertes" />
         <Kpi ic={Wallet} label="Acomptes disponibles" value={<Money value={sum(s => s.unallocatedTotal)} />} sub="Paiements à répartir sur les factures" />
       </div>
@@ -39,7 +39,7 @@ export default function SuppliersPage() {
         {rows.length === 0 && <tr><td colSpan={7} className="muted">Aucun fournisseur pour ces critères.</td></tr>}
         {rows.map(s => <Fragment key={s.id}><tr>
           <td>{s.contactId ? <Link href={`/app/contacts/${s.contactId}`}><strong>{s.name}</strong></Link> : <strong>{s.name}</strong>}</td>
-          <td className="tnum"><Money value={s.openTtc} /></td><td className="tnum">{s.overdue > 0 ? <span className="badge warn"><Money value={s.overdue} /></span> : '—'}</td>
+          <td className="tnum"><Money value={s.openTtc} /></td><td className="tnum">{(s.overdueNet ?? s.overdue) > 0 ? <span className="badge warn"><Money value={s.overdueNet ?? s.overdue} /></span> : '—'}</td>
           <td>{s.nextDue ? formatDateBE(s.nextDue) : s.invoices.some(i => i.remaining > 0 && !i.dueDate) ? 'Échéance à renseigner' : '—'}</td>
           <td className="tnum"><Money value={s.unallocatedTotal + s.credits} /></td>
           <td className="tnum"><strong><Money value={Math.abs(s.balance)} /></strong><div className="muted">{s.balance < 0 ? 'Crédit chez le fournisseur' : s.balance > 0 ? 'À régler' : 'Compte soldé'}</div></td>

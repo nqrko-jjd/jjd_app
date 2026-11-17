@@ -74,6 +74,9 @@ export interface WorksiteLabourDay {
 }
 
 export interface WorksiteMarginFull extends WorksiteMargin {
+  /** Factures de vente émises et pas encore payées (TVAC, part déjà versée déduite) : ce que le client doit encore. */
+  toCollectTtc: number;
+  toCollectCount: number;
   transport: WorksiteTransport;
   labour: WorksiteLabourDay[];
 }
@@ -197,6 +200,8 @@ export async function worksiteMargin(worksiteId: string): Promise<WorksiteMargin
 
   let invoicedHt = 0;
   let paidHt = 0;
+  let toCollectTtc = 0;
+  let toCollectCount = 0;
   let materialCost = 0;
   // Main-d'œuvre JJD (ouvriers pointés) déjà facturée : ils sont payés à la journée sur base
   // du pointage, puis la facture "Rémunération - Ouvrier" formalise ce même paiement. Une fois
@@ -208,6 +213,11 @@ export async function worksiteMargin(worksiteId: string): Promise<WorksiteMargin
     if (e.direction === 'sale') {
       invoicedHt += e.ht;
       paidHt += e.ht * paidFraction(e); // payée partiellement : la part déjà versée compte dans l'encaissé
+      // reste dû par le client : TVAC (c'est ce qu'il vire), hors factures annulées par une note de crédit
+      if (!['credited', 'draft', 'declined'].includes(e.document?.status ?? '')) {
+        const due = (e.ttc ?? e.ht) * (1 - paidFraction(e));
+        if (due > 0.005) { toCollectTtc += due; toCollectCount++; }
+      }
     } else if (e.direction === 'purchase') {
       if (isVehicleFinancing(e.categoryRaw)) continue; // crédit/leasing : financement, pas une dépense
       if (isOuvrierRemuneration(e.categoryRaw)) invoicedLabourCost += e.ht;
@@ -239,5 +249,5 @@ export async function worksiteMargin(worksiteId: string): Promise<WorksiteMargin
     labourCost,
     vehicleCost: transport.cost,
   });
-  return { ...margin, transport, labour };
+  return { ...margin, toCollectTtc: Math.round(toCollectTtc * 100) / 100, toCollectCount, transport, labour };
 }

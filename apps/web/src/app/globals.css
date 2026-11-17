@@ -2101,9 +2101,10 @@ body.nav-collapsed .navlink .nav-badge { position: absolute; top: 2px; right: 2p
 .worksite-finance-heading .eyebrow { color:var(--gold); }
 .worksite-finance-heading h2 { color:white; margin:.3rem 0; }
 .worksite-finance-heading p { color:#d8e6df; margin:0; }
-.worksite-finance-totals { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:.85rem; margin:1rem 0; }
+.worksite-finance-totals { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:.85rem; margin:1rem 0; }
 .worksite-finance-totals article { padding:1.25rem; background:var(--surface); border:1px solid var(--line); border-radius:14px; min-width:0; }
 .worksite-finance-totals article.remaining { background:var(--gold-soft); border-color:var(--gold); }
+.worksite-finance-totals article.to-collect { border-color:var(--primary); box-shadow:inset 3px 0 0 var(--primary); }
 .worksite-finance-totals span { font-size:.875rem; color:var(--ink-2); }
 .worksite-finance-totals strong { display:block; font-size:1.5rem; margin:.45rem 0; overflow-wrap:anywhere; }
 .worksite-finance-totals small { display:block; font-size:.8rem; line-height:1.5; color:var(--ink-2); }

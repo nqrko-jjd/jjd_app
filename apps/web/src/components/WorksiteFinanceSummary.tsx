@@ -7,7 +7,7 @@ import { Money } from '@/lib/ui';
 
 /** Présentation uniquement : toutes les valeurs proviennent du calcul métier existant. */
 export function WorksiteFinanceSummary({ margin, worksiteId, billingName, billingContactId, labour, documentCount }: {
-  margin: WorksiteMargin;
+  margin: WorksiteMargin & { toCollectTtc?: number; toCollectCount?: number };
   worksiteId: string;
   billingName: string;
   billingContactId?: string | null;
@@ -26,6 +26,13 @@ export function WorksiteFinanceSummary({ margin, worksiteId, billingName, billin
         <article><span>Marché HT</span><strong><Money value={margin.quotedHt} /></strong><small>Devis et montant convenu</small></article>
         <article><span>Facturé HT</span><strong><Money value={margin.invoicedHt} /></strong><small>Factures moins notes de crédit</small></article>
         <article><span>Encaissé HT</span><strong><Money value={margin.paidHt} /></strong><small>Paiements enregistrés</small></article>
+        {margin.toCollectTtc !== undefined && (
+          <article className={margin.toCollectTtc > 0 ? 'to-collect' : undefined}>
+            <span>Reste à encaisser TVAC</span>
+            <strong><Money value={margin.toCollectTtc} /></strong>
+            <small>{margin.toCollectTtc > 0 ? `${margin.toCollectCount} facture${(margin.toCollectCount ?? 0) > 1 ? 's' : ''} émise${(margin.toCollectCount ?? 0) > 1 ? 's' : ''}, pas encore payée${(margin.toCollectCount ?? 0) > 1 ? 's' : ''}` : 'Tout le facturé est payé'}</small>
+          </article>
+        )}
         <article className="remaining"><span>Reste à facturer HT</span><strong>{margin.quotedHt <= 0 ? '—' : <Money value={margin.leftToInvoice} />}</strong><small>{margin.quotedHt <= 0 ? 'Aucun devis enregistré' : margin.leftToInvoice < 0 ? 'Dépassement du marché à vérifier' : 'Solde du marché, pas un avancement validé'}</small></article>
       </div>
       <div className="worksite-finance-costs">

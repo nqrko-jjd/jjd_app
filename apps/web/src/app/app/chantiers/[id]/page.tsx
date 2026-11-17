@@ -56,6 +56,8 @@ interface Detail {
     }[];
   };
   margin: (WorksiteMargin & {
+    toCollectTtc?: number;
+    toCollectCount?: number;
     transport: {
       cost: number; fuelCost: number; fixedCost: number; note: string | null; oneWayKm: number | null;
       trips: { date: string; vehicleLabel: string; roundTripKm: number; fuelCost: number; fixedCost: number; cost: number }[];

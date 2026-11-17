@@ -4,7 +4,7 @@ import { createReadStream, existsSync } from 'node:fs';
 import { nanoid } from 'nanoid';
 import { z } from 'zod';
 import jwt from 'jsonwebtoken';
-import { requestBriefInput } from '@jjd/shared';
+import { requestBriefInput, portalStatusLabel } from '@jjd/shared';
 import multer from 'multer';
 import {
   WORKSITE_STATUS_LABEL, WORKSITE_PRIORITY_LABEL, DOC_KIND_LABEL, WORKSITE_PROGRESS_PCT,
@@ -32,7 +32,11 @@ const portalPdfPath = (safe: string) => path.join(PORTAL_PDF_DIR, safe);
 
 const OPEN_STATUSES: WorksiteStatus[] = ['scheduled', 'in_progress', 'on_hold', 'done', 'to_invoice'];
 
-const wsLabel = (s: string) => WORKSITE_STATUS_LABEL[s as WorksiteStatus] ?? s;
+// statut côté client : son parcours (demande → devis → travaux → facture à régler → réglé), jamais le
+// vocabulaire interne (« À facturer », « Devis à faire »)
+const wsLabel = (s: string, invoiceStatus?: string | null) => portalStatusLabel(s, invoiceStatus);
+// travaux finis côté client : plus rien d'« urgent » à lui signaler
+const CLIENT_DONE = ['done', 'to_invoice', 'invoiced', 'closed', 'refused', 'cancelled'];
 const prioLabel = (p: string) => WORKSITE_PRIORITY_LABEL[p as WorksitePriority] ?? p;
 const managerName = (m: { displayName: string | null; firstName: string } | null) =>
   m ? (m.displayName || m.firstName) : null;
@@ -50,7 +54,7 @@ const NEXT_STEP_LABEL: Partial<Record<WorksiteStatus, string>> = {
   in_progress: 'Poursuite des travaux',
   on_hold: 'Reprise des travaux',
   done: 'Contrôle des finitions',
-  to_invoice: 'Facturation',
+  to_invoice: 'Envoi de la facture',
 };
 
 /* ---------------------------------------------------- connexion (lien magique) */
@@ -168,7 +172,7 @@ portalRouter.get(
     ]);
 
     const open = worksites.filter((w) => OPEN_STATUSES.includes(w.status as WorksiteStatus));
-    const urgent = open.filter((w) => w.priority === 'high' || w.priority === 'urgent');
+    const urgent = open.filter((w) => (w.priority === 'high' || w.priority === 'urgent') && !CLIENT_DONE.includes(w.status));
     const full = portalFull(u);
     // Client particulier (pas syndic, pas résident d'un immeuble) avec un seul chantier ouvert :
     // on met en avant sa progression, comme la maquette ("Avancement des travaux").
@@ -178,7 +182,7 @@ portalRouter.get(
       building: single.acp?.name ?? null,
       address: [single.acp?.address, single.acp?.city].filter(Boolean).join(', ') || null,
       photoThumbUrl: single.acp?.photoThumbUrl ?? null,
-      status: single.status, statusLabel: wsLabel(single.status),
+      status: single.status, statusLabel: wsLabel(single.status, single.documents[0]?.status),
       progressPct: WORKSITE_PROGRESS_PCT[single.status as WorksiteStatus] ?? 0,
       nextStep: NEXT_STEP_LABEL[single.status as WorksiteStatus] ?? null,
       manager: managerName(single.manager),
@@ -199,11 +203,11 @@ portalRouter.get(
       },
       urgentItems: urgent.slice(0, 4).map((w) => ({
         id: w.id, ref: w.ref, title: w.title, building: w.acp?.name ?? null,
-        statusLabel: wsLabel(w.status), priority: w.priority,
+        statusLabel: wsLabel(w.status, w.documents[0]?.status), priority: w.priority,
       })),
       recentInterventions: worksites.slice(0, 6).map((w) => ({
         id: w.id, ref: w.ref, title: w.title, building: w.acp?.name ?? null,
-        status: w.status, statusLabel: wsLabel(w.status),
+        status: w.status, statusLabel: wsLabel(w.status, w.documents[0]?.status),
         priority: w.priority, priorityLabel: prioLabel(w.priority),
         manager: managerName(w.manager), updatedAt: w.updatedAt,
         invoiceStatus: w.documents[0]?.status ?? null,
@@ -453,10 +457,11 @@ portalRouter.get(
         ref: w.ref,
         title: w.title,
         status: w.status,
-        statusLabel: WORKSITE_STATUS_LABEL[w.status as WorksiteStatus] ?? w.status,
+        statusLabel: wsLabel(w.status),
         building: w.acp,
         endedOn: w.endedOn,
-        urgent: w.status === 'to_invoice' || w.status === 'on_hold',
+        // « à suivre » pour le client : intervention urgente pas encore terminée (jamais « à facturer », interne)
+        urgent: (w.priority === 'urgent' || w.priority === 'high') && !CLIENT_DONE.includes(w.status),
       })),
     });
   }),
@@ -473,7 +478,7 @@ portalRouter.get(
     res.json({
       worksite: {
         id: w.id, ref: w.ref, title: w.title, status: w.status,
-        statusLabel: WORKSITE_STATUS_LABEL[w.status as WorksiteStatus] ?? w.status,
+        statusLabel: wsLabel(w.status, w.documents.find((d) => (d.kind === 'invoice' || d.kind === 'deposit_invoice') && d.number)?.status),
         address: [w.address, w.city].filter(Boolean).join(', '),
         building: w.acp, startedOn: w.startedOn, endedOn: w.endedOn,
         description: w.description,

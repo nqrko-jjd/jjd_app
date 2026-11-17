@@ -108,6 +108,34 @@ export const WORKSITE_STATUSES = [
 ] as const;
 export type WorksiteStatus = (typeof WORKSITE_STATUSES)[number];
 
+/**
+ * Statut vu par le client / syndic sur le portail : son parcours (demande → devis → travaux → réglé), sans le
+ * vocabulaire interne (« À facturer », « Devis à faire »…).
+ */
+export const PORTAL_STATUS_LABEL: Record<WorksiteStatus, string> = {
+  lead: 'Demande reçue',
+  quote_needed: 'Devis en préparation',
+  quote_sent: 'Devis à valider',
+  to_plan: 'Accepté · à planifier',
+  scheduled: 'Intervention planifiée',
+  in_progress: 'En cours',
+  on_hold: 'En attente',
+  done: 'Travaux terminés',
+  to_invoice: 'Travaux terminés',
+  invoiced: 'Facture envoyée',
+  closed: 'Terminé et réglé',
+  refused: 'Devis non retenu',
+  cancelled: 'Annulé',
+};
+/** Libellé portail, affiné par l'état de la facture quand il y en a une (à régler / réglée). */
+export function portalStatusLabel(status: string, invoiceStatus?: string | null): string {
+  if ((status === 'invoiced' || status === 'to_invoice' || status === 'done') && invoiceStatus) {
+    if (invoiceStatus === 'paid') return 'Terminé et réglé';
+    if (['sent', 'partial', 'overdue'].includes(invoiceStatus)) return 'Facture à régler';
+  }
+  return PORTAL_STATUS_LABEL[status as WorksiteStatus] ?? status;
+}
+
 export const WORKSITE_STATUS_LABEL: Record<WorksiteStatus, string> = {
   lead: 'Demande',
   quote_needed: 'Devis à faire',

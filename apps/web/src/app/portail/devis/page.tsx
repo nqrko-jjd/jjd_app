@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import { useState } from 'react';
 import { FileText } from 'lucide-react';
 import { portalDownload, usePortalApi, usePortalGuard } from '@/lib/portal';
 import { EmptyState, ErrorState, SkeletonRows } from '@/components/States';
@@ -18,13 +19,23 @@ const LABEL: Record<string, string> = { sent: 'À valider', accepted: 'Accepté'
 export default function PortalQuotes() {
   const { me, loading } = usePortalGuard();
   const { data, error, reload } = usePortalApi<{ items: Quote[] }>(me && me.access !== 'limited' ? '/quotes' : null);
-  const items = data?.items ?? null;
+  const all = data?.items ?? null;
+  // onglets : ce qui attend le client d'abord, puis l'historique
+  const [tab, setTab] = useState<'todo' | 'accepted' | 'other' | 'all' | null>(null);
 
   if (loading || !me) return null;
   if (me.access === 'limited') {
     return <PortalShell title="Devis"><EmptyState icon={FileText} title="Devis gérés par votre syndic" text="Les devis de votre immeuble sont validés par le syndic. Vous suivez l’avancement des interventions depuis « Interventions »." action={<Link href="/portail/interventions" className="btn primary">Voir les interventions</Link>} /></PortalShell>;
   }
-  const toValidate = (items ?? []).filter((q) => q.status === 'sent').length;
+  const toValidate = (all ?? []).filter((q) => q.status === 'sent').length;
+  const current = tab ?? (toValidate > 0 ? 'todo' : 'all');
+  const TABS: [typeof current, string, (q: Quote) => boolean][] = [
+    ['todo', 'À valider', (q) => q.status === 'sent'],
+    ['accepted', 'Acceptés', (q) => q.status === 'accepted'],
+    ['other', 'Refusés / expirés', (q) => q.status === 'declined' || q.status === 'expired'],
+    ['all', 'Tous', () => true],
+  ];
+  const items = all ? all.filter(TABS.find((t) => t[0] === current)![2]) : null;
 
   async function openPdf(id: string) {
     try { await portalDownload(`/documents/${id}/pdf`); } catch { /* */ }
@@ -32,7 +43,15 @@ export default function PortalQuotes() {
 
   return (
     <PortalShell title="Devis" subtitle={toValidate > 0 ? `${toValidate} en attente de votre validation` : 'Tous vos devis'}>
-      {error ? <ErrorState message={error} onRetry={reload} /> : !items ? <SkeletonRows rows={4} height={96} /> : items.length === 0 ? <EmptyState icon={FileText} title="Aucun devis pour l’instant" text="Dès que JJD Consult vous envoie un devis, il apparaît ici et vous pouvez le valider ou le décliner." action={<Link href="/portail/demande" className="btn primary">Nouvelle demande</Link>} secondary={<Link href="/portail/interventions" className="btn">Voir les interventions</Link>} /> : (
+      {all && all.length > 0 && (
+        <div className="row" style={{ gap: '0.4rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+          {TABS.map(([k, label, f]) => {
+            const n = all.filter(f).length;
+            return <button key={k} className={current === k ? 'p-btn-primary' : 'p-btn-line'} style={{ padding: '0.35rem 0.8rem', fontSize: '0.82rem' }} onClick={() => setTab(k)}>{label} ({n})</button>;
+          })}
+        </div>
+      )}
+      {error ? <ErrorState message={error} onRetry={reload} /> : !items ? <SkeletonRows rows={4} height={96} /> : items.length === 0 && all && all.length > 0 ? <EmptyState icon={FileText} title={current === 'todo' ? 'Aucun devis à valider' : 'Aucun devis ici'} text={current === 'todo' ? 'Tout est à jour : aucun devis n’attend votre décision.' : 'Rien dans cette catégorie.'} /> : items.length === 0 ? <EmptyState icon={FileText} title="Aucun devis pour l’instant" text="Dès que JJD Consult vous envoie un devis, il apparaît ici et vous pouvez le valider ou le décliner." action={<Link href="/portail/demande" className="btn primary">Nouvelle demande</Link>} secondary={<Link href="/portail/interventions" className="btn">Voir les interventions</Link>} /> : (
         <div style={{ display: 'grid', gap: '0.8rem' }}>
           {items.map((q) => (
             <div key={q.id} className="p-card p-card-pad">

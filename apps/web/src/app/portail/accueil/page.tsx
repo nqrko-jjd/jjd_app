@@ -36,7 +36,7 @@ function invoiceTag(status: string | null) {
 }
 
 const STATUS_DOT: Record<string, string> = {
-  scheduled: 'gold', in_progress: 'ok', on_hold: 'blue', done: 'ok', to_invoice: 'gold',
+  scheduled: 'gold', in_progress: 'ok', on_hold: 'blue', done: 'ok', to_invoice: 'ok',
   invoiced: 'grey', closed: 'grey', lead: 'grey', quote_sent: 'grey', to_plan: 'grey', cancelled: 'crit',
 };
 function fdate(s: string | null) {
@@ -93,6 +93,24 @@ export default function PortalDashboard() {
               )}
             </div>
           </div>
+
+          {/* Devis à valider */}
+          {!resident && d.quotesToValidate.length > 0 && (
+            <div className="p-panel" style={{ marginTop: '1.4rem' }}>
+              <div className="p-panel-h"><h2>Devis à valider</h2><span className="p-tag gold">{d.kpis.quotesToValidate ?? d.quotesToValidate.length} en attente</span></div>
+              {d.quotesToValidate.map((q) => (
+                <div key={q.id} className="p-doc-row">
+                  <span className="p-quote"><span className="ico">▤</span></span>
+                  <div>
+                    <div style={{ fontWeight: 700 }}>{q.title ?? 'Devis'} · <span className="amt">{eur(q.totalHt)} HTVA</span></div>
+                    <div className="p-note">{q.building ?? q.worksiteRef ?? ''} · reçu le {fdate(q.issuedOn)}</div>
+                  </div>
+                  <Link href={q.worksiteId ? `/portail/chantier/${q.worksiteId}` : '/portail/devis'} className="p-btn-primary p-btn-gold" style={{ marginLeft: 'auto' }}>Consulter le devis</Link>
+                </div>
+              ))}
+              <Link href="/portail/devis" className="p-more">Voir tous les devis ›</Link>
+            </div>
+          )}
 
           {/* Portefeuille (syndic) — photos des immeubles en avant sur l'accueil, comme la maquette */}
           {portfolio && d.portfolio.length > 0 && (
@@ -230,24 +248,6 @@ export default function PortalDashboard() {
               <Link href="/portail/planning" className="p-more">Voir tout le planning ›</Link>
             </div>}
           </div>
-
-          {/* Devis à valider */}
-          {!resident && d.quotesToValidate.length > 0 && (
-            <div className="p-panel">
-              <div className="p-panel-h"><h2>Devis à valider</h2></div>
-              {d.quotesToValidate.map((q) => (
-                <div key={q.id} className="p-doc-row">
-                  <span className="p-quote"><span className="ico">▤</span></span>
-                  <div>
-                    <div style={{ fontWeight: 700 }}>{q.title ?? 'Devis'} · <span className="amt">{eur(q.totalHt)} HTVA</span></div>
-                    <div className="p-note">{q.building ?? q.worksiteRef ?? ''} · reçu le {fdate(q.issuedOn)}</div>
-                  </div>
-                  <Link href={q.worksiteId ? `/portail/chantier/${q.worksiteId}` : '/portail/devis'} className="p-btn-primary p-btn-gold" style={{ marginLeft: 'auto' }}>Consulter le devis</Link>
-                </div>
-              ))}
-              <Link href="/portail/devis" className="p-more">Voir tous les devis ›</Link>
-            </div>
-          )}
 
           {/* Documents récents */}
           {!resident && d.recentDocuments.length > 0 && (

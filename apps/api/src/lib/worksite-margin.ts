@@ -200,8 +200,20 @@ export async function worksiteMargin(worksiteId: string): Promise<WorksiteMargin
 
   let invoicedHt = 0;
   let paidHt = 0;
+  // Reste à encaisser (TVAC, c'est ce que le client vire) : pour une facture de l'app, son solde (total − paiements
+  // rapprochés) fait foi — l'écriture comptable synchronisée n'est pas toujours reliée à la facture.
+  const appInvoices = await prisma.document.findMany({
+    where: { worksiteId, kind: { in: ['invoice', 'deposit_invoice'] }, status: { notIn: ['draft', 'declined'] } },
+    select: { number: true, status: true, totalTtc: true, paidAmount: true },
+  });
+  const appInvoiceNumbers = new Set(appInvoices.map((d) => d.number).filter((n): n is string => !!n));
   let toCollectTtc = 0;
   let toCollectCount = 0;
+  for (const d of appInvoices) {
+    if (['paid', 'credited'].includes(d.status)) continue;
+    const due = (d.totalTtc ?? 0) - (d.paidAmount ?? 0);
+    if (due > 0.005) { toCollectTtc += due; toCollectCount++; }
+  }
   let materialCost = 0;
   // Main-d'œuvre JJD (ouvriers pointés) déjà facturée : ils sont payés à la journée sur base
   // du pointage, puis la facture "Rémunération - Ouvrier" formalise ce même paiement. Une fois
@@ -213,8 +225,8 @@ export async function worksiteMargin(worksiteId: string): Promise<WorksiteMargin
     if (e.direction === 'sale') {
       invoicedHt += e.ht;
       paidHt += e.ht * paidFraction(e); // payée partiellement : la part déjà versée compte dans l'encaissé
-      // reste dû par le client : TVAC (c'est ce qu'il vire), hors factures annulées par une note de crédit
-      if (!['credited', 'draft', 'declined'].includes(e.document?.status ?? '')) {
+      // reste dû des ventes importées (sans facture de l'app) ; celles de l'app sont comptées plus bas, depuis la facture
+      if (!e.document && !(e.docNumber && appInvoiceNumbers.has(e.docNumber))) {
         const due = (e.ttc ?? e.ht) * (1 - paidFraction(e));
         if (due > 0.005) { toCollectTtc += due; toCollectCount++; }
       }

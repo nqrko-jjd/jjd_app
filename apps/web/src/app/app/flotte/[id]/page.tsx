@@ -112,6 +112,17 @@ export default function VehicleDetail({ params }: { params: Promise<{ id: string
     { name: 'insuranceAnnual', label: 'Assurance : prime (€/an)', type: 'number', placeholder: 'si pas de prime mensuelle' },
     { name: 'parkingMonthly', label: 'Parking / garage (€/mois)', type: 'number' },
     { name: 'otherMonthly', label: 'Autres frais fixes (€/mois)', type: 'number', placeholder: 'GPS, télépéage…' },
+    { name: 'acquisitionMode', label: 'Acquisition', type: 'select', options: ['Comptant', 'Crédit', 'Leasing', 'Renting financier'].map((m) => ({ value: m, label: m })) },
+    { name: 'purchaseDate', label: 'Date d’achat', type: 'date' },
+    { name: 'purchasePriceHt', label: 'Prix d’achat HTVA', type: 'number' },
+    { name: 'financeCompany', label: 'Organisme (banque, leasing)' },
+    { name: 'financeContract', label: 'N° de contrat', placeholder: 'tel qu’il apparaît sur le relevé bancaire' },
+    { name: 'financedAmount', label: 'Montant financé', type: 'number' },
+    { name: 'monthlyPayment', label: 'Mensualité', type: 'number' },
+    { name: 'financeMonths', label: 'Durée (mois)', type: 'number' },
+    { name: 'financeEndOn', label: 'Dernière échéance', type: 'date' },
+    { name: 'downPayment', label: 'Acompte', type: 'number' },
+    { name: 'residualValue', label: 'Valeur résiduelle', type: 'number' },
   ];
 
   return (
@@ -155,6 +166,9 @@ export default function VehicleDetail({ params }: { params: Promise<{ id: string
             circulationTax: v.circulationTax, biv: v.biv, equipment: v.equipment, note: v.note,
             fuelConsoL100: v.fuelConsoL100, fuelPricePerL: v.fuelPricePerL, costPerKmExtra: v.costPerKmExtra,
             parkingMonthly: v.parkingMonthly, otherMonthly: v.otherMonthly,
+            acquisitionMode: v.acquisitionMode, purchaseDate: toDateInput(v.purchaseDate), purchasePriceHt: v.purchasePriceHt,
+            financeCompany: v.financeCompany, financeContract: v.financeContract, financedAmount: v.financedAmount, monthlyPayment: v.monthlyPayment,
+            financeMonths: v.financeMonths, financeEndOn: toDateInput(v.financeEndOn), downPayment: v.downPayment, residualValue: v.residualValue,
             insuranceProvider: v.insurances[0]?.provider ?? null, insuranceMonthly: v.insurances[0]?.monthlyAmount ?? null, insuranceAnnual: v.insurances[0]?.annualAmount ?? null,
           }}
           onClose={() => setEditing(false)}

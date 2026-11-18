@@ -547,6 +547,18 @@ export const vehicleInput = z.object({
   status: z.enum(VEHICLE_STATUSES).nullish(),
   excludedFromPlanning: z.boolean().nullish(),
   note: z.string().trim().nullish(),
+  // acquisition / financement (contrat de crédit ou leasing : sert aussi à reconnaître les mensualités sur le relevé)
+  acquisitionMode: z.string().trim().nullish(),
+  purchaseDate: z.coerce.date().nullish(),
+  purchasePriceHt: z.coerce.number().nonnegative().nullish(),
+  financedAmount: z.coerce.number().nonnegative().nullish(),
+  monthlyPayment: z.coerce.number().nonnegative().nullish(),
+  downPayment: z.coerce.number().nonnegative().nullish(),
+  residualValue: z.coerce.number().nonnegative().nullish(),
+  financeMonths: z.coerce.number().int().nonnegative().nullish(),
+  financeEndOn: z.coerce.date().nullish(),
+  financeCompany: z.string().trim().nullish(),
+  financeContract: z.string().trim().nullish(),
 }).merge(vehicleCostInput);
 export type VehicleInput = z.infer<typeof vehicleInput>;
 

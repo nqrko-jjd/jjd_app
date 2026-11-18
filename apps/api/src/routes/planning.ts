@@ -519,6 +519,8 @@ vehiclesRouter.patch(
       'code', 'brand', 'model', 'plate', 'type', 'seats', 'fuel', 'vin', 'km', 'firstRegistration', 'nextInspection',
       'circulationTax', 'biv', 'driver', 'equipment', 'depot', 'status', 'excludedFromPlanning', 'note',
       'fuelConsoL100', 'fuelPricePerL', 'costPerKmExtra', 'parkingMonthly', 'otherMonthly',
+      'acquisitionMode', 'purchaseDate', 'purchasePriceHt', 'financedAmount', 'monthlyPayment', 'downPayment',
+      'residualValue', 'financeMonths', 'financeEndOn', 'financeCompany', 'financeContract',
     ] as const;
     const data: Record<string, unknown> = {};
     for (const k of keys) {

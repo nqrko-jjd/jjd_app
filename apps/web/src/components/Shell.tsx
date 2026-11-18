@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  LayoutGrid, Building2, CalendarDays, ListChecks, Clock, TrendingUp, FileText, Wallet,
+  LayoutGrid, Building2, CalendarDays, ListChecks, Clock, TrendingUp, FileText, Wallet, CreditCard,
   BarChart3, Euro, Warehouse, Contact, Users, UserRound, Truck, Wrench, Package, ScanLine, Flag, Settings, ExternalLink,
   MessageSquare, ClipboardList, BellRing, Search, ChevronDown, ChevronLeft, ChevronRight, X, Menu, LogOut, Sparkles, type LucideIcon,
 } from 'lucide-react';
@@ -96,6 +96,7 @@ const NAV: Group[] = [
     { href: '/app/finances', label: 'Finances', ic: Euro, roles: ['admin', 'office'] },
     { href: '/app/finances/fournisseurs', label: 'Comptes fournisseurs', ic: Contact, roles: ['admin', 'office'] },
     { href: '/app/finances/banque', label: 'Rapprochement bancaire', ic: Wallet, roles: ['admin', 'office'] },
+    { href: '/app/finances/cartes', label: 'Cartes de paiement', ic: CreditCard, roles: ['admin', 'office'] },
     { href: '/app/relances', label: 'Relances de paiement', ic: BellRing, roles: ['admin', 'office'] },
     { href: '/app/analyse', label: 'Analyse', ic: BarChart3, roles: ['admin', 'office'] },
   ] },

@@ -2702,3 +2702,51 @@ body.nav-collapsed .navlink .nav-badge { position: absolute; top: 2px; right: 2p
 .contact-band { display: flex; flex-wrap: wrap; gap: 0.4rem 1.2rem; align-items: center; margin: -0.3rem 0 1rem; padding: 0.55rem 0.9rem; border-radius: 10px; background: var(--primary-soft); color: var(--ink); font-size: 0.88rem; }
 .contact-band a { color: inherit; }
 .contact-band:empty { display: none; }
+
+/* Cartes de paiement (finances/cartes) : rendu « appli bancaire ». */
+.pay-cards-rail { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:1rem; margin-bottom:1.25rem; }
+.pay-card-tile { all:unset; cursor:pointer; display:flex; flex-direction:column; gap:.55rem; padding:.55rem; border-radius:18px; border:2px solid transparent; transition:border-color .15s, background .15s; }
+.pay-card-tile:hover { background:var(--surface-2); }
+.pay-card-tile:focus-visible { outline:3px solid var(--primary); outline-offset:2px; }
+.pay-card-tile.is-selected { border-color:var(--primary); background:var(--primary-soft); }
+.pay-card-meta { display:flex; justify-content:space-between; align-items:center; gap:.5rem; font-size:.85rem; padding:0 .2rem; }
+.pay-card-owner { display:inline-flex; align-items:center; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600; }
+.pay-card { position:relative; aspect-ratio:1.586; border-radius:14px; padding:1rem 1.1rem; color:#fff; display:flex; flex-direction:column; justify-content:space-between; overflow:hidden; box-shadow:0 8px 22px rgba(10,30,24,.18); }
+.pay-card::after { content:''; position:absolute; right:-30%; top:-40%; width:85%; height:140%; border-radius:50%; background:rgba(255,255,255,.08); pointer-events:none; }
+.pay-card.net-bancontact { background:linear-gradient(135deg,#124b3a 0%,#1d6b52 55%,#2f8a6c 100%); }
+.pay-card.net-visa { background:linear-gradient(135deg,#1c2430 0%,#2c3a4d 60%,#45566d 100%); }
+.pay-card.is-off { filter:grayscale(.85); opacity:.75; }
+.pay-card.is-big { max-width:380px; margin:0 auto 1rem; }
+.pay-card-top { display:flex; justify-content:space-between; align-items:flex-start; gap:.5rem; font-size:.82rem; font-weight:600; letter-spacing:.01em; }
+.pay-card-flag { background:rgba(255,255,255,.2); border-radius:999px; padding:.1rem .5rem; font-size:.72rem; }
+.pay-card-chip { width:38px; height:28px; border-radius:6px; background:linear-gradient(135deg,#e8d29b,#b8975a); box-shadow:inset 0 0 0 1px rgba(0,0,0,.15); }
+.pay-card-number { font-size:1.05rem; letter-spacing:.12em; font-variant-numeric:tabular-nums; }
+.pay-card.is-big .pay-card-number { font-size:1.25rem; }
+.pay-card-bottom { display:flex; justify-content:space-between; align-items:flex-end; gap:.5rem; font-size:.78rem; text-transform:uppercase; letter-spacing:.06em; }
+.pay-card-holder { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.pay-card-brand { font-weight:800; font-size:.95rem; letter-spacing:.02em; text-transform:none; }
+.pay-card.net-visa .pay-card-brand { font-style:italic; font-size:1.1rem; }
+.pay-card-detail { display:grid; grid-template-columns:minmax(280px,400px) 1fr; gap:1rem; align-items:start; }
+.pay-card-kpis { display:grid; grid-template-columns:repeat(3,1fr); gap:.5rem; margin-bottom:.8rem; }
+.pay-card-kpis > div { background:var(--surface-2); border-radius:10px; padding:.55rem .6rem; min-width:0; }
+.pay-card-kpis span { display:block; font-size:.74rem; color:var(--ink-2); }
+.pay-card-kpis strong { display:block; font-size:.98rem; margin-top:.15rem; font-variant-numeric:tabular-nums; }
+.pay-card-kpis strong.crit { color:var(--crit); }
+.pay-limit { height:5px; border-radius:3px; background:var(--line); margin-top:.35rem; overflow:hidden; }
+.pay-limit i { display:block; height:100%; background:var(--primary); }
+.pay-limit i.crit { background:var(--crit); }
+.pay-bars { display:flex; align-items:flex-end; gap:.45rem; height:150px; margin:1rem 0 .3rem; }
+.pay-bar { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; min-width:0; }
+.pay-bar i { width:100%; max-width:46px; border-radius:6px 6px 2px 2px; background:var(--primary); opacity:.85; }
+.pay-bar:last-child i { background:var(--gold); opacity:1; }
+.pay-bar-val { font-size:.68rem; color:var(--ink-2); margin-bottom:.2rem; white-space:nowrap; }
+.pay-bar-lab { font-size:.72rem; color:var(--ink-2); margin-top:.25rem; }
+.pay-tx-list { list-style:none; margin:0; padding:0; }
+.pay-tx-list li { display:flex; justify-content:space-between; align-items:center; gap:.75rem; padding:.6rem 0; border-top:1px solid var(--line); }
+.pay-tx-main { display:flex; flex-direction:column; min-width:0; }
+.pay-tx-main strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:.9rem; }
+.pay-tx-main span { font-size:.78rem; }
+.pay-tx-side { display:flex; flex-direction:column; align-items:flex-end; gap:.2rem; font-variant-numeric:tabular-nums; flex-shrink:0; }
+.pay-tx-side .pos { color:var(--ok); }
+@media(max-width:860px) { .pay-card-detail { grid-template-columns:1fr; } }
+@media(max-width:520px) { .pay-cards-rail { grid-template-columns:none; grid-auto-flow:column; grid-auto-columns:82%; overflow-x:auto; scroll-snap-type:x mandatory; padding-bottom:.4rem; } .pay-card-tile { scroll-snap-align:start; } .pay-bar-val { display:none; } }

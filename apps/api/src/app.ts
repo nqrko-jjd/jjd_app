@@ -24,6 +24,7 @@ import { gpsRouter } from './routes/gps.js';
 import { portalRouter } from './routes/portal.js';
 import { financeRouter } from './routes/finance.js';
 import { expensesRouter } from './routes/expenses.js';
+import { cardsRouter } from './routes/cards.js';
 import { pontoRouter } from './routes/ponto.js';
 import { documentsRouter, priceItemsRouter } from './routes/documents.js';
 import { progressRouter } from './routes/progress.js';
@@ -89,6 +90,7 @@ export function createApp() {
   app.use('/api/crm', crmRouter);
   app.use('/api/mail-suggestions', mailSuggestionsRouter);
   app.use('/api/finance/expenses', expensesRouter);
+  app.use('/api/finance/cards', cardsRouter);
   app.use('/api/finance', financeRouter);
   app.use('/api/ponto', pontoRouter);
   app.use('/api/documents', documentsRouter);

@@ -269,7 +269,7 @@ function BanqueInner() {
       <PageHead
         title="Rapprochement bancaire"
         sub={data ? `${data.matched} / ${data.total} transactions rapprochées · page ${data.page}/${data.totalPages}` : undefined}
-        action={<><Link href="/app/finances/banque/domiciliations" className="btn">Domiciliations</Link><Link href="/app/finances" className="btn">← Finances</Link></>}
+        action={<><Link href="/app/finances/banque/domiciliations" className="btn">Domiciliations</Link><Link href="/app/finances/cartes" className="btn">Cartes</Link><Link href="/app/finances" className="btn">← Finances</Link></>}
       />
 
       {documentFilter && (

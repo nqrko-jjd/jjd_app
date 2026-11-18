@@ -119,7 +119,7 @@ export function Loading() {
 export function Badge({ children, tone }: { children: ReactNode; tone?: 'ok' | 'warn' | 'crit' | 'primary' }) {
   const map = { ok: [T.ok, T.okSoft], warn: [T.warn, T.warnSoft], crit: [T.crit, T.critSoft], primary: [T.primary, T.primarySoft] } as const;
   const [fg, bg] = tone ? map[tone] : [T.ink2, T.surface2];
-  return <View style={[st.badge, { backgroundColor: bg }]}><Text style={{ color: fg, fontSize: 11.5, fontWeight: '700' }}>{children}</Text></View>;
+  return <View style={[st.badge, { backgroundColor: bg }]}><Text style={{ color: fg, fontSize: 11.5, fontWeight: '700', flexShrink: 1 }}>{children}</Text></View>;
 }
 
 export function eur(n: number | null | undefined): string {
@@ -151,7 +151,7 @@ export function ResourceList<Item extends { id: string }>({
 }: {
   endpoint: string;
   search?: (it: Item, q: string) => boolean;
-  render: (it: Item) => ReactNode;
+  render: (it: Item, q: string) => ReactNode;
   onPress?: (it: Item) => void;
   searchPlaceholder?: string;
 }) {
@@ -193,7 +193,7 @@ export function ResourceList<Item extends { id: string }>({
         ListEmptyComponent={<EmptyState title={tr("Aucun résultat")} description={tr("Essayez un autre terme de recherche.")}/>}
         renderItem={({ item }) => (
           <Pressable style={st.listRow} onPress={() => onPress?.(item)} disabled={!onPress}>
-<View style={{flex:1,minWidth:0,gap:6}}>{render(item)}</View>{onPress && <Feather name="chevron-right" size={18} color={T.ink3}/>}
+<View style={{flex:1,minWidth:0,gap:6}}>{render(item, q.toLowerCase())}</View>{onPress && <Feather name="chevron-right" size={18} color={T.ink3}/>}
           </Pressable>
         )}
       />
@@ -210,7 +210,7 @@ const st = StyleSheet.create({
   card: { ...T.shadow, backgroundColor: T.surface, borderRadius: T.radius, borderWidth: 1, borderColor: T.line, padding: 20, gap: 10 },
   label: { fontSize: 11, color: T.ink2, textTransform: 'uppercase', letterSpacing: 1.1, fontWeight: '700', marginBottom: 3 },
   muted: { color: T.ink2, fontSize: 13, lineHeight: 20 },
-  badge: { borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3, alignSelf: 'flex-start' },
+  badge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, alignSelf: 'flex-start', flexShrink: 1 },
   kv: { flexDirection: 'row', justifyContent: 'space-between', gap: 16, paddingVertical: 8, alignItems: 'flex-start' },
   kvK: { color: T.ink2, fontSize: 12, flexShrink: 1, maxWidth: '42%', lineHeight: 19 },
   kvV: { color: T.ink, fontSize: 14, lineHeight: 21, flex: 1, textAlign: 'right', fontWeight: '600' },

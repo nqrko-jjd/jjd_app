@@ -15,7 +15,7 @@ const GROUPS:{title:string;links:LinkItem[]}[]=[
  {title:tr('Mon quotidien'),links:[
   {href:'/planning',label:tr('Planning'),description:'Mes journées et affectations',ic:'calendar',roles:['worker','foreman','admin','office']},
   {href:'/valider',label:tr('À valider'),description:'Rapports et pointages de l’équipe',ic:'check-square',roles:TEAM},
-  {href:'/heures',label:tr('Mes heures'),description:'Mes pointages sur chantier',ic:'clock',roles:['worker','foreman']},
+  {href:'/heures',label:tr('Mes heures'),description:'Mes pointages sur chantier',ic:'clock',roles:['worker','foreman','admin','office']},
   {href:'/compte',label:tr('Mon compte'),description:'Profil, langue et préférences',ic:'user'},
  ]},
  {title:tr('Magasin'),links:[
@@ -28,6 +28,7 @@ const GROUPS:{title:string;links:LinkItem[]}[]=[
   {href:'/contacts',label:'Contacts',description:'Clients et interlocuteurs',ic:'book-open',roles:TEAM},
   {href:'/equipe',label:tr('Équipe'),description:'Les personnes et leurs coordonnées',ic:'users',roles:TEAM},
   {href:'/flotte',label:tr('Flotte'),description:'Véhicules et entretiens',ic:'truck',roles:TEAM},
+  {href:'/suivi-gps',label:tr('Suivi GPS'),description:'Où sont les véhicules en ce moment',ic:'map-pin',roles:TEAM},
  ]},
  {title:tr('Gestion'),links:[
   {href:'/moderation',label:'Signalements',description:'Messages à examiner',ic:'flag',roles:['admin']},
@@ -35,6 +36,8 @@ const GROUPS:{title:string;links:LinkItem[]}[]=[
   {href:'/pipeline',label:tr('Opportunités'),description:'Les demandes à suivre',ic:'trending-up',roles:OFFICE},
   {href:'/documents',label:tr('Devis & factures'),description:'Documents et paiements',ic:'file-text',roles:OFFICE},
   {href:'/depense/nouvelle',label:tr('Nouvelle dépense'),description:'Photographier un ticket ou saisir une dépense',ic:'camera',roles:TEAM},
+  {href:'/commandes',label:tr('Commandes fournisseurs'),description:'Commandes à réceptionner et brouillons',ic:'shopping-cart',roles:['admin','office','storekeeper']},
+  {href:'/cartes',label:tr('Cartes & comptes'),description:'Paiements par carte et comptes à justifier',ic:'credit-card',roles:OFFICE},
   {href:'/achats',label:tr('Achats & dépenses'),description:'Justificatifs et coûts',ic:'shopping-bag',roles:OFFICE},
   {href:'/decomptes',label:tr('Décomptes du mois'),description:'Les journées à contrôler',ic:'credit-card',roles:TEAM},
   {href:'/analyse',label:tr('Analyse'),description:'Facturé, encaissé, marges et devis',ic:'bar-chart-2',roles:OFFICE},

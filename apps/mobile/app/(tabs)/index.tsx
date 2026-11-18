@@ -193,8 +193,9 @@ export function FieldHome({ embedded = false }: { embedded?: boolean }) {
         <View style={[s.card, { borderColor: T.accent, borderWidth: 2 }]}>
           <Text style={s.label}>Compte non lié</Text>
           <Text style={s.muted}>
-            Ton compte n’est pas encore rattaché à ta fiche ouvrier. Le bureau doit le faire
-            (fiche Équipe → « Lier à un compte »). En attendant, tu ne peux pas pointer.
+            {user?.role === 'admin' || user?.role === 'office'
+              ? 'Liez votre compte à votre fiche dans Équipe (fiche → « Lier à un compte » sur le site) : le pointage et « Mes heures » seront alors disponibles pour vous.'
+              : 'Ton compte n’est pas encore rattaché à ta fiche. Le bureau doit le faire (fiche Équipe → « Lier à un compte »). En attendant, tu ne peux pas pointer.'}
           </Text>
         </View>
       )}

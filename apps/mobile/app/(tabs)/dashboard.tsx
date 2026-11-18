@@ -23,8 +23,8 @@ const hm = (iso: string) => new Date(iso).toLocaleTimeString(dateLocale(), { hou
 
 /** Où mène chaque alerte : on touche la ligne, on arrive directement sur la liste utile. */
 const ALERT_ROUTE: Record<string, string> = {
-  overdue_invoices: '/documents', overdue_supplier_invoices: '/achats', to_invoice: '/chantiers?status=to_invoice', on_hold: '/chantiers?status=on_hold',
-  quotes_follow: '/documents', crm_due: '/pipeline', expiring_docs: '/flotte', ct_expiring: '/flotte', planned_time: '/valider', project: '/chantiers',
+  overdue_invoices: '/documents?dashboard=overdue', overdue_supplier_invoices: '/achats', to_invoice: '/chantiers?status=to_invoice', on_hold: '/chantiers?status=on_hold',
+  quotes_follow: '/documents?dashboard=quotes', crm_due: '/pipeline', expiring_docs: '/flotte', ct_expiring: '/flotte', planned_time: '/valider', project: '/chantiers',
 };
 
 /** Accueil direction / bureau : ce qu'il faut traiter aujourd'hui, pas des statistiques (celles-ci sont dans « Plus → Analyse »). */
@@ -67,7 +67,7 @@ function BureauHome() {
     { icon: 'check-square', label: tr('À valider'), value: pending ? `${pending} pointage${pending > 1 ? 's' : ''}` : 'Rien en attente', to: '/valider', alert: pending > 0 },
     { icon: 'inbox', label: tr('Boîte IA'), value: inbox ? `${inbox} à traiter` : 'Rien à traiter', to: '/boite-ia', alert: inbox > 0 },
     { icon: 'trending-up', label: tr('Demandes'), value: leads ? `${leads} nouvelle${leads > 1 ? 's' : ''}` : 'Aucune nouvelle', to: '/pipeline', alert: leads > 0 },
-    { icon: 'flag', label: tr('Impayés'), value: data.kpis.overdueCount ? eur(data.kpis.overdueAmount) : 'Aucun', to: '/documents', alert: data.kpis.overdueCount > 0 },
+    { icon: 'flag', label: tr('Impayés'), value: data.kpis.overdueCount ? eur(data.kpis.overdueAmount) : 'Aucun', to: '/documents?dashboard=overdue', alert: data.kpis.overdueCount > 0 },
     { icon: 'home', label: tr('Chantiers'), value: `${data.kpis.openWorksites} en cours`, to: '/chantiers?status=in_progress' },
     { icon: 'camera', label: tr('Nouvelle dépense'), value: 'Scanner un ticket', to: '/depense/nouvelle' },
     { icon: 'file-text', label: tr('Devis & factures'), value: 'Voir la liste', to: '/documents' },
@@ -82,11 +82,11 @@ function BureauHome() {
       <ScreenHeader eyebrow={todayLabel()} title={first ? `Bonjour ${first},` : 'Bonjour,'} description={tr("Ce qui demande votre attention aujourd’hui.")} avatar={first?.slice(0, 1) || 'J'} />
 
       <View style={s.tiles}>
-        <Pressable accessibilityRole="button" accessibilityLabel={`${tr('Facturé ce mois')} : ${eur(data.kpis.invoicedMonth)}`} onPress={() => go('/analyse')} style={({pressed})=>[{flexGrow:1,flexBasis:150},pressed&&{opacity:0.75}]}>
+        <Pressable accessibilityRole="button" accessibilityLabel={`${tr('Facturé ce mois')} : ${eur(data.kpis.invoicedMonth)}`} onPress={() => go('/documents?dashboard=invoiced')} style={({pressed})=>[{flexGrow:1,flexBasis:150},pressed&&{opacity:0.75}]}>
           <HeroTile icon="bar-chart-2" style={{padding:18,flex:1}}><Text style={s.heroLabel}>Facturé ce mois</Text><Text style={s.heroValue}>{eur(data.kpis.invoicedMonth)}</Text></HeroTile>
         </Pressable>
-        <Pressable accessibilityRole="button" onPress={() => go('/analyse')} style={({pressed})=>[s.metric,pressed&&{opacity:0.75}]}><Text style={s.tileLabel}>Encaissé ce mois</Text><Text style={s.metricValue}>{eur(data.kpis.paidMonth)}</Text><Feather name="trending-up" size={18} color={T.primary}/></Pressable>
-        <Pressable accessibilityRole="button" onPress={() => go('/documents')} style={({pressed})=>[s.metric,s.tileAlert,pressed&&{opacity:0.75}]}><Text style={s.tileLabel}>Factures en retard</Text><Text style={[s.metricValue,{color:T.kpiWarnFg}]}>{eur(data.kpis.overdueAmount)}</Text><Text style={s.tileLabel}>{data.kpis.overdueCount} facture(s)</Text></Pressable>
+        <Pressable accessibilityRole="button" onPress={() => go('/documents?dashboard=collected')} style={({pressed})=>[s.metric,pressed&&{opacity:0.75}]}><Text style={s.tileLabel}>Encaissé ce mois</Text><Text style={s.metricValue}>{eur(data.kpis.paidMonth)}</Text><Feather name="trending-up" size={18} color={T.primary}/></Pressable>
+        <Pressable accessibilityRole="button" onPress={() => go('/documents?dashboard=overdue')} style={({pressed})=>[s.metric,s.tileAlert,pressed&&{opacity:0.75}]}><Text style={s.tileLabel}>Factures en retard</Text><Text style={[s.metricValue,{color:T.kpiWarnFg}]}>{eur(data.kpis.overdueAmount)}</Text><Text style={s.tileLabel}>{data.kpis.overdueCount} facture(s)</Text></Pressable>
         <Pressable accessibilityRole="button" onPress={() => go('/chantiers?status=in_progress')} style={({pressed})=>[s.metric,pressed&&{opacity:0.75}]}><Text style={s.tileLabel}>Chantiers en cours</Text><Text style={s.metricValue}>{data.kpis.openWorksites}</Text><Feather name="home" size={18} color={T.primary}/></Pressable>
       </View>
 

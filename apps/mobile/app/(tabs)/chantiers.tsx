@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useState } from 'react';
-import { View, TextInput, Pressable, FlatList, StyleSheet, ScrollView } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { View, TextInput, Pressable, FlatList, StyleSheet } from 'react-native';
 import { Text } from '@/lib/AppText';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { apiGet } from '@/lib/api';
@@ -23,11 +23,9 @@ const TONE: Record<string, 'ok' | 'warn' | 'crit' | undefined> = {
   in_progress: undefined, done: 'ok', invoiced: 'ok', closed: 'ok', to_invoice: 'warn', on_hold: 'warn', cancelled: 'crit',
 };
 
-const FILTERS = [
-  { key: 'all', label: tr('Tous'), test: () => true },
-  { key: 'open', label: tr('En cours'), test: (it: WS) => it.status === 'in_progress' },
-  { key: 'to_invoice', label: tr('À facturer'), test: (it: WS) => it.status === 'to_invoice' },
-] as const;
+/** Ordre des pastilles : le parcours d'un chantier, de la demande à la clôture. */
+const FILTER_ORDER = ['in_progress', 'to_invoice', 'on_hold', 'lead', 'quote_needed', 'quote_sent', 'to_plan', 'scheduled', 'done', 'invoiced', 'closed', 'cancelled'] as const;
+const FILTER_LABEL: Record<string, string> = { on_hold: 'Sous observation / en attente' };
 
 export default function Chantiers() {
   const router = useRouter();
@@ -35,7 +33,9 @@ export default function Chantiers() {
   const { user } = useSession();
   const worker = user?.role === 'worker';
   const [q, setQ] = useState('');
-  const [filter, setFilter] = useState<(typeof FILTERS)[number]['key']>(statusParam === 'in_progress' ? 'open' : 'all');
+  const [filter, setFilter] = useState<string>(statusParam && STATUS_LABEL[statusParam] ? statusParam : 'all');
+  // l'onglet reste monté : un nouveau lien depuis l'accueil (« À facturer », « Sous observation »…) doit changer le filtre
+  useEffect(() => { setFilter(statusParam && STATUS_LABEL[statusParam] ? statusParam : 'all'); }, [statusParam]);
   const [items, setItems] = useState<WS[]>([]);
 
   const load = useCallback(async () => {
@@ -49,8 +49,13 @@ export default function Chantiers() {
   }, [q, worker]);
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const active = FILTERS.find((f) => f.key === filter) ?? FILTERS[0];
-  const filtered = useMemo(() => items.filter(active.test), [items, active]);
+  const counts = useMemo(() => {
+    const c: Record<string, number> = {};
+    for (const it of items) c[it.status] = (c[it.status] ?? 0) + 1;
+    return c;
+  }, [items]);
+  const filtered = useMemo(() => (filter === 'all' ? items : items.filter((it) => it.status === filter)), [items, filter]);
+  const pills = [{ key: 'all', label: tr('Tous'), n: items.length }, ...FILTER_ORDER.filter((k) => counts[k] || k === filter).map((k) => ({ key: k as string, label: tr(FILTER_LABEL[k] ?? STATUS_LABEL[k] ?? k), n: counts[k] ?? 0 }))];
 
   return (
     <View style={{ flex: 1, backgroundColor: T.paper }}>
@@ -59,13 +64,13 @@ export default function Chantiers() {
 
       </View>
 
-      <ScrollView style={{flexGrow:0}} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.pillRow}>
-        {FILTERS.map((f) => (
-          <Pressable key={f.key} onPress={() => setFilter(f.key)} style={[s.pill, filter === f.key && s.pillActive]}>
-            <Text style={[s.pillLabel, filter === f.key && s.pillLabelActive]}>{f.label}</Text>
+      <View style={s.pillRow}>
+        {pills.map((f) => (
+          <Pressable key={f.key} accessibilityRole="button" onPress={() => setFilter(f.key)} style={[s.pill, filter === f.key && s.pillActive]}>
+            <Text style={[s.pillLabel, filter === f.key && s.pillLabelActive]}>{f.label} · {f.n}</Text>
           </Pressable>
         ))}
-      </ScrollView>
+      </View>
 
       <View style={{ paddingHorizontal: 18 }}>
         <TextInput
@@ -103,7 +108,7 @@ export default function Chantiers() {
 const s = StyleSheet.create({
   eyebrow: { fontSize: 11.5, color: T.ink3, textTransform: 'uppercase', letterSpacing: 0.6, fontWeight: '700' },
   title: { fontSize: 22, fontWeight: '800', color: T.ink, marginTop: 2, marginBottom: 2 },
-  pillRow: { paddingHorizontal: 16, paddingBottom: 10, gap: 8 },
+  pillRow: { paddingHorizontal: 16, paddingBottom: 10, gap: 8, flexDirection: 'row', flexWrap: 'wrap' },
   pill: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, backgroundColor: T.surface, borderWidth: 1, borderColor: T.line },
   pillActive: { backgroundColor: T.primary, borderColor: T.primary },
   pillLabel: { color: T.ink2, fontWeight: '600', fontSize: 13 },

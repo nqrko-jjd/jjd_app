@@ -70,6 +70,12 @@ export default function Heures() {
       contentContainerStyle={{ ...T.content, gap: 20 }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} />}
     >
+      {!person && (
+        <View style={[s.card, { borderColor: T.accent, borderWidth: 2 }]}>
+          <Text style={s.label}>Compte non lié</Text>
+          <Text style={s.muted}>Liez votre compte à votre fiche dans Équipe (fiche → « Lier à un compte » sur le site) pour voir vos heures et pointer.</Text>
+        </View>
+      )}
       <View style={s.nav}>
         <Pressable style={s.navBtn} onPress={() => shift(-1)}><Feather name="chevron-left" size={18} color={T.ink} /></Pressable>
         <Text style={s.month}>{MONTHS[m - 1]} {y}</Text>

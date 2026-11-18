@@ -1,0 +1,14 @@
+.pay-section-title { font-size:1rem; margin:.4rem 0 .6rem; display:flex; gap:.5rem; align-items:baseline; }
+.pay-section-title .muted { font-size:.8rem; font-weight:400; }
+.pay-card.net-account { background:linear-gradient(135deg,#f6f1e4 0%,#efe4c8 100%); color:#173b31; box-shadow:0 6px 18px rgba(23,59,49,.12); border:1px solid #e3d5ae; }
+.pay-card.net-account::after { background:rgba(255,255,255,.35); }
+.pay-acc-balance-label { font-size:.72rem; text-transform:uppercase; letter-spacing:.06em; opacity:.7; }
+.pay-acc-balance { font-size:1.35rem; font-weight:800; font-variant-numeric:tabular-nums; }
+.pay-card.is-big .pay-acc-balance { font-size:1.6rem; }
+.pay-bar-pair { display:flex; align-items:flex-end; gap:3px; height:100%; width:100%; justify-content:center; }
+.pay-bar-pair i { width:45%; max-width:22px; border-radius:5px 5px 2px 2px; background:var(--crit); opacity:.75; }
+.pay-bar-pair i.in { background:var(--primary); opacity:.85; }
+.pay-bar.is-double:last-child .pay-bar-pair i { opacity:1; }
+strong.crit { color:var(--crit); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .pay-card.net-account { background:linear-gradient(135deg,#2a2416,#3a3220); color:#f1e8d6; border-color:#4a3f26; } }
+:root[data-theme="dark"] .pay-card.net-account { background:linear-gradient(135deg,#2a2416,#3a3220); color:#f1e8d6; border-color:#4a3f26; }

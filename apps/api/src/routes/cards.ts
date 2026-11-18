@@ -157,3 +157,74 @@ cardsRouter.delete('/:id', requireAuth(...OFFICE), asyncHandler(async (req, res)
   await prisma.paymentCard.delete({ where: { id: req.params.id } });
   res.status(204).end();
 }));
+
+/* ------------------------------------------------------------- comptes (virements, domiciliations, entrées) */
+
+/** Opérations d'un compte qui ne sont PAS des paiements carte (ceux-là sont sous leur carte). */
+async function accountTransactions(bank: string | null, since: Date) {
+  const rows = await prisma.bankTransaction.findMany({
+    where: { bookingDate: { gte: since }, NOT: { bank: { startsWith: 'VISA' } }, ...(bank ? { bank } : {}) },
+    select: { ...TX_SELECT, accountId: true, account: { select: { iban: true, label: true, balance: true, balanceAt: true } } },
+    orderBy: { bookingDate: 'desc' },
+  });
+  return rows.filter((t) => !detectCard(t));
+}
+
+cardsRouter.get('/accounts', requireAuth(...OFFICE), asyncHandler(async (_req, res) => {
+  const now = new Date();
+  const since = new Date(now.getFullYear(), now.getMonth() - 12, 1);
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const rows = await accountTransactions(null, since);
+  const by = new Map<string, typeof rows>();
+  for (const t of rows) { const k = t.bank || 'Autre'; by.set(k, [...(by.get(k) ?? []), t]); }
+  const items = [...by.entries()].map(([bank, txs]) => {
+    const acc = txs.find((t) => t.account)?.account ?? null;
+    const month = txs.filter((t) => t.bookingDate && t.bookingDate >= monthStart);
+    const todo = txs.filter((t) => !t._count.matches && !t.pairedTxId);
+    return {
+      bank, iban: acc?.iban ?? null, label: acc?.label ?? null, balance: acc?.balance ?? null, balanceAt: acc?.balanceAt ?? null,
+      stats: {
+        monthOut: round2(month.filter((t) => (t.amount ?? 0) < 0).reduce((s, t) => s - (t.amount ?? 0), 0)),
+        monthIn: round2(month.filter((t) => (t.amount ?? 0) > 0).reduce((s, t) => s + (t.amount ?? 0), 0)),
+        count: txs.length,
+        toJustify: todo.length,
+        toJustifyAmount: round2(todo.reduce((s, t) => s + Math.abs(t.amount ?? 0), 0)),
+        lastUsedAt: txs[0]?.bookingDate ?? null,
+      },
+    };
+  }).sort((a, b) => b.stats.count - a.stats.count);
+  res.json({ items });
+}));
+
+cardsRouter.get('/accounts/:bank/transactions', requireAuth(...OFFICE), asyncHandler(async (req, res) => {
+  const months = Math.min(36, Math.max(1, Number(req.query.months) || 3));
+  const now = new Date();
+  const since = new Date(now.getFullYear(), now.getMonth() - months + 1, 1);
+  const rows = await accountTransactions(req.params.bank!, since);
+  const ids = rows.map((t) => t.id);
+  const links = await prisma.bankTransaction.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, matches: { select: { ledgerEntry: { select: { id: true, docNumber: true, supplierName: true, worksite: { select: { ref: true } } } }, document: { select: { id: true, number: true, contact: { select: { name: true } }, worksite: { select: { ref: true } } } } } } },
+  });
+  const linkMap = new Map(links.map((l) => [l.id, l.matches]));
+  const byMonth = new Map<string, { out: number; in: number }>();
+  for (const t of rows) {
+    if (!t.bookingDate) continue;
+    const m = t.bookingDate.toISOString().slice(0, 7);
+    const cur = byMonth.get(m) ?? { out: 0, in: 0 };
+    if ((t.amount ?? 0) < 0) cur.out = round2(cur.out - (t.amount ?? 0)); else cur.in = round2(cur.in + (t.amount ?? 0));
+    byMonth.set(m, cur);
+  }
+  res.json({
+    months: [...byMonth.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([month, v]) => ({ month, spend: v.out, income: v.in })),
+    items: rows.map((t) => ({
+      id: t.id, date: t.bookingDate, amount: t.amount,
+      merchant: (t.counterpartyName || t.description || (t.communication ?? '').replace(/\s+/g, ' ').slice(0, 60) || 'Opération').trim(),
+      detail: (t.communication ?? '').replace(/\s+/g, ' ').slice(0, 120) || null,
+      justified: t._count.matches > 0 || !!t.pairedTxId,
+      links: (linkMap.get(t.id) ?? []).map((m) => m.document
+        ? { id: null, label: [m.document.contact?.name, m.document.number].filter(Boolean).join(' · '), worksiteRef: m.document.worksite?.ref ?? null }
+        : { id: m.ledgerEntry?.id ?? null, label: [m.ledgerEntry?.supplierName, m.ledgerEntry?.docNumber].filter(Boolean).join(' · '), worksiteRef: m.ledgerEntry?.worksite?.ref ?? null }),
+    })),
+  });
+}));

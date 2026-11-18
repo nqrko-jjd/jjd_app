@@ -14,7 +14,9 @@ interface Card {
   label: string | null; personId: string | null; person: PersonRef | null; status: string; expiresOn: string | null; monthlyLimit: number | null; note: string | null;
   stats: { monthSpend: number; prevMonthSpend: number; yearSpend: number; count: number; lastUsedAt: string | null; lastMerchant: string | null; lastAmount: number | null; toJustify: number; toJustifyAmount: number };
 }
-interface CardTx { id: string; date: string | null; amount: number | null; merchant: string; justified: boolean; links: { id: string | null; label: string; worksiteRef: string | null }[] }
+interface Account { bank: string; iban: string | null; label: string | null; balance: number | null; balanceAt: string | null; stats: { monthOut: number; monthIn: number; count: number; toJustify: number; toJustifyAmount: number; lastUsedAt: string | null } }
+interface CardTx {
+  detail?: string | null; id: string; date: string | null; amount: number | null; merchant: string; justified: boolean; links: { id: string | null; label: string; worksiteRef: string | null }[] }
 
 const STATUS: Record<string, { label: string; tone: string }> = {
   active: { label: 'Active', tone: 'ok' }, blocked: { label: 'Bloquée', tone: 'warn' }, lost: { label: 'Perdue / volée', tone: 'crit' }, expired: { label: 'Expirée', tone: '' },
@@ -28,23 +30,46 @@ const MONTHS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'aoû
  */
 export default function CardsPage() {
   const { data, loading, error, reload } = useApi<{ items: Card[]; people: PersonRef[] }>('/api/finance/cards');
+  const { data: accData, reload: reloadAcc } = useApi<{ items: Account[] }>('/api/finance/cards/accounts');
+  const accounts = accData?.items ?? [];
   const [selected, setSelected] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const cards = data?.items ?? [];
   useEffect(() => { if (!selected && cards.length) setSelected(cards[0]!.id); }, [cards, selected]);
   const card = cards.find((c) => c.id === selected) ?? null;
+  const account = selected?.startsWith('acc:') ? accounts.find((a) => `acc:${a.bank}` === selected) ?? null : null;
   const month = cards.reduce((s, c) => s + c.stats.monthSpend, 0);
   const toJustify = cards.reduce((s, c) => s + c.stats.toJustify, 0);
 
   return (
     <>
       <PageHead
-        title="Cartes de paiement"
+        title="Cartes & comptes"
         sub={data ? `${cards.length} carte(s) · ${new Intl.NumberFormat('fr-BE', { style: 'currency', currency: 'EUR' }).format(month)} dépensés ce mois${toJustify ? ` · ${toJustify} paiement(s) sans justificatif` : ''}` : undefined}
         action={<><button className="btn" onClick={() => setAdding(true)}>+ Ajouter une carte</button><Link href="/app/finances/banque" className="btn">← Rapprochement bancaire</Link></>}
       />
       {error ? <ErrorState message={String(error)} onRetry={reload} /> : loading && !data ? <SkeletonRows rows={4} /> : (
         <>
+          {accounts.length > 0 && (
+            <>
+              <h2 className="pay-section-title">Comptes <span className="muted">virements, domiciliations et entrées</span></h2>
+              <div className="pay-cards-rail" role="list">
+                {accounts.map((a) => {
+                  const k = `acc:${a.bank}`;
+                  return (
+                    <button key={k} type="button" role="listitem" className={`pay-card-tile${k === selected ? ' is-selected' : ''}`} onClick={() => setSelected(k)} aria-pressed={k === selected}>
+                      <AccountTile account={a} />
+                      <div className="pay-card-meta">
+                        <span className="muted">{a.stats.toJustify ? <><strong className="crit">{a.stats.toJustify}</strong> à justifier</> : 'Tout est justifié'}</span>
+                        <span><strong><Money value={a.stats.monthOut} /></strong> <span className="muted">sortis ce mois</span></span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+              <h2 className="pay-section-title">Cartes</h2>
+            </>
+          )}
           {cards.length === 0 && <div className="card card-pad muted">Aucune carte reconnue sur les relevés pour l’instant. Ajoutez-en une avec ses 4 derniers chiffres.</div>}
           <div className="pay-cards-rail" role="list">
             {cards.map((c) => (
@@ -59,7 +84,8 @@ export default function CardsPage() {
               </button>
             ))}
           </div>
-          {card && <CardDetail key={card.id} card={card} people={data?.people ?? []} onSaved={reload} />}
+          {account ? <AccountDetail key={account.bank} account={account} onSaved={reloadAcc} />
+            : card && <CardDetail key={card.id} card={card} people={data?.people ?? []} onSaved={() => { reload(); reloadAcc(); }} />}
         </>
       )}
       {adding && <AddCard onClose={() => setAdding(false)} onDone={(id) => { setAdding(false); setSelected(id); reload(); }} />}
@@ -204,6 +230,89 @@ function CardDetail({ card, people, onSaved }: { card: Card; people: PersonRef[]
   );
 }
 
+/** Compte bancaire, dans le même esprit que les cartes : solde, IBAN. */
+function AccountTile({ account, big }: { account: Account; big?: boolean }) {
+  return (
+    <div className={`pay-card net-account${big ? ' is-big' : ''}`} aria-label={`Compte ${account.bank}`}>
+      <div className="pay-card-top"><span className="pay-card-bank">{account.label || 'Compte courant'}</span><span className="pay-card-brand">{account.bank}</span></div>
+      <div>
+        <div className="pay-acc-balance-label">Solde</div>
+        <div className="pay-acc-balance">{account.balance !== null ? <Money value={account.balance} /> : '—'}</div>
+      </div>
+      <div className="pay-card-bottom"><span className="pay-card-holder">{account.iban ? account.iban.replace(/(.{4})/g, '$1 ').trim() : 'JJD CONSULT'}</span></div>
+    </div>
+  );
+}
+
+function AccountDetail({ account, onSaved }: { account: Account; onSaved: () => void }) {
+  const [months, setMonths] = useState(3);
+  const [dir, setDir] = useState<'all' | 'out' | 'in'>('all');
+  const [onlyTodo, setOnlyTodo] = useState(true);
+  const [openTx, setOpenTx] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const { data, loading, reload } = useApi<{ items: CardTx[]; months: { month: string; spend: number; income: number }[] }>(`/api/finance/cards/accounts/${encodeURIComponent(account.bank)}/transactions?months=${months}`);
+  const txs = (data?.items ?? []).filter((t) => (!onlyTodo || !t.justified) && (dir === 'all' || (dir === 'out' ? (t.amount ?? 0) < 0 : (t.amount ?? 0) > 0)));
+  const max = Math.max(1, ...(data?.months ?? []).flatMap((m) => [m.spend, m.income]));
+  return (
+    <div className="pay-card-detail">
+      <section className="card card-pad pay-card-side">
+        <AccountTile account={account} big />
+        <div className="pay-card-kpis">
+          <div><span>Sorti ce mois</span><strong><Money value={account.stats.monthOut} /></strong></div>
+          <div><span>Entré ce mois</span><strong><Money value={account.stats.monthIn} /></strong></div>
+          <div><span>À justifier</span><strong className={account.stats.toJustify ? 'crit' : ''}>{account.stats.toJustify} · <Money value={account.stats.toJustifyAmount} /></strong></div>
+        </div>
+        <p className="muted" style={{ fontSize: '0.82rem', margin: 0 }}>Les paiements par carte de ce compte sont sous leur carte. Ici : virements, domiciliations, prélèvements et paiements reçus.</p>
+        {msg && <p className="badge ok" role="status" style={{ marginTop: '0.7rem', whiteSpace: 'normal' }}>{msg}</p>}
+      </section>
+      <section className="card card-pad pay-card-activity">
+        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+          <h2 style={{ margin: 0 }}>Opérations</h2>
+          <div className="row" style={{ gap: '0.4rem' }}>
+            {[1, 3, 12].map((m) => <button key={m} className={`btn sm${months === m ? ' primary' : ''}`} onClick={() => setMonths(m)}>{m} mois</button>)}
+          </div>
+        </div>
+        <div className="pay-bars" aria-label="Sorties et entrées par mois">
+          {(data?.months ?? []).map((m) => (
+            <div key={m.month} className="pay-bar is-double" title={`${m.month} : sorties ${m.spend.toFixed(2)} €, entrées ${m.income.toFixed(2)} €`}>
+              <div className="pay-bar-pair"><i style={{ height: `${Math.max(3, (m.spend / max) * 100)}%` }} /><i className="in" style={{ height: `${Math.max(3, (m.income / max) * 100)}%` }} /></div>
+              <span className="pay-bar-lab">{MONTHS[Number(m.month.slice(5)) - 1]}</span>
+            </div>
+          ))}
+        </div>
+        <div className="row" style={{ gap: '0.8rem', alignItems: 'center', flexWrap: 'wrap', margin: '0.6rem 0' }}>
+          <div className="pay-seg" role="tablist" aria-label="Sens" style={{ margin: 0 }}>
+            {([['all', 'Tout'], ['out', 'Sorties'], ['in', 'Entrées']] as const).map(([k, l]) => <button key={k} role="tab" aria-selected={dir === k} className={dir === k ? 'is-on' : ''} onClick={() => setDir(k)}>{l}</button>)}
+          </div>
+          <label className="row" style={{ gap: '0.4rem', alignItems: 'center', fontSize: '0.85rem' }}><input type="checkbox" checked={onlyTodo} onChange={(e) => setOnlyTodo(e.target.checked)} /> Seulement à justifier</label>
+        </div>
+        {loading && !data ? <SkeletonRows rows={5} /> : txs.length === 0 ? <p className="muted">{onlyTodo ? 'Tout est justifié sur cette période.' : 'Aucune opération sur cette période.'}</p> : (
+          <ul className="pay-tx-list">
+            {txs.map((t) => {
+              const open = openTx === t.id;
+              return (
+                <li key={t.id} className={open ? 'is-open' : undefined}>
+                  <button type="button" className="pay-tx-row" onClick={() => setOpenTx(open ? null : t.id)} aria-expanded={open}>
+                    <div className="pay-tx-main">
+                      <strong>{t.merchant}</strong>
+                      <span className="muted">{t.date ? formatDateBE(t.date) : ''}{t.links.length > 0 ? ` · ${t.links.map((l) => [l.label, l.worksiteRef].filter(Boolean).join(' → ')).join(', ')}` : t.detail ? ` · ${t.detail}` : ''}</span>
+                    </div>
+                    <div className="pay-tx-side">
+                      <span className={(t.amount ?? 0) > 0 ? 'pos' : ''}><Money value={t.amount} sign /></span>
+                      {t.justified ? <span className="badge ok">Justifié</span> : <span className="badge warn">À justifier</span>}
+                    </div>
+                  </button>
+                  {open && <TxReconcile tx={t} todo={!t.justified} onDone={(m) => { setMsg(m); setOpenTx(null); reload(); onSaved(); }} />}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+    </div>
+  );
+}
+
 interface Suggestion { kind: 'ledger' | 'document'; id: string; label: string; amount: number | null; date: string | null; direction: string; worksiteRef: string | null }
 
 /**
@@ -216,7 +325,8 @@ function TxReconcile({ tx, todo, onDone }: { tx: CardTx; todo: boolean; onDone: 
   const [err, setErr] = useState<string | null>(null);
   const [mode, setMode] = useState<'invoice' | 'expense'>('invoice');
   const { data: sugg, loading } = useApi<{ items: Suggestion[]; remaining: number }>(todo ? `/api/finance/bank/${tx.id}/suggestions${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ''}` : null);
-  const purchases = (sugg?.items ?? []).filter((s) => s.direction !== 'sale');
+  const incoming = (tx.amount ?? 0) > 0;
+  const purchases = (sugg?.items ?? []).filter((s) => (incoming ? s.direction === 'sale' : s.direction !== 'sale'));
 
   async function link(s: Suggestion) {
     setBusy(s.id); setErr(null);
@@ -237,11 +347,12 @@ function TxReconcile({ tx, todo, onDone }: { tx: CardTx; todo: boolean; onDone: 
   }
   return (
     <div className="pay-tx-panel">
-      <div className="pay-seg" role="tablist" aria-label="Comment justifier ce paiement">
+      {!incoming && <div className="pay-seg" role="tablist" aria-label="Comment justifier ce paiement">
         <button role="tab" aria-selected={mode === 'invoice'} className={mode === 'invoice' ? 'is-on' : ''} onClick={() => setMode('invoice')}>J’ai la facture / le ticket</button>
         <button role="tab" aria-selected={mode === 'expense'} className={mode === 'expense' ? 'is-on' : ''} onClick={() => setMode('expense')}>Pas de facture</button>
-      </div>
-      {mode === 'invoice' ? (
+      </div>}
+      {incoming && <p className="muted" style={{ margin: '0 0 0.5rem' }}>Paiement reçu : choisissez la facture client qu’il règle.</p>}
+      {mode === 'invoice' || incoming ? (
         <>
           <input className="input" placeholder="Chercher : fournisseur, n° de facture, chantier, montant…" value={q} onChange={(e) => setQ(e.target.value)} style={{ marginBottom: '0.5rem' }} />
           {loading && !sugg ? <span className="muted">Recherche…</span> : purchases.length === 0 ? (

@@ -3,7 +3,11 @@ import { z } from 'zod';
 import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, OFFICE } from '../lib/auth.js';
-import { detectCard, cardTextNeedles } from '../lib/bank-cards-pure.js';
+import multer from 'multer';
+import { detectCard, cardTextNeedles, isCardSettlement } from '../lib/bank-cards-pure.js';
+import { pdfToRawText, pdftotextAvailable, parseVisaStatement } from '../lib/bank-pdf.js';
+import { autoMatchAll } from '../lib/bank-match.js';
+import { insertBankRows } from './finance.js';
 
 /** Cartes de paiement physiques (Bancontact, Visa) : qui a quelle carte, et ce qui a été payé avec. */
 export const cardsRouter = Router();
@@ -180,7 +184,7 @@ cardsRouter.get('/accounts', requireAuth(...OFFICE), asyncHandler(async (_req, r
   const items = [...by.entries()].map(([bank, txs]) => {
     const acc = txs.find((t) => t.account)?.account ?? null;
     const month = txs.filter((t) => t.bookingDate && t.bookingDate >= monthStart);
-    const todo = txs.filter((t) => !t._count.matches && !t.pairedTxId);
+    const todo = txs.filter((t) => !t._count.matches && !t.pairedTxId && !isCardSettlement(t));
     return {
       bank, iban: acc?.iban ?? null, label: acc?.label ?? null, balance: acc?.balance ?? null, balanceAt: acc?.balanceAt ?? null,
       stats: {
@@ -221,10 +225,67 @@ cardsRouter.get('/accounts/:bank/transactions', requireAuth(...OFFICE), asyncHan
       id: t.id, date: t.bookingDate, amount: t.amount,
       merchant: (t.counterpartyName || t.description || (t.communication ?? '').replace(/\s+/g, ' ').slice(0, 60) || 'Opération').trim(),
       detail: (t.communication ?? '').replace(/\s+/g, ' ').slice(0, 120) || null,
-      justified: t._count.matches > 0 || !!t.pairedTxId,
+      justified: t._count.matches > 0 || !!t.pairedTxId || isCardSettlement(t),
+      settlement: isCardSettlement(t),
       links: (linkMap.get(t.id) ?? []).map((m) => m.document
         ? { id: null, label: [m.document.contact?.name, m.document.number].filter(Boolean).join(' · '), worksiteRef: m.document.worksite?.ref ?? null }
         : { id: m.ledgerEntry?.id ?? null, label: [m.ledgerEntry?.supplierName, m.ledgerEntry?.docNumber].filter(Boolean).join(' · '), worksiteRef: m.ledgerEntry?.worksite?.ref ?? null }),
     })),
   });
+}));
+
+/* ------------------------------------------------------------- import des relevés Visa (PDF « État des dépenses ») */
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+const frDay = (d: Date | null) => (d ? d.toISOString().slice(0, 10).split('-').reverse().join('/') : '—');
+const dayN = (d: Date) => Math.round(d.getTime() / 86400000);
+
+/**
+ * Un ou plusieurs relevés Visa Belfius. Un relevé Business peut couvrir plusieurs cartes (principale + secondaires, un
+ * seul décompte) : chaque achat va sur SA carte. Le relevé n'est importé que si la somme des achats = son total.
+ * Le prélèvement du relevé sur le compte courant est annoté (et ne compte plus comme « à justifier »).
+ */
+cardsRouter.post('/import-statement', requireAuth(...OFFICE), upload.array('files', 24), asyncHandler(async (req, res) => {
+  const files = (req.files as Express.Multer.File[] | undefined) ?? [];
+  if (!files.length) throw new HttpError(422, 'Aucun fichier');
+  if (!(await pdftotextAvailable())) throw new HttpError(503, 'Lecture PDF indisponible sur ce serveur.');
+  const results = [];
+  for (const f of files) {
+    const st = parseVisaStatement(await pdfToRawText(f.buffer));
+    if (!st.closeDate || st.purchases.length === 0) { results.push({ file: f.originalname, error: 'Relevé Visa non reconnu (aucun achat lu).' }); continue; }
+    if (st.total != null && Math.abs(st.total - st.sumPurchases) > 0.01) {
+      results.push({ file: f.originalname, error: `Total du relevé ${st.total} € ≠ somme des achats lus ${st.sumPurchases} € : relevé non importé.` });
+      continue;
+    }
+    const note = `Relevé VISA du ${frDay(st.closeDate)}${st.debitDate ? ` · débité le ${frDay(st.debitDate)}` : ''}`;
+    const cards = [];
+    for (const c of st.cards) {
+      const rows = st.purchases.filter((p) => (p.cardLast4 ?? '????') === c.last4).map(({ cardLast4: _c, cardholder: _h, ...r }) => ({ ...r, communication: `${note}${c.holder ? ` · ${c.holder}` : ''}` }));
+      const r = rows.length ? await insertBankRows(rows, `VISA ••${c.last4}`, 'pdf-visa') : { imported: 0, duplicates: 0 };
+      if (/^\d{4}$/.test(c.last4)) {
+        const exists = await prisma.paymentCard.findUnique({ where: { network_last4: { network: 'visa', last4: c.last4 } } });
+        if (!exists) await prisma.paymentCard.create({ data: { network: 'visa', last4: c.last4, bank: 'Belfius', holderName: c.holder } });
+        else if (!exists.holderName && c.holder) await prisma.paymentCard.update({ where: { id: exists.id }, data: { holderName: c.holder } });
+      }
+      cards.push({ last4: c.last4, holder: c.holder, count: c.count, sum: c.sum, imported: r.imported, duplicates: r.duplicates });
+    }
+    // carte à débit différé : retrouver le prélèvement du total sur le compte courant et l'annoter
+    let debit: { found: boolean; date: Date | null } = { found: false, date: st.debitDate };
+    if (st.debitDate && st.total) {
+      const from = new Date(st.debitDate.getTime() - 5 * 86400000), to = new Date(st.debitDate.getTime() + 5 * 86400000);
+      const cands = await prisma.bankTransaction.findMany({ where: { bookingDate: { gte: from, lte: to }, NOT: { bank: { startsWith: 'VISA' } } }, select: { id: true, amount: true, bookingDate: true, communication: true, description: true } });
+      const hit = cands.filter((t) => Math.abs(Math.abs(t.amount ?? 0) - st.total!) < 0.011 && (t.amount ?? 0) < 0)
+        .sort((a, b) => Math.abs(dayN(a.bookingDate!) - dayN(st.debitDate!)) - Math.abs(dayN(b.bookingDate!) - dayN(st.debitDate!)))[0];
+      if (hit) {
+        debit = { found: true, date: hit.bookingDate };
+        if (!hit.communication?.includes('Relevé VISA')) {
+          const text = `${note} · ${st.purchases.length} achats (${st.cards.map((c) => `••${c.last4}`).join(', ')})`;
+          await prisma.bankTransaction.update({ where: { id: hit.id }, data: { communication: hit.communication ? `${text} | ${hit.communication.replace(/\s+/g, ' ')}` : text } });
+        }
+      }
+    }
+    results.push({ file: f.originalname, period: st.period, total: st.total, cards, debit });
+  }
+  const match = await autoMatchAll();
+  res.json({ results, match });
 }));

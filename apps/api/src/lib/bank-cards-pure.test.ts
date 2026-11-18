@@ -18,3 +18,9 @@ test('Belfius : le libellé après le nom est ignoré', () => {
   assert.equal(detectCard({ bank: 'Belfius', communication: 'BE 18/11/26 MCC5541 525506XXXXXX3734Scott David', description: 'BANCONTACT - ACHAT CARBURANT' })?.holderName, 'Scott David');
   assert.equal(detectCard({ bank: 'Belfius', communication: 'MCC5046 525506XXXXXX6094Sweert Julien BANCONTACT - ACHAT - SANIMAT' })?.holderName, 'Sweert Julien');
 });
+import { isCardSettlement } from './bank-cards-pure.js';
+test('prélèvement de relevé Visa / chargement de prépayée', () => {
+  assert.equal(isCardSettlement({ description: 'VISA RELEVE 7701909272' }), true);
+  assert.equal(isCardSettlement({ description: 'CHARGEMENT CARTE PREPAYEE **** 8820' }), true);
+  assert.equal(isCardSettlement({ description: 'Facture 341' }), false);
+});

@@ -27,3 +27,9 @@ export function cardTextNeedles(network: string, last4: string): { bankStartsWit
   if (network === 'visa') return { bankStartsWith: 'VISA' };
   return { contains: [`XXXXXX${last4}`, `XXXX ${last4}`, `XXXX${last4}`] };
 }
+
+/** Prélèvement du relevé d'une carte de crédit (« VISA RELEVE ») ou chargement d'une prépayée : justifié par les achats de la carte. */
+export function isCardSettlement(tx: { description?: string | null; communication?: string | null }): boolean {
+  const t = `${tx.description ?? ''} ${tx.communication ?? ''}`;
+  return /VISA RELEVE|RELEVE NUMERO|Relev. VISA|(?:D.)?CHARGEMENT.{0,40}(?:\*{4}|VISA|CARTE)/i.test(t);
+}

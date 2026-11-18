@@ -156,7 +156,9 @@ export interface VisaStatement {
   debitDate: Date | null; // carte à débit différé : date du prélèvement sur le compte courant
   period: string | null;
   total: number | null; // total des dépenses du relevé (positif)
-  purchases: ParsedBankRow[]; // achats de la section « Transactions »
+  purchases: (ParsedBankRow & { cardLast4: string | null; cardholder: string | null })[]; // achats de la section « Transactions »
+  /** Relevé à plusieurs cartes (Business : carte principale + secondaires, un seul décompte) : une entrée par carte. */
+  cards: { last4: string; holder: string | null; count: number; sum: number; declared: number | null }[];
   loads: { date: Date | null; amount: number; label: string }[]; // « Votre chargement / déchargement » (+ = chargement)
   sumPurchases: number; // somme des achats (positive) — doit égaler `total`
 }
@@ -187,13 +189,27 @@ export function parseVisaStatement(text: string): VisaStatement {
   const LINE = /^(\d{2}\/\d{2})\s+(\d{2}\/\d{2})\s+(.+?)\s+([\d.]+,\d{2})\s*EUR\s*([+-])\s*$/;
   type Sec = 'loads' | 'tx' | null;
   let sec: Sec = null;
-  const purchases: ParsedBankRow[] = [];
+  const purchases: VisaStatement['purchases'] = [];
+  // total annoncé par carte en page 1 : « Titulaire de la carte principale David Scott 4.060,32 EUR - » puis « Numéro de carte … 4960 »
+  const declared = new Map<string, { holder: string | null; amount: number | null }>();
+  lines.forEach((l, i) => {
+    const t = l.match(/^Titulaire de la carte (?:principale|secondaire)\s+(.+?)\s+([\d.]+,\d{2})\s*EUR\s*-/i);
+    const n = t ? lines.slice(i + 1, i + 3).join(' ').match(/Num.ro de carte\s+\d{4} \d{2}XX XXXX (\d{4})/i) : null;
+    if (t && n) declared.set(n[1]!, { holder: t[1]!.trim(), amount: parseAmount(t[2]) ?? null });
+  });
+  let curCard: string | null = cardLast4;
+  let curHolder: string | null = cardM?.[3]?.trim() ?? null;
   const loads: VisaStatement['loads'] = [];
   const seen = new Map<string, number>();
   let last: ParsedBankRow | null = null;
   for (const line of lines) {
     if (/Chargements & D/i.test(line)) { sec = 'loads'; last = null; continue; }
-    if (/^Transactions - Num/i.test(line)) { sec = 'tx'; last = null; continue; }
+    if (/^Transactions - Num/i.test(line)) {
+      sec = 'tx'; last = null;
+      const c = line.match(/(\d{4})\s*-\s*(.+)$/);
+      if (c) { curCard = c[1]!; curHolder = c[2]!.trim(); }
+      continue;
+    }
     if (/^Total\b/i.test(line)) { sec = null; last = null; continue; }
     const m = LINE.exec(line);
     if (m && sec) {
@@ -203,9 +219,10 @@ export function parseVisaStatement(text: string): VisaStatement {
       if (sec === 'loads') { loads.push({ date: dmToDate(dBook!, closeYear, closeMonth), amount: sign === '+' ? magnitude : -magnitude, label: desc }); last = null; continue; }
       const amount = sign === '-' ? -magnitude : magnitude;
       const bookingDate = dmToDate(dBook!, closeYear, closeMonth);
-      const base = [cardLast4, closeDate?.toISOString().slice(0, 10) ?? '', dTx, dBook, amount, desc].join('|');
+      const base = [curCard, closeDate?.toISOString().slice(0, 10) ?? '', dTx, dBook, amount, desc].join('|');
       const rank = (seen.get(base) ?? 0) + 1; seen.set(base, rank);
-      const row: ParsedBankRow = {
+      const row: VisaStatement['purchases'][number] = {
+        cardLast4: curCard, cardholder: curHolder,
         externalId: stableId([base, rank]),
         bookingDate, valueDate: dmToDate(dTx!, closeYear, closeMonth), amount, currency: 'EUR',
         counterpartyName: desc.replace(COUNTRY, '').trim() || desc, counterpartyAccount: null, description: desc,
@@ -217,7 +234,16 @@ export function parseVisaStatement(text: string): VisaStatement {
     if (sec === 'tx' && last && /^\(Via .+\)$/i.test(line)) { last.description = `${last.description} ${line}`; }
   }
   const sumPurchases = Math.round(-purchases.reduce((s, r) => s + (r.amount ?? 0), 0) * 100) / 100;
+  const cardMap = new Map<string, VisaStatement['cards'][number]>();
+  for (const p of purchases) {
+    const k = p.cardLast4 ?? '????';
+    const c = cardMap.get(k) ?? { last4: k, holder: p.cardholder, count: 0, sum: 0, declared: declared.get(k)?.amount ?? null };
+    c.count++; c.sum = Math.round((c.sum - (p.amount ?? 0)) * 100) / 100;
+    cardMap.set(k, c);
+  }
+  for (const [k, d] of declared) if (!cardMap.has(k)) cardMap.set(k, { last4: k, holder: d.holder, count: 0, sum: 0, declared: d.amount });
   return {
+    cards: [...cardMap.values()],
     clientRef, cardLast4, cardNumber: cardM?.[1] ?? null, cardholder: cardM?.[3]?.trim() ?? null,
     closeDate, debitDate, period, total: totalM ? parseAmount(totalM[1]) ?? null : null, purchases, loads, sumPurchases,
   };

@@ -91,3 +91,22 @@ test('parseVisaStatement : carte à débit différé, date de débit et complém
   assert.equal(s.sumPurchases, 1727.98);
   assert.equal(s.total, 1727.98);
 });
+
+test('parseVisaStatement : relevé Business à deux cartes (principale + secondaire), un seul décompte', () => {
+  const text = [
+    'Date de clôture 25/04/2026', 'Date de débit 04/05/2026', 'Référence client 7701909272', 'Transactions du 26/03/2026 au 25/04/2026',
+    'Titulaire de la carte principale David Scott 4.060,32 EUR -', 'Numéro de carte 4569 59XX XXXX 4960', 'Limite d\'utilisation 10.000,00 EUR',
+    'Titulaire de la carte secondaire Julien Sweert 1.174,61 EUR -', 'Numéro de carte 4569 59XX XXXX 7449', 'Limite d\'utilisation 10.000,00 EUR',
+    'Total 5.234,93 EUR -',
+    'Transactions - Numéro de carte 4569 59XX XXXX 4960 - David Scott',
+    '08/04 09/04 DESCO NV WIJNEGEM BE 4.060,32 EUR -',
+    'Transactions - Numéro de carte 4569 59XX XXXX 7449 - Julien Sweert',
+    '10/04 11/04 LUKOIL 253 BRUXELLES BE 1.000,00 EUR -',
+    '12/04 13/04 BRICO ETTERBEEK BE 174,61 EUR -',
+  ].join('\n');
+  const s = parseVisaStatement(text);
+  assert.equal(s.total, 5234.93);
+  assert.equal(s.sumPurchases, 5234.93);
+  assert.deepEqual(s.purchases.map((p) => p.cardLast4), ['4960', '7449', '7449']);
+  assert.deepEqual(s.cards.map((c) => [c.last4, c.holder, c.count, c.sum, c.declared]), [['4960', 'David Scott', 1, 4060.32, 4060.32], ['7449', 'Julien Sweert', 2, 1174.61, 1174.61]]);
+});

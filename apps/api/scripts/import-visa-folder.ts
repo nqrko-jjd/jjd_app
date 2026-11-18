@@ -65,7 +65,7 @@ async function run() {
   if (!APPLY) { console.log('\nSIMULATION — rien n\'a été écrit.'); await prisma.$disconnect(); return; }
 
   let imported = 0, dup = 0;
-  for (const { label, st } of toImport) { const r = await insertBankRows(st.purchases, label, 'pdf-visa'); imported += r.imported; dup += r.duplicates; }
+  for (const { label, st } of toImport) { for (const c of st.cards) { const rows = st.purchases.filter((p) => (p.cardLast4 ?? '????') === c.last4); const r = await insertBankRows(rows, st.cards.length > 1 ? `VISA ••${c.last4}` : label, 'pdf-visa'); imported += r.imported; dup += r.duplicates; } }
   console.log(`\nAchats importés: ${imported} | écartés comme déjà présents: ${dup}`);
   let linked = 0;
   for (const l of relink) { const t = await prisma.bankTransaction.findUnique({ where: { id: l.txId }, select: { communication: true } }); if (t && !t.communication?.includes('Relevé VISA')) { await prisma.bankTransaction.update({ where: { id: l.txId }, data: { communication: t.communication ? `${l.text} | ${t.communication.replace(/\s+/g, ' ')}` : l.text } }); linked++; } }

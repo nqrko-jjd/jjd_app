@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
-import { api } from '@/lib/api';
+import { api, apiUpload } from '@/lib/api';
 import { PageHead, Money, Avatar, formatDateBE } from '@/lib/ui';
 import { SkeletonRows, ErrorState } from '@/components/States';
 import { FormModal } from '@/components/FormModal';
@@ -16,7 +16,7 @@ interface Card {
 }
 interface Account { bank: string; iban: string | null; label: string | null; balance: number | null; balanceAt: string | null; stats: { monthOut: number; monthIn: number; count: number; toJustify: number; toJustifyAmount: number; lastUsedAt: string | null } }
 interface CardTx {
-  detail?: string | null; id: string; date: string | null; amount: number | null; merchant: string; justified: boolean; links: { id: string | null; label: string; worksiteRef: string | null }[] }
+  detail?: string | null; settlement?: boolean; id: string; date: string | null; amount: number | null; merchant: string; justified: boolean; links: { id: string | null; label: string; worksiteRef: string | null }[] }
 
 const STATUS: Record<string, { label: string; tone: string }> = {
   active: { label: 'Active', tone: 'ok' }, blocked: { label: 'Bloquée', tone: 'warn' }, lost: { label: 'Perdue / volée', tone: 'crit' }, expired: { label: 'Expirée', tone: '' },
@@ -46,7 +46,7 @@ export default function CardsPage() {
       <PageHead
         title="Cartes & comptes"
         sub={data ? `${cards.length} carte(s) · ${new Intl.NumberFormat('fr-BE', { style: 'currency', currency: 'EUR' }).format(month)} dépensés ce mois${toJustify ? ` · ${toJustify} paiement(s) sans justificatif` : ''}` : undefined}
-        action={<><button className="btn" onClick={() => setAdding(true)}>+ Ajouter une carte</button><Link href="/app/finances/banque" className="btn">← Rapprochement bancaire</Link></>}
+        action={<><ImportStatement onDone={() => { reload(); reloadAcc(); }} /><button className="btn" onClick={() => setAdding(true)}>+ Ajouter une carte</button><Link href="/app/finances/banque" className="btn">← Rapprochement bancaire</Link></>}
       />
       {error ? <ErrorState message={String(error)} onRetry={reload} /> : loading && !data ? <SkeletonRows rows={4} /> : (
         <>
@@ -299,7 +299,7 @@ function AccountDetail({ account, onSaved }: { account: Account; onSaved: () => 
                     </div>
                     <div className="pay-tx-side">
                       <span className={(t.amount ?? 0) > 0 ? 'pos' : ''}><Money value={t.amount} sign /></span>
-                      {t.justified ? <span className="badge ok">Justifié</span> : <span className="badge warn">À justifier</span>}
+                      {t.settlement ? <span className="badge plain">Relevé carte</span> : t.justified ? <span className="badge ok">Justifié</span> : <span className="badge warn">À justifier</span>}
                     </div>
                   </button>
                   {open && <TxReconcile tx={t} todo={!t.justified} onDone={(m) => { setMsg(m); setOpenTx(null); reload(); onSaved(); }} />}
@@ -373,6 +373,56 @@ function TxReconcile({ tx, todo, onDone }: { tx: CardTx; todo: boolean; onDone: 
       )}
       {err && <p role="alert" className="badge crit" style={{ margin: '0.5rem 0 0' }}>{err}</p>}
     </div>
+  );
+}
+
+interface ImportResult { file: string; error?: string; period?: string | null; total?: number | null; cards?: { last4: string; holder: string | null; count: number; sum: number; imported: number; duplicates: number }[]; debit?: { found: boolean; date: string | null } }
+
+/** Import des relevés Visa (PDF « État des dépenses ») : un relevé Business à plusieurs cartes est réparti carte par carte. */
+function ImportStatement({ onDone }: { onDone: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [res, setRes] = useState<ImportResult[] | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  async function upload(files: FileList | null) {
+    if (!files?.length) return;
+    setBusy(true); setErr(null); setRes(null);
+    try {
+      const fd = new FormData();
+      [...files].forEach((f) => fd.append('files', f));
+      const r = await apiUpload<{ results: ImportResult[] }>('/api/finance/cards/import-statement', fd);
+      setRes(r.results); onDone();
+    } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+  }
+  return (
+    <>
+      <label className="btn" style={{ cursor: busy ? 'wait' : 'pointer' }}>
+        {busy ? 'Lecture du relevé…' : 'Importer un relevé Visa (PDF)'}
+        <input type="file" accept="application/pdf" multiple hidden disabled={busy} onChange={(e) => { upload(e.target.files); e.target.value = ''; }} />
+      </label>
+      {(res || err) && (
+        <div className="modal-scrim" onClick={() => { setRes(null); setErr(null); }}>
+          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="imp-title" style={{ maxWidth: 560 }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head"><div className="modal-heading"><span className="modal-eyebrow">Relevés Visa</span><h2 id="imp-title">Résultat de l’import</h2></div>
+              <button type="button" className="btn ghost" onClick={() => { setRes(null); setErr(null); }} aria-label="Fermer">✕</button></div>
+            <div style={{ padding: '1rem 1.15rem', display: 'grid', gap: '0.8rem' }}>
+              {err && <p className="badge crit" role="alert" style={{ whiteSpace: 'normal' }}>{err}</p>}
+              {res?.map((r) => (
+                <div key={r.file} style={{ fontSize: '0.88rem' }}>
+                  <strong>{r.file}</strong>{r.period ? <span className="muted"> · {r.period}</span> : null}
+                  {r.error ? <p className="badge crit" style={{ whiteSpace: 'normal', margin: '0.3rem 0 0' }}>{r.error}</p> : (
+                    <ul style={{ margin: '0.3rem 0 0', paddingLeft: '1.1rem' }}>
+                      {r.cards?.map((c) => <li key={c.last4}>Carte ••{c.last4}{c.holder ? ` (${c.holder})` : ''} : {c.count} achats, <Money value={c.sum} /> — {c.imported} ajoutés{c.duplicates ? `, ${c.duplicates} déjà présents` : ''}</li>)}
+                      <li>{r.debit?.found ? <>Prélèvement de <Money value={r.total} /> retrouvé sur le compte courant{r.debit.date ? ` le ${formatDateBE(r.debit.date)}` : ''}.</> : r.debit?.date ? <>Prélèvement de <Money value={r.total} /> pas encore sur le compte courant (prévu le {formatDateBE(r.debit.date)}).</> : 'Carte prépayée : pas de prélèvement global.'}</li>
+                    </ul>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="modal-foot"><button type="button" className="btn" onClick={() => { setRes(null); setErr(null); }}>Fermer</button></div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

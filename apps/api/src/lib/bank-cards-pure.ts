@@ -8,7 +8,8 @@ export interface CardHit { network: 'bancontact' | 'visa'; last4: string; prefix
 
 export function detectCard(tx: { bank?: string | null; communication?: string | null; description?: string | null }): CardHit | null {
   const bank = tx.bank ?? '';
-  const visa = bank.match(/^visa\s*(?:••|\*+|x+)?\s*(\d{4})\b/i);
+  // « VISA ••7639 », « Visa prépayée Belfius ••7639 », « Visa Belfius ••4960 / ••7449 » (relevé Business commun : carte principale)
+  const visa = /visa/i.test(bank) ? bank.match(/(?:••|\*{2,}|x{2,})\s*(\d{4})\b/i) ?? bank.match(/^visa\s*(\d{4})\b/i) : null;
   if (visa) return { network: 'visa', last4: visa[1]!, prefix: null, holderName: null, bank: null };
   const text = `${tx.communication ?? ''} ${tx.description ?? ''}`;
   const belfius = text.match(/\b(\d{6})X{6}(\d{4})([A-Za-zÀ-ÿ'’\- ]{2,40})?/);
@@ -23,8 +24,8 @@ export function detectCard(tx: { bank?: string | null; communication?: string | 
 }
 
 /** Filtre « texte » à appliquer en base pour retrouver les opérations d'une carte (affiné ensuite par detectCard). */
-export function cardTextNeedles(network: string, last4: string): { bankStartsWith?: string; contains?: string[] } {
-  if (network === 'visa') return { bankStartsWith: 'VISA' };
+export function cardTextNeedles(network: string, last4: string): { bankContains?: string; contains?: string[] } {
+  if (network === 'visa') return { bankContains: last4 };
   return { contains: [`XXXXXX${last4}`, `XXXX ${last4}`, `XXXX${last4}`] };
 }
 

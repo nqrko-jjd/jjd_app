@@ -24,3 +24,9 @@ test('prélèvement de relevé Visa / chargement de prépayée', () => {
   assert.equal(isCardSettlement({ description: 'CHARGEMENT CARTE PREPAYEE **** 8820' }), true);
   assert.equal(isCardSettlement({ description: 'Facture 341' }), false);
 });
+test('libellés Visa des imports précédents', () => {
+  assert.equal(detectCard({ bank: 'Visa prépayée Belfius ••7639' })?.last4, '7639');
+  assert.equal(detectCard({ bank: 'Visa Belfius ••4960 / ••7449' })?.last4, '4960');
+  assert.equal(detectCard({ bank: 'VISA **8307' })?.last4, '8307');
+  assert.equal(detectCard({ bank: 'Belfius' }), null);
+});

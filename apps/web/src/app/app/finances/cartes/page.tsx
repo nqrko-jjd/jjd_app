@@ -250,7 +250,7 @@ function AccountDetail({ account, onSaved }: { account: Account; onSaved: () => 
   const [onlyTodo, setOnlyTodo] = useState(true);
   const [openTx, setOpenTx] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
-  const { data, loading, reload } = useApi<{ items: CardTx[]; months: { month: string; spend: number; income: number }[] }>(`/api/finance/cards/accounts/${encodeURIComponent(account.bank)}/transactions?months=${months}`);
+  const { data, loading, reload } = useApi<{ items: CardTx[]; months: { month: string; spend: number; income: number }[] }>(`/api/finance/cards/accounts/transactions?bank=${encodeURIComponent(account.bank)}&months=${months}`);
   const txs = (data?.items ?? []).filter((t) => (!onlyTodo || !t.justified) && (dir === 'all' || (dir === 'out' ? (t.amount ?? 0) < 0 : (t.amount ?? 0) > 0)));
   const max = Math.max(1, ...(data?.months ?? []).flatMap((m) => [m.spend, m.income]));
   return (
@@ -376,7 +376,7 @@ function TxReconcile({ tx, todo, onDone }: { tx: CardTx; todo: boolean; onDone: 
   );
 }
 
-interface ImportResult { file: string; error?: string; period?: string | null; total?: number | null; cards?: { last4: string; holder: string | null; count: number; sum: number; imported: number; duplicates: number }[]; debit?: { found: boolean; date: string | null } }
+interface ImportResult { file: string; error?: string; period?: string | null; total?: number | null; cards?: { last4: string; holder: string | null; count: number; sum: number; imported: number; duplicates: number; relabeled?: number }[]; debit?: { found: boolean; date: string | null } }
 
 /** Import des relevés Visa (PDF « État des dépenses ») : un relevé Business à plusieurs cartes est réparti carte par carte. */
 function ImportStatement({ onDone }: { onDone: () => void }) {
@@ -411,7 +411,7 @@ function ImportStatement({ onDone }: { onDone: () => void }) {
                   <strong>{r.file}</strong>{r.period ? <span className="muted"> · {r.period}</span> : null}
                   {r.error ? <p className="badge crit" style={{ whiteSpace: 'normal', margin: '0.3rem 0 0' }}>{r.error}</p> : (
                     <ul style={{ margin: '0.3rem 0 0', paddingLeft: '1.1rem' }}>
-                      {r.cards?.map((c) => <li key={c.last4}>Carte ••{c.last4}{c.holder ? ` (${c.holder})` : ''} : {c.count} achats, <Money value={c.sum} /> — {c.imported} ajoutés{c.duplicates ? `, ${c.duplicates} déjà présents` : ''}</li>)}
+                      {r.cards?.map((c) => <li key={c.last4}>Carte ••{c.last4}{c.holder ? ` (${c.holder})` : ''} : {c.count} achats, <Money value={c.sum} /> — {c.imported} ajoutés{c.relabeled ? `, ${c.relabeled} rangés sur cette carte` : ''}{c.duplicates ? `, ${c.duplicates} déjà présents` : ''}</li>)}
                       <li>{r.debit?.found ? <>Prélèvement de <Money value={r.total} /> retrouvé sur le compte courant{r.debit.date ? ` le ${formatDateBE(r.debit.date)}` : ''}.</> : r.debit?.date ? <>Prélèvement de <Money value={r.total} /> pas encore sur le compte courant (prévu le {formatDateBE(r.debit.date)}).</> : 'Carte prépayée : pas de prélèvement global.'}</li>
                     </ul>
                   )}

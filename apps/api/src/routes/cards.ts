@@ -36,7 +36,7 @@ async function cardTransactions(since: Date) {
   const rows = await prisma.bankTransaction.findMany({
     where: {
       bookingDate: { gte: since },
-      OR: [{ bank: { startsWith: 'VISA' } }, { communication: { contains: 'XXXX' } }, { description: { contains: 'XXXX' } }],
+      OR: [{ bank: { contains: 'visa', mode: 'insensitive' } }, { communication: { contains: 'XXXX' } }, { description: { contains: 'XXXX' } }],
     },
     select: TX_SELECT,
     orderBy: { bookingDate: 'desc' },
@@ -104,8 +104,8 @@ cardsRouter.get('/:id/transactions', requireAuth(...OFFICE), asyncHandler(async 
   const rows = await prisma.bankTransaction.findMany({
     where: {
       bookingDate: { gte: since },
-      ...(needles.bankStartsWith
-        ? { bank: { startsWith: needles.bankStartsWith } }
+      ...(needles.bankContains
+        ? { AND: [{ bank: { contains: 'visa', mode: 'insensitive' as const } }, { bank: { contains: needles.bankContains } }] }
         : { OR: needles.contains!.flatMap((n) => [{ communication: { contains: n } }, { description: { contains: n } }]) }),
     },
     select: { ...TX_SELECT, matches: { select: { amount: true, ledgerEntry: { select: { id: true, docNumber: true, supplierName: true, worksite: { select: { ref: true } } } } } } },
@@ -167,7 +167,7 @@ cardsRouter.delete('/:id', requireAuth(...OFFICE), asyncHandler(async (req, res)
 /** Opérations d'un compte qui ne sont PAS des paiements carte (ceux-là sont sous leur carte). */
 async function accountTransactions(bank: string | null, since: Date) {
   const rows = await prisma.bankTransaction.findMany({
-    where: { bookingDate: { gte: since }, NOT: { bank: { startsWith: 'VISA' } }, ...(bank ? { bank } : {}) },
+    where: { bookingDate: { gte: since }, NOT: { bank: { contains: 'visa', mode: 'insensitive' } }, ...(bank ? { bank } : {}) },
     select: { ...TX_SELECT, accountId: true, account: { select: { iban: true, label: true, balance: true, balanceAt: true } } },
     orderBy: { bookingDate: 'desc' },
   });
@@ -200,11 +200,13 @@ cardsRouter.get('/accounts', requireAuth(...OFFICE), asyncHandler(async (_req, r
   res.json({ items });
 }));
 
-cardsRouter.get('/accounts/:bank/transactions', requireAuth(...OFFICE), asyncHandler(async (req, res) => {
+cardsRouter.get('/accounts/transactions', requireAuth(...OFFICE), asyncHandler(async (req, res) => {
   const months = Math.min(36, Math.max(1, Number(req.query.months) || 3));
   const now = new Date();
   const since = new Date(now.getFullYear(), now.getMonth() - months + 1, 1);
-  const rows = await accountTransactions(req.params.bank!, since);
+  const bank = String(req.query.bank ?? '').trim();
+  if (!bank) throw new HttpError(422, 'Compte manquant');
+  const rows = await accountTransactions(bank, since);
   const ids = rows.map((t) => t.id);
   const links = await prisma.bankTransaction.findMany({
     where: { id: { in: ids } },
@@ -259,21 +261,43 @@ cardsRouter.post('/import-statement', requireAuth(...OFFICE), upload.array('file
     }
     const note = `Relevé VISA du ${frDay(st.closeDate)}${st.debitDate ? ` · débité le ${frDay(st.debitDate)}` : ''}`;
     const cards = [];
+    const claimed: string[] = [];
     for (const c of st.cards) {
       const rows = st.purchases.filter((p) => (p.cardLast4 ?? '????') === c.last4).map(({ cardLast4: _c, cardholder: _h, ...r }) => ({ ...r, communication: `${note}${c.holder ? ` · ${c.holder}` : ''}` }));
-      const r = rows.length ? await insertBankRows(rows, `VISA ••${c.last4}`, 'pdf-visa') : { imported: 0, duplicates: 0 };
+      // achats déjà importés par un ancien relevé (autre libellé, ex. « Visa Belfius ••4960 / ••7449 ») : on les range sur la bonne
+      // carte au lieu de les doubler — leurs rapprochements sont conservés
+      const label = `VISA ••${c.last4}`;
+      let relabeled = 0;
+      const fresh: typeof rows = [];
+      for (const row of rows) {
+        if (!row.bookingDate) { fresh.push(row); continue; }
+        const day = row.bookingDate.toISOString().slice(0, 10);
+        const twin = await prisma.bankTransaction.findFirst({
+          where: {
+            bank: { contains: 'visa', mode: 'insensitive' }, amount: row.amount,
+            bookingDate: { gte: new Date(`${day}T00:00:00.000Z`), lt: new Date(new Date(`${day}T00:00:00.000Z`).getTime() + 86400000) },
+            ...(row.counterpartyName ? { counterpartyName: { startsWith: row.counterpartyName.slice(0, 12) } } : {}),
+            NOT: { id: { in: claimed } },
+          },
+          select: { id: true, bank: true },
+        });
+        if (twin) { claimed.push(twin.id); if (twin.bank !== label) { await prisma.bankTransaction.update({ where: { id: twin.id }, data: { bank: label, communication: row.communication } }); relabeled++; } }
+        else fresh.push(row);
+      }
+      const ins = fresh.length ? await insertBankRows(fresh, label, 'pdf-visa') : { imported: 0, duplicates: 0 };
+      const r = { imported: ins.imported, duplicates: ins.duplicates + rows.length - fresh.length - relabeled, relabeled };
       if (/^\d{4}$/.test(c.last4)) {
         const exists = await prisma.paymentCard.findUnique({ where: { network_last4: { network: 'visa', last4: c.last4 } } });
         if (!exists) await prisma.paymentCard.create({ data: { network: 'visa', last4: c.last4, bank: 'Belfius', holderName: c.holder } });
         else if (!exists.holderName && c.holder) await prisma.paymentCard.update({ where: { id: exists.id }, data: { holderName: c.holder } });
       }
-      cards.push({ last4: c.last4, holder: c.holder, count: c.count, sum: c.sum, imported: r.imported, duplicates: r.duplicates });
+      cards.push({ last4: c.last4, holder: c.holder, count: c.count, sum: c.sum, imported: r.imported, duplicates: r.duplicates, relabeled: r.relabeled });
     }
     // carte à débit différé : retrouver le prélèvement du total sur le compte courant et l'annoter
     let debit: { found: boolean; date: Date | null } = { found: false, date: st.debitDate };
     if (st.debitDate && st.total) {
       const from = new Date(st.debitDate.getTime() - 5 * 86400000), to = new Date(st.debitDate.getTime() + 5 * 86400000);
-      const cands = await prisma.bankTransaction.findMany({ where: { bookingDate: { gte: from, lte: to }, NOT: { bank: { startsWith: 'VISA' } } }, select: { id: true, amount: true, bookingDate: true, communication: true, description: true } });
+      const cands = await prisma.bankTransaction.findMany({ where: { bookingDate: { gte: from, lte: to }, NOT: { bank: { contains: 'visa', mode: 'insensitive' } } }, select: { id: true, amount: true, bookingDate: true, communication: true, description: true } });
       const hit = cands.filter((t) => Math.abs(Math.abs(t.amount ?? 0) - st.total!) < 0.011 && (t.amount ?? 0) < 0)
         .sort((a, b) => Math.abs(dayN(a.bookingDate!) - dayN(st.debitDate!)) - Math.abs(dayN(b.bookingDate!) - dayN(st.debitDate!)))[0];
       if (hit) {

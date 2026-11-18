@@ -731,6 +731,33 @@ vehiclesRouter.get(
   }),
 );
 
+/* ---------------------------------------------------- échéancier de financement */
+
+/** Remplace tout l'échéancier du véhicule (lignes du tableau d'amortissement de la banque / du leasing). */
+vehiclesRouter.put(
+  '/:id/payments',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    const { rows } = z.object({
+      rows: z.array(z.object({
+        dueOn: z.coerce.date(),
+        amount: z.coerce.number().nonnegative(),
+        principal: z.coerce.number().nonnegative().nullish(),
+        interest: z.coerce.number().nonnegative().nullish(),
+        balance: z.coerce.number().nonnegative().nullish(),
+      })).max(600),
+    }).parse(req.body);
+    const v = await prisma.vehicle.findUnique({ where: { id: req.params.id }, select: { id: true } });
+    if (!v) throw new HttpError(404, 'Véhicule introuvable');
+    await prisma.$transaction([
+      prisma.vehiclePayment.deleteMany({ where: { vehicleId: v.id } }),
+      prisma.vehiclePayment.createMany({ data: rows.map((r) => ({ vehicleId: v.id, dueOn: r.dueOn, amount: r.amount, principal: r.principal ?? null, interest: r.interest ?? null, balance: r.balance ?? null })) }),
+    ]);
+    await prisma.auditLog.create({ data: { actorId: req.user!.id, action: 'vehicle.payments.replace', entity: 'vehicle', entityId: v.id, meta: { count: rows.length } } }).catch(() => undefined);
+    res.json({ ok: true, count: rows.length });
+  }),
+);
+
 /* ---------------------------------------------------- documents véhicule */
 
 vehiclesRouter.post(

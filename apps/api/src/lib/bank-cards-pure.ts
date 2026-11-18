@@ -13,7 +13,8 @@ export function detectCard(tx: { bank?: string | null; communication?: string | 
   const text = `${tx.communication ?? ''} ${tx.description ?? ''}`;
   const belfius = text.match(/\b(\d{6})X{6}(\d{4})([A-Za-zÀ-ÿ'’\- ]{2,40})?/);
   if (belfius) {
-    const holder = (belfius[3] ?? '').replace(/\s+/g, ' ').trim();
+    // le nom suit les chiffres, puis le libellé (« … 3734Scott David BANCONTACT - ACHAT CARBURANT ») : on s'arrête avant
+    const holder = (belfius[3] ?? '').split(/\s{2,}|\s(?:BANCONTACT|ACHAT|PAIEMENT|BETALING|RETRAIT|VISA)\b|\s-\s/i)[0]!.replace(/\s+/g, ' ').trim();
     return { network: 'bancontact', last4: belfius[2]!, prefix: belfius[1]!, holderName: holder || null, bank: bank || 'Belfius' };
   }
   const ing = text.match(/Kaartnummer\s+(\d{4})\s?(\d{2})XX\s?XXXX\s?(\d{4})/i);

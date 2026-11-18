@@ -14,3 +14,7 @@ test('Visa', () => {
   assert.deepEqual(detectCard({ bank: 'VISA ••7639', communication: '' }), { network: 'visa', last4: '7639', prefix: null, holderName: null, bank: null });
 });
 test('virement ordinaire', () => { assert.equal(detectCard({ bank: 'Belfius', communication: 'Facture 341' }), null); });
+test('Belfius : le libellé après le nom est ignoré', () => {
+  assert.equal(detectCard({ bank: 'Belfius', communication: 'BE 18/11/26 MCC5541 525506XXXXXX3734Scott David', description: 'BANCONTACT - ACHAT CARBURANT' })?.holderName, 'Scott David');
+  assert.equal(detectCard({ bank: 'Belfius', communication: 'MCC5046 525506XXXXXX6094Sweert Julien BANCONTACT - ACHAT - SANIMAT' })?.holderName, 'Sweert Julien');
+});

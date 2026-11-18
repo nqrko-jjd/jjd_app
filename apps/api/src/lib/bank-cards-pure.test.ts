@@ -30,3 +30,10 @@ test('libellés Visa des imports précédents', () => {
   assert.equal(detectCard({ bank: 'VISA **8307' })?.last4, '8307');
   assert.equal(detectCard({ bank: 'Belfius' }), null);
 });
+import { maskPan } from './bank-cards-pure.js';
+test('numéro complet collé au nom (achat en ligne Belfius)', () => {
+  const h = detectCard({ bank: 'Belfius', communication: '18/11/2026 0,28 D EUR 5255060417823734Scott David' });
+  assert.equal(h?.last4, '3734'); assert.equal(h?.holderName, 'Scott David');
+  assert.equal(detectCard({ bank: 'Belfius', communication: 'IBAN BE31068949400055 virement' }), null);
+  assert.equal(maskPan('EUR 5255060417823734Scott'), 'EUR 525506••••••3734Scott');
+});

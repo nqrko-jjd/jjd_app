@@ -4,7 +4,7 @@ import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, OFFICE } from '../lib/auth.js';
 import multer from 'multer';
-import { detectCard, cardTextNeedles, isCardSettlement } from '../lib/bank-cards-pure.js';
+import { detectCard, cardTextNeedles, isCardSettlement, maskPan } from '../lib/bank-cards-pure.js';
 import { pdfToRawText, pdftotextAvailable, parseVisaStatement } from '../lib/bank-pdf.js';
 import { autoMatchAll } from '../lib/bank-match.js';
 import { insertBankRows } from './finance.js';
@@ -36,7 +36,7 @@ async function cardTransactions(since: Date) {
   const rows = await prisma.bankTransaction.findMany({
     where: {
       bookingDate: { gte: since },
-      OR: [{ bank: { contains: 'visa', mode: 'insensitive' } }, { communication: { contains: 'XXXX' } }, { description: { contains: 'XXXX' } }],
+      // pas de pré-filtre texte : certains paiements Belfius portent le numéro complet (achats en ligne) — detectCard trie
     },
     select: TX_SELECT,
     orderBy: { bookingDate: 'desc' },
@@ -226,7 +226,7 @@ cardsRouter.get('/account-transactions', requireAuth(...OFFICE), asyncHandler(as
     items: rows.map((t) => ({
       id: t.id, date: t.bookingDate, amount: t.amount,
       merchant: (t.counterpartyName || t.description || (t.communication ?? '').replace(/\s+/g, ' ').slice(0, 60) || 'Opération').trim(),
-      detail: (t.communication ?? '').replace(/\s+/g, ' ').slice(0, 120) || null,
+      detail: maskPan((t.communication ?? '').replace(/\s+/g, ' ')).slice(0, 120) || null,
       justified: t._count.matches > 0 || !!t.pairedTxId || isCardSettlement(t),
       settlement: isCardSettlement(t),
       links: (linkMap.get(t.id) ?? []).map((m) => m.document

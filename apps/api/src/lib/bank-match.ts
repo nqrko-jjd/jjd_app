@@ -231,15 +231,19 @@ export async function buildAliasCheck(): Promise<AliasCheck> {
 export async function suspiciousMatchTxIds(): Promise<string[]> {
   const alias = await buildAliasCheck();
   const txs = await prisma.bankTransaction.findMany({
-    where: { matchConfidence: 'good', matches: { some: { ledgerEntryId: { not: null } } } },
+    // liens posés par la machine (« good », ou anciens liens importés sans niveau de confiance) — « strong » = communication
+    // structurée, « manual » = choisi par quelqu'un : pas remis en cause
+    where: { OR: [{ matchConfidence: 'good' }, { matchConfidence: null }], matches: { some: { ledgerEntryId: { not: null } } } },
     select: {
       id: true, amount: true, bookingDate: true, structuredComm: true, counterpartyName: true, side: true, description: true,
-      matches: { select: { ledgerEntry: { select: { id: true, ttc: true, ht: true, date: true, direction: true, bankComm: true, supplierName: true, documentId: true, contact: { select: { name: true } } } } } },
+      matches: { select: { amount: true, ledgerEntry: { select: { id: true, ttc: true, ht: true, date: true, direction: true, bankComm: true, supplierName: true, documentId: true, contact: { select: { name: true } } } } } },
     },
   });
   return txs.filter((t) => t.matches.some((m) => {
     const l = m.ledgerEntry;
     if (!l) return false;
+    // lien « vide » (0 € affecté) sur un paiement réel : le paiement reste accroché à un fournisseur sans rien régler
+    if (m.amount !== null && Math.abs(m.amount) < 0.005 && Math.abs(t.amount ?? 0) >= 0.01) return true;
     const lite: LedgerLite = { id: l.id, ttc: l.ttc, ht: l.ht, date: l.date, direction: l.direction, bankComm: l.bankComm, supplierName: l.supplierName, contactName: l.contact?.name ?? null, documentId: l.documentId };
     return !partyCoherent(t as TxLite, lite, alias);
   })).map((t) => t.id);

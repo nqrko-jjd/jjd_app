@@ -6,6 +6,7 @@ import { api } from '@/lib/api';
 import { PageHead, Money, Avatar, formatDateBE } from '@/lib/ui';
 import { SkeletonRows, ErrorState } from '@/components/States';
 import { FormModal } from '@/components/FormModal';
+import { BankExpenseCreate } from '@/components/BankExpenseCreate';
 
 interface PersonRef { id: string; firstName: string; lastName: string | null; displayName: string | null; photoThumbUrl: string | null; active: boolean }
 interface Card {
@@ -87,7 +88,8 @@ function PayCard({ card, big }: { card: Card; big?: boolean }) {
 
 function CardDetail({ card, people, onSaved }: { card: Card; people: PersonRef[]; onSaved: () => void }) {
   const [months, setMonths] = useState(6);
-  const { data, loading } = useApi<{ items: CardTx[]; months: { month: string; spend: number }[] }>(`/api/finance/cards/${card.id}/transactions?months=${months}`);
+  const { data, loading, reload: reloadTx } = useApi<{ items: CardTx[]; months: { month: string; spend: number }[] }>(`/api/finance/cards/${card.id}/transactions?months=${months}`);
+  const [openTx, setOpenTx] = useState<string | null>(null);
   const [form, setForm] = useState({ personId: card.personId ?? '', label: card.label ?? '', holderName: card.holderName ?? '', status: card.status, expiresOn: card.expiresOn?.slice(0, 7) ?? '', monthlyLimit: card.monthlyLimit?.toString() ?? '', note: card.note ?? '' });
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -167,26 +169,98 @@ function CardDetail({ card, people, onSaved }: { card: Card; people: PersonRef[]
         </label>
         {loading && !data ? <SkeletonRows rows={5} /> : txs.length === 0 ? <p className="muted">Aucune opération sur cette période.</p> : (
           <ul className="pay-tx-list">
-            {txs.map((t) => (
-              <li key={t.id}>
-                <div className="pay-tx-main">
-                  <strong>{t.merchant || 'Paiement'}</strong>
-                  <span className="muted">
-                    {t.date ? formatDateBE(t.date) : ''}
-                    {t.links.length > 0 && <> · {t.links.map((l) => [l.label, l.worksiteRef].filter(Boolean).join(' → ')).join(', ')}</>}
-                  </span>
-                </div>
-                <div className="pay-tx-side">
-                  <span className={(t.amount ?? 0) > 0 ? 'pos' : ''}><Money value={t.amount} /></span>
-                  {(t.amount ?? 0) < 0 && (t.justified
-                    ? <span className="badge ok">Justifié</span>
-                    : <Link className="badge warn" href={`/app/finances/banque?transactionId=${t.id}`}>À justifier</Link>)}
-                </div>
-              </li>
-            ))}
+            {txs.map((t) => {
+              const todo = !t.justified && (t.amount ?? 0) < 0;
+              const open = openTx === t.id;
+              return (
+                <li key={t.id} className={open ? 'is-open' : undefined}>
+                  <button type="button" className="pay-tx-row" onClick={() => setOpenTx(open ? null : t.id)} aria-expanded={open}>
+                    <div className="pay-tx-main">
+                      <strong>{t.merchant || 'Paiement'}</strong>
+                      <span className="muted">
+                        {t.date ? formatDateBE(t.date) : ''}
+                        {t.links.length > 0 && <> · {t.links.map((l) => [l.label, l.worksiteRef].filter(Boolean).join(' → ')).join(', ')}</>}
+                      </span>
+                    </div>
+                    <div className="pay-tx-side">
+                      <span className={(t.amount ?? 0) > 0 ? 'pos' : ''}><Money value={t.amount} /></span>
+                      {(t.amount ?? 0) < 0 && (t.justified ? <span className="badge ok">Justifié</span> : <span className="badge warn">À justifier</span>)}
+                    </div>
+                  </button>
+                  {open && (
+                    <TxReconcile
+                      tx={t}
+                      todo={todo}
+                      onDone={(m) => { setMsg(m); setOpenTx(null); reloadTx(); onSaved(); }}
+                    />
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>
+    </div>
+  );
+}
+
+interface Suggestion { kind: 'ledger' | 'document'; id: string; label: string; amount: number | null; date: string | null; direction: string; worksiteRef: string | null }
+
+/**
+ * Rapprochement d'un paiement carte, directement sous la ligne : factures/tickets proposés (un clic pour lier),
+ * recherche, ou dépense sans facture (parking, carburant…). Même logique que le rapprochement bancaire.
+ */
+function TxReconcile({ tx, todo, onDone }: { tx: CardTx; todo: boolean; onDone: (msg: string) => void }) {
+  const [q, setQ] = useState('');
+  const [busy, setBusy] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [mode, setMode] = useState<'invoice' | 'expense'>('invoice');
+  const { data: sugg, loading } = useApi<{ items: Suggestion[]; remaining: number }>(todo ? `/api/finance/bank/${tx.id}/suggestions${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ''}` : null);
+  const purchases = (sugg?.items ?? []).filter((s) => s.direction !== 'sale');
+
+  async function link(s: Suggestion) {
+    setBusy(s.id); setErr(null);
+    try {
+      const amount = Math.min(s.amount ?? 0, sugg?.remaining ?? Math.abs(tx.amount ?? 0));
+      await api(`/api/finance/bank/${tx.id}/matches`, { method: 'POST', body: { ...(s.kind === 'ledger' ? { ledgerId: s.id } : { documentId: s.id }), amount } });
+      onDone(`Paiement de ${tx.merchant} lié à ${s.label}.`);
+    } catch (e) { setErr((e as Error).message); } finally { setBusy(null); }
+  }
+
+  if (!todo) {
+    return (
+      <div className="pay-tx-panel">
+        {tx.links.length ? <>Lié à : {tx.links.map((l, i) => <span key={i}>{i > 0 && ', '}{l.id ? <Link href={`/app/achats?q=${encodeURIComponent(l.label.split(' · ').pop() ?? '')}`}>{l.label || 'dépense'}</Link> : l.label}{l.worksiteRef ? ` → ${l.worksiteRef}` : ''}</span>)}</> : 'Justifié (remboursement lié).'}
+        <span className="muted"> · Pour défaire, passez par le <Link href={`/app/finances/banque?transactionId=${tx.id}`}>rapprochement bancaire</Link>.</span>
+      </div>
+    );
+  }
+  return (
+    <div className="pay-tx-panel">
+      <div className="pay-seg" role="tablist" aria-label="Comment justifier ce paiement">
+        <button role="tab" aria-selected={mode === 'invoice'} className={mode === 'invoice' ? 'is-on' : ''} onClick={() => setMode('invoice')}>J’ai la facture / le ticket</button>
+        <button role="tab" aria-selected={mode === 'expense'} className={mode === 'expense' ? 'is-on' : ''} onClick={() => setMode('expense')}>Pas de facture</button>
+      </div>
+      {mode === 'invoice' ? (
+        <>
+          <input className="input" placeholder="Chercher : fournisseur, n° de facture, chantier, montant…" value={q} onChange={(e) => setQ(e.target.value)} style={{ marginBottom: '0.5rem' }} />
+          {loading && !sugg ? <span className="muted">Recherche…</span> : purchases.length === 0 ? (
+            <p className="muted" style={{ margin: 0 }}>{q.trim() ? 'Aucune facture trouvée.' : 'Aucune facture du même montant pour l’instant. Cherchez-la, ou créez la dépense (« Pas de facture »). Si le ticket n’est pas encore encodé, il apparaîtra ici dès qu’il le sera.'}</p>
+          ) : (
+            <div className="pay-sugg">
+              {purchases.slice(0, 8).map((s) => (
+                <button key={`${s.kind}-${s.id}`} className="pay-sugg-item" disabled={!!busy} onClick={() => link(s)}>
+                  <span><strong>{s.label}</strong><span className="muted">{[s.worksiteRef, s.date ? formatDateBE(s.date) : null].filter(Boolean).join(' · ')}</span></span>
+                  <span className="pay-sugg-amt"><Money value={s.amount} /><em>{busy === s.id ? 'Liaison…' : 'Lier'}</em></span>
+                </button>
+              ))}
+            </div>
+          )}
+        </>
+      ) : (
+        <BankExpenseCreate txId={tx.id} onDone={onDone} />
+      )}
+      {err && <p role="alert" className="badge crit" style={{ margin: '0.5rem 0 0' }}>{err}</p>}
     </div>
   );
 }

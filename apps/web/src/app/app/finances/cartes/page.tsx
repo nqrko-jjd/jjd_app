@@ -250,7 +250,7 @@ function AccountDetail({ account, onSaved }: { account: Account; onSaved: () => 
   const [onlyTodo, setOnlyTodo] = useState(true);
   const [openTx, setOpenTx] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
-  const { data, loading, reload } = useApi<{ items: CardTx[]; months: { month: string; spend: number; income: number }[] }>(`/api/finance/cards/accounts/transactions?bank=${encodeURIComponent(account.bank)}&months=${months}`);
+  const { data, loading, reload } = useApi<{ items: CardTx[]; months: { month: string; spend: number; income: number }[] }>(`/api/finance/cards/account-transactions?bank=${encodeURIComponent(account.bank)}&months=${months}`);
   const txs = (data?.items ?? []).filter((t) => (!onlyTodo || !t.justified) && (dir === 'all' || (dir === 'out' ? (t.amount ?? 0) < 0 : (t.amount ?? 0) > 0)));
   const max = Math.max(1, ...(data?.months ?? []).flatMap((m) => [m.spend, m.income]));
   return (

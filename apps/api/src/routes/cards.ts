@@ -200,7 +200,7 @@ cardsRouter.get('/accounts', requireAuth(...OFFICE), asyncHandler(async (_req, r
   res.json({ items });
 }));
 
-cardsRouter.get('/accounts/transactions', requireAuth(...OFFICE), asyncHandler(async (req, res) => {
+cardsRouter.get('/account-transactions', requireAuth(...OFFICE), asyncHandler(async (req, res) => {
   const months = Math.min(36, Math.max(1, Number(req.query.months) || 3));
   const now = new Date();
   const since = new Date(now.getFullYear(), now.getMonth() - months + 1, 1);

@@ -15,6 +15,7 @@ interface Vehicle {
   pajDeviceId: string | null; lastLat: number | null; lastLng: number | null; lastSeenAt: string | null; lastSpeed: number | null; lastBattery: number | null;
 }
 interface Data { pajConfigured: boolean; vehicles: Vehicle[] }
+interface Day { km: number; firstMoveAt: string | null; stoppedSince: string | null; noMoveToday: boolean; track: [number, number][]; stops: { from: string; to: string | null; lat: number; lng: number }[] }
 type VState = 'moving' | 'parked' | 'sleep';
 
 const STALE_MS = 30 * 60_000;
@@ -28,6 +29,7 @@ const vState = (v: Vehicle, now: number): VState => {
   if (!v.lastSeenAt || now - new Date(v.lastSeenAt).getTime() > STALE_MS) return 'sleep';
   return v.lastSpeed != null && v.lastSpeed > 2 ? 'moving' : 'parked';
 };
+const hm = (iso: string) => new Date(iso).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' });
 const label = (v: Vehicle) => [v.code, v.name ?? [v.brand, v.model].filter(Boolean).join(' '), v.plate].filter(Boolean).join(' · ') || tr('Véhicule');
 const ago = (iso: string) => {
   const m = Math.round((Date.now() - new Date(iso).getTime()) / 60_000);
@@ -52,6 +54,12 @@ window.setVehicles=function(list){last=list;var seen={};
  if(!fitted&&list.length){fitted=true;var b=L.latLngBounds(list.map(function(v){return[v.lat,v.lng]}));map.fitBounds(b,{padding:[40,40],maxZoom:15});}};
 window.focusVehicle=function(id){sel=id;last.forEach(function(v){if(markers[v.id])markers[v.id].setIcon(icon(v))});
  var v=last.filter(function(x){return x.id===id})[0];if(v)map.setView([v.lat,v.lng],Math.max(map.getZoom(),15),{animate:true});};
+var trackLayer=null;
+window.setTrack=function(track,stops){if(trackLayer){map.removeLayer(trackLayer);trackLayer=null}
+ if(!track||track.length<2&&(!stops||!stops.length))return;trackLayer=L.layerGroup().addTo(map);
+ if(track&&track.length>1){var pl=L.polyline(track,{color:'#124b3a',weight:4,opacity:.8}).addTo(trackLayer);map.fitBounds(pl.getBounds(),{padding:[40,40],maxZoom:16});
+  L.circleMarker(track[0],{radius:6,color:'#fff',weight:2,fillColor:'#1f8f4e',fillOpacity:1}).bindTooltip('Départ').addTo(trackLayer);}
+ (stops||[]).forEach(function(s,i){L.marker([s.lat,s.lng],{icon:L.divIcon({className:'',html:'<div style="background:#a87529;color:#fff;border:2px solid #fff;border-radius:50%;width:22px;height:22px;text-align:center;font:700 12px/18px sans-serif;box-shadow:0 1px 4px rgba(0,0,0,.4)">'+(i+1)+'</div>',iconSize:[22,22],iconAnchor:[11,11]})}).bindTooltip(s.label).addTo(trackLayer)});};
 window.fitAll=function(){if(last.length)map.fitBounds(L.latLngBounds(last.map(function(v){return[v.lat,v.lng]})),{padding:[40,40],maxZoom:15})};
 true;</script></body></html>`;
 
@@ -67,6 +75,8 @@ export default function SuiviGps() {
   const [refreshing, setRefreshing] = useState(false);
   const [mapReady, setMapReady] = useState(false);
   const web = useRef<WebView>(null);
+  const [day, setDay] = useState<Day | null>(null);
+  const [dayErr, setDayErr] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -105,6 +115,20 @@ export default function SuiviGps() {
   const push = useCallback((js: string) => web.current?.injectJavaScript(`${js};true;`), []);
   useEffect(() => { if (mapReady) push(`window.setVehicles(${JSON.stringify(mapVehicles)})`); }, [mapVehicles, mapReady, push]);
   useEffect(() => { if (mapReady && sel) push(`window.focusVehicle(${JSON.stringify(sel)})`); }, [sel, mapReady, push]);
+
+  // Journée du véhicule sélectionné : tracé, arrêts, kilomètres (lu à la demande chez le fournisseur GPS)
+  useEffect(() => {
+    setDay(null); setDayErr(false);
+    if (!sel || !allowed) return;
+    let off = false;
+    apiGet<Day>(`/api/gps/vehicles/${sel}/day`).then((d) => { if (!off) setDay(d); }).catch(() => { if (!off) setDayErr(true); });
+    return () => { off = true; };
+  }, [sel, allowed]);
+  useEffect(() => {
+    if (!mapReady) return;
+    const stops = (day?.stops ?? []).map((st) => ({ lat: st.lat, lng: st.lng, label: `${hm(st.from)} → ${st.to ? hm(st.to) : 'maintenant'}` }));
+    push(`window.setTrack(${JSON.stringify(day?.track ?? [])}, ${JSON.stringify(stops)})`);
+  }, [day, mapReady, push]);
 
   if (!allowed) {
     return (
@@ -171,6 +195,24 @@ export default function SuiviGps() {
             <Info icon="user" text={drivers[selected.id] ?? tr('Conducteur non renseigné')} />
             {selected.lastSpeed != null && <Info icon="activity" text={`${Math.round(selected.lastSpeed)} km/h`} />}
             {selected.lastBattery != null && <Info icon="battery" text={`${tr('Batterie du traceur')} ${Math.round(selected.lastBattery)} %`} />}
+            {dayErr && <Muted>{tr('Journée indisponible pour le moment.')}</Muted>}
+            {!day && !dayErr && <Muted>{tr('Chargement de la journée…')}</Muted>}
+            {day && (
+              <View style={{ gap: 8 }}>
+                <Text style={s.section}>{tr('Aujourd’hui')}</Text>
+                <Info icon="navigation" text={`${day.km.toFixed(1).replace('.', ',')} km ${tr('parcourus')}`} />
+                {day.firstMoveAt && <Info icon="log-out" text={`${tr('Première sortie')} ${hm(day.firstMoveAt)}`} />}
+                {day.noMoveToday && <Info icon="pause-circle" text={tr('Le véhicule n’a pas bougé aujourd’hui')} />}
+                {day.stoppedSince && !day.noMoveToday && <Info icon="clock" text={`${tr('À l’arrêt depuis')} ${hm(day.stoppedSince)}`} />}
+                {day.stops.length > 0 && <Text style={s.section}>{tr('Arrêts')}</Text>}
+                {day.stops.map((st, i) => (
+                  <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <View style={s.stopNum}><Text style={{ color: '#fff', fontWeight: '800', fontSize: 12 }}>{i + 1}</Text></View>
+                    <Text style={{ color: T.ink, fontSize: 14 }}>{hm(st.from)} → {st.to ? hm(st.to) : tr('maintenant')}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
             <Pressable accessibilityRole="button" style={s.cta} onPress={() => router.push(`/vehicule/${selected.id}` as never)}>
               <Text style={s.ctaText}>{tr('Ouvrir la fiche du véhicule')}</Text>
               <Feather name="chevron-right" size={16} color="#fff" />
@@ -217,6 +259,7 @@ const s = StyleSheet.create({
   fit: { position: 'absolute', right: 12, bottom: 12, width: 44, height: 44, borderRadius: 14, backgroundColor: T.surface, alignItems: 'center', justifyContent: 'center', ...T.shadow, borderWidth: 1, borderColor: T.line },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: T.surface, borderWidth: 1, borderColor: T.line, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7 },
   chipText: { color: T.ink, fontSize: 13, fontWeight: '600' },
+  stopNum: { width: 22, height: 22, borderRadius: 11, backgroundColor: T.accent, alignItems: 'center', justifyContent: 'center' },
   dot: { width: 10, height: 10, borderRadius: 5 },
   dotBig: { width: 14, height: 14, borderRadius: 7 },
   section: { fontSize: 11, fontWeight: '700', letterSpacing: 1.1, textTransform: 'uppercase', color: T.ink2, marginTop: 4 },

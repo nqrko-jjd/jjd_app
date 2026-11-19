@@ -72,7 +72,7 @@ export default function FilGeneral() {
               {!mine && <Text style={s.author}>{m.authorName}</Text>}
               {m.kind === 'audio' && m.fileUrl && <VoicePlayer uri={`${API_URL}${m.fileUrl}`} />}
               {gifUrl(m.body) ? <GifImage url={gifUrl(m.body)!} /> : m.body ? <MsgText body={m.body} translated={m.bodyTranslated} style={[s.bubble, mine && s.bubbleMine]} /> : null}
-              <ReactionChips reactions={m.reactions} mine={mine} onToggle={(e) => react(m.id, e)} />
+              <ReactionChips reactions={m.reactions} mine={mine} onToggle={(e) => react(m.id, e)} onAdd={() => setPickFor(m.id)} />
               <Text style={[s.timeTxt, mine && { alignSelf: 'flex-end' }]}>{time(m.createdAt)}</Text>
               {!mine && <ReportMessage id={m.id} />}
             </Pressable>

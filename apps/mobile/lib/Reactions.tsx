@@ -7,11 +7,11 @@ export interface Reaction { emoji: string; count: number; mine: boolean }
 const QUICK = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
 
 /** Pastilles d'émojis sous un message ; un appui ajoute ou retire sa propre réaction. */
-export function ReactionChips({ reactions, onToggle, mine }: { reactions?: Reaction[]; onToggle: (emoji: string) => void; mine?: boolean }) {
-  if (!reactions?.length) return null;
+export function ReactionChips({ reactions, onToggle, onAdd, mine }: { reactions?: Reaction[]; onToggle: (emoji: string) => void; onAdd?: () => void; mine?: boolean }) {
+  if (!reactions?.length && !onAdd) return null;
   return (
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: mine ? 'flex-end' : 'flex-start' }}>
-      {reactions.map((r) => (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: mine ? 'flex-end' : 'flex-start', alignItems: 'center' }}>
+      {(reactions ?? []).map((r) => (
         <Pressable
           key={r.emoji}
           accessibilityRole="button"
@@ -22,6 +22,11 @@ export function ReactionChips({ reactions, onToggle, mine }: { reactions?: React
           <Text style={{ fontSize: 12, fontWeight: '700', color: r.mine ? T.primary : T.ink2 }}>{r.count}</Text>
         </Pressable>
       ))}
+      {onAdd && (
+        <Pressable accessibilityRole="button" accessibilityLabel="Réagir" onPress={onAdd} hitSlop={8} style={{ paddingHorizontal: 7, paddingVertical: 3, borderRadius: 999, borderWidth: 1, borderColor: T.line, backgroundColor: T.surface }}>
+          <Text style={{ fontSize: 13, color: T.ink3 }}>☺ +</Text>
+        </Pressable>
+      )}
     </View>
   );
 }

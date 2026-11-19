@@ -2,7 +2,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ReportMessage } from '@/lib/ReportMessage';
 import { VoiceNote, VoicePlayer } from '@/lib/VoiceNote';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { View, TextInput, Pressable, ScrollView, Image, StyleSheet, KeyboardAvoidingView, Platform, Linking } from 'react-native';
+import { View, TextInput, Pressable, ScrollView, Image, StyleSheet, KeyboardAvoidingView, Platform, Linking, Keyboard } from 'react-native';
 import { Text } from '@/lib/AppText';
 import { Feather } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams, useFocusEffect, useRouter } from 'expo-router';
@@ -42,6 +42,13 @@ export default function Fil() {
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const scroll = useRef<ScrollView>(null);
+  // Clavier ouvert : on masque les boutons du bas pour laisser la place à l'écriture
+  const [kb, setKb] = useState(false);
+  useEffect(() => {
+    const a = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', () => setKb(true));
+    const b = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => setKb(false));
+    return () => { a.remove(); b.remove(); };
+  }, []);
 
   const load = useCallback(async () => {
     try { setD(await apiGet<Data>(`/api/worksites/${id}/thread`)); } catch {}
@@ -182,7 +189,7 @@ export default function Fil() {
               {gifUrl(m.body) ? <GifImage url={gifUrl(m.body)!} /> : m.body && m.kind !== 'file' && !isExpense(m) ? (
                 <MsgText body={m.body} translated={m.bodyTranslated} style={[s.bubble, mine && s.bubbleMine]} />
               ) : null}
-              <ReactionChips reactions={m.reactions} mine={mine} onToggle={(e) => react(m.id, e)} />
+              <ReactionChips reactions={m.reactions} mine={mine} onToggle={(e) => react(m.id, e)} onAdd={() => setPickFor(m.id)} />
               <Text style={[s.timeTxt, mine && { alignSelf: 'flex-end' }]}>{time(m.createdAt)}</Text>
               {!mine && <ReportMessage id={m.id} />}
             </Pressable>
@@ -190,21 +197,21 @@ export default function Fil() {
         })}
       </ScrollView>
 
-      {d.thread.closedAt ? (
-        <View style={s.closed}><Text style={{ color: T.ok, fontWeight: '700' }}>Chantier signalé terminé</Text></View>
+      {!kb && (d.thread.closedAt ? (
+        <View style={s.closed}><Text style={{ color: T.ok, fontWeight: '700', fontSize: 13 }}>Chantier signalé terminé</Text></View>
       ) : (
         <View style={s.doneWrap}>
           <Pressable accessibilityRole="button" style={s.doneBtn} onPress={markDone}>
-            <Feather name="flag" size={17} color="#fff" />
-            <Text style={{ color: '#fff', fontWeight: '800', fontSize: 14.5 }}>Chantier entièrement terminé</Text>
+            <Feather name="flag" size={15} color="#fff" />
+            <Text style={{ color: '#fff', fontWeight: '800', fontSize: 13.5 }}>Chantier entièrement terminé</Text>
           </Pressable>
-          <Text style={s.doneHint}>À utiliser une seule fois, quand tous les travaux sont finis. Ce n'est pas la fin de votre journée.</Text>
+          <Text style={s.doneHint}>Pas la fin de votre journée (voir « Mes heures »)</Text>
         </View>
-      )}
+      ))}
 
       <ReactionPicker visible={!!pickFor} onClose={() => setPickFor(null)} onPick={(e) => pickFor && react(pickFor, e)} />
-      <VoiceNote endpoint={`/api/worksites/${id}/thread/voice`} onSent={load} />
-      <View style={s.actions}>
+      {!kb && <VoiceNote endpoint={`/api/worksites/${id}/thread/voice`} onSent={load} />}
+      {!kb && <View style={s.actions}>
         <Pressable accessibilityRole="button" style={s.actPhoto} onPress={addPhoto} disabled={busy}>
           <Feather name="camera" size={17} color={T.primary} />
           <Text style={{ color: T.primary, fontWeight: '700', fontSize: 13.5 }}>Photo du chantier</Text>
@@ -213,7 +220,7 @@ export default function Fil() {
           <Feather name="file-text" size={17} color="#fff" />
           <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13.5 }}>Dépense (ticket)</Text>
         </Pressable>
-      </View>
+      </View>}
       <View style={s.composer}>
         <TextInput style={s.input} placeholder="Message…" value={text} onChangeText={setText} placeholderTextColor={T.ink3} />
         <GifButton onPick={(g) => send(g)} />
@@ -234,14 +241,14 @@ const s = StyleSheet.create({
   bubble: { backgroundColor: T.surface, borderWidth: 1, borderColor: T.line, borderRadius: 14, borderBottomLeftRadius: 4, padding: 10, alignSelf: 'flex-start', maxWidth: '85%', color: T.ink },
   bubbleMine: { backgroundColor: T.primary, borderColor: T.primary, borderBottomLeftRadius: 14, borderBottomRightRadius: 4, color: '#fff' },
   status: { fontStyle: 'italic', color: T.ink2, fontSize: 12, alignSelf: 'center' },
-  closed: { padding: 10, alignItems: 'center', backgroundColor: T.okSoft },
-  doneWrap: { padding: 10, gap: 5, borderTopWidth: 1, borderTopColor: T.line, backgroundColor: T.surface },
-  doneBtn: { flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center', paddingVertical: 13, borderRadius: 10, backgroundColor: T.ok },
-  doneHint: { fontSize: 12, color: T.ink2, textAlign: 'center' },
+  closed: { padding: 6, alignItems: 'center', backgroundColor: T.okSoft },
+  doneWrap: { paddingHorizontal: 10, paddingVertical: 6, gap: 2, borderTopWidth: 1, borderTopColor: T.line, backgroundColor: T.surface },
+  doneBtn: { flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center', paddingVertical: 9, borderRadius: 10, backgroundColor: T.ok },
+  doneHint: { fontSize: 11, color: T.ink2, textAlign: 'center' },
   composer: { flexDirection: 'row', gap: 8, padding: 10, borderTopWidth: 1, borderTopColor: T.line, backgroundColor: T.surface, alignItems: 'center' },
   actions: { flexDirection: 'row', gap: 8, paddingHorizontal: 10, paddingTop: 8, backgroundColor: T.surface, borderTopWidth: 1, borderTopColor: T.line },
-  actPhoto: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: T.primary, backgroundColor: T.primarySoft },
-  actExpense: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingVertical: 10, borderRadius: 10, backgroundColor: T.accent },
+  actPhoto: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: T.primary, backgroundColor: T.primarySoft },
+  actExpense: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingVertical: 8, borderRadius: 10, backgroundColor: T.accent },
   expenseCard: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: T.warnSoft, borderWidth: 1, borderColor: T.accent, borderLeftWidth: 4, borderRadius: 10, padding: 10, maxWidth: '85%' },
   iconBtn: { width: 40, height: 40, borderRadius: 10, backgroundColor: T.surface2, alignItems: 'center', justifyContent: 'center' },
   input: { flex: 1, backgroundColor: T.surface2, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, color: T.ink },

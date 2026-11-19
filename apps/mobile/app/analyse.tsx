@@ -16,6 +16,7 @@ interface Analytics {
   expenseSections: { key: string; label: string; total: number }[];
   topWorksites: { ref: string; title: string; margin: number }[];
   topClients: { name: string; revenue: number; invoices: number }[];
+  topSuppliers?: { name: string; total: number; invoices: number }[];
   quotes: { sent: number; accepted: number; declined: number; pending: number; pipelineHt: number; acceptRate: number | null };
 }
 
@@ -90,9 +91,15 @@ export default function Analyse() {
           </Card>
 
           <Card>
-            <Label>Top clients · chiffre d’affaires</Label>
+            <Label>Top 10 clients · chiffre d’affaires</Label>
             {data.topClients.length === 0 ? <Muted>Rien à afficher.</Muted>
               : <HBars rows={data.topClients.map((c) => ({ label: `${c.name} (${c.invoices} fact.)`, value: c.revenue }))} format={(n) => `${compact(n)} €`} />}
+          </Card>
+
+          <Card>
+            <Label>Top 10 fournisseurs · achats HT</Label>
+            {!data.topSuppliers?.length ? <Muted>Rien à afficher.</Muted>
+              : <HBars rows={data.topSuppliers.map((c) => ({ label: `${c.name} (${c.invoices} fact.)`, value: c.total }))} format={(n) => `${compact(n)} €`} />}
           </Card>
 
           <Label>Devis</Label>

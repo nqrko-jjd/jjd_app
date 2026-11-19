@@ -88,7 +88,7 @@ export default function Chantiers() {
         contentContainerStyle={{ ...T.content, padding: 18, paddingTop: 12, gap: 12 }}
         ListEmptyComponent={<EmptyState title={tr("Aucun chantier trouvé")} description={tr("Changez le filtre ou votre recherche.")} icon="home"/>}
         renderItem={({ item }) => (
-          <Pressable style={s.row} onPress={() => router.push((worker ? `/fil/${item.id}` : `/chantier/${item.id}`) as never)}>
+          <Pressable style={s.row} onPress={() => router.push(`/chantier/${item.id}` as never)}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
               <Text style={s.ref}>{item.ref}</Text>
               <Badge tone={TONE[item.status]}>{STATUS_LABEL[item.status] ?? item.status}</Badge>

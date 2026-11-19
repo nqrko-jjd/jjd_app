@@ -40,6 +40,7 @@ interface Ev {
   startAt: string; note: string | null;
   assignments: { person: { displayName: string | null; firstName: string } }[];
 }
+interface MyTask { id: string; title: string; status: string; dueOn: string | null; worksiteId: string | null }
 interface Activity { id: string; label: string; by: string | null; at: string }
 interface Detail {
   worksite: {
@@ -70,14 +71,20 @@ export default function ChantierDetail() {
   const { user } = useSession();
   const router = useRouter();
   const [data, setData] = useState<Detail | null>(null);
+  const [tasks, setTasks] = useState<MyTask[]>([]);
+  const worker = user?.role === 'worker';
 
   const load = useCallback(async () => {
     try {
       setData(await apiGet<Detail>(`/api/worksites/${id}`));
+      if (worker) {
+        const t = await apiGet<{ items: MyTask[] }>('/api/tasks?mine=1').catch(() => ({ items: [] as MyTask[] }));
+        setTasks(t.items.filter((x) => x.worksiteId === id && x.status !== 'done'));
+      }
     } catch {
       /* hors ligne */
     }
-  }, [id]);
+  }, [id, worker]);
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   if (!data) return <Loading />;
@@ -128,6 +135,18 @@ export default function ChantierDetail() {
         </Pressable>
       )}
 
+      {worker && tasks.length > 0 && (
+        <Card>
+          <Label>Mes tâches sur ce chantier</Label>
+          {tasks.map((t) => (
+            <View key={t.id} style={{ paddingVertical: 4 }}>
+              <Text style={{ color: T.ink, fontWeight: '700' }}>{t.title}</Text>
+              {!!t.dueOn && <Text style={{ color: T.ink2, fontSize: 12.5 }}>Pour le {dateBE(t.dueOn)}</Text>}
+            </View>
+          ))}
+        </Card>
+      )}
+
       {!!w.siteBrief && (
         <Card>
           <Label>À faire sur place</Label>
@@ -142,7 +161,7 @@ export default function ChantierDetail() {
         <Row k="Localisation" v={[w.address, w.box && `bte ${w.box}`, w.unitLabel, w.city].filter(Boolean).join(', ') || '—'} />
         {!!team && <Row k="Équipe affectée" v={team} />}
         <Row k="Début / Fin" v={`${dateBE(w.startedOn)} → ${dateBE(w.endedOn)}`} />
-        {(w.billToContact || w.billTo) && <Row k="Facturé à" v={w.billToContact?.name ?? w.billTo ?? '—'} />}
+        {!worker && (w.billToContact || w.billTo) && <Row k="Facturé à" v={w.billToContact?.name ?? w.billTo ?? '—'} />}
         {!!w.requestKind && <Row k="Type de demande" v={REQUEST_KIND_LABEL[w.requestKind] ?? w.requestKind} />}
         {!!w.accessNotes && <Row k="Accès et RDV" v={w.accessNotes} />}
       </Card>

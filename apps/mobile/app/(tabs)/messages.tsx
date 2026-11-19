@@ -26,15 +26,16 @@ export default function Messages() {
   const router = useRouter();
   const [items, setItems] = useState<ThreadItem[] | null>(null);
   const [q, setQ] = useState('');
+  const [archived, setArchived] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const r = await apiGet<{ items: ThreadItem[] }>('/api/messagerie/threads?audience=internal');
+      const r = await apiGet<{ items: ThreadItem[] }>(`/api/messagerie/threads?audience=internal${archived ? '&archived=1' : ''}`);
       setItems(r.items);
     } catch {
       /* hors ligne */
     }
-  }, []);
+  }, [archived]);
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   if (!items) return <Loading />;
@@ -54,6 +55,18 @@ export default function Messages() {
           onChangeText={setQ}
           placeholderTextColor={T.ink3}
         />
+      </View>
+      <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 18, paddingBottom: 10 }}>
+        {([[false, 'Conversations'], [true, 'Chantiers terminés']] as const).map(([val, label]) => (
+          <Pressable
+            key={label}
+            accessibilityRole="button"
+            onPress={() => { setItems(null); setArchived(val); }}
+            style={{ paddingVertical: 8, paddingHorizontal: 16, borderRadius: 999, backgroundColor: archived === val ? T.primary : T.surface2 }}
+          >
+            <Text style={{ color: archived === val ? '#fff' : T.ink2, fontWeight: '700', fontSize: 13.5 }}>{tr(label)}</Text>
+          </Pressable>
+        ))}
       </View>
       <FlatList
         data={filtered}

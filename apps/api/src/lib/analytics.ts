@@ -230,7 +230,24 @@ export async function analytics(input: AnalyticsInput = {}) {
   const topClients = salesByClient
     .map((s) => ({ name: cName.get(s.contactId!) ?? '—', revenue: round2(s._sum.ht ?? 0), invoices: s._count }))
     .sort((a, b) => b.revenue - a.revenue)
-    .slice(0, 8);
+    .slice(0, 10);
+
+  /* ---------------- top fournisseurs (achats HT sur la fenêtre) ---------------- */
+  const buysBySupplier = await prisma.ledgerEntry.groupBy({
+    by: ['contactId'],
+    where: { direction: 'purchase', contactId: { not: null }, date: { gte: win.from }, source: { not: 'demo' } },
+    _sum: { ht: true },
+    _count: true,
+  });
+  const supplierIds = buysBySupplier.map((s) => s.contactId).filter((x): x is string => !!x);
+  const suppliers = supplierIds.length
+    ? await prisma.contact.findMany({ where: { id: { in: supplierIds } }, select: { id: true, name: true } })
+    : [];
+  const sName = new Map(suppliers.map((c) => [c.id, c.name]));
+  const topSuppliers = buysBySupplier
+    .map((s) => ({ name: sName.get(s.contactId!) ?? '—', total: round2(s._sum.ht ?? 0), invoices: s._count }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 10);
 
   /* ---------------- devis ---------------- */
   const q = { sent: 0, accepted: 0, declined: 0, pending: 0, pipelineHt: 0 };
@@ -252,6 +269,7 @@ export async function analytics(input: AnalyticsInput = {}) {
     expenseSections,
     topWorksites,
     topClients,
+    topSuppliers,
     quotes,
   };
 }

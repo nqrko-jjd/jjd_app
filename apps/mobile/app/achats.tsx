@@ -5,7 +5,8 @@ import { Feather } from '@expo/vector-icons';
 import { Stack } from 'expo-router';
 import { ResourceList, Muted, Badge, eur, dateBE } from '@/lib/ui';
 import { T } from '@/lib/theme';
-import { tr } from '@/lib/i18n';
+import { tr, Alert } from '@/lib/i18n';
+import { openApiFile } from '@/lib/files';
 
 interface Expense {
   id: string; date: string | null; supplier: string | null; categoryLabel: string | null; docNumber: string | null;
@@ -18,6 +19,11 @@ const TABS = [
   { key: '', label: tr('Toutes') },
   { key: '0', label: tr('Non payées') },
 ] as const;
+
+async function openPiece(e: Expense) {
+  try { await openApiFile(`/api/finance/expenses/${e.id}/pdf`, `${e.docNumber ?? 'facture'}.pdf`); }
+  catch (err) { Alert.alert('Pièce jointe', (err as Error).message); }
+}
 
 export default function Achats() {
   const [paid, setPaid] = useState<(typeof TABS)[number]['key']>('');
@@ -48,21 +54,28 @@ export default function Achats() {
           (e.worksite?.ref ?? '').toLowerCase().includes(q)
         }
         searchPlaceholder="Fournisseur, n° facture, chantier…"
+        onPress={(e) => { if (e.hasPdf) openPiece(e); }}
         render={(e) => (
-          <View style={{ gap: 3 }}>
+          <View style={{ gap: 6 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-              <Text style={{ fontWeight: '700', color: T.ink, flex: 1, marginRight: 8 }}>{e.supplier ?? '—'}</Text>
-              <Text style={{ fontWeight: '700', color: T.ink }}>{eur(e.ttc ?? e.ht)}</Text>
+              <Text style={{ fontWeight: '800', color: T.ink, fontSize: 16, flex: 1, marginRight: 8 }}>{e.supplier ?? '—'}</Text>
+              <Text style={{ fontWeight: '800', color: T.ink, fontSize: 16 }}>{eur(e.ttc ?? e.ht)}</Text>
             </View>
             <Muted>
-              {dateBE(e.date)}{e.docNumber ? ` · ${e.docNumber}` : ''}{e.categoryLabel ? ` · ${e.categoryLabel}` : ''}
+              {tr('Facture')}{e.docNumber ? ` • ${e.docNumber}` : ''} · {dateBE(e.date)}{e.categoryLabel ? ` · ${e.categoryLabel}` : ''}
             </Muted>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Badge tone={e.paid ? 'ok' : 'warn'}>{e.paid ? 'Payée' : 'Non payée'}</Badge>
-              {e.worksite && <Muted>{e.worksite.ref}</Muted>}
+            <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+              <Badge tone={e.paid ? 'ok' : 'crit'}>{e.paid ? 'Payée' : 'Non payée'}</Badge>
+              {e.worksite && <Badge>{e.worksite.ref}</Badge>}
               {e.vehicle && <Muted>🚗 {e.vehicle.model || e.vehicle.brand || e.vehicle.name || e.vehicle.plate || e.vehicle.code}</Muted>}
-              {e.hasPdf && <Feather name="paperclip" size={12} color={T.ink3} />}
             </View>
+            {e.hasPdf && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: T.surface2, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 }}>
+                <Feather name="file" size={16} color={T.ink2} />
+                <Text style={{ flex: 1, color: T.ink2, fontWeight: '600' }} numberOfLines={1}>{tr('Facture')} {e.docNumber ?? ''}</Text>
+                <Feather name="eye" size={18} color={T.primary} />
+              </View>
+            )}
           </View>
         )}
       />

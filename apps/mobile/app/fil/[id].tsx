@@ -112,9 +112,9 @@ export default function Fil() {
     load();
   }
   async function markDone() {
-    Alert.alert('Chantier terminé ?', 'Signaler le chantier comme terminé au bureau.', [
-      { text: 'Annuler', style: 'cancel' },
-      { text: 'Confirmer', onPress: async () => { await apiSend(`/api/worksites/${id}/thread/close`, 'POST', {}); load(); } },
+    Alert.alert('Tout le chantier est fini ?', "Attention : ceci n'est PAS la fin de votre journée. Cela prévient le bureau que le chantier est entièrement terminé (travaux finis, plus personne n'y retourne). Pour finir votre journée, pointez dans « Mes heures ».", [
+      { text: 'Non, annuler', style: 'cancel' },
+      { text: 'Oui, chantier terminé', style: 'destructive', onPress: async () => { await apiSend(`/api/worksites/${id}/thread/close`, 'POST', {}); load(); } },
     ]);
   }
 
@@ -182,10 +182,13 @@ export default function Fil() {
       {d.thread.closedAt ? (
         <View style={s.closed}><Text style={{ color: T.ok, fontWeight: '700' }}>Chantier signalé terminé</Text></View>
       ) : (
-        <Pressable style={[s.doneBtn, { flexDirection: 'row', gap: 6, justifyContent: 'center' }]} onPress={markDone}>
-          <Feather name="check" size={16} color={T.ok} />
-          <Text style={{ color: T.ok, fontWeight: '700' }}>Chantier terminé</Text>
-        </Pressable>
+        <View style={s.doneWrap}>
+          <Pressable accessibilityRole="button" style={s.doneBtn} onPress={markDone}>
+            <Feather name="flag" size={17} color="#fff" />
+            <Text style={{ color: '#fff', fontWeight: '800', fontSize: 14.5 }}>Chantier entièrement terminé</Text>
+          </Pressable>
+          <Text style={s.doneHint}>À utiliser une seule fois, quand tous les travaux sont finis. Ce n'est pas la fin de votre journée.</Text>
+        </View>
       )}
 
       <VoiceNote endpoint={`/api/worksites/${id}/thread/voice`} onSent={load} />
@@ -219,7 +222,9 @@ const s = StyleSheet.create({
   bubbleMine: { backgroundColor: T.primary, borderColor: T.primary, borderBottomLeftRadius: 14, borderBottomRightRadius: 4, color: '#fff' },
   status: { fontStyle: 'italic', color: T.ink2, fontSize: 12, alignSelf: 'center' },
   closed: { padding: 10, alignItems: 'center', backgroundColor: T.okSoft },
-  doneBtn: { padding: 12, alignItems: 'center', borderTopWidth: 1, borderTopColor: T.line, backgroundColor: T.surface },
+  doneWrap: { padding: 10, gap: 5, borderTopWidth: 1, borderTopColor: T.line, backgroundColor: T.surface },
+  doneBtn: { flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center', paddingVertical: 13, borderRadius: 10, backgroundColor: T.ok },
+  doneHint: { fontSize: 12, color: T.ink2, textAlign: 'center' },
   composer: { flexDirection: 'row', gap: 8, padding: 10, borderTopWidth: 1, borderTopColor: T.line, backgroundColor: T.surface, alignItems: 'center' },
   actions: { flexDirection: 'row', gap: 8, paddingHorizontal: 10, paddingTop: 8, backgroundColor: T.surface, borderTopWidth: 1, borderTopColor: T.line },
   actPhoto: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: T.primary, backgroundColor: T.primarySoft },

@@ -11,10 +11,11 @@ import { useSession } from '@/lib/session';
 import { Loading } from '@/lib/ui';
 import { T } from '@/lib/theme';
 import { MsgText } from '@/lib/MsgText';
+import { ReactionChips, ReactionPicker, type Reaction } from '@/lib/Reactions';
 import { tr, dateLocale } from '@/lib/i18n';
 
 interface Msg {
-  id: string; kind: string; fileUrl: string | null; body: string | null; authorId: string | null; authorName: string | null; createdAt: string; bodyTranslated?: string | null;
+  id: string; kind: string; fileUrl: string | null; body: string | null; authorId: string | null; authorName: string | null; createdAt: string; bodyTranslated?: string | null; reactions?: Reaction[];
 }
 interface Data {
   thread: { id: string };
@@ -39,6 +40,13 @@ export default function FilGeneral() {
   useFocusEffect(useCallback(() => { load(); }, [load]));
   useEffect(() => { scroll.current?.scrollToEnd({ animated: false }); }, [d?.messages.length]);
 
+  const [pickFor, setPickFor] = useState<string | null>(null);
+  async function react(messageId: string, emoji: string) {
+    setPickFor(null);
+    try { await apiSend(`/api/messagerie/messages/${messageId}/reactions`, 'POST', { emoji }, false); } catch {}
+    load();
+  }
+
   async function send() {
     if (!text.trim()) return;
     setBusy(true);
@@ -58,16 +66,18 @@ export default function FilGeneral() {
         {d.messages.map((m) => {
           const mine = m.authorId === user?.id;
           return (
-            <View key={m.id} style={[s.msgCol, mine && s.msgColMine]}>
+            <Pressable key={m.id} onLongPress={() => setPickFor(m.id)} delayLongPress={350} style={[s.msgCol, mine && s.msgColMine]}>
               {!mine && <Text style={s.author}>{m.authorName}</Text>}
               {m.kind === 'audio' && m.fileUrl && <VoicePlayer uri={`${API_URL}${m.fileUrl}`} />}
               {m.body ? <MsgText body={m.body} translated={m.bodyTranslated} style={[s.bubble, mine && s.bubbleMine]} /> : null}
+              <ReactionChips reactions={m.reactions} mine={mine} onToggle={(e) => react(m.id, e)} />
               <Text style={[s.timeTxt, mine && { alignSelf: 'flex-end' }]}>{time(m.createdAt)}</Text>
               {!mine && <ReportMessage id={m.id} />}
-            </View>
+            </Pressable>
           );
         })}
       </ScrollView>
+      <ReactionPicker visible={!!pickFor} onClose={() => setPickFor(null)} onPick={(e) => pickFor && react(pickFor, e)} />
       <VoiceNote endpoint={`/api/messagerie/general/voice`} onSent={load} />
       <View style={s.composer}>
         <TextInput style={s.input} placeholder="Message…" value={text} onChangeText={setText} placeholderTextColor={T.ink3} />

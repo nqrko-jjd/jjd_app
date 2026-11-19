@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { notifyMessage } from '../lib/native-push.js';
 import { withTranslations } from '../lib/translate.js';
+import { reactionsFor, toggleReaction } from '../lib/reactions.js';
 import { refreshWorksiteStatus } from '../lib/worksite-status.js';
 import { Router } from 'express';
 import multer from 'multer';
@@ -78,9 +79,10 @@ threadRouter.get(
       readableByFor(worksiteId),
     ]);
     const mentionNames = await mentionNamesFor(messages);
+    const reactions = await reactionsFor(messages.map((m) => m.id), req.user!.id);
     res.json({
       thread,
-      messages: await withTranslations(messages.map((m) => ({ ...m, mentions: undefined, mentionedNames: mentionNames.get(m.id) ?? [] })), req.user!.locale),
+      messages: await withTranslations(messages.map((m) => ({ ...m, mentions: undefined, mentionedNames: mentionNames.get(m.id) ?? [], reactions: reactions.get(m.id) ?? [] })), req.user!.locale),
       participants: participants.map((p) => p.person),
       readableBy,
     });

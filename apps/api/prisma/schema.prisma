@@ -1283,9 +1283,23 @@ model Message {
   sharedWithClient Boolean  @default(false) // photo/vidéo interne explicitement partagée avec le client
   createdAt        DateTime @default(now())
 
-  mentions MessageMention[]
+  mentions  MessageMention[]
+  reactions MessageReaction[]
 
   @@index([threadId, createdAt])
+}
+
+/// Réaction (émoji) d'un utilisateur à un message. Une seule par (message, utilisateur, émoji),
+/// garantie dans le code (pas d'@unique : voir le risque de changement de schéma en production).
+model MessageReaction {
+  id        String   @id @default(cuid())
+  messageId String
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String
+  emoji     String
+  createdAt DateTime @default(now())
+
+  @@index([messageId])
 }
 
 /// "@Nom" dans un message — un utilisateur interne mentionné, pour le mettre en avant dans

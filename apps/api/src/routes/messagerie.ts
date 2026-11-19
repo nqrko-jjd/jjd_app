@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { notifyMessage } from '../lib/native-push.js';
 import { withTranslations } from '../lib/translate.js';
+import { reactionsFor, toggleReaction } from '../lib/reactions.js';
 import { Router } from 'express';
 import multer from 'multer';
 import { prisma } from '../db.js';
@@ -146,6 +147,20 @@ messagerieRouter.get(
   }),
 );
 
+/** Réagir à un message (ou retirer sa réaction) : POST { emoji } — bascule. */
+messagerieRouter.post(
+  '/messages/:id/reactions',
+  requireAuth(...STAFF),
+  asyncHandler(async (req, res) => {
+    const emoji = String(req.body?.emoji ?? '').trim();
+    if (!emoji || emoji.length > 16) throw new HttpError(422, 'Émoji invalide');
+    const msg = await prisma.message.findUnique({ where: { id: req.params.id }, select: { id: true, audience: true } });
+    if (!msg || msg.audience !== 'internal') throw new HttpError(404, 'Message introuvable');
+    await toggleReaction(msg.id, req.user!.id, emoji);
+    res.json({ reactions: (await reactionsFor([msg.id], req.user!.id)).get(msg.id) ?? [] });
+  }),
+);
+
 messagerieRouter.get(
   '/general',
   requireAuth(...STAFF),
@@ -157,9 +172,10 @@ messagerieRouter.get(
       include: { author: { select: { id: true, locale: true } }, mentions: { select: { userId: true } } },
     });
     const mentionNames = await mentionNamesFor(messages);
+    const reactions = await reactionsFor(messages.map((m) => m.id), req.user!.id);
     res.json({
       thread,
-      messages: await withTranslations(messages.map((m) => ({ ...m, mentions: undefined, mentionedNames: mentionNames.get(m.id) ?? [] })), req.user!.locale),
+      messages: await withTranslations(messages.map((m) => ({ ...m, mentions: undefined, mentionedNames: mentionNames.get(m.id) ?? [], reactions: reactions.get(m.id) ?? [] })), req.user!.locale),
     });
   }),
 );

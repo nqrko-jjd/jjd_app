@@ -1,4 +1,4 @@
-import { isExpoToken } from '../lib/native-push.js';
+import { isExpoToken, getNotifPrefs, setNotifPrefs } from '../lib/native-push.js';
 import { Router } from 'express';
 import { prisma } from '../db.js';
 import { env } from '../env.js';
@@ -70,4 +70,12 @@ pushRouter.post('/native/unsubscribe', requireAuth(...STAFF), asyncHandler(async
   if (!isExpoToken(token)) throw new HttpError(422, 'Jeton de notification invalide');
   await prisma.pushSubscription.deleteMany({ where: { endpoint: token, userId: req.user!.id } });
   res.json({ ok: true });
+}));
+
+/** Types de notification activés pour mon compte (messages, planning, rappel de départ, factures Peppol). */
+pushRouter.get('/native/prefs', requireAuth(...STAFF), asyncHandler(async (req, res) => {
+  res.json({ prefs: await getNotifPrefs(req.user!.id) });
+}));
+pushRouter.patch('/native/prefs', requireAuth(...STAFF), asyncHandler(async (req, res) => {
+  res.json({ prefs: await setNotifPrefs(req.user!.id, req.body ?? {}) });
 }));

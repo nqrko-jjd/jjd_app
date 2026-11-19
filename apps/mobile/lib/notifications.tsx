@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { AppState, Alert, Linking, Platform, Pressable, View } from 'react-native';
+import { AppState, Alert, Linking, Platform, Pressable, Switch, View } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import { apiSend, getToken, storageKey } from './api';
+import { apiGet, apiSend, getToken, storageKey } from './api';
 import { useSession } from './session';
 import { Text } from './AppText';
 import { T } from './theme';
@@ -70,22 +70,65 @@ export function NotificationBridge() {
   return null;
 }
 
+type Prefs = { messages: boolean; planning: boolean; departure: boolean; peppol: boolean };
+const PREF_ROWS: { key: keyof Prefs; label: string; hint: string }[] = [
+  { key: 'messages', label: 'Messages', hint: 'Nouveau message dans la messagerie ou un chantier' },
+  { key: 'planning', label: 'Planning', hint: 'Votre planning a été mis à jour' },
+  { key: 'departure', label: 'Rappel de départ', hint: 'Avant une intervention, au moment de partir' },
+  { key: 'peppol', label: 'Factures Peppol', hint: 'Nouvelle facture fournisseur reçue (bureau)' },
+];
+
 export function NotificationSettings() {
-  const [status, setStatus] = useState('Activez les alertes de messages et de planning sur ce téléphone.');
+  const [on, setOn] = useState(false);
+  const [status, setStatus] = useState('Activez les alertes sur ce téléphone.');
   const [busy, setBusy] = useState(false);
+  const [prefs, setPrefs] = useState<Prefs | null>(null);
   async function change(enabled: boolean) {
     if (busy) return;
     setBusy(true);
     try {
       if (enabled) await register(true); else await unregisterNotifications();
+      setOn(enabled);
       setStatus(enabled ? 'Notifications activées sur ce téléphone.' : 'Notifications désactivées sur ce téléphone.');
     } catch (e) { Alert.alert('Notifications', e instanceof Error ? e.message : 'Vérifiez votre connexion.'); }
     finally { setBusy(false); }
   }
-  useEffect(() => { void AsyncStorage.getItem(storageKey(ENABLED)).then(v => { if (v === '1') setStatus('Notifications activées dans JJD. Vérifiez aussi les autorisations du téléphone.'); }); }, []);
-  return <View style={{ gap: 4 }}><Text style={{ fontWeight: '700' }}>Notifications</Text><Text>{status}</Text>
-    <Pressable accessibilityRole="button" disabled={busy} onPress={() => change(true)} style={{ paddingVertical: 12 }}><Text style={{ color: T.primary }}>{busy ? 'Mise à jour…' : 'Activer les notifications'}</Text></Pressable>
-    <Pressable accessibilityRole="button" disabled={busy} onPress={() => change(false)} style={{ paddingVertical: 12 }}><Text>Désactiver sur ce téléphone</Text></Pressable>
-    <Pressable accessibilityRole="link" onPress={() => Linking.openSettings()} style={{ paddingVertical: 12 }}><Text>Réglages du téléphone</Text></Pressable>
-  </View>;
+  async function toggle(key: keyof Prefs, value: boolean) {
+    if (!prefs) return;
+    const before = prefs;
+    setPrefs({ ...prefs, [key]: value });
+    try { await apiSend('/api/push/native/prefs', 'PATCH', { [key]: value }, false); }
+    catch { setPrefs(before); Alert.alert('Notifications', 'Réglage non enregistré (connexion ?).'); }
+  }
+  useEffect(() => {
+    void AsyncStorage.getItem(storageKey(ENABLED)).then(v => { if (v === '1') { setOn(true); setStatus('Notifications activées. Vérifiez aussi les autorisations du téléphone.'); } });
+    void apiGet<{ prefs: Prefs }>('/api/push/native/prefs').then(r => setPrefs(r.prefs)).catch(() => {});
+  }, []);
+  const btn = { paddingVertical: 14, borderRadius: 12, alignItems: 'center' as const };
+  return (
+    <View style={{ gap: 12 }}>
+      <Text style={{ fontWeight: '800', fontSize: 16 }}>Notifications</Text>
+      <Text style={{ color: T.ink2 }}>{status}</Text>
+      <Pressable accessibilityRole="button" disabled={busy} onPress={() => change(!on)} style={{ ...btn, backgroundColor: on ? T.surface2 : T.primary, opacity: busy ? 0.6 : 1 }}>
+        <Text style={{ color: on ? T.ink : '#fff', fontWeight: '800' }}>{busy ? 'Mise à jour…' : on ? 'Désactiver sur ce téléphone' : 'Activer les notifications'}</Text>
+      </Pressable>
+      {prefs && (
+        <View style={{ gap: 2, backgroundColor: T.surface, borderWidth: 1, borderColor: T.line, borderRadius: 14, paddingHorizontal: 14 }}>
+          <Text style={{ fontWeight: '700', paddingTop: 12, color: T.ink2 }}>Quelles alertes recevoir ?</Text>
+          {PREF_ROWS.map((r, i) => (
+            <View key={r.key} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12, borderTopWidth: i ? 1 : 0, borderTopColor: T.line }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontWeight: '700', color: T.ink }}>{r.label}</Text>
+                <Text style={{ color: T.ink2, fontSize: 12.5 }}>{r.hint}</Text>
+              </View>
+              <Switch value={prefs[r.key]} onValueChange={(v) => toggle(r.key, v)} trackColor={{ true: T.primary }} />
+            </View>
+          ))}
+        </View>
+      )}
+      <Pressable accessibilityRole="link" onPress={() => Linking.openSettings()} style={{ ...btn, borderWidth: 1, borderColor: T.line }}>
+        <Text style={{ color: T.ink, fontWeight: '700' }}>Réglages du téléphone</Text>
+      </Pressable>
+    </View>
+  );
 }

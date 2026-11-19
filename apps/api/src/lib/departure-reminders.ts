@@ -183,7 +183,7 @@ export async function runDepartureReminders(now = new Date()): Promise<number> {
   if (!due.length) return 0;
   const sent = await getSent();
   for (const c of due) {
-    try { await notifyMobile(c.userIds, '/planning', c.title, c.body); } catch { continue; }
+    try { await notifyMobile(c.userIds, '/planning', c.title, c.body, 'departure'); } catch { continue; }
     sent[c.key] = now.toISOString();
   }
   await prisma.setting.upsert({ where: { key: SENT_KEY }, create: { key: SENT_KEY, value: sent }, update: { value: sent } });

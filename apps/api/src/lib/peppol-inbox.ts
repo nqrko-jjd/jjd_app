@@ -176,7 +176,7 @@ async function run() {
       const line=(f:typeof fresh[number])=>[f.supplier??'Fournisseur inconnu',f.ttc!=null?eurFmt(f.ttc):null,f.worksiteRef].filter(Boolean).join(' · ');
       const title=fresh.length>1?`${fresh.length} nouvelles factures Peppol`:'Nouvelle facture Peppol';
       const body=fresh.length>1?fresh.slice(0,3).map(line).join('\n')+(fresh.length>3?`\n+ ${fresh.length-3} autres`:''):fresh.length===1?line(fresh[0]!):undefined;
-      await notifyMobile(staff.map(u=>u.id),'/achats',title,body);
+      await notifyMobile(staff.map(u=>u.id),'/achats',title,body,'peppol');
     } catch {console.warn('[peppol-inbox] notification impossible');}
   }
   await prisma.setting.upsert({where:{key:'peppolReceptionLast'},create:{key:'peppolReceptionLast',value:result},update:{value:result}});

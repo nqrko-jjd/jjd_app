@@ -8,6 +8,7 @@ import { useSession } from '@/lib/session';
 import { Card, HeroTile, Label, Loading, Badge, eur, dateBE } from '@/lib/ui';
 import { T } from '@/lib/theme';
 import { tr, dateLocale } from '@/lib/i18n';
+import { EditButton, type Section } from '@/lib/EditForm';
 
 const STATUS_LABEL: Record<string, string> = {
   lead: 'Demande', quote_needed: 'Devis à faire', quote_sent: 'Devis envoyé', to_plan: 'À planifier', scheduled: 'Planifié', in_progress: 'En cours',
@@ -27,6 +28,36 @@ const CONTACT_FOR_LABEL: Record<string, string> = {
   demande: 'Demande et validation', rdv_acces: 'Rendez-vous / accès', suivi_technique: 'Suivi technique',
   factures: 'Factures', demande_acces_suivi: 'Demande, accès et suivi',
 };
+
+const WS_SECTIONS: Section[] = [
+  { title: 'Chantier', fields: [
+    { key: 'title', label: 'Titre', required: true },
+    { key: 'status', label: 'Statut', type: 'select', required: true, options: [{ value: 'lead', label: 'Demande reçue' }, { value: 'quote_needed', label: 'Devis à faire' }, { value: 'quote_sent', label: 'Devis envoyé' }, { value: 'to_plan', label: 'À planifier' }, { value: 'scheduled', label: 'Planifié' }, { value: 'in_progress', label: 'En cours' }, { value: 'on_hold', label: 'En attente' }, { value: 'done', label: 'Terminé' }, { value: 'to_invoice', label: 'À facturer' }, { value: 'invoiced', label: 'Facturé' }, { value: 'closed', label: 'Clôturé' }, { value: 'cancelled', label: 'Annulé' }] },
+    { key: 'priority', label: 'Priorité', type: 'select', required: true, options: [{ value: 'low', label: 'Basse' }, { value: 'normal', label: 'Normale' }, { value: 'high', label: 'Haute' }, { value: 'urgent', label: 'Urgente' }] },
+    { key: 'requestKind', label: 'Type de demande', type: 'select', options: [{ value: 'ponctuelle', label: 'Ponctuelle' }, { value: 'renovation', label: 'Rénovation' }, { value: 'entretien', label: 'Entretien' }, { value: 'sav', label: 'SAV' }] },
+    { key: 'description', label: 'Description', type: 'multiline' },
+    { key: 'siteBrief', label: 'Consignes pour l’équipe', type: 'multiline' },
+    { key: 'accessNotes', label: 'Accès / clés', type: 'multiline' },
+    { key: 'startedOn', label: 'Début', type: 'date' },
+    { key: 'endedOn', label: 'Fin', type: 'date' },
+    { key: 'quotedHt', label: 'Montant du devis HTVA', type: 'number' },
+    { key: 'quoteRef', label: 'Réf. devis' },
+    { key: 'clientRef', label: 'Réf. du client' },
+  ] },
+  { title: 'Adresse', fields: [
+    { key: 'address', label: 'Adresse' }, { key: 'box', label: 'Boîte / appartement' },
+    { key: 'postalCode', label: 'Code postal' }, { key: 'city', label: 'Ville' }, { key: 'unitLabel', label: 'Lot / unité' },
+  ] },
+  { title: 'Facturation', fields: [
+    { key: 'billTo', label: 'Facturé à' }, { key: 'billToAttn', label: 'À l’attention de' }, { key: 'billToEmail', label: 'E-mail de facturation', type: 'email' },
+  ] },
+  { title: 'Propriétaire', fields: [
+    { key: 'ownerName', label: 'Nom' }, { key: 'ownerPhone', label: 'Téléphone', type: 'phone' }, { key: 'ownerEmail', label: 'E-mail', type: 'email' },
+  ] },
+  { title: 'Locataire / occupant', fields: [
+    { key: 'tenantName', label: 'Nom' }, { key: 'tenantPhone', label: 'Téléphone', type: 'phone' }, { key: 'tenantPhone2', label: 'Téléphone 2', type: 'phone' }, { key: 'tenantEmail', label: 'E-mail', type: 'email' },
+  ] },
+];
 
 interface Margin {
   quotedHt: number; invoicedHt: number; paidHt: number; materialCost: number; labourCost: number;
@@ -98,6 +129,7 @@ export default function ChantierDetail() {
     <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ ...T.content, gap: 20 }}>
       <Stack.Screen options={{ title: w.ref, headerBackTitle: tr('Retour') }} />
 
+      {!worker && <EditButton title={w.ref} sections={WS_SECTIONS} values={w as unknown as Record<string, unknown>} path={`/api/worksites/${id}`} onSaved={load} />}
       <HeroTile>
         <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
           <Text style={s.heroRef}>{w.ref}</Text>

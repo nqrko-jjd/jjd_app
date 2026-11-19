@@ -6,6 +6,7 @@ import { apiGet } from '@/lib/api';
 import { ScreenHeader, Card, Label, Loading, Row, Badge, PhotoHeader, eur, dateBE } from '@/lib/ui';
 import { T } from '@/lib/theme';
 import { tr } from '@/lib/i18n';
+import { EditButton, type Section } from '@/lib/EditForm';
 
 interface D {
   person: {
@@ -18,6 +19,23 @@ interface D {
   };
   monthStatement: { hours: number; amount: number };
 }
+const PERSON_SECTIONS: Section[] = [
+  { title: 'Identité', fields: [
+    { key: 'firstName', label: 'Prénom', required: true }, { key: 'lastName', label: 'Nom' }, { key: 'displayName', label: 'Nom affiché' },
+    { key: 'role', label: 'Fonction', type: 'select', required: true, options: [{ value: 'worker', label: 'Ouvrier' }, { value: 'qualified_worker', label: 'Ouvrier qualifié' }, { value: 'team_leader', label: 'Chef d’équipe' }, { value: 'foreman', label: 'Chef de chantier' }, { value: 'manager', label: 'Gestionnaire' }, { value: 'office', label: 'Bureau' }] },
+    { key: 'contractType', label: 'Contrat', type: 'select', required: true, options: [{ value: 'employee', label: 'Salarié' }, { value: 'subcontractor', label: 'Sous-traitant' }, { value: 'interim', label: 'Intérim' }] },
+    { key: 'active', label: 'Actif', type: 'bool' },
+  ] },
+  { title: 'Coordonnées', fields: [
+    { key: 'phone', label: 'Téléphone', type: 'phone' }, { key: 'email', label: 'E-mail', type: 'email' },
+    { key: 'address', label: 'Adresse' }, { key: 'box', label: 'Boîte' }, { key: 'emergencyContact', label: 'Contact d’urgence' },
+  ] },
+  { title: 'Rémunération', fields: [
+    { key: 'hourlyRate', label: 'Taux horaire (€)', type: 'number' }, { key: 'payoutPerDay', label: 'Paiement par jour (€)', type: 'number' },
+    { key: 'dailyHours', label: 'Heures par jour', type: 'number', required: true },
+  ] },
+  { title: 'Notes', fields: [{ key: 'note', label: 'Note interne', type: 'multiline' }] },
+];
 const DOC: Record<string, string> = { a1: 'A1', limosa: 'Limosa', vca: 'VCA', driving_license: 'Permis', id_card: 'CI', medical: 'Médical', contract: 'Contrat', work_permit: 'Permis travail' };
 
 export default function PersonneDetail() {
@@ -33,6 +51,7 @@ export default function PersonneDetail() {
     <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ ...T.content, gap: 20 }}>
       <Stack.Screen options={{ title: p.displayName || p.firstName, headerBackTitle: tr('Retour') }} />
       <ScreenHeader title={p.displayName || p.firstName} eyebrow="Équipe" description={p.contractType === 'employee' ? 'Salarié' : p.contractType === 'subcontractor' ? 'Sous-traitant' : 'Fiche collaborateur'}/>
+      <EditButton title={p.displayName || p.firstName} sections={PERSON_SECTIONS} values={p as unknown as Record<string, unknown>} path={`/api/people/${p.id}`} onSaved={load} />
       <PhotoHeader basePath={`/api/people/${p.id}`} photoUrl={p.photoUrl} round onChange={load} />
       <Card>
         <Row k="Taux horaire" v={p.hourlyRate != null ? eur(p.hourlyRate) : 'à définir'} />

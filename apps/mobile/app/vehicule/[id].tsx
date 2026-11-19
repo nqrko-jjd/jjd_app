@@ -6,6 +6,7 @@ import { apiGet } from '@/lib/api';
 import { ScreenHeader, Card, Label, Loading, Row, Badge, PhotoHeader, eur, dateBE } from '@/lib/ui';
 import { T } from '@/lib/theme';
 import { tr } from '@/lib/i18n';
+import { EditButton, type Section } from '@/lib/EditForm';
 
 interface D {
   vehicle: {
@@ -21,6 +22,28 @@ interface D {
   };
 }
 
+const VEH_SECTIONS: Section[] = [
+  { title: 'Véhicule', fields: [
+    { key: 'code', label: 'Code' }, { key: 'brand', label: 'Marque' }, { key: 'model', label: 'Modèle' }, { key: 'plate', label: 'Plaque' },
+    { key: 'type', label: 'Type' }, { key: 'seats', label: 'Places', type: 'number' }, { key: 'fuel', label: 'Carburant' }, { key: 'vin', label: 'N° de châssis' },
+    { key: 'km', label: 'Kilométrage' }, { key: 'driver', label: 'Conducteur' }, { key: 'equipment', label: 'Équipements', type: 'multiline' }, { key: 'depot', label: 'Dépôt' },
+    { key: 'status', label: 'Statut', type: 'select', required: true, options: [{ value: 'active', label: 'Opérationnel' }, { value: 'repair', label: 'En réparation' }, { value: 'breakdown', label: 'En panne' }, { value: 'sold', label: 'Vendu' }] },
+    { key: 'excludedFromPlanning', label: 'Exclu du planning', type: 'bool' },
+    { key: 'note', label: 'Note', type: 'multiline' },
+  ] },
+  { title: 'Dates et taxes', fields: [
+    { key: 'firstRegistration', label: '1re immatriculation', type: 'date' }, { key: 'nextInspection', label: 'Prochain contrôle technique', type: 'date' },
+    { key: 'circulationTax', label: 'Taxe de circulation (€)', type: 'number' }, { key: 'biv', label: 'TMC / BIV (€)', type: 'number' },
+  ] },
+  { title: 'Financement', fields: [
+    { key: 'acquisitionMode', label: 'Mode d’acquisition' }, { key: 'purchaseDate', label: 'Date d’achat', type: 'date' },
+    { key: 'purchasePriceHt', label: 'Prix HTVA (€)', type: 'number' }, { key: 'financedAmount', label: 'Montant financé (€)', type: 'number' },
+    { key: 'monthlyPayment', label: 'Mensualité (€)', type: 'number' }, { key: 'downPayment', label: 'Apport (€)', type: 'number' },
+    { key: 'residualValue', label: 'Valeur résiduelle (€)', type: 'number' }, { key: 'financeMonths', label: 'Durée (mois)', type: 'number' },
+    { key: 'financeEndOn', label: 'Fin du financement', type: 'date' }, { key: 'financeCompany', label: 'Organisme' }, { key: 'financeContract', label: 'N° de contrat' },
+  ] },
+];
+
 export default function VehiculeDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [d, setD] = useState<D | null>(null);
@@ -35,6 +58,7 @@ export default function VehiculeDetail() {
     <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ ...T.content, gap: 20 }}>
       <Stack.Screen options={{ title: [v.brand, v.model].filter(Boolean).join(' '), headerBackTitle: tr('Retour') }} />
       <ScreenHeader title={[v.brand, v.model].filter(Boolean).join(' ') || v.plate || 'Véhicule'} eyebrow="Flotte" description={v.plate ?? undefined}/>
+      <EditButton title={v.plate || 'Véhicule'} sections={VEH_SECTIONS} values={v as unknown as Record<string, unknown>} path={`/api/vehicles/${v.id}`} onSaved={load} />
       <PhotoHeader basePath={`/api/vehicles/${v.id}`} photoUrl={v.photoUrl} onChange={load} />
       <Card>
         <Row k="Plaque" v={v.plate ?? '—'} />

@@ -7,6 +7,7 @@ import { ScreenHeader, Card, Label, Loading, Row, Badge } from '@/lib/ui';
 import { WORKSITE_STATUS_LABEL } from '@/lib/labels';
 import { T } from '@/lib/theme';
 import { tr } from '@/lib/i18n';
+import { EditButton, type Section } from '@/lib/EditForm';
 
 interface D {
   contact: {
@@ -17,11 +18,27 @@ interface D {
   };
 }
 
+const CONTACT_SECTIONS: Section[] = [
+  { title: 'Contact', fields: [
+    { key: 'name', label: 'Nom', required: true },
+    { key: 'type', label: 'Type', type: 'select', required: true, options: [{ value: 'client', label: 'Client' }, { value: 'supplier', label: 'Fournisseur' }, { value: 'both', label: 'Les deux' }] },
+    { key: 'jobTitle', label: 'Fonction' }, { key: 'email', label: 'E-mail', type: 'email' }, { key: 'phone', label: 'Téléphone', type: 'phone' }, { key: 'vat', label: 'N° TVA' },
+  ] },
+  { title: 'Adresse', fields: [
+    { key: 'address', label: 'Adresse' }, { key: 'box', label: 'Boîte' }, { key: 'postalCode', label: 'Code postal' }, { key: 'city', label: 'Ville' },
+  ] },
+  { title: 'Fournisseur', fields: [
+    { key: 'customerNumber', label: 'Notre n° de client chez lui' }, { key: 'onAccount', label: 'Achats en compte', type: 'bool' },
+  ] },
+  { title: 'Notes', fields: [{ key: 'note', label: 'Note', type: 'multiline' }] },
+];
+
 export default function ContactDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const [d, setD] = useState<D | null>(null);
-  useFocusEffect(useCallback(() => { apiGet<D>(`/api/contacts/${id}`).then(setD).catch(() => {}); }, [id]));
+  const load = useCallback(() => { apiGet<D>(`/api/contacts/${id}`).then(setD).catch(() => {}); }, [id]);
+  useFocusEffect(useCallback(() => { load(); }, [load]));
   if (!d) return <Loading />;
   const c = d.contact;
 
@@ -30,6 +47,7 @@ export default function ContactDetail() {
     <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ ...T.content, gap: 20 }}>
       <Stack.Screen options={{ title: c.name, headerBackTitle: tr('Retour') }} />
       <ScreenHeader title={c.name} eyebrow="Contact" description={[c.address, c.postalCode, c.city].filter(Boolean).join(' · ')}/>
+      <EditButton title={c.name} sections={CONTACT_SECTIONS} values={c as unknown as Record<string, unknown>} path={`/api/contacts/${id}`} onSaved={load} />
       <Card>
         <Row k="E-mail" v={c.email ?? '—'} />
         <Row k="Téléphone" v={c.phone ?? '—'} />

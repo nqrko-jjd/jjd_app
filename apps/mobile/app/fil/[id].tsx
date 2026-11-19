@@ -24,6 +24,9 @@ interface Data {
   participants: { id: string }[];
 }
 
+/** Message créé par la route « dépense » (le texte porte la mention des achats). */
+const isExpense = (m: Msg) => (m.kind === 'photo' || m.kind === 'file') && !!m.body && m.body.includes('ajoutée aux achats');
+
 function time(iso: string) {
   return new Date(iso).toLocaleString(dateLocale(), { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
@@ -84,10 +87,17 @@ export default function Fil() {
   }
 
   function addInvoice() {
-    Alert.alert('Envoyer une facture', 'Elle sera ajoutée aux achats, à vérifier par le bureau.', [
+    Alert.alert('Dépense : ticket ou facture', "Uniquement pour un ticket de caisse ou une facture d'achat. Elle sera ajoutée aux achats. Pour une photo du chantier, utilisez « Photo ».", [
       { text: 'Annuler', style: 'cancel' },
-      { text: 'Prendre une photo', onPress: async () => { const uri = await pickImage(true); if (uri) sendInvoice(uri); } },
-      { text: 'Choisir dans la galerie', onPress: async () => { const uri = await pickImage(false); if (uri) sendInvoice(uri); } },
+      { text: 'Photographier le ticket', onPress: async () => { const uri = await pickImage(true); if (uri) confirmInvoice(uri); } },
+      { text: 'Choisir dans la galerie', onPress: async () => { const uri = await pickImage(false); if (uri) confirmInvoice(uri); } },
+    ]);
+  }
+  /** Garde-fou : évite qu'une simple photo de chantier devienne une dépense. */
+  function confirmInvoice(uri: string) {
+    Alert.alert('Est-ce bien un ticket ou une facture ?', undefined, [
+      { text: 'Non, c’est une photo', onPress: () => sendPhoto(uri) },
+      { text: 'Oui, c’est une dépense', onPress: () => sendInvoice(uri) },
     ]);
   }
   async function sendInvoice(uri: string) {
@@ -135,7 +145,16 @@ export default function Fil() {
             <View key={m.id} style={[s.msgCol, mine && s.msgColMine]}>
               {!mine && <Text style={s.author}>{m.authorName}</Text>}
               {m.kind === 'audio' && m.fileUrl && <VoicePlayer uri={`${API_URL}${m.fileUrl}`} />}
-              {m.kind === 'photo' && m.fileUrl && (
+              {isExpense(m) && m.fileUrl && (
+                <Pressable style={s.expenseCard} onPress={() => Linking.openURL(`${API_URL}${m.fileUrl}`)}>
+                  {m.kind === 'photo' ? <Image source={{ uri: `${API_URL}${m.thumbUrl ?? m.fileUrl}` }} style={{ width: 56, height: 56, borderRadius: 6 }} /> : <Feather name="file-text" size={28} color={T.accent} />}
+                  <View style={{ flexShrink: 1 }}>
+                    <Text style={{ fontWeight: '800', color: T.accent }}>DÉPENSE</Text>
+                    <Text style={{ color: T.ink2, fontSize: 12.5 }}>Ajoutée aux achats, à vérifier par le bureau</Text>
+                  </View>
+                </Pressable>
+              )}
+              {!isExpense(m) && m.kind === 'photo' && m.fileUrl && (
                 <Image source={{ uri: `${API_URL}${m.thumbUrl ?? m.fileUrl}` }} style={s.photo} />
               )}
               {m.kind === 'video' && m.fileUrl && (
@@ -144,13 +163,13 @@ export default function Fil() {
                   <Text style={{ color: T.primary, fontWeight: '600' }}>Voir la vidéo</Text>
                 </Pressable>
               )}
-              {m.kind === 'file' && m.fileUrl && (
+              {!isExpense(m) && m.kind === 'file' && m.fileUrl && (
                 <Pressable style={[s.mediaLink, s.mediaLinkRow]} onPress={() => Linking.openURL(`${API_URL}${m.fileUrl}`)}>
                   <Feather name="paperclip" size={14} color={T.primary} />
                   <Text style={{ color: T.primary, fontWeight: '600' }}>{m.body || 'Fichier'}</Text>
                 </Pressable>
               )}
-              {m.body && m.kind !== 'file' ? (
+              {m.body && m.kind !== 'file' && !isExpense(m) ? (
                 <MsgText body={m.body} translated={m.bodyTranslated} style={[s.bubble, mine && s.bubbleMine]} />
               ) : null}
               <Text style={[s.timeTxt, mine && { alignSelf: 'flex-end' }]}>{time(m.createdAt)}</Text>
@@ -170,9 +189,17 @@ export default function Fil() {
       )}
 
       <VoiceNote endpoint={`/api/worksites/${id}/thread/voice`} onSent={load} />
+      <View style={s.actions}>
+        <Pressable accessibilityRole="button" style={s.actPhoto} onPress={addPhoto} disabled={busy}>
+          <Feather name="camera" size={17} color={T.primary} />
+          <Text style={{ color: T.primary, fontWeight: '700', fontSize: 13.5 }}>Photo du chantier</Text>
+        </Pressable>
+        <Pressable accessibilityRole="button" style={s.actExpense} onPress={addInvoice} disabled={busy}>
+          <Feather name="file-text" size={17} color="#fff" />
+          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13.5 }}>Dépense (ticket)</Text>
+        </Pressable>
+      </View>
       <View style={s.composer}>
-        <Pressable style={s.iconBtn} onPress={addPhoto} disabled={busy}><Feather name="camera" size={18} color={T.ink2} /></Pressable>
-        <Pressable style={s.iconBtn} onPress={addInvoice} disabled={busy}><Feather name="paperclip" size={18} color={T.ink2} /></Pressable>
         <TextInput style={s.input} placeholder="Message…" value={text} onChangeText={setText} placeholderTextColor={T.ink3} />
         <Pressable style={s.sendBtn} onPress={send} disabled={busy || !text.trim()}><Feather name="send" size={16} color="#fff" /></Pressable>
       </View>
@@ -194,6 +221,10 @@ const s = StyleSheet.create({
   closed: { padding: 10, alignItems: 'center', backgroundColor: T.okSoft },
   doneBtn: { padding: 12, alignItems: 'center', borderTopWidth: 1, borderTopColor: T.line, backgroundColor: T.surface },
   composer: { flexDirection: 'row', gap: 8, padding: 10, borderTopWidth: 1, borderTopColor: T.line, backgroundColor: T.surface, alignItems: 'center' },
+  actions: { flexDirection: 'row', gap: 8, paddingHorizontal: 10, paddingTop: 8, backgroundColor: T.surface, borderTopWidth: 1, borderTopColor: T.line },
+  actPhoto: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: T.primary, backgroundColor: T.primarySoft },
+  actExpense: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingVertical: 10, borderRadius: 10, backgroundColor: T.accent },
+  expenseCard: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: T.warnSoft, borderWidth: 1, borderColor: T.accent, borderLeftWidth: 4, borderRadius: 10, padding: 10, maxWidth: '85%' },
   iconBtn: { width: 40, height: 40, borderRadius: 10, backgroundColor: T.surface2, alignItems: 'center', justifyContent: 'center' },
   input: { flex: 1, backgroundColor: T.surface2, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, color: T.ink },
   sendBtn: { width: 40, height: 40, borderRadius: 10, backgroundColor: T.primary, alignItems: 'center', justifyContent: 'center' },

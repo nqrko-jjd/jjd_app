@@ -12,6 +12,7 @@ import { useSession } from '@/lib/session';
 import { Loading } from '@/lib/ui';
 import { T } from '@/lib/theme';
 import { MsgText } from '@/lib/MsgText';
+import { GifButton, GifImage, gifUrl } from '@/lib/Gif';
 import { ReactionChips, ReactionPicker, type Reaction } from '@/lib/Reactions';
 import { tr, dateLocale, Alert } from '@/lib/i18n';
 
@@ -55,12 +56,13 @@ export default function Fil() {
     load();
   }
 
-  async function send() {
-    if (!text.trim()) return;
+  async function send(gif?: string) {
+    const body = gif ?? text.trim();
+    if (!body) return;
     setBusy(true);
-    const r = await apiSend<{ message: unknown }>(`/api/worksites/${id}/thread/messages`, 'POST', { body: text.trim() });
+    const r = await apiSend<{ message: unknown }>(`/api/worksites/${id}/thread/messages`, 'POST', { body });
     if ('queued' in r) Alert.alert('Hors ligne', 'Le message sera envoyé au retour du réseau.');
-    setText('');
+    if (!gif) setText('');
     setBusy(false);
     load();
   }
@@ -177,7 +179,7 @@ export default function Fil() {
                   <Text style={{ color: T.primary, fontWeight: '600' }}>{m.body || 'Fichier'}</Text>
                 </Pressable>
               )}
-              {m.body && m.kind !== 'file' && !isExpense(m) ? (
+              {gifUrl(m.body) ? <GifImage url={gifUrl(m.body)!} /> : m.body && m.kind !== 'file' && !isExpense(m) ? (
                 <MsgText body={m.body} translated={m.bodyTranslated} style={[s.bubble, mine && s.bubbleMine]} />
               ) : null}
               <ReactionChips reactions={m.reactions} mine={mine} onToggle={(e) => react(m.id, e)} />
@@ -214,7 +216,8 @@ export default function Fil() {
       </View>
       <View style={s.composer}>
         <TextInput style={s.input} placeholder="Message…" value={text} onChangeText={setText} placeholderTextColor={T.ink3} />
-        <Pressable style={s.sendBtn} onPress={send} disabled={busy || !text.trim()}><Feather name="send" size={16} color="#fff" /></Pressable>
+        <GifButton onPick={(g) => send(g)} />
+        <Pressable style={s.sendBtn} onPress={() => send()} disabled={busy || !text.trim()}><Feather name="send" size={16} color="#fff" /></Pressable>
       </View>
     </KeyboardAvoidingView>
   );

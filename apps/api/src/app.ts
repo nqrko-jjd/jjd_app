@@ -47,6 +47,7 @@ import { quoteSignRouter, publicSignRouter } from './routes/quote-sign.js';
 import { geocodeRouter } from './routes/geocode.js';
 import { usersRouter } from './routes/users.js';
 import { pushRouter } from './routes/push.js';
+import { gifsRouter } from './routes/gifs.js';
 import { moderationRouter } from './routes/moderation.js';
 import { journalRouter } from './routes/journal.js';
 import { activityLog } from './lib/activity-log.js';
@@ -76,6 +77,7 @@ export function createApp() {
   app.use('/api/translate', translateRouter);
   app.use('/api/gps', gpsRouter);
   app.use('/api/push', pushRouter);
+  app.use('/api/gifs', gifsRouter);
   app.use('/api/worksites/:worksiteId/reports', worksiteReportsRouter);
   app.use('/api/reports', reportsRouter);
   app.use('/api/worksites/:worksiteId/phases', worksitePhasesRouter);

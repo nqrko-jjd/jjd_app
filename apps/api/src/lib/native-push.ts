@@ -63,7 +63,7 @@ export async function notifyMessage(authorId: string, worksiteId?: string, previ
   ]);
   const who = (author?.person?.displayName || author?.person?.firstName || '').trim();
   const where = site ? `${site.ref}${site.title ? ` · ${site.title}` : ''}` : 'Messagerie générale';
-  const what = preview?.kind === 'audio' ? '🎤 Message vocal' : preview?.kind === 'photo' && !preview.body ? '📷 Photo' : (preview?.body ?? '').replace(/\s+/g, ' ').trim().slice(0, 110);
+  const what = preview?.kind === 'audio' ? '🎤 Message vocal' : preview?.kind === 'photo' && !preview.body ? '📷 Photo' : preview?.body?.startsWith('[gif]') ? '🎞️ GIF' : (preview?.body ?? '').replace(/\s+/g, ' ').trim().slice(0, 110);
   const title = who ? `${who} · ${where}` : where;
   await notifyMobile(users.map(u => u.id), worksiteId ? `/fil/${worksiteId}` : '/fil-general', title, what || undefined, 'messages');
 }

@@ -11,6 +11,7 @@ import { useSession } from '@/lib/session';
 import { Loading } from '@/lib/ui';
 import { T } from '@/lib/theme';
 import { MsgText } from '@/lib/MsgText';
+import { GifButton, GifImage, gifUrl } from '@/lib/Gif';
 import { ReactionChips, ReactionPicker, type Reaction } from '@/lib/Reactions';
 import { tr, dateLocale } from '@/lib/i18n';
 
@@ -47,11 +48,12 @@ export default function FilGeneral() {
     load();
   }
 
-  async function send() {
-    if (!text.trim()) return;
+  async function send(gif?: string) {
+    const body = gif ?? text.trim();
+    if (!body) return;
     setBusy(true);
-    await apiSend('/api/messagerie/general/messages', 'POST', { body: text.trim() });
-    setText('');
+    await apiSend('/api/messagerie/general/messages', 'POST', { body });
+    if (!gif) setText('');
     setBusy(false);
     load();
   }
@@ -69,7 +71,7 @@ export default function FilGeneral() {
             <Pressable key={m.id} onLongPress={() => setPickFor(m.id)} delayLongPress={350} style={[s.msgCol, mine && s.msgColMine]}>
               {!mine && <Text style={s.author}>{m.authorName}</Text>}
               {m.kind === 'audio' && m.fileUrl && <VoicePlayer uri={`${API_URL}${m.fileUrl}`} />}
-              {m.body ? <MsgText body={m.body} translated={m.bodyTranslated} style={[s.bubble, mine && s.bubbleMine]} /> : null}
+              {gifUrl(m.body) ? <GifImage url={gifUrl(m.body)!} /> : m.body ? <MsgText body={m.body} translated={m.bodyTranslated} style={[s.bubble, mine && s.bubbleMine]} /> : null}
               <ReactionChips reactions={m.reactions} mine={mine} onToggle={(e) => react(m.id, e)} />
               <Text style={[s.timeTxt, mine && { alignSelf: 'flex-end' }]}>{time(m.createdAt)}</Text>
               {!mine && <ReportMessage id={m.id} />}
@@ -81,7 +83,8 @@ export default function FilGeneral() {
       <VoiceNote endpoint={`/api/messagerie/general/voice`} onSent={load} />
       <View style={s.composer}>
         <TextInput style={s.input} placeholder="Message…" value={text} onChangeText={setText} placeholderTextColor={T.ink3} />
-        <Pressable style={s.sendBtn} onPress={send} disabled={busy || !text.trim()}><Feather name="send" size={16} color="#fff" /></Pressable>
+        <GifButton onPick={(g) => send(g)} />
+        <Pressable style={s.sendBtn} onPress={() => send()} disabled={busy || !text.trim()}><Feather name="send" size={16} color="#fff" /></Pressable>
       </View>
     </KeyboardAvoidingView>
   );

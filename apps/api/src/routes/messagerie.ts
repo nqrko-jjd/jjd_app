@@ -176,7 +176,7 @@ messagerieRouter.post(
       data: { threadId: thread.id, authorId: req.user!.id, authorName: author, kind: 'text', body, audience: 'internal' },
     });
     await processMentions(msg.id, body, req.user!.id, author, '/app/messagerie').catch(() => {});
-    void notifyMessage(req.user!.id).catch(() => {});
+    void notifyMessage(req.user!.id, undefined, msg).catch(() => {});
     res.status(201).json({ message: msg });
   }),
 );
@@ -195,7 +195,7 @@ messagerieRouter.post(
         kind: 'photo', body: String(req.body.caption ?? '').trim() || null, fileUrl: img.url, thumbUrl: img.thumbUrl, audience: 'internal',
       },
     });
-    void notifyMessage(req.user!.id).catch(() => {});
+    void notifyMessage(req.user!.id, undefined, msg).catch(() => {});
     res.status(201).json({ message: msg });
   }),
 );
@@ -222,7 +222,7 @@ messagerieRouter.post(
         id: messageId, kind: 'audio', fileUrl: url, audience: 'internal',
       },
     });
-    void notifyMessage(req.user!.id).catch(() => {});
+    void notifyMessage(req.user!.id, undefined, msg).catch(() => {});
     res.status(201).json({ message: msg });
   }),
 );

@@ -121,7 +121,7 @@ threadRouter.post(
       data: { threadId: thread.id, authorId: req.user!.id, authorName: author, kind, body, audience: 'internal' },
     });
     if (kind === 'text') await processMentions(msg.id, body, req.user!.id, author, `/app/messagerie?worksite=${worksiteId}`).catch(() => {});
-    void notifyMessage(req.user!.id, req.params.worksiteId!).catch(() => {});
+    void notifyMessage(req.user!.id, req.params.worksiteId!, msg).catch(() => {});
     res.status(201).json({ message: msg });
   }),
 );
@@ -148,7 +148,7 @@ threadRouter.post(
         audience: 'internal',
       },
     });
-    void notifyMessage(req.user!.id, req.params.worksiteId!).catch(() => {});
+    void notifyMessage(req.user!.id, req.params.worksiteId!, msg).catch(() => {});
     res.status(201).json({ message: msg });
   }),
 );
@@ -176,7 +176,7 @@ threadRouter.post(
         id: messageId, kind: 'audio', fileUrl: url, audience: 'internal',
       },
     });
-    void notifyMessage(req.user!.id, req.params.worksiteId!).catch(() => {});
+    void notifyMessage(req.user!.id, req.params.worksiteId!, msg).catch(() => {});
     res.status(201).json({ message: msg });
   }),
 );

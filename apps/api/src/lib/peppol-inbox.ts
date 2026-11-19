@@ -124,6 +124,7 @@ async function run() {
   const setting=await prisma.setting.findUnique({where:{key:'peppolReception'}});
   if((setting?.value as {enabled?:boolean}|null)?.enabled!==true) return {imported:0,review:0,errors:[],disabled:true};
   const result={imported:0,review:0,errors:[] as string[],at:new Date().toISOString()};
+  const fresh:{supplier:string|null;ttc:number|null;worksiteRef:string|null}[]=[];
   try {
     await repairPeppolOriginalPdfs().catch(e=>result.errors.push('Reprise des PDF d’origine : '+(e as Error).message));
     const status=await peppolReceptionStatus();
@@ -161,6 +162,7 @@ async function run() {
           }
           const receipt=await receivePurchase({sourceRef:ref,source:'peppol',data,pdfPath,xmlPath,reason});
           if(receipt.status==='review') result.review++; else result.imported++;
+          fresh.push({supplier:data.supplierName??null,ttc:(data.ttc as number|null)??null,worksiteRef:(data.worksiteRef as string|null)??null});
         } catch(e) {result.errors.push(String(item.id)+': '+(e as Error).message);}
       }
     }
@@ -170,7 +172,11 @@ async function run() {
   if(result.imported+result.review>0) {
     try {
       const staff=await prisma.user.findMany({where:{active:true,role:{in:['admin','office']}},select:{id:true}});
-      await notifyMobile(staff.map(u=>u.id),'/achats','Nouvelle facture Peppol reçue');
+      const eurFmt=(n:number)=>new Intl.NumberFormat('fr-BE',{style:'currency',currency:'EUR'}).format(n);
+      const line=(f:typeof fresh[number])=>[f.supplier??'Fournisseur inconnu',f.ttc!=null?eurFmt(f.ttc):null,f.worksiteRef].filter(Boolean).join(' · ');
+      const title=fresh.length>1?`${fresh.length} nouvelles factures Peppol`:'Nouvelle facture Peppol';
+      const body=fresh.length>1?fresh.slice(0,3).map(line).join('\n')+(fresh.length>3?`\n+ ${fresh.length-3} autres`:''):fresh.length===1?line(fresh[0]!):undefined;
+      await notifyMobile(staff.map(u=>u.id),'/achats',title,body);
     } catch {console.warn('[peppol-inbox] notification impossible');}
   }
   await prisma.setting.upsert({where:{key:'peppolReceptionLast'},create:{key:'peppolReceptionLast',value:result},update:{value:result}});

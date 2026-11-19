@@ -60,7 +60,7 @@ export function NotificationBridge() {
       last = response.notification.request.identifier;
       const data = response.notification.request.content.data;
       if (!data || data.userId !== user.id || typeof data.route !== 'string') return;
-      if (data.route === '/planning' || data.route === '/fil-general' || /^\/fil\/[a-zA-Z0-9_-]+$/.test(data.route)) router.push(data.route as never);
+      if (data.route === '/planning' || data.route === '/achats' || data.route === '/fil-general' || /^\/fil\/[a-zA-Z0-9_-]+$/.test(data.route)) router.push(data.route as never);
       void Notifications.clearLastNotificationResponseAsync();
     };
     void Notifications.getLastNotificationResponseAsync().then(open);

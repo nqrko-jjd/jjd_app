@@ -3,8 +3,8 @@ import { STAFF } from './auth.js';
 
 export const isExpoToken = (s: unknown): s is string => typeof s === 'string' && /^(Expo|Exponent)PushToken\[[A-Za-z0-9_-]+\]$/.test(s) && s.length < 256;
 
-/** Generic lock-screen content: no client, worksite address or message text. */
-export async function notifyMobile(userIds: string[], route: string, title: string, body = 'Ouvrez JJD Chantier pour consulter les nouveautés.'): Promise<void> {
+/** Contenu de l'alerte : par défaut générique ; les appelants peuvent y mettre chantier, auteur ou fournisseur (appareils du personnel uniquement). */
+export async function notifyMobile(userIds: string[], route: string, title: string, body: string = 'Ouvrez JJD Chantier pour consulter les nouveautés.'): Promise<void> {
   const subs = await prisma.pushSubscription.findMany({ where: { userId: { in: [...new Set(userIds)] }, user: { active: true } } });
   const mobile = subs.filter(s => isExpoToken(s.endpoint));
   for (let offset = 0; offset < mobile.length; offset += 100) {
@@ -25,7 +25,7 @@ export async function notifyMobile(userIds: string[], route: string, title: stri
   }
 }
 
-export async function notifyMessage(authorId: string, worksiteId?: string): Promise<void> {
+export async function notifyMessage(authorId: string, worksiteId?: string, preview?: { kind?: string; body?: string | null }): Promise<void> {
   const users = await prisma.user.findMany({ where: {
     active: true, id: { not: authorId }, role: { in: STAFF },
     ...(worksiteId ? { AND: [
@@ -34,7 +34,15 @@ export async function notifyMessage(authorId: string, worksiteId?: string): Prom
       { OR: [{ entityScope: null }, { entityScope: (await prisma.worksite.findUnique({ where: { id: worksiteId }, select: { entity: true } }))?.entity ?? '__none__' }] },
     ] } : {}),
   }, select: { id: true } });
-  await notifyMobile(users.map(u => u.id), worksiteId ? `/fil/${worksiteId}` : '/fil-general', 'Nouveau message JJD');
+  const [author, site] = await Promise.all([
+    prisma.user.findUnique({ where: { id: authorId }, select: { email: true, person: { select: { displayName: true, firstName: true } } } }).catch(() => null),
+    worksiteId ? prisma.worksite.findUnique({ where: { id: worksiteId }, select: { ref: true, title: true } }).catch(() => null) : null,
+  ]);
+  const who = (author?.person?.displayName || author?.person?.firstName || '').trim();
+  const where = site ? `${site.ref}${site.title ? ` · ${site.title}` : ''}` : 'Messagerie générale';
+  const what = preview?.kind === 'audio' ? '🎤 Message vocal' : preview?.kind === 'photo' && !preview.body ? '📷 Photo' : (preview?.body ?? '').replace(/\s+/g, ' ').trim().slice(0, 110);
+  const title = who ? `${who} · ${where}` : where;
+  await notifyMobile(users.map(u => u.id), worksiteId ? `/fil/${worksiteId}` : '/fil-general', title, what || undefined);
 }
 
 export async function notifyPlanning(eventId: string, authorId: string): Promise<void> {

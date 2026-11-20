@@ -13,13 +13,15 @@ import { insensitive } from './search.js';
 import { parseLineItems, articleKey } from './purchase-line-parse.js';
 
 const DIRECTIONS = ['purchase', 'delivery_slip'];
+// notes de crédit lues aussi : leurs lignes comptent en négatif (retours de palettes consignées, marchandise reprise…)
+const SCAN_DIRECTIONS = [...DIRECTIONS, 'credit_note'];
 const resolveUpload = (rel: string) => path.join(UPLOADS_DIR, path.normalize(rel.replace(/^\/?uploads\//, '').replace(/\\/g, '/')));
 const READABLE_MIN_CHARS = 60;  // en dessous : PDF scanné / photo, pas de texte à lire
 
 export interface ScanResult { scanned: number; linesFound: number; unreadable: number; remaining: number; total: number }
 
 /** Lit les lignes du PDF d'UNE écriture et remplace ce qui avait été lu avant. */
-export async function scanEntryLines(entry: { id: string; contactId: string | null; pdfPath: string | null }): Promise<{ status: 'lines' | 'none' | 'unreadable' | 'missing'; lines: number }> {
+export async function scanEntryLines(entry: { id: string; contactId: string | null; pdfPath: string | null; direction?: string | null }): Promise<{ status: 'lines' | 'none' | 'unreadable' | 'missing'; lines: number }> {
   let status: 'lines' | 'none' | 'unreadable' | 'missing' = 'unreadable';
   let rows: ReturnType<typeof parseLineItems> = [];
   const file = entry.pdfPath ? resolveUpload(entry.pdfPath) : null;
@@ -38,7 +40,9 @@ export async function scanEntryLines(entry: { id: string; contactId: string | nu
     ...(rows.length ? [prisma.purchaseLine.createMany({
       data: rows.map((r, i) => ({
         ledgerEntryId: entry.id, position: i, code: r.code, label: r.label, articleKey: articleKey(r, entry.contactId),
-        qty: r.qty, unit: r.unit, unitPriceHt: r.unitPriceHt, discountPct: r.discountPct, totalHt: r.totalHt,
+        // note de crédit : quantité et montant en négatif, pour que l'article soit compté net (acheté − rendu)
+        qty: entry.direction === 'credit_note' ? -Math.abs(r.qty) : r.qty, unit: r.unit, unitPriceHt: Math.abs(r.unitPriceHt), discountPct: r.discountPct,
+        totalHt: entry.direction === 'credit_note' ? -Math.abs(r.totalHt) : r.totalHt,
       })),
     })] : []),
     prisma.ledgerEntry.update({ where: { id: entry.id }, data: { linesScannedAt: new Date(), linesScanStatus: status } }),
@@ -46,7 +50,7 @@ export async function scanEntryLines(entry: { id: string; contactId: string | nu
   return { status, lines: rows.length };
 }
 
-const toScan = { direction: { in: DIRECTIONS }, pdfPath: { not: null }, source: { not: 'demo' } } as const;
+const toScan = { direction: { in: SCAN_DIRECTIONS }, pdfPath: { not: null }, source: { not: 'demo' } } as const;
 
 /** Traite des PDF pas encore lus jusqu'à épuisement du temps imparti (≈ 20 s) ; à rappeler tant que `remaining` > 0. */
 export async function scanLinesBatch(opts: { timeBudgetMs?: number; rescan?: boolean } = {}): Promise<ScanResult> {
@@ -59,7 +63,7 @@ export async function scanLinesBatch(opts: { timeBudgetMs?: number; rescan?: boo
   const t0 = Date.now();
   let scanned = 0, linesFound = 0, unreadable = 0;
   while (Date.now() - t0 < budget) {
-    const batch = await prisma.ledgerEntry.findMany({ where: { ...toScan, linesScannedAt: null }, select: { id: true, contactId: true, pdfPath: true }, orderBy: { date: 'desc' }, take: 25 });
+    const batch = await prisma.ledgerEntry.findMany({ where: { ...toScan, linesScannedAt: null }, select: { id: true, contactId: true, pdfPath: true, direction: true }, orderBy: { date: 'desc' }, take: 25 });
     if (!batch.length) break;
     for (const e of batch) {
       const r = await scanEntryLines(e);
@@ -111,7 +115,7 @@ export async function setHidden(input: { articles?: { key: string; label: string
 /** Par défaut, seules les factures d'achat comptent : un bordereau (enlèvement) est repris par la facture qui le suit, donc les compter aussi doublerait tout. */
 function entryWhere(f: ArticleFilters) {
   return {
-    direction: { in: f.includeSlips ? DIRECTIONS : ['purchase'] },
+    direction: { in: f.includeSlips ? SCAN_DIRECTIONS : ['purchase', 'credit_note'] },
     ...(f.contactId ? { contactId: f.contactId } : {}),
     ...(f.worksiteId ? { worksiteId: f.worksiteId } : {}),
     ...((f.from || f.to) ? { date: { ...(f.from ? { gte: f.from } : {}), ...(f.to ? { lte: f.to } : {}) } } : {}),
@@ -143,9 +147,9 @@ export async function articleSummary(f: ArticleFilters): Promise<ArticleRow[]> {
     if (!g) { g = { row: { key: l.articleKey, label: l.label, code: l.code, unit: l.unit, purchases: 0, qty: 0, totalHt: 0, minPrice: l.unitPriceHt, maxPrice: l.unitPriceHt, lastPrice: l.unitPriceHt, lastDate: null, suppliers: [], supplierRefs: [] }, entries: new Set(), lastTs: -1 }; groups.set(l.articleKey, g); }
     g.entries.add(l.ledgerEntryId);
     g.row.qty += l.qty; g.row.totalHt += l.totalHt;
-    g.row.minPrice = Math.min(g.row.minPrice, l.unitPriceHt); g.row.maxPrice = Math.max(g.row.maxPrice, l.unitPriceHt);
+    if (l.qty >= 0) { g.row.minPrice = Math.min(g.row.minPrice, l.unitPriceHt); g.row.maxPrice = Math.max(g.row.maxPrice, l.unitPriceHt); }
     if (!g.row.suppliers.includes(supplier)) { g.row.suppliers.push(supplier); g.row.supplierRefs.push({ id: l.ledgerEntry.contactId, name: supplier }); }
-    if (ts >= g.lastTs) { g.lastTs = ts; g.row.lastPrice = l.unitPriceHt; g.row.lastDate = l.ledgerEntry.date?.toISOString() ?? null; g.row.label = l.label; g.row.unit = l.unit ?? g.row.unit; }
+    if (ts >= g.lastTs && l.qty >= 0) { g.lastTs = ts; g.row.lastPrice = l.unitPriceHt; g.row.lastDate = l.ledgerEntry.date?.toISOString() ?? null; g.row.label = l.label; g.row.unit = l.unit ?? g.row.unit; }
   }
   return [...groups.values()].map(({ row, entries }) => ({
     ...row, purchases: entries.size, qty: Math.round(row.qty * 100) / 100, totalHt: Math.round(row.totalHt * 100) / 100,
@@ -162,6 +166,6 @@ export async function articleOccurrences(key: string, f: ArticleFilters) {
     take: 500,
   });
   return lines
-    .map((l) => ({ id: l.id, entryId: l.ledgerEntry.id, contactId: l.ledgerEntry.contactId, date: l.ledgerEntry.date?.toISOString() ?? null, docNumber: l.ledgerEntry.docNumber, slip: l.ledgerEntry.direction === 'delivery_slip', supplier: l.ledgerEntry.contact?.name ?? l.ledgerEntry.supplierName ?? '—', worksiteRef: l.ledgerEntry.worksite?.ref ?? l.ledgerEntry.worksiteRef, label: l.label, qty: l.qty, unit: l.unit, unitPriceHt: l.unitPriceHt, discountPct: l.discountPct, totalHt: l.totalHt }))
+    .map((l) => ({ id: l.id, entryId: l.ledgerEntry.id, contactId: l.ledgerEntry.contactId, date: l.ledgerEntry.date?.toISOString() ?? null, docNumber: l.ledgerEntry.docNumber, slip: l.ledgerEntry.direction === 'delivery_slip', credit: l.ledgerEntry.direction === 'credit_note', supplier: l.ledgerEntry.contact?.name ?? l.ledgerEntry.supplierName ?? '—', worksiteRef: l.ledgerEntry.worksite?.ref ?? l.ledgerEntry.worksiteRef, label: l.label, qty: l.qty, unit: l.unit, unitPriceHt: l.unitPriceHt, discountPct: l.discountPct, totalHt: l.totalHt }))
     .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
 }

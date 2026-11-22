@@ -1,4 +1,5 @@
 import { supplierAccounts } from '../lib/supplier-account.js';
+import { supplierPallets, palletsOverview } from '../lib/pallets.js';
 import { allocationSnapshot } from '../lib/bank-allocation.js';
 import { purchaseRemaining } from '../lib/payment-tolerance.js';
 import { Router } from 'express';
@@ -56,6 +57,12 @@ function shapeContact<T extends { linkedAcpId?: string | null; linkedAcp?: unkno
 
 /** Recherche une entreprise par n° de TVA (VIES) pour préremplir un nouveau contact. */
 /** Aperçu d'une fusion : ce qui sera déplacé, complété, et ce qui ne sera pas repris — pour ne rien écraser par erreur. */
+/** Palettes consignées de tous les fournisseurs (solde : facturées − rendues). */
+contactsRouter.get('/pallets/overview', requireAuth(...OFFICE), asyncHandler(async (_req, res) => { res.json({ items: await palletsOverview() }); }));
+
+/** Palettes consignées chez un fournisseur : solde par type + mouvements (factures / notes de crédit). */
+contactsRouter.get('/:id/pallets', requireAuth(...OFFICE), asyncHandler(async (req, res) => { res.json(await supplierPallets(req.params.id!)); }));
+
 contactsRouter.get(
   '/merge-preview',
   requireAuth(...OFFICE),

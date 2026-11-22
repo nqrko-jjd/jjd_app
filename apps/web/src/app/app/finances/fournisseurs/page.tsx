@@ -2,7 +2,7 @@
 import { tr } from '@/lib/ui-language';
 import { Fragment, useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, CalendarClock, Wallet, Scale } from 'lucide-react';
+import { AlertTriangle, CalendarClock, Wallet, Scale, Layers } from 'lucide-react';
 import { useApi } from '@/lib/use-api';
 import { PageHead, Money, Kpi, formatDateBE } from '@/lib/ui';
 import { SkeletonRows, ErrorState } from '@/components/States';
@@ -15,6 +15,8 @@ interface Supplier {
 }
 export default function SuppliersPage() {
   const { data, loading, error, reload } = useApi<{ items: Supplier[] }>('/api/finance/suppliers');
+  const { data: pal } = useApi<{ items: { contactId: string | null; supplier: string; net: number; valueHt: number; lastDate: string | null; byType: { type: string; net: number }[] }[] }>('/api/contacts/pallets/overview');
+  const palToReturn = (pal?.items ?? []).filter((p) => p.net > 0);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('open');
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -30,7 +32,23 @@ export default function SuppliersPage() {
         <Kpi ic={AlertTriangle} label="Échu à payer" value={<Money value={sum(s => s.overdueNet ?? s.overdue)} />} warn={sum(s => s.overdueNet ?? s.overdue) > 0} sub="Notes de crédit et acomptes déduits" />
         <Kpi ic={CalendarClock} label="Échéances sous 30 jours" value={<Money value={sum(s => s.dueSoon)} />} sub="Factures encore ouvertes" />
         <Kpi ic={Wallet} label="Acomptes disponibles" value={<Money value={sum(s => s.unallocatedTotal)} />} sub="Paiements à répartir sur les factures" />
+        <Kpi ic={Layers} label="Palettes à rendre" value={palToReturn.reduce((n, p) => n + p.net, 0)} warn={palToReturn.length > 0} sub={`Caution : ${new Intl.NumberFormat('fr-BE', { style: 'currency', currency: 'EUR' }).format(palToReturn.reduce((n, p) => n + p.valueHt, 0))} HTVA`} />
       </div>
+      {palToReturn.length > 0 && (
+        <div className="card card-pad" style={{ marginBottom: '1.2rem' }}>
+          <h3 style={{ marginTop: 0 }}>Palettes consignées à rendre</h3>
+          <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Fournisseur</th><th>Palettes</th><th>Détail</th><th>Caution HTVA</th><th>Dernière facturée</th></tr></thead><tbody>
+            {palToReturn.map((p) => <tr key={p.contactId ?? p.supplier}>
+              <td>{p.contactId ? <Link href={`/app/contacts/${p.contactId}`}><strong>{p.supplier}</strong></Link> : <strong>{p.supplier}</strong>}</td>
+              <td className="tnum"><span className="badge warn">{p.net}</span></td>
+              <td className="muted">{p.byType.filter((b) => b.net > 0).map((b) => `${b.net} ${b.type.toLowerCase()}`).join(', ')}</td>
+              <td className="tnum"><Money value={p.valueHt} /></td>
+              <td>{formatDateBE(p.lastDate)}</td>
+            </tr>)}
+          </tbody></table></div>
+          <p className="muted" style={{ margin: '0.6rem 0 0', fontSize: '0.82rem' }}>Compté sur les lignes des factures (+) et des notes de crédit (−) : une palette rendue revient à zéro dès que la note de crédit est encodée.</p>
+        </div>
+      )}
       <div className="row" style={{ marginBottom: '1rem', flexWrap: 'wrap' }}>
         <label>{tr("Fournisseur")}<input className="input" value={query} onChange={e => setQuery(e.target.value)} placeholder="CF Group, BigMat…" /></label>
         <label>Afficher<select className="select" value={filter} onChange={e => setFilter(e.target.value)}><option value="open">Comptes avec un solde ou crédit</option><option value="overdue">Factures échues</option><option value="credit">Crédit chez le fournisseur</option><option value="all">Tous les fournisseurs</option></select></label>

@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
 import { api, apiBlobUrl } from '@/lib/api';
 import { PageHead, StatusBadge, Money, formatDateBE, Kpi, formatEur } from '@/lib/ui';
-import { Wallet, Euro, Scale, FileText, Users } from 'lucide-react';
+import { Wallet, Euro, Scale, FileText, Users, Layers } from 'lucide-react';
 import { FormModal, type FieldDef } from '@/components/FormModal';
 import { CollapsibleSection } from '@/components/CollapsibleSection';
 import { ComboBox } from '@/components/ComboBox';
@@ -19,7 +19,7 @@ import { CLIENT_KIND_LABEL, formatVat } from '@jjd/shared';
 
 const PAGE = 30;
 
-type ContactTab = 'info' | 'worksites' | 'client-open' | 'client-hist' | 'supplier-open' | 'supplier-hist';
+type ContactTab = 'info' | 'worksites' | 'client-open' | 'client-hist' | 'supplier-open' | 'supplier-hist' | 'pallets';
 interface ClientDoc {
   id: string; kind: string; number: string | null; status: string; totalTtc: number | null; paidAmount?: number | null;
   issuedOn: string | null; dueOn: string | null; worksite?: { ref: string } | null;
@@ -86,6 +86,30 @@ function ClientDocsTable({ docs, open, name }: { docs: ClientDoc[]; open?: boole
         ['Date', 'Type', 'N°', 'Chantier', 'Montant TTC', ...(open ? ['Reste dû', 'Échéance'] : ['Statut'])],
         docs.map((d) => [formatDateBE(d.issuedOn), KIND_LABEL[d.kind] ?? d.kind, d.number, d.worksite?.ref ?? '', sign(d), ...(open ? [left(d), formatDateBE(d.dueOn)] : [STATUS_LABEL[d.status] ?? d.status])]))} />
     </>
+  );
+}
+
+interface PalletsData {
+  net: number; valueHt: number;
+  byType: { type: string; out: number; back: number; net: number; unitPriceHt: number; valueHt: number }[];
+  moves: { entryId: string; date: string | null; docNumber: string | null; credit: boolean; label: string; type: string; qty: number; unitPriceHt: number; totalHt: number }[];
+}
+
+/** Palettes consignées chez ce fournisseur : chaque palette facturée est « à rendre », une note de crédit la remet à zéro. */
+function SupplierPallets({ data }: { data: PalletsData }) {
+  return (
+    <div className="grid" style={{ gap: '1rem', marginBottom: '1.4rem' }}>
+      <div className="kpis">
+        <Kpi ic={Layers} label="Palettes à rendre" value={data.net} warn={data.net > 0} sub={data.net > 0 ? 'facturées, pas encore reprises' : data.net < 0 ? 'plus rendues que facturées : à vérifier' : 'tout est rendu'} />
+        <Kpi ic={Wallet} label="Caution à récupérer" value={<Money value={Math.max(0, data.valueHt)} />} sub="HTVA, au prix facturé" />
+      </div>
+      <div className="card tbl-wrap"><table className="tbl"><thead><tr><th>Type</th><th>Facturées</th><th>Rendues</th><th>À rendre</th><th>Caution</th></tr></thead><tbody>
+        {data.byType.map((b) => <tr key={b.type}><td><strong>{b.type}</strong> <span className="muted">· <Money value={b.unitPriceHt} /> pièce</span></td><td className="tnum">{b.out}</td><td className="tnum">{b.back}</td><td className="tnum">{b.net > 0 ? <span className="badge warn">{b.net}</span> : b.net}</td><td className="tnum"><Money value={b.valueHt} /></td></tr>)}
+      </tbody></table></div>
+      <div className="card tbl-wrap"><table className="tbl"><thead><tr><th>Date</th><th>Document</th><th>Ligne</th><th>Palettes</th><th>Montant HTVA</th></tr></thead><tbody>
+        {data.moves.map((m, i) => <tr key={`${m.entryId}-${i}`}><td>{formatDateBE(m.date)}</td><td><Link href={`/app/achats?q=${encodeURIComponent(m.docNumber ?? '')}`}>{m.credit ? 'Note de crédit' : 'Facture'} {m.docNumber ?? ''}</Link></td><td className="muted">{m.label}</td><td className="tnum">{m.qty > 0 ? `+${m.qty}` : m.qty}</td><td className="tnum"><Money value={m.totalHt} /></td></tr>)}
+      </tbody></table></div>
+    </div>
   );
 }
 
@@ -186,6 +210,8 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
   // fiche en onglets (inspiré d'Horus) : tout le compte du tiers, client ET fournisseur, sans tout faire défiler
   const [tab, setTab] = useState<ContactTab>('info');
   const { data: clientDocs } = useApi<{ items: ClientDoc[] }>(`/api/documents?contactId=${id}&pageSize=500`);
+  const supplierLike = data?.contact.type === 'supplier' || data?.contact.type === 'both';
+  const { data: pallets } = useApi<PalletsData>(supplierLike ? `/api/contacts/${id}/pallets` : null);
   const [portalInfo, setPortalInfo] = useState<{ email: string; portal: string } | null>(null);
   const [purchasesShown, setPurchasesShown] = useState(PAGE);
   const [balanceShown, setBalanceShown] = useState(PAGE);
@@ -432,6 +458,7 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
           ...(showClient ? [['worksites', 'Chantiers', c.worksites.length] as [ContactTab, string, number]] : []),
           ...(showClient ? [['client-open', 'Impayés client', openDocs.length] as [ContactTab, string, number], ['client-hist', 'Historique client', docs.length] as [ContactTab, string, number]] : []),
           ...(isSupplier ? [['supplier-open', 'Impayés fournisseur', supOpen.length] as [ContactTab, string, number], ['supplier-hist', 'Historique fournisseur', c.purchases.length] as [ContactTab, string, number]] : []),
+          ...(isSupplier && pallets && pallets.moves.length ? [['pallets', 'Palettes', pallets.net] as [ContactTab, string, number]] : []),
         ];
         return (
           <>
@@ -442,6 +469,7 @@ export default function ContactDetail({ params }: { params: Promise<{ id: string
             </div>
             {tab === 'client-open' && <ClientDocsTable docs={openDocs} open name={c.name} />}
             {tab === 'client-hist' && <ClientDocsTable docs={docs} name={c.name} />}
+            {tab === 'pallets' && pallets && <SupplierPallets data={pallets} />}
             {tab === 'supplier-open' && <SupplierOpenTable rows={supOpen} name={c.name} credits={c.supplierAccount?.credits ?? 0} advances={c.supplierAccount?.unallocatedTotal ?? 0} />}
           </>
         );

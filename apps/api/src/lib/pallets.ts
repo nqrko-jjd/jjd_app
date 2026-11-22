@@ -14,10 +14,11 @@ export async function palletMoves(contactId?: string): Promise<(PalletMove & { c
     .filter((l) => isPalletLine(l.label))
     .map((l) => {
       const credit = l.ledgerEntry.direction === 'credit_note';
+      // facture : une ligne négative = palettes rendues déduites de la facture ; note de crédit : toujours un retour
       const qty = credit ? -Math.abs(l.qty) : l.qty;
       return {
         entryId: l.ledgerEntry.id, date: l.ledgerEntry.date?.toISOString() ?? null, docNumber: l.ledgerEntry.docNumber, credit, label: l.label,
-        type: palletType(l.label), qty, unitPriceHt: Math.abs(l.unitPriceHt), totalHt: credit ? -Math.abs(l.totalHt) : l.totalHt,
+        type: palletType(l.label), qty, unitPriceHt: Math.abs(l.unitPriceHt), totalHt: qty < 0 ? -Math.abs(l.totalHt) : Math.abs(l.totalHt),
         contactId: l.ledgerEntry.contactId, supplier: l.ledgerEntry.contact?.name ?? l.ledgerEntry.supplierName ?? '—',
       };
     })

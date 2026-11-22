@@ -551,7 +551,7 @@ expensesRouter.post(
   '/scan-lines',
   requireAuth(...OFFICE),
   asyncHandler(async (req, res) => {
-    const body = z.object({ rescan: z.boolean().optional(), timeBudgetMs: z.number().int().optional() }).parse(req.body ?? {});
+    const body = z.object({ rescan: z.boolean().optional(), onlyCredits: z.boolean().optional(), timeBudgetMs: z.number().int().optional() }).parse(req.body ?? {});
     const result = await scanLinesBatch(body);
     await prisma.auditLog.create({ data: { actorId: req.user!.id, action: 'purchase-lines.scan', entity: 'ledger', entityId: 'batch', meta: { ...result, rescan: !!body.rescan } } }).catch(() => undefined);
     res.json(result);

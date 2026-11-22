@@ -53,8 +53,10 @@ export async function scanEntryLines(entry: { id: string; contactId: string | nu
 const toScan = { direction: { in: SCAN_DIRECTIONS }, pdfPath: { not: null }, source: { not: 'demo' } } as const;
 
 /** Traite des PDF pas encore lus jusqu'à épuisement du temps imparti (≈ 20 s) ; à rappeler tant que `remaining` > 0. */
-export async function scanLinesBatch(opts: { timeBudgetMs?: number; rescan?: boolean } = {}): Promise<ScanResult> {
+export async function scanLinesBatch(opts: { timeBudgetMs?: number; rescan?: boolean; onlyCredits?: boolean } = {}): Promise<ScanResult> {
   if (!(await pdftotextAvailable())) throw new HttpError(503, 'La lecture des PDF n’est pas disponible sur le serveur (pdftotext manquant).');
+  // relire les notes de crédit où aucune ligne n'avait été trouvée (lecture des montants négatifs ajoutée)
+  if (opts.onlyCredits) await prisma.ledgerEntry.updateMany({ where: { ...toScan, direction: 'credit_note', linesScanStatus: 'none' }, data: { linesScannedAt: null, linesScanStatus: null } });
   if (opts.rescan) {
     await prisma.purchaseLine.deleteMany({});
     await prisma.ledgerEntry.updateMany({ where: toScan, data: { linesScannedAt: null, linesScanStatus: null } });

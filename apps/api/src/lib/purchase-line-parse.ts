@@ -55,7 +55,13 @@ interface Entry { idx: number; value: number; kind: 'pos' | 'neg' | 'pct' }
  * l'arithmétique (quantité × prix = total) tranche, et une lecture qui ne se recoupe pas est écartée.
  */
 export function parseLine(raw: string): ParsedLine | null {
-  return parseWith(raw, true) ?? parseWith(raw, false);
+  const direct = parseWith(raw, true) ?? parseWith(raw, false);
+  if (direct) return direct;
+  // note de crédit : quantité et/ou montants en négatif (« PALETTE EURO P -2 25,00 -50,00 ») — on relit en valeurs absolues
+  // (le signe est remis par l'appelant selon le type de pièce). Une remise « -10 % » reste une remise.
+  if (!/(^|\s)-\d/.test(raw)) return null;
+  const unsigned = raw.replace(/(^|\s)-(?=\d[\d.,]*(?!\s*%))/g, '$1');
+  return parseWith(unsigned, true) ?? parseWith(unsigned, false);
 }
 
 function parseWith(raw: string, joinThousands: boolean): ParsedLine | null {

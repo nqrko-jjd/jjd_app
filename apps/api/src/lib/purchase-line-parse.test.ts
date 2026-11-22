@@ -54,3 +54,10 @@ test('prix à 3 décimales avec un point (grossiste) : 516.619 = 516,619 €, pa
   // avec une virgule dans la ligne, le point reste un séparateur de milliers
   assert.equal(parseLine('Prestation chantier 7 € 200,00 1.400,00 €')!.totalHt, 1400);
 });
+
+test('note de crédit : quantité et montants négatifs', () => {
+  const a = parseLine('PALETTE GARANTIE EURO P -2 25,00 -50,00')!;
+  assert.equal(a.label, 'PALETTE GARANTIE EURO'); assert.equal(a.qty, 2); assert.equal(a.totalHt, 50);
+  const b = parseLine('123456 PALETTE GARANTIE -10 PC 20,00 -200,00')!;
+  assert.equal(b.qty, 10); assert.equal(b.unitPriceHt, 20); assert.equal(b.code, '123456');
+});

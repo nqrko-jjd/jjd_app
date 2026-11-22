@@ -110,3 +110,29 @@ export async function searchAddresses(query: string, limit = 6): Promise<Address
   const hits = (await r.json()) as NominatimSearchHit[];
   return hits.map(mapNominatimHit);
 }
+
+/* ------------------------------------------------------- adresse à partir d'une position */
+
+const reverseCache = new Map<string, string | null>();
+/** « Rue X 12, 1390 Grez-Doiceau » pour une position (Photon / OpenStreetMap). Coordonnées arrondies à ~100 m avant l'envoi ; résultats gardés en mémoire. */
+export async function reverseAddress(lat: number, lng: number): Promise<string | null> {
+  const rl = Math.round(lat * 1000) / 1000, rg = Math.round(lng * 1000) / 1000;
+  const key = `${rl},${rg}`;
+  if (reverseCache.has(key)) return reverseCache.get(key) ?? null;
+  let label: string | null = null;
+  try {
+    const r = await fetch(`https://photon.komoot.io/reverse?lat=${rl}&lon=${rg}&lang=fr&limit=1`, { headers: { 'User-Agent': 'JJD-App/1.0 (info@jjd-consult.be)' }, signal: AbortSignal.timeout(4000) });
+    if (r.ok) {
+      const f = ((await r.json()) as { features?: { properties: { street?: string; housenumber?: string; name?: string; postcode?: string; city?: string; town?: string; village?: string } }[] }).features?.[0];
+      if (f) {
+        const p = f.properties;
+        const street = [p.street ?? p.name, p.housenumber].filter(Boolean).join(' ');
+        const city = [p.postcode, p.city ?? p.town ?? p.village].filter(Boolean).join(' ');
+        label = [street, city].filter(Boolean).join(', ') || null;
+      }
+    }
+  } catch { /* indisponible : pas d'adresse, l'appli montre les coordonnées */ }
+  if (reverseCache.size > 2000) reverseCache.clear();
+  reverseCache.set(key, label);
+  return label;
+}

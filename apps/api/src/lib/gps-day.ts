@@ -79,3 +79,85 @@ export function summarizeDay(raw: DayPoint[]): DaySummary {
     firstMoveAt: firstMove?.at.toISOString() ?? null, km: Math.round(km * 10) / 10, track, stops: findStops(pts, moving),
   };
 }
+
+/* ------------------------------------------------------------------ journal des trajets */
+
+export interface JourneyStop { type: 'stop'; from: string; to: string | null; minutes: number; lat: number; lng: number }
+export interface JourneyTrip { type: 'trip'; from: string; to: string; minutes: number; km: number; maxSpeed: number; avgSpeed: number; start: { lat: number; lng: number }; end: { lat: number; lng: number } }
+export type JourneySegment = JourneyStop | JourneyTrip;
+export interface Journey {
+  summary: { km: number; driveMinutes: number; stopMinutes: number; maxSpeed: number; firstMoveAt: string | null; lastSignalAt: string | null };
+  segments: JourneySegment[];
+  /** Pour le rejeu : [lat, lng, secondes UNIX, vitesse km/h], allégé à ~800 points. */
+  points: [number, number, number, number][];
+}
+
+const MAX_REPLAY_POINTS = 800;
+const MIN_TRIP_KM = 0.15;
+
+/** Trajets et arrêts de la journée : un « arrêt » est une immobilisation d'au moins 5 min (même règle que summarizeDay), un « trajet » ce qu'il y a entre deux arrêts. */
+export function buildJourney(raw: DayPoint[]): Journey {
+  const pts = [...raw].sort((a, b) => a.at.getTime() - b.at.getTime());
+  if (!pts.length) return { summary: { km: 0, driveMinutes: 0, stopMinutes: 0, maxSpeed: 0, firstMoveAt: null, lastSignalAt: null }, segments: [], points: [] };
+  const moving = (p: DayPoint) => p.speed != null && p.speed >= MOVING_KMH;
+  const stops = findStops(pts, moving);
+  const t = (iso: string) => new Date(iso).getTime();
+  const firstT = pts[0]!.at.getTime();
+  const lastT = pts[pts.length - 1]!.at.getTime();
+
+  const kmBetween = (from: number, to: number) => {
+    let km = 0, max = 0;
+    let prev: DayPoint | null = null;
+    for (const p of pts) {
+      const ts = p.at.getTime();
+      if (ts < from || ts > to) continue;
+      if (p.speed != null && p.speed > max) max = p.speed;
+      if (prev) { const d = distanceKm(prev, p); if (d >= JITTER_KM && d < 5) km += d; }
+      prev = p;
+    }
+    return { km, max };
+  };
+
+  const segments: JourneySegment[] = [];
+  const pushTrip = (from: number, to: number) => {
+    if (to - from < 60_000) return;
+    const inside = pts.filter((p) => p.at.getTime() >= from && p.at.getTime() <= to);
+    if (inside.length < 2) return;
+    const { km, max } = kmBetween(from, to);
+    if (km < MIN_TRIP_KM) return;
+    const minutes = Math.max(1, Math.round((to - from) / 60_000));
+    segments.push({
+      type: 'trip', from: new Date(from).toISOString(), to: new Date(to).toISOString(), minutes,
+      km: Math.round(km * 10) / 10, maxSpeed: Math.round(max), avgSpeed: Math.round(km / (minutes / 60)),
+      start: { lat: inside[0]!.lat, lng: inside[0]!.lng }, end: { lat: inside[inside.length - 1]!.lat, lng: inside[inside.length - 1]!.lng },
+    });
+  };
+
+  let cursor = firstT;
+  for (const st of stops) {
+    const sFrom = t(st.from);
+    const sTo = st.to ? t(st.to) : lastT;
+    pushTrip(cursor, sFrom);
+    segments.push({ type: 'stop', from: st.from, to: st.to, minutes: Math.max(1, Math.round((sTo - sFrom) / 60_000)), lat: st.lat, lng: st.lng });
+    cursor = sTo;
+  }
+  if (!stops.length || stops[stops.length - 1]!.to) pushTrip(cursor, lastT);
+
+  const step = Math.max(1, Math.ceil(pts.length / MAX_REPLAY_POINTS));
+  const points = pts.filter((_, i) => i % step === 0 || i === pts.length - 1)
+    .map((p): [number, number, number, number] => [p.lat, p.lng, Math.round(p.at.getTime() / 1000), Math.round(p.speed ?? 0)]);
+
+  const trips = segments.filter((s): s is JourneyTrip => s.type === 'trip');
+  const firstMove = pts.find(moving);
+  return {
+    summary: {
+      km: Math.round(trips.reduce((s, x) => s + x.km, 0) * 10) / 10,
+      driveMinutes: trips.reduce((s, x) => s + x.minutes, 0),
+      stopMinutes: segments.filter((s): s is JourneyStop => s.type === 'stop').reduce((s, x) => s + x.minutes, 0),
+      maxSpeed: Math.max(0, ...trips.map((x) => x.maxSpeed)),
+      firstMoveAt: firstMove?.at.toISOString() ?? null,
+      lastSignalAt: pts[pts.length - 1]!.at.toISOString(),
+    },
+    segments, points,
+  };
+}

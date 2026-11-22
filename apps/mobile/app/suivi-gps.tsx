@@ -213,9 +213,13 @@ export default function SuiviGps() {
                 ))}
               </View>
             )}
-            <Pressable accessibilityRole="button" style={s.cta} onPress={() => router.push(`/vehicule/${selected.id}` as never)}>
-              <Text style={s.ctaText}>{tr('Ouvrir la fiche du véhicule')}</Text>
-              <Feather name="chevron-right" size={16} color="#fff" />
+            <Pressable accessibilityRole="button" style={s.cta} onPress={() => router.push({ pathname: '/parcours/[id]', params: { id: selected.id, label: label(selected) } } as never)}>
+              <Feather name="play-circle" size={16} color="#fff" />
+              <Text style={s.ctaText}>{tr('Trajets, arrêts et rejeu du parcours')}</Text>
+            </Pressable>
+            <Pressable accessibilityRole="button" style={[s.cta, { backgroundColor: T.surface2 }]} onPress={() => router.push(`/vehicule/${selected.id}` as never)}>
+              <Text style={[s.ctaText, { color: T.primary }]}>{tr('Ouvrir la fiche du véhicule')}</Text>
+              <Feather name="chevron-right" size={16} color={T.primary} />
             </Pressable>
           </Card>
         )}

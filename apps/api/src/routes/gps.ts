@@ -5,7 +5,9 @@ import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, OFFICE } from '../lib/auth.js';
 import { emailConfigured } from '../lib/doc-mail.js';
 import { gpsConfigured, listPajDevices, pajPointsBetween, syncVehiclePositions } from '../lib/paj.js';
-import { siteVisit, summarizeDay } from '../lib/gps-day.js';
+import { siteVisit, summarizeDay, buildJourney } from '../lib/gps-day.js';
+import { distanceKm } from '../lib/arrival-notices.js';
+import { reverseAddress } from '../lib/geocode.js';
 import { computeArrivals, getArrivalSettings, saveArrivalSettings } from '../lib/arrival-notices.js';
 
 /** Suivi GPS des véhicules (traceurs PAJ) et avis d'arrivée aux clients — bureau uniquement (lib/paj.ts, lib/arrival-notices.ts). */
@@ -75,6 +77,45 @@ gpsRouter.get(
     if (!v?.pajDeviceId) throw new HttpError(404, 'Ce véhicule n’a pas de traceur.');
     const from = new Date(); from.setHours(0, 0, 0, 0);
     try { res.json(summarizeDay(await pajPointsBetween(v.pajDeviceId, from, new Date()))); } catch (e) { throw e instanceof HttpError ? e : new HttpError(502, `PAJ GPS : ${(e as Error).message}`); }
+  }),
+);
+
+/** Journal d'un véhicule pour un jour (?date=AAAA-MM-JJ, aujourd'hui par défaut) : trajets, arrêts (avec chantier ou adresse), totaux et points pour le rejeu. Lu à la demande chez PAJ. */
+gpsRouter.get(
+  '/vehicles/:id/journey',
+  requireAuth(...OFFICE),
+  asyncHandler(async (req, res) => {
+    if (!gpsConfigured()) throw new HttpError(503, 'Aucune source GPS (PAJ ou Traccar) n’est configurée sur le serveur.');
+    const v = await prisma.vehicle.findUnique({ where: { id: req.params.id }, select: { pajDeviceId: true } });
+    if (!v?.pajDeviceId) throw new HttpError(404, 'Ce véhicule n’a pas de traceur.');
+    const dateStr = typeof req.query.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(req.query.date) ? req.query.date : null;
+    const from = dateStr ? new Date(`${dateStr}T00:00:00`) : new Date();
+    from.setHours(0, 0, 0, 0);
+    const to = new Date(Math.min(from.getTime() + 86_400_000, Date.now()));
+    if (Number.isNaN(from.getTime()) || from.getTime() > Date.now()) throw new HttpError(422, 'Date invalide');
+    let journey;
+    try { journey = buildJourney(await pajPointsBetween(v.pajDeviceId, from, to)); } catch (e) { throw e instanceof HttpError ? e : new HttpError(502, `PAJ GPS : ${(e as Error).message}`); }
+
+    // lieux : d'abord les chantiers connus (à moins de 250 m), sinon l'adresse (quelques recherches seulement)
+    const sites = await prisma.worksite.findMany({ where: { lat: { not: null }, lng: { not: null }, archived: false }, select: { ref: true, title: true, address: true, city: true, lat: true, lng: true } });
+    let lookups = 0;
+    const place = async (p: { lat: number; lng: number }): Promise<{ label: string | null; worksite: string | null }> => {
+      let best: { ref: string; title: string; d: number } | null = null;
+      for (const s of sites) {
+        const d = distanceKm(p, { lat: s.lat!, lng: s.lng! });
+        if (d <= 0.25 && (!best || d < best.d)) best = { ref: s.ref, title: s.title, d };
+      }
+      if (best) return { label: `${best.ref} · ${best.title}`, worksite: best.ref };
+      if (lookups >= 10) return { label: null, worksite: null };
+      lookups++;
+      return { label: await reverseAddress(p.lat, p.lng), worksite: null };
+    };
+    const segments = [];
+    for (const seg of journey.segments) {
+      if (seg.type === 'stop') segments.push({ ...seg, ...(await place(seg)) });
+      else segments.push({ ...seg, startPlace: (await place(seg.start)).label, endPlace: (await place(seg.end)).label });
+    }
+    res.json({ date: dateStr ?? `${from.getFullYear()}-${String(from.getMonth() + 1).padStart(2, '0')}-${String(from.getDate()).padStart(2, '0')}`, summary: journey.summary, segments, points: journey.points });
   }),
 );
 

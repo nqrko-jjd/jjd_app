@@ -9,9 +9,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { T } from '@/lib/theme';
 import { tr } from '@/lib/i18n';
 import { LanguagePicker } from '@/lib/LanguagePicker';
+import { useRouter } from 'expo-router';
 
 export default function Login() {
   const { signIn } = useSession();
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [err, setErr] = useState<string | null>(null);
@@ -76,6 +78,9 @@ Tout au même endroit.</Text></LinearGradient>
         {err && <Text style={s.err}>{err}</Text>}
         <Pressable style={s.btn} onPress={submit} disabled={busy}>
           <Text style={s.btnTxt}>{busy ? 'Connexion…' : 'Se connecter'}</Text>
+        </Pressable>
+        <Pressable accessibilityRole="link" onPress={() => router.push('/portail-login' as never)} style={{ paddingVertical: 12 }}>
+          <Text style={{ color: T.ink2, textAlign: 'center' }}>Vous êtes client de JJD ? <Text style={{ color: T.primary, fontWeight: '700' }}>Espace client</Text></Text>
         </Pressable>
         <PrivacyLinks />
         <Pressable accessibilityRole="button" onPress={changeSpace} disabled={busy} style={{ paddingVertical: 12 }}>

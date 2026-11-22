@@ -35,9 +35,14 @@ function Guard() {
 
   useEffect(() => {
     if (loading) return;
-    const onLogin = segments[0] === 'login';
+    const first = segments[0] as string | undefined;
+    const onLogin = first === 'login' || first === 'portail-login';
+    const inPortal = first === '(portail)' || first === 'espace';
     if (!user && !onLogin) router.replace('/login');
-    else if (user && onLogin) router.replace('/');
+    else if (user && user.role === 'client') {
+      // un client ne voit que son espace, jamais les écrans de l'équipe
+      if (!inPortal) router.replace('/accueil' as never);
+    } else if (user && (onLogin || inPortal)) router.replace('/');
   }, [user, loading, segments, router]);
 
   return (<>
@@ -53,7 +58,9 @@ function Guard() {
       }}
     >
       <Stack.Screen name="login" options={{ headerShown: false }} />
+      <Stack.Screen name="portail-login" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="(portail)" options={{ headerShown: false }} />
     </Stack></>
   );
 }

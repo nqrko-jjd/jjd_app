@@ -1,4 +1,6 @@
-import { assertLoginAllowed, recordLoginFailure } from '../lib/login-throttle.js';
+import { assertLoginAllowed, recordLoginFailure, clearLoginFailures } from '../lib/login-throttle.js';
+import { randomInt } from 'node:crypto';
+import { hashPassword, verifyPassword } from '../lib/auth.js';
 import { Router, type Request, type Response } from 'express';
 import path from 'node:path';
 import { createReadStream, existsSync } from 'node:fs';
@@ -100,6 +102,119 @@ portalRouter.post(
     await prisma.loginToken.update({ where: { token }, data: { usedAt: new Date() } });
     await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
     res.json({ token: signPortalToken(user.id) });
+  }),
+);
+
+/* --------------------------------------- connexion par code à 6 chiffres (appli mobile) */
+
+// Un lien de 40 caractères est inutilisable dans une appli : on envoie un code court, stocké dans
+// la table LoginToken existante (token = `code:<email>:<code>`), valable 10 minutes, à usage unique.
+portalRouter.post(
+  '/request-code',
+  asyncHandler(async (req, res) => {
+    const email = z.string().trim().email().parse(req.body?.email).toLowerCase();
+    assertLoginAllowed(`portal:${email}`, req.ip || 'unknown');
+    recordLoginFailure(`portal:${email}`, req.ip || 'unknown');
+    const user = await prisma.user.findFirst({ where: { email, role: 'client', active: true } });
+    // réponse identique que le compte existe ou non (anti-énumération)
+    let devCode: string | undefined;
+    if (user) {
+      // les anciens codes encore valables de cette adresse ne servent plus
+      await prisma.loginToken.updateMany({
+        where: { email, usedAt: null, token: { startsWith: `code:${email}:` } },
+        data: { usedAt: new Date() },
+      });
+      let code = '';
+      for (let i = 0; i < 5; i++) {
+        code = String(randomInt(0, 1_000_000)).padStart(6, '0');
+        if (!(await prisma.loginToken.findUnique({ where: { token: `code:${email}:${code}` } }))) break;
+      }
+      await prisma.loginToken.create({
+        data: { token: `code:${email}:${code}`, email, expiresAt: new Date(Date.now() + 10 * 60_000) },
+      });
+      await sendMail(
+        email,
+        'Votre code de connexion JJD Consult',
+        `Bonjour,\n\nVotre code de connexion JJD : ${code} (valable 10 minutes).\n\nSi vous n’êtes pas à l’origine de cette demande, ignorez ce message.\n\nJJD Consult`,
+      );
+      // comptes de démonstration uniquement (pas de vraie boîte mail), même en production
+      if (email.endsWith('@portail.demo')) devCode = code;
+    }
+    res.json({ ok: true, devCode });
+  }),
+);
+
+portalRouter.post(
+  '/verify-code',
+  asyncHandler(async (req, res) => {
+    const email = z.string().trim().email().parse(req.body?.email).toLowerCase();
+    const code = String(req.body?.code ?? '').trim();
+    const ip = req.ip || 'unknown';
+    assertLoginAllowed(`portalcode:${email}`, ip);
+    const invalid = () => { recordLoginFailure(`portalcode:${email}`, ip); return new HttpError(400, 'Code invalide ou expiré'); };
+    if (!/^\d{6}$/.test(code)) throw invalid();
+    const token = `code:${email}:${code}`;
+    const row = await prisma.loginToken.findUnique({ where: { token } });
+    if (!row || row.usedAt || row.expiresAt < new Date()) throw invalid();
+    const user = await prisma.user.findFirst({ where: { email, role: 'client', active: true } });
+    if (!user) throw invalid();
+    // usage unique, même si deux requêtes arrivent en même temps
+    const claimed = await prisma.loginToken.updateMany({ where: { token, usedAt: null }, data: { usedAt: new Date() } });
+    if (claimed.count !== 1) throw invalid();
+    clearLoginFailures(`portalcode:${email}`);
+    await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+    res.json({ token: signPortalToken(user.id) });
+  }),
+);
+
+/* ------------------------------------------------------- connexion par mot de passe */
+
+// Les comptes clients ont un hash aléatoire tant qu'aucun mot de passe n'a été choisi ; les mots de passe
+// choisis ici font au moins 10 caractères. Impossible de savoir sans migration si un mot de passe a été défini.
+portalRouter.post(
+  '/login',
+  asyncHandler(async (req, res) => {
+    const email = String(req.body?.email ?? '').trim().toLowerCase();
+    const password = String(req.body?.password ?? '');
+    const ip = req.ip || 'unknown';
+    assertLoginAllowed(`portalpwd:${email}`, ip);
+    const user = email && password.length <= 200
+      ? await prisma.user.findFirst({ where: { email, role: 'client', active: true } })
+      : null;
+    const ok = user ? await verifyPassword(password, user.passwordHash) : false;
+    if (!user || !ok) {
+      recordLoginFailure(`portalpwd:${email}`, ip);
+      throw new HttpError(401, 'Identifiant ou mot de passe incorrect');
+    }
+    clearLoginFailures(`portalpwd:${email}`);
+    await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+    res.json({ token: signPortalToken(user.id), hasPassword: true });
+  }),
+);
+
+portalRouter.post(
+  '/password',
+  requirePortal,
+  asyncHandler(async (req, res) => {
+    const u = req.portalUser!;
+    const ip = req.ip || 'unknown';
+    assertLoginAllowed(`portalpwdset:${u.id}`, ip);
+    const input = z.object({
+      password: z.string().min(10, 'Au moins 10 caractères').max(200),
+      currentPassword: z.string().max(200).optional(),
+    }).parse(req.body);
+    // un ancien mot de passe fourni doit être le bon ; sans lui (après connexion par code), on accepte
+    if (input.currentPassword) {
+      const row = await prisma.user.findUnique({ where: { id: u.id }, select: { passwordHash: true } });
+      if (!row || !(await verifyPassword(input.currentPassword, row.passwordHash))) {
+        recordLoginFailure(`portalpwdset:${u.id}`, ip);
+        throw new HttpError(403, 'Mot de passe actuel incorrect');
+      }
+    } else {
+      recordLoginFailure(`portalpwdset:${u.id}`, ip);
+    }
+    await prisma.user.update({ where: { id: u.id }, data: { passwordHash: await hashPassword(input.password) } });
+    res.json({ ok: true });
   }),
 );
 

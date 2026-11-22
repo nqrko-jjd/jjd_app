@@ -50,7 +50,8 @@ export function NotificationBridge() {
   const { user } = useSession();
   const router = useRouter();
   useEffect(() => {
-    if (!user) return;
+    // pas de notifications push pour les clients : /api/push/native/* est réservé aux équipes
+    if (!user || user.role === 'client') return;
     const refresh = async () => { if (await AsyncStorage.getItem(storageKey(ENABLED)) === '1') await register(false); };
     void refresh().catch(() => {});
     const state = AppState.addEventListener('change', s => { if (s === 'active') void refresh().catch(() => {}); });

@@ -3,27 +3,19 @@ import { ScrollView, View, Pressable, RefreshControl } from 'react-native';
 import { Text } from '@/lib/AppText';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { apiGet } from '@/lib/api';
-import { ScreenHeader, Card, Muted, Loading, Badge, EmptyState, eur, dateBE } from '@/lib/ui';
-import { Pills } from '@/lib/CardTxList';
+import { ScreenHeader, Muted, Loading, EmptyState, eur } from '@/lib/ui';
+import { PayCardView, AccountCardView, holderOf, type CardLike } from '@/lib/BankCard';
 import { T } from '@/lib/theme';
 import { tr } from '@/lib/i18n';
 
-interface PersonRef { displayName: string | null; firstName: string; lastName: string | null }
-interface PCard {
-  id: string; network: 'bancontact' | 'visa'; last4: string; holderName: string | null; label: string | null; status: string;
-  person: PersonRef | null;
-  stats: { monthSpend: number; yearSpend: number; count: number; lastUsedAt: string | null; lastMerchant: string | null; toJustify: number; toJustifyAmount: number };
+interface PCard extends CardLike {
+  id: string;
+  stats: { monthSpend: number; prevMonthSpend?: number; yearSpend: number; count: number; lastUsedAt: string | null; lastMerchant: string | null; toJustify: number; toJustifyAmount: number };
 }
 interface Account { bank: string; iban: string | null; label: string | null; balance: number | null; balanceAt: string | null; stats: { monthOut: number; monthIn: number; count: number; toJustify: number; toJustifyAmount: number } }
 
-const STATUS: Record<string, { label: string; tone?: 'ok' | 'warn' | 'crit' }> = {
-  active: { label: 'Active', tone: 'ok' }, blocked: { label: 'Bloquée', tone: 'warn' }, lost: { label: 'Perdue / volée', tone: 'crit' }, expired: { label: 'Expirée' },
-};
-const holder = (c: PCard) => c.person ? (c.person.displayName || [c.person.firstName, c.person.lastName].filter(Boolean).join(' ')) : c.holderName || tr('Titulaire à indiquer');
-
 export default function Cartes() {
   const router = useRouter();
-  const [tab, setTab] = useState<'cards' | 'accounts'>('cards');
   const [cards, setCards] = useState<PCard[] | null>(null);
   const [accounts, setAccounts] = useState<Account[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -41,55 +33,47 @@ export default function Cartes() {
 
   if (!cards || !accounts) return <Loading />;
   const todoCards = cards.reduce((s, c) => s + c.stats.toJustify, 0);
+  const month = cards.reduce((s, c) => s + c.stats.monthSpend, 0);
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ ...T.content, gap: 16 }}
+    <ScrollView style={{ flex: 1, backgroundColor: T.paper }} contentContainerStyle={{ ...T.content, gap: 14 }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} />}>
       <Stack.Screen options={{ title: tr('Cartes & comptes'), headerBackTitle: tr('Retour') }} />
-      <ScreenHeader title={tr('Cartes & comptes')} eyebrow={tr('Finances')} description={todoCards ? `${todoCards} ${tr('paiement(s) par carte sans justificatif')}` : tr('Tous les paiements par carte sont justifiés.')} />
-      <Pills items={[{ key: 'cards' as const, label: tr('Cartes') }, { key: 'accounts' as const, label: tr('Comptes') }]} value={tab} onChange={setTab} />
+      <ScreenHeader title={tr('Cartes & comptes')} eyebrow={tr('Finances')}
+        description={`${cards.length} ${tr('carte(s)')} · ${eur(month)} ${tr('dépensés ce mois')}${todoCards ? ` · ${todoCards} ${tr('paiement(s) sans justificatif')}` : ''}`} />
 
-      {tab === 'cards' && (cards.length === 0
-        ? <EmptyState icon="credit-card" title={tr('Aucune carte')} description={tr('Les cartes apparaissent dès qu’elles servent sur un relevé.')} />
-        : cards.map((c) => {
-          const st = STATUS[c.status] ?? { label: c.status };
-          return (
-            <Pressable key={c.id} onPress={() => router.push(`/carte/${c.id}` as never)} accessibilityRole="button">
-              <Card accent={c.stats.toJustify ? T.warn : undefined}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                  <Text style={{ fontWeight: '800', color: T.ink, fontSize: 16 }}>{c.network === 'visa' ? 'Visa' : 'Bancontact'} •••• {c.last4}</Text>
-                  <Badge tone={st.tone}>{tr(st.label)}</Badge>
-                </View>
-                <Text style={{ color: T.ink, fontWeight: '600' }}>{holder(c)}{c.label ? ` · ${c.label}` : ''}</Text>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <View><Muted>{tr('Ce mois')}</Muted><Text style={{ fontWeight: '800', color: T.ink }}>{eur(c.stats.monthSpend)}</Text></View>
-                  <View><Muted>{tr('12 derniers mois')}</Muted><Text style={{ fontWeight: '800', color: T.ink }}>{eur(c.stats.yearSpend)}</Text></View>
-                  <View><Muted>{tr('À justifier')}</Muted><Text style={{ fontWeight: '800', color: c.stats.toJustify ? T.crit : T.ok }}>{c.stats.toJustify ? `${c.stats.toJustify} · ${eur(c.stats.toJustifyAmount)}` : '0'}</Text></View>
-                </View>
-                {c.stats.lastUsedAt && <Muted numberOfLines={1}>{tr('Dernier paiement')} {dateBE(c.stats.lastUsedAt)}{c.stats.lastMerchant ? ` · ${c.stats.lastMerchant}` : ''}</Muted>}
-              </Card>
-            </Pressable>
-          );
-        }))}
+      {accounts.length > 0 && <Text style={s.section}>{tr('Comptes')} <Text style={s.sub}>· {tr('virements, domiciliations et entrées')}</Text></Text>}
+      {accounts.map((a) => (
+        <Pressable key={a.bank} onPress={() => router.push(`/carte/compte?bank=${encodeURIComponent(a.bank)}` as never)} accessibilityRole="button" style={s.tile}>
+          <AccountCardView account={a} compact />
+          <View style={s.meta}>
+            <Muted>{a.stats.toJustify ? <Text style={{ color: T.crit, fontWeight: '800' }}>{a.stats.toJustify} <Text style={{ color: T.ink2, fontWeight: '400' }}>{tr('à justifier')}</Text></Text> : tr('Tout est justifié')}</Muted>
+            <Text style={{ color: T.ink }}><Text style={{ fontWeight: '800' }}>{eur(a.stats.monthOut)}</Text> <Text style={s.sub}>{tr('sortis ce mois')}</Text></Text>
+          </View>
+        </Pressable>
+      ))}
 
-      {tab === 'accounts' && (accounts.length === 0
-        ? <EmptyState icon="briefcase" title={tr('Aucun compte')} />
-        : accounts.map((a) => (
-          <Pressable key={a.bank} onPress={() => router.push(`/carte/compte?bank=${encodeURIComponent(a.bank)}` as never)} accessibilityRole="button">
-            <Card accent={a.stats.toJustify ? T.warn : undefined}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}>
-                <Text style={{ fontWeight: '800', color: T.ink, fontSize: 16 }}>{a.label || a.bank}</Text>
-                <Text style={{ fontWeight: '800', color: T.ink }}>{a.balance != null ? eur(a.balance) : '—'}</Text>
-              </View>
-              {a.iban && <Muted>{a.iban.replace(/(.{4})/g, '$1 ').trim()}</Muted>}
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <View><Muted>{tr('Sorti ce mois')}</Muted><Text style={{ fontWeight: '800', color: T.ink }}>{eur(a.stats.monthOut)}</Text></View>
-                <View><Muted>{tr('Entré ce mois')}</Muted><Text style={{ fontWeight: '800', color: T.ok }}>{eur(a.stats.monthIn)}</Text></View>
-                <View><Muted>{tr('À justifier')}</Muted><Text style={{ fontWeight: '800', color: a.stats.toJustify ? T.crit : T.ok }}>{a.stats.toJustify ? `${a.stats.toJustify} · ${eur(a.stats.toJustifyAmount)}` : '0'}</Text></View>
-              </View>
-            </Card>
-          </Pressable>
-        )))}
+      <Text style={s.section}>{tr('Cartes')}</Text>
+      {cards.length === 0 && <EmptyState icon="credit-card" title={tr('Aucune carte')} description={tr('Les cartes apparaissent dès qu’elles servent sur un relevé.')} />}
+      {cards.map((c) => (
+        <Pressable key={c.id} onPress={() => router.push(`/carte/${c.id}` as never)} accessibilityRole="button" style={s.tile}>
+          <PayCardView card={c} compact />
+          <View style={s.meta}>
+            <Text style={{ color: T.ink, fontWeight: '700', flexShrink: 1 }} numberOfLines={1}>{c.person || c.holderName ? holderOf(c) : tr('Non attribuée')}</Text>
+            <Text style={{ color: T.ink }}><Text style={{ fontWeight: '800' }}>{eur(c.stats.monthSpend)}</Text> <Text style={s.sub}>{tr('ce mois')}</Text></Text>
+          </View>
+          {c.stats.toJustify > 0 && (
+            <Text style={{ color: T.crit, fontWeight: '700', fontSize: 12.5, paddingHorizontal: 4 }}>{c.stats.toJustify} {tr('paiement(s) à justifier')} · {eur(c.stats.toJustifyAmount)}</Text>
+          )}
+        </Pressable>
+      ))}
     </ScrollView>
   );
 }
+
+const s = {
+  section: { fontSize: 11, fontWeight: '700' as const, letterSpacing: 1.1, textTransform: 'uppercase' as const, color: T.ink2, marginTop: 6 },
+  sub: { color: T.ink2, fontSize: 12.5, fontWeight: '400' as const, textTransform: 'none' as const, letterSpacing: 0 },
+  tile: { gap: 8, padding: 8, borderRadius: 20, backgroundColor: T.surface, borderWidth: 1, borderColor: T.line },
+  meta: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'center' as const, gap: 8, paddingHorizontal: 4 },
+};

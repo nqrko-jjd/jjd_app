@@ -39,7 +39,7 @@ function strip(v: unknown): unknown {
 export function entityScopeMiddleware(req: Request, res: Response, next: NextFunction) {
   const scope = req.user?.entityScope;
   if (!scope) return next();
-  const path = req.originalUrl.split('?')[0]!;
+  const path = req.originalUrl.split('?')[0]!.toLowerCase();
   if (path.startsWith('/api/') && !isAllowedForScoped(path)) return next(new HttpError(403, 'Accès réservé : ce compte est limité à ses chantiers.'));
   if (path.startsWith('/api/people')) {
     const json = res.json.bind(res);

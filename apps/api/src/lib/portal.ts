@@ -74,6 +74,7 @@ export function worksiteScope(u: PortalUser): object {
   if (u.promoterId) return { acp: { promoterId: u.promoterId } };
   // client, ACP… et toute personne listée comme contact du chantier ou de l'immeuble (un gestionnaire de syndic
   // voit ainsi SES dossiers, pas tout le portefeuille du syndic)
+  if (!u.contactId) return { id: '__aucun__' }; // compte sans aucun lien : ne voit rien
   return { OR: [{ clientId: u.contactId }, { acpId: u.contactId }, ...(u.contactId ? [{ contacts: { some: { contactId: u.contactId } } }, { acp: { acpKeyContacts: { some: { contactId: u.contactId } } } }] : [])] };
 }
 

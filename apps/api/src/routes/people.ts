@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type RequestHandler } from 'express';
 import type { Prisma } from '@prisma/client';
 import path from 'node:path';
 import { createReadStream, existsSync } from 'node:fs';
@@ -30,6 +30,32 @@ attachPhotoRoutes(peopleRouter, (id, data) => prisma.person.update({ where: { id
 function fullName(p: { firstName: string; lastName?: string | null }) {
   return `${p.firstName} ${p.lastName ?? ''}`.trim();
 }
+
+/** Taux, paiements, avances et contact d'urgence : seulement pour le bureau ou sur sa propre fiche. */
+const PAY_KEYS = new Set(['hourlyRate', 'payoutPerDay', 'adjustments', 'emergencyContact']);
+function stripPay(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(stripPay);
+  if (v && typeof v === 'object' && !(v instanceof Date)) {
+    const out: Record<string, unknown> = {};
+    for (const [k, x] of Object.entries(v as Record<string, unknown>)) if (!PAY_KEYS.has(k)) out[k] = stripPay(x);
+    return out;
+  }
+  return v;
+}
+peopleRouter.use((req, res, next) => {
+  if (req.method !== 'GET' || !req.user || ['admin', 'office'].includes(req.user.role)) return next();
+  const own = req.path.split('/')[1];
+  if (own && own === req.user.personId) return next();
+  const json = res.json.bind(res);
+  res.json = ((body: unknown) => json(stripPay(body))) as typeof res.json;
+  next();
+});
+/** Gains et pièces d'identité : bureau, ou la personne elle-même. */
+const officeOrSelf: RequestHandler = (req, res, next) => {
+  const role = req.user?.role;
+  if (role === 'admin' || role === 'office' || (req.user?.personId && req.params.id === req.user.personId)) return next();
+  next(new HttpError(403, 'Accès réservé au bureau.'));
+};
 
 peopleRouter.get(
   '/',
@@ -174,7 +200,7 @@ peopleRouter.get(
 /** Série mensuelle (montant, heures, chantiers) pour le graphique de la fiche. */
 peopleRouter.get(
   '/:id/stats',
-  requireAuth(...STAFF),
+  requireAuth(...STAFF), officeOrSelf,
   asyncHandler(async (req, res) => {
     const months = Math.min(24, Math.max(3, Number(req.query.months) || 12));
     res.json({ months: await personEarningsSeries(req.params.id!, months) });
@@ -184,7 +210,7 @@ peopleRouter.get(
 /** Revenus tout l'historique : total, par année, par chantier (+ rentabilité du chantier). */
 peopleRouter.get(
   '/:id/earnings',
-  requireAuth(...STAFF),
+  requireAuth(...STAFF), officeOrSelf,
   asyncHandler(async (req, res) => {
     res.json(await personEarningsBreakdown(req.params.id!));
   }),
@@ -375,7 +401,7 @@ peopleRouter.post(
 
 peopleRouter.get(
   '/:id/legal-docs/:docId/file',
-  requireAuth(...STAFF),
+  requireAuth(...STAFF), officeOrSelf,
   asyncHandler(async (req, res) => {
     const doc = await prisma.legalDoc.findFirst({ where: { id: req.params.docId, personId: req.params.id } });
     if (!doc?.fileUrl) throw new HttpError(404, 'Aucune pièce jointe');

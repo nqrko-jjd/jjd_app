@@ -27,7 +27,7 @@ const publicApiUrl = process.env.PUBLIC_API_URL ?? `http://localhost:${port}`;
 
 export const env = {
   databaseUrl: process.env.DATABASE_URL ?? 'file:./prisma/dev.db',
-  jwtSecret: process.env.JWT_SECRET ?? 'dev-jjd-secret-change-me',
+  jwtSecret: process.env.JWT_SECRET ?? (process.env.NODE_ENV === 'production' ? (() => { throw new Error('JWT_SECRET manquant en production'); })() : 'dev-jjd-secret-change-me'),
   port,
   publicApiUrl,
   webUrl: process.env.WEB_URL ?? 'http://localhost:3100',

@@ -40,7 +40,8 @@ export function signToken(userId: string): string {
 
 async function loadUser(token: string): Promise<AuthUser | null> {
   try {
-    const payload = jwt.verify(token, env.jwtSecret) as { sub: string };
+    const payload = jwt.verify(token, env.jwtSecret) as { sub: string; portal?: boolean };
+    if (payload.portal) return null; // jeton du portail client : réservé aux routes du portail
     const u = await prisma.user.findUnique({ where: { id: payload.sub } });
     if (!u || !u.active) return null;
     return {

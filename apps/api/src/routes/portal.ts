@@ -1,3 +1,4 @@
+import { assertLoginAllowed, recordLoginFailure } from '../lib/login-throttle.js';
 import { Router, type Request, type Response } from 'express';
 import path from 'node:path';
 import { createReadStream, existsSync } from 'node:fs';
@@ -63,6 +64,9 @@ portalRouter.post(
   '/request-link',
   asyncHandler(async (req, res) => {
     const email = z.string().trim().email().parse(req.body?.email).toLowerCase();
+    // anti mail-bombing : quelques demandes par adresse et par visiteur
+    assertLoginAllowed(`portal:${email}`, req.ip || 'unknown');
+    recordLoginFailure(`portal:${email}`, req.ip || 'unknown');
     const user = await prisma.user.findFirst({ where: { email, role: 'client', active: true } });
     // réponse identique que le compte existe ou non (anti-énumération)
     let devToken: string | undefined;
@@ -275,13 +279,15 @@ portalRouter.get(
   requirePortal,
   asyncHandler(async (req, res) => {
     const u = req.portalUser!;
-    const { status, buildingId, q: qRaw } = req.query as Record<string, string>;
+    const { status, buildingId, q: qRaw } = z.object({ status: z.string().max(40).optional(), buildingId: z.string().max(60).optional(), q: z.string().max(100).optional() }).parse(req.query);
     const q = qRaw?.toLowerCase();
-    const where: Record<string, unknown> = { ...worksiteScope(u) };
-    if (status === 'open') where.status = { in: OPEN_STATUSES };
-    else if (status) where.status = status;
-    if (buildingId) where.acpId = buildingId;
-    if (q) where.OR = [{ ref: { contains: q, ...insensitive } }, { title: { contains: q, ...insensitive } }];
+    const extra: Record<string, unknown> = {};
+    if (status === 'open') extra.status = { in: OPEN_STATUSES };
+    else if (status) extra.status = status;
+    if (buildingId) extra.acpId = buildingId;
+    if (q) extra.OR = [{ ref: { contains: q, ...insensitive } }, { title: { contains: q, ...insensitive } }];
+    // la portée du client et les filtres se cumulent (ils ne s'écrasent plus)
+    const where = { AND: [worksiteScope(u), extra] };
     const items = await prisma.worksite.findMany({
       where,
       orderBy: [{ updatedAt: 'desc' }],

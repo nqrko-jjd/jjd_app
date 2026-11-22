@@ -166,6 +166,10 @@ timesheetRouter.post(
   requireAuth(...STAFF),
   asyncHandler(async (req, res) => {
     const d = timeEntryInput.parse(req.body);
+    if (!['admin', 'office', 'foreman'].includes(req.user!.role)) {
+      if (!req.user!.personId || d.personId !== req.user!.personId) throw new HttpError(403, 'Vous ne pouvez saisir que vos propres heures.');
+      delete (d as { amount?: unknown }).amount; // le montant se calcule (heures × taux), jamais saisi par l'ouvrier
+    }
     const person = await prisma.person.findUnique({ where: { id: d.personId } });
     const rate = person?.hourlyRate ?? null;
     // bureau / chef de chantier : peut valider d'emblée ce qu'il saisit (sinon « à valider », même file qu'un pointage terrain)

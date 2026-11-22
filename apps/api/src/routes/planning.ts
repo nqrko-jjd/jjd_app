@@ -8,7 +8,7 @@ import { planningEventInput, teamInput, consumableInput, vehicleInput, vehicleDo
 import { prisma } from '../db.js';
 import { insensitive } from '../lib/search.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
-import { requireAuth, STAFF, OFFICE } from '../lib/auth.js';
+import { requireAuth, STAFF, OFFICE, FIELD_OFFICE } from '../lib/auth.js';
 import { upsertEvent, deleteEvent, gcalEnabled } from '../lib/gcal.js';
 import { composeGcalEvent, composeGcalGroup, composeGcalAbsence } from '../lib/gcal-format.js';
 import { refreshWorksiteStatus } from '../lib/worksite-status.js';
@@ -201,7 +201,7 @@ async function resolveEventWorksiteId(kind: string, worksiteId: string | null | 
 
 planningRouter.post(
   '/',
-  requireAuth(...STAFF),
+  requireAuth(...FIELD_OFFICE),
   asyncHandler(async (req, res) => {
     const d = planningEventInput.parse(req.body);
     if (d.kind === 'meeting' && !d.worksiteId && !d.title?.trim()) throw new HttpError(422, 'Indiquez l’objet du rendez-vous.');
@@ -244,7 +244,7 @@ planningRouter.post(
 
 planningRouter.patch(
   '/:id',
-  requireAuth(...STAFF),
+  requireAuth(...FIELD_OFFICE),
   asyncHandler(async (req, res) => {
     const d = planningEventInput.partial().parse(req.body);
     const before = await prisma.planningEvent.findUnique({ where: { id: req.params.id }, select: { worksiteId: true, startAt: true, kind: true, source: true } });

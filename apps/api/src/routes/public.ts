@@ -35,7 +35,7 @@ publicRouter.post(
     const d = parsed.data;
 
     // honeypot rempli ou trop de requêtes -> on répond OK sans rien créer
-    const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || 'unknown';
+    const ip = req.ip || 'unknown';
     if (d.website || throttled(ip)) return res.json({ ok: true });
 
     const title = `${d.type ? `${d.type} — ` : ''}${d.name}${d.company ? ` (${d.company})` : ''}`;

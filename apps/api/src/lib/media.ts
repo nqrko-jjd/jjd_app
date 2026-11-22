@@ -44,13 +44,16 @@ export async function storeImage(buffer: Buffer): Promise<StoredImage> {
   };
 }
 
+const SAFE_EXT = new Set(['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif', '.gif', '.mp4', '.mov', '.m4v', '.webm', '.3gp', '.avi', '.m4a', '.mp3', '.aac', '.amr', '.ogg', '.opus', '.oga', '.wav', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.odt', '.ods', '.rtf', '.txt', '.csv', '.zip', '.eml', '.msg', '.xml', '.json', '.dwg', '.dxf']);
+
 /** Stocke un fichier tel quel (vidéo, PDF…) sous uploads/<subdir>/. Renvoie l'URL relative. */
 export function storeFile(buffer: Buffer, originalName: string, subdir = 'files'): string {
   const now = new Date();
   const rel = path.join(subdir, String(now.getFullYear()), String(now.getMonth() + 1).padStart(2, '0'));
   const dir = path.join(UPLOADS_DIR, rel);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  const ext = (originalName.match(/\.[a-z0-9]+$/i)?.[0] ?? '').toLowerCase();
+  const ext0 = (originalName.match(/\.[a-z0-9]+$/i)?.[0] ?? '').toLowerCase();
+  const ext = SAFE_EXT.has(ext0) ? ext0 : '.bin'; // jamais .html/.svg/.js… : un fichier envoyé ne doit pas pouvoir s'exécuter sur le site
   const name = `${nanoid(14)}${ext}`;
   writeFileSync(path.join(dir, name), buffer);
   return `/uploads/${rel.replace(/\\/g, '/')}/${name}`;

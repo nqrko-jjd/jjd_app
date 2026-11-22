@@ -12,7 +12,7 @@ import { scopeStore } from '../lib/entity-scope.js';
 export const dashboardRouter = Router();
 dashboardRouter.get(
   '/',
-  requireAuth(...STAFF),
+  requireAuth(...OFFICE),
   asyncHandler(async (_req, res) => res.json(await bureauDashboard())),
 );
 

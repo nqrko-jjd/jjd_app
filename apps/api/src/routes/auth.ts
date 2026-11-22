@@ -36,8 +36,7 @@ const ownPassword = z.object({ currentPassword: z.string().min(1).max(200), newP
 authRouter.post('/password', requireAuth(), asyncHandler(async (req, res) => {
   const result = ownPassword.safeParse(req.body);
   if (!result.success) throw new HttpError(422, 'Le nouveau mot de passe doit faire au moins 6 caractères');
-  const fwd = String(req.headers['x-forwarded-for'] ?? '').split(',')[0]!.trim();
-  const ip = fwd || req.ip || 'unknown';
+  const ip = req.ip || 'unknown';
   const account = `pwd:${req.user!.id}`;
   assertLoginAllowed(account, ip);
   const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
@@ -56,8 +55,7 @@ authRouter.post(
     const { email: identifier, password } = loginSchema.parse(req.body);
     // E-mail, ou numéro de GSM (encodé en e-mail technique : voir packages/shared/src/phone.ts).
     const loginEmail = resolveLoginEmail(identifier);
-    const fwd = String(req.headers['x-forwarded-for'] ?? '').split(',')[0]!.trim();
-    const ip = fwd || req.ip || 'unknown';
+    const ip = req.ip || 'unknown';
     const account = loginEmail ?? identifier.toLowerCase();
     assertLoginAllowed(account, ip);
     const user = loginEmail ? await prisma.user.findUnique({ where: { email: loginEmail } }) : null;

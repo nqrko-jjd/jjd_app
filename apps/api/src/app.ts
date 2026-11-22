@@ -55,16 +55,35 @@ import { claudeMcpRouter } from './routes/claude-mcp.js';
 
 export function createApp() {
   const app = express();
+  app.set('trust proxy', 1); // un seul relais (nginx) : req.ip = vraie adresse du visiteur, X-Forwarded-For falsifié ignoré
+  app.disable('x-powered-by');
   app.use(cors({ origin: env.corsOrigins.includes('*') ? true : env.corsOrigins }));
   app.use(express.json({ limit: '2mb' }));
-  if (process.env.NODE_ENV !== 'test') app.use(morgan('dev'));
+  morgan.token('safeurl', (req) => String((req as express.Request).originalUrl).replace(/\/mcp\/[^/?\s]+/, '/mcp/***').replace(/\/(sign|public|listes?|purchase-lists)\/([A-Za-z0-9_-]{16,})/g, '/$1/***'));
+  if (process.env.NODE_ENV !== 'test') app.use(morgan(':method :safeurl :status :response-time ms'));
   app.use(attachUser);
   app.use(activityLog); // journal « qui fait quoi » (voir lib/activity-log.ts)
   app.use(entityScopeMiddleware); // comptes limités à une entité : liste blanche de routes + filtrage des données (voir lib/entity-scope.ts)
 
   app.get('/health', (_req, res) => res.json({ ok: true, service: 'jjd-api' }));
-  app.use('/uploads/_private', (_req, res) => res.status(404).end()); // copies de mails et pièces jointes : seulement par les routes authentifiées
-  app.use('/uploads', express.static(UPLOADS_DIR, { maxAge: '7d' }));
+  // copies de mails et pièces jointes : seulement par les routes authentifiées (le chemin est décodé : « %5Fprivate » ne contourne pas)
+  app.use('/uploads', (req, res, next) => {
+    let p = req.path;
+    try { p = decodeURIComponent(p); } catch { return res.status(400).end(); }
+    if (/(^|\/)_private(\/|$)/i.test(p) || p.includes('..')) return res.status(404).end();
+    next();
+  });
+  app.use('/uploads', express.static(UPLOADS_DIR, {
+    maxAge: '7d', dotfiles: 'deny', index: false,
+    setHeaders: (res, filePath) => {
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      // un fichier actif (page web, SVG, script) ne doit jamais s'exécuter sur notre site : téléchargement forcé + bac à sable
+      if (/\.(html?|xhtml|svg|xml|js|mjs|php)$/i.test(filePath)) {
+        res.setHeader('Content-Disposition', 'attachment');
+        res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+      }
+    },
+  }));
 
   app.use('/api/auth', authRouter);
   app.use('/api/public', publicRouter);

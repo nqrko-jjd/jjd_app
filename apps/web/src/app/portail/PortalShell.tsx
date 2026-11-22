@@ -3,7 +3,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { portalApi, usePortal } from '@/lib/portal';
-import { LayoutGrid, Building2, Wrench, FileText, CalendarDays, FolderOpen, MessageSquare, Menu, X, LogOut, type LucideIcon } from 'lucide-react';
+import { LayoutGrid, Building2, Wrench, FileText, CalendarDays, FolderOpen, MessageSquare, Menu, X, LogOut, KeyRound, type LucideIcon } from 'lucide-react';
 
 type NavItem = { href: string; label: string; ic: LucideIcon; full?: boolean; portfolio?: boolean };
 
@@ -17,6 +17,7 @@ const NAV: NavItem[] = [
   { href: '/portail/planning', label: 'Planning', ic: CalendarDays, portfolio: true },
   { href: '/portail/documents', label: 'Documents', ic: FolderOpen, full: true },
   { href: '/portail/messages', label: 'Messages', ic: MessageSquare },
+  { href: '/portail/mot-de-passe', label: 'Mon mot de passe', ic: KeyRound },
 ];
 
 export function PortalShell({
@@ -32,6 +33,14 @@ export function PortalShell({
   const nav = NAV.filter((n) => (!n.full || me?.access !== 'limited') && (!n.portfolio || portfolio)).map(n => ({...n,label: n.portfolio && me?.scope === 'promoter' && n.href.endsWith('immeubles') ? 'Mes projets' : n.label}));
   const primary = nav.filter(n => ['/portail/accueil', '/portail/immeubles', '/portail/interventions', '/portail/messages'].includes(n.href));
   const [unread, setUnread] = useState(0);
+  const [pwBanner, setPwBanner] = useState(false);
+  useEffect(() => {
+    try { setPwBanner(localStorage.getItem('jjd_portal_pw_banner') === 'show'); } catch { /* */ }
+  }, []);
+  function dismissPwBanner() {
+    setPwBanner(false);
+    try { localStorage.setItem('jjd_portal_pw_banner', 'done'); } catch { /* */ }
+  }
   useEffect(() => {
     if (!me) return;
     const check = () => portalApi<{ items: { unread: number }[] }>('/messages').then((r) => setUnread(r.items.reduce((s, t) => s + t.unread, 0))).catch(() => {});
@@ -107,7 +116,16 @@ export function PortalShell({
             {action}
           </div>
         </div>
-        <div className="p-body">{children}</div>
+        <div className="p-body">
+          {pwBanner && me && !pathname.startsWith('/portail/mot-de-passe') && (
+            <div className="p-banner warn" role="status">
+              <div><strong>Choisissez un mot de passe</strong>pour vous connecter plus vite la prochaine fois.</div>
+              <Link href="/portail/mot-de-passe" className="p-btn-line">Choisir</Link>
+              <button type="button" className="p-btn-line" style={{ marginLeft: 0 }} onClick={dismissPwBanner}>Plus tard</button>
+            </div>
+          )}
+          {children}
+        </div>
       </div>
       <nav className="p-bottom-tabs" aria-label="Navigation mobile client">{primary.map(n=><Link key={n.href} href={n.href} className={pathname.startsWith(n.href)?'active':''} aria-current={pathname.startsWith(n.href)?'page':undefined}><n.ic size={20}/><span>{n.href==='/portail/immeubles'?(me?.scope==='promoter'?'Projets':'Immeubles'):n.label}</span>{n.href==='/portail/messages' && unread>0 && <b>{unread}</b>}</Link>)}<button aria-label="Autres pages du portail" aria-expanded={mobileOpen} onClick={()=>setMobileOpen(true)}><Menu size={20}/><span>Plus</span></button></nav>
     </div>

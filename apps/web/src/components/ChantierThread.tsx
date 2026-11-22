@@ -7,11 +7,13 @@ import { useAuth } from '@/lib/auth';
 import { Avatar } from '@/lib/ui';
 import { useVoiceRecorder } from '@/lib/useVoiceRecorder';
 import { useMentionInput, splitMentions } from '@/lib/useMentionInput';
+import { ReactionBar, GifButton, GifImage, gifUrl, type Reaction } from '@/components/MessageExtras';
 
 interface Msg {
   id: string; kind: string; body: string | null; fileUrl: string | null; thumbUrl: string | null;
   authorName: string | null; authorId?: string | null; createdAt: string; sharedWithClient?: boolean;
   mentionedNames?: string[];
+  reactions?: Reaction[];
 }
 interface ThreadData {
   thread: { id: string; closedAt: string | null };
@@ -63,11 +65,12 @@ export function ChantierThread({ worksiteId }: { worksiteId: string }) {
     reload();
   }
 
-  async function send() {
-    if (!text.trim()) return;
+  async function send(override?: string) {
+    const content = (override ?? text).trim();
+    if (!content) return;
     setBusy(true);
-    await api(`/api/worksites/${worksiteId}/thread/messages`, { method: 'POST', body: { body: text.trim() } });
-    setText('');
+    await api(`/api/worksites/${worksiteId}/thread/messages`, { method: 'POST', body: { body: content } });
+    if (override === undefined) setText('');
     setBusy(false);
     reload();
   }
@@ -210,7 +213,7 @@ export function ChantierThread({ worksiteId }: { worksiteId: string }) {
           {(clientData?.messages ?? []).map((m) => (
             <div key={m.id} style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', alignItems: m.authorId ? 'flex-end' : 'flex-start' }}>
               <div style={{ fontSize: '0.72rem', color: 'var(--ink-3)' }}>{m.authorName} · {time(m.createdAt)}</div>
-              {m.body && (
+              {gifUrl(m.body) ? <GifImage url={gifUrl(m.body)!} /> : m.body && (
                 <div style={{ background: m.authorId ? 'var(--primary-soft)' : 'var(--surface-2)', borderRadius: 8, padding: '0.5rem 0.7rem', fontSize: '0.9rem', maxWidth: '80%' }}>
                   {m.body}
                 </div>
@@ -248,7 +251,9 @@ export function ChantierThread({ worksiteId }: { worksiteId: string }) {
                 ) : m.kind === 'file' && m.fileUrl ? (
                   <a href={m.fileUrl} target="_blank" rel="noreferrer" className="badge plain" style={{ fontSize: '0.8rem' }}>📎 {m.body || 'Fichier'}</a>
                 ) : null}
-                {m.body && m.kind !== 'file' && (
+                {m.kind === 'text' && gifUrl(m.body) ? (
+                  <GifImage url={gifUrl(m.body)!} />
+                ) : m.body && m.kind !== 'file' && (
                   <div style={{
                     background: mine ? 'var(--primary-soft)' : 'var(--surface-2)',
                     borderRadius: 14, padding: '0.55rem 0.8rem', fontSize: '0.9rem',
@@ -258,6 +263,7 @@ export function ChantierThread({ worksiteId }: { worksiteId: string }) {
                     ))}
                   </div>
                 )}
+                <ReactionBar messageId={m.id} reactions={m.reactions} mine={mine} onChanged={reload} />
               </div>
             </div>
           );
@@ -315,7 +321,8 @@ export function ChantierThread({ worksiteId }: { worksiteId: string }) {
           >
             {voice.recording ? '⏹️' : '🎤'}
           </button>
-          <button className="btn primary" onClick={send} disabled={busy || !text.trim()}>{tr("Envoyer")}</button>
+          <GifButton disabled={busy} onPick={(b) => send(b)} />
+          <button className="btn primary" onClick={() => send()} disabled={busy || !text.trim()}>{tr("Envoyer")}</button>
         </div>
       )}
     </div>

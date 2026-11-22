@@ -14,6 +14,7 @@ function Verify() {
     portalApi<{ token: string }>('/verify', { method: 'POST', body: { token } })
       .then((r) => {
         setPortalToken(r.token);
+        try { localStorage.setItem('jjd_portal_pw_banner', 'show'); } catch { /* */ }
         // rechargement complet pour que le PortalProvider relise /me avec le token
         window.location.href = '/portail/accueil';
       })

@@ -12,6 +12,7 @@ import { Search, Paperclip, Send, Building2, ArrowLeft, Mic, Square } from 'luci
 import { useVoiceRecorder } from '@/lib/useVoiceRecorder';
 import { useMentionInput, splitMentions } from '@/lib/useMentionInput';
 import { usePushNotifications } from '@/lib/usePushNotifications';
+import { ReactionBar, GifButton, GifImage, gifUrl, type Reaction } from '@/components/MessageExtras';
 import { Bell, BellOff } from 'lucide-react';
 
 interface ThreadItem {
@@ -27,6 +28,7 @@ interface Msg {
   id: string; kind: string; body: string | null; fileUrl: string | null; thumbUrl: string | null;
   authorName: string | null; authorId?: string | null; createdAt: string; sharedWithClient?: boolean;
   mentionedNames?: string[];
+  reactions?: Reaction[];
   /** Texte traduit dans la langue du lecteur (DeepL), présent seulement si l'auteur écrit dans une autre langue. */
   bodyTranslated?: string;
 }
@@ -175,15 +177,16 @@ function MessagerieInner({worksiteId, compact=false, active=true}: {worksiteId?:
     finally {setSharing(false);}
   }
 
-  async function send() {
-    if (!text.trim() || !selected || busy) return;
+  async function send(override?: string) {
+    const content = (override ?? text).trim();
+    if (!content || !selected || busy) return;
     setActionError(null);
     setBusy(true);
     try {
-      if (selected?.kind === 'general') await api('/api/messagerie/general/messages', { method: 'POST', body: { body: text.trim() } });
-      else if (selected?.kind === 'worksite' && audience === 'client') await api(`/api/worksites/${selected.worksiteId}/thread/client/messages`, { method: 'POST', body: { body: text.trim() } });
-      else if (selected?.kind === 'worksite') await api(`/api/worksites/${selected.worksiteId}/thread/messages`, { method: 'POST', body: { body: text.trim() } });
-      setText('');
+      if (selected?.kind === 'general') await api('/api/messagerie/general/messages', { method: 'POST', body: { body: content } });
+      else if (selected?.kind === 'worksite' && audience === 'client') await api(`/api/worksites/${selected.worksiteId}/thread/client/messages`, { method: 'POST', body: { body: content } });
+      else if (selected?.kind === 'worksite') await api(`/api/worksites/${selected.worksiteId}/thread/messages`, { method: 'POST', body: { body: content } });
+      if (override === undefined) setText('');
       nearBottom.current=true;
       reloadConvo();
       reloadList();
@@ -438,7 +441,9 @@ function MessagerieInner({worksiteId, compact=false, active=true}: {worksiteId?:
                           <a href={m.fileUrl} target="_blank" rel="noreferrer" className="badge plain" style={{ fontSize: '0.8rem' }}>📎 {m.body || 'Fichier'}</a>
                         ) : null}
                         {isOffice && audience==='internal' && selected.kind==='worksite' && (m.kind==='photo'||m.kind==='video') && <button type="button" disabled={sharing} className={`btn msg-share-button ${m.sharedWithClient?'shared':''}`} onClick={()=>toggleShare(m)}>{m.sharedWithClient?'Visible du client · Retirer':'Partager avec le client'}</button>}
-                        {m.body && m.kind !== 'file' && (
+                        {m.kind === 'text' && gifUrl(m.body) ? (
+                          <GifImage url={gifUrl(m.body)!} />
+                        ) : m.body && m.kind !== 'file' && (
                           <div className={`msg-bubble${mine ? ' mine' : ''}`}>
                             {m.bodyTranslated && !showOriginal.has(m.id)
                               ? <span>{m.bodyTranslated}</span>
@@ -452,6 +457,7 @@ function MessagerieInner({worksiteId, compact=false, active=true}: {worksiteId?:
                             )}
                           </div>
                         )}
+                        {audience === 'internal' && <ReactionBar messageId={m.id} reactions={m.reactions} mine={mine} onChanged={reloadConvo} />}
                       </div>
                     </div>
                   );
@@ -503,7 +509,8 @@ function MessagerieInner({worksiteId, compact=false, active=true}: {worksiteId?:
                     }
                   }}
                 />
-                <button type="button" className="btn primary msg-send" aria-label="Envoyer le message" onClick={send} disabled={busy || !text.trim()}>
+                {audience !== 'client' && <GifButton disabled={busy} onPick={(b) => send(b)} />}
+                <button type="button" className="btn primary msg-send" aria-label="Envoyer le message" onClick={() => send()} disabled={busy || !text.trim()}>
                   <Send size={16} strokeWidth={2} />
                 </button>
               </div>

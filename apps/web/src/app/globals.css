@@ -2784,3 +2784,64 @@ body.nav-collapsed .navlink .nav-badge { position: absolute; top: 2px; right: 2p
 strong.crit { color:var(--crit); }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .pay-card.net-account { background:linear-gradient(135deg,#2a2416,#3a3220); color:#f1e8d6; border-color:#4a3f26; } }
 :root[data-theme="dark"] .pay-card.net-account { background:linear-gradient(135deg,#2a2416,#3a3220); color:#f1e8d6; border-color:#4a3f26; }
+
+/* Messagerie : réactions et GIF */
+.msg-react-bar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;position:relative}
+.msg-react-bar.mine{justify-content:flex-end}
+.msg-react-chip,.msg-react-add{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--ink-2);font:inherit;font-size:.8rem;cursor:pointer}
+.msg-react-chip b{font-size:.75rem}
+.msg-react-chip.on{border-color:var(--primary);background:var(--primary-soft);color:var(--primary)}
+.msg-react-add{color:var(--ink-3);opacity:.65}
+.msg-bubble-col:hover .msg-react-add,.msg-react-add:focus-visible,.msg-react-add[aria-expanded="true"]{opacity:1}
+.msg-react-pop{position:absolute;top:100%;left:0;margin-top:4px;z-index:20;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:8px;box-shadow:0 8px 24px rgba(20,40,30,.18);display:flex;flex-direction:column;gap:8px;min-width:230px}
+.msg-react-bar.mine .msg-react-pop{left:auto;right:0}
+.msg-react-quick{display:flex;justify-content:space-between;gap:2px}
+.msg-react-quick button{border:0;background:transparent;font-size:1.4rem;padding:4px 6px;border-radius:8px;cursor:pointer}
+.msg-react-quick button:hover,.msg-react-quick button:focus-visible{background:var(--surface-2)}
+.msg-react-other{display:flex;gap:6px}
+.msg-react-other .input{flex:1;min-width:0}
+.msg-gif-img{display:block;max-width:240px;width:100%;height:auto;border-radius:10px;background:var(--surface-2)}
+.msg-gif-wrap{position:relative;display:inline-flex}
+.msg-gif-btn{font-weight:800;color:var(--primary)}
+.msg-gif-pop{position:absolute;bottom:100%;left:0;margin-bottom:8px;z-index:30;width:min(340px,86vw);background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:8px;box-shadow:0 8px 24px rgba(20,40,30,.18);display:flex;flex-direction:column;gap:6px}
+.msg-gif-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;max-height:280px;overflow-y:auto}
+.msg-gif-grid button{border:0;padding:0;background:var(--surface-2);border-radius:8px;cursor:pointer;overflow:hidden}
+.msg-gif-grid img{display:block;width:100%;height:100px;object-fit:cover}
+.msg-gif-note{font-size:.72rem;text-align:center;margin:0}
+
+/* Suivi GPS : journal des trajets et rejeu du parcours */
+.gps-trip { display: grid; gap: 0.6rem; margin-top: 0.8rem; padding-top: 0.8rem; border-top: 1px solid var(--line); }
+.gps-trip-day { display: flex; align-items: center; gap: 0.4rem; }
+.gps-trip-ico { display: grid; place-items: center; width: 38px; height: 38px; flex: none; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--surface); color: var(--primary); cursor: pointer; }
+.gps-trip-ico:hover:not(:disabled) { background: var(--surface-2); }
+.gps-trip-ico:disabled { opacity: 0.3; cursor: default; }
+.gps-trip-date { flex: 1; min-width: 0; height: 38px; padding: 0 0.6rem; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--surface); color: var(--ink); font: inherit; font-weight: 600; }
+.gps-trip-quick, .gps-trip-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; }
+.gps-trip-chip { padding: 0.3rem 0.75rem; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--surface); color: var(--ink); font: inherit; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
+.gps-trip-chip:hover { background: var(--surface-2); }
+.gps-trip-chip.on { background: var(--primary); border-color: var(--primary); color: var(--surface); }
+.gps-trip-ico:focus-visible, .gps-trip-date:focus-visible, .gps-trip-chip:focus-visible, .gps-trip-play:focus-visible, .gps-trip-range:focus-visible, .gps-trip-live:has(input:focus-visible), .gps-trip-list button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.gps-trip-live { display: flex; align-items: center; gap: 0.6rem; padding: 0.55rem 0.7rem; border-radius: 12px; background: var(--surface-2); cursor: pointer; }
+.gps-trip-live input { width: 2.4rem; height: 1.3rem; flex: none; accent-color: var(--primary); cursor: pointer; }
+.gps-trip-live span { display: grid; gap: 0.1rem; }
+.gps-trip-live strong { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.85rem; }
+.gps-trip-live small { font-size: 0.74rem; color: var(--ink-2); }
+.gps-trip-kpis { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.45rem; }
+.gps-trip-kpis div { display: grid; gap: 0.1rem; padding: 0.55rem 0.65rem; border-radius: 12px; background: var(--surface-2); }
+.gps-trip-kpis span { font-size: 0.7rem; color: var(--ink-2); }
+.gps-trip-kpis b { font-size: 1rem; font-variant-numeric: tabular-nums; color: var(--ink); }
+.gps-trip-player { display: grid; gap: 0.5rem; padding: 0.6rem 0.7rem; border: 1px solid var(--primary-line); border-radius: 14px; background: var(--surface-2); }
+.gps-trip-play { display: grid; place-items: center; width: 40px; height: 40px; flex: none; border: 0; border-radius: 50%; background: var(--primary); color: var(--surface); cursor: pointer; }
+.gps-trip-play:hover { filter: brightness(1.1); }
+.gps-trip-range { flex: 1; min-width: 80px; accent-color: var(--primary); }
+.gps-trip-clock { font-size: 0.8rem; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.gps-trip-livetag { margin-left: auto; font-size: 0.78rem; font-weight: 700; color: var(--ok); }
+.gps-trip-list button.long { background: var(--warn-soft); }
+.gps-trip-list .gps-tl-body { gap: 0.1rem; }
+.gps-trip-list .gps-tl-body strong { white-space: normal; }
+.gps-trip-place { color: var(--ink) !important; overflow-wrap: anywhere; }
+.gps-trip-list .gps-tl-n { align-self: flex-start; margin-top: 2px; }
+.gps-trip-n-long, .fm-stop.gps-trip-long { background: var(--crit); border-color: #fff; color: #fff; }
+.gps-trip-n-car { background: var(--primary-soft); color: var(--primary); }
+.gps-trip-car { position: absolute; width: 22px; height: 22px; transform: translate(-50%, -50%); border-radius: 50%; background: #124b3a; border: 3px solid #fff; box-shadow: 0 0 0 3px rgba(18, 75, 58, 0.35), 0 1px 5px rgba(0, 0, 0, 0.5); }
+@media (prefers-reduced-motion: reduce) { .gps-trip-play { transition: none; } }

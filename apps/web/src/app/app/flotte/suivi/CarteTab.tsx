@@ -1,10 +1,11 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { BatteryMedium, Gauge, MapPin, Moon, Navigation, Route, Truck } from 'lucide-react';
+import { BatteryMedium, Gauge, MapPin, Moon, Truck } from 'lucide-react';
 import { api } from '@/lib/api';
 import { SkeletonRows } from '@/components/States';
-import type { MapSite, MapStop, MapVehicle } from '@/components/FleetMap';
+import type { MapSite, MapVehicle } from '@/components/FleetMap';
+import { JournalPanel, useJournal } from './Journal';
 import { ago, duration, hhmm, label, type Data, type Day, type Site, type Vehicle, type Visit } from './types';
 
 const FleetMap = dynamic(() => import('@/components/FleetMap'), { ssr: false, loading: () => <SkeletonRows /> });
@@ -46,6 +47,7 @@ export default function CarteTab({ data, onGoTraceurs }: { data: Data; onGoTrace
   const [dayErr, setDayErr] = useState<string | null>(null);
   const [visits, setVisits] = useState<Visit[]>([]);
   const [now, setNow] = useState(() => Date.now());
+  const [pageVisible, setPageVisible] = useState(true);
 
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 30_000); return () => clearInterval(t); }, []);
 
@@ -53,6 +55,8 @@ export default function CarteTab({ data, onGoTraceurs }: { data: Data; onGoTrace
   const trackedIds = useMemo(() => new Set(tracked.map((v) => v.id)), [tracked]);
   const sites = useMemo(() => [...data.sites].sort((a, b) => a.startAt.localeCompare(b.startAt)), [data]);
   const selected = tracked.find((v) => v.id === sel) ?? null;
+  const journal = useJournal(selected?.id ?? null, pageVisible);
+  useEffect(() => { const f = () => setPageVisible(!document.hidden); document.addEventListener('visibilitychange', f); return () => document.removeEventListener('visibilitychange', f); }, []);
 
   // journée du véhicule sélectionné (arrêts, km, parcours) : lue à la demande chez le fournisseur du traceur
   useEffect(() => {
@@ -83,8 +87,6 @@ export default function CarteTab({ data, onGoTraceurs }: { data: Data; onGoTrace
 
   const d = day && day.id === sel ? day.d : null;
   const siteAt = (p: { lat: number; lng: number }) => sites.find((x) => distKm(x, p) <= SITE_RADIUS_KM) ?? null;
-  const stopLabel = (p: { lat: number; lng: number }) => { const s = siteAt(p); return s ? `${s.ref}${s.client ? ` · ${s.client}` : ''}` : 'Arrêt'; };
-  const mapStops = useMemo<MapStop[] | null>(() => d?.stops.map((s) => ({ lat: s.lat, lng: s.lng, label: `${hhmm(s.from)} · ${stopLabel(s)}` })) ?? null, [d, sites]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fly = (p: { lat: number; lng: number }) => setPoint({ lat: p.lat, lng: p.lng, n: Date.now() });
   const pickVehicle = (v: Vehicle) => { if (sel === v.id) { setSel(null); return; } setSel(v.id); fly({ lat: v.lastLat!, lng: v.lastLng! }); };
@@ -99,7 +101,7 @@ export default function CarteTab({ data, onGoTraceurs }: { data: Data; onGoTrace
 
   return (
     <div className="gps-layout">
-      <FleetMap vehicles={mapVehicles} sites={mapSites} selectedId={sel} track={d?.track ?? null} stops={mapStops} focusPoint={point} />
+      <FleetMap vehicles={mapVehicles} sites={mapSites} selectedId={sel} track={journal.mapJourney ? null : d?.track ?? null} focusPoint={point} journey={journal.mapJourney} replay={journal.replay} focusBounds={journal.focus} />
 
       <aside className="gps-side" aria-label="Véhicules et chantiers du jour">
         {tracked.length > 0 && (
@@ -146,34 +148,11 @@ export default function CarteTab({ data, onGoTraceurs }: { data: Data; onGoTrace
                               : d.stoppedSince ? (d.noMoveToday ? <>N’a <strong>pas bougé aujourd’hui</strong> · immobile depuis {hhmm(d.stoppedSince)}</> : <>À l’arrêt depuis <strong>{hhmm(d.stoppedSince)}</strong> · {duration(d.stoppedSince)}</>)
                               : <>Position du <strong>{hhmm(v.lastSeenAt!)}</strong></>}
                           </p>
-                          <div className="gps-kpis">
-                            <div className="gps-kpi"><Route size={15} aria-hidden /><b>{d.km.toLocaleString('fr-BE')} km</b><span>aujourd’hui</span></div>
-                            <div className="gps-kpi"><Navigation size={15} aria-hidden /><b>{d.firstMoveAt ? hhmm(d.firstMoveAt) : '—'}</b><span>premier départ</span></div>
-                            <div className="gps-kpi"><BatteryMedium size={15} aria-hidden /><b>{v.lastBattery != null ? `${Math.round(v.lastBattery)} %` : '—'}</b><span>batterie</span></div>
-                          </div>
+                          {v.lastBattery != null && <p className="gps-hint"><BatteryMedium size={14} aria-hidden /> Batterie du traceur : {Math.round(v.lastBattery)} %</p>}
                           {st === 'sleep' && <p className="gps-hint"><Moon size={14} aria-hidden /> Le traceur se met en veille quand le véhicule reste immobile : pas de nouveau signal, c’est normal.</p>}
-                          <h4 className="gps-h2">Arrêts de la journée</h4>
-                          {d.stops.length === 0 ? <p className="gps-hint">Aucun arrêt de plus de 5 minutes pour l’instant.</p> : (
-                            <ol className="gps-tl">
-                              {d.stops.map((s, i) => {
-                                const site = siteAt(s);
-                                return (
-                                  <li key={s.from}>
-                                    <button type="button" onClick={() => fly(s)}>
-                                      <span className={`gps-tl-n${site ? ' site' : ''}`}>{i + 1}</span>
-                                      <span className="gps-tl-body">
-                                        <strong>{stopLabel(s)}</strong>
-                                        <span>{s.to ? `${hhmm(s.from)} → ${hhmm(s.to)}` : `Depuis ${hhmm(s.from)} · en cours`}</span>
-                                      </span>
-                                      <span className="gps-tl-dur">{duration(s.from, s.to)}</span>
-                                    </button>
-                                  </li>
-                                );
-                              })}
-                            </ol>
-                          )}
                         </>
                       ) : dayErr ? <p className="gps-hint err">Détail indisponible : {dayErr}</p> : <SkeletonRows />}
+                      <JournalPanel s={journal} />
                       <a className="gps-link" href={`https://www.google.com/maps?q=${v.lastLat},${v.lastLng}`} target="_blank" rel="noreferrer"><MapPin size={14} aria-hidden /> Ouvrir dans Google Maps</a>
                     </div>
                   )}

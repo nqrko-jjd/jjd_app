@@ -189,7 +189,7 @@ peopleRouter.get(
     res.json({
       person,
       monthStatement: {
-        hours: s.totalHours, amount: s.totalAmount,
+        hours: s.totalHours, amount: s.totalAmount, days: s.totalDays, dayAmount: s.dayAmount,
         worksites: s.worksiteCount, guaranteeApplied: s.guaranteeApplied, dailyHours: s.dailyHoursGuarantee,
       },
       adjustmentBalance: toWithhold,

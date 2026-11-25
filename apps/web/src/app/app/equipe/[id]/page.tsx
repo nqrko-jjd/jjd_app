@@ -36,7 +36,7 @@ interface Detail {
     user: { id: string; email: string; role: string } | null;
     adjustments: Adjustment[];
   };
-  monthStatement: { hours: number; amount: number; worksites: number; guaranteeApplied: boolean; dailyHours: number };
+  monthStatement: { hours: number; amount: number; days?: number; dayAmount?: number | null; worksites: number; guaranteeApplied: boolean; dailyHours: number };
   adjustmentBalance: number;
 }
 interface WsRow { id: string; ref: string; title: string; city: string | null }
@@ -273,6 +273,7 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
       <section className="card card-pad" style={{ marginBottom: '1.4rem' }}>
         <div className="eyebrow" style={{ marginBottom: '0.8rem' }}>Fiche</div>
         <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))' }}>
+          <Info label="Montant par jour" value={data.monthStatement.dayAmount != null ? <Money value={data.monthStatement.dayAmount} /> : <span className="badge warn">à définir</span>} />
           <Info label="Taux horaire" value={p.hourlyRate != null ? <Money value={p.hourlyRate} /> : <span className="badge warn">à définir</span>} />
           <Info label="Heures payées / jour presté" value={`${p.dailyHours} h`} />
           <Info label="Spécialités" value={(p.specialties ?? []).join(', ') || '—'} />
@@ -339,13 +340,14 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
       <section className="card card-pad" style={{ marginBottom: '1.4rem' }}>
         <div className="eyebrow">Décompte — {now}</div>
         <div className="row" style={{ marginTop: '0.4rem', gap: '2rem', flexWrap: 'wrap' }}>
-          <div><div className="value" style={{ fontSize: '1.25rem', fontWeight: 600 }}>{formatHours(data.monthStatement.hours)}</div><div className="muted" style={{ fontSize: '0.78rem' }}>heures payées</div></div>
+          <div><div className="value" style={{ fontSize: '1.25rem', fontWeight: 600 }}>{data.monthStatement.days ?? '—'}</div><div className="muted" style={{ fontSize: '0.78rem' }}>jour{(data.monthStatement.days ?? 0) > 1 ? 's' : ''} presté{(data.monthStatement.days ?? 0) > 1 ? 's' : ''}</div></div>
+          <div><div className="value" style={{ fontSize: '1.25rem', fontWeight: 600 }}>{formatHours(data.monthStatement.hours)}</div><div className="muted" style={{ fontSize: '0.78rem' }}>heures pointées</div></div>
           <div><div className="value" style={{ fontSize: '1.25rem', fontWeight: 600 }}><Money value={data.monthStatement.amount} /></div><div className="muted" style={{ fontSize: '0.78rem' }}>montant dû</div></div>
           <div><div className="value" style={{ fontSize: '1.25rem', fontWeight: 600 }}>{data.monthStatement.worksites}</div><div className="muted" style={{ fontSize: '0.78rem' }}>chantier{data.monthStatement.worksites > 1 ? 's' : ''}</div></div>
         </div>
         <p className="muted" style={{ fontSize: '0.8rem', marginTop: '0.6rem', marginBottom: 0 }}>
-          {data.monthStatement.guaranteeApplied
-            ? `Un jour presté est payé au minimum ${data.monthStatement.dailyHours} h, même si moins de temps a été pointé sur le chantier ce jour-là — ce minimum s'applique ce mois-ci.`
+          {data.monthStatement.dayAmount != null
+            ? `Payé à la journée : chaque jour presté compte ${formatEur(data.monthStatement.dayAmount)}, quelles que soient les heures pointées (réparti entre les chantiers du jour).`
             : `Un jour presté est payé au minimum ${data.monthStatement.dailyHours} h (réglable dans la fiche).`}
         </p>
       </section>

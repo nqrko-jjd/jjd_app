@@ -2,7 +2,7 @@ import { refreshWorksiteStatus } from '../lib/worksite-status.js';
 import { Router } from 'express';
 import type { Prisma } from '@prisma/client';
 import multer from 'multer';
-import { timeEntryInput, timerStartInput, timerStopInput, round2, distanceMeters, DEFAULT_GEO_RADIUS, parseAmount, parseLooseDate } from '@jjd/shared';
+import { timeEntryInput, timerStartInput, timerStopInput, round2, distanceMeters, DEFAULT_GEO_RADIUS, parseAmount, parseLooseDate, dayBasedAmounts, personDayAmount } from '@jjd/shared';
 import { prisma } from '../db.js';
 import { asyncHandler, HttpError } from '../lib/http.js';
 import { requireAuth, STAFF, OFFICE } from '../lib/auth.js';
@@ -430,6 +430,22 @@ timesheetRouter.post(
   }),
 );
 
+/**
+ * Montant affiché par pointage = part du JOUR presté (payé à la journée), pas heures × taux : le jour de chaque ouvrier
+ * est réparti sur ses pointages de ce jour au prorata des heures. Les pointages refusés gardent leur montant.
+ */
+async function withDayAmounts<T extends { id: string; personId: string; date: Date | null; hours: number | null; amount: number | null; source: string | null; status: string }>(items: T[]): Promise<T[]> {
+  const ids = [...new Set(items.map((e) => e.personId))];
+  const people = await prisma.person.findMany({ where: { id: { in: ids } }, select: { id: true, payoutPerDay: true, hourlyRate: true, dailyHours: true } });
+  const dayOf = new Map(people.map((p) => [p.id, personDayAmount(p)]));
+  const out = new Map<string, number | null>();
+  for (const pid of ids) {
+    const mine = items.filter((e) => e.personId === pid && e.status !== 'rejected');
+    for (const [k, v] of dayBasedAmounts(mine, dayOf.get(pid) ?? null)) out.set(k, v);
+  }
+  return items.map((e) => (out.has(e.id) ? { ...e, amount: out.get(e.id) ?? null } : e));
+}
+
 /** File de validation (chef / bureau). */
 timesheetRouter.get(
   '/pending',
@@ -454,7 +470,7 @@ timesheetRouter.get(
       // sécurité plutôt qu'une vraie borne métier.
       take: 3000,
     });
-    res.json({ items });
+    res.json({ items: await withDayAmounts(items) });
   }),
 );
 
@@ -483,7 +499,7 @@ timesheetRouter.get(
       },
       take: 1500,
     });
-    res.json({ items });
+    res.json({ items: await withDayAmounts(items) });
   }),
 );
 

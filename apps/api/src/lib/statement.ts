@@ -1,5 +1,5 @@
 import { prisma } from '../db.js';
-import { round2, computePaidTime } from '@jjd/shared';
+import { round2, computePaidTime, dayBasedAmounts, personDayAmount } from '@jjd/shared';
 import { worksiteMargin } from './worksite-margin.js';
 import { plannedProposals, brusselsDay, type Proposal } from './planned-time.js';
 
@@ -39,7 +39,7 @@ export async function monthlyStatement(personId: string, year: number, month: nu
   const planned = plannedTotals(preloadedPlanned ?? (range ? await plannedProposals(range.from, range.to, { personId }) : []));
 
   const [person, entries] = await Promise.all([
-    prisma.person.findUnique({ where: { id: personId }, select: { hourlyRate: true, dailyHours: true } }),
+    prisma.person.findUnique({ where: { id: personId }, select: { hourlyRate: true, dailyHours: true, payoutPerDay: true } }),
     prisma.timeEntry.findMany({
       where: { personId, date: { gte: start, lt: end }, status: { in: ['submitted', 'approved'] } },
       include: { worksite: { select: { ref: true, title: true } } },
@@ -51,6 +51,9 @@ export async function monthlyStatement(personId: string, year: number, month: nu
   const defaultRate = person?.hourlyRate ?? null;
 
   const pay = computePaidTime(entries, dailyHours, defaultRate);
+  // payé à la journée : chaque jour presté vaut le montant du jour, quelles que soient les heures (réparti sur ses chantiers)
+  const dayAmount = personDayAmount(person);
+  const dayAmt = dayBasedAmounts(entries.filter((e) => e.status === 'approved'), dayAmount);
   const byWorksite = new Map<string, { ref: string; title: string; hours: number; amount: number; days: number }>();
   const workedDays = new Set<string>();
   let totalHours = 0;
@@ -59,18 +62,19 @@ export async function monthlyStatement(personId: string, year: number, month: nu
   for (const e of entries) {
     if (e.status === 'submitted') { pending++; continue; }
     totalHours += e.hours ?? 0;
-    totalAmount += e.amount ?? 0;
+    totalAmount += dayAmt.get(e.id) ?? e.amount ?? 0;
     if (e.status === 'submitted') pending++;
     if (e.date) workedDays.add(dayKey(e.date));
     const key = e.worksite?.ref ?? '—';
     const row = byWorksite.get(key) ?? { ref: key, title: e.worksite?.title ?? 'Sans chantier', hours: 0, amount: 0, days: 0 };
     row.hours += e.hours ?? 0;
-    row.amount += e.amount ?? 0;
+    row.amount += dayAmt.get(e.id) ?? e.amount ?? 0;
     row.days += 1;
     byWorksite.set(key, row);
   }
   totalHours = pay.paidHours;
-  totalAmount = pay.paidAmount;
+  // sans montant journalier connu (pas de taux), on garde l'ancienne règle (heures × taux, jour garanti)
+  if (dayAmount == null) totalAmount = pay.paidAmount;
 
   return {
     personId,
@@ -78,7 +82,8 @@ export async function monthlyStatement(personId: string, year: number, month: nu
     month,
     actualHours: pay.actualHours,
     guaranteeHours: pay.guaranteeHours,
-    guaranteeAmount: pay.guaranteeAmount,
+    guaranteeAmount: dayAmount == null ? pay.guaranteeAmount : round2(totalAmount - pay.actualAmount),
+    dayAmount,
     totalHours: round2(totalHours),
     totalAmount: round2(totalAmount),
     totalDays: workedDays.size,
@@ -98,7 +103,7 @@ export async function monthlyStatement(personId: string, year: number, month: nu
       worksiteRef: e.worksite?.ref ?? null,
       worksiteTitle: e.worksite?.title ?? null,
       hours: e.hours,
-      amount: e.amount,
+      amount: e.status === 'approved' ? dayAmt.get(e.id) ?? e.amount : e.amount,
       task: e.task,
       status: e.status,
     })),
@@ -223,11 +228,11 @@ export async function personEarningsSeries(personId: string, months = 12) {
  */
 export async function personEarningsBreakdown(personId: string) {
   const [person, entries] = await Promise.all([
-    prisma.person.findUnique({ where: { id: personId }, select: { hourlyRate: true, dailyHours: true } }),
+    prisma.person.findUnique({ where: { id: personId }, select: { hourlyRate: true, dailyHours: true, payoutPerDay: true } }),
     prisma.timeEntry.findMany({
       where: { personId, status: { in: ['submitted', 'approved'] } },
       select: {
-        date: true, hours: true, amount: true, rateUsed: true, source: true, worksiteId: true,
+        id: true, date: true, hours: true, amount: true, rateUsed: true, source: true, worksiteId: true,
         worksite: { select: { ref: true, title: true } },
       },
       orderBy: { date: 'asc' },
@@ -275,17 +280,22 @@ export async function personEarningsBreakdown(personId: string) {
     }
   }
 
+  // montants à la journée (voir dayBasedAmounts) : ils remplacent heures × taux et le complément « jour garanti »
+  const dayAmount = personDayAmount(person);
+  const dayAmt = dayBasedAmounts(entries, dayAmount);
+  const amountOf = (e: (typeof entries)[number]) => (dayAmount != null ? dayAmt.get(e.id) ?? 0 : e.amount ?? 0);
+  if (dayAmount != null) { floorAmountAdded = 0; for (const v of yearFloorAdded.values()) v.amount = 0; for (const v of worksiteFloorAdded.values()) v.amount = 0; }
   const byYear = new Map<number, { year: number; hours: number; amount: number; worksites: Set<string> }>();
   const byWorksite = new Map<string, { id: string; ref: string; title: string; hours: number; amount: number; days: Set<string> }>();
   let totalHours = 0, totalAmount = 0;
   for (const e of entries) {
     totalHours += e.hours ?? 0;
-    totalAmount += e.amount ?? 0;
+    totalAmount += amountOf(e);
     if (e.date) {
       const year = e.date.getUTCFullYear();
       const yr = byYear.get(year) ?? { year, hours: 0, amount: 0, worksites: new Set() };
       yr.hours += e.hours ?? 0;
-      yr.amount += e.amount ?? 0;
+      yr.amount += amountOf(e);
       if (e.worksiteId) yr.worksites.add(e.worksiteId);
       byYear.set(year, yr);
     }
@@ -295,7 +305,7 @@ export async function personEarningsBreakdown(personId: string) {
         hours: 0, amount: 0, days: new Set<string>(),
       };
       row.hours += e.hours ?? 0;
-      row.amount += e.amount ?? 0;
+      row.amount += amountOf(e);
       if (e.date) row.days.add(dayKey(e.date));
       byWorksite.set(e.worksiteId, row);
     }

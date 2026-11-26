@@ -1,5 +1,5 @@
 'use client';
-import { tr } from '@/lib/ui-language';
+import { tr, dateLocale } from '@/lib/ui-language';
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
@@ -62,7 +62,7 @@ function ReviewCard({ r, reload }: { r: ReportRow; reload: () => void }) {
         <div>
           <div style={{ fontWeight: 700 }}>{r.worksite.ref} · {r.authorName}</div>
           <div className="muted" style={{ fontSize: '0.82rem' }}>
-            {new Date(r.date).toLocaleDateString('fr-BE', { day: 'numeric', month: 'short' })} · {new Date(r.date).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' })}
+            {new Date(r.date).toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short' })} · {new Date(r.date).toLocaleTimeString(dateLocale(), { hour: '2-digit', minute: '2-digit' })}
           </div>
         </div>
         <span className={`badge ${TONE[r.reviewStatus]}`}>{REPORT_REVIEW_STATUS_LABEL[r.reviewStatus]}</span>

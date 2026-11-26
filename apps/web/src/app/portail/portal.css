@@ -454,3 +454,5 @@
 /* The portal-wide anchor reset must not override action contrast. */
 .portal .p-btn-primary { color: #fff; }
 .portal .p-btn-gold { color: #241c05; }
+
+.portal .p-lang { font: inherit; font-size: 12px; padding: 2px 4px; border: 1px solid var(--p-line, #ddd); border-radius: 6px; background: transparent; color: inherit; margin-right: 6px; }

@@ -1,5 +1,5 @@
 'use client';
-import { tr } from '@/lib/ui-language';
+import { tr, dateLocale } from '@/lib/ui-language';
 import { PlanningAgenda } from '@/components/PlanningAgenda';
 import { PlanningList } from '@/components/PlanningList';
 import { SkeletonRows } from '@/components/States';
@@ -58,7 +58,7 @@ function specialtyLabel(p: PersonRow) {
   const specs = Array.isArray(p.specialties) ? (p.specialties as string[]) : [];
   return specs[0] || PERSON_ROLE_LABEL[p.role as keyof typeof PERSON_ROLE_LABEL] || p.role;
 }
-function hhmm(iso: string) { return new Date(iso).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' }); }
+function hhmm(iso: string) { return new Date(iso).toLocaleTimeString(dateLocale(), { hour: '2-digit', minute: '2-digit' }); }
 
 type KpiKey = 'workers' | 'affected' | 'free' | 'subs' | 'absent' | 'vehicles';
 type InfoRow = { id: string; name: string; lines: string[] };
@@ -285,7 +285,7 @@ export default function PlanningPage() {
     const absByPerson = new Map<string, PlanAbsence>();
     for (const a of absences) if (trackedDay >= toDateInput(new Date(a.startsOn)) && trackedDay <= toDateInput(new Date(a.endsOn))) absByPerson.set(a.personId, a);
     const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, 'fr');
-    const absLine = (a: PlanAbsence) => `${ABSENCE_KIND_LABEL[a.kind as keyof typeof ABSENCE_KIND_LABEL] ?? a.kind} · jusqu’au ${new Date(a.endsOn).toLocaleDateString('fr-BE', { day: 'numeric', month: 'short' })}`;
+    const absLine = (a: PlanAbsence) => `${ABSENCE_KIND_LABEL[a.kind as keyof typeof ABSENCE_KIND_LABEL] ?? a.kind} · jusqu’au ${new Date(a.endsOn).toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short' })}`;
     const field = people.filter((p) => fieldIds.has(p.id));
     const affected: InfoRow[] = field.filter((p) => evsByPerson.has(p.id)).map((p) => ({ id: p.id, name: personLabel(p), lines: evsByPerson.get(p.id)!.map(slot) })).sort(byName);
     const free: InfoRow[] = field.filter((p) => !evsByPerson.has(p.id) && !absByPerson.has(p.id)).map((p) => ({ id: p.id, name: personLabel(p), lines: [specialtyLabel(p)] })).sort(byName);
@@ -406,16 +406,16 @@ export default function PlanningPage() {
     if (v === 'week') setView('agenda');
     else setView(v as ViewMode);
   }
-  const monthLabel = monthAnchor.toLocaleDateString('fr-BE', { month: 'long', year: 'numeric' });
-  const dayLabel = dayView[0]!.toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' });
+  const monthLabel = monthAnchor.toLocaleDateString(dateLocale(), { month: 'long', year: 'numeric' });
+  const dayLabel = dayView[0]!.toLocaleDateString(dateLocale(), { weekday: 'long', day: 'numeric', month: 'long' });
   const rangeLabel = view === 'planning'
-    ? `Planning · à partir du ${listStart.toLocaleDateString('fr-BE', { day: 'numeric', month: 'long', year: 'numeric' })}`
+    ? `Planning · à partir du ${listStart.toLocaleDateString(dateLocale(), { day: 'numeric', month: 'long', year: 'numeric' })}`
     : view === 'month'
     ? monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1)
     : view === 'day'
     ? dayLabel.charAt(0).toUpperCase() + dayLabel.slice(1)
-    : `${days[0]!.toLocaleDateString('fr-BE', { day: '2-digit', month: 'short' })} — ${days[days.length - 1]!.toLocaleDateString('fr-BE', { day: '2-digit', month: 'short', year: 'numeric' })}`;
-  const trackedShort = new Date(`${trackedDay}T00:00:00`).toLocaleDateString('fr-BE', { weekday: 'short', day: '2-digit' });
+    : `${days[0]!.toLocaleDateString(dateLocale(), { day: '2-digit', month: 'short' })} — ${days[days.length - 1]!.toLocaleDateString(dateLocale(), { day: '2-digit', month: 'short', year: 'numeric' })}`;
+  const trackedShort = new Date(`${trackedDay}T00:00:00`).toLocaleDateString(dateLocale(), { weekday: 'short', day: '2-digit' });
 
   return (
     <>
@@ -650,7 +650,7 @@ export default function PlanningPage() {
                     return (
                       <th key={ds} className={sameDate(ds, trackedDay) ? 'selected-day' : ''}>
                         <button type="button" onClick={() => selectTrackedDay(ds)}>
-                          {d.toLocaleDateString('fr-BE', { weekday: 'short', day: '2-digit', month: 'short' })}
+                          {d.toLocaleDateString(dateLocale(), { weekday: 'short', day: '2-digit', month: 'short' })}
                           <span>{affected}/{totalActive} affectés</span>
                         </button>
                       </th>
@@ -804,7 +804,7 @@ export default function PlanningPage() {
               <div className="modal-head">
                 <div>
                   <h2>{info.title}</h2>
-                  <div className="muted" style={{ fontSize: '0.8rem' }}>{new Date(`${trackedDay}T00:00:00`).toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
+                  <div className="muted" style={{ fontSize: '0.8rem' }}>{new Date(`${trackedDay}T00:00:00`).toLocaleDateString(dateLocale(), { weekday: 'long', day: 'numeric', month: 'long' })}</div>
                 </div>
                 <button className="btn ghost" onClick={() => setKpiInfo(null)} aria-label={tr("Fermer")}>✕</button>
               </div>
@@ -834,7 +834,7 @@ export default function PlanningPage() {
         <div className="modal-scrim" onClick={() => setDayAgenda(null)}>
           <div className="modal" style={{ maxWidth: 420 }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-head">
-              <h2>{new Date(`${dayAgenda}T00:00:00`).toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' })}</h2>
+              <h2>{new Date(`${dayAgenda}T00:00:00`).toLocaleDateString(dateLocale(), { weekday: 'long', day: 'numeric', month: 'long' })}</h2>
               <button className="btn ghost" onClick={() => setDayAgenda(null)} aria-label={tr("Fermer")}>✕</button>
             </div>
             <div className="modal-body" style={{ display: 'block', maxHeight: '72vh', overflowY: 'auto' }}>

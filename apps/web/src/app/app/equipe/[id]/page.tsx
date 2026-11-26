@@ -1,5 +1,5 @@
 'use client';
-import { tr } from '@/lib/ui-language';
+import { tr, dateLocale } from '@/lib/ui-language';
 import { SkeletonRows, EmptyState, ErrorState } from '@/components/States';
 import { use, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -62,8 +62,8 @@ interface Earnings {
 function localToday() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
 function addDaysStr(dateStr: string, n: number) { const d = new Date(`${dateStr}T00:00:00`); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
 function dayOf(iso: string) { const d = new Date(iso); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
-function dayShort(dateStr: string) { return new Date(`${dateStr}T00:00:00`).toLocaleDateString('fr-BE', { weekday: 'short', day: '2-digit', month: 'short' }); }
-function hhmm(iso: string) { return new Date(iso).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' }); }
+function dayShort(dateStr: string) { return new Date(`${dateStr}T00:00:00`).toLocaleDateString(dateLocale(), { weekday: 'short', day: '2-digit', month: 'short' }); }
+function hhmm(iso: string) { return new Date(iso).toLocaleTimeString(dateLocale(), { hour: '2-digit', minute: '2-digit' }); }
 
 export default function PersonDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -117,7 +117,7 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
       : <EmptyState icon={UserX} title="Fiche introuvable" text="Cette personne n’existe plus ou a été supprimée. Retournez à la liste de l’équipe." action={<Link href="/app/equipe" className="btn primary">Retour à l’équipe</Link>} />;
   }
   const p = data.person;
-  const now = new Date().toLocaleDateString('fr-BE', { month: 'long', year: 'numeric' });
+  const now = new Date().toLocaleDateString(dateLocale(), { month: 'long', year: 'numeric' });
 
   async function createAccount() {
     const email = prompt('N° de GSM ou e-mail de connexion pour cette personne :', p.phone ?? p.email ?? '');
@@ -358,7 +358,7 @@ export default function PersonDetail({ params }: { params: Promise<{ id: string 
               data={stats.months.map((m) => ({
                 month: m.month,
                 value: m.amount,
-                tooltip: `${new Date(`${m.month}-01`).toLocaleDateString('fr-BE', { month: 'long', year: 'numeric' })} : ${formatEur(m.amount)} · ${formatHours(m.hours)} · ${m.worksites} chantier${m.worksites > 1 ? 's' : ''}`,
+                tooltip: `${new Date(`${m.month}-01`).toLocaleDateString(dateLocale(), { month: 'long', year: 'numeric' })} : ${formatEur(m.amount)} · ${formatHours(m.hours)} · ${m.worksites} chantier${m.worksites > 1 ? 's' : ''}`,
               }))}
             />
           </div>

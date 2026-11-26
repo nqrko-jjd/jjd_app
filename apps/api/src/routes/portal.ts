@@ -21,6 +21,7 @@ import { asyncHandler, HttpError } from '../lib/http.js';
 import { sendMail } from '../lib/mail.js';
 import { attachPortalUser, requirePortal, signPortalToken, worksiteScope, buildingScope, portalFull, type PortalUser } from '../lib/portal.js';
 import { UPLOADS_DIR, storeImage, storeFile } from '../lib/media.js';
+import { LOCALES, translateUiStrings } from '../lib/translate.js';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 
@@ -225,7 +226,7 @@ portalRouter.get(
     const u = req.portalUser!;
     res.json({
       user: {
-        email: u.email, label: u.label,
+        email: u.email, label: u.label, locale: u.locale,
         isSyndic: !!u.syndicId,
         isPromoter: !!u.promoterId,
         access: u.access,
@@ -915,5 +916,26 @@ portalRouter.post(
     // référence lisible, dérivée de l'id (stable, rien à stocker) : INT-2026-AB12C
     const reference = `INT-${opp.createdAt.getFullYear()}-${opp.id.slice(-5).toUpperCase()}`;
     res.status(201).json({ id: opp.id, reference });
+  }),
+);
+
+/** Langue de l'espace client (fr, nl, en, pt-BR) — choisie par le client lui-même. */
+portalRouter.put(
+  '/me/locale',
+  requirePortal,
+  asyncHandler(async (req, res) => {
+    const { locale } = z.object({ locale: z.enum(LOCALES) }).parse(req.body);
+    await prisma.user.update({ where: { id: req.portalUser!.id }, data: { locale } });
+    res.json({ locale });
+  }),
+);
+
+/** Traduction à la volée des textes d'interface du portail hors dictionnaire (même cache que le bureau). */
+portalRouter.post(
+  '/translate/ui',
+  requirePortal,
+  asyncHandler(async (req, res) => {
+    const i = z.object({ locale: z.enum(LOCALES), strings: z.array(z.string().max(300)).max(80) }).parse(req.body);
+    res.json({ translations: await translateUiStrings(i.strings, i.locale) });
   }),
 );

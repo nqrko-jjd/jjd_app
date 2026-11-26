@@ -1,12 +1,12 @@
 'use client';
-import { tr } from '@/lib/ui-language';
+import { tr, dateLocale } from '@/lib/ui-language';
 import { useEffect, useRef, useState } from 'react';
 import type { PlanningEv, PlanAbsence } from './planningTypes';
 
 const dayKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 /** Plafond de la liste (≈ 2 ans) : au-delà, plus de chargement. */
 const MAX_DAYS = 730;
-const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' });
+const hhmm = (iso: string) => new Date(iso).toLocaleTimeString(dateLocale(), { hour: '2-digit', minute: '2-digit' });
 const personName = (p: { displayName: string | null; firstName: string }) => p.displayName || p.firstName;
 
 /** Titre complet comme dans Google Agenda : « R-494 - Chantier - Créneau », sans répéter ce qui est déjà dedans. */
@@ -89,7 +89,7 @@ export function PlanningList({ days, events, absences, absenceLabel, busy, onOpe
   }, []);
 
   const today = dayKey(new Date());
-  const endLabel = days.length ? days[days.length - 1]!.toLocaleDateString('fr-BE', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+  const endLabel = days.length ? days[days.length - 1]!.toLocaleDateString(dateLocale(), { day: 'numeric', month: 'long', year: 'numeric' }) : '';
   const lastEvent = events.reduce<string | null>((m, e) => (!m || e.startAt > m ? e.startAt : m), null);
   const byDay = new Map<string, PlanningEv[]>();
   for (const e of events) {
@@ -110,7 +110,7 @@ export function PlanningList({ days, events, absences, absenceLabel, busy, onOpe
         <div key={k} className={`plan-list-day${k === today ? ' today' : ''}`}>
           <div className="plan-list-date">
             <strong>{d.getDate()}</strong>
-            <small>{d.toLocaleDateString('fr-BE', { month: 'short', weekday: 'short' }).replace('.', '')}</small>
+            <small>{d.toLocaleDateString(dateLocale(), { month: 'short', weekday: 'short' }).replace('.', '')}</small>
           </div>
           <div className="plan-list-rows">
             {evs.length === 0 && abs.length === 0 && <div className="plan-list-empty">Rien de prévu aujourd’hui</div>}
@@ -166,7 +166,7 @@ export function PlanningList({ days, events, absences, absenceLabel, busy, onOpe
         {busy ? 'Chargement…' : capped ? 'Fin de la liste (2 ans affichés).' : (
           <div>
             <div style={{ marginBottom: '0.3rem' }}>
-              {lastEvent ? `Dernier événement : ${new Date(lastEvent).toLocaleDateString('fr-BE', { day: 'numeric', month: 'long' })}` : 'Rien de planifié sur cette période'} · affiché jusqu’au {endLabel}
+              {lastEvent ? `Dernier événement : ${new Date(lastEvent).toLocaleDateString(dateLocale(), { day: 'numeric', month: 'long' })}` : 'Rien de planifié sur cette période'} · affiché jusqu’au {endLabel}
             </div>
             <button type="button" className="plan-list-more" onClick={onLoadMore}>Charger {days.length >= 31 ? 'un mois de plus' : 'la suite'} ↓</button>
           </div>

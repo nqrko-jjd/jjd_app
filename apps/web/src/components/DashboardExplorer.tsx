@@ -1,5 +1,5 @@
 'use client';
-import { tr } from '@/lib/ui-language';
+import { tr, dateLocale } from '@/lib/ui-language';
 import {useState} from 'react';
 import Link from 'next/link';
 import {useApi} from '@/lib/use-api';
@@ -12,7 +12,7 @@ export function DashboardExplorer({monthly}:{monthly?:Month[]}){
  const data=monthly ? {monthly} : fetched;
  const [metric,setMetric]=useState<keyof typeof metrics>('operations'),[period,setPeriod]=useState(12),[mode,setMode]=useState('bars'),[compare,setCompare]=useState(false),[focus,setFocus]=useState<number|null>(null),[table,setTable]=useState(false);
  const rows=data?.monthly.slice(-(monthly ? monthly.length : period))??[];
- const label=(month:string)=>new Date(`${month}-01T12:00:00Z`).toLocaleDateString('fr-BE',{month:'short',year:'2-digit'});
+ const label=(month:string)=>new Date(`${month}-01T12:00:00Z`).toLocaleDateString(dateLocale(),{month:'short',year:'2-digit'});
  const value=(m:Month)=>metric==='expenses'?m.expenses:metric==='hours'?m.hours:m.revenue;
  const format=(n:number)=>metric==='hours'?`${n.toLocaleString('fr-BE',{maximumFractionDigits:1})} h`:`${n.toLocaleString('fr-BE',{maximumFractionDigits:0})} €`;
  const previous=(m:Month)=>data?.monthly.find(p=>p.month===`${Number(m.month.slice(0,4))-1}${m.month.slice(4)}`);

@@ -1,5 +1,5 @@
 'use client';
-import { tr } from '@/lib/ui-language';
+import { tr, dateLocale } from '@/lib/ui-language';
 import { SkeletonRows, ErrorState, EmptyState } from '@/components/States';
 import { Suspense, useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -42,7 +42,7 @@ interface VehicleRow extends PlanVehicleRef { status: string; excludedFromPlanni
 // ça décalerait le jour affiché juste après minuit.
 function toDateInput(d: Date) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
 function addDaysStr(dateStr: string, n: number) { const d = new Date(`${dateStr}T00:00:00`); d.setDate(d.getDate() + n); return toDateInput(d); }
-function dayShort(dateStr: string) { return new Date(`${dateStr}T00:00:00`).toLocaleDateString('fr-BE', { weekday: 'short', day: '2-digit', month: 'short' }); }
+function dayShort(dateStr: string) { return new Date(`${dateStr}T00:00:00`).toLocaleDateString(dateLocale(), { weekday: 'short', day: '2-digit', month: 'short' }); }
 function specialtyLabel(p: Person) {
   const specs = Array.isArray(p.specialties) ? p.specialties : [];
   return specs[0] || PERSON_ROLE_LABEL[p.role as keyof typeof PERSON_ROLE_LABEL] || p.role;

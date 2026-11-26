@@ -1,0 +1,65 @@
+name: Démo commerciale
+
+# Lance / met à jour la pile de démo (docker-compose.demo.yml) sur le VPS : base « jjd_demo » séparée, jamais les données réelles.
+# - premier lancement : génère .env.demo (mot de passe base + secret JWT aléatoires, DEMO_PASSWORD = secret GitHub, clé DeepL reprise de la prod)
+# - reset = true : vide la base de démo et recrée tout le jeu d'exemple (dates recalées sur aujourd'hui)
+
+on:
+  workflow_dispatch:
+    inputs:
+      reset:
+        description: 'Recréer toutes les données de démo'
+        type: boolean
+        default: false
+      https:
+        description: 'Activer demo.jjd-consult.be (une seule fois, après le DNS) : recharge le nginx partagé + certificat'
+        type: boolean
+        default: false
+
+jobs:
+  demo:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Démarrer la démo via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          DEMO_PASSWORD: ${{ secrets.DEMO_PASSWORD }}
+          RESET: ${{ inputs.reset }}
+          HTTPS: ${{ inputs.https }}
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          envs: DEMO_PASSWORD,RESET,HTTPS
+          script_stop: true
+          command_timeout: 30m
+          script: |
+            set -e
+            cd "${{ secrets.VPS_PATH }}"
+            test ${#DEMO_PASSWORD} -ge 8 || { echo "Secret DEMO_PASSWORD manquant (8 caractères min.)"; exit 1; }
+            if [ ! -f .env.demo ]; then
+              umask 077
+              {
+                echo "DEMO_DB_PASSWORD=$(openssl rand -hex 24)"
+                echo "DEMO_JWT_SECRET=$(openssl rand -hex 32)"
+                grep '^DEEPL_API_KEY=' .env.production || true
+              } > .env.demo
+            fi
+            export DEMO_PASSWORD
+            docker compose -f docker-compose.demo.yml --env-file .env.demo up -d --build
+            if [ "$RESET" = "true" ]; then
+              docker compose -f docker-compose.demo.yml --env-file .env.demo exec -T api npx tsx scripts/seed-sales-demo.ts --reset
+            fi
+            if [ "$HTTPS" = "true" ]; then
+              # nginx partagé (pile Bricoloc) : on teste d'abord la nouvelle config dans un conteneur jetable avec les mêmes montages.
+              NG=$(docker ps --filter label=com.docker.compose.service=nginx --format '{{.Names}}' | while read n; do docker inspect -f '{{range .Mounts}}{{.Source}} {{end}}' "$n" | grep -q 'new.jjd-consult.be.conf' && echo "$n"; done | head -1)
+              test -n "$NG" || { echo "nginx partagé introuvable"; exit 1; }
+              docker run --rm --volumes-from "$NG" --network "container:$NG" "$(docker inspect -f '{{.Config.Image}}' "$NG")" nginx -t
+              docker restart "$NG"
+              sleep 3
+              BRICO=$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project.working_dir"}}' "$NG")
+              (cd "$BRICO" && docker compose --env-file .env.production run --rm --entrypoint certbot certbot certonly --webroot -w /var/www/certbot -d demo.jjd-consult.be --non-interactive --agree-tos --keep-until-expiring)
+              docker exec "$NG" nginx -s reload
+            fi
+            docker image prune -f
+            echo "Démo à jour : $(git rev-parse --short HEAD)"

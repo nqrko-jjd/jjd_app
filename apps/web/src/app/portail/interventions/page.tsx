@@ -1,4 +1,5 @@
 'use client';
+import { dateLocale } from '@/lib/ui-language';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -18,7 +19,7 @@ const STATUS_DOT: Record<string, string> = {
   scheduled: 'gold', in_progress: 'ok', on_hold: 'blue', done: 'ok', to_invoice: 'ok',
   invoiced: 'grey', closed: 'grey', lead: 'grey', quote_sent: 'grey', to_plan: 'grey', cancelled: 'crit',
 };
-const fdate = (s: string | null) => (s ? new Date(s).toLocaleDateString('fr-BE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—');
+const fdate = (s: string | null) => (s ? new Date(s).toLocaleDateString(dateLocale(), { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—');
 
 const STATUS_VIEWS: { key: string; label: string }[] = [
   { key: 'open', label: 'En cours' },

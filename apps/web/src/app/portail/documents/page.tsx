@@ -1,4 +1,5 @@
 'use client';
+import { dateLocale } from '@/lib/ui-language';
 import { useState } from 'react';
 import Link from 'next/link';
 import { FileText } from 'lucide-react';
@@ -11,7 +12,7 @@ interface Doc {
   status: string; totalTtc: number; issuedOn: string | null; hasPdf: boolean;
   worksiteId: string | null; building: string | null;
 }
-const fdate = (s: string | null) => (s ? new Date(s).toLocaleDateString('fr-BE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—');
+const fdate = (s: string | null) => (s ? new Date(s).toLocaleDateString(dateLocale(), { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—');
 const eur = (n: number) => `${n.toLocaleString('fr-BE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
 
 const TABS = [

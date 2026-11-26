@@ -1,5 +1,5 @@
 'use client';
-import { tr } from '@/lib/ui-language';
+import { tr, dateLocale } from '@/lib/ui-language';
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -68,11 +68,11 @@ function dueLabel(dueOn: string | null, status: string): { text: string; tone: '
   const d0 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const dd = new Date(d.getFullYear(), d.getMonth(), d.getDate());
   const diffDays = Math.round((dd.getTime() - d0.getTime()) / 86400000);
-  if (diffDays < 0) return { text: `En retard · ${d.toLocaleDateString('fr-BE', { day: '2-digit', month: 'short' })}`, tone: 'crit' };
+  if (diffDays < 0) return { text: `En retard · ${d.toLocaleDateString(dateLocale(), { day: '2-digit', month: 'short' })}`, tone: 'crit' };
   if (diffDays === 0) return { text: 'Aujourd’hui', tone: 'warn' };
   if (diffDays === 1) return { text: 'Demain', tone: 'warn' };
-  if (diffDays < 7) return { text: d.toLocaleDateString('fr-BE', { weekday: 'long' }), tone: 'warn' };
-  return { text: d.toLocaleDateString('fr-BE', { day: '2-digit', month: 'short' }), tone: '' };
+  if (diffDays < 7) return { text: d.toLocaleDateString(dateLocale(), { weekday: 'long' }), tone: 'warn' };
+  return { text: d.toLocaleDateString(dateLocale(), { day: '2-digit', month: 'short' }), tone: '' };
 }
 
 export default function TachesPage() {

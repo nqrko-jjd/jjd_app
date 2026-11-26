@@ -1,5 +1,5 @@
 'use client';
-import { tr } from '@/lib/ui-language';
+import { tr, dateLocale } from '@/lib/ui-language';
 import { vehicleLabel } from '@/lib/vehicle';
 import Link from 'next/link';
 import { api } from '@/lib/api';
@@ -7,10 +7,10 @@ import { PLANNING_EVENT_STATUS_LABEL, PLANNING_EVENT_KIND_LABEL } from '@jjd/sha
 import type { PlanningEv } from './planningTypes';
 
 function hhmm(iso: string) {
-  return new Date(iso).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' });
+  return new Date(iso).toLocaleTimeString(dateLocale(), { hour: '2-digit', minute: '2-digit' });
 }
 function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString('fr-BE', { weekday: 'short', day: '2-digit', month: 'short' });
+  return new Date(iso).toLocaleDateString(dateLocale(), { weekday: 'short', day: '2-digit', month: 'short' });
 }
 
 export function PlanningEventDetail({

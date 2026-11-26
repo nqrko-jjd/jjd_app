@@ -1,5 +1,5 @@
 'use client';
-import { tr } from '@/lib/ui-language';
+import { tr, dateLocale } from '@/lib/ui-language';
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useApi } from '@/lib/use-api';
@@ -19,8 +19,8 @@ interface PlannedData { items: Proposal[]; summary: { open: number; covered: num
 // jour LOCAL (jamais toISOString : la Belgique est en avance sur UTC)
 const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const addDays = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
-const dayLabel = (s: string) => new Date(`${s}T12:00:00`).toLocaleDateString('fr-BE', { weekday: 'short', day: 'numeric' });
-const longDay = (s: string) => new Date(`${s}T12:00:00`).toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' });
+const dayLabel = (s: string) => new Date(`${s}T12:00:00`).toLocaleDateString(dateLocale(), { weekday: 'short', day: 'numeric' });
+const longDay = (s: string) => new Date(`${s}T12:00:00`).toLocaleDateString(dateLocale(), { weekday: 'long', day: 'numeric', month: 'long' });
 const STATUS_FR: Record<string, string> = { running: 'en cours', submitted: 'à valider', approved: 'validé' };
 
 /**

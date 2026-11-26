@@ -14,6 +14,7 @@ export interface PortalUser {
   buildingName: string | null;
   access: 'full' | 'limited';
   label: string;
+  locale: string;
 }
 
 /** true = accès complet (devis, factures, montants). */
@@ -52,6 +53,7 @@ export async function attachPortalUser(req: Request, _res: Response, next: NextF
         buildingName: u.residentOf?.name ?? null,
         access: u.portalAccess === 'limited' ? 'limited' : 'full',
         label: u.syndic?.name ?? u.promoter?.name ?? u.contact?.name ?? u.residentOf?.name ?? u.email,
+        locale: u.locale,
       };
     }
   } catch {

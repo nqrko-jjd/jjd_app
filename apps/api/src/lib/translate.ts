@@ -1,5 +1,5 @@
 /**
- * Traduction des messages du fil : chacun lit la discussion dans SA langue (compte `locale` : fr | en | pt-BR).
+ * Traduction des messages du fil : chacun lit la discussion dans SA langue (compte `locale` : fr | nl | en | pt-BR).
  * Passe par DeepL (comme Bricoloc) : pas d'IA facturée au jeton, offre gratuite = 500 000 caractères / mois.
  * Seuls les messages écrits par quelqu'un d'une autre langue sont traduits ; chaque traduction est gardée en base (une seule fois par langue).
  * Sans clé DeepL ou en cas d'erreur : le message s'affiche simplement dans sa langue d'origine.
@@ -7,11 +7,11 @@
 import { prisma } from '../db.js';
 import { env } from '../env.js';
 
-export const LOCALES = ['fr', 'en', 'pt-BR'] as const;
+export const LOCALES = ['fr', 'nl', 'en', 'pt-BR'] as const;
 export type Locale = (typeof LOCALES)[number];
 export const normalizeLocale = (v: unknown): Locale => (LOCALES as readonly string[]).includes(String(v)) ? (v as Locale) : 'fr';
-const TARGET: Record<Locale, string> = { fr: 'FR', en: 'EN-GB', 'pt-BR': 'PT-BR' };
-const SOURCE: Record<Locale, string> = { fr: 'FR', en: 'EN', 'pt-BR': 'PT' };
+const TARGET: Record<Locale, string> = { fr: 'FR', nl: 'NL', en: 'EN-GB', 'pt-BR': 'PT-BR' };
+const SOURCE: Record<Locale, string> = { fr: 'FR', nl: 'NL', en: 'EN', 'pt-BR': 'PT' };
 const MAX_CHARS = 1500;
 
 interface Msg { id: string; kind: string; body: string | null; author?: { locale?: string | null } | null }

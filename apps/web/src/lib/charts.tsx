@@ -1,4 +1,5 @@
 'use client';
+import { dateLocale } from '@/lib/ui-language';
 import { formatEur } from '@jjd/shared';
 
 /* Graphiques SVG légers, sans dépendance. Couleurs = variables du thème. */
@@ -16,7 +17,7 @@ const eurShort = (n: number) => {
 };
 const monthShort = (k: string) => {
   const [y, m] = k.split('-');
-  return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString('fr-BE', { month: 'short' }).replace('.', '');
+  return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString(dateLocale(), { month: 'short' }).replace('.', '');
 };
 
 /* ------------------------------------------------------------ tuile à tendance */

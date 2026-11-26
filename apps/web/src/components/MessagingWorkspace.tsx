@@ -1,5 +1,5 @@
 'use client';
-import { tr } from '@/lib/ui-language';
+import { tr, dateLocale } from '@/lib/ui-language';
 import { SkeletonRows } from '@/components/States';
 import { Suspense, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -41,8 +41,8 @@ function timeShort(iso: string) {
   const today = new Date();
   const sameDay = d.toDateString() === today.toDateString();
   return sameDay
-    ? d.toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' })
-    : d.toLocaleDateString('fr-BE', { day: '2-digit', month: '2-digit' });
+    ? d.toLocaleTimeString(dateLocale(), { hour: '2-digit', minute: '2-digit' })
+    : d.toLocaleDateString(dateLocale(), { day: '2-digit', month: '2-digit' });
 }
 function timeFull(iso: string) {
   return new Date(iso).toLocaleString('fr-BE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });

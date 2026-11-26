@@ -12,7 +12,11 @@ const ATTRS = ['placeholder', 'title', 'aria-label'] as const;
 const MAX_LEN = 200;
 const MAX_BATCH = 60;
 
-export function startDomTranslation(locale: UiLocale): () => void {
+type UiTranslator = (body: { locale: UiLocale; strings: string[] }) => Promise<{ translations: Record<string, string> }>;
+const officeTranslator: UiTranslator = (body) => api<{ translations: Record<string, string> }>('/api/translate/ui', { method: 'POST', body });
+
+/** `translator` : appel serveur à utiliser (bureau par défaut ; le portail client passe le sien, authentifié par son propre jeton). */
+export function startDomTranslation(locale: UiLocale, translator: UiTranslator = officeTranslator): () => void {
   if (locale === 'fr' || typeof document === 'undefined') return () => {};
   const storeKey = `uitr:${locale}`;
   let cache: Record<string, string> = {};
@@ -41,7 +45,7 @@ export function startDomTranslation(locale: UiLocale): () => void {
     timer = null;
     const texts = [...pending.keys()].slice(0, MAX_BATCH);
     if (!texts.length) return;
-    api<{ translations: Record<string, string> }>('/api/translate/ui', { method: 'POST', body: { locale, strings: texts } })
+    translator({ locale, strings: texts })
       .then((r) => {
         for (const t of texts) {
           const done = r.translations[t];

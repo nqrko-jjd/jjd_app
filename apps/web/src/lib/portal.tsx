@@ -1,10 +1,13 @@
 'use client';
 import { downloadResponse } from './download';
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { Fragment, createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
+import { isUiLocale, setUiLocale, type UiLocale } from './ui-language';
+import { startDomTranslation } from './dom-translate';
 
 const BASE = '/jjd-api/api/portal';
 const KEY = 'jjd_portal_token';
+const LANG_KEY = 'jjd_portal_locale';
 
 function tok(): string | null {
   try { return localStorage.getItem(KEY); } catch { return null; }
@@ -50,8 +53,9 @@ export async function portalBlobUrl(path: string): Promise<string> {
 interface Me {
   email: string; label: string; isSyndic: boolean; isPromoter: boolean; access: 'full' | 'limited'; scopeLabel: string | null;
   scope: 'syndic' | 'promoter' | 'building' | 'client';
+  locale?: string;
 }
-interface Ctx { me: Me | null; loading: boolean; signOut: () => void }
+interface Ctx { me: Me | null; loading: boolean; signOut: () => void; locale: UiLocale; setLocale: (l: UiLocale) => void }
 const PortalContext = createContext<Ctx | null>(null);
 
 export function PortalProvider({ children }: { children: ReactNode }) {
@@ -69,7 +73,47 @@ export function PortalProvider({ children }: { children: ReactNode }) {
     router.push('/portail');
   }
 
-  return <PortalContext.Provider value={{ me, loading, signOut }}>{children}</PortalContext.Provider>;
+  // langue : celle du compte une fois connecté, sinon le dernier choix sur cet appareil, sinon la langue du navigateur
+  const [pref, setPref] = useState<UiLocale>('fr');
+  useEffect(() => {
+    let saved: string | null = null;
+    try { saved = localStorage.getItem(LANG_KEY); } catch { /* */ }
+    const nav = typeof navigator !== 'undefined' ? navigator.language.toLowerCase() : 'fr';
+    setPref(isUiLocale(saved) ? saved : nav.startsWith('nl') ? 'nl' : nav.startsWith('en') ? 'en' : nav.startsWith('pt') ? 'pt-BR' : 'fr');
+  }, []);
+  const locale: UiLocale = isUiLocale(me?.locale) ? me.locale : pref;
+
+  function setLocale(l: UiLocale) {
+    setPref(l);
+    try { localStorage.setItem(LANG_KEY, l); } catch { /* */ }
+    if (me) {
+      setMe({ ...me, locale: l });
+      portalApi('/me/locale', { method: 'PUT', body: { locale: l } }).catch(() => { /* reste appliquée sur cet appareil */ });
+    }
+  }
+
+  return (
+    <PortalContext.Provider value={{ me, loading, signOut, locale, setLocale }}>
+      <PortalLanguage locale={locale} signedIn={!!me}>{children}</PortalLanguage>
+    </PortalContext.Provider>
+  );
+}
+
+const portalTranslator = (body: { locale: UiLocale; strings: string[] }) =>
+  portalApi<{ translations: Record<string, string> }>('/translate/ui', { method: 'POST', body });
+
+function PortalLanguage({ locale, signedIn, children }: { locale: UiLocale; signedIn: boolean; children: ReactNode }) {
+  const [ready, setReady] = useState<string | null>(null);
+  useEffect(() => {
+    setUiLocale(locale);
+    document.documentElement.lang = locale;
+    setReady(locale);
+    return () => { setUiLocale('fr'); document.documentElement.lang = 'fr'; };
+  }, [locale]);
+  // dictionnaire d'abord, puis traduction à la volée (serveur, en cache) ; avant connexion le serveur refuse et seul le dictionnaire s'applique
+  useEffect(() => (ready === locale ? startDomTranslation(locale, portalTranslator) : undefined), [ready, locale, signedIn]);
+  if (ready !== locale) return null;
+  return <Fragment key={locale}>{children}</Fragment>;
 }
 
 export function usePortal() {

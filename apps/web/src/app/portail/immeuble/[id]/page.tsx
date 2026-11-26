@@ -1,4 +1,5 @@
 'use client';
+import { dateLocale } from '@/lib/ui-language';
 import { use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -14,7 +15,7 @@ interface Building {
   worksites: { id: string; ref: string; title: string; status: string; updatedAt: string }[];
 }
 const STATUS: Record<string, string> = PORTAL_STATUS_LABEL; // statuts côté client (jamais « À facturer »)
-const fdate = (s: string) => new Date(s).toLocaleDateString('fr-BE', { day: '2-digit', month: 'long', year: 'numeric' });
+const fdate = (s: string) => new Date(s).toLocaleDateString(dateLocale(), { day: '2-digit', month: 'long', year: 'numeric' });
 
 export default function BuildingPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);

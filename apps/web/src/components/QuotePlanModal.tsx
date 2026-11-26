@@ -1,5 +1,5 @@
 'use client';
-import { tr } from '@/lib/ui-language';
+import { tr, dateLocale } from '@/lib/ui-language';
 import { useEffect, useMemo, useState } from 'react';
 import { GanttChart, type GanttRow } from './GanttChart';
 import Link from 'next/link';
@@ -14,7 +14,7 @@ interface Preview {
   params: { startDate: string; teamSize: number; dayRate: number; labourShare: number };
   lots: Lot[]; slots: Slot[]; totalDays: number; endDate: string; existing: number; confirmed: number;
 }
-const dayFr = (s: string) => new Date(`${s}T12:00:00`).toLocaleDateString('fr-BE', { weekday: 'short', day: 'numeric', month: 'short' });
+const dayFr = (s: string) => new Date(`${s}T12:00:00`).toLocaleDateString(dateLocale(), { weekday: 'short', day: 'numeric', month: 'short' });
 const KEY = 'jjd-plan-params';
 
 /**

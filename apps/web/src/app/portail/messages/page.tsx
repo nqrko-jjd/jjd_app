@@ -1,4 +1,5 @@
 'use client';
+import { dateLocale } from '@/lib/ui-language';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { MessageSquare } from 'lucide-react';
@@ -15,8 +16,8 @@ function fdate(s: string | null) {
   if (!s) return '';
   const d = new Date(s);
   const today = new Date();
-  if (d.toDateString() === today.toDateString()) return d.toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' });
-  return d.toLocaleDateString('fr-BE', { day: '2-digit', month: '2-digit' });
+  if (d.toDateString() === today.toDateString()) return d.toLocaleTimeString(dateLocale(), { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleDateString(dateLocale(), { day: '2-digit', month: '2-digit' });
 }
 
 export default function PortalMessagesPage() {

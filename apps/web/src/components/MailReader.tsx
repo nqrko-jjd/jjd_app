@@ -1,5 +1,5 @@
 'use client';
-import { tr } from '@/lib/ui-language';
+import { tr, dateLocale } from '@/lib/ui-language';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Paperclip, FileText, Image as ImageIcon, FileSpreadsheet, File as FileIcon } from 'lucide-react';
 import { apiBlobUrl } from '@/lib/api';
@@ -38,8 +38,8 @@ export const listDate = (iso: string | null | undefined) => {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
   const now = new Date();
-  if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' });
-  return d.getFullYear() === now.getFullYear() ? d.toLocaleDateString('fr-BE', { day: 'numeric', month: 'short' }) : d.toLocaleDateString('fr-BE');
+  if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString(dateLocale(), { hour: '2-digit', minute: '2-digit' });
+  return d.getFullYear() === now.getFullYear() ? d.toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short' }) : d.toLocaleDateString(dateLocale());
 };
 
 const INLINE_TYPES = /^(application\/pdf|image\/(png|jpe?g|gif|webp))$/i;

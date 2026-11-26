@@ -1,5 +1,5 @@
 'use client';
-import { tr } from '@/lib/ui-language';
+import { tr, dateLocale } from '@/lib/ui-language';
 import { useState } from 'react';
 
 export type LabourRow = { date: string; personId: string; personName: string; hours: number; amount: number; pending: boolean };
@@ -22,7 +22,7 @@ export function WorksiteLabourDetail({ rows, demo = false }: { rows: LabourRow[]
       <p className="muted" style={{fontSize:".8rem"}}>Une journée à contrôler peut contenir des pointages validés et en attente. Les montants ci-dessous proviennent des pointages ; le coût retenu dans la rentabilité peut être remplacé par les factures de rémunération.</p>
       {!dates.length && <p className="muted">{rows.length ? 'Aucun pointage ne correspond aux filtres.' : 'Aucun pointage enregistré sur ce chantier.'}</p>}
       {dates.map(date => { const day = filtered.filter(r => r.date.slice(0,10) === date); return <details className="labour-day" key={date}>
-        <summary><strong>{new Date(`${date}T12:00:00`).toLocaleDateString('fr-BE',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</strong><span>{new Set(day.map(r=>r.personId)).size} ouvriers · {hours(day.reduce((s,r)=>s+r.hours,0))}</span><b>{money(day.reduce((s,r)=>s+r.amount,0))} enregistrés</b></summary>
+        <summary><strong>{new Date(`${date}T12:00:00`).toLocaleDateString(dateLocale(),{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</strong><span>{new Set(day.map(r=>r.personId)).size} ouvriers · {hours(day.reduce((s,r)=>s+r.hours,0))}</span><b>{money(day.reduce((s,r)=>s+r.amount,0))} enregistrés</b></summary>
         <div className="labour-lines">{day.map((r,i)=><div className="labour-line" key={`${r.personId}-${i}`}><span className="labour-avatar" aria-hidden="true">{r.personName.slice(0,2).toUpperCase()}</span><strong>{r.personName}</strong><span>{hours(r.hours)}</span><span className={`badge ${r.pending?'warn':'ok'}`}>{r.pending?'À contrôler':'Validé'}</span><b>{money(r.amount)}{r.pending && <small>à contrôler</small>}</b></div>)}</div>
       </details>; })}
     </details>

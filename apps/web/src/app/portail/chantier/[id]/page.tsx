@@ -1,4 +1,5 @@
 'use client';
+import { dateLocale } from '@/lib/ui-language';
 import { Suspense, use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
@@ -38,7 +39,7 @@ const STEP_DEFS = [
   { key: 'invoiced', label: 'Facturée', text: 'La facture a été émise.' },
 ];
 function eur(n: number) { return `${n.toLocaleString('fr-BE', { maximumFractionDigits: 2 })} €`; }
-function d(s: string | null) { return s ? new Date(s).toLocaleDateString('fr-BE') : '—'; }
+function d(s: string | null) { return s ? new Date(s).toLocaleDateString(dateLocale()) : '—'; }
 
 export default function PortalWorksite(props: { params: Promise<{ id: string }> }) {
   return (

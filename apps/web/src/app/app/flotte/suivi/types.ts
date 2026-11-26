@@ -1,3 +1,4 @@
+import { dateLocale } from '@/lib/ui-language';
 import { formatDateBE } from '@/lib/ui';
 
 export interface Vehicle { id: string; code: string | null; name: string | null; plate: string | null; brand: string | null; model: string | null; pajDeviceId: string | null; lastLat: number | null; lastLng: number | null; lastSeenAt: string | null; lastSpeed: number | null; lastBattery: number | null }
@@ -13,7 +14,7 @@ export interface Visit { eventId: string; vehicleId: string; arrivedAt: string |
 
 export const label = (v: Vehicle) => [v.code, v.name ?? [v.brand, v.model].filter(Boolean).join(' '), v.plate].filter(Boolean).join(' · ') || 'Véhicule';
 export const ago = (iso: string) => { const m = Math.round((Date.now() - new Date(iso).getTime()) / 60_000); return m < 1 ? 'à l’instant' : m < 60 ? `il y a ${m} min` : m < 1440 ? `il y a ${Math.round(m / 60)} h` : formatDateBE(iso); };
-export const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' });
+export const hhmm = (iso: string) => new Date(iso).toLocaleTimeString(dateLocale(), { hour: '2-digit', minute: '2-digit' });
 /** Durée entre deux instants (ou jusqu'à maintenant) : « 12 min », « 3 h 05 ». */
 export const duration = (fromIso: string, toIso?: string | null) => {
   const m = Math.max(0, Math.round(((toIso ? new Date(toIso).getTime() : Date.now()) - new Date(fromIso).getTime()) / 60_000));

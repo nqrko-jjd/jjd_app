@@ -1,4 +1,5 @@
 'use client';
+import { dateLocale } from '@/lib/ui-language';
 import { useEffect, useState } from 'react';
 import { useApi } from '@/lib/use-api';
 import { api, apiBlobUrl } from '@/lib/api';
@@ -33,7 +34,7 @@ export default function PurchaseReception({onImported}:{onImported:()=>void}) {
       {state?.recipient && state.verified && <button className="btn" disabled={busy} onClick={()=>action(state.enabled?'disable':'enable')}>{state.enabled?'Suspendre la synchronisation':'Activer la synchronisation'}</button>}
       {state?.enabled && <button className="btn primary" disabled={busy} onClick={()=>action('sync')}>{busy?'Synchronisation…':'Récupérer maintenant'}</button>}
     </div>
-    {state?.last?.at && <p className="muted">Dernière tentative : {formatDateBE(state.last.at)} {new Date(state.last.at).toLocaleTimeString('fr-BE')}</p>}
+    {state?.last?.at && <p className="muted">Dernière tentative : {formatDateBE(state.last.at)} {new Date(state.last.at).toLocaleTimeString(dateLocale())}</p>}
     {!!state?.last?.errors?.length && <p role="alert">{state.last.errors.join(' · ')}</p>}
     {notice && <p role="status">{notice}</p>}
     <MailboxHistory onProgress={()=>{reload();onImported();}}/>

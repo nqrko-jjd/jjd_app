@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState, type ReactNode } from 'react';
+import { UI_LANGUAGES, isUiLocale } from '@/lib/ui-language';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { portalApi, usePortal } from '@/lib/portal';
@@ -24,7 +25,7 @@ export function PortalShell({
   title, subtitle, action, children,
 }: { title?: string; subtitle?: string; action?: ReactNode; children: ReactNode }) {
   const pathname = usePathname();
-  const { me, signOut } = usePortal();
+  const { me, signOut, locale, setLocale } = usePortal();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const initials = (me?.label ?? '?').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join('');
@@ -110,6 +111,9 @@ export function PortalShell({
                 <span className="nm">{me?.label}</span>
                 <span className="rl"> · {profileLabel}</span>
                 <br />
+                <select className="p-lang" value={locale} translate="no" aria-label="Langue" onChange={(e) => { if (isUiLocale(e.target.value)) setLocale(e.target.value); }}>
+                  {UI_LANGUAGES.map((l) => <option key={l.code} value={l.code}>{l.label}</option>)}
+                </select>{' '}
                 <button onClick={signOut}>Se déconnecter</button>
               </span>
             </div>

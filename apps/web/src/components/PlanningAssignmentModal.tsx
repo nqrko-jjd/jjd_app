@@ -1,5 +1,5 @@
 'use client';
-import { tr } from '@/lib/ui-language';
+import { tr, dateLocale } from '@/lib/ui-language';
 import { vehicleLabel } from '@/lib/vehicle';
 import { useMemo, useState } from 'react';
 import { api } from '@/lib/api';
@@ -27,7 +27,7 @@ function specialtyLabel(p: PersonRef) {
   return specs[0] || PERSON_ROLE_LABEL[p.role as keyof typeof PERSON_ROLE_LABEL] || p.role;
 }
 function fmtDayShort(dateStr: string) {
-  return new Date(`${dateStr}T00:00:00`).toLocaleDateString('fr-BE', { weekday: 'short', day: '2-digit', month: 'short' });
+  return new Date(`${dateStr}T00:00:00`).toLocaleDateString(dateLocale(), { weekday: 'short', day: '2-digit', month: 'short' });
 }
 
 /** tous les jours (samedi/dimanche compris — les équipes travaillent aussi le week-end) entre

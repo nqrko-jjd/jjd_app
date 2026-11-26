@@ -1,4 +1,5 @@
 'use client';
+import { dateLocale } from '@/lib/ui-language';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Navigation, Pause, Play, Radio } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -21,7 +22,7 @@ const RATES = [{ label: '×1', rate: 60 }, { label: '×5', rate: 300 }, { label:
 const dur = (min: number) => (min >= 60 ? `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')}` : `${min} min`);
 const km1 = (n: number) => `${n.toFixed(1).replace('.', ',')} km`;
 const dkey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-const clock = (sec: number) => new Date(sec * 1000).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' });
+const clock = (sec: number) => new Date(sec * 1000).toLocaleTimeString(dateLocale(), { hour: '2-digit', minute: '2-digit' });
 const parseKey = (k: string) => { const [y, m, d] = k.split('-').map(Number); return new Date(y, m - 1, d); };
 const idxAt = (pts: Journey['points'], t: number) => { let lo = 0, hi = pts.length - 1; while (lo < hi) { const m = (lo + hi + 1) >> 1; if (pts[m][2] <= t) lo = m; else hi = m - 1; } return lo; };
 

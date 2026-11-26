@@ -1,4 +1,5 @@
 'use client';
+import { dateLocale } from '@/lib/ui-language';
 import { PeppolStatus } from './PeppolStatus';
 import { useEffect, useState } from 'react';
 import { FileText, Send, CheckCircle2, CircleAlert } from 'lucide-react';
@@ -90,9 +91,9 @@ export function DocumentDelivery({doc,busy,onExternal,onError,peppolEnabled=fals
     {isQuote&&sig&&<p className="delivery-history" style={{display:'flex',flexWrap:'wrap',gap:'0.5rem',alignItems:'center'}}>
       {sig.status==='signed'&&<><CheckCircle2 size={16}/>Signé en ligne par <strong>{sig.signerName}</strong> le {new Date(sig.signedAt!).toLocaleString('fr-BE',{dateStyle:'long',timeStyle:'short'})}.</>}
       {sig.status==='declined'&&<><CircleAlert size={16}/>Refusé en ligne par le client{sig.signerComment?` : « ${sig.signerComment} »`:''}.</>}
-      {sig.status==='pending'&&<><Send size={16}/>Signature en ligne en attente (envoyée à {sig.sentTo}, valable jusqu’au {new Date(sig.expiresAt).toLocaleDateString('fr-BE')}). <button className="btn ghost" style={{fontSize:'0.8rem'}} onClick={revoke}>Annuler le lien</button></>}
+      {sig.status==='pending'&&<><Send size={16}/>Signature en ligne en attente (envoyée à {sig.sentTo}, valable jusqu’au {new Date(sig.expiresAt).toLocaleDateString(dateLocale())}). <button className="btn ghost" style={{fontSize:'0.8rem'}} onClick={revoke}>Annuler le lien</button></>}
       {sig.status==='expired'&&<><CircleAlert size={16}/>Le lien de signature a expiré : renvoyez le devis avec « signer en ligne » coché.</>}
     </p>}
-    {doc.sentAt&&<p className="delivery-history"><CheckCircle2 size={16}/>Envoi enregistré le {new Date(doc.sentAt).toLocaleDateString('fr-BE')} · à distinguer de l’accusé de réception Peppol.</p>}
+    {doc.sentAt&&<p className="delivery-history"><CheckCircle2 size={16}/>Envoi enregistré le {new Date(doc.sentAt).toLocaleDateString(dateLocale())} · à distinguer de l’accusé de réception Peppol.</p>}
   </section>;
 }

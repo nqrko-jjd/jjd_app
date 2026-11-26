@@ -1,13 +1,19 @@
 import { DICT } from './ui-dict';
 import { TPL } from './ui-dict-tpl';
+import { DICT_NL, TPL_NL } from './ui-dict-nl';
 
-export const UI_LANGUAGES = [{ code: 'fr', label: 'Français' }, { code: 'en', label: 'English' }, { code: 'pt-BR', label: 'Português (Brasil)' }] as const;
+export const UI_LANGUAGES = [{ code: 'fr', label: 'Français' }, { code: 'nl', label: 'Nederlands' }, { code: 'en', label: 'English' }, { code: 'pt-BR', label: 'Português (Brasil)' }] as const;
 export type UiLocale = typeof UI_LANGUAGES[number]['code'];
 export const isUiLocale = (v: unknown): v is UiLocale => UI_LANGUAGES.some(l => l.code === v);
 let current: UiLocale = 'fr';
 export const setUiLocale = (locale: UiLocale) => { current = locale; };
-export const dateLocale = () => current === 'en' ? 'en-GB' : current === 'pt-BR' ? 'pt-BR' : 'fr-BE';
+export const dateLocale = () => current === 'en' ? 'en-GB' : current === 'pt-BR' ? 'pt-BR' : current === 'nl' ? 'nl-BE' : 'fr-BE';
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const toPattern = (key: string) => ({
+  re: new RegExp('^' + key.split(/(\{\d+\})/).map(p => /^\{\d+\}$/.test(p) ? '([\\s\\S]*?)' : esc(p)).join('') + '$'),
+  slots: [...key.matchAll(/\{(\d+)\}/g)].map(m => Number(m[1])),
+});
+const patternsNl = Object.entries(TPL_NL).map(([key, value]) => ({ ...toPattern(key), value }));
 const patterns = Object.entries(TPL).map(([key, values]) => ({
   re: new RegExp('^' + key.split(/(\{\d+\})/).map(p => /^\{\d+\}$/.test(p) ? '([\\s\\S]*?)' : esc(p)).join('') + '$'),
   slots: [...key.matchAll(/\{(\d+)\}/g)].map(m => Number(m[1])), values,
@@ -89,6 +95,18 @@ export function translateUi(s: string, locale: UiLocale): string {
   const match = /^(\s*)([\s\S]*?)(\s*)$/.exec(s);
   if (!match || !match[2]) return s;
   const text = match[2], index = locale === 'en' ? 0 : 1;
+  if (locale === 'nl') {
+    const nl = DICT_NL[text] ?? DICT_NL[text.replace(/\s+/g, ' ')];
+    if (nl) return match[1] + nl + match[3];
+    for (const p of patternsNl) {
+      const m = p.re.exec(text);
+      if (!m) continue;
+      const slots: Record<number, string> = {};
+      p.slots.forEach((n, i) => { slots[n] = m[i + 1] ?? ''; });
+      return match[1] + p.value.replace(/\{(\d+)(?::([^|}]*)\|([^}]*))?\}/g, (_v, n, a, b) => a !== undefined ? (slots[Number(n)] ? b : a) : slots[Number(n)] ?? '') + match[3];
+    }
+    return s; // sinon : traduction à la volée (dom-translate, DeepL)
+  }
   const hit = extra[text] ?? DICT[text] ?? DICT[text.replace(/\s+/g, ' ')];
   if (hit) return match[1] + hit[index] + match[3];
   for (const p of patterns) {

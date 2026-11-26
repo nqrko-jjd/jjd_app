@@ -1,4 +1,5 @@
 'use client';
+import { dateLocale } from '@/lib/ui-language';
 import { useMemo } from 'react';
 import Link from 'next/link';
 import { CalendarDays } from 'lucide-react';
@@ -35,14 +36,14 @@ export default function PortalPlanning() {
           {byDay.map(([day, evts]) => (
             <div key={day} className="p-panel">
               <h3 style={{ marginBottom: '0.7rem', textTransform: 'capitalize' }}>
-                {new Date(day).toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' })}
+                {new Date(day).toLocaleDateString(dateLocale(), { weekday: 'long', day: 'numeric', month: 'long' })}
                 {evts.length > 6 && <span className="p-note" style={{ fontWeight: 400, marginLeft: '0.5rem' }}>({evts.length})</span>}
               </h3>
               <div className="plan-day-events">
                 {evts.map((e) => (
                   <div key={e.id} className="p-doc-row">
                     <span className="p-note" style={{ width: 52, fontVariantNumeric: 'tabular-nums' }}>
-                      {e.allDay ? 'Jour.' : new Date(e.startAt).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' })}
+                      {e.allDay ? 'Jour.' : new Date(e.startAt).toLocaleTimeString(dateLocale(), { hour: '2-digit', minute: '2-digit' })}
                     </span>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontWeight: 600 }}>

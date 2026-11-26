@@ -1,4 +1,5 @@
 'use client';
+import { dateLocale } from '@/lib/ui-language';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ClipboardList } from 'lucide-react';
@@ -41,7 +42,7 @@ const STATUS_DOT: Record<string, string> = {
 };
 function fdate(s: string | null) {
   if (!s) return '—';
-  return new Date(s).toLocaleDateString('fr-BE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  return new Date(s).toLocaleDateString(dateLocale(), { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 function eur(n: number) {
   return `${n.toLocaleString('fr-BE', { maximumFractionDigits: 0 })} €`;

@@ -1,0 +1,70 @@
+# Démo commerciale — demo.jjd-consult.be
+# Pile ENTIÈREMENT séparée de la production : sa propre base (jjd_demo), ses propres volumes, son propre secret JWT.
+# Aucune intégration réelle (mail, Ponto, Google, Bricoloc, factures entrantes) : seule la traduction DeepL est branchée.
+# Lancement : workflow « Démo commerciale » (.github/workflows/demo.yml) — fichier .env.demo généré sur le VPS.
+name: jjd-demo
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: jjd_demo
+      POSTGRES_DB: jjd_demo
+      POSTGRES_PASSWORD: ${DEMO_DB_PASSWORD:?required}
+    volumes:
+      - demo-db:/var/lib/postgresql/data
+    networks: [demo-db]
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U jjd_demo']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: jjd-demo-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://jjd_demo:${DEMO_DB_PASSWORD}@db:5432/jjd_demo
+      JWT_SECRET: ${DEMO_JWT_SECRET:?required}
+      DEMO_PASSWORD: ${DEMO_PASSWORD:?required}
+      DEEPL_API_KEY: ${DEEPL_API_KEY:-}
+      JJD_DEMO: '1'
+      JJD_SKIP_ENV_FILE: '1'
+      PORT: '4100'
+      PUBLIC_API_URL: https://demo.jjd-consult.be/jjd-api
+      WEB_URL: https://demo.jjd-consult.be
+      CORS_ORIGINS: https://demo.jjd-consult.be
+      UPLOADS_DIR: /repo/apps/api/uploads
+      BRICOLOC_API_URL: ''
+      ANTHROPIC_API_KEY: ''
+    # Pas de index.js : aucun import de mails, aucune tâche planifiée, aucune synchro. Juste l'API + le jeu de données de démo.
+    command: ['sh', '-c', 'npm run db:deploy:safe && npx tsx scripts/seed-sales-demo.ts && node --input-type=module -e "import {createApp} from ''./dist/src/app.js''; createApp().listen(4100,''0.0.0.0'');"']
+    volumes:
+      - demo-uploads:/repo/apps/api/uploads
+    networks: [demo-db, demo]
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: jjd-demo-web
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      # nom de conteneur explicite : sur le réseau « edge » le nom « api » est aussi celui de la prod
+      API_INTERNAL_URL: http://jjd-demo-api:4100
+    networks: [demo, edge]
+networks:
+  demo-db:
+    internal: true
+  demo:
+  edge:
+    external: true
+volumes:
+  demo-db:
+  demo-uploads:

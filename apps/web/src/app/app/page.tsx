@@ -161,7 +161,7 @@ function WorkerToday() {
             <div className="eyebrow">{e.worksite.ref}</div><h2 className="worker-mission-title">{e.worksite.title}</h2>
             {e.worksite.city && <div className="muted">{e.worksite.city}</div>}
             <div className="muted">
-              {new Date(e.startAt).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' })} – {new Date(e.endAt).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' })}
+              {new Date(e.startAt).toLocaleTimeString(dateLocale(), { hour: '2-digit', minute: '2-digit' })} – {new Date(e.endAt).toLocaleTimeString(dateLocale(), { hour: '2-digit', minute: '2-digit' })}
             </div>
             <div className="row" style={{ gap: '0.5rem', marginTop: '0.6rem' }}>
               {linked && !running && (
@@ -354,7 +354,7 @@ const ALERT_KIND_ICON: Record<string, LucideIcon> = {
   crm_due: Phone, expiring_docs: ShieldAlert, ct_expiring: Truck, on_hold: Eye, planned_time: Clock,
 };
 
-const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' });
+const hhmm = (iso: string) => new Date(iso).toLocaleTimeString(dateLocale(), { hour: '2-digit', minute: '2-digit' });
 
 /** Barre d'en-tête 76px du tableau de bord bureau : recherche, notifications, compte. */
 function DashBar() {

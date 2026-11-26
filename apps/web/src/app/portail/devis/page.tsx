@@ -1,4 +1,5 @@
 'use client';
+import { dateLocale } from '@/lib/ui-language';
 import Link from 'next/link';
 import { useState } from 'react';
 import { FileText } from 'lucide-react';
@@ -11,7 +12,7 @@ interface Quote {
   totalHt: number; totalTtc: number; issuedOn: string | null; dueOn: string | null;
   worksiteId: string | null; worksiteRef: string | null; building: string | null;
 }
-const fdate = (s: string | null) => (s ? new Date(s).toLocaleDateString('fr-BE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—');
+const fdate = (s: string | null) => (s ? new Date(s).toLocaleDateString(dateLocale(), { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—');
 const eur = (n: number) => `${n.toLocaleString('fr-BE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
 const TONE: Record<string, string> = { sent: 'gold', accepted: 'ok', declined: 'crit', expired: 'grey' };
 const LABEL: Record<string, string> = { sent: 'À valider', accepted: 'Accepté', declined: 'Décliné', expired: 'Expiré', draft: 'Brouillon' };

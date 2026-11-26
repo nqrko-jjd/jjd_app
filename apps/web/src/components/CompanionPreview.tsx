@@ -1,5 +1,5 @@
 'use client';
-import { tr } from '@/lib/ui-language';
+import { tr, dateLocale } from '@/lib/ui-language';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {usePathname} from 'next/navigation';
@@ -15,7 +15,7 @@ type Kind = 'devis' | 'intervention' | 'planning';
 type Proposal = { kind: Kind; title: string; detail: string; accepted: boolean; requestedBy: Profile };
 type Message = { id: string; role: 'user' | 'assistant'; text: string; time: string; files?: string[]; proposal?: Proposal };
 type Chat = { id: string; title: string; messages: Message[] };
-const time = () => new Date().toLocaleTimeString('fr-BE',{hour:'2-digit',minute:'2-digit'});
+const time = () => new Date().toLocaleTimeString(dateLocale(),{hour:'2-digit',minute:'2-digit'});
 const uid = () => crypto.randomUUID();
 const suggestions:Record<Profile,{title:string;sub:string;prompt:string}[]>={
  Julien:[{title:'Une visite → un devis',sub:'Vidéo, photos et explications du chantier',prompt:'Prépare un brouillon de devis à partir de ma visite.'},{title:'Les points à contrôler',sub:'Préparer le contrôle qualité',prompt:'Quels points vérifier avant la réception ?'},{title:'Relire avant validation',sub:'Prix, précisions et éléments manquants',prompt:'Quels éléments vérifier avant de valider ce devis ?'}],

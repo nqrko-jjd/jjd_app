@@ -308,7 +308,7 @@ async function main() {
     // factures (acompte 30 %, avancement 40 %, solde 30 %)
     if (quoteId && qStatus === 'accepted' && status !== 'to_plan') {
       const lg = langOf.get(c.id) ?? 'fr';
-      const L = { fr: ['Acompte 30 % à la commande', 'Facture d’avancement 40 %', 'Facture de solde'], nl: ['Voorschot 30 % bij bestelling', 'Vorderingsfactuur 40 %', 'Saldofactuur'], en: ['30% deposit on order', '40% progress invoice', 'Final invoice'] }[lg];
+      const L = ({ fr: ['Acompte 30 % à la commande', 'Facture d’avancement 40 %', 'Facture de solde'], nl: ['Voorschot 30 % bij bestelling', 'Vorderingsfactuur 40 %', 'Saldofactuur'], en: ['30% deposit on order', '40% progress invoice', 'Final invoice'] } as const)[lg];
       const steps: [string, number, number][] = [[L[0], 0.3, -age + 15]];
       if (['in_progress', 'done', 'to_invoice', 'invoiced', 'closed', 'on_hold'].includes(status) && age > 30) steps.push([L[1], 0.4, -age + 35]);
       if (['invoiced', 'closed'].includes(status)) steps.push([L[2], 0.3, -between(8, 30)]);
